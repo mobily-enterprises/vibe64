@@ -168,6 +168,7 @@ beforeEach(() => {
     isLoading: ref(false),
     loadError: ref(""),
     query: {
+      isFetchedAfterMount: ref(true),
       refetch: creationHarness.refetch
     },
     reload: creationHarness.refetch
@@ -246,7 +247,7 @@ describe("Vibe64 session creation", () => {
     }
   });
 
-  it("shows loading while a remembered session runtime mounts before the session list arrives", async () => {
+  it("shows loading and mounts no session runtime before the session list arrives", async () => {
     creationHarness.selectedId.value = "remembered-session";
     creationHarness.queryData.value = undefined;
     creationHarness.endpointResource.isInitialLoading.value = true;
@@ -256,7 +257,7 @@ describe("Vibe64 session creation", () => {
 
     try {
       await nextTick();
-      expect(panel.runtimeHostSessionIds.value).toEqual(["remembered-session"]);
+      expect(panel.runtimeHostSessionIds.value).toEqual([]);
       expect(panel.emptyLayoutVisible.value).toBe(true);
       expect(panel.emptyStateInitialLoading.value).toBe(true);
       expect(panel.emptyChatHintText.value).toBe("Loading sessions.");
@@ -977,5 +978,88 @@ describe("completed renewal URL follows collection reconciliation", () => {
       expect(replace).not.toHaveBeenCalled();
       expect(f.router.currentRoute.value.query.session).toBe("predecessor-a");
     } finally { replace.mockRestore(); f.cleanup(); }
+  });
+});
+
+// Opening a project without a session in the address goes to the person's
+// last opened session from the session list; each opened session is published
+// so the server remembers it.
+describe("reopening a project", () => {
+  async function reopenFixture({ lastOpenedSessionId = "", routeSession = "", stored = "s1" } = {}) {
+    const { useVibe64SessionSelection } = await vi.importActual("../../src/composables/useVibe64SessionSelection.js");
+    const storage = new Map([["vibe64:selected-session-id:project:project-a", stored]]);
+    vi.stubGlobal("window", { sessionStorage: {
+      getItem: (key) => storage.get(key) ?? null,
+      removeItem: (key) => storage.delete(key),
+      setItem: (key, value) => storage.set(key, value)
+    } });
+    creationHarness.selectionFactory = useVibe64SessionSelection;
+    creationHarness.route = reactive({ path: "/app/project/project-a", query: routeSession ? { session: routeSession } : {} });
+    creationHarness.queryData.value = {
+      ...creationHarness.queryData.value,
+      lastOpenedSessionId,
+      sessions: ["s1", "s2", "s3", "s4"].map((sessionId) => ({ sessionId, status: "active" }))
+    };
+    const { scope, sessionData } = mountSessionData();
+    const published = async () => {
+      await vi.waitFor(() => expect(creationHarness.updateRun).toHaveBeenCalled());
+      return creationHarness.updateRun.mock.calls.map(([context]) => context.sessionId);
+    };
+    return { published, sessionData, cleanup() {
+      scope.stop(); creationHarness.selectionFactory = null; vi.unstubAllGlobals();
+    } };
+  }
+
+  it("goes straight to the person's last opened session and remembers it again", async () => {
+    const f = await reopenFixture({ lastOpenedSessionId: "s3" });
+    try {
+      expect(f.sessionData.selectedSessionId.value).toBe("s3");
+      expect(await f.published()).toEqual(["s3"]);
+    } finally { f.cleanup(); }
+  });
+
+  it("lets an explicit session in the address win and remembers it", async () => {
+    const f = await reopenFixture({ lastOpenedSessionId: "s3", routeSession: "s2" });
+    try {
+      expect(f.sessionData.selectedSessionId.value).toBe("s2");
+      expect(await f.published()).toEqual(["s2"]);
+    } finally { f.cleanup(); }
+  });
+
+  it("remembers each switch once", async () => {
+    const f = await reopenFixture({ lastOpenedSessionId: "s3" });
+    try {
+      await f.published();
+      f.sessionData.selectSessionId("s4");
+      await vi.waitFor(() => expect(creationHarness.updateRun).toHaveBeenCalledTimes(2));
+      f.sessionData.selectSessionId("s4");
+      await nextTick();
+      expect(await f.published()).toEqual(["s3", "s4"]);
+    } finally { f.cleanup(); }
+  });
+
+  it("waits for its own list read instead of a cached list from an earlier visit", async () => {
+    creationHarness.endpointResource.query.isFetchedAfterMount.value = false;
+    const f = await reopenFixture({ lastOpenedSessionId: "s1", stored: "s1" });
+    try {
+      expect(creationHarness.listOptions.queryOptions.refetchOnMount).toBe("always");
+      expect(f.sessionData.sessionList.isInitialLoading).toBe(true);
+      expect(f.sessionData.selectedSessionId.value).toBe("");
+      // Another tab or device opened s3 since this tab cached the list.
+      creationHarness.queryData.value = { ...creationHarness.queryData.value, lastOpenedSessionId: "s3" };
+      creationHarness.endpointResource.query.isFetchedAfterMount.value = true;
+      await nextTick();
+      expect(f.sessionData.sessionList.isInitialLoading).toBe(false);
+      expect(f.sessionData.selectedSessionId.value).toBe("s3");
+      expect(await f.published()).toEqual(["s3"]);
+    } finally { f.cleanup(); }
+  });
+
+  it.each(["", "archived-session"])("falls back to the default session without a usable record (%j)", async (lastOpenedSessionId) => {
+    const f = await reopenFixture({ lastOpenedSessionId });
+    try {
+      expect(f.sessionData.selectedSessionId.value).toBe("s4");
+      expect(await f.published()).toEqual(["s4"]);
+    } finally { f.cleanup(); }
   });
 });

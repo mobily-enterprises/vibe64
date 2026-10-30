@@ -51,6 +51,7 @@ import { presenceActor } from "./sessionPresence.js";
 import { createMainChatApprovals } from "./mainChatApprovals.js";
 import { createConnectedContributions } from "./connectedContributions.js";
 import { createSessionArchive } from "./sessionArchive.js";
+import { readLastOpenedSessionId, rememberLastOpenedSessionId } from "./lastOpenedSession.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 
@@ -1602,12 +1603,15 @@ function createService({
       }, "Vibe64 could not interrupt the assistant.");
     },
 
-    async listSessions() {
+    async listSessions({ vibe64User = null } = {}) {
       return sessionResult(async () => {
         const runtime = await project.createRuntime({
           inspectSource: false
         });
-        const summaries = await runtime.listSessionSummaries({ statusGroup: "open", includeUnavailable: true });
+        const [summaries, lastOpenedSessionId] = await Promise.all([
+          runtime.listSessionSummaries({ statusGroup: "open", includeUnavailable: true }),
+          readLastOpenedSessionId(runtime.stateRoot, vibe64User)
+        ]);
         const sessions = summaries.filter((session) => !session.unavailable);
         if (typeof project.developmentDatabasePolicy !== "function") {
           throw new TypeError("Session listing requires the project session policy.");
@@ -1619,6 +1623,8 @@ function createService({
         )));
         return {
           creation: policy.creation,
+          // The person's last opened session, while it is still open.
+          lastOpenedSessionId: sessions.some((session) => session.sessionId === lastOpenedSessionId) ? lastOpenedSessionId : "",
           limits: policy.limits,
           ok: true,
           sessions: sessions.map((session, index) => {
@@ -2027,12 +2033,15 @@ function createService({
       }, "Vibe64 could not update typing presence.");
     },
 
-    async updateCurrentSession(sessionId = "") {
+    // The browser publishes each session it opens: the project's selected
+    // alias (unless pinned) and the person's last opened session.
+    async updateCurrentSession(sessionId = "", { vibe64User = null } = {}) {
       return sessionResult(async () => {
         const runtime = await project.createRuntime({
           inspectSource: false
         });
         const current = await runtime.updateCurrentSession(sessionId);
+        if (text(sessionId)) await rememberLastOpenedSessionId(runtime.stateRoot, vibe64User, text(sessionId));
         return {
           ok: true,
           sessionId: text(current.sessionId)

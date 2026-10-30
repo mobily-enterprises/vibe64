@@ -3,7 +3,6 @@ import { useRoute } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
-import { selectedSessionIdFromRoute } from "@/composables/useVibe64SessionSelection.js";
 import {
   blockingVibe64SessionPageError
 } from "@/lib/vibe64SessionPanelModel.js";
@@ -103,12 +102,10 @@ function useVibe64SessionPanel(props, emit) {
     selectedSessionId: sessionData.selectedSessionId
   });
   // Only a session this project listed gets a runtime, so a ?session= from
-  // another project (a stale link) never reaches a session request. While the
-  // first list loads, this project's remembered selection may mount early.
+  // another project (a stale link) never reaches a session request.
   const listedSelectedSessionId = computed(() => {
     const id = selection.selectedSessionId;
-    if ((sessionData.sessions.value || []).some((session) => session.sessionId === id)) return id;
-    return sessionData.sessionList.isInitialLoading && id !== selectedSessionIdFromRoute(route) ? id : "";
+    return (sessionData.sessions.value || []).some((session) => session.sessionId === id) ? id : "";
   });
   const repositoryStatusRegistry = useVibe64SessionRepositoryStatusRegistry({
     onState: applyRuntimeWorkState,

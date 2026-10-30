@@ -78,6 +78,8 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/composables/useVibe64SessionSelection.js`
 - `src/composables/useStoredSelection.js`
 - `src/lib/vibe64CurrentSessionPublisher.js`
+- `packages/vibe64-sessions/src/server/lastOpenedSession.js`
+- `tests/server/lastOpenedSession.unit.test.js`
 - `tests/client/vibe64SessionCreateUi.vitest.js`
 - `tests/client/vibe64SessionSelection.vitest.js`
 - `tests/client/vibe64SessionCreation.vitest.js`
@@ -220,6 +222,25 @@ checkout after interruption. No new persisted status or read-time repair is used
 Session URL selection initializes the current session and follows subsequent
 navigation. Available-session reconciliation preserves a newer explicit tab
 selection instead of repeatedly restoring the session from the earlier URL.
+
+Each person's last opened session per project is server state owned by Sessions
+(`lastOpenedSession.js`): one small JSON record per person under the project's
+runtime state (`last-opened-sessions/<sha256 of uid or username>.json`; the
+standalone editor, which has no signed-in user, uses `local`). It is never stored
+in a session. The existing current-session publication (`PUT /sessions/current`)
+records the requested session after the runtime accepts it, also while another
+session is pinned; it skips the write when the record already names that session,
+serializes writes per record and never records an empty selection. The session
+list reports `lastOpenedSessionId` for the acting person only while it names one
+of the listed open sessions; a missing, damaged or unreadable record reports none.
+The project page's session collection is the single owner of the choice: it
+re-reads the list on every visit and keeps its initial loading state until that
+read completes, because a cached list may carry a stale record. Without a session
+in the address it then selects the remembered session, otherwise the last
+listed session; an explicit `?session=` wins and is published, so it becomes the
+remembered one. This tab's stored selection only mirrors the choice for other
+readers in the tab (Env, preview identities); it no longer restores the project's
+session, and no runtime mounts before the list names the selected session.
 
 The session collection's existing completed-renewal reconciliation selects the
 exact unique `renewed_from` successor, then replaces only the predecessor URL's

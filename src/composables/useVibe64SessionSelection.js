@@ -16,12 +16,16 @@ function selectedSessionIdFromRoute(route = {}) {
   return String(value || "").trim();
 }
 
+// The project page owns the selection and passes the person's last opened
+// session as rememberedId; other readers follow this tab's stored selection.
 function useVibe64SessionSelection({
   projectSlug = useVibe64ProjectSlug(),
+  rememberedId,
   route = useRoute()
 } = {}) {
   return useStoredSelection({
     preferredId: computed(() => selectedSessionIdFromRoute(route)),
+    rememberedId,
     storageKey: computed(() => selectedSessionStorageKey(unref(projectSlug)))
   });
 }

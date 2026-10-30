@@ -140,9 +140,6 @@ function useVibe64SessionData() {
   const router = useRouter();
   const paths = usePaths();
   const selectionScope = computed(() => String(projectSlug.value || "").trim());
-  const sessionSelection = useVibe64SessionSelection({ projectSlug });
-
-  const selectedSessionId = sessionSelection.selectedId;
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
@@ -162,7 +159,9 @@ function useVibe64SessionData() {
       limit: 20
     },
     queryOptions: {
-      refetchOnMount: false,
+      // A list cached by an earlier visit can name a stale last opened
+      // session, so each visit reads the list again before choosing.
+      refetchOnMount: "always",
       refetchOnWindowFocus: false
     },
     requestRecoveryLabel: "Vibe64 sessions",
@@ -178,7 +177,9 @@ function useVibe64SessionData() {
       return Array.isArray(payload.sessions) ? payload.sessions : [];
     }),
     loadError: computed(() => sessionListResource.loadError.value),
-    isInitialLoading: computed(() => sessionListResource.isInitialLoading.value),
+    // Loading lasts until this page has read the list itself.
+    isInitialLoading: computed(() => sessionListResource.isInitialLoading.value ||
+      !sessionListResource.query.isFetchedAfterMount.value),
     isLoading: computed(() => sessionListResource.isLoading.value),
     pages: computed(() => {
       const payload = sessionListResource.data.value;
@@ -187,6 +188,13 @@ function useVibe64SessionData() {
     reload: sessionListResource.reload,
     resource: sessionListResource
   });
+  // Without a session in the address, the project opens the person's last
+  // opened session, reported by the list once this page has read it.
+  const sessionSelection = useVibe64SessionSelection({
+    projectSlug,
+    rememberedId: () => sessionList.isInitialLoading ? "" : sessionList.pages[0]?.lastOpenedSessionId
+  });
+  const selectedSessionId = sessionSelection.selectedId;
   let emptySessionListObservedForProject = "";
   const createSessionCommand = useCommand({
     access: "never",

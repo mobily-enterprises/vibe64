@@ -556,6 +556,7 @@ protect host-owned values; stored-value inspection and secret reveal stay in Env
 Coordinates the selected project’s working conversations through the original session services and actions. It exposes creation, selection, renewal, archive discovery and the shared browser transport, preserving conversation identity and current actor/project authority.
 
 Sessions exposes explicit source pinning and its lifecycle guards. Browsing another session does not change a pinned server selection.
+Sessions also owns each person's last opened session per project, a small record under the project's runtime state (never inside a session) that the project page uses to reopen that session.
 
 Runtime owns the stored session descriptors and source workspaces. Sessions owns the session metadata records it writes through Runtime's session store (`main_chat_approvals`, `connected_sources`, `connected_submissions`, `connected_session_name`, `session_archive_operation`, `repository_update_check`) and the session renewal state record. Terminals owns native conversation admission, provider preparation and execution. Training may supply an admitted immutable learning scope; that does not give the session UI authority to change lesson content, access or grading.
 Sessions coordinates explicit and workspace-driven connected-source preparation through receiving

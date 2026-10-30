@@ -41,15 +41,22 @@ function readPreferredId(preferredId = "") {
   return String(typeof preferredId === "function" ? preferredId() : unref(preferredId) || "").trim();
 }
 
+// rememberedId, when given, is the caller's own remembered choice (such as a
+// server record): it replaces this tab's stored value as the choice to restore,
+// and the stored value then only mirrors each selection for other readers.
 function useStoredSelection({
   preferredId = "",
+  rememberedId,
   storageKey = "",
   enabled = true
 } = {}) {
   const selectionEnabled = computed(() => Boolean(typeof enabled === "function" ? enabled() : unref(enabled)));
   const activeStorageKey = computed(() => readStorageKey(storageKey));
   const activePreferredId = computed(() => readPreferredId(preferredId));
-  const selectedId = ref(selectionEnabled.value ? activePreferredId.value || readStoredValue(activeStorageKey.value) : "");
+  const restoredId = (key = activeStorageKey.value) => (
+    rememberedId === undefined ? readStoredValue(key) : readPreferredId(rememberedId)
+  );
+  const selectedId = ref(selectionEnabled.value ? activePreferredId.value || restoredId() : "");
 
   function select(id = "") {
     if (!selectionEnabled.value) return;
@@ -85,9 +92,9 @@ function useStoredSelection({
       return selectedId.value;
     }
 
-    const rememberedId = readStoredValue(activeStorageKey.value);
-    const nextId = itemIds.includes(rememberedId)
-      ? rememberedId
+    const restoredSelectionId = restoredId();
+    const nextId = itemIds.includes(restoredSelectionId)
+      ? restoredSelectionId
       : String(fallbackId || "").trim();
     select(nextId);
     return selectedId.value;
@@ -107,11 +114,11 @@ function useStoredSelection({
   }
 
   watch(selectionEnabled, (nextEnabled) => {
-    selectedId.value = nextEnabled ? activePreferredId.value || readStoredValue(activeStorageKey.value) : "";
+    selectedId.value = nextEnabled ? activePreferredId.value || restoredId() : "";
   }, { flush: "sync" });
 
   watch(activeStorageKey, (nextStorageKey) => {
-    if (selectionEnabled.value) selectedId.value = activePreferredId.value || readStoredValue(nextStorageKey);
+    if (selectionEnabled.value) selectedId.value = activePreferredId.value || restoredId(nextStorageKey);
   });
 
   watch(activePreferredId, (nextPreferredId) => {

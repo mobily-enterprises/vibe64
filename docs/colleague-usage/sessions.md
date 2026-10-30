@@ -95,12 +95,25 @@ select another tab; session-list refreshes preserve that choice. Following a
 different session link selects its named session. A session being archived is
 temporarily unavailable for selection.
 
+Vibe64 remembers the session you last opened in each project. Opening the
+project again without a session in its address (from the project list or
+switcher, a bookmark to the project, **Back** out of the project and in again, a
+reload, another browser or another device) goes straight to that session; the
+chat shows **Loading sessions.** until the project's session list has been read.
+A session named in the address always wins and becomes the remembered one, and
+so does a session Colleague opens for you. Each person has their own remembered
+session in each project: other people's choices, and your choices in other
+projects, never change it. Another tab that is already open keeps its own
+selection. If the remembered session has been archived or is no longer open, the
+project opens its usual session (the last tab) instead, without an error, and
+the next session you open is remembered. Practice projects work the same way.
+
 A link whose session is not one of this project's open sessions (another
 project's session, or one that has since been archived) loses its `session`
-part once the session list loads, and the project opens its usual session
-instead; no chat, Preview or other session work starts for the unknown
-session. Switching projects always starts the next project from its own
-sessions, never the previous project's.
+part once the session list loads, and the project opens your remembered session
+or its usual session instead; no chat, Preview or other session work starts for
+the unknown session. Switching projects always starts the next project from its
+own sessions, never the previous project's.
 
 The session header gives its room to session names first, then **Save**, which
 never leaves the header. The other actions follow in priority order: **Temporary

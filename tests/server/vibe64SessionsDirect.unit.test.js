@@ -3459,7 +3459,7 @@ test("session listing reports unavailable sessions separately without changing c
   });
   assert.deepEqual(await service.listSessions(), {
     ok: true, sessions: [{ ...healthy, agentActivity: { active: false, revision: 7 } }],
-    unavailableSessions: [unavailable], creation, limits
+    unavailableSessions: [unavailable], creation, lastOpenedSessionId: "", limits
   });
 });
 

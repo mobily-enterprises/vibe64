@@ -291,7 +291,7 @@ function createSessionActions({ sessions } = {}) {
       id: ACTION_UPDATE_CURRENT_SESSION,
       kind: "command",
       input: currentSessionInputValidator,
-      execute: (input) => sessions.updateCurrentSession(input?.sessionId || "")
+      execute: (input) => sessions.updateCurrentSession(input?.sessionId || "", { vibe64User: input?.vibe64User || null })
     }),
     action({
       id: ACTION_INSPECT_SESSION,

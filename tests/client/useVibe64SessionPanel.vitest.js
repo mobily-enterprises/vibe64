@@ -374,24 +374,15 @@ describe("mounted session hosts", () => {
     } finally { f.scope.stop(); }
   });
 
-  it("before the first list mounts only this project's remembered selection, never the link's", async () => {
+  it("mounts no runtime before the first list names the selected session", async () => {
     const f = mountPanel();
     try {
       f.data.sessionList.isInitialLoading = true;
       f.data.sessions.value = [];
-      f.data.selectedSessionId.value = "remembered";
+      f.data.selectedSessionId.value = "linked";
       await nextTick();
-      expect(f.panel.runtimeHostSessionIds.value).toEqual(["remembered"]);
-      panelHarness.route = { query: { session: "linked" } };
-      const g = mountPanel();
-      try {
-        g.data.sessionList.isInitialLoading = true;
-        g.data.sessions.value = [];
-        g.data.selectedSessionId.value = "linked";
-        await nextTick();
-        expect(g.panel.runtimeHostSessionIds.value).toEqual([]);
-      } finally { g.scope.stop(); }
-    } finally { f.scope.stop(); panelHarness.route = { query: {} }; }
+      expect(f.panel.runtimeHostSessionIds.value).toEqual([]);
+    } finally { f.scope.stop(); }
   });
 });
 
