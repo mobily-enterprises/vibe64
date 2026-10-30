@@ -1,3 +1,7 @@
+import { realpath, open } from "node:fs/promises";
+import { constants } from "node:fs";
+import path from "node:path";
+
 import {
   backtickedArguments,
   invalidStackOperation,
@@ -12,18 +16,20 @@ const VIBE64_ARCHITECTURE_INSPECTION_CONTRACT = "vibe64.architecture-inspection.
 const VIBE64_ARCHITECTURE_INSPECTION_SECTION = "Architecture inspection";
 const ERROR_CODE = "VIBE64_ARCHITECTURE_INSPECTION_INVALID";
 const SECTION_PATH = "genesis/stack.md#Architecture inspection";
-const MAX_TIMEOUT_SECONDS = 60;
-const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_TIMEOUT_SECONDS = 120;
+const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
+const ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES = 64 * 1024;
 const REQUIRED_FIELDS = Object.freeze(["runtimeRequirements", "workdir", "argv", "timeout", "maxBuffer"]);
 // Entry label -> [inspector field, value form]; shared by the parser, its errors and the agent spec.
 const ARCHITECTURE_INSPECTOR_FIELDS = Object.freeze({
   Runtime: ["runtimeRequirements", "`runtime`..."],
   Directory: ["workdir", "`path`"],
   Command: ["argv", "`command` `argument`..."],
-  "Timeout seconds": ["timeout", "`1` through `60`"],
+  "Timeout seconds": ["timeout", `\`1\` through \`${MAX_TIMEOUT_SECONDS}\``],
   "Max output bytes": ["maxBuffer", `\`1\` through \`${MAX_OUTPUT_BYTES}\``],
   "Entry files": ["entryFiles", "`path`... (optional)"],
-  "Required files": ["requiredFiles", "`path`... (optional)"]
+  "Required files": ["requiredFiles", "`path`... (optional)"],
+  "Preview locator": ["previewLocator", "`path` (optional .js file)"]
 });
 const FIELD_LINE = new RegExp(`^- (${Object.keys(ARCHITECTURE_INSPECTOR_FIELDS).join("|")}): (.+)$`, "u");
 
@@ -71,6 +77,8 @@ function parseVibe64ArchitectureInspectionLines(lines, { path = SECTION_PATH } =
       const [value] = backtickedArguments(field[2], ERROR_CODE, path, field[1], index + 1, { count: 1 });
       if (key === "workdir") {
         current[key] = projectPath(value, ERROR_CODE, path, "Inspector directory", index + 1);
+      } else if (key === "previewLocator") {
+        current[key] = previewLocatorPath(value, path, index + 1);
       } else {
         const number = Number(value);
         const max = key === "timeout" ? MAX_TIMEOUT_SECONDS : MAX_OUTPUT_BYTES;
@@ -84,6 +92,36 @@ function parseVibe64ArchitectureInspectionLines(lines, { path = SECTION_PATH } =
   finish();
   if (!inspectors.length) invalidStackOperation(ERROR_CODE, path, "Use an Inspector entry or - Nothing.");
   return inspectors;
+}
+
+function previewLocatorPath(value, operationPath, line) {
+  projectPath(value, ERROR_CODE, operationPath, "Preview locator", line, { allowRoot: false });
+  if (!value.endsWith(".js")) invalidStackOperation(ERROR_CODE, operationPath, "Preview locator must name a .js file.", line);
+  return value;
+}
+
+// Reads a recipe's Preview locator for the Preview page: a regular .js file of
+// at most 64 KiB inside the source root (node_modules included), reached
+// without symlinks so it cannot name a file outside the project.
+async function readArchitecturePreviewLocator(sourceRoot, locatorPath) {
+  previewLocatorPath(locatorPath, SECTION_PATH);
+  const refuse = (problem) => invalidStackOperation(ERROR_CODE, SECTION_PATH, `Preview locator \`${locatorPath}\` ${problem}.`);
+  let handle;
+  try {
+    const expected = path.join(await realpath(sourceRoot), locatorPath);
+    if (await realpath(expected) !== expected) refuse("must not be or pass through a symlink");
+    handle = await open(expected, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const stats = await handle.stat();
+    if (!stats.isFile()) refuse("must be a regular file");
+    if (stats.size > ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES) refuse(`must be at most ${ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES} bytes`);
+    return { path: locatorPath, source: await handle.readFile("utf8") };
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") refuse("is not a file in this project");
+    if (error?.code === "ELOOP") refuse("must not be or pass through a symlink");
+    throw error;
+  } finally {
+    await handle?.close();
+  }
 }
 
 function vibe64ArchitectureInspection(section) {
@@ -105,8 +143,10 @@ function vibe64ArchitectureInspection(section) {
 
 export {
   ARCHITECTURE_INSPECTOR_FIELDS,
+  ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES,
   VIBE64_ARCHITECTURE_INSPECTION_CONTRACT,
   VIBE64_ARCHITECTURE_INSPECTION_SECTION,
   parseVibe64ArchitectureInspectionLines,
+  readArchitecturePreviewLocator,
   vibe64ArchitectureInspection
 };

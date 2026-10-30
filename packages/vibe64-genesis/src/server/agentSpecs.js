@@ -18,6 +18,7 @@ import {
 } from "./packaging.js";
 import {
   ARCHITECTURE_INSPECTOR_FIELDS,
+  ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES,
   VIBE64_ARCHITECTURE_INSPECTION_CONTRACT,
   VIBE64_ARCHITECTURE_INSPECTION_SECTION
 } from "./architectureInspection.js";
@@ -394,9 +395,11 @@ The command's request/response protocol and the \`integrations.json\` usage: \`v
 Headings: \`\` ### Inspector \`id\`: Title \`\`, each followed by fields:
 ${list(Object.entries(ARCHITECTURE_INSPECTOR_FIELDS).map(([label, [, value]]) => `- ${label}: ${value}`))}
 
-- Every field except Entry files and Required files is required; ids are unique. The Runtime must be selected in the Stack.
+- Every field except Entry files, Required files and Preview locator is required; ids are unique. The Runtime must be selected in the Stack.
 - Reading declarations runs nothing. Entry files name application entry points. Required files must exist as regular project files before the inspector runs.
-- On analysis the command receives one \`vibe64.architecture-inspection-input.v1\` JSON request on stdin (files with hashes, packages, package identity, UI discovery and the Stack hash) and must print one \`${ARCHITECTURE_OBSERVATIONS_SCHEMA}\` JSON document; Genesis owns that observation schema.
+- Preview locator names the technology's script that maps a clicked Preview element to its source component: a project \`.js\` file (it may be under \`node_modules\`), regular, at most ${ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES} bytes, reached without symlinks.
+- On analysis the command receives one \`vibe64.architecture-inspection-input.v1\` JSON request on stdin (files with hashes, packages, package identity, UI discovery, the Stack hash and an optional \`cacheDirectory\`) and must print one \`${ARCHITECTURE_OBSERVATIONS_SCHEMA}\` JSON document; Genesis owns that observation schema.
+- \`cacheDirectory\` is an absolute directory for this inspector alone, outside the source; the inspector may read and write only there. When it is absent or unusable, inspect without a cache. Ignore unknown request fields.
 `,
     example: `
 ### Inspector \`ui\`: UI routes

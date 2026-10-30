@@ -44,4 +44,7 @@ tables, and parser errors end with `Exact grammar: vibe64-helper spec <name>.`
 Sessions read them with `vibe64-helper spec [<name>]`; outside a session use
 `vibe64 spec [<name>]`. The Architecture inspection grammar, including the
 optional Required files prerequisite that the System Graph consumer checks before
-scanning source, is `vibe64 spec architecture-inspection`.
+scanning source, is `vibe64 spec architecture-inspection`. Its optional Preview
+locator names a technology's element-to-component script;
+`readArchitecturePreviewLocator(sourceRoot, path)` reads it only as a regular
+project `.js` file of at most 64 KiB reached without symlinks.

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -11,6 +11,7 @@ import {
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import {
   readGenesisCity
 } from "../../packages/vibe64-system-graph/src/server/genesisCities.js";
@@ -106,7 +107,7 @@ function programCityFixture() {
   };
 }
 
-function projectServiceFor(root) {
+function projectServiceFor(root, { sessionRoot } = {}) {
   return {
     async createRuntime() {
       return {
@@ -118,6 +119,7 @@ function projectServiceFor(root) {
               source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
             },
             sessionId,
+            ...(sessionRoot ? { sessionRoot } : {})
           };
         }
       };
@@ -300,6 +302,7 @@ test("refresh delegates to Genesis exactly once and validates its native result"
     assert.deepEqual(calls, [{
       projectRoot: root,
       write: true,
+      callWeb: true,
       signal: calls[0].signal
     }]);
     assert.ok(calls[0].signal instanceof AbortSignal);
@@ -341,14 +344,53 @@ test('configured architecture inspection uses managed execution and publishes on
         assert.deepEqual(input.runtimes, ['fixture-node']); assert.equal(input.timeout, 1000); assert.equal(input.maxBuffer, 4096); assert.ok(input.signal instanceof AbortSignal);
         const request = JSON.parse(input.input);
         assert.equal(request.schema, 'vibe64.architecture-inspection-input.v1'); assert.deepEqual(request.files, [{ path: 'src/catalog.js', hash: 'catalog-hash' }]);
+        assert.equal(Object.hasOwn(request, 'cacheDirectory'), false, 'without a session folder the inspector runs cold');
         return { ok: true, stdout: JSON.stringify(emptyObservations()) };
       }
     });
     assert.equal((await service.refresh({ sessionId: 'session-1' })).ok, true);
     assert.equal(calls.length, 2);
     assert.equal(calls[0].write, true, 'one native index operation owns scan, inspection and guarded publication');
+    assert.equal(calls[0].callWeb, true, 'refresh also builds the call web');
     assert.equal(typeof calls[0].observations, 'function');
     assert.equal(calls[1].published.adapter, 'fixture');
+  });
+});
+
+test('each inspector gets its own shared cache folder beside the session, outside the source', async () => {
+  await withTempRoot(async root => {
+    const sessionRoot = path.join(root, '..', '..', '..', '..', 'state', 'session-1');
+    await mkdir(sessionRoot, { recursive: true });
+    await chmod(sessionRoot, 0o2770); // a shared project folder passes its group on
+    const projectService = { ...projectServiceFor(root, { sessionRoot }), async readCurrentProject() { return {}; }, async projectInspectionEnvironment() { return {}; } };
+    const inspection = inspectorFixture();
+    inspection.inspectors.push({ ...inspection.inspectors[0], id: 'second', title: 'Second', argv: ['node', 'second.mjs'] });
+    const requests = [];
+    const service = createService({ projectService, inspectorReader: async () => inspection, runtimeReader: () => ({ available: true, runtimes: [] }),
+      refresher: async input => { await input.observations(architectureFixture().architecture); return { machine: architectureFixture(), program: programCityFixture() }; },
+      runCommand: async input => { requests.push(JSON.parse(input.input)); return { ok: true, stdout: JSON.stringify({ ...emptyObservations(), adapter: input.args[0] }) }; }
+    });
+    configureVibe64Host({ sharedGroupAccess: true });
+    try {
+      assert.equal((await service.refresh({ sessionId: 'session-1' })).ok, true);
+    } finally {
+      configureVibe64Host(null);
+    }
+    assert.deepEqual(requests.map(request => request.cacheDirectory), [
+      path.join(sessionRoot, 'architecture-cache', 'fixture'),
+      path.join(sessionRoot, 'architecture-cache', 'second')
+    ]);
+    for (const request of requests) {
+      assert.equal((await stat(request.cacheDirectory)).mode & 0o7777, 0o2770);
+      assert.equal(request.cacheDirectory.startsWith(`${root}${path.sep}`), false);
+    }
+
+    // A cache folder that cannot be prepared leaves the inspector to run cold.
+    await rm(path.join(sessionRoot, 'architecture-cache'), { recursive: true });
+    await writeFile(path.join(sessionRoot, 'architecture-cache'), 'not a folder');
+    requests.length = 0;
+    assert.equal((await service.refresh({ sessionId: 'session-1' })).ok, true);
+    assert.deepEqual(requests.map(request => Object.hasOwn(request, 'cacheDirectory')), [false, false]);
   });
 });
 

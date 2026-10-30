@@ -331,6 +331,10 @@ Re-scan reads existing Program text; it neither rewrites it nor calls a Helper. 
 source-work admission and invokes Stack's Vibe64-owned Architecture inspection
 recipe through managed finite commands. Hashed inputs, UI discovery and package
 boundary identity are passed on stdin; stdout is bounded observation JSON.
+Each inspector also receives its own `cacheDirectory`,
+`<sessionRoot>/architecture-cache/<inspector id>/`, created with the session's
+shared directory mode outside the source; without it the inspector runs cold.
+Refresh asks Genesis for the call web as well (`callWeb: true`).
 The inspector runs in Genesis's async observation callback after one source
 extraction. Genesis joins its output to that scan, then rechecks the original
 inputs before publication rather than extracting the whole project a second time.

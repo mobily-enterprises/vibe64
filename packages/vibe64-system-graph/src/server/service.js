@@ -5,14 +5,16 @@ import {
   refreshGenesisCities
 } from "@local/vibe64-genesis/server";
 import { randomUUID } from "node:crypto";
-import { lstat, realpath, stat } from "node:fs/promises";
+import { lstat, mkdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { vibe64RuntimePacks } from "@local/vibe64-terminals/server/vibe64OutputTargets";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   normalizeText,
   pathExists,
+  pathInsideOrEqual,
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
@@ -124,7 +126,22 @@ async function assertInspectorPrerequisites(sourceRoot, realSourceRoot, inspecto
   }
 }
 
-function architectureInspectionRequest(architecture, inspection) {
+// Each inspector's own cache sits beside the session, outside its source, and is
+// prepared before every run. It is optional input: without it the inspector runs cold.
+async function inspectorCacheDirectory(current, realSourceRoot, inspector) {
+  const sessionRoot = normalizeText(current.session?.sessionRoot);
+  if (!sessionRoot) return "";
+  const directory = path.join(path.resolve(sessionRoot), "architecture-cache", inspector.id);
+  if (pathInsideOrEqual(realSourceRoot, directory) || pathInsideOrEqual(path.resolve(current.sourceRoot), directory)) return "";
+  try {
+    await mkdir(directory, { recursive: true, mode: vibe64SharedModes().inheritingDirectory });
+    return directory;
+  } catch {
+    return "";
+  }
+}
+
+function architectureInspectionRequest(architecture, inspection, cacheDirectory = "") {
   const request = `${JSON.stringify({
     schema: "vibe64.architecture-inspection-input.v1",
     files: architecture.files.map(file => ({ path: file.path, hash: file.hash })),
@@ -134,7 +151,8 @@ function architectureInspectionRequest(architecture, inspection) {
     })),
     packageIdentity: architecture.packageIdentity,
     uiDiscovery: architecture.uiDiscovery,
-    stackHash: inspection.stackHash
+    stackHash: inspection.stackHash,
+    ...(cacheDirectory ? { cacheDirectory } : {})
   })}\n`;
   if (Buffer.byteLength(request) > 4 * 1024 * 1024) throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
   return request;
@@ -387,9 +405,9 @@ function createService({
             }
             await progress("Scanning project source and existing Genesis documents…");
             const observations = inspection.inspectors?.length ? async architecture => {
-              const request = architectureInspectionRequest(architecture, inspection);
               const documents = [];
               for (const inspector of inspection.inspectors) {
+                const request = architectureInspectionRequest(architecture, inspection, await inspectorCacheDirectory(current, realSourceRoot, inspector));
                 documents.push(await runArchitectureInspector({ inspector, request, current, signal: controller.signal, progress, runCommand, projectService, runtimeReader }));
               }
               await progress("Validating UI observations…");
@@ -400,7 +418,7 @@ function createService({
               return merged;
             } : null;
             if (controller.signal.aborted) throw architectureCancelled();
-            return refresher({ projectRoot: current.sourceRoot, write: true, ...(observations ? { observations } : {}), signal: controller.signal });
+            return refresher({ projectRoot: current.sourceRoot, write: true, callWeb: true, ...(observations ? { observations } : {}), signal: controller.signal });
           }, { operation: "architecture-refresh" });
           if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
           const result = exclusive.value;
