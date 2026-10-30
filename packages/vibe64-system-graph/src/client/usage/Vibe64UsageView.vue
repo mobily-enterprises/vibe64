@@ -35,7 +35,7 @@
             :aria-checked="exactOnly"
             @click="exactOnly = !exactOnly"
           >Exact only</v-chip>
-          <v-btn class="usage-view__record" variant="tonal" color="primary" :prepend-icon="mdiRecordCircleOutline" @click="recordOpen = true">Record</v-btn>
+          <v-btn class="usage-view__record" variant="tonal" color="primary" :prepend-icon="mdiRecordCircleOutline" title="Record" @click="recordOpen = true"><span class="usage-view__record-label">Record</span></v-btn>
         </div>
       </header>
       <v-progress-linear :active="busy" indeterminate color="primary" height="2" class="usage-view__progress" />
@@ -501,10 +501,16 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view--compact { grid-template-columns: minmax(0, 1fr); }
 .usage-view__rail { min-height: 0; overflow: hidden; border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); background: rgb(var(--v-theme-surface-container-low, var(--v-theme-surface))); }
 .usage-view__main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.usage-view__header { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 8px; }
+.usage-view__header { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 8px; container-type: inline-size; }
 .usage-view__controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .usage-view__modes { flex: none; }
 .usage-view__record { margin-left: auto; }
+/* Narrow headers keep Record on the modes' row as an icon. */
+@container (max-width: 480px) {
+  .usage-view__record { min-width: 0; padding: 0 12px; }
+  .usage-view__record :deep(.v-btn__prepend) { margin-inline: 0; }
+  .usage-view__record-label { display: none; }
+}
 .usage-view__progress { flex: none; }
 .usage-view__content { flex: 1; min-height: 0; overflow: auto; padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
 .usage-view__banner { flex: none; }
