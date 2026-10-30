@@ -121,6 +121,17 @@ test("printed entry forms are the parsers' own tables, and unknown entries list 
   assert.match(identities, /Never create application accounts or change roles/u);
 });
 
+test("the Deployment spec leaves production mode to the Serve step the project declares", async () => {
+  const deployment = (await cli(["deployment"])).stdout;
+  assert.match(deployment, /Vibe64 never sets a framework's production mode/u);
+  assert.match(deployment, /Declare it on the Serve step/u);
+  assert.match(deployment, /skip the build tools/u);
+  const [example] = fencedBlocks(deployment, "markdown");
+  const serve = parseVibe64DeploymentLines(example.split("\n").slice(1)).steps.at(-1);
+  assert.deepEqual(serve.argv, ["env", "NODE_ENV=production", "node", "server.js"]);
+  assert.doesNotMatch(example.split("\n").filter((line) => !line.startsWith("- Serve ")).join("\n"), /NODE_ENV/u);
+});
+
 test("the Preview identity protocol examples satisfy the real response validation", async () => {
   const [request, ...responses] = fencedBlocks((await cli(["preview-identity-command"])).stdout, "json").map((block) => JSON.parse(block));
   assert.equal(responses.length, 2);

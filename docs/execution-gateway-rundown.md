@@ -259,14 +259,16 @@ For example, project commands receive project config and database env:
 }
 ```
 
-Deployment commands use deployment-specific env:
+Deployment commands use deployment-specific env, the project's production
+values exactly. The gateway adds no framework mode such as `NODE_ENV`; a
+project that needs one declares it on its Deployment Serve step.
 
 ```js
 {
   envPolicy: "deployment",
   project: {
     deploymentEnv: {
-      NODE_ENV: "production"
+      APP_PUBLIC_URL: "https://example.com"
     },
     deploymentDatabaseEnv: {
       DATABASE_URL: "mysql://..."

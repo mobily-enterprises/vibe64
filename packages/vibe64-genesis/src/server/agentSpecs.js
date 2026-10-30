@@ -234,6 +234,7 @@ Entries:
 ${list(DEPLOYMENT_ENTRY_FORMS)}
 
 - Steps are ordered ${DEPLOYMENT_STEP_ROLES.join(", ")}; exactly one Serve step comes last. Serve starts the long-running application, which listens on the address given by the \`HOST\` and \`PORT\` environment variables. Arguments are passed literally (no \`{host}\` or \`{port}\` placeholders), so a server that takes its address only as arguments needs a committed project script that reads them.
+- Every step runs exactly as declared with the project's production environment. Vibe64 never sets a framework's production mode, such as \`NODE_ENV=production\`. Declare it on the Serve step, for example \`env\` \`NODE_ENV=production\` \`node\` \`server.js\`, not in the production environment or Prepare, where it can make package installation skip the build tools a later step needs.
 - One Ready when entry is required (status 200 through 399). Workdir defaults to \`.\`. Each other entry appears at most once.
 - Recreate on restore lists project-relative globs (only \`*\` and \`**\`) that a restored deployment rebuilds with its Prepare step, such as installed dependencies. It requires a Prepare step.
 - Migrate applies pending migrations without destroying data.
@@ -244,7 +245,7 @@ ${list(DEPLOYMENT_ENTRY_FORMS)}
 - Prepare \`Install\`: \`npm\` \`ci\`
 - Build \`Build\`: \`npm\` \`run\` \`build\`
 - Migrate \`Migrate\`: \`npm\` \`run\` \`db:migrate\`
-- Serve \`Serve\`: \`node\` \`server.js\`
+- Serve \`Serve\`: \`env\` \`NODE_ENV=production\` \`node\` \`server.js\`
 - Ready when: \`GET\` \`/health\` returns \`200\`
 `
   }),
