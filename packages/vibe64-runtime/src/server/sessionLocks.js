@@ -149,24 +149,31 @@ async function readSessionLockOwner(lockPath = "") {
   }
 }
 
-async function sessionLockIsAbandoned(lockPath = "") {
+async function sessionLockState(lockPath = "") {
   const owner = await readSessionLockOwner(lockPath);
   if (owner?.pid) {
-    return ["absent", "reused"].includes(
-      await sessionLockOwnerProcessStatus(owner)
-    );
+    return ["absent", "reused"].includes(await sessionLockOwnerProcessStatus(owner))
+      ? "abandoned"
+      : "held";
   }
   try {
     const lockStat = await stat(lockPath);
-    return Date.now() - lockStat.mtimeMs >= SESSION_LOCK_OWNER_GRACE_MS;
+    return Date.now() - lockStat.mtimeMs >= SESSION_LOCK_OWNER_GRACE_MS ? "abandoned" : "held";
   } catch (error) {
-    return isMissingPathError(error);
+    return isMissingPathError(error) ? "missing" : "held";
   }
 }
 
+async function sessionLockIsAbandoned(lockPath = "") {
+  return await sessionLockState(lockPath) !== "held";
+}
+
 async function quarantineAbandonedSessionLock(lockPath = "") {
-  if (!await sessionLockIsAbandoned(lockPath)) {
-    return false;
+  const state = await sessionLockState(lockPath);
+  // A lock released since mkdir failed is simply retried. Renaming its path
+  // now could move a lock another process has just taken.
+  if (state !== "abandoned") {
+    return state === "missing";
   }
   const quarantinePath = `${lockPath}.abandoned.${process.pid}.${randomUUID()}`;
   try {
