@@ -17,7 +17,10 @@ const FORBIDDEN = Object.freeze([
   /["'`](?:node:)?net["'`]/u,
   /\bdgram\b/u,
   /\.listen\(/u,
-  /\bcreateServer\(/u
+  /\bcreateServer\(/u,
+  // Python and C recorders: no socket module and no socket calls.
+  /^\s*(?:import|from)\s+(?:socket|socketserver|http\.server)\b/mu,
+  /\bsocket(?:\.socket)?\s*\(\s*(?:AF_|socket\.AF_|\))/u
 ]);
 // /proc/net/tcp state 0A is LISTEN; unix sockets with __SO_ACCEPTCON accept connections.
 const TCP_LISTEN = "0A";
