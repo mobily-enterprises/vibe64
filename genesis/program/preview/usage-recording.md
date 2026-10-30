@@ -17,8 +17,13 @@ recording indicator in the project header follows it on every pane.
 - `packages/vibe64-usage-recording/src/server/recordingFiles.js`
 - `packages/vibe64-usage-recording/src/server/tracers/index.js`
 - `packages/vibe64-usage-recording/src/server/tracers/nodejs.js`
+- `packages/vibe64-usage-recording/src/server/tracers/python.js`
+- `packages/vibe64-usage-recording/src/server/tracers/php.js`
 - `packages/vibe64-usage-recording/runtime/node/preload.mjs`
 - `packages/vibe64-usage-recording/runtime/node/instrument.mjs`
+- `packages/vibe64-usage-recording/runtime/python/vibe64_usage/tracer.py`
+- `packages/vibe64-usage-recording/runtime/php/ext/vibe64_usage.c`
+- `packages/vibe64-usage-recording/runtime/php/build.mjs`
 - `packages/vibe64-usage-recording/src/shared/contract.js`
 - `packages/vibe64-usage-recording/src/client/useVibe64UsageRecording.js`
 - `packages/vibe64-usage-recording/src/client/Vibe64UsageRecordingIndicator.vue`
@@ -30,6 +35,9 @@ recording indicator in the project header follows it on every pane.
 - `tests/server/vibe64UsageRecordingService.unit.test.js`
 - `tests/server/vibe64UsageTraceStore.unit.test.js`
 - `tests/server/vibe64UsageRecordingPreviewProxy.unit.test.js`
+- `tests/server/vibe64UsageNodeTracer.unit.test.js`
+- `tests/server/vibe64UsagePythonTracer.unit.test.js`
+- `tests/server/vibe64UsagePhpTracer.unit.test.js`
 - `tests/e2e/usage-recording.spec.ts`
 
 ## Recording lifecycle
@@ -42,8 +50,11 @@ every launch of its target carries the declared runtimes' tracers, and the
 Preview proxy numbers each request, sends that id to the application and logs
 the request without its query. The target restarts to load the recorder.
 
-Tracers count project function entries per request, run or background scope
-and write them to files; the service reads those files incrementally and
+Node.js loads a preload that instruments project files as they load, Python
+loads a `sitecustomize` recorder through `PYTHONPATH`, and PHP loads a small
+observer module, built per PHP version, through `PHP_INI_SCAN_DIR`; each
+tracer's variables are prepended to the target's own. Tracers count project
+function entries per request, run or background scope and write them to files; the service reads those files incrementally and
 announces changes to the session's viewers. Stop always succeeds and is safe to
 repeat: it tells tracers to stop through `control.json`, then writes an index
 of the results. Recordings also stop at their time, request and size limits,
