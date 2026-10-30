@@ -1,4 +1,6 @@
-import { open, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { constants } from "node:fs";
+import { open, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 
@@ -14,24 +16,73 @@ import {
 // request log and the recorded interactions. Every read is bounded, every line
 // is validated, and a malformed line is skipped and counted. Trace content is
 // data only: nothing in it is ever executed or evaluated.
+// The recorded application can write in this directory, so no file of it is
+// opened through a link or waited on as a FIFO: reads take regular files
+// only, replacements go through a new temporary file, and appends refuse
+// anything but a regular file.
 
 const HITS_FILE_PATTERN = /^hits-(nodejs|python|php)-[0-9]+(?:-[0-9]+)?\.ndjson$/u;
 const MAX_HITS_FILES = 256;
 const READ_CHUNK_BYTES = 1024 * 1024;
 const LINE_LIMIT = USAGE_RECORDING_LIMITS.traceLineBytes;
 const FILE_LIMIT = USAGE_RECORDING_LIMITS.hitsBytesPerProcess + LINE_LIMIT;
+// The request and interaction logs are capped by lines when written; a read
+// stops here whatever a file holds.
+const LOG_BYTES = 8 * 1024 * 1024;
+const READ_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+const APPEND_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 
 async function writeJsonFile(filePath, value) {
-  const temporary = `${filePath}.${process.pid}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o660 });
-  await rename(temporary, filePath);
+  const temporary = `${filePath}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
+  try {
+    await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { flag: "wx", mode: 0o660 });
+    await rename(temporary, filePath);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+}
+
+async function appendJsonLine(filePath, value) {
+  const handle = await open(filePath, APPEND_FLAGS, 0o660);
+  try {
+    if (!(await handle.stat()).isFile()) throw new Error("A usage recording log is not a regular file.");
+    await handle.appendFile(`${JSON.stringify(value)}\n`);
+  } finally {
+    await handle.close();
+  }
+}
+
+// The first maxBytes of a regular file, and whether that is all of it; null
+// for a missing file, a link or anything but a regular file.
+async function readRegularFile(filePath, maxBytes) {
+  let handle;
+  try {
+    handle = await open(filePath, READ_FLAGS);
+  } catch {
+    return null;
+  }
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) return null;
+    const bytes = Buffer.alloc(Math.min(info.size, maxBytes));
+    let length = 0;
+    while (length < bytes.length) {
+      const { bytesRead } = await handle.read(bytes, length, bytes.length - length, length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    return { bytes: bytes.subarray(0, length), whole: info.size <= maxBytes };
+  } finally {
+    await handle.close();
+  }
 }
 
 async function readJsonFile(filePath, maxBytes = LINE_LIMIT) {
   try {
-    const info = await stat(filePath);
-    if (!info.isFile() || info.size > maxBytes) return null;
-    const value = JSON.parse(await readFile(filePath, "utf8"));
+    const file = await readRegularFile(filePath, maxBytes);
+    if (!file?.whole) return null;
+    const value = JSON.parse(file.bytes.toString("utf8"));
     return value && typeof value === "object" && !Array.isArray(value) ? value : null;
   } catch {
     return null;
@@ -39,11 +90,13 @@ async function readJsonFile(filePath, maxBytes = LINE_LIMIT) {
 }
 
 // Bounded NDJSON objects of a Vibe64-written file; oversized or invalid lines
-// are skipped.
+// are skipped, and so is a line cut at the read limit.
 async function readNdjson(filePath, maxLines) {
   let text = "";
   try {
-    text = await readFile(filePath, "utf8");
+    const file = await readRegularFile(filePath, LOG_BYTES);
+    text = file ? file.bytes.toString("utf8") : "";
+    if (file && !file.whole) text = text.slice(0, text.lastIndexOf("\n") + 1);
   } catch {
     return [];
   }
@@ -163,7 +216,14 @@ function createTraceReader(directory) {
   }
 
   async function readNewBytes(name, file) {
-    const handle = await open(path.join(directory, name), "r");
+    let handle;
+    try {
+      handle = await open(path.join(directory, name), READ_FLAGS);
+    } catch (error) {
+      // A link is skipped, never read; other failures are the caller's.
+      if (error?.code === "ELOOP") return;
+      throw error;
+    }
     try {
       const info = await handle.stat();
       if (!info.isFile()) return;
@@ -275,8 +335,8 @@ function createTraceReader(directory) {
   };
 }
 
-// The Preview proxy's request log and the recorded interactions, read whole
-// (both are capped when written).
+// The Preview proxy's request log and the recorded interactions, capped by
+// lines when written and read up to LOG_BYTES.
 async function readRequestLog(directory) {
   return (await readNdjson(path.join(directory, "requests.ndjson"), USAGE_RECORDING_LIMITS.proxyRequestLines))
     .filter((row) => /^r_[0-9]{6}$/u.test(String(row.id || "")));
@@ -287,12 +347,28 @@ async function readInteractions(directory) {
     .filter((row) => USAGE_INTERACTION_ID_PATTERN.test(String(row.id || "")));
 }
 
+// A request path as a recording keeps it: without query or fragment, and
+// with each opaque segment (a UUID, or 20 or more characters of hex, or of
+// base64url mixing letters and digits, as in reset links and signed URLs)
+// replaced. Shorter ids stay, and a replaced segment still matches a route's
+// parameter.
+const REDACTED_SEGMENT = "[redacted]";
+const UUID_OR_HEX_SEGMENT = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{20,})$/iu;
+const TOKEN_SEGMENT = /^(?=[A-Za-z_-]*[0-9])(?=[0-9_-]*[A-Za-z])[A-Za-z0-9_-]{20,}$/u;
+
+function recordedRequestPath(requestPath = "") {
+  return String(requestPath || "/").split(/[?#]/u)[0].split("/")
+    .map((segment) => (UUID_OR_HEX_SEGMENT.test(segment) || TOKEN_SEGMENT.test(segment) ? REDACTED_SEGMENT : segment))
+    .join("/").slice(0, 256);
+}
+
 function requestRow(id, fields, reader, plumbing) {
   const ran = reader.scopeFunctions(id, plumbing);
   return {
     id,
     method: fields.method ?? null,
-    path: fields.path ?? null,
+    // A request's path, logged by the proxy or a tracer; a run's label is kept.
+    path: fields.method && fields.path ? recordedRequestPath(fields.path) : fields.path ?? null,
     status: fields.status ?? null,
     startedAt: fields.startedAt ?? null,
     durationMs: fields.durationMs ?? null,
@@ -341,11 +417,14 @@ function pageOf(items, { cursor = "", limit = 100, maxLimit = 200 } = {}) {
 
 export {
   HITS_FILE_PATTERN,
+  appendJsonLine,
   createTraceReader,
   pageOf,
   readInteractions,
   readJsonFile,
+  readRegularFile,
   readRequestLog,
+  recordedRequestPath,
   recordingRequestRows,
   writeJsonFile
 };

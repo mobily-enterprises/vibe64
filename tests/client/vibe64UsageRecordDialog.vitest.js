@@ -167,7 +167,9 @@ it("lists the session's targets with the privacy copy, disabling unavailable one
   expect(server.requests.map((request) => request.route)).toContain("GET /targets");
   expect(view.text()).toContain("Record what runs");
   expect(view.text()).toContain(
-    "Use your app while recording. Vibe64 saves which functions ran for each request — never request contents, headers or data.");
+    "Use your app while recording. Vibe64 saves which functions ran for each request, with its method, path and status, " +
+    "and for each click the element's role, up to 40 characters of its text and its component file. Long ids and tokens " +
+    "in paths are hidden. It never saves what you type, request contents, headers or cookies.");
   expect(view.text()).toContain("Stops automatically after 10 minutes or 2,000 requests.");
   expect(view.kind("radio").map((node) => [node.props.label, Boolean(node.props.disabled)])).toEqual([
     ["Preview (restarts Preview)", false],

@@ -102,8 +102,9 @@ function goToPreview() {
       <v-card-title class="usage-record-dialog__title">Record what runs</v-card-title>
       <v-card-text class="usage-record-dialog__body">
         <p>
-          Use your app while recording. Vibe64 saves which functions ran for each request — never request contents,
-          headers or data.
+          Use your app while recording. Vibe64 saves which functions ran for each request, with its method, path and
+          status, and for each click the element's role, up to 40 characters of its text and its component file. Long
+          ids and tokens in paths are hidden. It never saves what you type, request contents, headers or cookies.
         </p>
         <v-progress-linear v-if="targetsLoading" indeterminate />
         <v-radio-group v-else v-model="selectedId" class="usage-record-dialog__targets" hide-details>

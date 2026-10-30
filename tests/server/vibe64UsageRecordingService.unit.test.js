@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFile, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -9,7 +9,9 @@ import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { activeUsageRecording, stopActiveUsageRecording } from "@local/vibe64-usage-recording/server/activeRecordings";
 import { mergePrependEnvironment } from "@local/vibe64-usage-recording/server/tracers";
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
+import python from "../../packages/vibe64-usage-recording/src/server/tracers/python.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
+import { routeTemplateFor } from "../../packages/vibe64-system-graph/src/client/usage/usageModel.js";
 
 const HASH = `sha256:${"b".repeat(64)}`;
 const SESSION_ID = "session-one";
@@ -109,6 +111,65 @@ test("prepended tracer variables keep both values' segments", () => {
   assert.deepEqual(mergePrependEnvironment({}, { PYTHONPATH: "/app" }), {});
 });
 
+test("a prepended variable joins the value the recorded process would inherit", async (t) => {
+  const saved = process.env.PYTHONPATH;
+  process.env.PYTHONPATH = "/inherited/site";
+  t.after(() => {
+    if (saved === undefined) delete process.env.PYTHONPATH;
+    else process.env.PYTHONPATH = saved;
+  });
+  const pythonRun = { id: "py-run", label: "Python run", web: false, available: true, disabledReason: "", runtimes: ["python"], parameters: [] };
+  const { call } = await recorder(t, { targets: [...TARGETS, pythonRun] });
+  await call("start", { targetId: "output:py-run" });
+  const ours = python.prepare({}).prependEnvironment.PYTHONPATH;
+  // The server's own value, unless the launch sets one itself.
+  assert.equal(launchOf({ outputTargetId: "py-run" }).environment.PYTHONPATH, `${ours}${path.delimiter}/inherited/site`);
+  assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "/project" } }).environment.PYTHONPATH,
+    `${ours}${path.delimiter}/project`);
+  assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "" } }).environment.PYTHONPATH, ours);
+});
+
+test("a recording appends its logs to no file but its own", async (t) => {
+  const { call, root } = await recorder(t);
+  const { recording } = await call("start", { targetId: "preview" });
+  const directory = launchOf({ web: true, outputTargetId: "web" }).environment.VIBE64_USAGE_RECORDING_DIR;
+  const outside = path.join(root, "outside.ndjson");
+  await writeFile(outside, "");
+  await symlink(outside, path.join(directory, "interactions.ndjson"));
+  await call("recordInteraction", { recordingId: recording.id, id: "i_0001", at: new Date().toISOString(), label: "button" });
+  assert.equal(await readFile(outside, "utf8"), "");
+});
+
+test("request paths keep no query and hide long ids and tokens, and still match their routes", async (t) => {
+  const { call } = await recorder(t);
+  const { recording } = await call("start", { targetId: "preview" });
+  const directory = launchOf({ web: true, outputTargetId: "web" }).environment.VIBE64_USAGE_RECORDING_DIR;
+  const active = activeUsageRecording(SCOPE, SESSION_ID);
+  const paths = {
+    "/reset/3f2b8c9d4e5f6a7b8c9d0e1f2a3b4c5d?next=/home": "/reset/[redacted]",
+    "/api/notes/123e4567-e89b-12d3-a456-426614174000": "/api/notes/[redacted]",
+    "/files/s/AbCdEfGh1234_-IjKlMnOp5678/view": "/files/s/[redacted]/view",
+    "/api/notes/42/comments/7": "/api/notes/42/comments/7",
+    "/api/app/demo/architecture-inspection": "/api/app/demo/architecture-inspection",
+    "/api/sessions/session-one": "/api/sessions/session-one"
+  };
+  for (const requestPath of Object.keys(paths)) active.proxyRequest({ method: "GET", path: requestPath }).finish({ status: 200 });
+  const log = path.join(directory, "requests.ndjson");
+  const logged = await waitFor(async () => (await readFile(log, "utf8").catch(() => "")).trim().split("\n").filter(Boolean),
+    (lines) => lines.length === 6, "the request log");
+  assert.deepEqual(logged.map((line) => JSON.parse(line).path), Object.values(paths));
+  // A path a tracer labelled itself is shown the same way.
+  const trace = tracer(directory);
+  await trace.ready();
+  await trace.hit("l_4242_1", "local-request", "POST /verify/eyJhbGciOiJIUzI1NiJ9xyz123");
+  const rows = await waitFor(async () => (await call("readRequests", { recordingId: recording.id })).requests,
+    (value) => value.length === 1, "the local request");
+  assert.equal(rows[0].path, "/verify/[redacted]");
+  const routes = [{ title: "GET /api/notes/:noteId" }, { title: "GET /files/s/:token/view" }];
+  assert.equal(routeTemplateFor("GET", "/api/notes/[redacted]", routes), "/api/notes/:noteId");
+  assert.equal(routeTemplateFor("GET", "/files/s/[redacted]/view", routes), "/files/s/:token/view");
+});
+
 test("targets list Preview and each terminal Output target with what can be recorded", async (t) => {
   const { call } = await recorder(t);
   const expected = await readJson(new URL("../fixtures/usage-map/recording/api/targets.json", import.meta.url));
@@ -150,7 +211,9 @@ test("a Preview recording numbers requests, follows its tracers and stops with r
   await trace.hit("r_000001");
   const recordingNow = await waitFor(current, (value) => value?.state === "recording" && value.counts.requests === 1, "recording");
   assert.deepEqual(recordingNow.tracers, [{ runtime: "nodejs", state: "ready", reason: "" }]);
-  assert.ok(published.some((event) => event.realtime.payload.state === "recording" && event.realtime.payload.projectSlug === "demo"));
+  // The state changes before its record is written and published.
+  await waitFor(async () => published.some((event) => event.realtime.payload.state === "recording" && event.realtime.payload.projectSlug === "demo"),
+    Boolean, "the recording event");
   assert.equal(published.at(-1).realtime.event, "vibe64.usage-recording.changed");
   assert.deepEqual(published.at(-1).realtime.audience, { room: `vibe64:project:demo:session:${SESSION_ID}` });
 

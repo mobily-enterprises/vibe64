@@ -3690,6 +3690,8 @@ function createVibe64SessionStore({
         `--exclude=${sessionPaths.sessionId}/drop-zone`,
         // Usage recordings are never archived; they end with the session.
         `--exclude=${sessionPaths.sessionId}/usage-recordings`,
+        // Architecture caches are rebuilt by the next inspection.
+        `--exclude=${sessionPaths.sessionId}/architecture-cache`,
         sessionPaths.sessionId
       ], {
         allowedRoots: [

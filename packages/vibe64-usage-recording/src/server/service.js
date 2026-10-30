@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { appendFile, chmod, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { chmod, mkdir, open, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { AppError } from "@jskit-ai/kernel/server/runtime";
@@ -19,10 +19,12 @@ import { registerActiveUsageRecording, activeUsageRecording } from "./activeReco
 import { admitUsageRecording } from "./admission.js";
 import { usageRecordingPath, usageRecordingsPath } from "./recordingFiles.js";
 import {
+  appendJsonLine,
   createTraceReader,
   pageOf,
   readInteractions,
   readJsonFile,
+  recordedRequestPath,
   recordingRequestRows,
   writeJsonFile
 } from "./traceStore.js";
@@ -111,8 +113,16 @@ async function readSourceIdentity(sourceRoot) {
   let afterColon = false;
   const structure = /["{}[\]:,]/gu;
   const stringEnd = /["\\]/gu;
-  const stream = createReadStream(path.join(sourceRoot, GENESIS_MACHINE_CITY_PATH), { encoding: "utf8", highWaterMark: 1024 * 1024 });
+  // Opened as a regular file only, never through a link or from a FIFO.
+  let handle;
   try {
+    handle = await open(path.join(sourceRoot, GENESIS_MACHINE_CITY_PATH), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch {
+    return null;
+  }
+  const stream = handle.createReadStream({ encoding: "utf8", highWaterMark: 1024 * 1024 });
+  try {
+    if (!(await handle.stat()).isFile()) return null;
     for await (const chunk of stream) {
       let index = 0;
       while (index < chunk.length) {
@@ -408,15 +418,20 @@ function createService({
       writes: Promise.resolve()
     };
     const append = (name, row) => {
-      entry.writes = entry.writes.then(() => appendFile(path.join(directory, name), `${JSON.stringify(row)}\n`, { mode: 0o660 }))
+      entry.writes = entry.writes.then(() => appendJsonLine(path.join(directory, name), row))
         .catch((error) => logger?.warn?.({ error, recordingId: record.id }, "Usage recording could not append a line."));
       return entry.writes;
     };
+    // A launched target inherits this server's environment beneath the
+    // launch's own variables, so a prepended value joins the one the process
+    // would otherwise see, such as a PHP_INI_SCAN_DIR the server was started
+    // with or a person's own PYTHONPATH.
     const recorderEnvironment = (environment = {}) => {
       const result = usageRecordingEnvironment({ recordingDirectory: directory, sourceRoot: context.sourceRoot, targetKind: target.kind });
+      const inherited = { ...process.env, ...environment };
       let usageRecordingPreload = "";
       for (const { prepared } of tracers) {
-        Object.assign(result, prepared.environment || {}, mergePrependEnvironment(prepared.prependEnvironment, environment));
+        Object.assign(result, prepared.environment || {}, mergePrependEnvironment(prepared.prependEnvironment, inherited));
         usageRecordingPreload = prepared.realPreload || usageRecordingPreload;
       }
       return { environment: result, usageRecordingPreload };
@@ -457,7 +472,7 @@ function createService({
               id: requestId,
               seq: Number(requestId.slice(2)),
               method: /^[A-Z]{1,16}$/u.test(String(method).toUpperCase()) ? String(method).toUpperCase() : "OTHER",
-              path: String(requestPath || "/").split(/[?#]/u)[0].slice(0, 256),
+              path: recordedRequestPath(requestPath),
               status: Number.isSafeInteger(status) ? status : null,
               startedAt: new Date(startedAtMs).toISOString(),
               durationMs: Math.max(0, now() - startedAtMs),

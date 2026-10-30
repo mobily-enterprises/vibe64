@@ -256,6 +256,26 @@ test("the namespace archive leaves out rebuildable output at each session source
   });
 });
 
+test("the state archive leaves out each session's Drop Zone, usage recordings and architecture caches", async () => {
+  await withArchiveTest(async ({ projectContext }) => {
+    await projectContext.createWorkspaceProjectRecord({ slug: "kept" });
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("kept");
+    for (const state of ["active", "closing"]) {
+      const session = path.join(runtimeRoot, "sessions", state, `${state}-one`);
+      for (const file of ["drop-zone/upload.txt", "usage-recordings/rec_aaaaaaaaaaaaaaaaaaaa/recording.json",
+        "architecture-cache/jskit/jskit-calls.json", "notes.txt"]) {
+        await mkdir(path.dirname(path.join(session, file)), { recursive: true });
+        await writeFile(path.join(session, file), "x\n");
+      }
+    }
+    const service = createProjectArchiveService({ closeProjectRuntime: async () => ({ ok: true }), projectContext, runCommand: runVibe64Command });
+    const completed = await service.archiveProject({ slug: "kept" });
+    const listing = String((await execFileAsync("tar", ["-tzf", path.join(completed.bundlePath, "runtime-state.tgz")])).stdout);
+    for (const state of ["active", "closing"]) assert.ok(listing.includes(`sessions/${state}/${state}-one/notes.txt`));
+    for (const name of ["drop-zone", "usage-recordings", "architecture-cache"]) assert.equal(listing.includes(`/${name}/`), false, name);
+  });
+});
+
 test("archive recovery rehearsal restores session source and conversation ACLs and detects corruption", async () => {
   await withArchiveTest(async ({ projectContext, tempRoot }) => {
     const slug = "restore-rehearsal";
