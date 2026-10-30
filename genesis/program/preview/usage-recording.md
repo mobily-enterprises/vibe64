@@ -40,6 +40,16 @@ recording indicator in the project header follows it on every pane.
 - `tests/server/vibe64UsagePhpTracer.unit.test.js`
 - `tests/e2e/usage-recording.spec.ts`
 
+## Public contract
+
+The `vibe64.usage-recording.*` actions sit under one session's
+`/usage-recordings` routes: list the recordable Output targets, start, read the
+current recording, list recent ones, stop, dismiss, delete, page a recording's
+requests and one request's functions, and record a Preview interaction (a
+click, Enter or submit, with an optional component file). Editor clients send
+interactions from the Preview page bridge while the recording runs. Results
+name project files, functions, positions and counts, never values.
+
 ## Recording lifecycle
 
 Starting checks the session, that no recording runs in it, the target and its
