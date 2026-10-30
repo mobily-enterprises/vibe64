@@ -509,10 +509,16 @@ function joinFunctions(index, callIndex, input) {
     if (file.hash !== candidate.hash) return { index: position, functionId: null, subsystemId: file.subsystemId ?? null, join: "stale" };
     const inFile = callIndex.byPath.get(filePath) || [];
     const start = candidate.start || {};
-    const exact = inFile.find((fnPosition) => {
+    const atStart = inFile.filter((fnPosition) => {
       const fn = callIndex.functions[fnPosition];
       return fn.start.line === start.line && fn.start.column === start.column;
     });
+    // A file's top-level code and a function opening the file share 1:1;
+    // the recorded name picks the function, any other name the top level.
+    const exact = atStart.length > 1
+      ? atStart.find((fnPosition) => callIndex.functions[fnPosition].name === (candidate.name || ""))
+        ?? atStart.find((fnPosition) => callIndex.functions[fnPosition].kind === "module")
+      : atStart[0];
     if (exact !== undefined) return { index: position, functionId: callIndex.functions[exact].id, subsystemId: file.subsystemId ?? null, join: "exact", position: exact };
     const near = candidate.name ? inFile.filter((fnPosition) => {
       const fn = callIndex.functions[fnPosition];
@@ -536,6 +542,7 @@ function joinFunctions(index, callIndex, input) {
   return {
     joined: joined.map(({ index: position, functionId, subsystemId, join }) => ({ index: position, functionId, subsystemId, join })),
     edges: [...edges.values()].sort((left, right) => left.from - right.from || left.to - right.to),
+    groups: index.groups,
     subsystems: subsystemIds.map((id) => {
       const owner = index.subsystemById.get(id);
       return { id, title: owner?.title || id, group: owner?.group ?? null };

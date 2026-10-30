@@ -31,7 +31,13 @@ const LAYOUT = { groups: [
   { id: "features", title: "Features", kind: "layer", subsystems: [{ root: "src" }, { root: "packages/sessions" }, { root: "packages/reports" }] },
   { id: "shared", title: "Shared code", kind: "layer", subsystems: [{ root: "packages/core" }] }
 ] };
-const fn = (file, line, column) => `fn:${file}#${line}:${column}`;
+// Function ids are opaque: tests find them in the fixture by file and start.
+function fn(file, line, column) {
+  const found = callWeb.functions.find((item) => callWeb.files[item.file].path === file && item.start.line === line && item.start.column === column && item.kind !== "module");
+  assert.ok(found, `${file}:${line}:${column} is not a function in the fixture call web`);
+  return found.id;
+}
+const moduleOf = (file) => callWeb.functions.find((item) => callWeb.files[item.file].path === file && item.kind === "module").id;
 const snapshot = (city = machine, layout = LAYOUT) => buildSnapshotIndex({ city, exists: true, builtAt: "2026-10-30T10:00:00.000Z" }, layout);
 const index = snapshot();
 const calls = buildCallIndex(callWeb);
@@ -121,7 +127,7 @@ test("Imports follow resolved imports only, never type-only ones", () => {
 test("Calls start from a component's own functions and cross transports through bridges", () => {
   const response = readCallsWeb(index, calls, entry(COMPONENT), {});
   const byId = new Map(response.functions.map((item) => [item.id, item]));
-  for (const start of [fn("src/components/SessionList.vue", 1, 1), fn("src/components/SessionList.vue", 8, 1), fn("src/components/SessionList.vue", 12, 1)]) {
+  for (const start of [moduleOf("src/components/SessionList.vue"), fn("src/components/SessionList.vue", 8, 1), fn("src/components/SessionList.vue", 12, 1)]) {
     assert.equal(byId.get(start)?.depth, 0, `${start} starts the web`);
   }
   assert.equal(byId.get(fn("packages/sessions/src/server/routes.js", 5, 50)).reach, "exact", "the exact bridge reaches the GET route handler");
@@ -142,7 +148,7 @@ test("Calls start from a component's own functions and cross transports through 
   assert.deepEqual(exact.functions.map((item) => item.id).sort(), [
     fn("packages/sessions/src/server/routes.js", 5, 50), fn("packages/sessions/src/server/routes.js", 9, 1),
     fn("src/api/sessionsClient.js", 1, 8), fn("src/api/sessionsClient.js", 6, 8),
-    fn("src/components/SessionList.vue", 1, 1), fn("src/components/SessionList.vue", 12, 1), fn("src/components/SessionList.vue", 8, 1)
+    moduleOf("src/components/SessionList.vue"), fn("src/components/SessionList.vue", 12, 1), fn("src/components/SessionList.vue", 8, 1)
   ].sort());
   assert.ok(exact.edges.every((edge) => edge.certainty === "exact"));
   assertBoundedEdges(exact, "functions");
@@ -189,7 +195,7 @@ test("maxNodes keeps function and file lists out of whole-web responses", () => 
 function syntheticWeb(count, { nameLength = 8, unresolvedPerFunction = 0 } = {}) {
   const file = "src/chain.js";
   const functions = Array.from({ length: count }, (_, position) => ({
-    id: fn(file, position + 1, 1), file: 0, name: `f${position}`.padEnd(nameLength, "x"), kind: "function",
+    id: `fn:${file}#f${position}`, file: 0, name: `f${position}`.padEnd(nameLength, "x"), kind: "function",
     start: { line: position + 1, column: 1 }, end: { line: position + 1, column: 9 }
   }));
   const site = (position) => ({ start: { line: position + 1, column: 2 }, end: { line: position + 1, column: 3 } });
@@ -238,7 +244,7 @@ test("a function lists its calls, callers and unresolved calls with their certai
   ]);
   const handler = readFunction(index, calls, { functionId: fn("server/router.js", 18, 3) });
   assert.deepEqual(handler.unresolved, [{ callee: "handler", start: { line: 20, column: 34 } }]);
-  assert.throws(() => readFunction(index, calls, { functionId: "fn:nowhere#1:1" }), { code: "vibe64_usage_function_not_found" });
+  assert.throws(() => readFunction(index, calls, { functionId: "fn:nowhere" }), { code: "vibe64_usage_function_not_found" });
   assert.throws(() => readFunction(index, null, { functionId: runAction.function.id }), { code: "vibe64_usage_function_not_found" });
 });
 
@@ -267,6 +273,38 @@ test("recorded functions join exactly, by name and line, as stale or not at all"
   assert.deepEqual(withoutCalls.joined.map((item) => item.join), ["none", "stale"]);
   assert.deepEqual(withoutCalls.edges, []);
   assert.throws(() => joinFunctions(index, calls, { functions: Array.from({ length: 1501 }, () => request.functions[0]) }), { code: "vibe64_invalid_usage_join_size" });
+
+  // A function opening its file shares 1:1 with the file's top-level code.
+  const opening = structuredClone(callWeb);
+  const demo = opening.files.findIndex((file) => file.path === "bin/demo.js");
+  opening.functions.push({ id: "fn:bin/demo.js#opening", file: demo, name: "main", kind: "function", start: { line: 1, column: 1 }, end: { line: 3, column: 2 } });
+  const shared = joinFunctions(index, buildCallIndex(opening), { functions: ["main", "", "<module>"].map((name) => ({ path: "bin/demo.js", hash: opening.files[demo].hash, name, start: { line: 1, column: 1 } })) });
+  assert.deepEqual(shared.joined.map((item) => item.functionId), ["fn:bin/demo.js#opening", moduleOf("bin/demo.js"), moduleOf("bin/demo.js")]);
+});
+
+test("PHP records join by name and line, closures not at all, and file bodies to the module", () => {
+  // PHP keeps no columns: every recorded start is column 1, methods carry
+  // their bare name, closures are named "" and a file's body is "" at 1:1.
+  const php = structuredClone(callWeb);
+  const path = "packages/sessions/src/server/SessionController.php";
+  const file = php.files.push({ path, hash: "sha256:php", subsystemId: "directory:packages/sessions", coverage: "generic" }) - 1;
+  const declared = [
+    { id: `fn:${path}#module`, kind: "module", name: "", start: { line: 1, column: 1 }, end: { line: 30, column: 2 } },
+    { id: `fn:${path}#12:5`, kind: "method", name: "index", container: "SessionController", start: { line: 12, column: 5 }, end: { line: 20, column: 6 } },
+    { id: `fn:${path}#14:22`, kind: "function", name: "", start: { line: 14, column: 22 }, end: { line: 16, column: 10 } }
+  ];
+  php.functions.push(...declared.map((item) => ({ ...item, file })));
+  const recorded = [
+    { name: "index", start: { line: 12, column: 1 } },
+    { name: "", start: { line: 14, column: 1 } },
+    { name: "", start: { line: 1, column: 1 } }
+  ].map((item) => ({ path, hash: "sha256:php", ...item }));
+  const joined = joinFunctions(index, buildCallIndex(php), { functions: recorded }).joined;
+  assert.deepEqual(joined.map((item) => [item.join, item.functionId]), [
+    ["name-line", `fn:${path}#12:5`],
+    ["none", null],
+    ["exact", `fn:${path}#module`]
+  ]);
 });
 
 test("the call-web cache keeps one web per session, two sessions, and drops idle ones", async () => {
