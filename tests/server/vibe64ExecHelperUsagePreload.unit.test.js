@@ -81,18 +81,18 @@ test("an unmanaged launch applies the same preload check before setting NODE_OPT
 });
 
 test("only a Preview or Output launch may name a recorder preload", () => {
-  const request = { command: "node", cwd: "/", usageRecordingPreload: "/opt/preload.mjs" };
+  const request = { command: "node", cwd: "/", usageRecordingPreload: "/recorder/preload.mjs" };
   for (const purpose of ["preview", "output"]) {
-    assert.equal(normalizeVibe64CommandRequest({ ...request, purpose }).usageRecordingPreload, "/opt/preload.mjs");
+    assert.equal(normalizeVibe64CommandRequest({ ...request, purpose }).usageRecordingPreload, "/recorder/preload.mjs");
   }
   assert.equal(normalizeVibe64CommandRequest({ command: "node", cwd: "/" }).usageRecordingPreload, "");
   for (const invalid of [
     { purpose: "terminal" },
     { purpose: "assistant" },
     { purpose: "preview", usageRecordingPreload: "relative/preload.mjs" },
-    { purpose: "preview", usageRecordingPreload: "/opt/pre load.mjs" },
-    { purpose: "preview", usageRecordingPreload: "/opt/\"preload.mjs" },
-    { purpose: "preview", usageRecordingPreload: ["/opt/preload.mjs"] },
+    { purpose: "preview", usageRecordingPreload: "/recorder/pre load.mjs" },
+    { purpose: "preview", usageRecordingPreload: "/recorder/\"preload.mjs" },
+    { purpose: "preview", usageRecordingPreload: ["/recorder/preload.mjs"] },
     { purpose: "output", actor: "app" }
   ]) {
     assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...invalid }),

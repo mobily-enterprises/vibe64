@@ -207,8 +207,8 @@ test("prepare loads the built module through PHP_INI_SCAN_DIR and keeps PHP's ow
     const merge = (existing) => mergePrependEnvironment(prepared.prependEnvironment, { PHP_INI_SCAN_DIR: existing }, ":").PHP_INI_SCAN_DIR;
     assert.equal(merge(undefined), `${scanDirectory}:`);
     assert.equal(merge(""), `${scanDirectory}:`);
-    assert.equal(merge("/etc/php.d"), `${scanDirectory}:/etc/php.d`);
-    assert.equal(merge(":/etc/php.d"), `${scanDirectory}::/etc/php.d`);
+    assert.equal(merge("/conf/php.d"), `${scanDirectory}:/conf/php.d`);
+    assert.equal(merge(":/conf/php.d"), `${scanDirectory}::/conf/php.d`);
   } finally {
     process.env.VIBE64_USAGE_PHP_MODULE_CACHE = previous;
   }

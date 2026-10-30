@@ -97,7 +97,7 @@ test("path escape, symlinks, size, extension and unparsable scripts are refused"
   assert.equal((await read("largest.js")).length, 64 * 1024, "64 KiB is allowed");
   for (const refused of [
     "../outside.js",
-    "/etc/locator.js",
+    "/outside/locator.js",
     "escape/outside.js",
     "linked.js",
     "too-large.js",
