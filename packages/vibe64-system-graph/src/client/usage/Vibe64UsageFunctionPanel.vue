@@ -110,6 +110,7 @@ function openAt(start, file = props.node.file) {
 .usage-panel__list { padding: 0; background: transparent; }
 .usage-panel__callee code { font-size: .8125rem; overflow-wrap: anywhere; white-space: normal; }
 .usage-panel__list :deep(.v-list-item-subtitle) { -webkit-line-clamp: 3; }
+.usage-panel__list :deep(.v-list-item__append) { padding-inline-start: 8px; }
 .usage-panel :deep(.v-chip--variant-outlined) { border-color: var(--v64-outline); }
 /* Touch: 48 px targets for Open source, the code buttons and Close. */
 @media (pointer: coarse) {
