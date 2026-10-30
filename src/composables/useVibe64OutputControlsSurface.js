@@ -1340,6 +1340,7 @@ function useVibe64OutputControlsSurface(props, {
       at: new Date(Number.isFinite(at) ? at : Date.now()).toISOString(),
       componentFile: previewComponentSourcePath(data?.componentFile, props.session?.sourcePath) || null,
       id,
+      kind: ["enter", "submit"].includes(data?.kind) ? data.kind : "click",
       label: String(data?.elementLabel || "").trim().slice(0, 80) || "element"
     });
   }

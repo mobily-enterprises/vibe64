@@ -54,6 +54,8 @@ const USAGE_RECORDING_RETENTION = Object.freeze({
 const USAGE_RECORDING_ID_PATTERN = /^rec_[a-z2-7]{20}$/u;
 const USAGE_REQUEST_ID_PATTERN = /^r_[0-9]{6}$/u;
 const USAGE_INTERACTION_ID_PATTERN = /^i_[0-9]{4,6}$/u;
+// What started an interaction in Preview: a click, Enter in a field, or a submit.
+const USAGE_INTERACTION_KINDS = Object.freeze(["click", "enter", "submit"]);
 
 // Scope ids and the kind each one must declare.
 const USAGE_SCOPE_KINDS = Object.freeze([
@@ -110,6 +112,7 @@ function usageTraceLineProblem(line) {
 
 export {
   USAGE_INTERACTION_ID_PATTERN,
+  USAGE_INTERACTION_KINDS,
   USAGE_RECORDING_CHANGED_EVENT,
   USAGE_RECORDING_ENVIRONMENT,
   USAGE_RECORDING_ID_PATTERN,

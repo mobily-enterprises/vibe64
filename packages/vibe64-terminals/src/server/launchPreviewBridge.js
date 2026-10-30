@@ -558,6 +558,7 @@ function launchPreviewBridgeScript({
       componentFile: locateComponent(element).componentFile,
       elementLabel: elementLabel(element),
       id: interaction.id,
+      kind: event.type === "keydown" ? "enter" : event.type,
       type: config.interactionMessageType,
       version: config.version
     });

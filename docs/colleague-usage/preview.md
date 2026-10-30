@@ -215,7 +215,7 @@ restarts Preview with the recorder, so unsaved page state is lost; stopping it
 does not restart Preview. While it runs, each click, form submit or Enter in
 Preview becomes an interaction. Requests the
 page starts on its own address within one second of it are listed under it in
-Usage › Recording, such as **Click: button "Add" (SessionList.vue)**; requests to
+Usage › Recording, such as **Click: button "Add" (SessionList.vue)** or **Enter: textbox "Title"**; requests to
 other sites are never marked. Labels name the element's role and visible label,
 never what was typed, and a password field is only called "password field". The
 page itself works as usual while it is recorded.

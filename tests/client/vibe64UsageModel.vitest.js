@@ -124,6 +124,8 @@ describe("recordings", () => {
     expect(requestTitle(requests.requests[0], routes, requests.requests)).toBe("Start-up and work outside requests");
     expect(requestTitle(requests.requests[0], routes, [requests.requests[0]])).toBe("Not separated per request for this server");
     expect(interactionTitle(groups[1].interaction)).toBe("Click: button \"Add\" (SessionList.vue)");
+    expect(interactionTitle({ ...groups[1].interaction, kind: "enter", label: "textbox \"Title\"" })).toBe("Enter: textbox \"Title\" (SessionList.vue)");
+    expect(interactionTitle({ ...groups[1].interaction, kind: "submit", label: "form \"New\"" })).toBe("Submit: form \"New\" (SessionList.vue)");
   });
 
   it("joins what ran to the call web and lights only the subsystems that ran", () => {

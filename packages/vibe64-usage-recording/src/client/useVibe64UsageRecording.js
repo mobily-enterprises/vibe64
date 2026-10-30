@@ -26,7 +26,7 @@ const FINAL_STATES = Object.freeze(["stopped", "failed", "unavailable"]);
 //   start({ targetId, parameters })  POST / → { recording }
 //   stop()             POST /:recordingId/stop (idempotent)
 //   dismiss()          POST /:recordingId/dismiss
-//   recordInteraction({ id, at, label, componentFile })  POST /:recordingId/interactions
+//   recordInteraction({ id, at, label, kind, componentFile })  POST /:recordingId/interactions
 // Every reader of one project's session shares one cached `current` read, so the
 // indicator, the usage view and the Preview controls show the same recording.
 // Realtime changes and operation results update that shared entry. Operations
@@ -154,10 +154,10 @@ function useVibe64UsageRecording({ sessionId = "" } = {}) {
     return result?.recording ? applyRecording(result.recording) : null;
   }
 
-  async function recordInteraction({ id: interactionId, at, label = "", componentFile = null } = {}) {
+  async function recordInteraction({ id: interactionId, at, label = "", kind = "click", componentFile = null } = {}) {
     if (recording.value?.state !== "recording") return null;
     return send(recordingPath("/interactions"), {
-      body: { id: interactionId, at, label: String(label).slice(0, 80), componentFile: componentFile || null },
+      body: { id: interactionId, at, label: String(label).slice(0, 80), kind, componentFile: componentFile || null },
       fallback: "The interaction could not be recorded."
     });
   }

@@ -215,10 +215,10 @@ describe("Recorded interactions", () => {
     await settle();
     expect(f.sent(PREVIEW_RECORDING_MESSAGE_TYPE).at(-1).data).toMatchObject({ active: true, recordingId: RECORDING.id, nextInteraction: 1 });
 
-    f.message({ type: PREVIEW_INTERACTION_MESSAGE_TYPE, id: "i_0004", at: "2026-10-30T10:00:00.000Z",
+    f.message({ type: PREVIEW_INTERACTION_MESSAGE_TYPE, id: "i_0004", at: "2026-10-30T10:00:00.000Z", kind: "submit",
       elementLabel: "button \"Save\"", componentFile: `${SOURCE_ROOT}/src/components/NoteCard.vue` });
     expect(f.usage.recordInteraction).toHaveBeenCalledWith({ id: "i_0004", at: "2026-10-30T10:00:00.000Z",
-      label: "button \"Save\"", componentFile: "src/components/NoteCard.vue" });
+      kind: "submit", label: "button \"Save\"", componentFile: "src/components/NoteCard.vue" });
     f.message({ type: PREVIEW_BRIDGE_READY_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION });
     expect(f.sent(PREVIEW_RECORDING_MESSAGE_TYPE).at(-1).data).toMatchObject({ active: true, nextInteraction: 5 },
       "a page that loads later continues after i_0004");

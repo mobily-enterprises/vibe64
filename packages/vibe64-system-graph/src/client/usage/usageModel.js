@@ -286,9 +286,12 @@ function requestGroups(requests = [], interactions = []) {
   return groups;
 }
 
+const INTERACTION_VERBS = Object.freeze({ click: "Click", enter: "Enter", submit: "Submit" });
+
 function interactionTitle(interaction) {
   if (!interaction) return "";
-  return `Click: ${interaction.label}${interaction.componentFile ? ` (${fileName(interaction.componentFile)})` : ""}`;
+  const verb = INTERACTION_VERBS[interaction.kind] || INTERACTION_VERBS.click;
+  return `${verb}: ${interaction.label}${interaction.componentFile ? ` (${fileName(interaction.componentFile)})` : ""}`;
 }
 
 // What ran in one request, joined to the call web and grouped by subsystem.

@@ -61,6 +61,7 @@
     {
       "id": "i_0001",
       "label": "button \"Add\"",
+      "kind": "click",
       "componentFile": "src/components/SessionList.vue"
     }
   ],

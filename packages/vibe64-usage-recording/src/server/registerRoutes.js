@@ -46,8 +46,8 @@ function registerRoutes(http, { projectContext = null } = {}) {
       (request) => ({ ...ids(request), requestId: request.params.requestId, ...pageQuery(requestQuery(request)) })],
     ["POST", "/:recordingId/interactions", "interaction.record", "Record a Preview interaction during a recording.",
       (request) => {
-        const { id, at, label, componentFile } = body(request);
-        return { ...ids(request), id, at, label, ...(componentFile !== undefined ? { componentFile } : {}) };
+        const { id, at, label, kind, componentFile } = body(request);
+        return { ...ids(request), id, at, label, ...(kind !== undefined ? { kind } : {}), ...(componentFile !== undefined ? { componentFile } : {}) };
       }],
     ["DELETE", "/:recordingId", "delete", "Delete a recording, stopping it first."]
   ]) routes.actionRoute(method, `${sessionRoute}${suffix}`, {

@@ -157,7 +157,7 @@ it("shares operation results with every reader and reports server refusals verba
   expect(await controls.recordInteraction({ id: "i_0001", at: "2026-10-30T10:00:01.000Z", label: "Save" })).toBe(null);
   view.emit("vibe64.usage-recording.changed", changed({ state: "recording" }));
   await controls.recordInteraction({ id: "i_0001", at: "2026-10-30T10:00:01.000Z", label: "x".repeat(90) });
-  expect(view.requests.at(-1).body).toEqual({ id: "i_0001", at: "2026-10-30T10:00:01.000Z", label: "x".repeat(80), componentFile: null });
+  expect(view.requests.at(-1).body).toEqual({ id: "i_0001", at: "2026-10-30T10:00:01.000Z", label: "x".repeat(80), kind: "click", componentFile: null });
 
   expect(await indicator.stop()).toEqual(expect.objectContaining({ state: "stopping" }));
   expect(controls.recording.value.state).toBe("stopping");

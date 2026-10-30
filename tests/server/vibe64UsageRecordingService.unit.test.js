@@ -339,15 +339,16 @@ test("interactions are recorded only while Preview records, validated and capped
   });
   assert.deepEqual(await interaction("i_0001"), { ok: true });
   assert.deepEqual(await interaction("i_0001"), { ok: true });
-  for (const invalid of [{ componentFile: "/etc/passwd" }, { componentFile: "../x.vue" }, { at: "yesterday" }, { label: "x".repeat(81) }]) {
+  for (const invalid of [{ componentFile: "/etc/passwd" }, { componentFile: "../x.vue" }, { at: "yesterday" }, { label: "x".repeat(81) }, { kind: "hover" }]) {
     await assert.rejects(interaction("i_0002", invalid), { statusCode: 422 }, JSON.stringify(invalid));
   }
   await assert.rejects(interaction("x_0002"), { statusCode: 422 });
-  for (let index = 2; index <= 500; index += 1) await interaction(`i_${String(index).padStart(4, "0")}`);
+  for (let index = 2; index <= 500; index += 1) await interaction(`i_${String(index).padStart(4, "0")}`, index === 2 ? { kind: "enter" } : {});
   await assert.rejects(interaction("i_0501"), { statusCode: 422, code: "vibe64_usage_recording_interaction_limit" });
   const lines = (await readFile(path.join(directory, "interactions.ndjson"), "utf8")).trim().split("\n");
   assert.equal(lines.length, 500);
-  assert.deepEqual(JSON.parse(lines[0]), { id: "i_0001", at: "2026-10-30T10:00:19.800Z", label: "button \"Add\"", componentFile: "src/components/SessionList.vue" });
+  assert.deepEqual(JSON.parse(lines[0]), { id: "i_0001", at: "2026-10-30T10:00:19.800Z", label: "button \"Add\"", kind: "click", componentFile: "src/components/SessionList.vue" });
+  assert.equal(JSON.parse(lines[1]).kind, "enter");
   await call("stop", { recordingId: recording.id });
   await waitFor(current, (value) => value?.state === "stopped", "stopped");
   await assert.rejects(interaction("i_0600"), { statusCode: 409 });

@@ -1,5 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { USAGE_INTERACTION_KINDS } from "../shared/contract.js";
 
 const text = (maxLength, extra = {}) => ({ type: "string", minLength: 1, maxLength, required: true, ...extra });
 const optionalText = (maxLength) => ({ type: "string", maxLength, required: false });
@@ -28,6 +29,7 @@ const OPERATIONS = [
     id: text(8, { pattern: "^i_[0-9]{4,6}$" }),
     at: text(40),
     label: text(80),
+    kind: { type: "string", enum: [...USAGE_INTERACTION_KINDS], required: false },
     componentFile: { type: "string", maxLength: 512, nullable: true, required: false }
   }],
   ["delete", "delete", "command", { recordingId }]

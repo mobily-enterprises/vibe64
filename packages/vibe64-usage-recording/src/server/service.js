@@ -33,6 +33,7 @@ import {
 } from "./tracers/index.js";
 import {
   USAGE_INTERACTION_ID_PATTERN,
+  USAGE_INTERACTION_KINDS,
   USAGE_RECORDING_CHANGED_EVENT,
   USAGE_RECORDING_ID_PATTERN,
   USAGE_RECORDING_LIMITS,
@@ -678,7 +679,7 @@ function createService({
       const page = pageOf(matching, { cursor, limit, maxLimit: 200 });
       const referenced = new Set(page.items.map((row) => row.interaction).filter(Boolean));
       const interactions = (await readInteractions(directory)).filter((row) => referenced.has(row.id))
-        .map(({ id, label, componentFile }) => ({ id, label, componentFile: componentFile ?? null }));
+        .map(({ id, label, kind, componentFile }) => ({ id, label, kind: kind || "click", componentFile: componentFile ?? null }));
       return { requests: page.items, interactions, nextCursor: page.more ? page.next : null };
     },
 
@@ -693,14 +694,14 @@ function createService({
       return { functions: page.items, total: functions.length, truncated: page.more };
     },
 
-    async recordInteraction({ sessionId, recordingId, id, at, label, componentFile = null } = {}) {
+    async recordInteraction({ sessionId, recordingId, id, at, label, kind = "click", componentFile = null } = {}) {
       const context = await sessionContext(sessionId);
       const { entry } = await recordingFor(context, recordingId);
       if (!entry || entry.stopRequested || entry.record.target.kind !== "web") {
         throw recordingError(409, "Interactions are recorded only while Preview is being recorded.", "vibe64_usage_recording_not_recording");
       }
       const valid = USAGE_INTERACTION_ID_PATTERN.test(String(id || "")) && Number.isFinite(Date.parse(at)) &&
-        typeof label === "string" && label.length > 0 && label.length <= 80 &&
+        typeof label === "string" && label.length > 0 && label.length <= 80 && USAGE_INTERACTION_KINDS.includes(kind) &&
         (componentFile === null || (typeof componentFile === "string" && componentFile.length <= 512 &&
           !componentFile.startsWith("/") && !componentFile.split("/").some((part) => !part || part === "." || part === "..")));
       if (!valid) throw recordingError(422, "This interaction is not valid.", "vibe64_usage_recording_interaction_invalid");
@@ -709,7 +710,7 @@ function createService({
         throw recordingError(422, "This recording has reached its interaction limit.", "vibe64_usage_recording_interaction_limit");
       }
       entry.interactions.add(id);
-      await entry.append("interactions.ndjson", { id, at: new Date(Date.parse(at)).toISOString(), label, componentFile });
+      await entry.append("interactions.ndjson", { id, at: new Date(Date.parse(at)).toISOString(), label, kind, componentFile });
       return { ok: true };
     },
 

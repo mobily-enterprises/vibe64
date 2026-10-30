@@ -93,9 +93,11 @@ phone) shows:
 - the recording, chosen from the last ten;
 - **Search requests**;
 - **Show requests that ran no project code**, off by default;
-- the requests, grouped under the click that caused them, such as
-  **Click: button "Add" (SessionList.vue)**. Each shows its method, route,
-  status and how many files and functions ran.
+- the requests, grouped under the click, Enter or form submit that caused
+  them, such as **Click: button "Add" (SessionList.vue)**, **Enter: textbox
+  "Title"** or **Submit: form "New note"**. Each shows its method, route,
+  status and how many files and functions ran. A process's start-up work is
+  listed first as **Start-up and work outside requests**.
 
 Pick a request to light up only the subsystems that ran. Functions that ran in
 most requests of the recording, such as logging or request setup, are counted

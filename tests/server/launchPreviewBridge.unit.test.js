@@ -277,10 +277,10 @@ test("a recorded click, submit and Enter each start one interaction, numbered fr
   page.dispatch("click", save, { isTrusted: false });
 
   const interactions = JSON.parse(JSON.stringify(page.of(PREVIEW_INTERACTION_MESSAGE_TYPE)));
-  assert.deepEqual(interactions.map(({ id, elementLabel, componentFile }) => ({ id, elementLabel, componentFile })), [
-    { id: "i_0007", elementLabel: "button \"Save\"", componentFile: "src/components/NoteForm.vue" },
-    { id: "i_0008", elementLabel: "form \"New note\"", componentFile: "src/components/NoteForm.vue" },
-    { id: "i_0009", elementLabel: "textbox \"Title\"", componentFile: "src/components/NoteForm.vue" }
+  assert.deepEqual(interactions.map(({ id, kind, elementLabel, componentFile }) => ({ id, kind, elementLabel, componentFile })), [
+    { id: "i_0007", kind: "click", elementLabel: "button \"Save\"", componentFile: "src/components/NoteForm.vue" },
+    { id: "i_0008", kind: "submit", elementLabel: "form \"New note\"", componentFile: "src/components/NoteForm.vue" },
+    { id: "i_0009", kind: "enter", elementLabel: "textbox \"Title\"", componentFile: "src/components/NoteForm.vue" }
   ]);
   assert.ok(interactions.every((message) => !Number.isNaN(Date.parse(message.at)) && message.version === PREVIEW_BRIDGE_VERSION));
   assert.doesNotMatch(JSON.stringify(page.messages), /my typed title|first draft/u, "typed values never leave the page");
