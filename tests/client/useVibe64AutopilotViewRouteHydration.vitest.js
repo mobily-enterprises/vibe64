@@ -108,9 +108,13 @@ describe("useVibe64AutopilotView route hydration", () => {
     ] } };
     const { useVibe64AutopilotView } = await import("../../src/composables/useVibe64AutopilotView.js");
     const view = app.runWithContext(() => scope.run(() => useVibe64AutopilotView(attachConversationRuntime(props), vi.fn())));
+    // Event times read in the person's own clock (the date shows: not today).
+    const localTime = (at) => new Intl.DateTimeFormat(undefined, {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit"
+    }).format(new Date(at));
     expect(view.saveWorkOutput.value).toBe([
-      "2026-09-26T13:28:47.406Z  Writing a concise name for this work.",
-      "2026-09-26T13:29:03.800Z  Session work was saved."
+      `${localTime("2026-09-26T13:28:47.406Z")}  Writing a concise name for this work.`,
+      `${localTime("2026-09-26T13:29:03.800Z")}  Session work was saved.`
     ].join("\n"));
     props.workState.operation.events.push({ at: "2026-09-26T13:30:00.000Z", message: "Push failed; retry Save." });
     expect(view.saveWorkOutput.value).toContain("Push failed; retry Save.");
