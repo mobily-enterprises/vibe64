@@ -86,7 +86,10 @@ const vuetify = createVuetify({
           "surface-light": "#2A2D33",
           "surface-variant": "#243342",
           "on-surface-variant": "#EDF4FC",
-          success: "#2E7D32",
+          // Material 3 dark-scheme green: readable as text on dark and tonal
+          // surfaces, with dark text when filled.
+          success: "#7DDC7A",
+          "on-success": "#00390A",
           warning: "#DFC477",
           "on-warning": "#3D2F00",
           "warning-container": "#353126",
