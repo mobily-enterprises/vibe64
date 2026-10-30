@@ -751,7 +751,9 @@ function createService({
       return { recordings: (await storedRecordings(context)).slice(0, USAGE_RECORDING_RETENTION.maxRecordings).map(publicRecording) };
     },
 
-    async readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false } = {}) {
+    // Oldest first unless order is "newest"; total counts every matching row.
+    // A requestId reads that one row, whatever the other filters say.
+    async readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false, order = "oldest", requestId = "" } = {}) {
       const context = await sessionContext(sessionId);
       const { directory, entry, record } = await recordingFor(context, recordingId);
       const index = entry ? null : await readJsonFile(path.join(directory, "index.json"), USAGE_RECORDING_LIMITS.indexBytes);
@@ -759,13 +761,13 @@ function createService({
         ? index.requests
         : await recordingRequestRows(directory, await readerFor(directory), { runLabel: record.target.label });
       const query = String(q || "").trim().toLowerCase();
-      const matching = rows.filter((row) => (includeEmpty === true || row.functionCount > 0) &&
-        (!query || `${row.method || ""} ${row.path || ""}`.toLowerCase().includes(query)));
-      const page = pageOf(matching, { cursor, limit, maxLimit: 200 });
+      const matching = rows.filter((row) => (requestId ? row.id === requestId : (includeEmpty === true || row.functionCount > 0) &&
+        (!query || `${row.method || ""} ${row.path || ""}`.toLowerCase().includes(query))));
+      const page = pageOf(order === "newest" ? matching.reverse() : matching, { cursor, limit, maxLimit: 200 });
       const referenced = new Set(page.items.map((row) => row.interaction).filter(Boolean));
       const interactions = (await readInteractions(directory)).filter((row) => referenced.has(row.id))
         .map(({ id, label, kind, componentFile }) => ({ id, label, kind: kind || "click", componentFile: componentFile ?? null }));
-      return { requests: page.items, interactions, nextCursor: page.more ? page.next : null };
+      return { requests: page.items, interactions, nextCursor: page.more ? page.next : null, total: matching.length };
     },
 
     async readRequestFunctions({ sessionId, recordingId, requestId, cursor, limit } = {}) {

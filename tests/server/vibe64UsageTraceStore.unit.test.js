@@ -74,6 +74,15 @@ test("the recording API answers the shared fixture exactly", async (t) => {
   assert.deepEqual([firstPage.requests.map((row) => row.id), firstPage.nextCursor], [["bg_4242", "r_000002"], "2"]);
   assert.deepEqual((await call("readRequests", { recordingId: RECORDING_ID, cursor: "2" })).requests.map((row) => row.id), ["r_000003", "r_000004"]);
   assert.deepEqual((await call("readRequests", { recordingId: RECORDING_ID, q: "post" })).requests.map((row) => row.id), ["r_000003"]);
+  // Newest first pages from the end; total counts every matching row.
+  const newest = await call("readRequests", { recordingId: RECORDING_ID, limit: 2, order: "newest" });
+  assert.deepEqual([newest.requests.map((row) => row.id), newest.nextCursor, newest.total], [["r_000004", "r_000003"], "2", 4]);
+  assert.deepEqual((await call("readRequests", { recordingId: RECORDING_ID, cursor: "2", order: "newest" })).requests.map((row) => row.id), ["r_000002", "bg_4242"]);
+  assert.equal((await call("readRequests", { recordingId: RECORDING_ID, q: "post" })).total, 1);
+  // One request by its id, with its click, whatever the other filters say.
+  const named = await call("readRequests", { recordingId: RECORDING_ID, requestId: "r_000004", q: "post", limit: 1 });
+  assert.deepEqual([named.requests.map((row) => row.id), named.interactions.map((row) => row.id), named.total], [["r_000004"], ["i_0001"], 1]);
+  assert.deepEqual((await call("readRequests", { recordingId: RECORDING_ID, requestId: "r_000001" })).requests.map((row) => row.id), ["r_000001"]);
   const functions = await call("readRequestFunctions", { recordingId: RECORDING_ID, requestId: "r_000004", limit: 5 });
   assert.deepEqual([functions.functions.length, functions.total, functions.truncated], [5, 16, true]);
   const startUp = await call("readRequestFunctions", { recordingId: RECORDING_ID, requestId: "bg_4242" });

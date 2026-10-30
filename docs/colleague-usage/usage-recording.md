@@ -176,9 +176,11 @@ failed**, the reason).
 
 **Open** or **Open results** shows Architecture › Usage › Recording with this
 recording selected; on a phone it shows the project instead of the chat. You
-can open results while still recording to see what has run so far. Opening a
+can open results while still recording to see what has run so far: the newest
+requests come first, and new ones appear at the top as they finish. Opening a
 finished recording also removes it from the header; it stays in the list of
-recordings.
+recordings. A long recording lists 200 requests at a time; **Show more** below
+the list adds the next 200.
 
 ## When a recording stops
 

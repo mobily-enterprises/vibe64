@@ -28,7 +28,10 @@ reach, or the functions one recorded request actually ran. Architecture shows it
 - `tests/server/vibe64UsageRoutes.unit.test.js`
 - `tests/client/vibe64UsageModel.vitest.js`
 - `tests/client/vibe64UsageView.vitest.js`
+- `tests/client/vibe64UsageRecordingResults.vitest.js`
+- `tests/client/useVibe64UsageWeb.vitest.js`
 - `tests/e2e/usage-map.spec.ts`
+- `tests/e2e/usage-recording-results.spec.ts`
 
 ## Public contract
 
@@ -75,3 +78,10 @@ The system dashboard's address keeps Usage's state (`view`, `entry`, `mode`,
 back restore it. Map's pages and zoomed views offer Show usage. A recorded web
 server that runs every request in one process is labelled "Not separated per
 request for this server" and shows everything that ran.
+
+Recording lists a recording's requests a page at a time with the matching
+total and Show more. A recording opened while it runs reads newest first and
+merges each refreshed first page in front of the rows already shown, so new
+requests appear on top without losing the pages read; a gap of more than one
+page starts the list again. The chosen request's result read carries its own
+row, so the heading names it even when the pages read do not hold it.

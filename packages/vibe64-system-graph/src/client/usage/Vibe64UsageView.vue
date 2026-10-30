@@ -15,7 +15,10 @@
           </Vibe64UsageEntryPicker>
           <v-btn class="usage-view__record usage-view__record--icon" variant="tonal" color="primary" :icon="mdiRecordCircleOutline" aria-label="Record" title="Record" @click="recordOpen = true" />
         </div>
-        <h3 v-if="!compact && mode !== 'recording' && state.entry" class="usage-view__entry text-title-medium">{{ pickerLabel }}</h3>
+        <div v-if="!compact" class="usage-view__title">
+          <h3 class="usage-view__entry text-title-medium" :class="{ 'usage-view__entry--none': !chosen }"><template v-for="(part, position) in pathParts(pickerLabel)" :key="position">{{ part }}<wbr></template></h3>
+          <p v-if="chosen && selectedInteraction" class="usage-view__click text-body-medium">{{ interactionTitle(selectedInteraction) }}</p>
+        </div>
         <div class="usage-view__controls">
           <v-btn-toggle
             :model-value="mode"
@@ -143,7 +146,7 @@
                   role="switch"
                   :aria-checked="showPlumbing"
                   @click="showPlumbing = !showPlumbing"
-                >Shared plumbing ({{ webView.plumbing }})</v-chip>
+                >Show shared plumbing ({{ webView.plumbing }})</v-chip>
               </template>
             </Vibe64UsageWebCanvas>
           </template>
@@ -182,7 +185,9 @@ import {
   USAGE_MODES,
   countLabel,
   functionLabel,
+  interactionTitle,
   isBackgroundRequest,
+  pathParts,
   recordingWeb,
   requestTitle,
   unavailableRuntimes,
@@ -197,6 +202,7 @@ const WIDE_WIDTH = 1040;
 const GRAPH_WIDTH = 888;
 const SEARCH_DELAY_MS = 200;
 const LIVE_REFRESH_MS = 5000;
+const LIVE_STATES = new Set(["starting", "recording", "stopping"]);
 
 // The Usage half of Architecture. Its address state (entry, mode, zoomed
 // subsystem, recording, request) belongs to the parent, which keeps it in the
@@ -359,15 +365,20 @@ watch(recordings, (list) => {
   }
 });
 
+// A recording opened while it runs lists its newest requests first, so new
+// ones appear on top; one opened after it stopped reads in recorded order.
+const live = computed(() => LIVE_STATES.has(selectedRecording.value?.state));
+const newestFirst = ref(false);
+watch(() => selectedRecording.value?.id, (id) => { if (id) newestFirst.value = live.value; }, { immediate: true });
+
 let requestTimer;
-const loadRequests = () => (recordingActive.value && props.state.recording
-  ? usage.requests.run({ recordingId: props.state.recording, q: requestSearch.value.trim(), includeEmpty: includeEmpty.value })
-  : null);
+const requestFilter = () => ({ recordingId: props.state.recording, q: requestSearch.value.trim(), includeEmpty: includeEmpty.value, newestFirst: newestFirst.value });
+const loadRequests = (read = "run") => (recordingActive.value && selectedRecording.value ? usage.requests[read](requestFilter()) : null);
 watch(requestSearch, () => {
   clearTimeout(requestTimer);
   requestTimer = setTimeout(loadRequests, SEARCH_DELAY_MS);
 });
-watch([recordingActive, () => props.state.recording, includeEmpty, () => props.snapshotKey], () => { void loadRequests(); }, { immediate: true });
+watch([recordingActive, () => selectedRecording.value?.id, includeEmpty, newestFirst, () => props.snapshotKey], () => { void loadRequests(); }, { immediate: true });
 
 let resultKey = "";
 function loadResult(force = false) {
@@ -380,10 +391,14 @@ function loadResult(force = false) {
 watch([recordingActive, () => props.state.recording, () => props.state.request, () => props.snapshotKey], () => loadResult(), { immediate: true });
 watch(() => props.state.request, () => closePanel());
 
-// While a recording runs, its requests list follows it.
-watch(() => recordingActive.value && selectedRecording.value?.state === "recording", (live, previous, onCleanup) => {
-  if (!live) return;
-  const timer = setInterval(() => { void usage.recordings.run(); void loadRequests(); }, LIVE_REFRESH_MS);
+// While a recording runs, its requests list follows it, and reads once more
+// when it stops so its last requests are listed too.
+watch(() => recordingActive.value && live.value, (following, wasFollowing, onCleanup) => {
+  if (!following) {
+    if (wasFollowing) void loadRequests("refresh");
+    return;
+  }
+  const timer = setInterval(() => { void usage.recordings.run(); void loadRequests("refresh"); }, LIVE_REFRESH_MS);
   onCleanup(() => clearInterval(timer));
 });
 
@@ -399,7 +414,15 @@ const changedSinceRecording = computed(() => {
   return Boolean(recordedScan && currentScan && recordedScan !== currentScan);
 });
 const requestRows = computed(() => usage.requests.data.value?.requests || []);
-const selectedRequest = computed(() => requestRows.value.find((request) => request.id === props.state.request) || null);
+const requestTotal = computed(() => usage.requests.data.value?.total ?? null);
+// The chosen request's row from the pages read, else the one its result carries.
+const resultRead = computed(() => (resultFresh.value ? usage.result.data.value : null));
+const selectedRequest = computed(() => requestRows.value.find((request) => request.id === props.state.request)
+  || (resultRead.value?.request?.id === props.state.request ? resultRead.value.request : null));
+const selectedInteraction = computed(() => {
+  const id = selectedRequest.value?.interaction;
+  return id ? [...(usage.requests.data.value?.interactions || []), ...(resultRead.value?.interactions || [])].find((item) => item.id === id) || null : null;
+});
 
 const recordingBindings = computed(() => ({
   sessionId: props.sessionId,
@@ -407,6 +430,9 @@ const recordingBindings = computed(() => ({
   recordingId: props.state.recording,
   requests: requestRows.value,
   interactions: usage.requests.data.value?.interactions || [],
+  total: requestTotal.value,
+  hasMore: Boolean(usage.requests.data.value?.nextCursor) && (requestTotal.value == null || requestRows.value.length < requestTotal.value),
+  newestFirst: newestFirst.value,
   requestId: props.state.request,
   search: requestSearch.value,
   includeEmpty: includeEmpty.value,
@@ -425,6 +451,7 @@ const recordingHandlers = {
   "update:requestId": (id) => { pickerOpen.value = false; update({ request: id, subsystem: "" }); },
   "update:search": (value) => { requestSearch.value = value; },
   "update:includeEmpty": (value) => { includeEmpty.value = value; },
+  more: () => usage.requests.more(),
   retry: () => { void loadRecordings(); void loadRequests(); }
 };
 
@@ -500,8 +527,12 @@ function openSource(location) {
   emit("open-source-file", { ...location, presentation: "code", origin: "system", systemContext: { usage: { ...props.state, view: "usage" } } });
 }
 
+const ranCounts = computed(() => (mode.value === "recording" && recorded.value
+  ? new Map(recorded.value.nodes.filter((node) => node.functionId).map((node) => [node.functionId, node.count]))
+  : null));
 const panelBindings = computed(() => ({
   node: selected.value,
+  ran: ranCounts.value,
   detail: selected.value?.functionId && usage.detail.data.value?.function?.id === selected.value.functionId ? usage.detail.data.value : null,
   loading: usage.detail.loading.value,
   error: usage.detail.error.value
@@ -515,6 +546,7 @@ const panelHandlers = {
 
 // ---------------------------------------------------------------- layout
 
+const chosen = computed(() => Boolean(mode.value === "recording" ? selectedRequest.value : props.state.entry));
 const pickerLabel = computed(() => {
   if (mode.value === "recording") {
     const request = selectedRequest.value;
@@ -555,7 +587,10 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view__main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .usage-view__header { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 8px; container-type: inline-size; }
 .usage-view__controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
-.usage-view__entry { margin: 0; overflow-wrap: anywhere; }
+.usage-view__title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; min-width: 0; }
+.usage-view__entry { margin: 0; min-width: 0; overflow-wrap: break-word; }
+.usage-view__entry--none { color: var(--v64-on-surface-variant); }
+.usage-view__click { margin: 0; min-width: 0; overflow-wrap: break-word; color: var(--v64-on-surface-variant); }
 .usage-view__modes { flex: none; }
 .usage-view__record { margin-left: auto; }
 /* Narrow headers keep Record on the modes' row as an icon. */

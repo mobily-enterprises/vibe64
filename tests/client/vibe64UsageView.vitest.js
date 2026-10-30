@@ -172,7 +172,7 @@ describe("Recording states", () => {
     const html = await view({ mode: "recording", recording: recordingId }, { recordings, requests: read(requests) });
     expect(html).toContain("Pick a request");
     expect(html).toContain("Click: button &quot;Add&quot; (SessionList.vue)");
-    expect(html).toContain("/api/sessions");
+    expect(html).toContain("/<wbr>api/<wbr>sessions");
     expect(html).toContain("200 · 11 files · 16 functions");
     expect(html).toContain("Show requests that ran no project code");
     expect(html).not.toContain("Other requests");
@@ -221,7 +221,7 @@ describe("Recording states", () => {
     expect(html).toContain("Shared plumbing (5)");
     expect(html).not.toContain("Client");
     const zoomed = await view({ mode: "recording", recording: recordingId, request: "r_000004", subsystem: "directory:packages/sessions" }, { recordings, requests: read(requests), result: read(joined) });
-    expect(zoomed).toContain("Shared plumbing (2)");
+    expect(zoomed).toContain("Show shared plumbing (2)");
     expect(zoomed).toContain("listSessions");
     expect(zoomed).toContain("Not in the last scan");
     expect(zoomed).toMatch(/usage-node__badge[^>]*>not scanned</u);
@@ -261,6 +261,40 @@ describe("Recording states", () => {
     expect(failed).toContain("Retry");
     const truncated = await view(state, { recordings, requests: read(requests), result: read({ ...joined, total: 4000, truncated: true }) });
     expect(truncated).toContain("Showing the first 16 of 4,000 functions that ran.");
+  });
+
+  it("names the chosen request and the click behind it on a desktop, in every mode's place", async () => {
+    const html = await view({ mode: "recording", recording: recordingId, request: "r_000004" }, { recordings, requests: read(requests), result: read(joined) });
+    expect(html).toMatch(/class="usage-view__entry[^"]*"[^>]*>Request: GET \/<wbr>api\/<wbr>sessions<wbr><\/h3>/u);
+    expect(html).toMatch(/class="usage-view__click[^"]*"[^>]*>Click: button &quot;Add&quot; \(SessionList\.vue\)</u);
+    // A request beyond the pages read (a reload after Show more) is named from the row its result carries.
+    const firstPage = { ...requests, requests: requests.requests.slice(0, 1), interactions: [] };
+    const named = { ...joined, request: requests.requests.find((row) => row.id === "r_000004"), interactions: requests.interactions };
+    const beyond = await view({ mode: "recording", recording: recordingId, request: "r_000004" }, { recordings, requests: read(firstPage), result: read(named) });
+    expect(beyond).toMatch(/class="usage-view__entry[^"]*"[^>]*>Request: GET \/<wbr>api\/<wbr>sessions<wbr><\/h3>/u);
+    expect(beyond).toMatch(/class="usage-view__click[^"]*"[^>]*>Click: button &quot;Add&quot;/u);
+    // The heading holds its place before a choice, so the header keeps its height.
+    expect(await view({ mode: "recording", recording: recordingId }, { recordings, requests: read(requests) }))
+      .toMatch(/class="[^"]*usage-view__entry--none[^"]*"[^>]*>Choose a request/u);
+    expect(await view({})).toMatch(/class="[^"]*usage-view__entry--none[^"]*"[^>]*>Choose an entry/u);
+  });
+
+  it("marks, in a recorded function's calls, the ones that ran in the request", async () => {
+    fake.usage = usageReads({ recordings, requests: read(requests), result: read(joined) });
+    const node = () => ({});
+    const renderer = createRenderer({ createComment: node, createElement: node, createText: node, setText() {}, setElementText() {},
+      patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+    const app = renderer.createApp({ ...Vibe64UsageView, render: () => null }, { sessionId: "s1", state: usageState({ mode: "recording", recording: recordingId, request: "r_000004" }) });
+    app.provide(ssrContextKey, { modules: new Set() });
+    app.mount({});
+    const { ran } = app._instance.setupState.panelBindings;
+    app.unmount();
+    const caller = joined.join.joined[3].functionId;
+    const detail = readFunction(index, calls, { functionId: caller });
+    expect(detail.calls.some((row) => ran.has(row.target.id))).toBe(true);
+    const node3 = { id: caller, functionId: caller, title: "x", subtitle: "", file: detail.function.file, start: detail.function.start };
+    expect(await render(Vibe64UsageFunctionPanel, { node: node3, detail, ran })).toMatch(/· ran (?:\d+ times?)?<\/span>/u);
+    expect(await render(Vibe64UsageFunctionPanel, { node: node3, detail })).not.toContain("· ran");
   });
 });
 
