@@ -609,6 +609,22 @@ function previewComponentSourcePath(file = "", sourceRoot = "") {
   return relative.split("/").every((part) => part && part !== "." && part !== "..") ? relative : "";
 }
 
+// The editor's primary colour and the colour on it, as the element shows them,
+// for the Preview's Pick highlight: { color, onColor } as #rrggbb, else {}.
+function previewPickColors(element) {
+  const style = element && typeof globalThis.getComputedStyle === "function" ? globalThis.getComputedStyle(element) : null;
+  const hex = (name) => {
+    const channels = String(style?.getPropertyValue(name) || "").match(/^\s*rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)\s*$/u)
+      ?.slice(1).map(Number);
+    return channels?.every((channel) => channel <= 255)
+      ? `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`
+      : "";
+  };
+  const color = hex("--v64-primary");
+  const onColor = hex("--v64-on-primary");
+  return color && onColor ? { color, onColor } : {};
+}
+
 // The usage entry a picked component starts from: a component, else a page,
 // entry for exactly that file.
 function previewUsageEntryForFile(entries = [], file = "") {
@@ -1276,7 +1292,7 @@ function useVibe64OutputControlsSurface(props, {
     if (!previewPickAvailable.value || previewPickBusy.value) {
       return false;
     }
-    setPreviewPicking(postToPreviewBridge({ type: PREVIEW_PICK_START_MESSAGE_TYPE }));
+    setPreviewPicking(postToPreviewBridge({ type: PREVIEW_PICK_START_MESSAGE_TYPE, ...previewPickColors(previewFrame.value) }));
     return previewPicking.value;
   }
 
@@ -2746,6 +2762,7 @@ export {
   normalizeConfiguredPreviewIdentities,
   previewComponentSourcePath,
   previewOpeningOverlayVisible,
+  previewPickColors,
   previewAddressDisplayText,
   previewRouteFromUrl,
   previewUrlForRoute,

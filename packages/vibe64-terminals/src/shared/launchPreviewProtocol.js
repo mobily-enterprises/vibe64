@@ -8,7 +8,8 @@ const PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE = "vibe64:preview-identity-request";
 const PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE = "vibe64:preview-identity-response";
 // Click in Preview: the editor starts and stops Pick, the bridge answers with
 // what was picked; the editor names the active recording, the bridge reports
-// each interaction it starts while that recording is on.
+// each interaction it starts while that recording is on. Pick start may carry
+// the editor's `color` and `onColor` (#rrggbb) for the highlight.
 const PREVIEW_INTERACTION_MESSAGE_TYPE = "vibe64:preview-interaction";
 const PREVIEW_PICK_RESULT_MESSAGE_TYPE = "vibe64:preview-pick-result";
 const PREVIEW_PICK_START_MESSAGE_TYPE = "vibe64:preview-pick-start";

@@ -483,19 +483,25 @@ function launchPreviewBridgeScript({
       return { componentFile: null, componentName: null };
     }
   }
-  function startPick() {
+  // The editor may name its primary colour and the colour on it as #rrggbb;
+  // an editor that names none, or anything else, gets the default.
+  function pickColor(value, fallback) {
+    return typeof value === "string" && /^#[0-9a-f]{6}$/iu.test(value) ? value : fallback;
+  }
+  function startPick({ color, onColor } = {}) {
     if (pick) {
       return;
     }
+    const primary = pickColor(color, "#6750a4");
     const overlay = document.createElement("div");
     const chip = document.createElement("span");
     overlay.setAttribute("aria-hidden", "true");
     overlay.setAttribute("data-vibe64-preview-pick", "1");
     overlay.style.cssText = "all:initial;position:fixed;z-index:2147483647;pointer-events:none;" +
-      "box-sizing:border-box;border:2px solid #6750a4;border-radius:4px;display:none";
+      "box-sizing:border-box;border:2px solid " + primary + ";border-radius:4px;display:none";
     chip.style.cssText = "all:initial;position:absolute;left:-2px;max-width:min(320px,90vw);padding:2px 8px;" +
-      "border-radius:8px;background:#6750a4;color:#fff;font:500 12px/20px system-ui,sans-serif;" +
-      "white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+      "border-radius:8px;background:" + primary + ";color:" + pickColor(onColor, "#ffffff") + ";" +
+      "font:500 12px/20px system-ui,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
     overlay.append(chip);
     document.documentElement.append(overlay);
     pick = { chip, element: null, overlay };
@@ -1019,7 +1025,7 @@ function launchPreviewBridgeScript({
       return;
     }
     if (event.data?.type === config.pickStartMessageType) {
-      startPick();
+      startPick(event.data);
       return;
     }
     if (event.data?.type === config.pickStopMessageType) {

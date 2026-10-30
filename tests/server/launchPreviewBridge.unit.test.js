@@ -202,6 +202,24 @@ test("Pick outlines the element, prevents only its own click, and answers with t
   assert.equal(page.dispatch("click", save).prevented, false, "the next click is the app's again");
 });
 
+test("Pick takes the editor's primary colour, and the default for a missing or unsafe one", () => {
+  const page = bridgePage();
+  page.post({ type: PREVIEW_PICK_START_MESSAGE_TYPE, color: "#1565C0", onColor: "#000000" });
+  assert.match(page.overlay().style.cssText, /border:2px solid #1565C0;/u);
+  assert.match(page.overlay().childNodes[0].style.cssText, /background:#1565C0;color:#000000;/u);
+  page.post({ type: PREVIEW_PICK_STOP_MESSAGE_TYPE });
+
+  page.post({ type: PREVIEW_PICK_START_MESSAGE_TYPE, color: "red;background:url(https://evil.example)", onColor: 7 });
+  assert.match(page.overlay().style.cssText, /border:2px solid #6750a4;/u);
+  assert.match(page.overlay().childNodes[0].style.cssText, /background:#6750a4;color:#ffffff;/u);
+  assert.doesNotMatch(page.overlay().style.cssText, /evil/u);
+  page.post({ type: PREVIEW_PICK_STOP_MESSAGE_TYPE });
+
+  // An editor from before colours were sent still gets the highlight.
+  page.post({ type: PREVIEW_PICK_START_MESSAGE_TYPE });
+  assert.match(page.overlay().style.cssText, /border:2px solid #6750a4;/u);
+});
+
 test("Escape and the editor's stop end Pick, and a page without a locator picks no component", () => {
   const page = bridgePage();
   const link = el("a", { href: "/help", title: "Help" }, ["Help"]);
