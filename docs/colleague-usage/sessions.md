@@ -58,16 +58,14 @@ if the checkout is still missing, use **Copy recovery details** and ask your
 administrator to restore the original work from a verified backup. Colleague
 can explain the notice, but cannot restore missing source through session creation.
 
-A session's checkout works on its own branch, `vibe64/<session id>`. A new
-session keeps no local copy of the branch it was created from (such as `main`):
-nothing would keep that copy current, so it would look like the latest saved
-work when it is not. **Git log**, **Current changes**, **Save** and **Update**
-read the project's saved work themselves. In a terminal the remote-tracking name
-(such as `origin/main`) remains. The local copy is kept only when Git shows it
-holds commits found nowhere else. Sessions created before this change lose
-their copy once, during the Vibe64 update that brings it, under the same check;
-one whose copy holds such commits, or whose checkout is not on its own branch,
-keeps it.
+A session's checkout works on its own branch, `vibe64/<session id>`, and keeps
+no local copy of the branch it was created from (such as `main`): nothing would
+keep it current, so it would look like the latest saved work when it is not.
+**Git log**, **Current changes**, **Save** and **Update** read the saved work
+themselves; in a terminal, `origin/main` remains. The copy is kept only when Git
+shows it holds commits found nowhere else or the checkout is not on its own
+branch. Older sessions lose their copy once, during the Vibe64 update that
+brings this, under the same check.
 
 If creation reports **This session source already exists**, existing commits,
 staged changes and files have been preserved. Reopen that session if it is listed;
@@ -95,18 +93,14 @@ select another tab; session-list refreshes preserve that choice. Following a
 different session link selects its named session. A session being archived is
 temporarily unavailable for selection.
 
-Vibe64 remembers the session you last opened in each project. Opening the
-project again without a session in its address (from the project list or
-switcher, a bookmark to the project, **Back** out of the project and in again, a
-reload, another browser or another device) goes straight to that session; the
-chat shows **Loading sessions.** until the project's session list has been read.
-A session named in the address always wins and becomes the remembered one, and
-so does a session Colleague opens for you. Each person has their own remembered
-session in each project: other people's choices, and your choices in other
-projects, never change it. Another tab that is already open keeps its own
-selection. If the remembered session has been archived or is no longer open, the
-project opens its usual session (the last tab) instead, without an error, and
-the next session you open is remembered. Practice projects work the same way.
+Vibe64 remembers the session you last opened in each project, per person.
+Opening the project without a session in its address (project list, bookmark,
+**Back** and in again, reload, another browser or device) goes straight to it;
+the chat shows **Loading sessions.** until the session list is read. A session
+named in the address, or opened by Colleague, wins and becomes the remembered
+one. Tabs already open keep their selection. If the remembered session is
+archived or no longer open, the project opens its usual session (the last tab)
+without an error. Practice projects work the same way.
 
 A link whose session is not one of this project's open sessions (another
 project's session, or one that has since been archived) loses its `session`
