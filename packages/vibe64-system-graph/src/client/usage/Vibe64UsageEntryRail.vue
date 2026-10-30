@@ -52,7 +52,6 @@
             role="option"
             :aria-selected="item.id === selectedId"
             :prepend-icon="entryKind(item.kind).icon"
-            :title="item.title"
             :aria-label="`${entryKind(item.kind).label}: ${item.title}, ${item.file}`"
             color="primary"
             rounded="xl"
@@ -60,6 +59,7 @@
             class="usage-entry-rail__item"
             @click="emit('select', item)"
           >
+            <template #title><template v-for="(part, position) in pathParts(item.title)" :key="position">{{ part }}<wbr></template></template>
             <template #subtitle><template v-for="(part, position) in pathParts(item.file)" :key="position">{{ part }}<wbr></template></template>
           </v-list-item>
         </template>
@@ -97,6 +97,8 @@ const rows = computed(() => (props.hasMore ? [...props.entries, { id: "\u0000mor
 .usage-entry-rail__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .usage-entry-rail__list { flex: 1; min-height: 0; padding-bottom: 8px; }
 .usage-entry-rail__item { min-height: 56px; }
+/* Titles and paths wrap between folders, like request rows. */
+.usage-entry-rail__item :deep(.v-list-item-title) { white-space: normal; overflow-wrap: break-word; }
 .usage-entry-rail__item :deep(.v-list-item-subtitle) { overflow-wrap: break-word; }
 .usage-entry-rail__empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px 12px; }
 .usage-entry-rail__empty p { margin: 0; }

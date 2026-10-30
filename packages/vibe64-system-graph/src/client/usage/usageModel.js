@@ -83,6 +83,13 @@ function fileName(filePath = "") {
   return String(filePath).split("/").pop();
 }
 
+// A node's one-line place: the file and line, or for a file its last folders.
+function shortLocation(filePath = "", line = null) {
+  if (line) return `${fileName(filePath)}:${line}`;
+  const folders = String(filePath).split("/").slice(0, -1);
+  return folders.length > 2 ? `…/${folders.slice(-2).join("/")}` : folders.join("/");
+}
+
 // Path segments that keep their slash, so long paths wrap between folders.
 function pathParts(filePath = "") {
   return String(filePath).split(/(?<=\/)/u);
@@ -155,7 +162,7 @@ function webNodes(mode, data = {}) {
   const { out, into } = edgeCounts(edges);
   if (mode === "imports") {
     return (data.files || []).map((file) => ({
-      id: file.id, title: fileName(file.path), subtitle: file.path, file: file.path, start: null, depth: file.depth,
+      id: file.id, title: fileName(file.path), subtitle: file.path, location: shortLocation(file.path), file: file.path, start: null, depth: file.depth,
       certainty: null, outCount: out.get(file.id) || 0, inCount: into.get(file.id) || 0, unresolved: 0
     }));
   }
@@ -163,12 +170,12 @@ function webNodes(mode, data = {}) {
     const unresolved = new Map();
     for (const item of data.unresolved || []) unresolved.set(item.fromFunctionId, (unresolved.get(item.fromFunctionId) || 0) + 1);
     return (data.functions || []).map((fn) => ({
-      id: fn.id, functionId: fn.id, title: functionLabel(fn), subtitle: `${fn.file}:${fn.start.line}`, file: fn.file, start: fn.start,
+      id: fn.id, functionId: fn.id, title: functionLabel(fn), subtitle: `${fn.file}:${fn.start.line}`, location: shortLocation(fn.file, fn.start.line), file: fn.file, start: fn.start,
       depth: fn.depth, certainty: fn.reach, outCount: fn.callCount || 0, inCount: fn.calledByCount || 0, unresolved: unresolved.get(fn.id) || 0
     }));
   }
   return recordedDepths(data.nodes || [], edges).map((node) => ({
-    id: node.id, functionId: node.functionId, title: functionLabel({ name: node.name, start: node.start }), subtitle: `${node.file}:${node.start.line}`,
+    id: node.id, functionId: node.functionId, title: functionLabel({ name: node.name, start: node.start }), subtitle: `${node.file}:${node.start.line}`, location: shortLocation(node.file, node.start.line),
     file: node.file, start: node.start, depth: node.depth, certainty: null, count: node.count, plumbing: node.plumbing, join: node.join,
     outCount: out.get(node.id) || 0, inCount: into.get(node.id) || 0, unresolved: 0
   }));
@@ -185,7 +192,8 @@ function depthColumns(nodes = []) {
   return [...columns.entries()].sort(([left], [right]) => left - right).map(([depth, items]) => ({ depth, items }));
 }
 
-const NODE = Object.freeze({ width: 220, height: 64, columnGap: 72, rowGap: 16, padding: 16 });
+// Room for a two-line title and the file:line below it.
+const NODE = Object.freeze({ width: 220, height: 76, columnGap: 72, rowGap: 16, padding: 16 });
 
 // Fixed positions: a node's column is its depth, its row its order there.
 function canvasLayout(nodes = [], edges = []) {
@@ -401,6 +409,7 @@ export {
   requestTitle,
   routeTemplateFor,
   sameQuery,
+  shortLocation,
   sameUsageState,
   subsystemCard,
   subsystemSections,

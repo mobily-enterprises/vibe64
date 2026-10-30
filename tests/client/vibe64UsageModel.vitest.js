@@ -31,6 +31,7 @@ import {
   routeTemplateFor,
   sameQuery,
   sameUsageState,
+  shortLocation,
   subsystemCard,
   subsystemSections,
   unavailableRuntimes,
@@ -74,6 +75,9 @@ describe("presentation", () => {
     expect(functionLabel({ name: "", start: { line: 12 } })).toBe("anonymous (line 12)");
     expect(functionLabel({ name: "read", container: "Store", start: { line: 1 } })).toBe("Store.read");
     expect(functionLabel({ name: "", kind: "module", file: "src/main.js", start: { line: 1 } })).toBe("main.js top level");
+    expect(shortLocation("packages/vibe64-sessions/src/server/service.js", 12)).toBe("service.js:12");
+    expect(shortLocation("packages/sessions/src/server/service.js")).toBe("…/src/server");
+    expect(shortLocation("src/main.js")).toBe("src");
     // Cards count functions; crossings count calls, and in Recording only the static calls between functions that ran.
     expect(subsystemCard("calls", { functionCount: 31, exact: 9, probable: 22 })).toEqual({ count: "31 functions", detail: "9 by exact calls · 22 only via probable" });
     expect(subsystemCard("imports", { fileCount: 1 })).toEqual({ count: "1 file", detail: "" });

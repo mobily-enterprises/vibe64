@@ -113,7 +113,7 @@
               <span class="usage-node__title text-body-medium">{{ node.title }}</span>
               <span v-if="badge(node)" class="usage-node__badge text-label-small">{{ badge(node) }}</span>
             </span>
-            <span class="usage-node__subtitle text-body-small">{{ node.subtitle }}</span>
+            <span class="usage-node__subtitle text-body-small">{{ node.location || node.subtitle }}</span>
           </button>
         </div>
       </div>
@@ -230,7 +230,8 @@ function nodeLabel(node) {
 .usage-node--selected { border-color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), .12); }
 .usage-node--probable { border-style: dashed; }
 .usage-node--plumbing { opacity: .7; }
-.usage-node__title, .usage-node__subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-node__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; }
+.usage-node__subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .usage-node__subtitle { color: rgb(var(--v-theme-on-surface-variant)); }
 .usage-node__head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .usage-node__title { flex: 1; min-width: 0; }

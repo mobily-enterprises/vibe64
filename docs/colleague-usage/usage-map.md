@@ -81,6 +81,9 @@ room for two columns of them they are boxes with arrows:
 - a dashed arrow is a probable call;
 - a short line ending in an open circle marks unresolved calls.
 
+Each box names the function and its file and line, such as
+**service.js:12**; its tooltip gives the full path.
+
 On a phone, or beside the chat on a narrower screen, the same functions are
 a list instead, without the line legend. Each row says **only via probable
 calls** when no exact path reaches it, then **calls N → · called by M ←** and

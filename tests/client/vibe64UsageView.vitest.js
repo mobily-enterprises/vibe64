@@ -225,6 +225,7 @@ describe("parts", () => {
     const entries = readEntries(index, {});
     const html = await render(Vibe64UsageEntryRail, { entries: entries.entries, kinds: entries.kinds });
     expect(html).toContain("Pages · 1");
+    expect(html).toContain(">/<wbr>sessions<wbr></div>", "titles wrap between folders");
     expect(html).toContain("Library exports · 1");
     expect(html).not.toContain("Jobs ·");
     expect(await render(Vibe64UsageEntryRail, {})).toContain("No entry points found yet. Refresh the architecture scan.");
