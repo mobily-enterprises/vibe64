@@ -174,6 +174,6 @@ test("usage trace lines are accepted only in their documented shapes", () => {
   for (const line of invalid) assert.notEqual(usageTraceLineProblem(line), "", JSON.stringify(line));
 });
 
-test("the Preview locator reader returns no locator until locators are read", async () => {
+test("the Preview locator reader returns no locator for a session whose project declares none", async () => {
   assert.equal(await readPreviewLocatorSource({ sessionRoot: "/sessions/one" }), "");
 });
