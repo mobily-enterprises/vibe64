@@ -115,6 +115,8 @@ const {
   validateArchitectureFacts,
   mergeArchitectureObservations,
   validateCityDocument,
+  validateCallWeb,
+  CALL_WEB_SCHEMA,
   MACHINE_CITY_SCHEMA,
   PROGRAM_CITY_SCHEMA,
   CITY_SCHEMA_VERSION
@@ -568,6 +570,8 @@ export {
   inspectVibe64ArchitectureLayout,
   validateArchitectureFacts,
   validateCityDocument,
+  validateCallWeb,
+  CALL_WEB_SCHEMA,
   MACHINE_CITY_SCHEMA,
   PROGRAM_CITY_SCHEMA,
   CITY_SCHEMA_VERSION,
