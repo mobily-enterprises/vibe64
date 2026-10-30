@@ -1,3 +1,7 @@
+import { realpathSync, statSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import {
   resolveVibe64CommandActor
 } from "./actor/resolveActor.js";
@@ -46,6 +50,26 @@ import {
   vibe64ManagedExecutionRequired
 } from "./managedExecution.js";
 
+const USAGE_RECORDING_NODE_RUNTIME = fileURLToPath(new URL("../../../vibe64-usage-recording/runtime/node/", import.meta.url));
+
+// The only NODE_OPTIONS a launch receives from Vibe64: the usage recorder's
+// preload, accepted as a regular file reached through no symbolic link inside
+// this installation's recorder runtime. The host helper keeps its own copy.
+function usageRecordingNodeOptions(preload = "", runtimeDirectory = USAGE_RECORDING_NODE_RUNTIME) {
+  try {
+    const root = realpathSync(runtimeDirectory);
+    if (path.resolve(preload) === preload && realpathSync(preload) === preload &&
+        preload.startsWith(`${root}${path.sep}`) && statSync(preload).isFile()) {
+      return `--import=${preload}`;
+    }
+  } catch {
+    // Reported below like any other refused path.
+  }
+  throw Object.assign(new Error("The usage recorder is not part of this Vibe64 installation."), {
+    code: "vibe64_usage_recording_preload_invalid"
+  });
+}
+
 // Release environments and application accounts exist only on a managed host,
 // whose helper loads the file and switches to the account.
 function managedOnlyRequestError(request) {
@@ -70,6 +94,12 @@ async function runLocalVibe64Command(request, {
   const managedOnly = managedOnlyRequestError(request);
   if (managedOnly) {
     return managedOnly;
+  }
+  if (request.usageRecordingPreload) {
+    const NODE_OPTIONS = usageRecordingNodeOptions(request.usageRecordingPreload);
+    const resolveWithoutPreload = resolveEnv;
+    env = { ...env, NODE_OPTIONS };
+    resolveEnv = (input) => ({ ...resolveWithoutPreload(input), NODE_OPTIONS });
   }
   if (request.mode === "pty") {
     return runPtyCommand(request, {
@@ -240,5 +270,6 @@ async function runVibe64Command(input = {}) {
 }
 
 export {
-  runVibe64Command
+  runVibe64Command,
+  usageRecordingNodeOptions
 };

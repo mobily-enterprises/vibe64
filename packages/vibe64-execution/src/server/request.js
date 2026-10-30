@@ -346,6 +346,14 @@ function normalizeVibe64CommandRequest(input = {}) {
       Object.keys(normalizedEnv.env).length || normalizedEnv.envFactory || Object.keys(baseEnv).length))) {
     throw commandRequestError("Release environment files require a finite application deployment command without caller Env.", "vibe64_command_release_environment_invalid");
   }
+  // A usage recording launch names the recorder's Node preload; Vibe64 or its
+  // host helper turns it into NODE_OPTIONS only after checking the file.
+  const usageRecordingPreload = request.usageRecordingPreload ?? "";
+  if (typeof usageRecordingPreload !== "string" || (usageRecordingPreload &&
+      (!usageRecordingPreload.startsWith("/") || /[\s"'\\\0]/u.test(usageRecordingPreload) ||
+      !["preview", "output"].includes(purpose) || request.actor === "app"))) {
+    throw commandRequestError("A usage recording preload belongs only to a Preview or Output target launch.", "vibe64_command_usage_recording_preload_invalid");
+  }
   const applicationAccount = request.applicationAccount ?? "";
   if (typeof applicationAccount !== "string" || (applicationAccount &&
       (!APPLICATION_ACCOUNT_PATTERN.test(applicationAccount) || request.actor !== "app" || mode !== "capture"))) {
@@ -403,6 +411,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     timeout: Number.isSafeInteger(Number(request.timeout)) && Number(request.timeout) > 0
       ? Number(request.timeout)
       : 15_000,
+    usageRecordingPreload,
     userKey: normalizeText(request.userKey)
   };
 }

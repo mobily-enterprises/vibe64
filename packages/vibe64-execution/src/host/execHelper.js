@@ -18,6 +18,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from "node:fs";
@@ -394,6 +395,12 @@ function handleManagedExecutionOperation(payload = {}) {
   }
   const args = Array.isArray(payload.args) ? payload.args.map((arg) => String(arg)) : [];
   const env = helperChildEnv(payload.env || {}, targetUser, owner.username, commandOperation);
+  if (payload.usageRecordingPreload) {
+    if (application) {
+      throw new Error("An application account does not run the usage recorder.");
+    }
+    env.NODE_OPTIONS = usageRecordingNodeOptions(payload.usageRecordingPreload);
+  }
   let releaseEnvironmentFile = "";
   if (payload.releaseEnvironmentFile) {
     if (!application) {
@@ -3896,6 +3903,25 @@ function workspaceTempRoot(ownerUsername = "") {
   );
 }
 
+// The only NODE_OPTIONS this helper sets: a usage recording launch's preload,
+// accepted as a regular file reached through no symbolic link inside the
+// recorder runtime of the installation this helper belongs to.
+const USAGE_RECORDING_NODE_RUNTIME = "../../../vibe64-usage-recording/runtime/node";
+
+function usageRecordingNodeOptions(preload = "", helperPath = process.argv[1]) {
+  const requested = String(preload);
+  try {
+    const root = realpathSync(path.resolve(path.dirname(realpathSync(helperPath)), USAGE_RECORDING_NODE_RUNTIME));
+    if (path.isAbsolute(requested) && !/[\s"'\\]/u.test(requested) && path.resolve(requested) === requested &&
+        realpathSync(requested) === requested && requested.startsWith(`${root}${path.sep}`) && statSync(requested).isFile()) {
+      return `--import=${requested}`;
+    }
+  } catch {
+    // Refused below like any other path.
+  }
+  throw new Error("Vibe64 exec helper rejected a usage recording preload outside its runtime.");
+}
+
 function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operation = "") {
   const env = {
     PATH: DEFAULT_PATH,
@@ -3955,7 +3981,7 @@ export { APPLICATION_LIMIT_PER_WORKSPACE, APPLICATION_USERNAME_PREFIX, DAEMON_US
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
-  resolveAllowedUserHomePath, runUserCommand };
+  resolveAllowedUserHomePath, runUserCommand, usageRecordingNodeOptions };
 
 // Last, so that every constant above exists before main() runs.
 if (import.meta.main) {
