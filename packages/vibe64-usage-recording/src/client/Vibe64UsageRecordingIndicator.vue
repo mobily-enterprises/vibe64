@@ -1,14 +1,14 @@
 <script setup>
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
-import { VBottomSheet } from "vuetify/components/VBottomSheet";
 import { VMenu } from "vuetify/components/VMenu";
 import { mdiAlertCircleOutline, mdiClose, mdiInformationOutline, mdiOpenInNew, mdiStop } from "@mdi/js";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { useVibe64UsageRecording } from "./useVibe64UsageRecording.js";
 
-// Rendered into the project header for the selected session. Emits
-// open-usage { recordingId } when the person opens the results.
+// Rendered into the project header for the selected session, or on a phone
+// into a full-width strip below it. Emits open-usage { recordingId } when the
+// person opens the results.
 const props = defineProps({
   sessionId: { type: String, required: true }
 });
@@ -40,21 +40,21 @@ const { recording, active, elapsedMs, error, stop, dismiss } = useVibe64UsageRec
   sessionId: () => props.sessionId
 });
 
-// The host takes its width from the header, so it decides wide or compact;
-// a phone is always compact.
+// The indicator fills its host, which takes its width from the header, so
+// that width decides wide or compact. A phone shows it as a strip, which has
+// the full width and opens the results itself, without a menu.
 const root = ref(null);
 const narrowHost = ref(false);
 watch(root, (element, _previous, onCleanup) => {
-  const host = element?.parentElement;
-  if (!host || typeof ResizeObserver !== "function") return;
+  if (!element || typeof ResizeObserver !== "function") return;
   const observer = new ResizeObserver(([entry]) => {
     narrowHost.value = entry.contentRect.width < WIDE_HOST_PX;
   });
-  observer.observe(host);
+  observer.observe(element);
   onCleanup(() => observer.disconnect());
 });
 const phone = computed(() => viewportWidth.value <= 600);
-const compact = computed(() => narrowHost.value || phone.value);
+const compact = computed(() => narrowHost.value && !phone.value);
 
 const expired = ref(false);
 let expiry = null;
@@ -151,13 +151,19 @@ function openResults() {
   emit("open-usage", { recordingId: current.id });
   if (current.state === "stopped") void dismiss();
 }
+
+// The phone strip's own tap: the results, or why the recording failed.
+function openFromStrip() {
+  if (shown.value === "failed") detailsOpen.value = true;
+  else openResults();
+}
 </script>
 
 <template>
   <div
     ref="root"
     class="usage-recording-indicator"
-    :class="{ 'usage-recording-indicator--compact': compact }"
+    :class="{ 'usage-recording-indicator--compact': compact, 'usage-recording-indicator--strip': phone }"
   >
     <span class="usage-recording-indicator__hidden" role="status" aria-live="polite">{{ announcement }}</span>
     <div
@@ -165,25 +171,26 @@ function openResults() {
       class="usage-recording-indicator__pill"
       :class="`usage-recording-indicator__pill--${shown}`"
     >
-      <component
-        :is="phone ? VBottomSheet : VMenu"
+      <v-menu
         v-model="menuOpen"
         :close-on-content-click="false"
+        :disabled="phone"
         location="bottom end"
         max-width="360"
       >
         <template #activator="{ props: activatorProps }">
           <button
-            v-bind="activatorProps"
+            v-bind="phone ? { onClick: openFromStrip } : activatorProps"
             class="usage-recording-indicator__body"
             type="button"
-            aria-haspopup="dialog"
+            :aria-haspopup="phone ? undefined : 'dialog'"
           >
             <v-progress-circular v-if="busy" indeterminate :size="16" :width="2" />
             <span v-else-if="shown === 'recording'" class="usage-recording-indicator__dot" aria-hidden="true" />
             <v-icon v-else-if="shown === 'failed'" :icon="mdiAlertCircleOutline" size="18" />
             <span v-if="!pillText.includes('Recording')" class="usage-recording-indicator__hidden">Recording: </span>
             <span class="usage-recording-indicator__text">{{ pillText }}</span>
+            <span v-if="phone" class="usage-recording-indicator__hidden">, {{ shown === 'failed' ? 'show details' : 'open results' }}</span>
           </button>
         </template>
         <v-card class="usage-recording-indicator__menu" rounded="lg" role="dialog" aria-label="Recording">
@@ -206,7 +213,7 @@ function openResults() {
             </v-btn>
           </v-card-actions>
         </v-card>
-      </component>
+      </v-menu>
 
       <template v-if="active">
         <v-btn
@@ -224,7 +231,7 @@ function openResults() {
           class="usage-recording-indicator__action"
           :prepend-icon="mdiStop"
           size="small"
-          variant="tonal"
+          :variant="phone ? 'text' : 'tonal'"
           @click="stopRecording"
         >
           Stop
@@ -284,6 +291,8 @@ function openResults() {
 .usage-recording-indicator {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  width: 100%;
   min-width: 0;
 }
 
@@ -329,8 +338,11 @@ function openResults() {
   min-width: 0;
   min-height: 32px;
   padding-inline: var(--v64-space-2);
+  border: 0;
   border-radius: var(--v64-shape-full);
+  background: transparent;
   color: inherit;
+  cursor: pointer;
   font: var(--v64-type-label-lg);
 }
 
@@ -365,6 +377,25 @@ function openResults() {
 
 .usage-recording-indicator__menu-status {
   color: var(--v64-on-surface-variant);
+}
+
+/* The phone strip: a full-width tonal band with 48 px targets; its actions
+   are text buttons, as on an M3 banner. */
+.usage-recording-indicator--strip .usage-recording-indicator__pill {
+  flex: 1 1 auto;
+  min-height: 48px;
+  padding-inline: var(--v64-space-2);
+  border-radius: 0;
+}
+
+.usage-recording-indicator--strip .usage-recording-indicator__body {
+  flex: 1 1 auto;
+  min-height: 48px;
+}
+
+.usage-recording-indicator--strip .usage-recording-indicator__action {
+  min-width: 48px;
+  min-height: 48px;
 }
 
 @keyframes usage-recording-pulse {

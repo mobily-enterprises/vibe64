@@ -46,8 +46,12 @@ import {
 const HOME_SHELL_CLASS = "studio-home-shell-active";
 const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
 // The selected session's recording indicator: in the header whenever a
-// project is open, whichever pane or chat layout is showing.
+// project is open, whichever pane or chat layout is showing. A phone's header
+// has no room for it beside the pane controls, so there it is a strip below
+// the header instead.
 const USAGE_RECORDING_HOST_ID = "studio-home-shell-usage-recording";
+const USAGE_RECORDING_STRIP_HOST_ID = "studio-home-shell-usage-recording-strip";
+const PHONE_BAR_MEDIA_QUERY = "(max-width: 600px)";
 const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
 // The project panes the header's Preview | Dash switch chooses between. Learn
 // mode's lesson is not one of them: it is its own on/off flag (the Lesson
@@ -86,9 +90,10 @@ function useVibe64AppPage() {
   const pageError = ref("");
   const chatCollapsed = ref(false);
   const mobilePaneLayout = ref(false);
+  const phoneBar = ref(false);
   const projectPaneNavigationReadySlug = ref("");
   const lastDashboardRoutePath = ref("");
-  let mobilePaneMediaQuery = null;
+  let stopMediaQueries = [];
   const projectSlug = computed(() => projectSlugFromRoute(route));
   const queryClient = useQueryClient();
   const feedback = useShellWebErrorRuntime();
@@ -206,7 +211,9 @@ function useVibe64AppPage() {
   const previewToolbarTeleportTarget = computed(() => (
     previewToolbarHostVisible.value ? `#${PREVIEW_TOOLBAR_HOST_ID}` : ""
   ));
-  const usageRecordingTeleportTarget = computed(() => (projectSlug.value ? `#${USAGE_RECORDING_HOST_ID}` : ""));
+  const usageRecordingTeleportTarget = computed(() => (projectSlug.value
+    ? `#${phoneBar.value ? USAGE_RECORDING_STRIP_HOST_ID : USAGE_RECORDING_HOST_ID}`
+    : ""));
 
   useStudioShellDrawer({
     hidden: true
@@ -275,20 +282,15 @@ function useVibe64AppPage() {
 
   onMounted(() => {
     setHomeShellActive(true);
-    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-      mobilePaneMediaQuery = window.matchMedia("(max-width: 980px)");
-      syncMobilePaneLayout();
-      // Opened at a session tool's address (a link, reload or Back to Files),
-      // a phone shows that tool's side from its first frame. The tool asks for
-      // it once its session loads; until then the phone would show the chat.
-      if (mobilePaneLayout.value && vibe64SessionToolIdFromDashboardPath(route.path, dashboardBasePath.value)) {
-        setChatCollapsed(true);
-      }
-      if (typeof mobilePaneMediaQuery.addEventListener === "function") {
-        mobilePaneMediaQuery.addEventListener("change", syncMobilePaneLayout);
-      } else {
-        mobilePaneMediaQuery.addListener?.(syncMobilePaneLayout);
-      }
+    stopMediaQueries = [
+      followMediaQuery("(max-width: 980px)", (matches) => { mobilePaneLayout.value = matches; }),
+      followMediaQuery(PHONE_BAR_MEDIA_QUERY, (matches) => { phoneBar.value = matches; })
+    ];
+    // Opened at a session tool's address (a link, reload or Back to Files),
+    // a phone shows that tool's side from its first frame. The tool asks for
+    // it once its session loads; until then the phone would show the chat.
+    if (mobilePaneLayout.value && vibe64SessionToolIdFromDashboardPath(route.path, dashboardBasePath.value)) {
+      setChatCollapsed(true);
     }
     if (colleagueLayout) colleagueLayout.value = layoutOwner;
   });
@@ -297,12 +299,7 @@ function useVibe64AppPage() {
     if (colleagueLayout?.value === layoutOwner) colleagueLayout.value = null;
     removeProjectNavigation();
     setHomeShellActive(false);
-    if (typeof mobilePaneMediaQuery?.removeEventListener === "function") {
-      mobilePaneMediaQuery.removeEventListener("change", syncMobilePaneLayout);
-    } else {
-      mobilePaneMediaQuery?.removeListener?.(syncMobilePaneLayout);
-    }
-    mobilePaneMediaQuery = null;
+    for (const stop of stopMediaQueries.splice(0)) stop();
   });
 
   watch(() => [
@@ -337,6 +334,7 @@ function useVibe64AppPage() {
     previewToolbarHostVisible,
     previewToolbarTeleportTarget,
     usageRecordingHostId: USAGE_RECORDING_HOST_ID,
+    usageRecordingStripHostId: USAGE_RECORDING_STRIP_HOST_ID,
     usageRecordingTeleportTarget,
     projectLoadError,
     projectPane,
@@ -456,10 +454,6 @@ function useVibe64AppPage() {
     chatCollapsed.value = Boolean(collapsed);
   }
 
-  function syncMobilePaneLayout() {
-    mobilePaneLayout.value = Boolean(mobilePaneMediaQuery?.matches);
-  }
-
   function handleProjectSelectionReady(selection = {}) {
     pageError.value = "";
     const selectedSlug = selectedProjectSlug(selection);
@@ -508,6 +502,21 @@ function openProjectSwitcherProjects(projects = []) {
   return projects
     .filter((project) => project?.runtime?.open === true)
     .sort((left, right) => String(left?.slug || "").localeCompare(String(right?.slug || "")));
+}
+
+// Calls sync(matches) now and whenever the media query's answer changes;
+// returns the function that stops following it.
+function followMediaQuery(query, sync) {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => {};
+  const media = window.matchMedia(query);
+  const listener = () => sync(Boolean(media.matches));
+  listener();
+  if (typeof media.addEventListener === "function") {
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }
+  media.addListener?.(listener);
+  return () => media.removeListener?.(listener);
 }
 
 function previewToolbarTargetVisible({

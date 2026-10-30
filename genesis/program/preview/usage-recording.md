@@ -3,7 +3,8 @@
 People record which of their project's own functions run while they use
 Preview or run one declared terminal Output target, counted per request or run,
 so Architecture's Usage view can show what each one actually executed. A
-recording indicator in the project header follows it on every pane.
+recording indicator in the project header (on a phone, a strip below it)
+follows it on every pane.
 
 ## Sources
 
@@ -87,10 +88,13 @@ unknown positions are skipped and counted, never trusted.
 ## Indicator
 
 The selected session's indicator is teleported into the project header, wide
-or compact by the width the header gives it, and always compact on a phone. It
-shows starting, recording time and count, stopping, ready and failed, offers
-Stop, Open results and dismiss, and announces only state changes. Open results
-selects the Architecture tool and asks its Usage view to show the recording.
+or compact by the width the header gives it. On a phone the page teleports it
+instead into a full-width strip below the header, which keeps the header's
+room for the pane controls; the strip shows the wide text, and tapping it
+opens the results (or a failure's reason) without a menu. It shows starting,
+recording time and count, stopping, ready and failed, offers Stop, Open
+results and dismiss, and announces only state changes. Open results selects
+the Architecture tool and asks its Usage view to show the recording.
 
 ## Security and retention
 

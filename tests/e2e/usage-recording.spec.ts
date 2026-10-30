@@ -88,11 +88,17 @@ async function noHorizontalScroll(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 }
 
+// A phone header's own contents fit it: nothing is clipped off its end.
+async function headerFits(page: Page) {
+  expect(await page.locator(".studio-home-shell-heading").evaluate((heading) => heading.scrollWidth - heading.clientWidth)).toBeLessThanOrEqual(0);
+}
+
 for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "phone", width: 390, height: 844 }]) {
   test.describe(viewport.name, () => {
     const phone = viewport.name === "phone";
     test.use({ viewport: { width: viewport.width, height: viewport.height }, hasTouch: phone, isMobile: phone });
 
+    // A phone's header has no room for it: there it is a full-width strip below the header.
     test("the recording indicator stays in the header across panes, chat and reload", async ({ page }) => {
       test.setTimeout(90_000);
       const shot = async (step: string) => {
@@ -102,8 +108,9 @@ for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "
         await mockDirectChatSession(page);
         const realtime = await mockRealtime(page);
         const recordings = await mockRecordings(page);
-        const host = page.locator("#studio-home-shell-usage-recording");
+        const host = page.locator(phone ? "#studio-home-shell-usage-recording-strip" : "#studio-home-shell-usage-recording");
         const pill = host.locator(".usage-recording-indicator__text");
+        const inHeader = page.locator("#studio-home-shell-usage-recording .usage-recording-indicator__pill");
 
         await page.goto(DASHBOARD_PATH);
         await expect(host).toBeAttached({ timeout: 15_000 });
@@ -117,11 +124,17 @@ for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "
           });
         }, { slug: WORKSPACE_SLUG, sessionId: directChatSessionId });
         realtime.publish(recordings.state.recording!);
-        await expect(pill).toHaveText(phone ? "Starting…" : "Starting recording…");
+        await expect(pill).toHaveText("Starting recording…");
         Object.assign(recordings.state.recording!, { state: "recording", tracers: [{ runtime: "nodejs", state: "ready", reason: "" }] });
         realtime.publish(recordings.state.recording!);
-        await expect(pill).toHaveText(phone ? /^1:0\d · 0$/u : /^Recording 1:0\d · 0 requests$/u);
+        await expect(pill).toHaveText(/^Recording 1:0\d · 0 requests$/u);
         await expect(host.getByRole("button", { name: "Stop recording" })).toBeVisible();
+        if (phone) {
+          await expect(inHeader).toHaveCount(0);
+          const stop = await host.getByRole("button", { name: "Stop recording" }).boundingBox();
+          expect(Math.min(stop?.width || 0, stop?.height || 0)).toBeGreaterThanOrEqual(48);
+          await headerFits(page);
+        }
         await shot("1-dashboard");
 
         // Preview, the chat, and (on a desktop) a collapsed chat all keep it.
@@ -146,7 +159,7 @@ for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "
         // A reload reads the recording again; the time continues from the server's start.
         await page.reload();
         // Beside Preview's toolbar a desktop header may be too narrow for the wide pill.
-        await expect(pill).toHaveText(phone ? /^1:\d\d · 0$/u : /^(?:Recording )?1:\d\d · 0(?: requests)?$/u, { timeout: 15_000 });
+        await expect(pill).toHaveText(phone ? /^Recording 1:\d\d · 0 requests$/u : /^(?:Recording )?1:\d\d · 0(?: requests)?$/u, { timeout: 15_000 });
 
         // Requests made in Preview raise the count.
         for (const requests of [1, 2, 3]) {
@@ -155,11 +168,12 @@ for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "
         }
         await expect(pill).toHaveText(/· 3(?: requests)?$/u, { timeout: 3_000 });
 
-        // The widest state fits a 360 px phone bar.
+        // The strip and the header both fit a 360 px phone.
         if (phone) {
           await page.setViewportSize({ width: 360, height: viewport.height });
           await expect(pill).toBeVisible();
           await noHorizontalScroll(page);
+          await headerFits(page);
           await shot("4-recording-360");
           await page.setViewportSize({ width: viewport.width, height: viewport.height });
         }
@@ -170,12 +184,15 @@ for (const viewport of [{ name: "desktop", width: 1280, height: 800 }, { name: "
         await expect(host.getByRole("button", { name: "Stop recording" })).toBeEnabled();
         recordings.state.recording!.state = "stopped";
         realtime.publish(recordings.state.recording!);
-        await expect(pill).toHaveText(phone ? "Ready · 3" : /^(?:Recording ready · 3 requests|Ready · 3)$/u);
+        await expect(pill).toHaveText(phone ? "Recording ready · 3 requests" : /^(?:Recording ready · 3 requests|Ready · 3)$/u);
         await shot("5-ready");
         await noHorizontalScroll(page);
+        if (phone) await headerFits(page);
 
-        // Open results: the Architecture tool of the dashboard, asked to show this recording.
-        await host.getByRole("button", { name: /^Open(?: results)?$/u }).click();
+        // Open results (on a phone, by tapping the strip): the Architecture
+        // tool of the dashboard, asked to show this recording.
+        if (phone) await host.locator(".usage-recording-indicator__body").click();
+        else await host.getByRole("button", { name: /^Open(?: results)?$/u }).click();
         await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/system`, "u"));
         await expect(page.locator(".studio-autopilot__architecture-pane")).toBeVisible();
         await expect.poll(() => recordings.calls).toContain(`POST /${RECORDING_ID}/dismiss`);
