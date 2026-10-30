@@ -1,4 +1,5 @@
 export {
+  SYSTEM_GRAPH_API_SUFFIX,
   useVibe64SystemGraph
 } from "./composables/useVibe64SystemGraph.js";
 

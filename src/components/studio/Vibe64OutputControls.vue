@@ -898,6 +898,7 @@
 import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
+import { SYSTEM_GRAPH_API_SUFFIX } from "@local/vibe64-system-graph/client";
 import { useVibe64UsageRecording } from "@local/vibe64-usage-recording/client";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import {
@@ -1164,7 +1165,7 @@ const {
 } = useVibe64OutputControlsSurface(props, {
   openUsage: (request) => emit("open-usage", request),
   readUsageEntries: (query) => getHttpWebClient().request(
-    `${paths.api("/vibe64/system-graph", { surface: "app" })}/sessions/${encodeURIComponent(usageSessionId.value)}/usage/entries`,
+    `${paths.api(SYSTEM_GRAPH_API_SUFFIX, { surface: "app" })}/sessions/${encodeURIComponent(usageSessionId.value)}/usage/entries`,
     { method: "GET", query }
   ),
   recordInteraction: usageRecording.recordInteraction,
