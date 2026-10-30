@@ -162,6 +162,7 @@ function goToPreview() {
 
 .usage-record-dialog__target {
   display: grid;
+  justify-items: start;
   gap: var(--v64-space-1);
 }
 
