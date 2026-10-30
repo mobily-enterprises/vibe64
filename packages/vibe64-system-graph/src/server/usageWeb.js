@@ -110,6 +110,8 @@ function buildSnapshotIndex(record, layout) {
     snapshot: {
       sourceIdentity: architecture.sourceHash || null,
       callWebIdentity: callWeb?.identity || null,
+      // Why a scan has no calls, when Genesis said: Git does not ignore the call web.
+      callWebProblem: !callWeb && (architecture.diagnostics || []).some((item) => item.code === "CALL_WEB_NOT_IGNORED") ? "not-ignored" : null,
       builtAt: record.builtAt || null,
       // The System Graph's own out-of-date signal: Genesis re-indexed source
       // without the inspectors, so observations and calls need a re-scan.
@@ -496,6 +498,9 @@ function joinFunctions(index, callIndex, input) {
   if (candidates.length > USAGE_QUERY_LIMITS.joinFunctions) {
     throw usageError("Join at most 1,500 functions at a time.", "vibe64_invalid_usage_join_size");
   }
+  // Why a function is not in the scan's calls, when known: the scan could not
+  // read calls, or its file's language is not one the scan reads calls for.
+  const noCalls = callIndex ? null : index.snapshot.callWebProblem;
   const joined = candidates.map((candidate, position) => {
     const filePath = String(candidate.path || "");
     const file = callIndex?.fileByPath.get(filePath);
@@ -504,9 +509,10 @@ function joinFunctions(index, callIndex, input) {
       // Without a call web, the Machine City's hash still says whether the
       // recording ran the scanned version of the file.
       const changed = indexed && indexed.hash !== candidate.hash;
-      return { index: position, functionId: null, subsystemId: subsystemForPath(index, filePath), join: changed ? "stale" : "none" };
+      return { index: position, functionId: null, subsystemId: subsystemForPath(index, filePath), join: changed ? "stale" : "none", ...(!changed && noCalls ? { reason: noCalls } : {}) };
     }
     if (file.hash !== candidate.hash) return { index: position, functionId: null, subsystemId: file.subsystemId ?? null, join: "stale" };
+    if (file.coverage === "none") return { index: position, functionId: null, subsystemId: file.subsystemId ?? null, join: "none", reason: "language" };
     const inFile = callIndex.byPath.get(filePath) || [];
     const start = candidate.start || {};
     const atStart = inFile.filter((fnPosition) => {
@@ -540,7 +546,7 @@ function joinFunctions(index, callIndex, input) {
   }
   const subsystemIds = [...new Set(joined.map((item) => item.subsystemId).filter(Boolean))].sort(byText);
   return {
-    joined: joined.map(({ index: position, functionId, subsystemId, join }) => ({ index: position, functionId, subsystemId, join })),
+    joined: joined.map(({ index: position, functionId, subsystemId, join, reason }) => ({ index: position, functionId, subsystemId, join, ...(reason ? { reason } : {}) })),
     edges: [...edges.values()].sort((left, right) => left.from - right.from || left.to - right.to),
     groups: index.groups,
     subsystems: subsystemIds.map((id) => {

@@ -180,6 +180,7 @@ async function readGenesisCallWeb(projectRoot, architecture, { validate = valida
 }
 
 export {
+  CALL_WEB_PATH,
   readGenesisCallWeb,
   readGenesisCity,
   requireGenesisCity,

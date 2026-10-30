@@ -139,6 +139,17 @@ describe("Imports and Calls states", () => {
     expect(html).toContain("Calls are not available here");
     expect(html).toContain("The last scan did not read calls for this project.");
     expect(html).toContain("Show Imports");
+    const notIgnored = await view({ entry: PAGE }, { web: read(web), snapshot: { ...index.snapshot, callWebIdentity: null, callWebProblem: "not-ignored" } });
+    expect(notIgnored).toContain("Git does not ignore .genesis/call-web.json in this project, so the last scan could not read calls. Add /.genesis/call-web.json to the project&#39;s .gitignore");
+  });
+
+  it("says why a function that ran has no calls: Git, or its language", async () => {
+    const node = { id: "ran:0", functionId: null, title: "handler", subtitle: "app/main.py:3", file: "app/main.py", start: { line: 3, column: 1 }, join: "none" };
+    expect(await render(Vibe64UsageFunctionPanel, { node: { ...node, reason: "language" } }))
+      .toContain("The scan reads calls only in the languages of the project&#39;s Stack components, and this file&#39;s language is not among them.");
+    expect(await render(Vibe64UsageFunctionPanel, { node: { ...node, reason: "not-ignored" } })).toContain("Add /.genesis/call-web.json to the project&#39;s .gitignore");
+    const canvas = await render(Vibe64UsageWebCanvas, { mode: "recording", zoomedId: "directory:app", subsystems: [], nodes: [{ ...node, reason: "language", depth: 0, count: 1, outCount: 0, inCount: 0 }], edges: [] });
+    expect(canvas).toContain("Calls not read in this file&#39;s language");
   });
 });
 

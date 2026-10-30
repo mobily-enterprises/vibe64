@@ -179,7 +179,7 @@ function nodeStyle(node) {
 const SHORT_JOIN = Object.freeze({ stale: "changed", none: "not scanned" });
 
 function badge(node, full = false) {
-  if (props.mode === "recording" && node.join !== "exact" && node.join !== "name-line") return full ? joinText(node.join) : SHORT_JOIN[node.join] || "";
+  if (props.mode === "recording" && node.join !== "exact" && node.join !== "name-line") return full ? joinText(node.join, node.reason) : SHORT_JOIN[node.join] || "";
   if (props.mode === "recording") return node.count == null ? "ran" : `×${node.count.toLocaleString()}`;
   if (node.certainty === "probable") return "probable";
   return "";

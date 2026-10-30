@@ -334,7 +334,10 @@ boundary identity are passed on stdin; stdout is bounded observation JSON.
 Each inspector also receives its own `cacheDirectory`,
 `<sessionRoot>/architecture-cache/<inspector id>/`, created with the session's
 shared directory mode outside the source; without it the inspector runs cold.
-Refresh asks Genesis for the call web as well (`callWeb: true`).
+Refresh asks Genesis for the call web as well (`callWeb: true`), first keeping
+`.genesis/call-web.json` out of Git in a managed block of the clone's
+`.git/info/exclude`, since Genesis writes the call web only for an ignored path.
+When that cannot be ensured, the scan runs without calls and Usage says why.
 The inspector runs in Genesis's async observation callback after one source
 extraction. Genesis joins its output to that scan, then rechecks the original
 inputs before publication rather than extracting the whole project a second time.

@@ -152,8 +152,13 @@ what it reaches. `src/server/usageWeb.js` answers four read actions
 - join: recorded functions matched to the call web by hash and start, else
   by name within three lines.
 
-Answers carry the snapshot (`sourceIdentity`, `callWebIdentity`, `builtAt`,
-`stale`) and stay bounded: subsystem counts always, nodes only for a zoomed
+Refresh first keeps `.genesis/call-web.json` out of Git through a managed
+block in the clone's `.git/info/exclude`, because Genesis writes the call web
+only for an ignored path. Answers carry the snapshot (`sourceIdentity`,
+`callWebIdentity`, `callWebProblem` when Genesis reported the call web not
+ignored, `builtAt`, `stale`). A joined function the call web cannot know says
+why in `reason`: `not-ignored`, or `language` for a file without call coverage.
+Answers stay bounded: subsystem counts always, nodes only for a zoomed
 subsystem or a reach within `maxNodes` (300, at most 1,000), 50 unresolved
 calls, 200 rows per function list, 1 MiB, `truncated` when cut. One parsed call
 web per session source is cached for two sessions and ten idle minutes.

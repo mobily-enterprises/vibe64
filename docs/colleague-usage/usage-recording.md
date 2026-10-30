@@ -51,6 +51,14 @@ Code that runs in the browser is not recorded. A target whose runtime has no
 recorder, such as Go or Rust, shows **Recording not available for `<runtime>`**
 in the Record dialog.
 
+Arrows between recorded functions come from the architecture scan's calls,
+which it reads only in the languages of the project's Stack components. A
+function in another language shows **Calls not read in this file's language**.
+When Git does not ignore `.genesis/call-web.json` and Vibe64 could not set that
+up itself, functions show **Calls not read: Git does not ignore the call web**;
+add `/.genesis/call-web.json` to the project's `.gitignore`, then refresh the
+scan.
+
 ### Node.js
 
 Node.js 22.15 or newer. Every Node.js process of the recorded target loads

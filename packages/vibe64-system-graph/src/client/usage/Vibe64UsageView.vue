@@ -71,7 +71,7 @@
           </div>
           <div v-else-if="mode === 'calls' && !webEntry.hasCalls" class="usage-view__state" role="status">
             <h3 class="text-title-medium">Calls are not available here</h3>
-            <p class="text-body-medium">{{ snapshot?.callWebIdentity ? 'No functions are known for this entry.' : 'The last scan did not read calls for this project.' }} Imports still shows the files it reaches.</p>
+            <p class="text-body-medium">{{ snapshot?.callWebIdentity ? 'No functions are known for this entry.' : snapshot?.callWebProblem === 'not-ignored' ? NOT_IGNORED_TEXT : 'The last scan did not read calls for this project.' }} Imports still shows the files it reaches.</p>
             <v-btn variant="tonal" @click="setMode('imports')">Show Imports</v-btn>
           </div>
           <template v-else>
@@ -167,6 +167,7 @@ import Vibe64UsageWebCanvas from "./Vibe64UsageWebCanvas.vue";
 import {
   MAX_NODES,
   MORE_NODES,
+  NOT_IGNORED_TEXT,
   NOT_SCANNED_CODE,
   USAGE_MODES,
   countLabel,
