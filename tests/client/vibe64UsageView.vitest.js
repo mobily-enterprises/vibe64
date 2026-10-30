@@ -106,7 +106,8 @@ describe("Imports and Calls states", () => {
   it("shows reached subsystems as cards with certainty, crossings and the untouched chip", async () => {
     const html = await view({ entry: PAGE }, { web: read(callsWeb()) });
     expect(html).toContain("Client");
-    expect(html).toMatch(/\d+ exact · \d+ probable/u);
+    expect(html).toMatch(/\d+ by exact calls · \d+ only via probable/u);
+    expect(html).toContain("1 exact call, 1 probable");
     expect(html).toMatch(/Show untouched \(\d+\)/u);
     expect(html).toContain("Exact only");
     expect(html).not.toContain("Source changed since the last scan");
@@ -209,11 +210,15 @@ describe("parts", () => {
     expect(await render(Vibe64UsageFunctionPanel, { node, detail: withUnresolved })).toContain("Unresolved call: <code>systemGraph[method](input)</code>");
   });
 
-  it("lists the zoomed web by depth with call counts on a phone", async () => {
+  it("lists the zoomed web by depth with certainty, call counts and unresolved calls on a phone", async () => {
     const zoomed = callsWeb({ subsystemId: "directory:src" });
     const html = await render(Vibe64UsageWebCanvas, { mode: "calls", compact: true, zoomedId: "directory:src", subsystems: zoomed.subsystems, nodes: webNodes("calls", zoomed), edges: zoomed.edges });
     expect(html).toContain("Start");
     expect(html).toMatch(/calls \d+ → · called by \d+ ←/u);
+    expect(html).not.toContain("Legend");
+    const probable = { id: "fn:a", functionId: "fn:a", title: "handle", subtitle: "server/router.js:18", file: "server/router.js", start: { line: 18, column: 3 }, depth: 1, certainty: "probable", outCount: 2, inCount: 1, unresolved: 1 };
+    const row = await render(Vibe64UsageWebCanvas, { mode: "calls", compact: true, zoomedId: "directory:server", subsystems: zoomed.subsystems, nodes: [probable] });
+    expect(row).toContain("only via probable calls · calls 2 → · called by 1 ← · 1 unresolved call");
   });
 
   it("offers only the kinds present, with counts, and a refresh when empty", async () => {

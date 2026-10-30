@@ -36,8 +36,8 @@ For text ownership, generation triggers and freshness, see
 
 The **Map | Usage** switch at the top chooses between this map and **Usage**,
 which starts from one entry point (a page, route, command, library export and
-so on) and shows only the files it imports, the functions it may call, or what
-one recorded request ran. Page cards and zoomed subsystems, Programs and files
+so on) and shows only the files it imports, the functions its exact and
+probable calls reach, or what one recorded request ran. Page cards and zoomed subsystems, Programs and files
 offer **Show usage** to open it there. See
 [See what one entry point uses](usage-map.md).
 

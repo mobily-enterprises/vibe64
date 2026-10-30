@@ -47,13 +47,12 @@
       <header class="usage-web__zoom">
         <v-btn variant="text" :prepend-icon="mdiArrowLeft" @click="emit('zoom', '')">All subsystems</v-btn>
         <h3 class="usage-web__zoom-title text-title-medium">{{ zoomedTitle }}</h3>
-        <div class="usage-web__legend" aria-label="Legend">
-          <slot name="zoom-actions" />
-          <template v-if="mode !== 'imports'">
-            <v-chip size="small" variant="text" class="usage-web__legend-chip"><svg width="24" height="8" aria-hidden="true"><line x1="0" y1="4" x2="24" y2="4" class="usage-web__line usage-web__line--exact" /></svg>Exact</v-chip>
-            <v-chip size="small" variant="text" class="usage-web__legend-chip"><svg width="24" height="8" aria-hidden="true"><line x1="0" y1="4" x2="24" y2="4" class="usage-web__line usage-web__line--probable" /></svg>Probable</v-chip>
-            <v-chip v-if="mode === 'calls'" size="small" variant="text" class="usage-web__legend-chip"><svg width="24" height="10" aria-hidden="true"><line x1="0" y1="5" x2="14" y2="5" class="usage-web__line usage-web__line--probable" /><circle cx="18" cy="5" r="4" class="usage-web__stub" /></svg>Unresolved</v-chip>
-          </template>
+        <slot name="zoom-actions" />
+        <!-- Lines are drawn only on the canvas; list rows say it in words. -->
+        <div v-if="mode !== 'imports' && !compact" class="usage-web__legend" aria-label="Legend">
+          <v-chip size="small" variant="text" class="usage-web__legend-chip"><svg width="24" height="8" aria-hidden="true"><line x1="0" y1="4" x2="24" y2="4" class="usage-web__line usage-web__line--exact" /></svg>Exact</v-chip>
+          <v-chip size="small" variant="text" class="usage-web__legend-chip"><svg width="24" height="8" aria-hidden="true"><line x1="0" y1="4" x2="24" y2="4" class="usage-web__line usage-web__line--probable" /></svg>Probable</v-chip>
+          <v-chip v-if="mode === 'calls'" size="small" variant="text" class="usage-web__legend-chip"><svg width="24" height="10" aria-hidden="true"><line x1="0" y1="5" x2="14" y2="5" class="usage-web__line usage-web__line--probable" /><circle cx="18" cy="5" r="4" class="usage-web__stub" /></svg>Unresolved</v-chip>
         </div>
       </header>
       <p v-if="!nodes.length" class="usage-web__empty text-body-medium" role="status">{{ zoomEmptyText }}</p>
@@ -181,18 +180,19 @@ const SHORT_JOIN = Object.freeze({ stale: "changed", none: "not scanned" });
 function badge(node, full = false) {
   if (props.mode === "recording" && node.join !== "exact" && node.join !== "name-line") return full ? joinText(node.join) : SHORT_JOIN[node.join] || "";
   if (props.mode === "recording") return node.count == null ? "ran" : `×${node.count.toLocaleString()}`;
-  if (node.certainty === "probable") return "probable";
+  if (node.certainty === "probable") return full ? "only via probable calls" : "probable";
   return "";
 }
 
+// List rows carry what the canvas draws: certainty, counts and unresolved stubs.
 function rowCounts(node) {
   if (props.mode === "recording") return badge(node, true);
   const [out, into] = props.mode === "imports" ? ["imports", "imported by"] : ["calls", "called by"];
-  return `${out} ${node.outCount} → · ${into} ${node.inCount} ←`;
+  return [badge(node, true), `${out} ${node.outCount} → · ${into} ${node.inCount} ←`, node.unresolved && countLabel(node.unresolved, "unresolved call")].filter(Boolean).join(" · ");
 }
 
 function nodeLabel(node) {
-  return [node.title, node.subtitle, badge(node, true), props.mode === "recording" ? "" : rowCounts(node)].filter(Boolean).join(", ");
+  return [node.title, node.subtitle, props.mode === "recording" ? badge(node, true) : rowCounts(node)].filter(Boolean).join(", ");
 }
 </script>
 

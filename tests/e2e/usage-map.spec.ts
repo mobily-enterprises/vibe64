@@ -154,7 +154,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     // Level 1: the subsystems the component reaches through calls.
     const client = usage.locator(".usage-web__card").filter({ hasText: "Client" });
     await expect(client).toContainText(/\d+ functions?/u);
-    await expect(client).toContainText(/\d+ exact · \d+ probable/u);
+    await expect(client).toContainText(/\d+ by exact calls · \d+ only via probable/u);
     await expect(usage.getByRole("switch", { name: /Show untouched/u })).toBeVisible();
     await expect(page).toHaveURL(/view=usage/u);
     await shot("1-subsystems");

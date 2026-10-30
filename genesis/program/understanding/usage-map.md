@@ -2,8 +2,8 @@
 
 People start from one entry point (a page, component, route, action, library
 export, command, job, Program operation or test file) and see only what it
-reaches: the files it imports, the functions it may call, or the functions one
-recorded request actually ran. Architecture shows it as Usage beside Map.
+reaches: the files it imports, the functions its exact and probable calls
+reach, or the functions one recorded request actually ran. Architecture shows it as Usage beside Map.
 
 ## Sources
 

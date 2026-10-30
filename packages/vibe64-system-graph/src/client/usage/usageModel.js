@@ -119,13 +119,19 @@ const COUNT_KEYS = Object.freeze({ imports: "fileCount", calls: "functionCount",
 
 function subsystemCard(mode, item = {}) {
   if (mode === "imports") return { count: countLabel(item.fileCount, "file"), detail: "" };
-  if (mode === "calls") return { count: countLabel(item.functionCount, "function"), detail: `${item.exact || 0} exact · ${item.probable || 0} probable` };
+  if (mode === "calls") return { count: countLabel(item.functionCount, "function"), detail: `${Number(item.exact || 0).toLocaleString()} by exact calls · ${Number(item.probable || 0).toLocaleString()} only via probable` };
   return { count: `${countLabel(item.ranCount, "function")} ran`, detail: "", plumbing: item.plumbingCount || 0 };
 }
 
+// Crossings count calls (cards count functions). In Recording they are the
+// static calls between functions that ran, not proof that a call happened.
 function crossingText(mode, crossing = {}) {
   if (mode === "imports") return countLabel(crossing.count, "import");
-  return [crossing.exact && `${crossing.exact} exact`, crossing.probable && `${crossing.probable} probable`, crossing.renders && `renders ${countLabel(crossing.renders, "component")}`].filter(Boolean).join(" · ");
+  const exact = Number(crossing.exact || 0);
+  const probable = Number(crossing.probable || 0);
+  if (mode === "recording") return countLabel(exact + probable, "call in code", "calls in code");
+  const calls = [exact && countLabel(exact, "exact call"), probable && (exact ? `${probable.toLocaleString()} probable` : countLabel(probable, "probable call"))].filter(Boolean).join(", ");
+  return [calls, crossing.renders && `renders ${countLabel(crossing.renders, "component")}`].filter(Boolean).join(" · ");
 }
 
 function depthTitle(depth) {
@@ -210,15 +216,16 @@ function canvasLayout(nodes = [], edges = []) {
 }
 
 const CERTAINTY_TEXT = Object.freeze({ exact: "exact", probable: "probable", unresolved: "unresolved" });
+// How the analysis found each call's target, in plain words.
 const METHOD_TEXT = Object.freeze({
-  checker: "type checker",
+  checker: "proved by types",
   "di-binding": "dependency binding",
-  "route-action": "route action",
-  "argument-flow": "argument flow",
-  "import-scope": "import",
-  "same-file-name": "same-file name",
+  "route-action": "the route's action",
+  "argument-flow": "passed as an argument",
+  "import-scope": "matched by imported name",
+  "same-file-name": "matched by name in this file",
   self: "same class",
-  "receiver-name": "method name",
+  "receiver-name": "matched by method name",
   operation: "request",
   // Renders rows have their own headings; the tag says the rest.
   renders: "",
@@ -229,8 +236,13 @@ function callMethodText(method = "") {
   return METHOD_TEXT[method] ?? method;
 }
 
+const ANALYSIS_NAMES = Object.freeze({ jskit: "JSKIT" });
+
 function coverageText(coverage = "") {
-  if (coverage.startsWith("adapter:")) return `Calls read by the ${coverage.slice("adapter:".length)} adapter`;
+  if (coverage.startsWith("adapter:")) {
+    const family = coverage.slice("adapter:".length).split(".")[0];
+    return `Calls read by ${ANALYSIS_NAMES[family] || family} analysis, which can prove exact calls`;
+  }
   if (coverage === "generic") return "Calls read by name only: probable at best";
   return "Calls not read for this file";
 }
