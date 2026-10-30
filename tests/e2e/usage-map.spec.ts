@@ -201,7 +201,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     await expect(core).toContainText("Shared plumbing (5)");
     await shot("6-recorded");
     await core.click();
-    await expect(usage.getByRole("switch", { name: "Shared plumbing (5)" })).toBeVisible();
+    await expect(usage.getByRole("switch", { name: "Show shared plumbing (5)" })).toBeVisible();
     await shot("7-recorded-functions");
 
     if (!phone) {

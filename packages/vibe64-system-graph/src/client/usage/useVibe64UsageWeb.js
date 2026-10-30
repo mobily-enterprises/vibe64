@@ -60,6 +60,58 @@ function latestRead(load) {
   return { data, loading, error, errorCode, run, reset };
 }
 
+const byId = (rows) => new Set(rows.map((row) => row.id));
+const union = (first = [], second = []) => {
+  const ids = byId(first);
+  return [...first, ...second.filter((row) => !ids.has(row.id))];
+};
+
+// A recording's requests page by page: `more` adds the next page, and
+// `refresh` puts a live recording's newest first page in front of the rows
+// already shown. data holds every row read so far, with the server's total.
+function requestPages(load) {
+  const read = latestRead(load);
+  const data = shallowRef(null);
+  let filter = null;
+
+  async function run(next) {
+    filter = next;
+    const page = await read.run(next, null);
+    if (page) data.value = { ...page, filterKey: JSON.stringify(next) };
+    return page;
+  }
+
+  async function more() {
+    const shown = data.value;
+    if (!shown?.nextCursor) return null;
+    const page = await read.run(filter, shown.nextCursor);
+    if (!page || data.value !== shown) return null;
+    data.value = { ...shown, ...page, requests: union(shown.requests, page.requests), interactions: union(shown.interactions, page.interactions) };
+    return page;
+  }
+
+  // Rows already shown stay when the new first page reaches them; a page that
+  // does not (many requests since the last read) starts the list again.
+  async function refresh(next) {
+    const shown = data.value;
+    if (!shown || shown.filterKey !== JSON.stringify(next)) return run(next);
+    if (read.loading.value) return null;
+    const page = await read.run(next, null);
+    if (!page || data.value !== shown) return null;
+    const reaches = !page.nextCursor || byId(shown.requests).has(page.requests.at(-1)?.id);
+    data.value = !reaches ? { ...page, filterKey: shown.filterKey } : {
+      ...shown,
+      ...page,
+      requests: union(page.requests, shown.requests),
+      interactions: union(page.interactions, shown.interactions),
+      nextCursor: shown.requests.length > page.requests.length ? shown.nextCursor : page.nextCursor
+    };
+    return page;
+  }
+
+  return { data, loading: read.loading, error: read.error, errorCode: read.errorCode, run, more, refresh };
+}
+
 // Reads for the usage view: entries, Imports/Calls webs, one function, and a
 // recording's requests joined to the call web. The view owns what is shown.
 function useVibe64UsageWeb({ sessionId }) {
@@ -101,19 +153,30 @@ function useVibe64UsageWeb({ sessionId }) {
   const detail = latestRead((signal, functionId) => get(`${usagePath.value}/function`, { functionId }, signal));
   const recordings = latestRead((signal) => get(recordingPath.value, {}, signal));
   const targets = latestRead((signal) => get(`${recordingPath.value}/targets`, {}, signal));
-  const requests = latestRead((signal, { recordingId, q, includeEmpty }) => get(
-    `${recordingPath.value}/${segment(recordingId)}/requests`, { q, includeEmpty: includeEmpty ? "true" : "", limit: REQUEST_PAGE }, signal
+  const requests = requestPages((signal, { recordingId, q, includeEmpty, newestFirst }, cursor) => get(
+    `${recordingPath.value}/${segment(recordingId)}/requests`,
+    { q, includeEmpty: includeEmpty ? "true" : "", order: newestFirst ? "newest" : "", cursor, limit: REQUEST_PAGE },
+    signal
   ));
   // What ran in one request, then the same functions joined to the call web.
+  // The request's own row comes along: it names the request when the pages
+  // read so far do not hold it (an address reloaded after Show more).
   const result = latestRead(async (signal, { recordingId, requestId }) => {
-    const ran = await get(`${recordingPath.value}/${segment(recordingId)}/requests/${segment(requestId)}/functions`, { limit: RECORDED_FUNCTIONS }, signal);
+    const requestsPath = `${recordingPath.value}/${segment(recordingId)}/requests`;
+    const [ran, named] = await Promise.all([
+      get(`${requestsPath}/${segment(requestId)}/functions`, { limit: RECORDED_FUNCTIONS }, signal),
+      get(requestsPath, { requestId, limit: 1 }, signal).catch(() => null)
+    ]);
     const functions = ran.functions || [];
     const join = await client.request(`${usagePath.value}/join`, {
       method: "POST",
       body: { functions: functions.map(({ path, hash, name, start }) => ({ path, hash, name, start })) },
       signal
     });
-    return { recordingId, requestId, functions, total: ran.total ?? functions.length, truncated: ran.truncated === true, join };
+    return {
+      recordingId, requestId, functions, total: ran.total ?? functions.length, truncated: ran.truncated === true, join,
+      request: named?.requests?.find((row) => row.id === requestId) || null, interactions: named?.interactions || []
+    };
   });
 
   // Route entries let Recording show a request's route template.

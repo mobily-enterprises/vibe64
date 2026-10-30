@@ -69,28 +69,39 @@
             @click="emit('update:requestId', request.id)"
           >
             <template #prepend>
-              <v-chip size="small" variant="tonal" label class="usage-recordings__method">{{ isBackgroundRequest(request) ? 'ALL' : request.method }}</v-chip>
+              <v-chip size="small" variant="tonal" label class="usage-recordings__method">
+                <v-icon v-if="markIcon(request)" :icon="markIcon(request)" size="small" />
+                <template v-else>{{ request.method || '–' }}</template>
+              </v-chip>
             </template>
-            <v-list-item-title class="text-body-medium">{{ requestTitle(request, routes, requests) }}</v-list-item-title>
+            <v-list-item-title class="text-body-medium"><template v-for="(part, index) in pathParts(requestTitle(request, routes, requests))" :key="index">{{ part }}<wbr></template></v-list-item-title>
             <v-list-item-subtitle>{{ [isBackgroundRequest(request) ? (onlyBackground(requests) ? 'Everything that ran while recording' : 'Outside any request') : request.status, countLabel(request.fileCount, 'file'), countLabel(request.functionCount, 'function')].filter(Boolean).join(' · ') }}</v-list-item-subtitle>
           </v-list-item>
         </template>
       </v-list>
+      <div v-if="groups.length && (hasMore || newestFirst)" class="usage-recordings__footer">
+        <p class="text-body-small">{{ footerText }}</p>
+        <v-btn v-if="hasMore" variant="text" size="small" :loading="requestsLoading" @click="emit('more')">Show more</v-btn>
+      </div>
     </template>
   </section>
 </template>
 
 <script setup>
 import { computed } from "vue";
-import { mdiMagnify } from "@mdi/js";
+import { mdiCogOutline, mdiConsoleLine, mdiMagnify } from "@mdi/js";
 
-import { BACKGROUND_TEXT, countLabel, interactionTitle, isBackgroundRequest, onlyBackground, requestGroups, requestTitle } from "./usageModel.js";
+import { BACKGROUND_TEXT, countLabel, interactionTitle, isBackgroundRequest, onlyBackground, pathParts, requestGroups, requestTitle } from "./usageModel.js";
 
 const props = defineProps({
   recordings: { type: Array, default: () => [] },
   recordingId: { type: String, default: "" },
   requests: { type: Array, default: () => [] },
   interactions: { type: Array, default: () => [] },
+  // Matching requests on the server (null: not known); requests holds the pages read so far.
+  total: { type: Number, default: null },
+  hasMore: { type: Boolean, default: false },
+  newestFirst: { type: Boolean, default: false },
   requestId: { type: String, default: "" },
   search: { type: String, default: "" },
   includeEmpty: { type: Boolean, default: false },
@@ -100,7 +111,7 @@ const props = defineProps({
   requestsLoading: { type: Boolean, default: false },
   error: { type: String, default: "" }
 });
-const emit = defineEmits(["update:recordingId", "update:requestId", "update:search", "update:includeEmpty", "retry"]);
+const emit = defineEmits(["update:recordingId", "update:requestId", "update:search", "update:includeEmpty", "more", "retry"]);
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
 const recordingItems = computed(() => props.recordings.map((recording) => ({
@@ -109,18 +120,32 @@ const recordingItems = computed(() => props.recordings.map((recording) => ({
 })));
 const selectedRecording = computed(() => props.recordings.find((recording) => recording.id === props.recordingId) || null);
 const groups = computed(() => requestGroups(props.requests, props.interactions));
+const footerText = computed(() => {
+  if (!props.hasMore) return "Newest requests first";
+  const shown = props.total == null ? `Showing ${countLabel(props.requests.length, "request")}`
+    : `Showing ${props.requests.length.toLocaleString()} of ${countLabel(Math.max(props.total, props.requests.length), "request")}`;
+  return props.newestFirst ? `${shown}, newest first` : shown;
+});
+// The method column shows an icon where there is no method: a process's
+// start-up and other work outside requests, and a command's run.
+const markIcon = (request) => (isBackgroundRequest(request) ? mdiCogOutline : /^run_/u.test(String(request.id)) ? mdiConsoleLine : null);
 
 </script>
 
 <style scoped>
-.usage-recordings { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 12px 8px; }
+/* The rail gives the section its height; the request list scrolls inside it. */
+.usage-recordings { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; overflow-y: auto; padding: 12px 8px; }
+.usage-recordings > :not(.usage-recordings__list) { flex: none; }
 .usage-recordings__empty { margin: 0; padding: 4px; }
 .usage-recordings__empty p { margin: 0; }
 .usage-recordings__switch { flex: none; }
 .usage-recordings__switch :deep(.v-label) { white-space: normal; }
 .usage-recordings__live { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
-.usage-recordings__list { padding: 0; background: transparent; }
-.usage-recordings__interaction { white-space: normal; overflow-wrap: anywhere; height: auto; min-height: 40px; }
-.usage-recordings__request :deep(.v-list-item-title) { overflow-wrap: anywhere; white-space: normal; }
-.usage-recordings__method { margin-right: 12px; font-family: ui-monospace, monospace; }
+.usage-recordings__list { flex: 1 1 auto; min-height: 160px; overflow-y: auto; padding: 0; background: transparent; }
+.usage-recordings__interaction { height: auto; min-height: 40px; }
+.usage-recordings__interaction :deep(.v-list-subheader__text) { white-space: normal; overflow: visible; overflow-wrap: break-word; }
+.usage-recordings__request :deep(.v-list-item-title) { overflow-wrap: break-word; white-space: normal; }
+.usage-recordings__method { min-width: 64px; justify-content: center; margin-right: 12px; font-family: ui-monospace, monospace; }
+.usage-recordings__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; padding: 0 4px; }
+.usage-recordings__footer p { margin: 0; color: var(--v64-on-surface-variant); }
 </style>

@@ -28,7 +28,7 @@
           <h4 class="text-title-small">{{ group.title }}</h4>
           <v-list density="compact" class="usage-panel__list">
             <v-list-item v-for="(row, position) in group.rows" :key="position" rounded="lg" lines="two" @click="emit('select', row.fn)">
-              <v-list-item-title class="text-body-medium">{{ functionLabel(row.fn) }}</v-list-item-title>
+              <v-list-item-title class="text-body-medium">{{ functionLabel(row.fn) }}<span v-if="ran?.has(row.fn.id)" class="usage-panel__ran"> · {{ ranLabel(ran.get(row.fn.id)) }}</span></v-list-item-title>
               <v-list-item-subtitle class="usage-panel__callee"><code>{{ row.callee }}</code><span v-if="methodText(row)"> · {{ methodText(row) }}</span></v-list-item-subtitle>
               <template #append>
                 <v-chip size="x-small" :variant="row.certainty === 'exact' ? 'tonal' : 'outlined'" class="mr-1">{{ CERTAINTY_TEXT[row.certainty] }}</v-chip>
@@ -63,7 +63,9 @@ const props = defineProps({
   node: { type: Object, required: true },
   detail: { type: Object, default: null },
   loading: { type: Boolean, default: false },
-  error: { type: String, default: "" }
+  error: { type: String, default: "" },
+  // In Recording: function id → times it ran in the request (null: ran, not counted).
+  ran: { type: Map, default: null }
 });
 const emit = defineEmits(["close", "select", "open-source", "retry"]);
 
@@ -86,6 +88,7 @@ const joinNote = computed(() => {
 const importText = computed(() => (props.node.functionId || props.node.join ? "" : `Imports ${props.node.outCount} of the reached files · imported by ${props.node.inCount}`));
 
 const methodText = (row) => callMethodText(row.method);
+const ranLabel = (count) => (count == null ? "ran" : `ran ${count.toLocaleString()} ${count === 1 ? "time" : "times"}`);
 
 function openAt(start, file = props.node.file) {
   emit("open-source", { path: file, line: start?.line || 1, column: start?.column || 1 });
@@ -104,4 +107,5 @@ function openAt(start, file = props.node.file) {
 .usage-panel__list { padding: 0; background: transparent; }
 .usage-panel__callee code { font-size: .8125rem; overflow-wrap: anywhere; white-space: normal; }
 .usage-panel__list :deep(.v-list-item-subtitle) { -webkit-line-clamp: 3; }
+.usage-panel__ran { color: var(--v64-primary); font-weight: 500; }
 </style>

@@ -100,13 +100,24 @@ phone) shows:
   "Title"** or **Submit: form "New note"**. Each shows its method, route,
   status and how many files and functions ran. Later requests that no click,
   Enter or submit caused are listed under **Other requests**. A process's
-  start-up work is listed first as **Start-up and work outside requests**.
+  start-up work is **Start-up and work outside requests**, listed first (last
+  when newest first), with a cog where other rows show their method; a
+  command's run has a terminal icon.
 
-Pick a request to light up only the subsystems that ran. Functions that ran in
-most requests of the recording, such as logging or request setup, are counted
-as **Shared plumbing** on each card; inside a subsystem they are hidden until
-you turn on the **Shared plumbing** chip. Each function shows how many times
-it ran. Arrows between them come from the static calls.
+The list shows 200 requests at a time. Below it, **Showing 200 of 1,234
+requests** says how many there are, and **Show more** adds the next 200. A
+recording opened while it is still recording lists its newest requests first,
+and new ones appear at the top as they finish (**newest first** below the
+list).
+
+Pick a request to light up only the subsystems that ran. On a computer the
+heading names it, such as **Request: POST /api/sessions**, with the click that
+caused it beside it. Functions that ran in most requests of the recording,
+such as logging or request setup, are counted as **Shared plumbing** on each
+card; inside a subsystem they are hidden until you turn on **Show shared
+plumbing**. Each function shows how many times it ran. Arrows between them
+come from the static calls. In a function's details, calls to functions that
+also ran in this request say **ran** and how many times.
 
 A function marked **changed** (**Changed since the last scan** in its
 tooltip and list row) ran from a file that has changed since Architecture was
