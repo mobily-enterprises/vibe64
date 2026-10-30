@@ -1,6 +1,6 @@
 <template>
-  <section class="vibe64-session-files" :class="$attrs.class" :style="$attrs.style" aria-label="Session files">
-    <v-tabs v-model="area" class="vibe64-session-files__tabs" :density="mobile ? 'default' : 'compact'" :grow="mobile" aria-label="File areas" :disabled="loadingAreas">
+  <section class="vibe64-session-files v64-focus-rings" :class="$attrs.class" :style="$attrs.style" aria-label="Session files">
+    <v-tabs v-model="area" class="vibe64-session-files__tabs" color="primary" :density="mobile ? 'default' : 'compact'" :grow="mobile" aria-label="File areas" :disabled="loadingAreas">
       <v-tab :disabled="archived || !repoAvailable" value="repo" :prepend-icon="mobile ? undefined : areaInfo('repo').icon">Repo</v-tab>
       <v-tab v-for="tab in tabAreas" :key="tab" :value="tab" :prepend-icon="mobile ? undefined : areaInfo(tab).icon">{{ areaInfo(tab).label }}</v-tab>
     </v-tabs>

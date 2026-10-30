@@ -16,15 +16,16 @@
     </div>
 
     <!-- An open file replaces the folder toolbar with its own bar. -->
+    <!-- The tab names the area, so the path shows only inside a folder. -->
     <div v-if="!file" class="vibe64-file-area__toolbar">
-      <nav class="vibe64-file-area__crumbs" aria-label="Folder">
+      <nav v-if="directory" class="vibe64-file-area__crumbs" aria-label="Folder">
         <template v-for="(crumb, index) in breadcrumbs" :key="crumb.path">
           <v-icon v-if="index" :icon="mdiChevronRight" size="18" aria-hidden="true" />
           <span v-if="index === breadcrumbs.length - 1" class="vibe64-file-area__crumb-current" aria-current="location">{{ crumb.title }}</span>
-          <v-btn v-else :disabled="loading || busy" variant="text" @click="loadDirectory(crumb.path)">{{ crumb.title }}</v-btn>
+          <v-btn v-else :disabled="loading || busy" variant="text" @click="loadDirectory(crumb.path, false, { focus: true })">{{ crumb.title }}</v-btn>
         </template>
       </nav>
-      <template v-if="!mobile">
+      <div v-if="!mobile" class="vibe64-file-area__actions">
         <v-btn v-if="archived && area === 'session'" :prepend-icon="mdiDownload" variant="text" :loading="downloading.includes(archiveName)" @click="download(archiveName, 'archive')">Download archive</v-btn>
         <v-btn v-if="location" :prepend-icon="mdiContentCopy" variant="text" @click="copyLocation">Copy AI path</v-btn>
         <v-btn :icon="mdiRefresh" aria-label="Refresh files" title="Refresh files" variant="text" :disabled="loading || busy" @click="refresh" />
@@ -33,14 +34,14 @@
           <v-btn :prepend-icon="mdiFilePlusOutline" variant="text" :disabled="busy" @click="openNewFile">New file</v-btn>
           <v-btn :prepend-icon="mdiUpload" color="primary" variant="flat" @click="chooseFiles">Upload</v-btn>
         </template>
-      </template>
-      <template v-else>
+      </div>
+      <div v-else class="vibe64-file-area__actions">
         <v-btn v-if="canWrite" :icon="mdiUpload" aria-label="Upload files" color="primary" variant="tonal" @click="chooseFiles" />
         <v-menu>
           <template #activator="{ props: menuProps }">
             <v-btn v-bind="menuProps" :icon="mdiDotsVertical" aria-label="More folder actions" variant="text" />
           </template>
-          <v-list>
+          <v-list class="v64-focus-rings">
             <v-list-item v-if="canWrite" :prepend-icon="mdiFilePlusOutline" title="New file" :disabled="busy" @click="openNewFile" />
             <v-list-item v-if="canWrite" :prepend-icon="mdiFolderPlusOutline" title="New folder" :disabled="busy" @click="openDialog('mkdir')" />
             <v-list-item v-if="location" :prepend-icon="mdiContentCopy" title="Copy AI path" @click="copyLocation" />
@@ -48,7 +49,7 @@
             <v-list-item :prepend-icon="mdiRefresh" title="Refresh" :disabled="loading || busy" @click="refresh" />
           </v-list>
         </v-menu>
-      </template>
+      </div>
     </div>
     <input ref="uploadInput" type="file" multiple class="d-none" aria-label="Choose files to upload" @change="pickFiles">
     <p v-if="!file && areaInfo.description" class="vibe64-file-area__description">{{ areaInfo.description }}</p>
@@ -66,7 +67,7 @@
           <v-btn :icon="mdiArrowLeft" aria-label="Back to folder" variant="text" :disabled="dirty || busy" @click="closeFile" />
         </span>
         <div class="vibe64-file-area__file-heading">
-          <h3 class="vibe64-file-area__file-name" :title="file.path">{{ fileName }}</h3>
+          <h3 ref="fileHeading" class="vibe64-file-area__file-name" :title="file.path" tabindex="-1">{{ fileName }}</h3>
           <p class="vibe64-file-area__file-folder">{{ folderLabel }}</p>
         </div>
         <div class="vibe64-file-area__file-actions">
@@ -80,7 +81,7 @@
               <v-btn :icon="mdiChevronRight" aria-label="Next image" title="Next image (→)" variant="text" @click="stepImage(1)" />
             </template>
             <v-btn v-bind="barAction(mdiDownload, 'Download')" aria-label="Download file" :loading="downloading.includes(file.path)" @click="download(file.path)" />
-            <v-btn v-if="destinations.length" v-bind="barAction(mdiFileMoveOutline, readOnly ? 'Copy to…' : 'Move or copy…')" :disabled="busy" @click="transferItem = fileEntry" />
+            <v-btn v-if="destinations.length" v-bind="barAction(mdiFileMoveOutline, readOnly ? 'Copy to…' : 'Move or copy…')" :disabled="busy" @click="openTransfer(fileEntry)" />
             <v-btn v-if="canWrite" :icon="mdiDeleteOutline" aria-label="Delete file" title="Delete" variant="text" :disabled="busy" @click="openDialog('delete', fileEntry)" />
           </template>
         </div>
@@ -91,8 +92,8 @@
         v-model="draft"
         :aria-label="`Contents of ${fileName}`"
         class="vibe64-file-area__text"
-        :disabled="busy"
         hide-details
+        :readonly="busy"
         rows="18"
         variant="outlined"
         @keydown.ctrl.s.prevent="saveShortcut"
@@ -113,6 +114,7 @@
           :key="entry.path"
           :disabled="busy"
           :prepend-icon="entryIcon(entry)"
+          :data-path="entry.path"
           :subtitle="entrySubtitle(entry)"
           tabindex="0"
           :title="entry.name"
@@ -132,9 +134,9 @@
               <template #activator="{ props: menuProps }">
                 <v-btn v-bind="menuProps" :icon="mdiDotsVertical" :aria-label="`Actions for ${entry.name}`" variant="text" @click.stop />
               </template>
-              <v-list>
+              <v-list class="v64-focus-rings">
                 <v-list-item v-if="entry.type === 'file' && mobile" :prepend-icon="mdiDownload" title="Download" @click="download(entry.path)" />
-                <v-list-item v-if="destinations.length" :prepend-icon="mdiFileMoveOutline" :title="readOnly ? 'Copy to…' : 'Move or copy…'" @click="transferItem = entry" />
+                <v-list-item v-if="destinations.length" :prepend-icon="mdiFileMoveOutline" :title="readOnly ? 'Copy to…' : 'Move or copy…'" @click="openTransfer(entry)" />
                 <v-list-item v-if="canWrite" :prepend-icon="mdiPencilOutline" title="Rename" @click="openDialog('rename', entry)" />
                 <v-list-item v-if="canWrite" :prepend-icon="mdiDeleteOutline" title="Delete" @click="openDialog('delete', entry)" />
               </v-list>
@@ -145,7 +147,7 @@
       </v-list>
       <div v-else class="vibe64-file-area__body vibe64-file-area__empty">
         <v-icon :icon="areaInfo.icon" size="48" aria-hidden="true" />
-        <h3>{{ expired ? "This Session Dropzone has expired" : directory ? "This folder is empty" : `${areaInfo.label} is empty` }}</h3>
+        <h3 tabindex="-1">{{ expired ? "This Session Dropzone has expired" : directory ? "This folder is empty" : `${areaInfo.label} is empty` }}</h3>
         <p v-if="canWrite">Drop files here, upload them, or create a text file.<template v-if="location"> The AI can use this folder too.</template></p>
         <div v-if="canWrite" class="vibe64-file-area__empty-actions">
           <v-btn :prepend-icon="mdiUpload" color="primary" variant="flat" @click="chooseFiles">Upload</v-btn>
@@ -164,8 +166,15 @@
       @retry="uploads.retry"
     />
 
-    <v-dialog v-model="dialogOpen" :aria-labelledby="dialogTitleId" max-width="460" :persistent="busy">
-      <v-card class="v64-focus-rings">
+    <v-dialog
+      v-model="dialogOpen"
+      :aria-labelledby="dialogTitleId"
+      :content-class="mobile ? 'vibe64-file-area__dialog--top' : undefined"
+      max-width="460"
+      :persistent="busy"
+      @after-leave="restoreFocus"
+    >
+      <v-card class="vibe64-file-area__dialog v64-focus-rings">
         <v-card-item>
           <v-card-title :id="dialogTitleId" class="vibe64-file-area__dialog-title">{{ dialogTitle }}</v-card-title>
         </v-card-item>
@@ -174,7 +183,16 @@
             {{ dialogEntry?.type === 'directory' ? `It and everything inside it will be deleted from ${areaInfo.label}.` : `It will be deleted from ${areaInfo.label}.` }}
             This can’t be undone.
           </p>
-          <v-text-field v-else v-model="dialogName" autofocus label="Name" :disabled="busy" :error-messages="nameError" variant="outlined" @keyup.enter="confirmDialog" />
+          <v-text-field
+            v-else
+            v-model="dialogName"
+            autofocus
+            :error-messages="nameError"
+            label="Name"
+            :readonly="busy"
+            variant="outlined"
+            @keydown.enter.prevent="confirmDialog"
+          />
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -193,21 +211,31 @@
       max-width="640"
       :persistent="busy || Boolean(newFileText)"
       scrollable
+      @after-leave="restoreFocus"
     >
       <v-card class="vibe64-file-area__new-file v64-focus-rings">
         <!-- A full-screen dialog on a phone keeps Create at the top, clear of the keyboard. -->
         <v-toolbar v-if="mobile" color="surface">
           <v-btn :icon="mdiClose" aria-label="Close" :disabled="busy" @click="newFileOpen = false" />
           <v-toolbar-title :id="newFileTitleId" class="vibe64-file-area__bar-title">New text file</v-toolbar-title>
-          <v-btn class="me-2" color="primary" variant="text" :loading="busy" @click="createFile">Create</v-btn>
+          <v-btn class="vibe64-file-area__bar-action me-2" color="primary" variant="text" :loading="busy" @click="createFile">Create</v-btn>
         </v-toolbar>
         <v-card-item>
           <v-card-title v-if="!mobile" :id="newFileTitleId" class="vibe64-file-area__dialog-title">New text file</v-card-title>
           <v-card-subtitle>In {{ folderLabel }}</v-card-subtitle>
         </v-card-item>
         <v-card-text class="vibe64-file-area__new-file-body">
-          <v-text-field v-model="newFileName" autofocus label="File name" placeholder="notes.md" :disabled="busy" :error-messages="nameError" variant="outlined" />
-          <v-textarea v-model="newFileText" class="vibe64-file-area__text" label="Contents" :disabled="busy" rows="12" variant="outlined" />
+          <v-text-field
+            v-model="newFileName"
+            autofocus
+            :error-messages="nameError"
+            label="File name"
+            placeholder="notes.md"
+            :readonly="busy"
+            variant="outlined"
+            @keydown.enter.prevent="createFile"
+          />
+          <v-textarea v-model="newFileText" class="vibe64-file-area__text" label="Contents" :readonly="busy" rows="12" variant="outlined" />
         </v-card-text>
         <v-card-actions v-if="!mobile">
           <v-spacer />
@@ -217,7 +245,7 @@
       </v-card>
     </v-dialog>
 
-    <Vibe64FileConflictDialog :folder-label="folderLabel" :names="uploadConflicts.names" @choose="resolveUploadConflict" />
+    <Vibe64FileConflictDialog :folder-label="folderLabel" :names="uploadConflicts.names" @choose="resolveUploadConflict" @closed="restoreFocus" />
     <Vibe64FileTransferDialog
       :destinations="destinations"
       :item="transferItem"
@@ -226,6 +254,7 @@
       :source-base="base"
       :source-label="areaInfo.label"
       @close="transferItem = null"
+      @closed="restoreFocus"
       @done="transferred"
     />
   </section>
@@ -290,6 +319,7 @@ const feedback = useUiFeedback({ source: "vibe64.files" });
 const areaInfo = computed(() => vibe64FileArea(props.area));
 const readOnly = computed(() => areaInfo.value.readOnly === true);
 const root = ref(null);
+const fileHeading = ref(null);
 const directory = ref("");
 const entries = ref([]);
 const location = ref("");
@@ -324,6 +354,9 @@ const dialogTitleId = `vibe64-file-dialog-${useId()}`;
 const newFileTitleId = `vibe64-new-file-dialog-${useId()}`;
 let generation = 0;
 let pendingRefresh = false;
+// Where focus goes back to when a dialog closes: the control that opened it,
+// or the row it was about when that control lived in a closed menu.
+let returnFocus = null;
 let uploadRefreshTimer = null;
 
 const uploads = useVibe64FileUploads({
@@ -343,7 +376,9 @@ const breadcrumbs = computed(() => [
   ...directory.value.split("/").filter(Boolean).map((name, index, parts) => ({ title: name, path: parts.slice(0, index + 1).join("/") }))
 ]);
 const folderLabel = computed(() => breadcrumbs.value.map((crumb) => crumb.title).join(" › "));
-const dialogTitle = computed(() => ({ delete: `Delete “${dialogEntry.value?.name}”?`, rename: "Rename", mkdir: "New folder" })[dialogOperation.value] || "");
+const dialogTitle = computed(() => ({
+  delete: `Delete “${dialogEntry.value?.name}”?`, rename: `Rename “${dialogEntry.value?.name}”`, mkdir: "New folder"
+})[dialogOperation.value] || "");
 const imageSiblings = computed(() => file.value?.image ? entries.value.filter((entry) => entry.type === "file" && filePreviewImageType(entry.name)) : []);
 
 function url(operation, filePath, query = {}) {
@@ -356,20 +391,49 @@ async function request(endpoint, options) {
   return result;
 }
 
-async function loadDirectory(target = "", append = false, { quiet = false } = {}) {
+function rowElement(path) {
+  return path ? root.value?.querySelector(`[data-path="${path.replace(/["\\]/gu, "\\$&")}"]`) : null;
+}
+
+// After moving to another folder, focus its first item, or its empty state.
+function focusFolder() {
+  root.value?.querySelector("[data-path], .vibe64-file-area__empty h3")?.focus();
+}
+
+function rememberFocus(path = "") {
+  const active = globalThis.document?.activeElement;
+  returnFocus = active && !active.closest?.(".v-overlay") ? active : path;
+}
+
+async function restoreFocus() {
+  const target = returnFocus;
+  returnFocus = null;
+  await nextTick();
+  const element = typeof target === "string" ? rowElement(target) : target;
+  if (element?.isConnected) element.focus();
+  else if (target !== null) focusFolder();
+}
+
+// A quiet reload refreshes the listing without leaving an open file.
+async function loadDirectory(target = "", append = false, { quiet = false, focus = false } = {}) {
   const current = ++generation;
   if (!quiet) loading.value = true;
   loadError.value = "";
   try {
     const result = await request(url("tree", target, { offset: append ? nextOffset.value : 0 }));
     if (current !== generation) return;
-    file.value = null;
+    if (!quiet) file.value = null;
     directory.value = target;
     entries.value = append ? [...entries.value, ...result.tree.children] : result.tree.children;
     hasMore.value = result.tree.hasMore === true;
     nextOffset.value = result.tree.nextOffset;
     location.value = result.location || "";
     expired.value = result.expired === true;
+    if (focus) {
+      loading.value = false;
+      await nextTick();
+      focusFolder();
+    }
   } catch (error) {
     if (current === generation) loadError.value = error.message;
   } finally {
@@ -377,8 +441,9 @@ async function loadDirectory(target = "", append = false, { quiet = false } = {}
   }
 }
 
-async function openEntry(entry) {
-  if (entry.type === "directory") return loadDirectory(entry.path);
+// Opening moves focus into the item; a refresh of the open file does not.
+async function openEntry(entry, { focus = true } = {}) {
+  if (entry.type === "directory") return loadDirectory(entry.path, false, { focus: true });
   if (filePreviewImageType(entry.name)) {
     generation += 1;
     loading.value = false;
@@ -404,11 +469,19 @@ async function openEntry(entry) {
   } finally {
     if (current === generation) loading.value = false;
   }
+  if (focus && current === generation) {
+    await nextTick();
+    fileHeading.value?.focus();
+  }
 }
 
-function closeFile() {
+// Back to the folder, with focus on the file that was open.
+async function closeFile() {
+  const path = file.value?.path || "";
   file.value = null;
-  if (pendingRefresh) void refresh();
+  if (pendingRefresh) await refresh();
+  await nextTick();
+  rowElement(path)?.focus();
 }
 
 function stepImage(step) {
@@ -420,7 +493,9 @@ function stepImage(step) {
 // Esc returns to the folder and the arrow keys walk its images.
 function previewKey(event) {
   if (!file.value?.image || event.defaultPrevented || event.target.closest?.("input, textarea, [role='dialog'], .v-overlay")) return;
-  if (event.key === "Escape") closeFile();
+  // At actual size the arrow keys scroll the image instead.
+  if (event.key !== "Escape" && event.target.closest?.(".vibe64-image-preview__stage--actual")) return;
+  if (event.key === "Escape") void closeFile();
   else if (event.key === "ArrowLeft") stepImage(-1);
   else if (event.key === "ArrowRight") stepImage(1);
   else return;
@@ -457,6 +532,7 @@ function validName(name) {
 }
 
 function openNewFile() {
+  rememberFocus();
   newFileName.value = "";
   newFileText.value = "";
   nameError.value = "";
@@ -477,6 +553,9 @@ function createFile() {
     await loadDirectory(directory.value, false, { quiet: true });
     file.value = result.file;
     draft.value = result.file.text;
+    returnFocus = null;
+    await nextTick();
+    fileHeading.value?.focus();
   }, "The file could not be created.");
 }
 
@@ -526,6 +605,7 @@ async function startUploads(files) {
       method: "POST", body: { path: folder, names: [...new Set(files.map((selected) => selected.name))] }
     });
     if (result.existing?.length) {
+      rememberFocus();
       uploadConflicts.value = { names: result.existing, files, folder };
       return;
     }
@@ -557,6 +637,7 @@ async function download(target, operation = "download") {
 }
 
 function openDialog(operation, entry = null) {
+  rememberFocus(entry?.path);
   dialogOperation.value = operation;
   dialogEntry.value = entry;
   dialogName.value = entry?.name || "";
@@ -587,6 +668,11 @@ function confirmDialog() {
   });
 }
 
+function openTransfer(entry) {
+  rememberFocus(entry.path);
+  transferItem.value = entry;
+}
+
 function transferred(event) {
   transferItem.value = null;
   if (event.skipped) return;
@@ -609,7 +695,8 @@ function refresh() {
     return;
   }
   pendingRefresh = false;
-  return file.value && !file.value.image ? openEntry({ type: "file", path: file.value.path, name: fileName.value }) : loadDirectory(directory.value);
+  if (file.value && !file.value.image) return openEntry({ type: "file", path: file.value.path, name: fileName.value }, { focus: false });
+  return loadDirectory(directory.value, false, { quiet: Boolean(file.value) });
 }
 
 // File actions show their words on wider screens and only icons on a phone.
@@ -701,6 +788,14 @@ onScopeDispose(() => {
   text-transform: none;
 }
 
+.vibe64-file-area__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+}
+
 .vibe64-file-area__crumb-current {
   color: rgb(var(--v-theme-on-surface));
   font: var(--v64-type-title-md);
@@ -728,6 +823,14 @@ onScopeDispose(() => {
   background: transparent;
 }
 
+/* Secondary text at full on-surface-variant contrast. */
+.vibe64-file-area :deep(.v-list-item-subtitle),
+.vibe64-file-area__dialog :deep(.v-card-subtitle),
+.vibe64-file-area__new-file :deep(.v-card-subtitle) {
+  color: var(--v64-on-surface-variant);
+  opacity: 1;
+}
+
 .vibe64-file-area__file-bar {
   align-items: center;
   border-block-end: 1px solid var(--v64-outline-variant);
@@ -737,6 +840,14 @@ onScopeDispose(() => {
   gap: 0 var(--v64-space-1);
   min-block-size: 56px;
   padding-inline: var(--v64-space-1);
+}
+
+/* On a phone the page scrolls, so Save and the other file actions stay in view. */
+.vibe64-file-area--mobile .vibe64-file-area__file-bar {
+  background: rgb(var(--v-theme-surface));
+  inset-block-start: 0;
+  position: sticky;
+  z-index: 2;
 }
 
 /* The name keeps room to be read; the actions move to a second line when the pane is narrow. */
@@ -829,6 +940,16 @@ onScopeDispose(() => {
 
 .vibe64-file-area__bar-title {
   font: var(--v64-type-title-lg);
+}
+
+.vibe64-file-area__bar-action {
+  min-block-size: 48px;
+}
+
+/* On a phone a small dialog sits near the top, clear of the keyboard. */
+:global(.vibe64-file-area__dialog--top) {
+  align-self: flex-start;
+  margin-block-start: var(--v64-space-6);
 }
 
 .vibe64-file-area__dialog-text {

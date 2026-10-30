@@ -1,5 +1,5 @@
 <template>
-  <section v-if="items.length" class="vibe64-upload-queue v64-focus-rings" aria-label="Uploads" :aria-busy="active ? 'true' : 'false'">
+  <section v-if="items.length" class="vibe64-upload-queue v64-focus-rings" aria-label="Uploads">
     <header class="vibe64-upload-queue__header">
       <v-icon
         class="vibe64-upload-queue__header-icon"
@@ -99,8 +99,11 @@ const summary = computed(() => {
   if (!done) return { done, failed, percent, title: "Uploads cancelled", detail: outcome };
   return { done, failed, percent, title: `${plural(done, "file")} uploaded`, detail: outcome };
 });
-// Spoken only when the batch changes state, not on every progress tick.
-const announcement = computed(() => props.items.length && !props.active ? `${summary.value.title}. ${summary.value.detail}` : "");
+// Spoken when a batch starts and when it ends, not on every progress tick.
+const announcement = computed(() => {
+  if (!props.items.length) return "";
+  return props.active ? summary.value.title : `${summary.value.title}. ${summary.value.detail}`;
+});
 
 function statusText(item) {
   switch (item.phase) {

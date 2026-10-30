@@ -3,12 +3,13 @@
     :model-value="Boolean(names.length)"
     :aria-labelledby="titleId"
     max-width="440"
+    @after-leave="$emit('closed')"
     @update:model-value="$event || $emit('choose', '')"
   >
     <v-card class="vibe64-conflict-dialog v64-focus-rings">
       <v-card-item>
         <v-card-title :id="titleId" class="vibe64-conflict-dialog__title">{{ title }}</v-card-title>
-        <v-card-subtitle class="vibe64-conflict-dialog__subtitle">in {{ folderLabel }}</v-card-subtitle>
+        <v-card-subtitle class="vibe64-conflict-dialog__subtitle">In {{ folderLabel }}</v-card-subtitle>
       </v-card-item>
       <v-card-text class="pb-0">
         <ul v-if="names.length > 1" class="vibe64-conflict-dialog__names">
@@ -17,11 +18,12 @@
         </ul>
         <p class="vibe64-conflict-dialog__question">What should happen to {{ names.length === 1 ? "it" : "them" }}?</p>
       </v-card-text>
-      <v-list class="vibe64-conflict-dialog__choices" aria-label="Choose what happens">
+      <v-list class="vibe64-conflict-dialog__choices" aria-label="Choose what happens" role="group">
         <v-list-item
           v-for="choice in choices"
           :key="choice.value"
           :prepend-icon="choice.icon"
+          role="button"
           :subtitle="choice.subtitle"
           :title="choice.title"
           lines="two"
@@ -46,7 +48,7 @@ const props = defineProps({
   folderLabel: { type: String, default: "" },
   names: { type: Array, default: () => [] }
 });
-defineEmits(["choose"]);
+defineEmits(["choose", "closed"]);
 const titleId = `vibe64-conflict-dialog-${useId()}`;
 const title = computed(() => props.names.length === 1
   ? `“${props.names[0]}” already exists`
@@ -71,6 +73,12 @@ const choices = computed(() => {
   font: var(--v64-type-headline-sm);
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.vibe64-conflict-dialog__subtitle,
+.vibe64-conflict-dialog :deep(.v-list-item-subtitle) {
+  color: var(--v64-on-surface-variant);
+  opacity: 1;
 }
 
 .vibe64-conflict-dialog__subtitle {

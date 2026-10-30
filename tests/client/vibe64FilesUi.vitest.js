@@ -163,6 +163,17 @@ describe("Files area", () => {
     state.previewKey(key("ArrowRight"));
     await settle();
     expect(state.file.path).toBe("a.png");
+
+    // At actual size the arrows scroll the image; a refresh keeps it open.
+    const actualSize = { closest: (selector) => selector.includes("--actual") ? {} : null };
+    state.previewKey({ ...key("ArrowRight"), target: actualSize });
+    await settle();
+    expect(state.file.path).toBe("a.png");
+    await state.refresh();
+    await settle();
+    expect(state.file.path).toBe("a.png");
+    expect(mocks.requests.at(-1).url).toBe(`${BASE}/tree?path=&offset=0`);
+
     state.previewKey(key("Escape"));
     expect(state.file).toBe(null);
   });

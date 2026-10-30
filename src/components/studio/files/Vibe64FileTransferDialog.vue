@@ -6,6 +6,7 @@
     :persistent="busy"
     max-width="560"
     scrollable
+    @after-leave="$emit('closed')"
     @update:model-value="$event || close()"
   >
     <v-card v-if="item" class="vibe64-transfer-dialog v64-focus-rings">
@@ -13,7 +14,7 @@
       <v-toolbar v-if="mobile" class="vibe64-transfer-dialog__bar" color="surface">
         <v-btn :icon="mdiClose" aria-label="Close" :disabled="busy" @click="close" />
         <v-toolbar-title :id="titleId" class="vibe64-transfer-dialog__title">{{ title }}</v-toolbar-title>
-        <v-btn class="me-2" color="primary" variant="text" :disabled="actionDisabled" :loading="busy" @click="confirm">{{ actionLabel }}</v-btn>
+        <v-btn class="vibe64-transfer-dialog__bar-action me-2" color="primary" variant="text" :disabled="actionDisabled" :loading="busy" @click="confirm">{{ actionLabel }}</v-btn>
       </v-toolbar>
       <v-card-item>
         <v-card-title v-if="!mobile" :id="titleId" class="vibe64-transfer-dialog__title">{{ title }}</v-card-title>
@@ -30,17 +31,28 @@
           color="primary"
           divided
           mandatory
+          role="radiogroup"
           rounded="pill"
           variant="outlined"
           aria-label="Move or copy"
         >
-          <v-btn value="copy" :prepend-icon="mdiContentCopy">Copy</v-btn>
-          <v-btn value="move" :prepend-icon="mdiFileMoveOutline">Move</v-btn>
+          <v-btn value="copy" :prepend-icon="mdiContentCopy" role="radio" :aria-checked="String(mode === 'copy')">Copy</v-btn>
+          <v-btn value="move" :prepend-icon="mdiFileMoveOutline" role="radio" :aria-checked="String(mode === 'move')">Move</v-btn>
         </v-btn-toggle>
 
         <h3 class="vibe64-transfer-dialog__label">Destination</h3>
-        <v-chip-group v-model="destinationKey" class="vibe64-transfer-dialog__areas" column mandatory selected-class="vibe64-transfer-dialog__chip--selected" aria-label="Destination area">
-          <v-chip v-for="option in destinations" :key="option.key" :value="option.key" :prepend-icon="option.icon" filter size="large" variant="outlined">
+        <v-chip-group v-model="destinationKey" class="vibe64-transfer-dialog__areas" column mandatory selected-class="vibe64-transfer-dialog__chip--selected" aria-label="Destination area" role="radiogroup">
+          <v-chip
+            v-for="option in destinations"
+            :key="option.key"
+            :aria-checked="String(destinationKey === option.key)"
+            filter
+            :prepend-icon="option.icon"
+            role="radio"
+            size="large"
+            :value="option.key"
+            variant="outlined"
+          >
             <span class="vibe64-transfer-dialog__chip-label">{{ option.label }}</span>
           </v-chip>
         </v-chip-group>
@@ -59,10 +71,11 @@
           <template #append><v-btn variant="text" @click="browse(folder)">Retry</v-btn></template>
         </v-alert>
         <p v-else-if="expired" class="vibe64-transfer-dialog__hint">This Session Dropzone has expired.</p>
-        <v-list v-else-if="folders.length" class="vibe64-transfer-dialog__folders" aria-label="Folders">
+        <v-list v-else-if="folders.length" class="vibe64-transfer-dialog__folders" aria-label="Folders" role="group">
           <v-list-item
             v-for="entry in folders"
             :key="entry.path"
+            role="button"
             :disabled="busy || insideItself(entry.path)"
             :prepend-icon="mdiFolderOutline"
             :title="entry.name"
@@ -108,7 +121,7 @@ const props = defineProps({
   sourceBase: { type: String, required: true },
   sourceLabel: { type: String, required: true }
 });
-const emit = defineEmits(["close", "done"]);
+const emit = defineEmits(["close", "closed", "done"]);
 const { smAndDown: mobile } = useDisplay();
 const feedback = useUiFeedback({ source: "vibe64.files.transfer" });
 const mode = ref("copy");
@@ -247,6 +260,8 @@ function resolveConflict(choice) {
 }
 
 .vibe64-transfer-dialog__subtitle {
+  color: var(--v64-on-surface-variant);
+  opacity: 1;
   align-items: center;
   display: flex;
   font: var(--v64-type-body-md);
@@ -322,7 +337,9 @@ function resolveConflict(choice) {
 }
 
 @media (max-width: 959.98px) {
-  .vibe64-transfer-dialog__crumbs .v-btn {
+  .vibe64-transfer-dialog__crumbs .v-btn,
+  .vibe64-transfer-dialog__bar-action,
+  .vibe64-transfer-dialog__areas .v-chip {
     min-block-size: 48px;
   }
 }

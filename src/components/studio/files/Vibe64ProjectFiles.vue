@@ -1,6 +1,6 @@
 <template>
-  <section class="vibe64-project-files" :class="{ 'vibe64-project-files--mobile': mobile }" aria-label="Project files">
-    <v-tabs v-model="area" class="vibe64-project-files__tabs" aria-label="Project file areas" :density="mobile ? 'default' : 'compact'" :grow="mobile">
+  <section class="vibe64-project-files v64-focus-rings" :class="{ 'vibe64-project-files--mobile': mobile }" aria-label="Project files">
+    <v-tabs v-model="area" class="vibe64-project-files__tabs" aria-label="Project file areas" color="primary" :density="mobile ? 'default' : 'compact'" :grow="mobile">
       <v-tab v-for="value in AREAS" :key="value" :value="value" :prepend-icon="mobile ? undefined : areaInfo(value).icon">
         {{ areaInfo(value).label }}
       </v-tab>
@@ -87,9 +87,11 @@ function transferred(event) {
   block-size: clamp(26rem, calc(100dvh - 16rem), 56rem);
 }
 
-/* A phone scrolls the page itself instead of a pane inside it. */
+/* A phone scrolls the page itself instead of a pane inside it, so the upload
+   card and the file bar stick to the page. */
 .vibe64-project-files--mobile .vibe64-project-files__area {
   block-size: auto;
   min-block-size: 26rem;
+  overflow: visible;
 }
 </style>

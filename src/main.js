@@ -86,6 +86,7 @@ const vuetify = createVuetify({
           "surface-light": "#2A2D33",
           "surface-variant": "#243342",
           "on-surface-variant": "#EDF4FC",
+          success: "#2E7D32",
           warning: "#DFC477",
           "on-warning": "#3D2F00",
           "warning-container": "#353126",
