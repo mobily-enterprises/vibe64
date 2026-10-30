@@ -11,6 +11,7 @@
           <Vibe64UsageRecordingResults v-if="mode === 'recording'" v-bind="recordingBindings" v-on="recordingHandlers" />
           <Vibe64UsageEntryRail v-else v-bind="railBindings" v-on="railHandlers" />
         </Vibe64UsageEntryPicker>
+        <h3 v-if="!compact && mode !== 'recording' && state.entry" class="usage-view__entry text-title-medium">{{ pickerLabel }}</h3>
         <div class="usage-view__controls">
           <v-btn-toggle
             :model-value="mode"
@@ -508,6 +509,7 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view__main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .usage-view__header { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 8px; container-type: inline-size; }
 .usage-view__controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.usage-view__entry { margin: 0; overflow-wrap: anywhere; }
 .usage-view__modes { flex: none; }
 .usage-view__record { margin-left: auto; }
 /* Narrow headers keep Record on the modes' row as an icon. */
