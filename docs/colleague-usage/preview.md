@@ -193,6 +193,36 @@ cleaned up but another close controller failed, the project remains open and
 Preview can start those services again; retry Close after addressing the reported
 controller.
 
+## Show what an element uses
+
+**Pick element**, beside **Reload preview**, finds the component behind part of
+the page. On mobile it is in the expanded toolbar (**Show preview controls**).
+Choose it, then click an element in Preview. While you pick, an outline follows
+the pointer and names the component, and the click selects the element instead
+of using it. Architecture then opens **Usage** › **Calls** at that component, to
+show what it may reach; see [See what one entry point uses](usage-map.md). To
+stop picking, press Escape or choose **Cancel** on **Select an element in Preview
+to see what it uses.** Hiding, suspending or reloading Preview also stops it.
+
+Pick needs the project's technology to say which component drew an element.
+When it cannot, Vibe64 says **No component information on this page. Record
+while clicking to see its requests.** When the component has no usage entry
+yet, it says that the file **has no usage entry yet. Refresh the architecture
+scan, then pick again.**
+
+Starting a Preview recording (see [Record what runs](usage-recording.md))
+restarts Preview with the recorder, so unsaved page state is lost; stopping it
+does not restart Preview. While it runs, each click, form submit or Enter in
+Preview becomes an interaction. Requests the
+page starts on its own address within one second of it are listed under it in
+Usage › Recording, such as **Click: button "Add" (SessionList.vue)**; requests to
+other sites are never marked. Labels name the element's role and visible label,
+never what was typed, and a password field is only called "password field". The
+page itself works as usual while it is recorded.
+
+Colleague can explain Pick and recorded interactions; the person picks and
+clicks in their own browser.
+
 ## Browser checks from chat
 
 For managed browser checks, test ownership and recovery, read

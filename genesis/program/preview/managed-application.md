@@ -96,6 +96,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/outputResults.js`
 - `packages/vibe64-terminals/src/server/launchPreviewProxy.js`
 - `packages/vibe64-terminals/src/server/launchPreviewBridge.js`
+- `packages/vibe64-terminals/src/server/previewLocator.js`
 - `src/components/studio/Vibe64LongRunningTerminal.vue`
 - `src/components/studio/Vibe64OutputControls.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -564,6 +565,35 @@ Separately, the bridge reports a reduced failure of a learner-started in-app
 request (`vibe64:preview-app-request`: method, `:id`-templated path, status,
 failure code); it carries no body, header, query or diagnostic entry. No current
 surface consumes it.
+
+Bridge version 8 adds Pick and recorded interactions for the usage map
+(`vibe64:preview-pick-start`, `-stop` and `-result`, `vibe64:preview-recording`,
+`vibe64:preview-interaction`) under the same parent-origin rules. While picking,
+an outline with `pointer-events: none` follows the pointer, and pointer, click
+and context-menu events are prevented and stopped in the capture phase; at any
+other time nothing is prevented. Escape, the editor's Cancel, hiding, suspending
+or reloading Preview, or a lost bridge ends Pick. The result names the element's
+component through the project's Preview locator, or `null`.
+`readPreviewLocatorSource(session)` reads the first `Preview locator` declared
+under Architecture inspection as that inspection reads it (a regular project
+`.js` file of at most 64 KiB, no symlinks) and parses it without running it. The
+proxy inlines it as its own classic script, which defines
+`globalThis.__vibe64LocateElement(element) → { file, name? } | null`; any
+failure only leaves Pick without component information. The editor turns the
+file into a source-relative path, finds that file's component (or page) usage
+entry and emits `open-usage` for Usage › Calls there.
+
+While the session's web recording runs, the editor tells the bridge the recording
+and its next interaction number, so a reloaded page continues the numbering. Each
+trusted click, form submit or Enter (outside text areas and editable text, not
+while composing) starts one interaction `i_NNNN`. Same-origin fetch and
+XMLHttpRequest calls started within 1 s, before the next interaction, carry
+`x-vibe64-interaction`; it is never sent to another origin. The editor posts each
+interaction to the recording. Labels name the element's role or tag and its
+accessible name (aria-label, aria-labelledby, `<label>`, placeholder, title, or
+the visible text of buttons, links and similar), clipped to 40 characters. They
+never read field values, option text or editable text, and a password field is
+only "password field".
 
 
 Preview suspension belongs to the displayed output surface. It clears its frame
