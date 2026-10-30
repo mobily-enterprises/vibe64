@@ -25,8 +25,8 @@ import {
 
 // Preview Pick and recorded clicks over the usage-map fixture project: a
 // picked element opens Usage › Calls at its component, and a recorded click's
-// requests are grouped under it. USAGE_PREVIEW_PICK_SCREENSHOTS names a folder
-// for screenshots.
+// requests are grouped under it, with no sideways scrolling down to 360 px.
+// USAGE_PREVIEW_PICK_SCREENSHOTS names a folder for screenshots.
 const fixture = (name: string) => JSON.parse(readFileSync(new URL(`../fixtures/usage-map/${name}`, import.meta.url), "utf8"));
 const machine = fixture("machine-city.json");
 const LAYOUT = { groups: [
@@ -250,7 +250,7 @@ async function capture(page: Page, name: string) {
   if (screenshots) await page.screenshot({ path: `${screenshots}/${name}.png` });
 }
 
-for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }, { width: 360, height: 780 }]) {
   const phone = viewport.width <= 600;
 
   test(`Pick opens Usage › Calls at the clicked element's component at ${viewport.width}px`, async ({ page }) => {
