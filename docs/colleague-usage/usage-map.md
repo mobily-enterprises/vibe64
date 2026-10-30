@@ -18,7 +18,9 @@ entry** (or **Entry: <name>**) to open the same list full screen.
 - **Search entries** matches names and file paths.
 - The chips filter by kind and show how many of each exist. Only kinds the
   project has are shown.
-- Each row shows the entry's name, kind icon and file.
+- Each row shows the entry's name, kind icon and file. A page is named by its
+  address, such as **/app/project/:slug/dashboard/env**, because many page
+  files share names like `index`.
 
 If the list says **No entry points found yet. Refresh the architecture scan.**,
 choose **Refresh**. That runs the same scan as **Architecture options →
@@ -49,7 +51,12 @@ The mode switch has three choices:
   [Record what runs](usage-recording.md) for making a recording.
 
 A page or component starts from every function in its file, including the
-file's top-level code.
+file's top-level code. Calls then follows the components it renders: a
+**renders** step leads from the file's top-level code to each rendered
+component's, and all of that component's functions count as one step away.
+Their own rendered components are followed the same way, so a page reaches
+the requests its components make. A renders step is exact when the tag is
+resolved through the file's imports.
 
 ## Read the result
 
@@ -79,6 +86,9 @@ sheet from the bottom on a phone):
 - **Calls (exact)**, **Calls (probable)**, **Called by (exact)** and **Called by
   (probable)** list the other functions with the code that makes each call.
   Tap one to move to it.
+- **Renders** and **Rendered by** appear on a file's top-level code: the
+  components it renders, and the files that render it, with the tag such as
+  `<EnvPanel>`.
 - **Unresolved call:** rows show the expression whose target is unknown.
 - **Open source** opens the file at that function's line. The code button on a
   row opens the line of that call. Use the source viewer's way back to return

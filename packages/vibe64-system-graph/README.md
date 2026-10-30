@@ -143,11 +143,13 @@ what it reaches. `src/server/usageWeb.js` answers four read actions
 `.join`) on `/vibe64/system-graph/sessions/:sessionId/usage/*`:
 
 - entries: the Machine City's `entryPoints`, searched, filtered by kind and
-  paged by a numeric cursor;
+  paged by a numeric cursor; pages are titled by their registered address;
 - Imports: breadth-first over resolved, non-type-only file imports;
 - Calls: breadth-first over exact and probable calls and operation bridges in
   the Genesis call web, read only when its bytes match the City's `callWeb`
-  identity; pages and components start from every function in their file;
+  identity; pages and components start from every function in their file,
+  and a file's top-level code steps on to the components it renders (the
+  City's UI component uses) as `renders` steps;
 - function: one function's calls, callers and unresolved calls;
 - join: recorded functions matched to the call web by hash and start, else
   by name within three lines.

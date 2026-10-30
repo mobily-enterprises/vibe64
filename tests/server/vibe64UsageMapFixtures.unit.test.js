@@ -129,6 +129,14 @@ test("bridges join transport uses to route controllers", () => {
   }
 });
 
+test("UI observations register the Sessions page and the component it renders", () => {
+  const { ui } = architecture;
+  const page = architecture.entryPoints.find((entry) => entry.kind === "page");
+  assert.deepEqual(ui.registrations.map((item) => [item.pageId, item.identity]), [[page.pageId, "/sessions"]]);
+  assert.deepEqual(ui.componentUses.map((use) => [use.parentId, use.componentId, use.resolution]), [[page.pageId, "component:src/components/SessionList.vue", "resolved"]]);
+  assert.equal(ui.componentUses[0].evidence[0].path, page.file, "the tag is evidenced in the rendering page");
+});
+
 test("entry points reference indexed files and call-web functions", () => {
   const files = new Map(architecture.files.map((file) => [file.path, file]));
   const functionIds = new Set(callWeb.functions.map((fn) => fn.id));

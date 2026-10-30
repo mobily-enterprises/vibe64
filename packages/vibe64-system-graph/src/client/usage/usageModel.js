@@ -125,7 +125,7 @@ function subsystemCard(mode, item = {}) {
 
 function crossingText(mode, crossing = {}) {
   if (mode === "imports") return countLabel(crossing.count, "import");
-  return [crossing.exact && `${crossing.exact} exact`, crossing.probable && `${crossing.probable} probable`].filter(Boolean).join(" · ");
+  return [crossing.exact && `${crossing.exact} exact`, crossing.probable && `${crossing.probable} probable`, crossing.renders && `renders ${countLabel(crossing.renders, "component")}`].filter(Boolean).join(" · ");
 }
 
 function depthTitle(depth) {
@@ -220,6 +220,8 @@ const METHOD_TEXT = Object.freeze({
   self: "same class",
   "receiver-name": "method name",
   operation: "request",
+  // Renders rows have their own headings; the tag says the rest.
+  renders: "",
   none: ""
 });
 

@@ -44,7 +44,11 @@ Entries and Imports come from the validated Machine City; Calls come from the
 Genesis call web named by the City's `callWeb` summary, read only when its
 bytes match that identity. Imports follow resolved, non-type-only imports.
 Calls follow exact and probable calls plus operation bridges; a page or
-component starts from every function in its file. Each reached function says
+component starts from every function in its file. From a file's top-level code
+Calls also follows the City's UI component uses as `renders` steps to each
+rendered component's top-level code and functions, exact when the use is
+resolved; crossings count renders apart from calls. A page entry is titled by
+its registered address. Each reached function says
 whether exact calls alone reach it. Unresolved calls stay listed, never
 followed. Without a call web, Calls says so and Imports still works.
 

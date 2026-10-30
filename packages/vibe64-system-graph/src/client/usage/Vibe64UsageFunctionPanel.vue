@@ -32,7 +32,7 @@
               <v-list-item-subtitle class="usage-panel__callee"><code>{{ row.callee }}</code><span v-if="methodText(row)"> · {{ methodText(row) }}</span></v-list-item-subtitle>
               <template #append>
                 <v-chip size="x-small" :variant="row.certainty === 'exact' ? 'tonal' : 'outlined'" class="mr-1">{{ CERTAINTY_TEXT[row.certainty] }}</v-chip>
-                <v-btn v-if="row.start" :icon="mdiCodeTags" variant="text" size="x-small" :aria-label="`Open the call at line ${row.start.line}`" @click.stop="openAt(row.start, row.site)" />
+                <v-btn v-if="row.start" :icon="mdiCodeTags" variant="text" size="x-small" :aria-label="`Open the ${row.method === 'renders' ? 'tag' : 'call'} at line ${row.start.line}`" @click.stop="openAt(row.start, row.site)" />
               </template>
             </v-list-item>
           </v-list>
@@ -71,7 +71,13 @@ const sections = computed(() => {
   if (!props.detail) return [];
   const calls = props.detail.calls.map((row) => ({ ...row, fn: row.target, site: props.detail.function.file }));
   const calledBy = props.detail.calledBy.map((row) => ({ ...row, fn: row.source, site: row.source.file }));
-  return [...callGroups(calls, "Calls"), ...callGroups(calledBy, "Called by")];
+  const renders = (row) => row.method === "renders";
+  return [
+    ...callGroups(calls.filter((row) => !renders(row)), "Calls"),
+    ...callGroups(calls.filter(renders), "Renders"),
+    ...callGroups(calledBy.filter((row) => !renders(row)), "Called by"),
+    ...callGroups(calledBy.filter(renders), "Rendered by")
+  ];
 });
 const ranText = computed(() => {
   if (props.node.count === undefined) return "";

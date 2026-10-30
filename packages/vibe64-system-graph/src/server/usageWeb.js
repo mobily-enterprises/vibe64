@@ -49,6 +49,43 @@ function layoutGroups(layout) {
   return (layout?.groups || []).map((group) => ({ id: group.id, title: group.title, kind: group.kind, roots: group.subsystems.map((member) => member.root) }));
 }
 
+// Machine City links each page or component to the components its template
+// renders. Calls follows them as "renders" steps between files, keeping the
+// link's certainty: a tag resolved through its import is exact.
+function renderLinks(ui) {
+  const fileOf = new Map([...(ui?.pages || []), ...(ui?.components || [])].filter((record) => record.file).map((record) => [record.id, record.file]));
+  const uses = new Map((ui?.componentUses || []).map((use) => [use.id, use]));
+  const links = new Map();
+  for (const use of uses.values()) {
+    // A tag inside another tag's slot is still drawn by the file around both.
+    let parentId = use.parentId;
+    for (let hops = 0; uses.has(parentId) && hops < uses.size; hops += 1) parentId = uses.get(parentId).parentId;
+    const from = fileOf.get(parentId);
+    const to = fileOf.get(use.componentId);
+    if (!from || !to || from === to) continue;
+    const certainty = use.resolution === "resolved" ? "exact" : "probable";
+    const key = `${from}\n${to}`;
+    if (links.get(key)?.certainty === "exact" || (links.has(key) && certainty !== "exact")) continue;
+    links.set(key, { from, to, certainty, title: use.title || "", start: use.evidence?.find((item) => item.path === from)?.start || null });
+  }
+  const grouped = (end) => {
+    const byFile = new Map();
+    for (const link of [...links.values()].sort((left, right) => byText(left.from, right.from) || byText(left.to, right.to))) {
+      if (!byFile.has(link[end])) byFile.set(link[end], []);
+      byFile.get(link[end]).push(link);
+    }
+    return byFile;
+  };
+  return { rendersFrom: grouped("from"), rendersInto: grouped("to") };
+}
+
+// Pages are named by their address: page files are often all called "index".
+function pageAddresses(ui) {
+  const addresses = new Map();
+  for (const registration of ui?.registrations || []) if (!addresses.has(registration.pageId)) addresses.set(registration.pageId, registration.identity);
+  return addresses;
+}
+
 // One index per validated Machine City object. City reads share that object
 // while its file is unchanged, so this is built once per snapshot.
 function buildSnapshotIndex(record, layout) {
@@ -80,6 +117,7 @@ function buildSnapshotIndex(record, layout) {
   }
   const order = new Map(USAGE_ENTRY_KINDS.map((kind, index) => [kind, index]));
   const callWeb = architecture.callWeb || null;
+  const addresses = pageAddresses(architecture.ui);
   const entries = (architecture.entryPoints || [])
     .filter((entry) => order.has(entry.kind))
     .map((entry) => {
@@ -87,7 +125,7 @@ function buildSnapshotIndex(record, layout) {
       return {
         id: entry.id,
         kind: entry.kind,
-        title: entry.title || entry.file,
+        title: (entry.kind === "page" && addresses.get(entry.pageId)) || entry.title || entry.file,
         file: entry.file,
         subsystemId: fileByPath.get(entry.file)?.subsystemId ?? null,
         hasCalls: Boolean(callWeb) && (functionIds.length > 0 || entry.kind === "page" || entry.kind === "component"),
@@ -104,6 +142,7 @@ function buildSnapshotIndex(record, layout) {
     fileByPath,
     groups: groups.map(({ id, title, kind }) => ({ id, title, kind })),
     imports,
+    ...renderLinks(architecture.ui),
     subsystemById,
     subsystems,
     unresolvedImports,
@@ -157,7 +196,13 @@ function buildCallIndex(document) {
     if (!byPath.has(filePath)) byPath.set(filePath, []);
     byPath.get(filePath).push(position);
   });
+  // A file's top-level code (else its first function) stands for the file
+  // in render steps.
+  const anchorByPath = new Map([...byPath].map(([filePath, positions]) => [
+    filePath, positions.find((position) => functions[position].kind === "module") ?? positions[0]
+  ]));
   return {
+    anchorByPath,
     bridges: document.bridges,
     byPath,
     calls: document.calls,
@@ -189,6 +234,29 @@ function forEachEdge(callIndex, from, allowed, visit) {
     const bridge = callIndex.bridges[position];
     if (allowed(bridge.certainty)) visit(bridge.to, bridge.certainty, "operation");
   }
+}
+
+// Render steps leaving a file's anchor: to each rendered component's anchor.
+function forEachRender(index, callIndex, from, allowed, visit) {
+  const filePath = callIndex.files[callIndex.functions[from].file].path;
+  if (callIndex.anchorByPath.get(filePath) !== from) return;
+  for (const link of index.rendersFrom.get(filePath) || []) {
+    const to = callIndex.anchorByPath.get(link.to);
+    if (to !== undefined && allowed(link.certainty)) visit(to, link);
+  }
+}
+
+// What Calls follows from one function: its calls and requests, and, from a
+// file's anchor, the components that file renders. A rendered component is
+// reached whole, like an entry's own file.
+function followSteps(index, callIndex, allowed) {
+  return (from, reach) => {
+    forEachEdge(callIndex, from, allowed, reach);
+    forEachRender(index, callIndex, from, allowed, (to, link) => {
+      reach(to);
+      for (const position of callIndex.byPath.get(link.to)) reach(position);
+    });
+  };
 }
 
 function breadthFirst(starts, follow) {
@@ -377,8 +445,8 @@ function readCallsWeb(index, callIndex, entry, input) {
   }
   const allowed = certainty === "exact" ? (value) => value === "exact" : (value) => value === "exact" || value === "probable";
   const starts = entryStarts(callIndex, entry);
-  const depth = breadthFirst(starts, (from, reach) => forEachEdge(callIndex, from, allowed, reach));
-  const exactReach = certainty === "exact" ? depth : breadthFirst(starts, (from, reach) => forEachEdge(callIndex, from, (value) => value === "exact", reach));
+  const depth = breadthFirst(starts, followSteps(index, callIndex, allowed));
+  const exactReach = certainty === "exact" ? depth : breadthFirst(starts, followSteps(index, callIndex, (value) => value === "exact"));
   const owner = (position) => callIndex.files[callIndex.functions[position].file].subsystemId ?? null;
   const edges = new Map();
   const outCount = new Map();
@@ -386,6 +454,16 @@ function readCallsWeb(index, callIndex, entry, input) {
   const counts = new Map();
   const crossings = new Map();
   const unresolved = [];
+  const crossingOf = (fromOwner, toOwner) => {
+    if (!fromOwner || !toOwner || fromOwner === toOwner) return null;
+    const key = `${fromOwner}\n${toOwner}`;
+    if (!crossings.has(key)) crossings.set(key, { fromSubsystemId: fromOwner, toSubsystemId: toOwner, exact: 0, probable: 0, renders: 0 });
+    return crossings.get(key);
+  };
+  const countStep = (from, to) => {
+    outCount.set(from, (outCount.get(from) || 0) + 1);
+    inCount.set(to, (inCount.get(to) || 0) + 1);
+  };
   for (const from of depth.keys()) {
     const fromOwner = owner(from);
     const bucket = counts.get(fromOwner) || { functionCount: 0, exact: 0 };
@@ -397,20 +475,22 @@ function readCallsWeb(index, callIndex, entry, input) {
       const existing = edges.get(key);
       if (existing && (existing.certainty === "exact" || edgeCertainty !== "exact")) return;
       if (!existing) {
-        outCount.set(from, (outCount.get(from) || 0) + 1);
-        inCount.set(to, (inCount.get(to) || 0) + 1);
-        const toOwner = owner(to);
-        if (fromOwner && toOwner && fromOwner !== toOwner) {
-          const crossingKey = `${fromOwner}\n${toOwner}`;
-          if (!crossings.has(crossingKey)) crossings.set(crossingKey, { fromSubsystemId: fromOwner, toSubsystemId: toOwner, exact: 0, probable: 0 });
-          crossings.get(crossingKey)[edgeCertainty] += 1;
-        }
+        countStep(from, to);
+        const crossing = crossingOf(fromOwner, owner(to));
+        if (crossing) crossing[edgeCertainty] += 1;
       } else {
         // An exact call replaces a probable one between the same functions.
         const crossing = crossings.get(`${fromOwner}\n${owner(to)}`);
         if (crossing) { crossing.probable -= 1; crossing.exact += 1; }
       }
       edges.set(key, { from, to, certainty: edgeCertainty, method });
+    });
+    // Renders are counted apart from calls: they are links between files.
+    forEachRender(index, callIndex, from, allowed, (to, link) => {
+      countStep(from, to);
+      const crossing = crossingOf(fromOwner, owner(to));
+      if (crossing) crossing.renders += 1;
+      edges.set(`${from}>${to}>renders`, { from, to, certainty: link.certainty, method: "renders" });
     });
     if (!subsystemId || fromOwner === subsystemId) {
       for (const position of callIndex.outCalls[from]) {
@@ -423,7 +503,7 @@ function readCallsWeb(index, callIndex, entry, input) {
     const bucket = counts.get(item.id) || { functionCount: 0, exact: 0 };
     return { id: item.id, title: item.title, group: item.group, functionCount: bucket.functionCount, exact: bucket.exact, probable: bucket.functionCount - bucket.exact };
   });
-  response.crossings = crossingList(crossings, ["exact", "probable"]);
+  response.crossings = crossingList(crossings, ["exact", "probable", "renders"]);
   unresolved.sort((left, right) => depth.get(left.from) - depth.get(right.from) || left.from - right.from || pointBefore(left.start, right.start));
   response.unresolvedTotal = unresolved.length;
   response.unresolved = unresolved.slice(0, USAGE_QUERY_LIMITS.unresolved)
@@ -472,6 +552,20 @@ function readFunction(index, callIndex, input) {
   for (const bridgePosition of callIndex.inBridges[position]) {
     const bridge = callIndex.bridges[bridgePosition];
     calledBy.push({ source: functionView(callIndex, bridge.from), certainty: bridge.certainty, method: "operation", callee: bridgeCallee(bridge), start: null });
+  }
+  // A file's anchor also lists the components it renders and the files that
+  // render it; `start` is the tag in the rendering file.
+  const filePath = callIndex.files[callIndex.functions[position].file].path;
+  if (callIndex.anchorByPath.get(filePath) === position) {
+    const step = (link) => ({ certainty: link.certainty, method: "renders", callee: `<${link.title}>`, start: link.start });
+    for (const link of index.rendersFrom.get(filePath) || []) {
+      const to = callIndex.anchorByPath.get(link.to);
+      if (to !== undefined) calls.push({ target: functionView(callIndex, to), ...step(link) });
+    }
+    for (const link of index.rendersInto.get(filePath) || []) {
+      const from = callIndex.anchorByPath.get(link.from);
+      if (from !== undefined) calledBy.push({ source: functionView(callIndex, from), ...step(link) });
+    }
   }
   const certaintyOrder = (row) => (row.certainty === "exact" ? 0 : 1);
   const atSite = (left, right) => certaintyOrder(left) - certaintyOrder(right) || (left.start && right.start ? pointBefore(left.start, right.start) : left.start ? -1 : right.start ? 1 : 0);
