@@ -84,4 +84,6 @@ total and Show more. A recording opened while it runs reads newest first and
 merges each refreshed first page in front of the rows already shown, so new
 requests appear on top without losing the pages read; a gap of more than one
 page starts the list again. The chosen request's result read carries its own
-row, so the heading names it even when the pages read do not hold it.
+row, so the heading names it even when the pages read do not hold it. Rows
+without a method (start-up work, the launch readiness check, a command's run)
+show a labelled icon in the method column.
