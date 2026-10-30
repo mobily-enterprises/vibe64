@@ -1,0 +1,39 @@
+{
+  "schema": "vibe64.usage-recording.v1",
+  "id": "rec_fixture2usagemap3web",
+  "sessionId": "session-fixture",
+  "state": "stopped",
+  "target": {
+    "id": "preview",
+    "kind": "web",
+    "label": "Preview"
+  },
+  "runtimes": [
+    "nodejs"
+  ],
+  "tracers": [
+    {
+      "runtime": "nodejs",
+      "state": "idle",
+      "reason": ""
+    }
+  ],
+  "startedAt": "2026-10-30T10:00:00.000Z",
+  "stoppedAt": "2026-10-30T10:02:14.000Z",
+  "stopReason": "person",
+  "counts": {
+    "requests": 3,
+    "functions": 21
+  },
+  "truncated": false,
+  "dismissedAt": null,
+  "sourceIdentity": "sha256:42d341358a04358e65283944f12333ee2cb59fa5a535e29b095d3d0afb21ffa1",
+  "limits": {
+    "durationMs": 600000,
+    "capturedRequests": 2000,
+    "hitsBytesPerProcess": 16777216,
+    "hitsBytesPerRecording": 33554432,
+    "proxyRequestLines": 20000,
+    "interactions": 500
+  }
+}

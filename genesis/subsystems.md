@@ -369,6 +369,31 @@ The Architecture canvas combines registered UI pages with directory-bound subsys
 
 ### Program
 - `genesis/program/understanding/genesis-context.md`
+- `genesis/program/understanding/usage-map.md`
+
+### Data owned
+- Nothing.
+
+### Data used
+- Nothing.
+
+## `packages-vibe64-usage-recording` Usage recording
+
+Owns recording which project functions run for each request or run of a
+session's declared Output target. A web target records through Preview, whose
+proxy assigns each request's identity; a terminal target records one run with
+its declared parameters. Runtime tracers load inside the recorded application,
+hook only runtime-level boundaries and communicate through files; they never
+open a port, inspector or socket and never record request contents, headers,
+arguments or values. Recordings live in the session's `usage-recordings`
+directory, outside the source, and are deleted with the session. The host may
+refuse a recording when resources are low. Architecture presents the results.
+
+### Source
+- Directory `packages/vibe64-usage-recording`
+
+### Program
+- `genesis/program/preview/usage-recording.md`
 
 ### Data owned
 - Nothing.

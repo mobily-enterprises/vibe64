@@ -1,0 +1,45 @@
+{
+  "requests": [
+    {
+      "id": "r_000002",
+      "method": "GET",
+      "path": "/api/sessions",
+      "status": 200,
+      "startedAt": "2026-10-30T10:00:04.000Z",
+      "durationMs": 12,
+      "interaction": null,
+      "functionCount": 13,
+      "fileCount": 9
+    },
+    {
+      "id": "r_000003",
+      "method": "POST",
+      "path": "/api/sessions",
+      "status": 200,
+      "startedAt": "2026-10-30T10:00:20.000Z",
+      "durationMs": 9,
+      "interaction": "i_0001",
+      "functionCount": 15,
+      "fileCount": 10
+    },
+    {
+      "id": "r_000004",
+      "method": "GET",
+      "path": "/api/sessions",
+      "status": 200,
+      "startedAt": "2026-10-30T10:00:20.200Z",
+      "durationMs": 11,
+      "interaction": "i_0001",
+      "functionCount": 16,
+      "fileCount": 11
+    }
+  ],
+  "interactions": [
+    {
+      "id": "i_0001",
+      "label": "button \"Add\"",
+      "componentFile": "src/components/SessionList.vue"
+    }
+  ],
+  "nextCursor": null
+}

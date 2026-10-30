@@ -1,0 +1,43 @@
+{
+  "targets": [
+    {
+      "id": "preview",
+      "kind": "web",
+      "label": "Preview",
+      "runtimes": [
+        "nodejs"
+      ],
+      "available": true,
+      "reason": "",
+      "parameters": []
+    },
+    {
+      "id": "output:sessions-cli",
+      "kind": "terminal",
+      "label": "List sessions",
+      "runtimes": [
+        "nodejs"
+      ],
+      "available": true,
+      "reason": "",
+      "parameters": [
+        {
+          "id": "limit",
+          "label": "Limit",
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "output:docs",
+      "kind": "terminal",
+      "label": "Build docs",
+      "runtimes": [
+        "go"
+      ],
+      "available": false,
+      "reason": "Recording not available for `go`",
+      "parameters": []
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "functions": [
+    {
+      "path": "packages/core/src/server/logger.js",
+      "hash": "sha256:35890020aa5446a82eeb420cc9ae7fd05942e390b31594c79a240797ad799b06",
+      "name": "info",
+      "start": {
+        "line": 3,
+        "column": 5
+      }
+    },
+    {
+      "path": "packages/core/src/server/logger.js",
+      "hash": "sha256:35890020aa5446a82eeb420cc9ae7fd05942e390b31594c79a240797ad799b06",
+      "name": "writeLine",
+      "start": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "path": "packages/core/src/server/metrics.js",
+      "hash": "sha256:542316ab19e26a70a4266139e85e0f2cd5aa4cbe78ac867dd3e4201aa4cba99d",
+      "name": "info",
+      "start": {
+        "line": 3,
+        "column": 8
+      }
+    },
+    {
+      "path": "packages/core/src/server/requestContext.js",
+      "hash": "sha256:3a6356d69ef89e4930c8da0d7683c030792761dd28d16dd57c76c3af8183921d",
+      "name": "handleWithContext",
+      "start": {
+        "line": 7,
+        "column": 10
+      }
+    },
+    {
+      "path": "packages/core/src/server/requestContext.js",
+      "hash": "sha256:3a6356d69ef89e4930c8da0d7683c030792761dd28d16dd57c76c3af8183921d",
+      "name": "readContext",
+      "start": {
+        "line": 15,
+        "column": 1
+      }
+    },
+    {
+      "path": "packages/core/src/shared/text.js",
+      "hash": "sha256:f10e0b1760c9db2b6031ea616a5d7e60d3085a87ac5a963b1f2e9d382fe320b8",
+      "name": "cleanTitle",
+      "start": {
+        "line": 1,
+        "column": 8
+      }
+    },
+    {
+      "path": "packages/sessions/src/server/actions.js",
+      "hash": "sha256:40c5f700aa30605b86776b26d8ecdebfe0b32e3a2fb7ed21a6ecb50b43077162",
+      "name": "execute",
+      "start": {
+        "line": 4,
+        "column": 40
+      }
+    },
+    {
+      "path": "packages/sessions/src/server/routes.js",
+      "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
+      "name": "",
+      "start": {
+        "line": 5,
+        "column": 50
+      }
+    },
+    {
+      "path": "packages/sessions/src/server/routes.js",
+      "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
+      "name": "runAction",
+      "start": {
+        "line": 9,
+        "column": 1
+      }
+    },
+    {
+      "path": "packages/sessions/src/server/routes.js",
+      "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
+      "name": "",
+      "start": {
+        "line": 10,
+        "column": 38
+      }
+    },
+    {
+      "path": "packages/sessions/src/server/service.js",
+      "hash": "sha256:24abfcc93e12c75d41f0eed98be27822be8b2e7de7a5a4bb9da5eaf90d35d945",
+      "name": "listSessions",
+      "start": {
+        "line": 4,
+        "column": 1
+      }
+    },
+    {
+      "path": "packages/sessions/src/server/service.js",
+      "hash": "sha256:24abfcc93e12c75d41f0eed98be27822be8b2e7de7a5a4bb9da5eaf90d35d945",
+      "name": "",
+      "start": {
+        "line": 5,
+        "column": 33
+      }
+    },
+    {
+      "path": "packages/sessions/src/server/sessionCache.js",
+      "hash": "sha256:ff0be78c031a90126200485ee1940f8875dac7f48f4b70c1d15c5e52a94d8c79",
+      "name": "readCachedSessions",
+      "start": {
+        "line": 3,
+        "column": 8
+      }
+    },
+    {
+      "path": "packages/sessions/src/server/store.ts",
+      "hash": "sha256:4a00df3acb1cb5e4fd0024185b431dbfae97e96c42098a6c386fea578a941de4",
+      "name": "listRecords",
+      "start": {
+        "line": 5,
+        "column": 8
+      }
+    },
+    {
+      "path": "server/main.js",
+      "hash": "sha256:4a84d9fa5ef69a92dd4483ab96218bc1c023dad57fa633995ec8f6b2b7d09878",
+      "name": "",
+      "start": {
+        "line": 8,
+        "column": 19
+      }
+    },
+    {
+      "path": "server/router.js",
+      "hash": "sha256:974657a1b7ab864a8afbbe0e013d0e7e4ef49205edcc0ffa4e41a82a72930063",
+      "name": "handle",
+      "start": {
+        "line": 18,
+        "column": 3
+      }
+    }
+  ]
+}

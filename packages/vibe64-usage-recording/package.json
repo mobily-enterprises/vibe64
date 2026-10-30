@@ -1,0 +1,70 @@
+{
+  "name": "@local/vibe64-usage-recording",
+  "version": "0.1.0",
+  "description": "Records which project functions run for each request or run of a session's Output target.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./src/client/index.js",
+    "./server": "./src/server/index.js",
+    "./server/admission": "./src/server/admission.js",
+    "./server/recordingFiles": "./src/server/recordingFiles.js",
+    "./server/tracers": "./src/server/tracers/index.js",
+    "./shared/contract": "./src/shared/contract.js"
+  },
+  "jskit": {
+    "kind": "runtime",
+    "capabilities": {
+      "provides": [
+        "vibe64.usage-recording"
+      ],
+      "requires": [
+        "runtime.actions",
+        "runtime.http"
+      ]
+    },
+    "runtime": {
+      "server": {
+        "providers": [
+          {
+            "entrypoint": "src/server/Vibe64UsageRecordingProvider.js",
+            "export": "Vibe64UsageRecordingProvider"
+          }
+        ]
+      },
+      "client": {
+        "providers": []
+      }
+    },
+    "metadata": {
+      "apiSummary": {
+        "surfaces": [
+          {
+            "subpath": "./server/admission",
+            "summary": "Names the host-replaceable recording admission decision and its always-admit default."
+          },
+          {
+            "subpath": "./server/recordingFiles",
+            "summary": "Locates a session's usage recordings so a host can account for and clean them."
+          },
+          {
+            "subpath": "./server/tracers",
+            "summary": "Selects the runtime tracers for an Output target's declared runtimes."
+          },
+          {
+            "subpath": "./shared/contract",
+            "summary": "Shared recording identifiers, limits, headers and the usage trace line format."
+          }
+        ],
+        "capabilities": [
+          "vibe64.usage-recording"
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "@jskit-ai/kernel": "0.2.1",
+    "vue": "^3.5.13"
+  }
+}

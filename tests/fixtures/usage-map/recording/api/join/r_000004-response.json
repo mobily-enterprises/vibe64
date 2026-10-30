@@ -1,0 +1,169 @@
+{
+  "joined": [
+    {
+      "index": 0,
+      "functionId": "fn:packages/core/src/server/logger.js#3:5",
+      "subsystemId": "directory:packages/core",
+      "join": "exact"
+    },
+    {
+      "index": 1,
+      "functionId": "fn:packages/core/src/server/logger.js#9:1",
+      "subsystemId": "directory:packages/core",
+      "join": "exact"
+    },
+    {
+      "index": 2,
+      "functionId": "fn:packages/core/src/server/metrics.js#3:8",
+      "subsystemId": "directory:packages/core",
+      "join": "exact"
+    },
+    {
+      "index": 3,
+      "functionId": "fn:packages/core/src/server/requestContext.js#7:10",
+      "subsystemId": "directory:packages/core",
+      "join": "exact"
+    },
+    {
+      "index": 4,
+      "functionId": "fn:packages/core/src/server/requestContext.js#15:1",
+      "subsystemId": "directory:packages/core",
+      "join": "exact"
+    },
+    {
+      "index": 5,
+      "functionId": null,
+      "subsystemId": "directory:packages/core",
+      "join": "stale"
+    },
+    {
+      "index": 6,
+      "functionId": "fn:packages/sessions/src/server/actions.js#4:40",
+      "subsystemId": "directory:packages/sessions",
+      "join": "exact"
+    },
+    {
+      "index": 7,
+      "functionId": "fn:packages/sessions/src/server/routes.js#5:50",
+      "subsystemId": "directory:packages/sessions",
+      "join": "exact"
+    },
+    {
+      "index": 8,
+      "functionId": "fn:packages/sessions/src/server/routes.js#9:1",
+      "subsystemId": "directory:packages/sessions",
+      "join": "exact"
+    },
+    {
+      "index": 9,
+      "functionId": "fn:packages/sessions/src/server/routes.js#10:38",
+      "subsystemId": "directory:packages/sessions",
+      "join": "exact"
+    },
+    {
+      "index": 10,
+      "functionId": "fn:packages/sessions/src/server/service.js#4:8",
+      "subsystemId": "directory:packages/sessions",
+      "join": "name-line"
+    },
+    {
+      "index": 11,
+      "functionId": "fn:packages/sessions/src/server/service.js#5:33",
+      "subsystemId": "directory:packages/sessions",
+      "join": "exact"
+    },
+    {
+      "index": 12,
+      "functionId": null,
+      "subsystemId": "directory:packages/sessions",
+      "join": "none"
+    },
+    {
+      "index": 13,
+      "functionId": "fn:packages/sessions/src/server/store.ts#5:8",
+      "subsystemId": "directory:packages/sessions",
+      "join": "exact"
+    },
+    {
+      "index": 14,
+      "functionId": "fn:server/main.js#8:19",
+      "subsystemId": "directory:server",
+      "join": "exact"
+    },
+    {
+      "index": 15,
+      "functionId": "fn:server/router.js#18:3",
+      "subsystemId": "directory:server",
+      "join": "exact"
+    }
+  ],
+  "edges": [
+    {
+      "from": 0,
+      "to": 1,
+      "certainty": "probable"
+    },
+    {
+      "from": 3,
+      "to": 0,
+      "certainty": "probable"
+    },
+    {
+      "from": 3,
+      "to": 2,
+      "certainty": "probable"
+    },
+    {
+      "from": 3,
+      "to": 2,
+      "certainty": "probable"
+    },
+    {
+      "from": 3,
+      "to": 4,
+      "certainty": "probable"
+    },
+    {
+      "from": 6,
+      "to": 10,
+      "certainty": "exact"
+    },
+    {
+      "from": 7,
+      "to": 8,
+      "certainty": "exact"
+    },
+    {
+      "from": 8,
+      "to": 6,
+      "certainty": "probable"
+    },
+    {
+      "from": 10,
+      "to": 13,
+      "certainty": "exact"
+    },
+    {
+      "from": 14,
+      "to": 15,
+      "certainty": "exact"
+    }
+  ],
+  "subsystems": [
+    {
+      "id": "directory:packages/core",
+      "title": "Core",
+      "group": "shared"
+    },
+    {
+      "id": "directory:packages/sessions",
+      "title": "Sessions",
+      "group": "features"
+    },
+    {
+      "id": "directory:server",
+      "title": "Server",
+      "group": "entry"
+    }
+  ]
+}

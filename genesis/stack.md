@@ -120,6 +120,7 @@
 - Subsystem: `packages/vibe64-training`
 - Subsystem: `packages/vibe64-source-editor`
 - Subsystem: `packages/vibe64-system-graph`
+- Subsystem: `packages/vibe64-usage-recording`
 - Subsystem: `packages/vibe64-database-tools`
 - Subsystem: `packages/vibe64-voice`
 - Subsystem: `packages/vibe64-publishing`

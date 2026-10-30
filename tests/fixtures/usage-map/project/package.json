@@ -1,0 +1,12 @@
+{
+  "name": "usage-map-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "demo": "bin/demo.js"
+  },
+  "exports": {
+    ".": "./packages/core/src/server/logger.js"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "recording": {
+    "id": "rec_fixture2usagemap3web",
+    "sessionId": "session-fixture",
+    "state": "stopped",
+    "target": {
+      "id": "preview",
+      "kind": "web",
+      "label": "Preview"
+    },
+    "runtimes": [
+      "nodejs"
+    ],
+    "tracers": [
+      {
+        "runtime": "nodejs",
+        "state": "idle",
+        "reason": ""
+      }
+    ],
+    "startedAt": "2026-10-30T10:00:00.000Z",
+    "stoppedAt": "2026-10-30T10:02:14.000Z",
+    "stopReason": "person",
+    "counts": {
+      "requests": 3,
+      "functions": 21
+    },
+    "truncated": false,
+    "dismissedAt": null
+  },
+  "serverTime": "2026-10-30T10:03:20.000Z"
+}
