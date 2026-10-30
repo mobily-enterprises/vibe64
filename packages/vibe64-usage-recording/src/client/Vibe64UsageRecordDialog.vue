@@ -162,8 +162,13 @@ function goToPreview() {
 
 .usage-record-dialog__target {
   display: grid;
-  justify-items: start;
   gap: var(--v64-space-1);
+}
+
+/* Vuetify gives the radio its input grid's "control" area, which here would
+   open an extra column and push the radio to the middle. */
+.usage-record-dialog__target > .v-radio {
+  grid-area: auto;
 }
 
 .usage-record-dialog__reason,
