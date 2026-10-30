@@ -8,6 +8,7 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { createVuetify } from "vuetify";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mdiHeartPulse } from "@mdi/js";
 
 const fake = vi.hoisted(() => ({ usage: null, graph: null }));
 vi.mock("../../packages/vibe64-system-graph/src/client/usage/useVibe64UsageWeb.js", () => ({ useVibe64UsageWeb: () => fake.usage }));
@@ -194,7 +195,10 @@ describe("Recording states", () => {
     const html = await render(Vibe64UsageRecordingResults, { recordings: recordingList.recordings, recordingId, requests: [check, ...requests.requests] });
     expect(html).toContain("Launch readiness check");
     expect(html).toContain("Vibe64 checking that the launch started · 1 file · 2 functions");
-    expect(html).toMatch(/usage-recordings__request--secondary[\s\S]*CHECK/u);
+    // Rows without a method carry a labelled icon in the method column.
+    expect(html).toMatch(new RegExp(`usage-recordings__request--secondary[\\s\\S]*?title="Readiness check"[^>]*>(?:<[^>]*>)*<i class="${mdiHeartPulse.slice(0, 24)}[\\s\\S]*?<span class="d-sr-only">Readiness check</span>`, "u"));
+    expect(html).toContain('<span class="d-sr-only">Start-up</span>');
+    expect(html).not.toContain(">CHECK<");
     expect(html).not.toContain("Request not in the request log");
     const shared = { id: "bg_4242", kind: "background", method: null, path: null, status: null, startedAt: null, durationMs: null, interaction: null, functionCount: 21, fileCount: 12 };
     const sharedHtml = await render(Vibe64UsageRecordingResults, { recordings: recordingList.recordings, recordingId, requests: [check, shared] });

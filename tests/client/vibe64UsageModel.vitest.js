@@ -184,6 +184,7 @@ describe("reads", () => {
       if (path.endsWith("/usage/entries") && options.query.q === "slow") return new Promise((resolve) => pending.push(resolve));
       if (path.endsWith("/usage/entries")) return Promise.resolve({ snapshot: index.snapshot, entries: [{ id: options.query.cursor || "first" }], kinds: [], nextCursor: options.query.cursor ? null : "100" });
       if (path.endsWith("/functions")) return Promise.resolve(ran);
+      if (path.endsWith("/requests")) return Promise.resolve({ ...requests, requests: requests.requests.filter((row) => row.id === options.query.requestId) });
       if (path.endsWith("/usage/join")) return Promise.resolve(joinFunctions(index, calls, options.body));
       throw new Error(`unexpected ${path}`);
     });
@@ -199,10 +200,12 @@ describe("reads", () => {
     expect(sent[1]).toEqual(["GET", "/api/app/demo/vibe64/system-graph/sessions/s%201/usage/entries", { q: "route", kind: "route", limit: 100 }]);
 
     const result = await usage.result.run({ recordingId: "rec_1", requestId: "r_000004" });
-    expect(sent.at(-2)).toEqual(["GET", "/api/app/demo/vibe64/usage-recordings/sessions/s%201/rec_1/requests/r_000004/functions", { limit: 1500 }]);
+    expect(sent.at(-3)).toEqual(["GET", "/api/app/demo/vibe64/usage-recordings/sessions/s%201/rec_1/requests/r_000004/functions", { limit: 1500 }]);
+    expect(sent.at(-2)).toEqual(["GET", "/api/app/demo/vibe64/usage-recordings/sessions/s%201/rec_1/requests", { requestId: "r_000004", limit: 1 }]);
     expect(sent.at(-1)[0]).toBe("POST");
     expect(sent.at(-1)[2].functions[0]).toEqual({ path: ran.functions[0].path, hash: ran.functions[0].hash, name: ran.functions[0].name, start: ran.functions[0].start });
     expect(result).toMatchObject({ recordingId: "rec_1", requestId: "r_000004", total: 16, truncated: false });
+    expect(result.request).toMatchObject({ id: "r_000004", method: "GET", path: "/api/sessions" }, "the chosen request's own row comes along");
     expect(result.join.joined).toHaveLength(16);
 
     http.request = vi.fn(() => Promise.reject(Object.assign(new Error("This entry point is not in the current scan."), { code: "vibe64_usage_entry_not_found" })));
