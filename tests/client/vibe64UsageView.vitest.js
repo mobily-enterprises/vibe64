@@ -225,6 +225,15 @@ describe("Recording states", () => {
     expect(zoomed).not.toContain("runAction");
   });
 
+  it("says when the scan changed since the recording, from the recording's source identity", async () => {
+    const state = { mode: "recording", recording: recordingId, request: "r_000004" };
+    const result = read({ ...joined, join: { ...joined.join, snapshot: index.snapshot } });
+    expect(recordingList.recordings[0].sourceIdentity).toBe(index.snapshot.sourceIdentity);
+    expect(await view(state, { recordings, requests: read(requests), result })).not.toContain("Source changed since this recording");
+    const earlier = read({ recordings: [{ ...recordingList.recordings[0], sourceIdentity: `sha256:${"0".repeat(64)}` }] });
+    expect(await view(state, { recordings: earlier, requests: read(requests), result })).toContain("Source changed since this recording");
+  });
+
   it("offers Refresh, not Retry, before the project's first scan", async () => {
     const NOT_SCANNED = { error: "Machine City has not been generated. Refresh analysis first.", errorCode: "vibe64_genesis_city_missing" };
     const state = { mode: "recording", recording: recordingId, request: "r_000004" };

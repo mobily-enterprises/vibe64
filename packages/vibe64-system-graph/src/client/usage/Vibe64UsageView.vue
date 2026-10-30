@@ -123,6 +123,9 @@
             <v-skeleton-loader v-for="card in 4" :key="card" type="card" class="usage-view__skeleton-card" />
           </div>
           <template v-else>
+            <v-alert v-if="changedSinceRecording" type="info" variant="tonal" density="compact" class="usage-view__banner">
+              Source changed since this recording
+            </v-alert>
             <v-alert v-if="usage.result.data.value.truncated" type="warning" variant="tonal" density="compact" class="usage-view__banner">
               Showing the first {{ usage.result.data.value.functions.length.toLocaleString() }} of {{ usage.result.data.value.total.toLocaleString() }} functions that ran.
             </v-alert>
@@ -367,6 +370,12 @@ const resultFresh = computed(() => {
   return Boolean(data && data.recordingId === props.state.recording && data.requestId === props.state.request);
 });
 const recorded = computed(() => (resultFresh.value ? recordingWeb(usage.result.data.value.functions, usage.result.data.value.join) : null));
+// The scan the recording ran against is no longer the one its functions were joined to.
+const changedSinceRecording = computed(() => {
+  const recordedScan = selectedRecording.value?.sourceIdentity;
+  const currentScan = resultFresh.value ? usage.result.data.value.join?.snapshot?.sourceIdentity : null;
+  return Boolean(recordedScan && currentScan && recordedScan !== currentScan);
+});
 const requestRows = computed(() => usage.requests.data.value?.requests || []);
 const selectedRequest = computed(() => requestRows.value.find((request) => request.id === props.state.request) || null);
 

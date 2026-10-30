@@ -229,6 +229,21 @@ test("module and asset loads are counted, and a full request log says so", async
   assert.equal((await readJson(path.join(directory, "recording.json"))).requestLog.full, true);
 });
 
+test("a recording keeps the scan it ran against: the Machine City's architecture.sourceHash", async (t) => {
+  const { call, sourceRoot } = await recorder(t);
+  const sourceHash = `sha256:${"a".repeat(64)}`;
+  // Genesis writes sorted keys, so sourceHash follows large sections, and
+  // look-alike keys sit deeper and in strings.
+  const files = Array.from({ length: 2000 }, (_, index) => ({ path: `src/f${index}.js`, sourceHash: `sha256:${"b".repeat(64)}`, text: "\\\"{[\"sourceHash\":\"x\"]}" }));
+  const city = { architecture: { callWeb: null, files, program: { sourceHash: `sha256:${"c".repeat(64)}` }, sourceHash, subsystems: [] }, schema: "genesis.machine-city.v1" };
+  await mkdir(path.join(sourceRoot, ".genesis"), { recursive: true });
+  await writeFile(path.join(sourceRoot, ".genesis/machine-city.json"), JSON.stringify(city));
+  assert.ok(JSON.stringify(city).indexOf(`"sourceHash":"${sourceHash}"`) > 256 * 1024);
+  const { recording } = await call("start", { targetId: "preview" });
+  assert.equal(recording.sourceIdentity, sourceHash);
+  await call("stop", { recordingId: recording.id });
+});
+
 test("stop during starting succeeds, and a session that ends stops its recording", async (t) => {
   const { call, current } = await recorder(t);
   const { recording } = await call("start", { targetId: "preview" });

@@ -116,6 +116,8 @@ scanned; **not scanned** (**Not in the last scan**) means the scan does not
 know it. Re-scan to see their calls. Calls are read only in the languages of
 the project's Stack components; a function in any other language shows **Calls
 not read in this file's language**, and re-scanning does not change that.
+**Source changed since this recording** means Architecture was scanned again
+after the recording; the request is shown against the newer scan.
 
 Some web servers handle every request in one shared process. Their code is
 then shown as one row, **Not separated per request for this server**, with

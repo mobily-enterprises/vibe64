@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { appendFile, chmod, mkdir, open, readdir, realpath, rm, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { appendFile, chmod, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { AppError } from "@jskit-ai/kernel/server/runtime";
@@ -11,7 +12,7 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { resolveVibe64OutputParameters } from "@local/vibe64-genesis/server";
+import { GENESIS_MACHINE_CITY_PATH, resolveVibe64OutputParameters } from "@local/vibe64-genesis/server";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 
 import { registerActiveUsageRecording, activeUsageRecording } from "./activeRecordings.js";
@@ -97,19 +98,64 @@ function storedRecording(value) {
   return value?.schema === USAGE_RECORDING_SCHEMA && USAGE_RECORDING_ID_PATTERN.test(String(value.id || "")) ? value : null;
 }
 
-// The call web names the source snapshot it was built from in its first lines;
-// a recording keeps it so results can say when the source has changed since.
+// The Machine City's architecture.sourceHash: the scan a recording runs
+// against, so results can say when the source has changed since. Genesis sorts
+// keys and the City can be tens of MiB, so this streams it and follows only
+// strings, nesting and the key at each level until it reaches that one field.
 async function readSourceIdentity(sourceRoot) {
-  let handle = null;
+  const target = ["architecture", "sourceHash"];
+  const keys = [];
+  let inString = false;
+  let escaped = false;
+  let text = "";
+  let afterColon = false;
+  const structure = /["{}[\]:,]/gu;
+  const stringEnd = /["\\]/gu;
+  const stream = createReadStream(path.join(sourceRoot, GENESIS_MACHINE_CITY_PATH), { encoding: "utf8", highWaterMark: 1024 * 1024 });
   try {
-    handle = await open(path.join(sourceRoot, ".genesis", "call-web.json"), "r");
-    const buffer = Buffer.alloc(4096);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    return /"sourceIdentity"\s*:\s*"(sha256:[0-9a-f]{64})"/u.exec(buffer.subarray(0, bytesRead).toString("utf8"))?.[1] || null;
+    for await (const chunk of stream) {
+      let index = 0;
+      while (index < chunk.length) {
+        if (escaped) {
+          escaped = false;
+          index += 1;
+          continue;
+        }
+        const pattern = inString ? stringEnd : structure;
+        pattern.lastIndex = index;
+        const match = pattern.exec(chunk);
+        const end = match ? match.index : chunk.length;
+        if (inString && keys.length <= target.length && text.length < 80) text += chunk.slice(index, Math.min(end, index + 80));
+        if (!match) break;
+        index = end + 1;
+        const found = match[0];
+        if (found === "\\") escaped = true;
+        else if (found === "\"" && !inString) {
+          inString = true;
+          text = "";
+        } else if (found === "\"") {
+          inString = false;
+          if (afterColon && keys.length === target.length && keys.every((key, level) => key === target[level])) {
+            return /^sha256:[0-9a-f]{64}$/u.test(text) ? text : null;
+          }
+          afterColon = false;
+        } else if (found === ":") {
+          keys[keys.length - 1] = text;
+          afterColon = true;
+        } else if (found === "{" || found === "[") {
+          keys.push(null);
+          afterColon = false;
+        } else if (found === "}" || found === "]") {
+          keys.pop();
+          if (!keys.length) return null;
+        } else afterColon = false;
+      }
+    }
+    return null;
   } catch {
     return null;
   } finally {
-    await handle?.close();
+    stream.destroy();
   }
 }
 

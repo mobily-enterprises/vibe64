@@ -42,6 +42,14 @@ test("the fixture Machine City is a valid Genesis Machine City of the fixture pr
   }
 });
 
+test("the Genesis outputs keep Genesis's sorted key order, as real scans write them", () => {
+  const stable = (value) => (Array.isArray(value) ? value.map(stable)
+    : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])])) : value);
+  for (const name of ["machine-city.json", "call-web.json"]) {
+    assert.equal(bytes(name).toString("utf8"), `${JSON.stringify(stable(json(name)), null, 2)}\n`, name);
+  }
+});
+
 test("the Machine City summarises the call web it names", () => {
   const summary = architecture.callWeb;
   assert.equal(summary.path, ".genesis/call-web.json");

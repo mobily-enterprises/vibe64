@@ -80,8 +80,9 @@ Refusals: 409 `vibe64_usage_recording_session_inactive` or
 invalid parameters; 503 `vibe64_usage_recording_refused` with
 `details.reason` when the host's admission decision refuses.
 
-`recording.sourceIdentity` is the `sourceIdentity` of the project's
-`.genesis/call-web.json` at start (the Machine City identity), or null.
+`recording.sourceIdentity` is the Machine City's `architecture.sourceHash` at
+start, or null. Genesis sorts keys and the City can be tens of MiB, so start
+streams the file and follows only that field.
 
 ## Host seams
 
