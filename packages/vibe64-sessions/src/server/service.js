@@ -617,6 +617,62 @@ function createService({
     });
   }
 
+  // A failed Update that the session's own repository has since repaired
+  // outside Save or Update (an assistant or a person using Git directly) no
+  // longer applies once its checkout proves all of this: HEAD contains the
+  // saved version the Update was trying to reach, or Update has nothing left
+  // to apply; no merge, rebase, cherry-pick or revert is unfinished; and no
+  // file is conflicted. The record keeps its checkpoint and conflict evidence
+  // and gains an event saying why it was resolved. Anything else leaves the
+  // failure, and its reason, as it was.
+  async function resolveRepairedUpdateFailure(runtime, session, task) {
+    if (task?.status !== "failed" || typeof terminals.inspectSessionUpdateFailure !== "function") {
+      return task;
+    }
+    let evidence;
+    try {
+      evidence = await terminals.inspectSessionUpdateFailure(session.sessionId, {
+        runtime,
+        session,
+        targetCommit: text(task.conflictRecovery?.canonicalCommit)
+      });
+    } catch (error) {
+      // Unreadable evidence proves nothing; the failure stays.
+      vibe64SessionDebugLog("server.sessions.updateFailure.inspect.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId: session.sessionId
+      });
+      return task;
+    }
+    const reached = evidence?.targetInHead === true;
+    if (
+      text(evidence?.gitOperation) ||
+      !Array.isArray(evidence?.unmergedPaths) || evidence.unmergedPaths.length > 0 ||
+      (!reached && evidence?.updateNeeded !== false)
+    ) {
+      return task;
+    }
+    return runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_UPDATE_TASK_ID, {
+      event: {
+        kind: "update-resolved-in-repository",
+        message: reached
+          ? "The session now contains the saved version this Update was trying to apply, with no unfinished Git operation or conflicted file, so the Update failure no longer applies."
+          : "The session already contains the latest saved version, with no unfinished Git operation or conflicted file, so the Update failure no longer applies.",
+        status: "ready"
+      },
+      patch: {
+        code: "",
+        error: "",
+        resolvedAtCommit: text(evidence.sessionHead),
+        retryable: false,
+        status: "ready"
+      },
+      // Only the failure that was inspected; a newer Update keeps its own record.
+      shouldWrite: ({ previous }) => previous.status === "failed" &&
+        text(previous.operationId) === text(task.operationId)
+    });
+  }
+
   function publicAssistantAccess(access = {}) {
     return {
       accessLabel: text(access.accessLabel) || "Unavailable",
@@ -1007,6 +1063,8 @@ function createService({
             activeWorkInspections.delete(inspectionKey);
           }
         }
+        // resolveSupersededUpdateFailure returns null when no Save applies.
+        await resolveRepairedUpdateFailure(runtime, session, updateOperation || recoveredUpdateOperation);
         const [latestOperation, latestUpdateOperation] = await Promise.all([
           runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID),
           runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID)

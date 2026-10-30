@@ -10,6 +10,8 @@ import path from "node:path";
 import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
+import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
+import { sessionWorkProblem } from "../shared/sessionWorkProblem.js";
 import { WORKSPACE_SETUP_METADATA_NAME, workspaceSetupState, workspaceSetupStateFromMetadata } from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import {
@@ -578,11 +580,19 @@ function createAgentSessionCommandService({
       const state = workspaceSetupStateFromMetadata({
         [WORKSPACE_SETUP_METADATA_NAME]: await store.readMetadataValue(sessionId, WORKSPACE_SETUP_METADATA_NAME)
       });
+      // The stored Save or Update failure behind the editor's "Repository needs
+      // help", so the assistant reports its recorded reason instead of guessing.
+      const [saveOperation, updateOperation] = await Promise.all([SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID]
+        .map((taskId) => store.readBackgroundTask(sessionId, taskId)));
+      const repositoryProblem = sessionWorkProblem({ operation: saveOperation, updateOperation });
       return {
         ok: true,
         sessionId,
         project: normalizeText(project.slug || project.name),
         environment,
+        repository: repositoryProblem
+          ? { needsHelp: true, ...repositoryProblem }
+          : { needsHelp: false },
         workspaceSetup: {
           status: state.status,
           inspectionStatus: setup.status,

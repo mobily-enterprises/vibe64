@@ -19,6 +19,7 @@
     "./server/nativeConversationBindings": "./src/server/nativeConversationRetirement.js",
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",
     "./shared/assistantWorkPlan": "./src/shared/assistantWorkPlan.js",
+    "./shared/sessionWorkProblem": "./src/shared/sessionWorkProblem.js",
     "./server/retainedConversationHelper": "./src/server/retainedConversationHelper.js",
     "./server/practiceAgentGuidance": "./src/server/practiceAgentGuidance.js",
     "./server/assistantClaudeCommandUpgrade": "./src/server/assistantClaudeCommandUpgrade.js",

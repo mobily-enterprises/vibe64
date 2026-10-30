@@ -22,6 +22,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import {
   checkSessionUpdates,
+  inspectSessionUpdateFailure,
   recoverSessionWorkUpdate,
   updateSessionWork as updateManagedSessionWork,
   updateSessionWorkDirect as updateSessionWork
@@ -845,6 +846,56 @@ test("managed Update leaves source untouched when merge conflicts cross the help
     assert.deepEqual(requests, ["update-checkpoint", "update-prepare"]);
     assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), fixture.baseCommit);
     assert.equal(await readFile(path.join(session.sourcePath, "shared.txt"), "utf8"), "my work\n");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("failed Update evidence follows a conflict the session repairs with Git outside Save or Update", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-failure-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    await writeFile(path.join(fixture.seed, "shared.txt"), "their work\n");
+    await git(fixture.seed, ["commit", "-am", "saved elsewhere"]);
+    await git(fixture.seed, ["push", "origin", "main"]);
+    await writeFile(path.join(session.sourcePath, "shared.txt"), "my work\n");
+    await git(session.sourcePath, ["commit", "-am", "session work"]);
+    const input = { project: githubProject(root, fixture.remote), runCommand: commandRunner, session };
+    let targetCommit = "";
+    await assert.rejects(updateSessionWork(input), (error) => {
+      targetCommit = error.details.conflictRecovery.canonicalCommit;
+      return error.code === "vibe64_session_update_conflict";
+    });
+    // Crosses the same helper boundary as the managed Update.
+    const evidence = () => inspectSessionUpdateFailure({ ...input, targetCommit });
+
+    // Nothing is repaired: HEAD lacks the saved version the Update tried to reach.
+    const sessionHead = await git(session.sourcePath, ["rev-parse", "HEAD"]);
+    assert.deepEqual(await evidence(), {
+      canonicalCommit: targetCommit, gitOperation: "", sessionHead, targetInHead: false, unmergedPaths: [], updateNeeded: true
+    });
+
+    // The session's assistant rebases with Git itself and stops on the same conflict.
+    await git(session.sourcePath, ["fetch", "origin"]);
+    await assert.rejects(git(session.sourcePath, ["rebase", "origin/main"]));
+    const stopped = await evidence();
+    assert.equal(stopped.gitOperation, "rebase");
+    assert.deepEqual(stopped.unmergedPaths, ["shared.txt"]);
+    assert.equal(stopped.targetInHead, true, "a stopped rebase already sits on the target");
+
+    // It resolves the file and finishes the rebase: nothing about the Update still applies.
+    await writeFile(path.join(session.sourcePath, "shared.txt"), "their work\nmy work\n");
+    await git(session.sourcePath, ["add", "shared.txt"]);
+    await git(session.sourcePath, ["-c", "core.editor=true", "rebase", "--continue"]);
+    assert.deepEqual(await evidence(), {
+      canonicalCommit: targetCommit,
+      gitOperation: "",
+      sessionHead: await git(session.sourcePath, ["rev-parse", "HEAD"]),
+      targetInHead: true,
+      unmergedPaths: [],
+      updateNeeded: false
+    });
   } finally {
     await rm(root, { force: true, recursive: true });
   }

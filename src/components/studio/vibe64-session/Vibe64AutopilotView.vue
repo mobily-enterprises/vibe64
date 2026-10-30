@@ -35,6 +35,7 @@
           :max-visible-sessions="3"
           :selected-session-id="sessionId"
           :selection-archived="sessionArchiveDisabled"
+          :show-repository-problem="showRepositoryProblem"
           :toolbar="props.sessionToolbar"
         />
 
@@ -1427,6 +1428,7 @@ const {
   saveWorkTitle,
   saveWorkRequiresUpdate,
   saveWorkUnsaved,
+  showSaveWorkActivity,
   selectSessionTool,
   sessionId,
   sessionGithubActor,
@@ -1734,6 +1736,12 @@ function copyActivityOutput(output = "") {
   return writeClipboardText(output);
 }
 
+// The tab's info brings back a dismissed Save or Update notice in chat.
+function showRepositoryProblem() {
+  showSaveWorkActivity();
+  emit("chat-attention");
+}
+
 function openTemporaryAi() {
   if (!sessionId.value || props.sessionSelectionArchived) {
     return false;
@@ -1763,9 +1771,13 @@ const saveWorkCheckAvailable = computed(() => Boolean(
 ));
 const saveWorkHeaderHint = computed(() => {
   if (saveConnectedFirst.value) return saveWorkTitle.value;
-  const status = saveWorkChecking.value ? "Checking for updates…"
+  const checkStatus = saveWorkChecking.value ? "Checking for updates…"
     : saveWorkCheckAvailable.value ? `${saveWorkTitle.value}. Click to check for updates.`
       : saveWorkTitle.value;
+  // The failure that makes the repository need help, as its notice titles it.
+  const status = saveWorkError.value && !saveWorkSending.value && !saveWorkOperationActive.value
+    ? `${saveWorkActivityLabel.value} needs attention: ${saveWorkError.value}\n${checkStatus}`
+    : checkStatus;
   const destination = props.workState?.destination;
   if (!destination) return status;
   if (saveWorkRequiresUpdate.value || saveWorkDisabled.value || saveWorkChecking.value) {

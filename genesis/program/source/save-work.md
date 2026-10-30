@@ -14,6 +14,23 @@ theme's disabled grey and its label says the work was saved at the last check
 while the assistant is still working, because the turn can still change source.
 The projection, other states' colours and the archive warning are unchanged.
 
+**Repository needs help** comes from one shared reading of the stored Save and
+Update records, `sessionWorkProblem()` in the terminals package's shared code: a
+failed Save (other than a required Update) or a failed Update, the later one
+when both failed. It returns that operation's own recorded message and a next
+step naming the existing controls (Review resolved conflicts for a reviewable
+Update conflict, Create draft PR for a required PR, otherwise Fix it with AI or
+trying again). The projection carries both, so the tab icon's tooltip, the tab's
+accessible name and its info's **Why** and **Next** facts show them on desktop
+and touch screens. For the selected session the info also offers **Show Update
+notice** or **Show Save notice**, which brings back a dismissed notice in chat;
+the Save header's hint repeats the notice's "needs attention" reason. A stored
+failure the notice mirrored leaves it once the record is no longer failed. The
+same reading feeds the session assistant's `vibe64-helper session status`
+(`repository`) and Colleague's work tool (`repositoryProblem`), so neither has
+to guess. The failure does not disable Save: Save stays unavailable only when
+there is nothing to save.
+
 A clean Main Save checks retained submitted revisions before reporting that there
 is no work to save. Its existing preparation job receives the freshly authorized
 connected snapshots and reuses the native integration gate on the no-change path;
@@ -68,6 +85,8 @@ Git commands.
 - `packages/vibe64-terminals/src/server/sessionWorkAuthority.js`
 - `packages/vibe64-terminals/src/server/githubRemoteHeads.js`
 - `packages/vibe64-terminals/src/server/sessionWorkUpdate.js`
+- `packages/vibe64-terminals/src/shared/sessionWorkProblem.js`
+- `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/sessionIncomingContributions.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `packages/vibe64-project/src/server/localRepositoryRemote.js`
@@ -504,6 +523,23 @@ independently of any AI outcome; it may also report the result into the existing
 repair chat without sending an automatic follow-up. It never publishes. Check
 Update remains an unacknowledged retry; automatic AI completion submits its own
 recorded runConflictId through the same check/result owner.
+
+Work inspection also settles a failed Update that the session repaired outside
+Save or Update, for example its assistant or a person rebasing with Git. The
+terminals' read-only `inspectSessionUpdateFailure()` reports, from the session
+checkout: whether HEAD contains the saved version the Update was trying to
+reach (its recorded `conflictRecovery.canonicalCommit`); whether Update still
+has anything to apply, by the check's own rule (the observed canonical commit,
+which the failed Update's canonical read remembered, is not in HEAD, or the
+saved history was rewritten); any unfinished merge, rebase, cherry-pick or revert
+(their Git-directory markers, as `git status` reads them); and any unmerged path.
+The sessions service, next to the Save-superseded case, records the failure as
+resolved only when the target is in HEAD or nothing is left to apply, with no
+unfinished operation and no unmerged path. It appends an
+`update-resolved-in-repository` event, clears the code and error, records
+`resolvedAtCommit` and keeps the checkpoint and conflict evidence; the write is
+guarded to the inspected failed operation. Unreadable evidence leaves the
+failure, and its reason, unchanged.
 
 Conflict recovery accepts a shrinking subset of the original conflict list only
 while the base, canonical commit, HEAD and index identities remain unchanged.

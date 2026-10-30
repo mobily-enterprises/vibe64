@@ -278,7 +278,19 @@ function useShortActionDismissals(projectSlug, sessionId) {
     }
   }
 
-  return { clear, dismiss, state };
+  // Shows one dismissed notice again, for the person who asks to see it.
+  function restore(name, activityKey = "") {
+    const key = normalizedAgentTurnText(activityKey);
+    if (!key || !storageKey.value) {
+      return false;
+    }
+    const { [key]: _dismissed, ...kept } = { ...readLocalStorageJson(storageKey.value, {}), ...state.value };
+    state.value = { ...kept, ...(kept[name] === key ? { [name]: "" } : {}) };
+    writeLocalStorageJson(storageKey.value, state.value);
+    return true;
+  }
+
+  return { clear, dismiss, restore, state };
 }
 
 function useVibe64AutopilotView(props, emit, {

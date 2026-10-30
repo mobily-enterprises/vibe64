@@ -2,6 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { connectedWorkReviewSchema, incomingReviewSchema, sessionHistoryReviewSchema, sessionRepositoryReviewSchema } from "./inputSchemas.js";
 import { assistantRoutingFromMetadata, assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "@local/vibe64-terminals/server/sessionRenewalHandover";
+import { sessionWorkProblem } from "@local/vibe64-terminals/shared/sessionWorkProblem";
 
 const shortText = { type: "string", maxLength: 256, required: false };
 
@@ -162,6 +163,7 @@ function sessionWorkTool(description) {
     "publicationRequiresPullRequest", "reconciled", "recovered", "cached", "connectedSaveRequired", "connectedRequirementsPresent"];
   const operationStrings = limits(["operationId", "kind", "status", "stage", "code", "error", "conflictReviewId"], 512);
   const operationSchema = createSchema(stringFields(operationStrings));
+  const problemStrings = { ...limits(["label", "operation", "status", "code", "failedAt"]), message: 512, nextStep: 512 };
   const cacheStrings = { status: 256, message: 512 };
   return {
     description,
@@ -180,6 +182,7 @@ function sessionWorkTool(description) {
       failedRepository: shortText,
       historyReview: { type: "object", schema: sessionHistoryReviewSchema, required: false },
       ...Object.fromEntries(["operation", "updateOperation", "activeOperation"].map((key) => [key, { type: "object", schema: operationSchema, required: false }])),
+      repositoryProblem: { type: "object", schema: createSchema(stringFields(problemStrings)), required: false },
       cacheMaintenance: { type: "object", required: false, schema: createSchema({
         ...stringFields(cacheStrings), retryable: { type: "boolean", required: false }
       }) }
@@ -215,6 +218,8 @@ function sessionWorkTool(description) {
         const record = { ...result[name], conflictReviewId: result[name].conflictRecovery?.reviewId };
         output[name] = pickStrings(record, operationStrings);
       }
+      const problem = sessionWorkProblem(result);
+      if (problem) output.repositoryProblem = pickStrings(problem, problemStrings);
       if (result.cacheMaintenance) {
         output.cacheMaintenance = { retryable: result.cacheMaintenance.retryable === true,
           ...pickStrings(result.cacheMaintenance, cacheStrings) };

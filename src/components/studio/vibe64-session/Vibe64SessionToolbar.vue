@@ -38,7 +38,7 @@
             ]"
             :icon="repositoryWorkStateIcon(sessionItem)"
             size="14"
-            :title="repositoryWorkStateLabel(sessionItem)"
+            :title="repositoryWorkStateDescription(sessionItem)"
           />
           <v-btn
             class="studio-ai-sessions__tab-info"
@@ -91,6 +91,13 @@
               </template>
             </dl>
             <v-btn
+              v-if="repositoryWorkStateProblem(sessionItem) && sessionItem.sessionId === selectedSessionId && showRepositoryProblem"
+              variant="text" height="48" :prepend-icon="mdiAlertCircleOutline"
+              @click.stop="showProblemNotice(sessionItem)"
+            >
+              Show {{ repositoryWorkStateProblem(sessionItem).operation === "update" ? "Update" : "Save" }} notice
+            </v-btn>
+            <v-btn
               v-if="toolbar.sessionsApiPath" variant="text" height="48" :prepend-icon="mdiPencilOutline"
               :disabled="sessionItem.archiving || selectionArchived" @click.stop="renameSession(sessionItem)"
             >
@@ -140,6 +147,7 @@
 <script setup>
 import { computed, inject, onMounted, ref, useId, watch } from "vue";
 import {
+  mdiAlertCircleOutline,
   mdiArchiveOutline,
   mdiPencilOutline,
   mdiInformationOutline
@@ -152,8 +160,10 @@ import { vibe64SessionDisplayTitle, vibe64SessionStatusLabel } from "@/lib/vibe6
 import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
 import {
   repositoryWorkState,
+  repositoryWorkStateDescription,
   repositoryWorkStateIcon,
   repositoryWorkStateLabel,
+  repositoryWorkStateProblem,
   repositoryWorkStateProvisional
 } from "@/lib/vibe64SessionRepositoryWorkState.js";
 import {
@@ -200,6 +210,11 @@ const props = defineProps({
   maxVisibleSessions: {
     default: 3,
     type: Number
+  },
+  // Brings back the selected session's dismissed Save or Update notice.
+  showRepositoryProblem: {
+    default: null,
+    type: Function
   }
 });
 
@@ -221,6 +236,12 @@ function renameSession(session) {
   infoSessionId.value = "";
   sessionTooltip.suppressedSessionId.value = session.sessionId;
   renamingSession.value = { ...session };
+}
+
+function showProblemNotice(session) {
+  infoSessionId.value = "";
+  sessionTooltip.suppressedSessionId.value = session.sessionId;
+  props.showRepositoryProblem();
 }
 
 function setSessionInfo(sessionId, visible) {
@@ -263,6 +284,8 @@ function sessionInfoFacts(sessionItem) {
     },
     { key: "model", label: "Model", value: selection.modelId },
     { key: "saved-work", label: "Work", value: repositoryWorkStateLabel(sessionItem) },
+    { key: "work-problem", label: "Why", value: repositoryWorkStateProblem(sessionItem)?.message },
+    { key: "work-next", label: "Next", value: repositoryWorkStateProblem(sessionItem)?.nextStep },
     ...details
   ].filter((fact) => fact.value);
 }
@@ -282,7 +305,8 @@ function sessionTabAriaLabel(sessionItem = {}) {
   if (sessionItem.archiving) {
     return `${sessionTabLabel(sessionItem)}. Inactive. Archiving session.`;
   }
-  return `${sessionTabLabel(sessionItem)}. ${repositoryWorkStateLabel(sessionItem)}.`;
+  const work = repositoryWorkStateDescription(sessionItem);
+  return `${sessionTabLabel(sessionItem)}. ${work}${work.endsWith(".") ? "" : "."}`;
 }
 
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);

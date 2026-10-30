@@ -71,6 +71,7 @@ import {
 } from "./sessionIncomingContributions.js";
 import {
   checkSessionUpdates as checkManagedSessionUpdates,
+  inspectSessionUpdateFailure as inspectManagedSessionUpdateFailure,
   readSessionAuthorityHeads as readManagedSessionAuthorityHeads,
   recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate,
   updateSessionWork as updateManagedSessionWork
@@ -3053,6 +3054,17 @@ function createService({
         publicationRequiresPullRequest: work.destination?.mode === "github" && !sessionConnectedContribution(session) &&
           (await projectService.readRepositoryWorkflow()).requirePullRequest
       };
+    },
+
+    // Read-only Git evidence on whether a failed Update still describes the
+    // session's checkout; the sessions service decides and records the result.
+    async inspectSessionUpdateFailure(sessionId, input = {}) {
+      const { session } = await sessionContext(String(sessionId || "").trim(), input);
+      return inspectManagedSessionUpdateFailure({
+        project: await projectService.readCurrentProject(),
+        session,
+        targetCommit: input.targetCommit
+      });
     },
 
     async inspectIncomingContributions(sessionId, input = {}) {

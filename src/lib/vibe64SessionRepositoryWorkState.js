@@ -5,12 +5,13 @@ import {
   mdiContentSaveAlertOutline,
   mdiDotsHorizontalCircleOutline
 } from "@mdi/js";
+import { SESSION_WORK_PROBLEM_LABEL, sessionWorkProblem } from "@local/vibe64-terminals/shared/sessionWorkProblem";
 
 // One owner for a session's repository work state: the derivation from the
 // session work snapshot, and the label and icon each state is shown with.
 const REPOSITORY_WORK_STATE_PRESENTATION = Object.freeze({
   checking: Object.freeze({ icon: mdiDotsHorizontalCircleOutline, label: "Checking whether work is saved" }),
-  needs_help: Object.freeze({ icon: mdiAlertCircleOutline, label: "Repository needs help" }),
+  needs_help: Object.freeze({ icon: mdiAlertCircleOutline, label: SESSION_WORK_PROBLEM_LABEL }),
   saved: Object.freeze({ icon: mdiCheckCircleOutline, label: "All work is saved" }),
   saving: Object.freeze({ icon: mdiDotsHorizontalCircleOutline, label: "Saving work" }),
   unavailable: Object.freeze({ icon: mdiAlertCircleOutline, label: "Save status is unavailable" }),
@@ -26,7 +27,6 @@ function sessionRepositoryWorkState(workState = null) {
     ...(source.updateStatusPending === true ? { updateStatusPending: true } : {})
   };
   const operationStatus = String(source.operation?.status || "").trim();
-  const operationCode = String(source.operation?.code || "").trim();
   const updateStatus = String(source.updateOperation?.status || "").trim();
   if (operationStatus === "running") {
     return {
@@ -40,12 +40,11 @@ function sessionRepositoryWorkState(workState = null) {
       state: "updating"
     };
   }
-  if (
-    (operationStatus === "failed" && operationCode !== "vibe64_session_save_update_required") ||
-    updateStatus === "failed"
-  ) {
+  const problem = sessionWorkProblem(source);
+  if (problem) {
     return {
       ...freshness,
+      problem: { message: problem.message, nextStep: problem.nextStep, operation: problem.operation },
       state: "needs_help",
       updateAvailable: source.updateAvailable === true
     };
@@ -99,6 +98,19 @@ function repositoryWorkStateLabel(sessionItem = {}) {
   return REPOSITORY_WORK_STATE_PRESENTATION[state].label;
 }
 
+// The stored reason a session's repository needs help and what to do next.
+function repositoryWorkStateProblem(sessionItem = {}) {
+  const problem = sessionItem?.repositoryWorkState?.problem;
+  return repositoryWorkState(sessionItem) === "needs_help" && problem?.message ? problem : null;
+}
+
+// The label with its reason, for the tab's icon tooltip and accessible name.
+function repositoryWorkStateDescription(sessionItem = {}) {
+  const label = repositoryWorkStateLabel(sessionItem);
+  const problem = repositoryWorkStateProblem(sessionItem);
+  return problem ? `${label}: ${problem.message} ${problem.nextStep}` : label;
+}
+
 function repositoryWorkStateIcon(sessionItem = {}) {
   return REPOSITORY_WORK_STATE_PRESENTATION[repositoryWorkState(sessionItem)].icon;
 }
@@ -127,8 +139,10 @@ function sessionArchiveWorkNotice(workState = null) {
 
 export {
   repositoryWorkState,
+  repositoryWorkStateDescription,
   repositoryWorkStateIcon,
   repositoryWorkStateLabel,
+  repositoryWorkStateProblem,
   repositoryWorkStateProvisional,
   sessionArchiveWorkNotice,
   sessionRepositoryWorkState

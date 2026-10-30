@@ -246,6 +246,8 @@ function useVibe64SessionSaveWork(props, {
     saveWorkOperation.value?.stage ||
     (saveWorkSending.value && !saveWorkOperation.value ? "Waiting for the session to be ready" : "")
   ));
+  // The failure last copied from a stored operation, as opposed to a request's own error.
+  let storedFailure = null;
   watch(() => ({
     code: String(saveWorkOperation.value?.code || ""),
     details: saveWorkOperation.value?.details || (saveWorkOperation.value?.conflictRecovery ? {
@@ -264,6 +266,12 @@ function useVibe64SessionSaveWork(props, {
       return;
     }
     if (operation.status !== "failed" || !operation.error) {
+      // A stored failure that is no longer recorded as failed stops showing.
+      if (storedFailure && saveWorkFailure.value === storedFailure) {
+        saveWorkError.value = "";
+        saveWorkFailure.value = null;
+      }
+      storedFailure = null;
       return;
     }
     saveWorkError.value = operation.error;
@@ -272,6 +280,7 @@ function useVibe64SessionSaveWork(props, {
       details: operation.details,
       message: operation.error
     };
+    storedFailure = saveWorkFailure.value;
   }, { immediate: true });
   // Conflicts cannot succeed by retrying; they keep their dedicated recovery.
   const saveWorkConflictFailure = computed(() => [
@@ -389,6 +398,11 @@ function useVibe64SessionSaveWork(props, {
     return dismissals.dismiss("saveWork", saveWorkActivityKey.value);
   }
 
+  // The tab's "Show … notice" brings a dismissed Save or Update notice back.
+  function showSaveWorkActivity() {
+    return saveWorkActivityDismissed.value && dismissals.restore("saveWork", saveWorkActivityKey.value);
+  }
+
   function cancelSaveWork() {
     saveWorkConfirmOpen.value = false;
   }
@@ -463,6 +477,7 @@ function useVibe64SessionSaveWork(props, {
     saveWorkStatus,
     saveWorkTitle,
     saveWorkUnsaved,
+    showSaveWorkActivity,
     updateBeforeSave,
     updateConflictRecovery,
     updateWorkDisabled

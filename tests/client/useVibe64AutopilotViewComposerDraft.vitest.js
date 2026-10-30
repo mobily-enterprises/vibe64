@@ -3533,6 +3533,30 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(anotherSession.saveWorkActivityDismissed.value).toBe(false);
   });
 
+  it("shows a dismissed Update failure again on request and drops it once the server resolves it", async () => {
+    const storage = memoryStorage();
+    vi.stubGlobal("window", { localStorage: storage });
+    const failedUpdate = { code: "vibe64_session_update_conflict", error: "2 files need review.",
+      operationId: "update-a", status: "failed" };
+    const { view, props } = await createViewWithProps({ workState: { unsaved: false, updateOperation: failedUpdate } });
+    expect(view.dismissSaveWorkActivity()).toBe(true);
+    expect(view.saveWorkActivityDismissed.value).toBe(true);
+    // Dismissing hides the notice only; the reason stays known.
+    expect(view.saveWorkError.value).toBe("2 files need review.");
+    // Nothing is unsaved, so Save offers nothing; the failure does not block it.
+    expect(view.saveWorkDisabled.value).toBe(true);
+    expect(view.saveWorkTitle.value).toBe("No work to save");
+
+    expect(view.showSaveWorkActivity()).toBe(true);
+    expect(view.saveWorkActivityDismissed.value).toBe(false);
+    expect((await createView({ workState: { updateOperation: failedUpdate } })).saveWorkActivityDismissed.value).toBe(false);
+
+    props.workState = { unsaved: false, updateOperation: { ...failedUpdate, code: "", error: "", status: "ready" } };
+    await nextTick();
+    expect(view.saveWorkError.value).toBe("");
+    expect(view.saveWorkFailure.value).toBeNull();
+  });
+
   it("retains an existing dismissal when another operation is dismissed", async () => {
     const storage = memoryStorage();
     storage.setItem("vibe64:short-action-dismissals:v1:chat-test:session-1",

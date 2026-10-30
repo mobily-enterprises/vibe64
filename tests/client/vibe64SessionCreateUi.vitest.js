@@ -37,6 +37,7 @@ import {
   createVibe64SessionTooltipState,
   VIBE64_SESSION_TOOLTIP_KEY
 } from "../../src/lib/vibe64SessionTooltip.js";
+import { sessionRepositoryWorkState } from "../../src/lib/vibe64SessionRepositoryWorkState.js";
 
 const buttonPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64CreateSessionButton.vue"
@@ -128,10 +129,12 @@ async function renderToolbar({
   sessions = [],
   selectedSessionId = "",
   sessionsApiPath = "",
+  showRepositoryProblem = null,
   title = "Create a new Vibe64 session"
 } = {}) {
   const app = createSSRApp(Vibe64SessionToolbar, {
     selectedSessionId,
+    showRepositoryProblem,
     archive: { command: { isRunning: false } },
     createVisible,
     toolbar: {
@@ -470,5 +473,35 @@ describe("session toolbar archive and repository controls", () => {
     // The grey is the theme's disabled colour, which Vuetify sets per light and dark theme.
     const styles = toolbarDescriptor.styles.map((style) => style.content).join("\n");
     expect(styles).toMatch(/\.studio-ai-sessions__repository-state--saved\.studio-ai-sessions__repository-state--provisional\s*\{\s*color: rgba\(var\(--v-theme-on-surface\), var\(--v-disabled-opacity\)\);/u);
+  });
+
+  it("says why the repository needs help and what to do next, on the icon, the tab name and its info", async () => {
+    const message = "2 files need review before this session can update: package-lock.json, package.json. Resolve them manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.";
+    const next = "Resolve the listed files yourself, in Main chat or with Fix it with AI, then choose Review resolved conflicts on the Update notice.";
+    const repositoryWorkState = sessionRepositoryWorkState({
+      unsaved: false,
+      updateOperation: { code: "vibe64_session_update_conflict", conflictRecovery: { reviewId: "review-1" }, error: message, status: "failed" }
+    });
+    const html = await renderToolbar({
+      createVisible: false, selectedSessionId: "work", showRepositoryProblem: vi.fn(),
+      sessions: [{ sessionId: "work", repositoryWorkState }]
+    });
+    const icon = html.match(/<span[^>]*studio-ai-sessions__repository-state[^>]*>/u)?.[0] || "";
+    expect(icon).toContain("studio-ai-sessions__repository-state--needs_help");
+    expect(icon).toContain(`title="Repository needs help: ${message} ${next}"`);
+    expect(html).toContain(`aria-label="Session work. Repository needs help: ${message} ${next}"`);
+    const fact = (label, value) => new RegExp(`<dt[^>]*>${label}</dt><dd[^>]*>${value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}</dd>`, "u");
+    expect(html).toMatch(fact("Work", "Repository needs help"));
+    expect(html).toMatch(fact("Why", message));
+    expect(html).toMatch(fact("Next", next));
+    // Phones read the same facts through the tab's info button; the notice can be shown again from there.
+    expect(html).toContain("Show Update notice");
+
+    const unselected = await renderToolbar({
+      createVisible: false, selectedSessionId: "other", showRepositoryProblem: vi.fn(),
+      sessions: [{ sessionId: "work", repositoryWorkState }, { sessionId: "other" }]
+    });
+    expect(unselected).toMatch(fact("Why", message));
+    expect(unselected).not.toContain("Show Update notice");
   });
 });

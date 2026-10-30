@@ -224,6 +224,39 @@ describe("useVibe64SessionPanel", () => {
     });
   });
 
+  it("keeps an unresolved Update conflict as needs help with its stored reason and next step", () => {
+    const message = "2 files need review before this session can update: package-lock.json, package.json. Resolve them manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.";
+    const conflict = {
+      code: "vibe64_session_update_conflict",
+      conflictPaths: ["package-lock.json", "package.json"],
+      conflictRecovery: { reviewId: "review-1" },
+      error: message,
+      finishedAt: "2026-10-25T14:49:52.000Z",
+      status: "failed",
+      updatedAt: "2026-10-25T14:49:52.000Z"
+    };
+    expect(sessionRepositoryWorkState({ unsaved: false, updateOperation: conflict })).toEqual({
+      checkedAt: "",
+      problem: {
+        message,
+        nextStep: "Resolve the listed files yourself, in Main chat or with Fix it with AI, then choose Review resolved conflicts on the Update notice.",
+        operation: "update"
+      },
+      state: "needs_help",
+      updateAvailable: false
+    });
+    // A failed Save shows its own reason; when both failed, the later failure does.
+    const save = { code: "vibe64_session_save_git_failed", error: "The push was rejected.", status: "failed",
+      updatedAt: "2026-10-26T09:00:00.000Z" };
+    expect(sessionRepositoryWorkState({ operation: save, unsaved: true }).problem).toEqual({
+      message: "The push was rejected.",
+      nextStep: "Choose Fix it with AI on the Save notice, or fix the cause and save again.",
+      operation: "save"
+    });
+    expect(sessionRepositoryWorkState({ operation: save, unsaved: true, updateOperation: conflict }).problem.operation)
+      .toBe("save");
+  });
+
   it("shows connected work as unsaved even when the main repository is clean", () => {
     const work = {
       checkedAt: "now",
@@ -378,6 +411,17 @@ describe("repository work state presentation", () => {
     for (const state of ["checking", "needs_help", "saved", "saving", "unavailable", "unsaved", "update_available", "updating"]) {
       expect(repositoryWorkStateIcon({ repositoryWorkState: { state } })).toMatch(/^M/u);
     }
+  });
+
+  it("describes needs help with its reason and next step, and other states by their label", async () => {
+    const { repositoryWorkStateDescription, repositoryWorkStateProblem } =
+      await import("../../src/lib/vibe64SessionRepositoryWorkState.js");
+    const problem = { message: "Update failed.", nextStep: "Choose Fix it with AI on the Update notice.", operation: "update" };
+    expect(repositoryWorkStateDescription({ repositoryWorkState: { problem, state: "needs_help" } }))
+      .toBe("Repository needs help: Update failed. Choose Fix it with AI on the Update notice.");
+    expect(repositoryWorkStateProblem({ repositoryWorkState: { problem, state: "needs_help" } })).toBe(problem);
+    expect(repositoryWorkStateProblem({ repositoryWorkState: { problem, state: "saved" } })).toBeNull();
+    expect(repositoryWorkStateDescription({ repositoryWorkState: { state: "saved" } })).toBe("All work is saved");
   });
 
   it("warns before archiving work the project does not have, such as an unsaved starter", async () => {

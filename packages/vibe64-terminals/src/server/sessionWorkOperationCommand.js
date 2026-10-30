@@ -9,6 +9,7 @@ import {
   applySessionWorkUpdateDirect,
   captureSessionWorkUpdateCheckpointDirect,
   checkSessionUpdatesDirect,
+  inspectSessionUpdateFailureDirect,
   prepareSessionWorkUpdateDirect,
   regenerateSessionWorkUpdateDirect
 } from "./sessionWorkUpdate.js";
@@ -50,6 +51,7 @@ const OPERATION_IMPLEMENTATIONS = {
     return prepareSessionWorkSaveMessageDirect(input);
   },
   "work": inspectSessionWorkDirect,
+  "update-failure": inspectSessionUpdateFailureDirect,
   "update-checkpoint": captureSessionWorkUpdateCheckpointDirect,
   "update-prepare": prepareSessionWorkUpdateDirect,
   "update-derived": async (input) => {

@@ -77,6 +77,9 @@ test("work tools retain exact review identities and project authority through HT
       assert.equal(result.result.changedPaths.length, 40);
       assert.equal(result.result.changedPathsTruncated, true);
       assert.equal(result.result.updateOperation.conflictReviewId, "review-1");
+      assert.deepEqual(result.result.repositoryProblem, { code: "update-conflict", failedAt: "", label: "Repository needs help",
+        message: "Resolve the conflict first.", nextStep: "Choose Fix it with AI on the Update notice, or fix the cause and update again.",
+        operation: "update", status: "failed" });
       assert.equal(result.result.cacheMaintenance.retryable, true);
       assert.equal(JSON.stringify(result).includes("private"), false);
       const count = calls.length;

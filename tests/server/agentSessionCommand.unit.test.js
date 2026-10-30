@@ -64,6 +64,9 @@ test("agent shell commands run as session-owned managed executions and drain on 
           async readSessionSourceDescriptor() {
             return descriptor;
           },
+          async readBackgroundTask() {
+            return null;
+          },
           async readMetadataValue() {
             return JSON.stringify({ status: "succeeded" });
           }
@@ -209,6 +212,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
     assert.match(summary.recovery, /preview ensure --wait/);
     assert.match(summary.recovery, /Read this status again before reporting/);
     assert.equal(summary.workspaceSetup.status, "succeeded");
+    assert.deepEqual(summary.repository, { needsHelp: false });
     assert.equal(summary.tools.browserTests, "vibe64-helper playwright status");
     assert.equal(summary.tools.browserTestReadiness, "vibe64-helper playwright readiness");
     assert.equal(JSON.stringify(summary).includes("managed_writer"), false);
@@ -256,6 +260,45 @@ test("agent shell commands run as session-owned managed executions and drain on 
   }
 });
 
+test("session status gives the assistant the stored reason a repository needs help and the next step", async (t) => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-status-repository-"));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  const sourceRoot = path.join(temporaryRoot, "sessions", "active", "session-1", "source");
+  await mkdir(sourceRoot, { recursive: true });
+  const descriptor = { metadata: { source_kind: "session_clone", source_path: sourceRoot,
+    source_path_authority: "managed_session_source" }, sessionId: "session-1" };
+  const message = "2 files need review before this session can update: package-lock.json, package.json. Resolve them manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.";
+  const tasks = new Map([["update-session", { code: "vibe64_session_update_conflict", conflictRecovery: { reviewId: "review-1" },
+    error: message, finishedAt: "2026-10-25T14:49:52.000Z", operationId: "update-1", status: "failed" }]]);
+  const service = createAgentSessionCommandService({
+    projectService: {
+      async createSessionStore() {
+        return { async readSessionSourceDescriptor() { return descriptor; },
+          async readBackgroundTask(sessionId, taskId) { assert.equal(sessionId, "session-1"); return tasks.get(taskId) || null; },
+          async readMetadataValue() { return JSON.stringify({ status: "succeeded", recipeHash: "earlier" }); } };
+      },
+      async createRuntime() { return { async getSession() { return descriptor; } }; },
+      async inspectWorkspaceSetup() { return { status: "ready", steps: [], diagnostics: [] }; },
+      async projectEnvironmentStatus() { return { status: "ready", keys: [], resources: [] }; },
+      async readCurrentProject() { return { projectRoot: path.join(temporaryRoot, "project"), slug: "project-1" }; },
+      async runInProjectContext(_slug, operation) { return operation(); }
+    }
+  });
+  await service.bindSession("session-1", { wrapperHostDir: path.join(temporaryRoot, "wrappers") });
+  assert.deepEqual((await service.sessionStatus("session-1")).repository, {
+    code: "vibe64_session_update_conflict",
+    failedAt: "2026-10-25T14:49:52.000Z",
+    label: "Repository needs help",
+    message,
+    needsHelp: true,
+    nextStep: "Resolve the listed files yourself, in Main chat or with Fix it with AI, then choose Review resolved conflicts on the Update notice.",
+    operation: "update",
+    status: "failed"
+  });
+  tasks.set("update-session", { ...tasks.get("update-session"), code: "", error: "", status: "ready" });
+  assert.deepEqual((await service.sessionStatus("session-1")).repository, { needsHelp: false });
+});
+
 test("project contract decisions are one shared predicate and keep agent status available", async (t) => {
   for (const code of ["STACK_SECTION_AMBIGUOUS", "STACK_PROJECT_CONTRACTS_INCOMPLETE"]) {
     assert.equal(genesisProjectContractNeedsAttention({ code }), true, code);
@@ -274,6 +317,7 @@ test("project contract decisions are one shared predicate and keep agent status 
     projectService: {
       async createSessionStore() {
         return { async readSessionSourceDescriptor() { return descriptor; },
+          async readBackgroundTask() { return null; },
           async readMetadataValue() { return JSON.stringify({ status: "succeeded", recipeHash: "earlier" }); } };
       },
       async createRuntime() { return { async getSession() { return descriptor; } }; },

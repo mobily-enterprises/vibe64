@@ -100,7 +100,50 @@ Use **Dismiss** to hide an inactive Save or Update notice. This browser remember
 each dismissed operation in that project and session, including after reload or
 dismissing another notice. A new failed attempt still appears. Dismiss changes
 only the notice; it does not resolve a repository failure or stop active work.
+To see a dismissed failure again, choose **Show Update notice** or **Show Save
+notice** in the selected session tab's info.
 On phones, reveal chat to reach the notice and its controls.
+
+## When the repository needs help
+
+A circled **!** on a session's tab reads **Repository needs help**: that
+session's last Save or Update failed and Vibe64 still records the failure. To
+read why, hover the icon or open the tab's info (hover or keyboard focus on
+desktop; the info button on phones and other touch screens). Under **Work**,
+**Why** shows the failed operation's own message, for example *2 files need
+review before this session can update: package-lock.json, package.json…*, and
+**Next** names the controls that lead out of it:
+
+- an Update conflict: resolve the listed files yourself, in Main chat or with
+  **Fix it with AI**, then choose **Review resolved conflicts** (see below);
+- a required pull request: **Create draft PR** or **Fix it with AI**;
+- diverged history: **Fix it with AI** only, because retrying cannot succeed;
+- anything else: **Fix it with AI**, or fix the cause and Save or Update again.
+
+These controls are on the Save or Update notice in chat. If you dismissed it,
+open the selected tab's info and choose **Show Update notice** (or **Show Save
+notice**); the notice returns with its controls, and on phones chat is revealed.
+Screen readers hear the same reason and next step in the tab's name, and the
+**Save** button's hover text repeats it. The failure does not disable Save:
+**Save** is unavailable only when the session has nothing to save, and its
+hover text then says **No work to save**.
+
+A repair made outside Save and Update counts. If you or the session's AI fixed
+the repository with Git (for example, rebased onto the latest saved version and
+finished the rebase), Vibe64 checks the session's own repository the next time
+it inspects its work: after an AI turn, a refresh, or **Check for updates**.
+When the session already contains the saved version the Update was trying to
+apply, or has nothing left to update, and no merge, rebase, cherry-pick or
+revert is unfinished and no file is still conflicted, the label clears and the
+Update's history notes why it no longer applies. A conflict that is still open
+keeps the label and its reason. The same applies on desktop and mobile.
+
+The session's AI reads this stored reason and next step in `vibe64-helper
+session status --json` (under `repository`), and Colleague reads it when it
+inspects the session's work, so both can explain the label instead of guessing.
+Explaining it authorizes nothing: **Fix it with AI**, **Review resolved
+conflicts** and **Show Update notice** need your interaction, and any repair the
+AI makes needs your request.
 
 ## Apply an Update after resolving conflicts
 

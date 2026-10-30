@@ -1873,6 +1873,108 @@ test("work inspection repairs a failed update superseded by a later reconciled S
   assert.equal(result.updateOperation.resolvedBySaveCommit, "saved-commit");
 });
 
+function failedUpdateInspection(evidence) {
+  const conflictMessage = "2 files need review before this session can update: package-lock.json, package.json. Resolve them manually or with AI, then use Review resolved conflicts to apply Update. Fix it with AI can help with the repair.";
+  const tasks = new Map([
+    ["update-session", {
+      checkpointCommit: "c".repeat(40),
+      code: "vibe64_session_update_conflict",
+      conflictPaths: ["package-lock.json", "package.json"],
+      conflictRecovery: { canonicalCommit: "a".repeat(40), conflictPaths: ["package-lock.json", "package.json"], reviewId: "review-1" },
+      error: conflictMessage,
+      events: [],
+      id: "update-session",
+      message: conflictMessage,
+      operationId: "update-1",
+      status: "failed",
+      updatedAt: "2026-10-25T14:49:52.000Z"
+    }]
+  ]);
+  const inspected = [];
+  const runtime = {
+    async getSession() {
+      return { agentRuns: [], sessionId: "session-1", status: "active" };
+    },
+    store: {
+      async readBackgroundTask(_sessionId, taskId) {
+        return tasks.get(taskId) || null;
+      },
+      async writeBackgroundTaskEvent(_sessionId, taskId, input) {
+        const prior = tasks.get(taskId) || { events: [], id: taskId };
+        if (typeof input.shouldWrite === "function" && !input.shouldWrite({ previous: prior })) return prior;
+        const task = { ...prior, ...input.patch, events: [...(prior.events || []), input.event], id: taskId };
+        tasks.set(taskId, task);
+        return task;
+      }
+    }
+  };
+  const service = createService({
+    project: {
+      async createRuntime() {
+        return runtime;
+      }
+    },
+    terminals: {
+      async inspectSessionWork() {
+        return { unsaved: false, updateAvailable: false };
+      },
+      async inspectSessionUpdateFailure(sessionId, input) {
+        inspected.push({ sessionId, targetCommit: input.targetCommit });
+        if (evidence instanceof Error) throw evidence;
+        return evidence;
+      }
+    }
+  });
+  return { conflictMessage, inspected, service, tasks };
+}
+
+test("work inspection resolves a failed Update the session repaired outside Save and records why", async () => {
+  const repaired = { canonicalCommit: "b".repeat(40), gitOperation: "", sessionHead: "d".repeat(40), unmergedPaths: [] };
+  for (const [evidence, reason] of [
+    [{ ...repaired, targetInHead: true, updateNeeded: false }, /contains the saved version this Update was trying to apply/u],
+    [{ ...repaired, targetInHead: false, updateNeeded: false }, /already contains the latest saved version/u],
+    // A newer saved version arrived after the repair: the old failure is over; Update is simply available.
+    [{ ...repaired, targetInHead: true, updateNeeded: true }, /contains the saved version this Update was trying to apply/u]
+  ]) {
+    const { inspected, service, tasks } = failedUpdateInspection(evidence);
+    const result = await service.inspectSessionWork("session-1");
+    assert.equal(result.ok, true);
+    assert.deepEqual(inspected, [{ sessionId: "session-1", targetCommit: "a".repeat(40) }]);
+    assert.equal(result.updateOperation.status, "ready");
+    assert.equal(result.updateOperation.code, "");
+    assert.equal(result.updateOperation.error, "");
+    assert.equal(result.updateOperation.resolvedAtCommit, "d".repeat(40));
+    // The record is kept with its recovery evidence, not deleted.
+    assert.equal(result.updateOperation.checkpointCommit, "c".repeat(40));
+    assert.equal(result.updateOperation.conflictRecovery.reviewId, "review-1");
+    const event = tasks.get("update-session").events.at(-1);
+    assert.equal(event.kind, "update-resolved-in-repository");
+    assert.match(event.message, reason);
+    assert.match(event.message, /no unfinished Git operation or conflicted file/u);
+  }
+});
+
+test("work inspection keeps a failed Update, with its reason, while the conflict is unresolved", async () => {
+  const unresolved = { canonicalCommit: "a".repeat(40), gitOperation: "", sessionHead: "d".repeat(40), unmergedPaths: [] };
+  for (const evidence of [
+    { ...unresolved, targetInHead: false, updateNeeded: true },
+    // The session's own rebase stopped on the conflict; HEAD already sits on the target.
+    { ...unresolved, gitOperation: "rebase", targetInHead: true, unmergedPaths: ["package.json"], updateNeeded: false },
+    { ...unresolved, targetInHead: true, unmergedPaths: ["package.json"], updateNeeded: false },
+    { ...unresolved, gitOperation: "merge", targetInHead: true, updateNeeded: false },
+    {},
+    Object.assign(new Error("git is unavailable"), { code: "git_failed" })
+  ]) {
+    const { conflictMessage, service, tasks } = failedUpdateInspection(evidence);
+    const result = await service.inspectSessionWork("session-1");
+    assert.equal(result.ok, true);
+    assert.equal(result.updateOperation.status, "failed");
+    assert.equal(result.updateOperation.code, "vibe64_session_update_conflict");
+    assert.equal(result.updateOperation.error, conflictMessage);
+    assert.deepEqual(tasks.get("update-session").events, []);
+  }
+});
+
 test("Update starts fresh and automatically prepares the updated workspace", async () => {
   const conflictRecovery = {
     baseCommit: "base",
