@@ -45,6 +45,9 @@ import {
 
 const HOME_SHELL_CLASS = "studio-home-shell-active";
 const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
+// The selected session's recording indicator: in the header whenever a
+// project is open, whichever pane or chat layout is showing.
+const USAGE_RECORDING_HOST_ID = "studio-home-shell-usage-recording";
 const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
 // The project panes the header's Preview | Dash switch chooses between. Learn
 // mode's lesson is not one of them: it is its own on/off flag (the Lesson
@@ -203,6 +206,7 @@ function useVibe64AppPage() {
   const previewToolbarTeleportTarget = computed(() => (
     previewToolbarHostVisible.value ? `#${PREVIEW_TOOLBAR_HOST_ID}` : ""
   ));
+  const usageRecordingTeleportTarget = computed(() => (projectSlug.value ? `#${USAGE_RECORDING_HOST_ID}` : ""));
 
   useStudioShellDrawer({
     hidden: true
@@ -332,6 +336,8 @@ function useVibe64AppPage() {
     previewToolbarHostId: PREVIEW_TOOLBAR_HOST_ID,
     previewToolbarHostVisible,
     previewToolbarTeleportTarget,
+    usageRecordingHostId: USAGE_RECORDING_HOST_ID,
+    usageRecordingTeleportTarget,
     projectLoadError,
     projectPane,
     emptySection,

@@ -17,6 +17,10 @@
         <span>{{ sessionGithubActor.displayLabel }}</span>
       </div>
     </Teleport>
+    <!-- Only the selected session's recording indicator is in the header. -->
+    <Teleport v-if="props.active && props.usageRecordingTeleportTarget && sessionId" :to="props.usageRecordingTeleportTarget" defer>
+      <Vibe64UsageRecordingIndicator :session-id="sessionId" @open-usage="openUsage" />
+    </Teleport>
     <Vibe64CreatePullRequestDialog v-if="githubProject" v-model="createPullRequestOpen" :dashboard-context="dashboardContext" />
     <section
       ref="mainChat"
@@ -837,6 +841,8 @@
           :resolve-request-url="resolveStudioRequestUrl"
           :restore-request="systemRestoreRequest"
           :open-program-request="architectureProgramRequest"
+          :usage-open-request="usageOpenRequest"
+          @select-preview="selectPreview"
           :reload-version="systemReloadVersion"
           :project-slug="projectSlug"
           @open-table="openSubsystemTable"
@@ -911,6 +917,7 @@
             :source-operations-suspended="sourceOperationsSuspended"
             :toolbar-teleport-target="props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
             :window-displayed="props.active"
+            @open-usage="openUsage"
             @preview-attachment-state="updatePreviewAttachmentState"
             @test-approval="updateTestApproval"
           />
@@ -1026,6 +1033,7 @@ import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64AssistantSelectionLabel, vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
+import { useRouter } from "vue-router";
 import {
   LongTextPreviewBlocks
 } from "@jskit-ai/assistant-core/client/conversation";
@@ -1060,6 +1068,7 @@ import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.v
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import Vibe64SessionPin from "./Vibe64SessionPin.vue";
+import { Vibe64UsageRecordingIndicator } from "@local/vibe64-usage-recording/client";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
@@ -1117,7 +1126,14 @@ const lessonShown = computed(() => Boolean(learning?.lessonShown));
 const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
 const architectureFileRequest = ref(null);
 const architectureProgramRequest = ref(null);
-watch(() => props.session?.sessionId, () => { architectureFileRequest.value = null; architectureProgramRequest.value = null; });
+// Usage in the Architecture tool, opened from the recording indicator
+// ({ recordingId }) or from a pick in Preview ({ entryId, mode }).
+const usageOpenRequest = ref(null);
+watch(() => props.session?.sessionId, () => {
+  architectureFileRequest.value = null;
+  architectureProgramRequest.value = null;
+  usageOpenRequest.value = null;
+});
 const resourceRetryBusy = ref(false);
 // A missing Stack tool is fixed first; the database panel waits for it.
 const workspaceSetupToolsMissing = ref(false);
@@ -1478,6 +1494,23 @@ const {
   requestTemporaryAi: startTemporaryAiTask,
   temporaryAiWorkspace
 });
+function openUsage({ entryId = "", mode = "recording", recordingId = "" } = {}) {
+  if (!selectSessionTool("system")) return;
+  usageOpenRequest.value = {
+    view: "usage",
+    mode,
+    ...(recordingId ? { recordingId } : {}),
+    ...(entryId ? { entryId } : {}),
+    nonce: (usageOpenRequest.value?.nonce || 0) + 1
+  };
+}
+// "Go to Preview" after starting a recording: the Preview pane, on a phone
+// in place of the chat.
+const router = useRouter();
+function selectPreview() {
+  void router.push(projectAppPath(projectSlug.value));
+  emit("project-attention");
+}
 const fileBookmarks = useVibe64StarredFiles({
   projectSlug,
   sessionId,

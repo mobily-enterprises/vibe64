@@ -48,6 +48,8 @@ const {
   previewToolbarHostId,
   previewToolbarHostVisible,
   previewToolbarTeleportTarget,
+  usageRecordingHostId,
+  usageRecordingTeleportTarget,
   projectLoadError,
   projectPane,
   projectPaneNavigationVisible,
@@ -167,6 +169,11 @@ const {
             <Vibe64LessonToggle />
           </div>
           <div
+            v-if="projectSlug"
+            :id="usageRecordingHostId"
+            class="studio-home-shell-usage-recording-host"
+          />
+          <div
             v-if="previewToolbarHostVisible"
             :id="previewToolbarHostId"
             class="studio-home-shell-preview-toolbar-host"
@@ -240,6 +247,7 @@ const {
               :project-context="projectSelectionSlotProps?.projectSelection?.currentProject || {}"
               :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
               :project-pane="projectPane"
+              :usage-recording-teleport-target="usageRecordingTeleportTarget"
               @chat-attention="setChatCollapsed(false)"
               @project-attention="showProjectPane"
             >
@@ -555,6 +563,25 @@ const {
   display: none;
 }
 
+/* The recording indicator decides wide or compact from this host's width, so
+   the width is set here and gives way to the bar, never follows the
+   indicator. With nothing to show it stays out of the bar's flow (and gap);
+   its live region still announces. */
+.studio-home-shell-usage-recording-host {
+  align-items: center;
+  display: flex;
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+  position: absolute;
+  width: 0;
+}
+
+.studio-home-shell-usage-recording-host:has(.usage-recording-indicator__pill) {
+  position: static;
+  width: 22rem;
+}
+
 /* Phone "next pane" control: an M3 tonal pill button with a 40px target. */
 .studio-home-shell-project-mobile-action {
   align-items: center;
@@ -639,6 +666,11 @@ const {
 }
 
 @media (max-width: 600px) {
+  /* A phone's indicator is always compact, so it sizes itself. */
+  .studio-home-shell-usage-recording-host:has(.usage-recording-indicator__pill) {
+    width: auto;
+  }
+
   /* Phone bar budget: the heading takes only the space the L plate and the
      account/Colleague buttons leave. The pane switch and session controls
      keep their size; the project name gives way with an ellipsis, so nothing

@@ -19,6 +19,7 @@
       :page="guardedPage"
       :project-context="runtimeProjectContext"
       :preview-toolbar-teleport-target="props.previewToolbarTeleportTarget"
+      :usage-recording-teleport-target="props.usageRecordingTeleportTarget"
       :prompt-hint-policy="props.promptHintPolicy"
       :refresh-session-data="refreshSessionData"
       :refresh-session-work="refreshWorkState"
@@ -135,6 +136,10 @@ const props = defineProps({
     type: String
   },
   previewToolbarTeleportTarget: {
+    default: "",
+    type: String
+  },
+  usageRecordingTeleportTarget: {
     default: "",
     type: String
   },

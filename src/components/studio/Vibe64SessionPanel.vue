@@ -112,6 +112,7 @@
         :github-actor-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.githubActorTeleportTarget : ''"
         :project-context="props.projectContext"
         :preview-toolbar-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.previewToolbarTeleportTarget : ''"
+        :usage-recording-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.usageRecordingTeleportTarget : ''"
         :prompt-hint-policy="promptHintPolicy"
         :project-pane="projectPane"
         :toolbar-sessions="toolbar.sessions"

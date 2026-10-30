@@ -123,6 +123,10 @@ const vibe64AutopilotViewProps = {
     default: "",
     type: String
   },
+  usageRecordingTeleportTarget: {
+    default: "",
+    type: String
+  },
   promptHintPolicy: {
     default: () => ({
       enabled: true,

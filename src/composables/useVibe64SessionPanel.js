@@ -60,6 +60,10 @@ const vibe64SessionPanelProps = {
   previewToolbarTeleportTarget: {
     default: "",
     type: String
+  },
+  usageRecordingTeleportTarget: {
+    default: "",
+    type: String
   }
 };
 
