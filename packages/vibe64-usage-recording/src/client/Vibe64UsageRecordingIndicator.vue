@@ -4,6 +4,7 @@ import { useDisplay } from "vuetify";
 import { VMenu } from "vuetify/components/VMenu";
 import { mdiAlertCircleOutline, mdiClose, mdiInformationOutline, mdiOpenInNew, mdiStop } from "@mdi/js";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
+import { usageRecordingEnd, usageRecordingFailure } from "./usageRecordingText.js";
 import { useVibe64UsageRecording } from "./useVibe64UsageRecording.js";
 
 // Rendered into the project header for the selected session, or on a phone
@@ -17,15 +18,6 @@ const emit = defineEmits(["open-usage"]);
 // A finished recording stays in the header this long unless dismissed.
 const READY_FOR_MS = 10 * 60 * 1000;
 const WIDE_HOST_PX = 340;
-const STOP_REASONS = Object.freeze({
-  person: "It was stopped.",
-  "time-limit": "It reached the 10-minute limit.",
-  "request-limit": "It reached 2,000 requests.",
-  "size-limit": "It reached its size limit.",
-  "target-exited": "The recorded program stopped.",
-  "session-ended": "The session ended.",
-  error: "Something went wrong while recording."
-});
 // Only these changes are announced; the ticking time never is.
 const ANNOUNCEMENTS = Object.freeze({
   starting: "",
@@ -101,14 +93,12 @@ const pillText = computed(() => {
   }
 });
 const targetLabel = computed(() => recording.value?.target?.label || "Recording");
-// Every failed tracer carries the same reason.
-const failureReason = computed(() =>
-  (recording.value?.tracers || []).find((tracer) => tracer?.reason)?.reason || "The recording could not start.");
+const failureReason = computed(() => usageRecordingFailure(recording.value));
 const statusText = computed(() => ({
   starting: "Starting…",
   recording: "Recording",
   stopping: "Stopping…",
-  stopped: `Ready. ${STOP_REASONS[recording.value?.stopReason] || ""}`.trim(),
+  stopped: `Ready. ${usageRecordingEnd(recording.value)}.`,
   failed: `Recording failed. ${failureReason.value}`
 })[shown.value] || "");
 
@@ -230,6 +220,7 @@ function openFromStrip() {
           aria-label="Stop recording"
           class="usage-recording-indicator__action"
           :prepend-icon="mdiStop"
+          rounded="pill"
           size="small"
           :variant="phone ? 'text' : 'tonal'"
           @click="stopRecording"

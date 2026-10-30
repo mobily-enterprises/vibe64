@@ -26,6 +26,8 @@ const FINAL_STATES = Object.freeze(["stopped", "failed", "unavailable"]);
 //   start({ targetId, parameters })  POST / → { recording }
 //   stop()             POST /:recordingId/stop (idempotent)
 //   dismiss()          POST /:recordingId/dismiss
+//   remove(recordingId) DELETE /:recordingId, for any of the session's
+//                      recordings (a running one stops first) → { ok: true }
 //   recordInteraction({ id, at, label, kind, componentFile })  POST /:recordingId/interactions
 //                      → { ok: true }, or { ok: false, nextInteraction } when another
 //                      Preview page already used that number
@@ -159,6 +161,15 @@ function useVibe64UsageRecording({ sessionId = "" } = {}) {
     return result?.recording ? applyRecording(result.recording) : null;
   }
 
+  // Deleting the current recording refreshes the shared entry, so the header lets go of it.
+  async function remove(recordingId) {
+    const removed = String(recordingId || "");
+    if (!removed) return null;
+    const result = await send(`/${encodeURIComponent(removed)}`, { method: "DELETE", fallback: "The recording could not be deleted." });
+    if (result && recording.value?.id === removed) await refresh();
+    return result;
+  }
+
   async function recordInteraction({ id: interactionId, at, label = "", kind = "click", componentFile = null } = {}) {
     if (recording.value?.state !== "recording") return null;
     return send(recordingPath("/interactions"), {
@@ -181,6 +192,7 @@ function useVibe64UsageRecording({ sessionId = "" } = {}) {
     start,
     stop,
     dismiss,
+    remove,
     recordInteraction
   };
 }

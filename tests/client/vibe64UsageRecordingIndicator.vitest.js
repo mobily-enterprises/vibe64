@@ -208,6 +208,8 @@ it.each([
   if (state === "recording") {
     expect(view.button("Stop recording").props["prepend-icon"]).toBe(mdiStop);
     expect(view.button("Stop recording").props.variant).toBe("tonal");
+    // The Stop inside the round pill is round too.
+    expect(view.button("Stop recording").props.rounded).toBe("pill");
   }
 });
 
@@ -309,7 +311,10 @@ it("opens results from the pill and its menu, dismissing a stopped recording", a
   expect(live.opened).toEqual([{ recordingId: STARTED.id }]);
   expect(server.requests).not.toContain(`POST /${STARTED.id}/dismiss`);
 
-  const ready = await mountIndicator({ recording: STATES.stopped });
+  const ready = await mountIndicator({ recording: { ...STATES.stopped, stopReason: "request-limit" } });
+  ready.nodes((node) => node.props?.class === "usage-recording-indicator__body")[0].props.onClick();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(textOf(ready.host)).toContain("Ready. Stopped at 2,000 requests.");
   await ready.click("Open");
   expect(ready.opened).toEqual([{ recordingId: STARTED.id }]);
   expect(server.requests).toContain(`POST /${STARTED.id}/dismiss`);

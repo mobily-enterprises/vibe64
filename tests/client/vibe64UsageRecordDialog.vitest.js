@@ -89,12 +89,12 @@ const originalClient = getHttpWebClient();
 let app;
 let server;
 beforeEach(() => {
-  server = { requests: [], start: null };
+  server = { requests: [], start: null, targets: TARGETS };
   configureHttpWebClient({
     request(path, options = {}) {
       server.requests.push({ route: `${options.method} ${path.replace(BASE, "")}`, body: options.body });
       if (path.endsWith("/current")) return Promise.resolve({ recording: null, serverTime: new Date().toISOString() });
-      if (path.endsWith("/targets")) return Promise.resolve({ targets: TARGETS });
+      if (path.endsWith("/targets")) return Promise.resolve({ targets: server.targets });
       return server.start();
     }
   });
@@ -238,4 +238,30 @@ it("keeps the dialog open with the server's refusal shown verbatim", async () =>
   expect(view.text()).toContain("Recording is paused while this computer is short of memory.");
   expect(view.open.value).toBe(true);
   expect(view.events).toEqual([]);
+});
+
+it("says why there is nothing to record and offers Preview when the session has no targets", async () => {
+  server.targets = [];
+  const view = await openDialog();
+  expect(view.kind("radio")).toEqual([]);
+  expect(view.text()).toContain("Nothing to record yet");
+  expect(view.text()).toContain("Open Preview, start the app there, then record.");
+  expect(view.button("Start recording")).toBeUndefined();
+  await view.click("Open Preview");
+  expect(view.events).toEqual([["update:modelValue", false], ["select-preview"]]);
+  expect(view.starts()).toEqual([]);
+});
+
+it("keeps the target list and its error, not the empty guidance, when targets cannot be read", async () => {
+  server.targets = null;
+  configureHttpWebClient({
+    request(path) {
+      if (path.endsWith("/current")) return Promise.resolve({ recording: null, serverTime: new Date().toISOString() });
+      return Promise.reject(Object.assign(new Error("This session's Output targets cannot be read."), { status: 422 }));
+    }
+  });
+  const view = await openDialog();
+  expect(view.text()).toContain("This session's Output targets cannot be read.");
+  expect(view.text()).not.toContain("Nothing to record yet");
+  expect(view.button("Start recording").props.disabled).toBe(true);
 });

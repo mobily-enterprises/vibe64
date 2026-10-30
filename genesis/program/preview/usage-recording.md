@@ -29,6 +29,8 @@ follows it on every pane.
 - `packages/vibe64-usage-recording/src/client/useVibe64UsageRecording.js`
 - `packages/vibe64-usage-recording/src/client/Vibe64UsageRecordingIndicator.vue`
 - `packages/vibe64-usage-recording/src/client/Vibe64UsageRecordDialog.vue`
+- `packages/vibe64-usage-recording/src/client/Vibe64UsageRecordingSummary.vue`
+- `packages/vibe64-usage-recording/src/client/usageRecordingText.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/launchPreviewProxy.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
@@ -102,6 +104,11 @@ opens the results (or a failure's reason) without a menu. It shows starting,
 recording time and count, stopping, ready and failed, offers Stop, Open
 results and dismiss, and announces only state changes. Open results selects
 the Architecture tool and asks its Usage view to show the recording.
+
+The Usage view puts the recording summary under its Recording selector: how
+the recording ended in plain words (the same words as the indicator's menu)
+and Delete, which asks for confirmation before the delete action. The Record
+dialog explains an empty target list and offers Preview instead of Start.
 
 ## Security and retention
 

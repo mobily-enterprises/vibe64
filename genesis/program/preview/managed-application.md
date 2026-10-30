@@ -569,7 +569,9 @@ surface consumes it.
 Bridge version 8 adds Pick and recorded interactions for the usage map
 (`vibe64:preview-pick-start`, `-stop` and `-result`, `vibe64:preview-recording`,
 `vibe64:preview-interaction`) under the same parent-origin rules. While picking,
-an outline with `pointer-events: none` follows the pointer, and pointer, click
+an outline with `pointer-events: none` follows the pointer, drawn in the
+editor's primary colour that Pick start may carry as `color` and `onColor`
+(`#rrggbb` only; anything else, or nothing, keeps the default), and pointer, click
 and context-menu events are prevented and stopped in the capture phase; at any
 other time nothing is prevented. Escape, the editor's Cancel, hiding, suspending
 or reloading Preview, or a lost bridge ends Pick. The result names the element's
