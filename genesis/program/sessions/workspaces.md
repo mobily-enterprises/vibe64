@@ -47,6 +47,9 @@ that turn without dropping either half. No saved history is rewritten.
 - `tests/e2e/session-naming.spec.ts`
 - `src/components/studio/vibe64-session/Vibe64RenameSessionDialog.vue`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
+- `packages/vibe64-terminals/src/server/clonedDefaultBranchUpgrade.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261030-cloned-default-branch.js`
+- `tests/server/clonedDefaultBranchUpgrade.unit.test.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/sessionGitCommandActor.js`
 - `packages/vibe64-terminals/src/server/projectStackInspection.js`
@@ -129,7 +132,21 @@ the reason (`kept_head_on_default`, `kept_head_detached`,
 `kept_session_branch_not_checked_out`, `kept_unpublished_commits`, `absent`,
 `git_failed`). A failed step never fails creation. Save, Update, Incoming and
 version history read recorded commits and explicit remote refs, never that
-local branch. Existing session sources are not changed.
+local branch.
+
+Session sources created earlier still had that copy. The one-time
+`20261030-cloned-default-branch` state upgrade gives them the same treatment:
+Terminals' `clonedDefaultBranchUpgrade.js`, supplied by `bin/upgrade-state.js`,
+walks every project's active sessions, takes each session clone's checkout from
+Core's `sessionSourcePath` rule (wherever `source_path` points), and decides
+with the same `clonedDefaultBranchProof` and `git branch -d`, using the
+recorded `base_commit` and `branch`. It skips, and reports, sessions with a
+recorded outcome, a status other than active or blocked, a missing checkout or
+incomplete source metadata. Before each removal it writes and verifies a private
+backup of the ref and its configuration; it then records the outcome in
+`source_default_branch_local` through the session store, with the same values
+as creation. A Git failure records `git_failed` for that session only.
+`docs/state-upgrades.md` has its backup format, retry and recovery.
 
 Internal contribution creation uses the ordinary Sessions admission and Runtime
 source lifecycle with a reserved identity and exact base commit. Its new

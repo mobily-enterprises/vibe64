@@ -1593,3 +1593,56 @@ a warning and left alone, and a retry after success finds nothing. Run it as the
 OS user that owns those homes, with Vibe64 and every Codex process using them
 stopped. Focused evidence: `codexUnusedCachesUpgrade.unit.test.js` and
 `stateUpgrades.unit.test.js`.
+
+## Stale cloned branch in session checkouts (`20261030-cloned-default-branch`)
+
+New sessions keep no local copy of the branch they cloned (usually `main`):
+source creation removes it under Git's proof and records the outcome in
+`source_default_branch_local`. This upgrade follows
+`20261029-codex-unused-caches` and gives existing session checkouts the same
+treatment. The owner is Terminals' `clonedDefaultBranchUpgrade.js`, supplied by
+the candidate CLI; the script refuses to run without it. It decides with the
+same `clonedDefaultBranchProof` and removes with the same `git branch -d` as
+creation, so both report identically.
+
+It visits every project's active sessions (`projects/<slug>/sessions/active/`)
+whose `source_kind` is `session_clone`. The checkout is the one Core's
+`sessionSourcePath` accepts from `source_path`, wherever that is; archived
+sessions have none. A session is skipped, and reported, when it already records
+an outcome (as every session created since creation began recording it does),
+its status is not active or blocked (a renewal or archive owns it), or its
+record lacks `source_default_branch`, `base_commit` or `branch`; a missing
+checkout is a warning. The copy goes only when HEAD is the recorded session branch and every
+commit on it is also on `origin/<branch>` or `base_commit`, and `git branch -d`
+refuses again unless it is merged into its upstream or HEAD, so its commits stay
+reachable. Each inspected session records `removed`, `kept_head_on_default`,
+`kept_head_detached`, `kept_session_branch_not_checked_out`,
+`kept_unpublished_commits`, `absent` or `git_failed` through the session store.
+A Git failure, including a refused ownership check, stays with its session: it
+records `git_failed`, reports a warning and the upgrade continues. Git runs as
+the command's user through the session-source runner, which marks only that
+checkout as safe through its environment; nothing is written to the user's or
+the system's Git configuration.
+
+A session that later opened a pull request records the pull request branch as
+`source_default_branch`, so its record no longer names the cloned copy. The
+upgrade skips it and reports why; it keeps its copy of the cloned branch.
+
+Before removing a copy, apply writes
+`upgrades/backups/20261030-cloned-default-branch/<project>/<session>.json`
+(private): the project, session id, checkout path, branch name, object id and
+the branch's `branch.<name>.*` configuration as `{ key, value }` entries. It
+reads the file back and compares it before Git runs. A backup that cannot be
+written or verified, or an earlier one that differs, stops the upgrade before
+that copy is removed and leaves it pending. To recreate a copy, run
+`git -C <sourcePath> update-ref refs/heads/<branch> <objectId>`, then
+`git -C <sourcePath> config --add <key> <value>` for each configuration entry.
+
+Check is read-only: it reports, per session, whether its copy would be removed,
+why it stays or why the session is skipped, and writes no backup. A retry skips
+sessions with a recorded outcome, reuses a matching backup, and records
+`removed` for a session whose copy is gone and whose backup exists (an apply
+interrupted after removal). Run it as the OS user that owns the session state,
+with Vibe64 and every session process stopped. Focused evidence:
+`clonedDefaultBranchUpgrade.unit.test.js`, `vibe64SessionSourceGit.unit.test.js`
+and `stateUpgrades.unit.test.js`.

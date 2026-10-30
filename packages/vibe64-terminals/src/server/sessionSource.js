@@ -467,11 +467,44 @@ async function resolveExpectedSourceCommit({
 // The clone leaves a local copy of the branch it cloned. Nothing advances that
 // copy, so it soon trails the authority and misleads people and assistants in
 // the session; session work, Save and Update use the session branch, recorded
-// commits and explicit remote refs instead. The copy is removed only when Git
-// proves nothing is lost; otherwise it is kept and the returned outcome says
-// why. The new clone is not attached yet, so nothing else moves its refs. This
-// is local-only and best effort: a failed step leaves the copy, as before,
-// rather than blocking a source that could then not be created again.
+// commits and explicit remote refs instead. Git proves the copy can go only
+// when HEAD is the session branch and every commit on it is also on
+// origin/<branch> or the recorded baseline: then this returns its objectId.
+// Otherwise the outcome says why it stays. Source creation and the one-time
+// upgrade of existing sessions both decide with this proof; git runs one Git
+// command in the session source, and a Git failure throws.
+async function clonedDefaultBranchProof(git, {
+  baselineCommit = "",
+  clonedBranch = "",
+  sessionBranch = ""
+} = {}) {
+  const localRef = `refs/heads/${clonedBranch}`;
+  const head = await git(["rev-parse", "--symbolic-full-name", "HEAD"]);
+  if (head === "HEAD") return { outcome: "kept_head_detached" };
+  if (head === localRef) return { outcome: "kept_head_on_default" };
+  if (head !== `refs/heads/${sessionBranch}`) return { outcome: "kept_session_branch_not_checked_out" };
+  const trackingRef = `refs/remotes/origin/${clonedBranch}`;
+  // A pattern also matches refs below it, so only exact names are read.
+  const refs = new Map((await git(["for-each-ref", "--format=%(refname) %(objectname)", localRef, trackingRef]))
+    .split("\n").filter(Boolean).map((line) => line.split(" ")));
+  if (!refs.has(localRef)) return { outcome: "absent" };
+  const unpublished = await git([
+    "rev-list", "--count", refs.get(localRef),
+    "--not", baselineCommit, ...(refs.has(trackingRef) ? [refs.get(trackingRef)] : [])
+  ]);
+  if (unpublished !== "0") return { outcome: "kept_unpublished_commits" };
+  return { objectId: refs.get(localRef) };
+}
+
+// -d makes Git refuse again unless the copy is merged into its upstream (or
+// HEAD); it also removes the copy's branch.<name>.* configuration.
+function deleteClonedDefaultBranch(git, clonedBranch = "") {
+  return git(["branch", "-d", "--", clonedBranch]);
+}
+
+// The new clone is not attached yet, so nothing else moves its refs. This is
+// local-only and best effort: a failed step leaves the copy, as before, rather
+// than blocking a source that could then not be created again.
 async function removeClonedDefaultBranch({
   allowedRoots = [],
   baselineCommit = "",
@@ -481,25 +514,10 @@ async function removeClonedDefaultBranch({
   sourcePath = ""
 } = {}) {
   const git = (args) => runGit(sourcePath, args, allowedRoots, commandOptions);
-  const localRef = `refs/heads/${clonedBranch}`;
   try {
-    const head = await git(["rev-parse", "--symbolic-full-name", "HEAD"]);
-    if (head === "HEAD") return "kept_head_detached";
-    if (head === localRef) return "kept_head_on_default";
-    if (head !== `refs/heads/${sessionBranch}`) return "kept_session_branch_not_checked_out";
-    const trackingRef = `refs/remotes/origin/${clonedBranch}`;
-    // A pattern also matches refs below it, so only exact names are read.
-    const refs = new Map((await git(["for-each-ref", "--format=%(refname) %(objectname)", localRef, trackingRef]))
-      .split("\n").filter(Boolean).map((line) => line.split(" ")));
-    if (!refs.has(localRef)) return "absent";
-    const unpublished = await git([
-      "rev-list", "--count", refs.get(localRef),
-      "--not", baselineCommit, ...(refs.has(trackingRef) ? [refs.get(trackingRef)] : [])
-    ]);
-    if (unpublished !== "0") return "kept_unpublished_commits";
-    // -d makes Git refuse again unless the copy is merged into its upstream (or
-    // HEAD); it also removes the copy's branch.<name>.* configuration.
-    await git(["branch", "-d", "--", clonedBranch]);
+    const proof = await clonedDefaultBranchProof(git, { baselineCommit, clonedBranch, sessionBranch });
+    if (!proof.objectId) return proof.outcome;
+    await deleteClonedDefaultBranch(git, clonedBranch);
     return "removed";
   } catch (error) {
     vibe64SessionDebugLog("server.sessionSource.cloned_branch.removal_failed", {
@@ -743,7 +761,10 @@ async function createSessionSource({
 
 export {
   canonicalProjectSource,
+  clonedDefaultBranchProof,
   createSessionSource,
+  deleteClonedDefaultBranch,
   githubSourceCommandOptions,
-  prepareGithubMirrorReference
+  prepareGithubMirrorReference,
+  runGit
 };

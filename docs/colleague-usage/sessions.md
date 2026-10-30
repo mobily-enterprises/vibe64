@@ -64,7 +64,10 @@ nothing would keep that copy current, so it would look like the latest saved
 work when it is not. **Git log**, **Current changes**, **Save** and **Update**
 read the project's saved work themselves. In a terminal the remote-tracking name
 (such as `origin/main`) remains. The local copy is kept only when Git shows it
-holds commits found nowhere else; sessions created earlier keep theirs.
+holds commits found nowhere else. Sessions created before this change lose
+their copy once, during the Vibe64 update that brings it, under the same check;
+one whose copy holds such commits, or whose checkout is not on its own branch,
+keeps it.
 
 If creation reports **This session source already exists**, existing commits,
 staged changes and files have been preserved. Reopen that session if it is listed;

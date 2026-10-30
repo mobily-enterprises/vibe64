@@ -21,6 +21,7 @@ import { retireFreeModelRouting } from "@local/vibe64-accounts/server/freeModelR
 import { upgradeTeamSetupRouting } from "@local/vibe64-accounts/server/teamSetupRoutingUpgrade";
 import { upgradeTeamSetupSessions } from "@local/vibe64-terminals/server/teamSetupSessionUpgrade";
 import { removeUnusedCodexCaches } from "@local/vibe64-core/server/codexCacheUpgrade";
+import { removeSessionClonedDefaultBranches } from "@local/vibe64-terminals/server/clonedDefaultBranchUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -80,6 +81,7 @@ try {
     upgradeClaudeCommandMessages,
     upgradeIndependentProviderCredentials,
     removeUnusedCodexCaches,
+    removeSessionClonedDefaultBranches,
     report
   });
 } catch (error) {
