@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { effectScope, isRef } from "vue";
+import { describe, expect, it, vi } from "vitest";
+import { createApp, effectScope, isRef } from "vue";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
+import { configureHttpWebClient, getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+
+vi.mock("/src/composables/useVibe64ProjectScope.js", async () => {
+  const { ref } = await import("vue");
+  return { useVibe64ProjectSlug: () => ref("fixture") };
+});
+vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({ usePaths: () => ({ api: (suffix) => `/api${suffix}` }) }));
 
 import {
   USAGE_RECORDING_API_SUFFIX,
@@ -19,8 +27,11 @@ describe("usage recording client entry", () => {
   });
 
   it("returns the session recording state and operations", async () => {
+    const originalClient = getHttpWebClient();
+    configureHttpWebClient({ request: () => new Promise(() => {}) });
+    const app = createApp({}).use(VueQueryPlugin, { queryClient: new QueryClient() });
     const scope = effectScope();
-    const state = scope.run(() => useVibe64UsageRecording({ sessionId: () => "session-1" }));
+    const state = app.runWithContext(() => scope.run(() => useVibe64UsageRecording({ sessionId: () => "session-1" })));
     expect(Object.keys(state).sort()).toEqual([
       "active", "dismiss", "elapsedMs", "error", "loading", "readTargets", "recordInteraction", "recording", "refresh", "start", "stop"
     ]);
@@ -31,5 +42,6 @@ describe("usage recording client entry", () => {
     expect(state.recording.value).toBe(null);
     expect(state.active.value).toBe(false);
     scope.stop();
+    configureHttpWebClient(originalClient);
   });
 });
