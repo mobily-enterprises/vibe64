@@ -107,7 +107,7 @@
             :style="nodeStyle(node)"
             :aria-pressed="node.id === selectedId"
             :aria-label="nodeLabel(node)"
-            :title="`${node.title}\n${node.subtitle}`"
+            :title="[node.title, node.subtitle, badge(node, true)].filter(Boolean).join('\n')"
             @click="emit('select', node)"
           >
             <span class="usage-node__head">
@@ -175,20 +175,24 @@ function nodeStyle(node) {
   return { left: `${position.x}px`, top: `${position.y}px`, width: `${NODE.width}px`, height: `${NODE.height}px` };
 }
 
-function badge(node) {
-  if (props.mode === "recording") return node.join !== "exact" && node.join !== "name-line" ? joinText(node.join) : node.count == null ? "ran" : `×${node.count.toLocaleString()}`;
+// A node's badge is short; its label, tooltip and list row say it in full.
+const SHORT_JOIN = Object.freeze({ stale: "changed", none: "not scanned" });
+
+function badge(node, full = false) {
+  if (props.mode === "recording" && node.join !== "exact" && node.join !== "name-line") return full ? joinText(node.join) : SHORT_JOIN[node.join] || "";
+  if (props.mode === "recording") return node.count == null ? "ran" : `×${node.count.toLocaleString()}`;
   if (node.certainty === "probable") return "probable";
   return "";
 }
 
 function rowCounts(node) {
-  if (props.mode === "recording") return badge(node);
+  if (props.mode === "recording") return badge(node, true);
   const [out, into] = props.mode === "imports" ? ["imports", "imported by"] : ["calls", "called by"];
   return `${out} ${node.outCount} → · ${into} ${node.inCount} ←`;
 }
 
 function nodeLabel(node) {
-  return [node.title, node.subtitle, badge(node), props.mode === "recording" ? "" : rowCounts(node)].filter(Boolean).join(", ");
+  return [node.title, node.subtitle, badge(node, true), props.mode === "recording" ? "" : rowCounts(node)].filter(Boolean).join(", ");
 }
 </script>
 

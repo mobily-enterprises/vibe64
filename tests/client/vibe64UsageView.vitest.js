@@ -179,6 +179,7 @@ describe("Recording states", () => {
     expect(zoomed).toContain("Shared plumbing (2)");
     expect(zoomed).toContain("listSessions");
     expect(zoomed).toContain("Not in the last scan");
+    expect(zoomed).toMatch(/usage-node__badge[^>]*>not scanned</u);
     expect(zoomed).not.toContain("runAction");
   });
 
