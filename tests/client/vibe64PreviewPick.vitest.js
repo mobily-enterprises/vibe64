@@ -287,4 +287,24 @@ describe("Recorded interactions", () => {
     expect(Number.isNaN(Date.parse(first.at))).toBe(false);
     expect(second.label).toHaveLength(80);
   });
+
+  it("forwards each interaction number once, only above the last one, and at most 500 per recording", async () => {
+    const f = mountPick({ recording: RECORDING });
+    f.ready();
+    const interaction = (number) => ({ type: PREVIEW_INTERACTION_MESSAGE_TYPE, id: `i_${String(number).padStart(4, "0")}`,
+      at: "2026-10-30T10:00:00.000Z", elementLabel: "button \"Add\"" });
+    f.usage.recordInteraction.mockResolvedValue({ ok: false, nextInteraction: 3 });
+    for (const number of [2, 2, 1, 2]) f.message(interaction(number));
+    await settle();
+    expect(f.usage.recordInteraction.mock.calls.map(([sent]) => sent.id)).toEqual(["i_0002"]);
+    f.usage.recordInteraction.mockResolvedValue({ ok: true });
+    for (let number = 3; number <= 600; number += 1) f.message(interaction(number));
+    expect(f.usage.recordInteraction).toHaveBeenCalledTimes(500);
+
+    // A new recording forwards again from its own first interaction.
+    f.usage.recording.value = { ...RECORDING, id: "rec_bcdefghijklmnopqrstu" };
+    await settle();
+    f.message(interaction(1));
+    expect(f.usage.recordInteraction).toHaveBeenCalledTimes(501);
+  });
 });

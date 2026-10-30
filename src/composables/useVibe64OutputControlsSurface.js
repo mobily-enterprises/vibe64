@@ -24,7 +24,7 @@ import {
   PREVIEW_RECORDING_MESSAGE_TYPE,
   PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
 } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
-import { USAGE_INTERACTION_ID_PATTERN } from "@local/vibe64-usage-recording/shared/contract";
+import { USAGE_INTERACTION_ID_PATTERN, USAGE_RECORDING_LIMITS } from "@local/vibe64-usage-recording/shared/contract";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import {
   managedPreviewTarget,
@@ -730,7 +730,8 @@ function useVibe64OutputControlsSurface(props, {
   const previewPickNoticeVisible = ref(false);
   // The highest interaction number this recording is known to hold, from the
   // bridge's reports and the server; a page that loads later continues after it.
-  const previewInteractions = { highest: 0, recordingId: "" };
+  // Only a higher number is forwarded, and no more than the recording takes.
+  const previewInteractions = { forwarded: 0, highest: 0, recordingId: "" };
   let previewIdentityAutomaticAttempt = "";
   let previewIdentityResumeSelection = null;
   let previewIdentityLifecycle = "";
@@ -1318,7 +1319,7 @@ function useVibe64OutputControlsSurface(props, {
   function publishPreviewRecording() {
     const recordingId = previewRecordingId.value;
     if (previewInteractions.recordingId !== recordingId) {
-      Object.assign(previewInteractions, { highest: 0, recordingId });
+      Object.assign(previewInteractions, { forwarded: 0, highest: 0, recordingId });
     }
     previewInteractions.highest = Math.max(previewInteractions.highest, previewRecordedInteractions.value);
     postToPreviewBridge({
@@ -1336,11 +1337,14 @@ function useVibe64OutputControlsSurface(props, {
       typeof recordInteraction !== "function" ||
       !recordingId ||
       recordingId !== previewInteractions.recordingId ||
-      !USAGE_INTERACTION_ID_PATTERN.test(id)
+      !USAGE_INTERACTION_ID_PATTERN.test(id) ||
+      Number(id.slice(2)) <= previewInteractions.highest ||
+      previewInteractions.forwarded >= USAGE_RECORDING_LIMITS.interactions
     ) {
       return;
     }
-    previewInteractions.highest = Math.max(previewInteractions.highest, Number(id.slice(2)));
+    previewInteractions.highest = Number(id.slice(2));
+    previewInteractions.forwarded += 1;
     const at = Date.parse(String(data?.at || ""));
     const result = await recordInteraction({
       at: new Date(Number.isFinite(at) ? at : Date.now()).toISOString(),
