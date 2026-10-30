@@ -174,6 +174,9 @@ import { useVibe64UsageWeb } from "./useVibe64UsageWeb.js";
 
 const COMPACT_WIDTH = 600;
 const WIDE_WIDTH = 1040;
+// Below the rail plus two function columns (280 + 32 + 544 + 32) a call
+// cannot be drawn whole, so the canvas lists functions as on a phone.
+const GRAPH_WIDTH = 888;
 const SEARCH_DELAY_MS = 200;
 const LIVE_REFRESH_MS = 5000;
 
@@ -194,6 +197,7 @@ const usage = useVibe64UsageWeb({ sessionId: toRef(props, "sessionId") });
 const root = ref(null);
 const compact = ref(false);
 const wide = ref(true);
+const listCanvas = ref(false);
 const search = ref("");
 const kind = ref("");
 const exactOnly = ref(false);
@@ -418,7 +422,7 @@ const canvasBindings = computed(() => ({
   edges: webView.value?.edges || [],
   selectedId: selected.value?.id || "",
   showUntouched: showUntouched.value,
-  compact: compact.value
+  compact: compact.value || listCanvas.value
 }));
 const canvasHandlers = {
   zoom: (subsystemId) => update({ subsystem: subsystemId }),
@@ -483,6 +487,7 @@ watch(root, (element) => {
     if (!width) return;
     compact.value = width <= COMPACT_WIDTH;
     wide.value = width >= WIDE_WIDTH;
+    listCanvas.value = width < GRAPH_WIDTH;
   });
   observer.observe(element);
 }, { flush: "post" });
