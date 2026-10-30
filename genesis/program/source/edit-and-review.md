@@ -730,7 +730,10 @@ session rail or its direct tool controls. Its existing repository route and
 history reader retain selected-session context for review and update actions.
 Without a selected session, the same history, version-files and version-diff
 reads use the project's repository at its default branch; Current changes and
-update checks still require a session.
+update checks still require a session. With a session, they are pinned to its
+recorded canonical (or base) commit, never to the clone's local branch, which a
+new session does not have; a session without a recorded commit reports
+incomplete history context.
 The Current changes view presents the session's complete current changes against saved project
 work, even when those changes are already committed inside the session. It can
 open an exact changed file without exposing staging mechanics to the user.

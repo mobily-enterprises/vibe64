@@ -58,6 +58,14 @@ if the checkout is still missing, use **Copy recovery details** and ask your
 administrator to restore the original work from a verified backup. Colleague
 can explain the notice, but cannot restore missing source through session creation.
 
+A session's checkout works on its own branch, `vibe64/<session id>`. A new
+session keeps no local copy of the branch it was created from (such as `main`):
+nothing would keep that copy current, so it would look like the latest saved
+work when it is not. **Git log**, **Current changes**, **Save** and **Update**
+read the project's saved work themselves. In a terminal the remote-tracking name
+(such as `origin/main`) remains. The local copy is kept only when Git shows it
+holds commits found nowhere else; sessions created earlier keep theirs.
+
 If creation reports **This session source already exists**, existing commits,
 staged changes and files have been preserved. Reopen that session if it is listed;
 otherwise keep the source and ask your administrator to inspect the recovery

@@ -114,6 +114,23 @@ an interrupted attempt, is recovery work, not permission to reset its branch.
 Contribution preparation must reuse the existing session through its lifecycle
 owner; calling source creation again cannot replace commits, staging or files.
 
+Every new session source (ordinary, practice, PR, chosen-branch, contribution
+and renewal, from the local-source clone or the canonical clone with or without
+the mirror reference) works only on `vibe64/<sessionId>`. Right after that
+branch is checked out at the verified baseline, source creation deletes the
+clone's local copy of the branch it cloned (`source_default_branch`) with
+`git branch -d`, which also removes its `branch.<name>.*` configuration. Nothing
+advanced that copy, so it misled people and assistants; the remote-tracking
+`origin/<name>` and `origin/HEAD` refs stay. Deletion is local and needs Git
+proof: HEAD is the session branch (not the cloned branch or detached) and every
+commit on the copy is also on `origin/<name>` or the recorded baseline commit.
+Otherwise the copy is kept. `source_default_branch_local` records `removed` or
+the reason (`kept_head_on_default`, `kept_head_detached`,
+`kept_session_branch_not_checked_out`, `kept_unpublished_commits`, `absent`,
+`git_failed`). A failed step never fails creation. Save, Update, Incoming and
+version history read recorded commits and explicit remote refs, never that
+local branch. Existing session sources are not changed.
+
 Internal contribution creation uses the ordinary Sessions admission and Runtime
 source lifecycle with a reserved identity and exact base commit. Its new
 `connected_contribution` metadata binds the receiving repository, integration

@@ -69,6 +69,15 @@ function repositoryReadContext(project = {}, session = null) {
     );
   }
   if (sessionSourceRoot) {
+    // A session clone keeps no local copy of the branch it cloned; its history
+    // is pinned to the commit the session recorded.
+    const snapshotRef = text(session?.metadata?.canonical_commit) || text(session?.metadata?.base_commit);
+    if (!snapshotRef) {
+      throw repositoryError(
+        "This session has no recorded source version to read its history from.",
+        "vibe64_repository_history_context_incomplete"
+      );
+    }
     return {
       argsPrefix: [],
       branch,
@@ -76,10 +85,7 @@ function repositoryReadContext(project = {}, session = null) {
       executionRoot: sessionSourceRoot,
       mode,
       sessionId: text(session.sessionId || session.id),
-      snapshotRef:
-        text(session?.metadata?.canonical_commit) ||
-        text(session?.metadata?.base_commit) ||
-        `refs/heads/${branch}`
+      snapshotRef
     };
   }
   if (mode === PROJECT_REPOSITORY_MODE_GITHUB || mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT) {

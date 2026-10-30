@@ -489,6 +489,11 @@ test(`${withPullRequest ? "PR" : "Named branch"} sessions clone the head and kee
       store: { async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } });
     session.sourcePath = session.metadata.source_path;
     assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), head);
+    // Only the session branch exists locally; the cloned head stays a remote-tracking ref.
+    const heads = () => git(session.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/heads"]);
+    assert.equal(session.metadata.source_default_branch_local, "removed");
+    assert.equal(await heads(), "refs/heads/vibe64/session-1");
+    assert.equal(await git(session.sourcePath, ["rev-parse", "refs/remotes/origin/feature/search"]), head);
     await writeFile(path.join(session.sourcePath, "file.txt"), "changed in session\n");
     const saved = await saveSessionWorkDirect({ project, session, runCommand, message: "Improve PR", refreshDerivedArtifacts: async () => ({}) });
     assert.equal(saved.ok, true);
@@ -514,6 +519,7 @@ test(`${withPullRequest ? "PR" : "Named branch"} sessions clone the head and kee
     assert.equal((await checkSessionUpdatesDirect({ project, session, runCommand })).updateAvailable, true);
     const updated = await updateSessionWorkDirect({ project, session, runCommand });
     assert.equal(updated.status, "updated");
+    assert.equal(await heads(), "refs/heads/vibe64/session-1", "Save and Update never recreate the cloned branch");
     assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), updatedHead);
     assert.equal(await readFile(path.join(session.sourcePath, "from-main.txt"), "utf8"), "main advanced\n");
     assert.equal(await readFile(path.join(session.sourcePath, "unsaved.txt"), "utf8"), "keep this draft\n");

@@ -2012,6 +2012,11 @@ test("a practice session is an ordinary local project session that stays the lea
     const listed = await runtime.store.listSessions();
     assert.deepEqual(listed.map(session => session.sessionId), [created.sessionId], "the ordinary store lists it");
     assert.equal(await runtime.store.readMetadataValue(created.sessionId, "learning_session"), "");
+    // The practice clone, like any session source, keeps only its session branch.
+    assert.equal(await runtime.store.readMetadataValue(created.sessionId, "source_default_branch_local"), "removed");
+    const practiceSource = await runtime.store.readMetadataValue(created.sessionId, "source_path");
+    assert.equal(execFileSync("git", ["-C", practiceSource, "for-each-ref", "--format=%(refname)", "refs/heads"],
+      { encoding: "utf8" }).trim(), `refs/heads/vibe64/${created.sessionId}`);
     retained = captureProjectRequestContext();
   });
   // Later work captured from that request (agent turns, helpers) keeps write.

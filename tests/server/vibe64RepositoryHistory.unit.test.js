@@ -13,6 +13,7 @@ import {
   repositoryVersionFiles
 } from "../../packages/vibe64-terminals/src/server/repositoryHistory.js";
 import { commandResult } from "../../packages/vibe64-execution/src/server/result.js";
+import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 
 const execFileAsync = promisify(execFile);
 const identity = {
@@ -67,6 +68,24 @@ test("a session without a source never falls through to a project repository cac
     metadata: { base_branch: "main" },
     sessionId: "session-1"
   }), (error) => error.code === "vibe64_repository_history_session_source_missing");
+});
+
+test("a session without a recorded source commit never reads its clone's local branch", () => {
+  const session = {
+    metadata: {
+      base_branch: "main",
+      source_kind: "session_clone",
+      source_path: "/managed/sessions/active/session-1/source",
+      source_path_authority: "managed_session_source"
+    },
+    sessionId: "session-1"
+  };
+  assert.throws(() => repositoryReadContext(localProject("/project"), session),
+    (error) => error.code === "vibe64_repository_history_context_incomplete");
+  assert.equal(repositoryReadContext(localProject("/project"), {
+    ...session,
+    metadata: { ...session.metadata, base_commit: "a".repeat(40) }
+  }).snapshotRef, "a".repeat(40));
 });
 
 test("hosted history uses repository storage and never the hosted namespace", async () => {
@@ -226,6 +245,42 @@ test("version history pins pagination and exposes bounded per-version files and 
       rm(managedSourceRoot, { force: true, recursive: true })
     ]);
   }
+});
+
+test("session history reads its recorded commit in a created session without a local default branch", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-created-history-"));
+  const sessionSourceRoot = `${root}-sessions`;
+  t.after(() => Promise.all([
+    rm(root, { force: true, recursive: true }),
+    rm(sessionSourceRoot, { force: true, recursive: true })
+  ]));
+  await git(root, ["init", "--initial-branch=main"]);
+  const commits = [];
+  for (const name of ["first", "second"]) {
+    await writeFile(path.join(root, `${name}.txt`), `${name}\n`, "utf8");
+    await git(root, ["add", `${name}.txt`]);
+    await git(root, ["commit", "-m", `${name} version`]);
+    commits.unshift(await git(root, ["rev-parse", "HEAD"]));
+  }
+  const metadata = {};
+  const created = await createSessionSource({ project: localProject(root), runCommand: commandRunner,
+    runtime: { projectContextRoot: root, projectSessionSourceRoot: sessionSourceRoot },
+    session: { sessionId: "history" },
+    store: { async writeMetadataValue(_id, name, value) { metadata[name] = value; } } });
+  assert.equal(metadata.source_default_branch_local, "removed");
+  assert.equal(await git(created.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/heads"]), "refs/heads/vibe64/history");
+  // The project moves on; the session's history stays pinned to its recorded commit.
+  await writeFile(path.join(root, "later.txt"), "later\n", "utf8");
+  await git(root, ["add", "later.txt"]);
+  await git(root, ["commit", "-m", "later version"]);
+  const session = { metadata, sessionId: "history", sourcePath: created.sourcePath };
+
+  const history = await inspectRepositoryHistory({ project: localProject(root), runCommand: commandRunner, session });
+  assert.equal(history.historySnapshotCommit, commits[0]);
+  assert.deepEqual(history.versions.map((version) => version.commit), commits);
+  const files = await repositoryVersionFiles({ commit: commits[1], historySnapshotCommit: history.historySnapshotCommit,
+    project: localProject(root), runCommand: commandRunner, session });
+  assert.deepEqual(files.files.map((file) => file.path), ["first.txt"]);
 });
 
 test("history cursors and version snapshots cannot select another project's repository", async (t) => {

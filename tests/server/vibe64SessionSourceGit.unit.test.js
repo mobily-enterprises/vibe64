@@ -124,6 +124,22 @@ function githubSourceContext(root, sessionId, {
   return context;
 }
 
+// A created session works only on its own branch: the clone's local copy of
+// the branch it cloned (and that copy's config) is gone, while the
+// remote-tracking ref stays.
+async function assertOnlySessionBranch(sourcePath, metadata, originCommit) {
+  const cloned = metadata.source_default_branch;
+  assert.ok(cloned);
+  assert.equal(metadata.source_default_branch_local, "removed");
+  assert.equal(await git(sourcePath, ["branch", "--show-current"]), metadata.branch);
+  assert.equal(await git(sourcePath, ["for-each-ref", "--format=%(refname)", "refs/heads"]), `refs/heads/${metadata.branch}`);
+  assert.equal(await git(sourcePath, ["config", "--local", "--get-regexp", "^branch\\."]).catch((error) => {
+    if (error.code === 1) return "";
+    throw error;
+  }), "");
+  assert.equal(await git(sourcePath, ["rev-parse", "--verify", `refs/remotes/origin/${cloned}^{commit}`]), originCommit);
+}
+
 function assertPreparedCloneTarget(request = {}, finalSourcePath = "") {
   const preparedSourcePath = String(request.args?.at(-1) || "");
   assert.equal(path.basename(preparedSourcePath), "source");
@@ -162,10 +178,62 @@ test("Vibe64 creates an isolated Git source for a session", async () => {
     assert.equal(context.metadata.source_cache_refresh, "not_applicable");
     assert.equal(context.metadata.source_path, result.sourcePath);
     assert.equal(context.metadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
+    await assertOnlySessionBranch(result.sourcePath, context.metadata, baseline);
+    assert.equal(await git(context.runtime.projectContextRoot, ["rev-parse", "refs/heads/main"]), baseline);
     const cloneRequest = requests.find((request) => request.command === "git" && request.args?.[0] === "clone");
     assert.deepEqual(cloneRequest.args.slice(-2), [context.runtime.projectContextRoot, result.sourcePath]);
     assert.equal(cloneRequest.args.includes("--reference"), false);
     assert.equal(requests.some((request) => request.command === "bash"), false);
+  });
+});
+
+test("source creation keeps the cloned branch, and records why, unless Git proves removing it loses nothing", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectRoot = path.join(root, "project");
+    await createProject(projectRoot);
+    const baseline = await git(projectRoot, ["rev-parse", "HEAD"]);
+    const run = (request, args) => directCommand({ ...request, args });
+    const checkout = (replace) => (request) => request.args[0] === "checkout" ? replace(request) : null;
+    // Each changes one Git step to reach one unsafe or failed state.
+    const scenarios = {
+      kept_unpublished_commits: checkout(async (request) => {
+        const checkedOut = await directCommand(request);
+        const localOnly = await git(request.cwd, ["-c", "user.name=Vibe64 Test", "-c", "user.email=vibe64@example.test",
+          "commit-tree", `${baseline}^{tree}`, "-p", baseline, "-m", "Local-only work"]);
+        await git(request.cwd, ["update-ref", "refs/heads/main", localOnly]);
+        return checkedOut;
+      }),
+      kept_head_detached: checkout((request) => run(request, ["checkout", "--detach", baseline])),
+      kept_session_branch_not_checked_out: checkout((request) => run(request, ["checkout", "-B", "other", baseline])),
+      // A failed step never fails creation: the copy stays, as before.
+      git_failed: (request) => request.args[0] === "branch" && request.args[1] === "-d"
+        ? { code: "vibe64_test_branch_failed", ok: false, stderr: "simulated failure" }
+        : null
+    };
+    for (const [reason, intercept] of Object.entries(scenarios)) {
+      const context = sourceContext(root, reason);
+      const result = await createSessionSource({ ...context, runCommand: async (request) => (
+        (request.command === "git" && await intercept(request)) || directCommand(request)
+      ) });
+      assert.equal(context.metadata.source_default_branch_local, reason, reason);
+      const kept = await git(result.sourcePath, ["rev-parse", "--verify", "refs/heads/main^{commit}"]);
+      if (reason === "kept_unpublished_commits") {
+        assert.notEqual(kept, baseline);
+        assert.equal(await git(result.sourcePath, ["rev-parse", `${kept}^`]), baseline);
+      } else {
+        assert.equal(kept, baseline, reason);
+      }
+      assert.equal(await git(result.sourcePath, ["config", "--local", "branch.main.merge"]), "refs/heads/main", reason);
+      assert.equal(await git(result.sourcePath, ["rev-parse", "refs/remotes/origin/main"]), baseline, reason);
+    }
+
+    // A cloned branch that is itself the session branch is never removed.
+    const same = sourceContext(path.join(root, "same-name"), "same");
+    await createProject(same.runtime.projectContextRoot, { branch: "vibe64/same" });
+    const sameSource = await createSessionSource({ ...same, runCommand: directCommand });
+    assert.equal(same.metadata.source_default_branch_local, "kept_head_on_default");
+    assert.equal(await git(sameSource.sourcePath, ["branch", "--show-current"]), "vibe64/same");
+    assert.equal(await git(sameSource.sourcePath, ["rev-parse", "refs/heads/vibe64/same"]), sameSource.commit);
   });
 });
 
@@ -222,6 +290,7 @@ test("two contributions clone their reserved integration base without creating r
       const source = await createSessionSource({ ...context, runCommand: directCommand });
       assert.equal(source.commit, baseCommit);
       assert.equal(context.metadata.base_branch, "main");
+      await assertOnlySessionBranch(source.sourcePath, context.metadata, baseCommit);
       assert.equal(sessionRepositoryDestination(context.project, context.session).branch, `vibe64-incoming/${id}`);
       prepared.push(source.sourcePath);
     }
@@ -268,6 +337,8 @@ test("replacement contribution source pins its discarded predecessor without tou
     const source = await createSessionSource({ ...context, runCommand: directCommand });
     assert.equal(source.commit, baseCommit, "replacement keeps its frozen reviewed revision when the discarded ref advances");
     assert.equal(context.metadata.base_branch, discardedBranch);
+    // The removed local copy was at the advanced discarded head, ahead of the session.
+    await assertOnlySessionBranch(source.sourcePath, context.metadata, discardedHead);
     assert.equal(await readFile(path.join(source.sourcePath, "app.txt"), "utf8"), "discarded contribution\n");
     await assert.rejects(readFile(path.join(source.sourcePath, "later.txt")), { code: "ENOENT" });
     await assert.rejects(readFile(path.join(source.sourcePath, "private.txt")), { code: "ENOENT" });
@@ -324,6 +395,8 @@ test("renewed replacement sources use the confirmed owned ref and exact commit",
       const source = await createSessionSource({ ...context, expectedCommit, expectedSourceRef, runCommand: directCommand });
       assert.equal(source.commit, expectedCommit);
       assert.equal(context.metadata.base_branch, expectedSourceRef.slice("refs/heads/".length));
+      await assertOnlySessionBranch(source.sourcePath, context.metadata,
+        await git(root, ["--git-dir", remoteRoot, "rev-parse", expectedSourceRef]));
       assert.equal(sessionRepositoryDestination(context.project, context.session).branch, `vibe64-incoming/${id}`);
     }
   });
@@ -384,6 +457,7 @@ test("Vibe64 ignores a stale hosted namespace checkout and clones the GitHub aut
     assert.equal(context.metadata.source_cache_kind, "github_mirror");
     assert.equal(context.metadata.source_cache_refresh, "refreshed");
     assert.equal(context.metadata.source_cache_reference, "used");
+    await assertOnlySessionBranch(result.sourcePath, context.metadata, canonicalCommit);
     const cloneRequest = requests.find((request) => (
       request.command === "git" && request.args?.[0] === "clone"
     ));
@@ -460,6 +534,7 @@ test("renewal source creation pins the confirmed GitHub commit after authority a
     );
     assert.equal(context.metadata.base_commit, confirmedCommit);
     assert.equal(context.metadata.canonical_commit, confirmedCommit);
+    await assertOnlySessionBranch(result.sourcePath, context.metadata, advancedCommit);
     assert.equal(
       await git(root, [
         "--git-dir", context.project.githubMirrorPath,
@@ -501,6 +576,7 @@ test("renewal source creation pins the confirmed standalone commit after authori
     assert.equal(await git(result.sourcePath, ["show", "HEAD:app.txt"]), "initial");
     assert.equal(context.metadata.base_commit, confirmedCommit);
     assert.equal(context.metadata.canonical_commit, confirmedCommit);
+    await assertOnlySessionBranch(result.sourcePath, context.metadata, advancedCommit);
   });
 });
 
@@ -545,6 +621,7 @@ test("renewal source creation pins the confirmed Vibe64 Git commit after authori
     );
     assert.equal(context.metadata.base_commit, confirmedCommit);
     assert.equal(context.metadata.canonical_commit, confirmedCommit);
+    await assertOnlySessionBranch(result.sourcePath, context.metadata, advancedCommit);
   });
 });
 
@@ -660,6 +737,10 @@ test("GitHub mirror acceleration handles cold, warm, stale, and non-main session
       await git(root, ["--git-dir", stale.project.githubMirrorPath, "rev-parse", `refs/heads/${branch}`]),
       advancedCommit
     );
+    // Each clone's own trunk copy is removed; its tracking ref keeps the tip it cloned.
+    await assertOnlySessionBranch(coldResult.sourcePath, cold.metadata, initialCommit);
+    await assertOnlySessionBranch(warmResult.sourcePath, warm.metadata, initialCommit);
+    await assertOnlySessionBranch(staleResult.sourcePath, stale.metadata, advancedCommit);
     for (const result of [coldResult, warmResult, staleResult]) {
       await assert.rejects(
         () => access(path.join(result.sourcePath, ".git", "objects", "info", "alternates")),
@@ -822,6 +903,7 @@ test("GitHub session cloning retries the authoritative remote without a rejected
     }));
     assert.equal(context.metadata.source_cache_reference, "not_used");
     assert.equal(result.commit, await git(publisherRoot, ["rev-parse", "HEAD"]));
+    await assertOnlySessionBranch(result.sourcePath, context.metadata, result.commit);
   });
 });
 
@@ -890,6 +972,7 @@ test("GitHub session cloning falls back when reference dissociation cannot be pr
       }), failedStep);
       assert.equal(context.metadata.source_cache_reference, "not_used", failedStep);
       assert.equal(result.commit, await git(publisherRoot, ["rev-parse", "HEAD"]), failedStep);
+      await assertOnlySessionBranch(result.sourcePath, context.metadata, result.commit);
       await assert.rejects(
         () => access(path.join(result.sourcePath, ".git", "objects", "info", "alternates")),
         { code: "ENOENT" }
@@ -1028,6 +1111,7 @@ test("Vibe64-only sessions clone the canonical bare repository without a namespa
       assert.equal(context.metadata.source_cache_kind, "none");
       assert.equal(context.metadata.source_cache_reference, "not_used");
       assert.equal(context.metadata.source_cache_refresh, "not_applicable");
+      await assertOnlySessionBranch(result.sourcePath, context.metadata, canonicalCommit);
       const cloneRequest = requests.find((request) => request.command === "git" && request.args?.[0] === "clone");
       assert.equal(cloneRequest.args.at(-2), canonicalRoot);
       assertPreparedCloneTarget(cloneRequest, result.sourcePath);
@@ -1193,6 +1277,7 @@ test("Vibe64 creates a Git baseline for a new unversioned project", async () => 
     assert.match(result.commit, /^[0-9a-f]{40}$/u);
     assert.equal(await git(context.runtime.projectContextRoot, ["status", "--porcelain"]), "");
     assert.equal(await git(result.sourcePath, ["show", "HEAD:README.md"]), "New project");
+    await assertOnlySessionBranch(result.sourcePath, context.metadata, result.commit);
   });
 });
 

@@ -39,6 +39,7 @@ import {
   canonicalRepositoryInstallRefScript
 } from "../../packages/vibe64-execution/src/server/repositoryStorage.js";
 import { vibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
+import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -127,6 +128,8 @@ async function sessionForRemote(root, fixture, id = "session-1") {
   const source = path.join(root, id);
   await git(root, ["clone", "--branch", "main", fixture.remote, source]);
   await git(source, ["checkout", "-b", `vibe64/${id}`]);
+  // Like a created session source, it keeps no local copy of the cloned branch.
+  await git(source, ["branch", "-D", "main"]);
   return {
     metadata: {
       base_branch: "main",
@@ -2623,6 +2626,59 @@ test("local-source Save advances the clean configured baseline", async () => {
     await rm(root, { force: true, recursive: true });
   }
 });
+
+for (const mode of ["local_source", "managed_git"]) {
+  test(`${mode} Update and Save work in a created session without a local default branch`, async (t) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-created-session-"));
+    t.after(() => rm(root, { force: true, recursive: true }));
+    const fixture = await createRemoteFixture(root);
+    let project;
+    let advance;
+    let canonicalHead;
+    if (mode === "local_source") {
+      project = { repository: { defaultBranch: "main", mode }, repositoryMode: mode, sourceRoot: fixture.seed };
+      advance = async () => git(fixture.seed, ["commit", "-m", "baseline advance"]);
+      canonicalHead = () => git(fixture.seed, ["rev-parse", "refs/heads/main"]);
+    } else {
+      const canonicalRepositoryPath = path.join(root, "canonical-repository", "repository.git");
+      await runScript(canonicalRepositoryInitializeScript({ defaultBranch: "main", repositoryPath: canonicalRepositoryPath }), root);
+      await runScript(canonicalRepositoryInstallRefScript({ repositoryPath: canonicalRepositoryPath,
+        sourceRef: "refs/heads/main", sourceRepository: fixture.seed, targetRef: "refs/heads/main" }), root);
+      project = managedGitProject(root, canonicalRepositoryPath);
+      advance = async () => {
+        await git(fixture.seed, ["commit", "-m", "canonical advance"]);
+        await git(fixture.seed, ["push", "--push-option=vibe64-atomic", canonicalRepositoryPath, "HEAD:refs/heads/main"]);
+      };
+      canonicalHead = () => git(root, ["--git-dir", canonicalRepositoryPath, "rev-parse", "refs/heads/main"]);
+    }
+    const metadata = {};
+    const created = await createSessionSource({ project, runCommand: commandRunner,
+      runtime: { projectContextRoot: root, projectSessionSourceRoot: path.join(root, "sessions") },
+      session: { sessionId: "created" },
+      store: { async writeMetadataValue(_id, name, value) { metadata[name] = value; } } });
+    const session = { metadata, sessionId: "created", sourcePath: created.sourcePath };
+    const branches = () => git(created.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/heads"]);
+    assert.equal(metadata.source_default_branch_local, "removed");
+    assert.equal(await branches(), "refs/heads/vibe64/created");
+
+    await writeFile(path.join(created.sourcePath, "session.txt"), "session work\n", "utf8");
+    await writeFile(path.join(fixture.seed, "canonical.txt"), "canonical\n", "utf8");
+    await git(fixture.seed, ["add", "canonical.txt"]);
+    await advance();
+    const advanced = await canonicalHead();
+    assert.equal((await checkSessionUpdates({ operationId: "created-check", project, runCommand: commandRunner, session })).updateAvailable, true);
+    const updated = await updateSessionWork({ operationId: "created-update", project, runCommand: commandRunner, session });
+    assert.equal(updated.canonicalCommit, advanced);
+    metadata.base_commit = metadata.canonical_commit = updated.canonicalCommit;
+    const saved = await saveSessionWork({ operationId: "created-save", project, runCommand: commandRunner, session });
+
+    assert.equal(saved.status, "saved");
+    assert.equal(await canonicalHead(), saved.saveCommit);
+    assert.equal(await git(created.sourcePath, ["rev-parse", `${saved.saveCommit}^`]), advanced);
+    assert.equal(await git(created.sourcePath, ["show", `${saved.saveCommit}:session.txt`]), "session work");
+    assert.equal(await branches(), "refs/heads/vibe64/created", "Update and Save never recreate the default branch");
+  });
+}
 
 test("local-source Save rejects a baseline checked out on the wrong branch", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-"));

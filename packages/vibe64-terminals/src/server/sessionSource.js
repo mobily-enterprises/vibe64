@@ -24,6 +24,7 @@ import {
   managedSessionSourcePath,
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "@local/vibe64-core/server/sessionSourcePath";
+import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   gitFailureError,
@@ -463,6 +464,53 @@ async function resolveExpectedSourceCommit({
   return resolved;
 }
 
+// The clone leaves a local copy of the branch it cloned. Nothing advances that
+// copy, so it soon trails the authority and misleads people and assistants in
+// the session; session work, Save and Update use the session branch, recorded
+// commits and explicit remote refs instead. The copy is removed only when Git
+// proves nothing is lost; otherwise it is kept and the returned outcome says
+// why. The new clone is not attached yet, so nothing else moves its refs. This
+// is local-only and best effort: a failed step leaves the copy, as before,
+// rather than blocking a source that could then not be created again.
+async function removeClonedDefaultBranch({
+  allowedRoots = [],
+  baselineCommit = "",
+  clonedBranch = "",
+  commandOptions = {},
+  sessionBranch = "",
+  sourcePath = ""
+} = {}) {
+  const git = (args) => runGit(sourcePath, args, allowedRoots, commandOptions);
+  const localRef = `refs/heads/${clonedBranch}`;
+  try {
+    const head = await git(["rev-parse", "--symbolic-full-name", "HEAD"]);
+    if (head === "HEAD") return "kept_head_detached";
+    if (head === localRef) return "kept_head_on_default";
+    if (head !== `refs/heads/${sessionBranch}`) return "kept_session_branch_not_checked_out";
+    const trackingRef = `refs/remotes/origin/${clonedBranch}`;
+    // A pattern also matches refs below it, so only exact names are read.
+    const refs = new Map((await git(["for-each-ref", "--format=%(refname) %(objectname)", localRef, trackingRef]))
+      .split("\n").filter(Boolean).map((line) => line.split(" ")));
+    if (!refs.has(localRef)) return "absent";
+    const unpublished = await git([
+      "rev-list", "--count", refs.get(localRef),
+      "--not", baselineCommit, ...(refs.has(trackingRef) ? [refs.get(trackingRef)] : [])
+    ]);
+    if (unpublished !== "0") return "kept_unpublished_commits";
+    // -d makes Git refuse again unless the copy is merged into its upstream (or
+    // HEAD); it also removes the copy's branch.<name>.* configuration.
+    await git(["branch", "-d", "--", clonedBranch]);
+    return "removed";
+  } catch (error) {
+    vibe64SessionDebugLog("server.sessionSource.cloned_branch.removal_failed", {
+      clonedBranch,
+      error: vibe64SessionDebugError(error),
+      sessionBranch
+    });
+    return "git_failed";
+  }
+}
+
 async function attachSessionSource(store, sessionId = "", metadata = {}) {
   const write = async () => {
     await Promise.all(Object.entries(metadata).map(([name, value]) => (
@@ -654,6 +702,14 @@ async function createSessionSource({
       );
     }
   }
+  const defaultBranchLocal = await removeClonedDefaultBranch({
+    allowedRoots: sourceRoots,
+    baselineCommit: resolvedBaseline.commit,
+    clonedBranch: resolvedBaseline.branch,
+    commandOptions: { runCommand },
+    sessionBranch: branch,
+    sourcePath
+  });
   if (resolvedBaseline.remoteUrl) {
     await runGit(sourcePath, ["remote", "set-url", "origin", resolvedBaseline.remoteUrl], sourceRoots, {
       runCommand
@@ -667,6 +723,7 @@ async function createSessionSource({
     branch,
     repository_mode: canonical.mode,
     source_default_branch: resolvedBaseline.branch,
+    source_default_branch_local: defaultBranchLocal,
     source_kind: "session_clone",
     source_cache_attempted: cache.attempted ? "yes" : "no",
     source_cache_kind: canonical.mode === PROJECT_REPOSITORY_MODE_GITHUB ? "github_mirror" : "none",
