@@ -157,6 +157,7 @@ function goToPreview() {
 
 .usage-record-dialog__body {
   display: grid;
+  align-content: start;
   gap: var(--v64-space-4);
 }
 
