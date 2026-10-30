@@ -29,7 +29,9 @@ other data, and the recorder opens no network port.
 After Preview starts recording, **Recording — use Preview now** appears with
 **Go to Preview**, which shows the Preview pane. Use the app normally: each
 page load, button or form that reaches the server becomes a request in the
-results. A command starts running at once and the recording follows that run.
+results. Reloading the page, or using Preview in a second browser tab, keeps
+each click's requests grouped under that click. A command starts running at
+once and the recording follows that run.
 
 Only one recording runs in a session at a time. Other sessions are not
 affected, and a recording in another session keeps running when you switch.
@@ -128,9 +130,11 @@ loaded.
 ## The recording indicator
 
 While a recording exists, the project header shows its state beside the
-Preview and Dashboard switch. It stays there on every pane, with the chat open
-or collapsed, on a phone, and after reloading the page; the time continues
-from when the recording started.
+Preview and Dashboard switch. On a phone it is a full-width strip directly
+below the header instead, so the header keeps its pane switch and **Show
+preview controls**. It stays on every pane, with the chat open or collapsed,
+and after reloading the page; the time continues from when the recording
+started.
 
 - **Starting recording…**: the app is restarting with the recorder.
 - **Recording 2:14 · 37 requests** (a command shows runs), with **Stop**.
@@ -140,10 +144,13 @@ from when the recording started.
   stays for 10 minutes unless dismissed.
 - **Recording failed**, with **Details** (the reason) and **×**.
 
-On a phone, and where the header is narrow, it is shorter: **2:14 · 37** with
-a stop icon, **Ready · 37** with an open icon. Select the indicator itself for
-a menu (a sheet on a phone) with the target, time, count, **Open results**
-and **Stop recording**.
+Where a computer's header is narrow, it is shorter: **2:14 · 37** with a stop
+icon, **Ready · 37** with an open icon. Select the indicator itself for a menu
+with the target, time, count, **Open results** and **Stop recording**.
+
+On a phone the strip shows the same words in full, with **Stop**, or **Open**
+and **×**. Tap the strip itself to open the results (or, for **Recording
+failed**, the reason).
 
 **Open** or **Open results** shows Architecture › Usage › Recording with this
 recording selected; on a phone it shows the project instead of the chat. You

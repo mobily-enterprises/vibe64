@@ -304,6 +304,16 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     const seen = await mockProject(page, { recording: true });
     const app = await openPreview(page, phone);
     await capture(page, `${viewport.width}-recording-preview`);
+    if (phone) {
+      // The recording indicator is a strip below a phone's header, which
+      // keeps its room for Preview's controls.
+      expect(await page.locator(".studio-home-shell-heading").evaluate((heading) => heading.scrollWidth - heading.clientWidth)).toBe(0);
+      await expect(page.locator("#studio-home-shell-usage-recording-strip").getByRole("button", { name: "Stop recording" })).toBeInViewport();
+      await page.getByRole("button", { name: "Show preview controls", exact: true }).click();
+      await expect(page.getByRole("button", { name: "Pick element", exact: true })).toBeVisible();
+      await capture(page, `${viewport.width}-recording-preview-controls`);
+      await page.getByRole("button", { name: "Collapse preview controls", exact: true }).click();
+    }
 
     await app.getByLabel("Name").fill("secret plan");
     await app.getByRole("button", { name: "Add" }).click();

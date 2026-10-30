@@ -228,6 +228,42 @@ describe("Recorded interactions", () => {
     expect(f.sent(PREVIEW_RECORDING_MESSAGE_TYPE).at(-1).data).toMatchObject({ recordingId: "rec_bcdefghijklmnopqrstu", nextInteraction: 1 });
   });
 
+  it("continues after the interactions the recording already holds, after a reload or in a second tab", async () => {
+    // This editor loaded while the recording already held i_0001 to i_0004.
+    const f = mountPick({ recording: { ...RECORDING, highestInteraction: 4 } });
+    f.ready();
+    expect(f.sent(PREVIEW_RECORDING_MESSAGE_TYPE).at(-1).data).toMatchObject({ active: true, nextInteraction: 5 });
+
+    // The recording loads after the page did.
+    const late = mountPick();
+    late.ready();
+    late.usage.recording.value = { ...RECORDING, highestInteraction: 6 };
+    await settle();
+    expect(late.sent(PREVIEW_RECORDING_MESSAGE_TYPE).at(-1).data).toMatchObject({ active: true, nextInteraction: 7 });
+  });
+
+  it("moves the bridge on to the next free number when the server refuses a number another page used", async () => {
+    const f = mountPick({ recording: RECORDING });
+    f.usage.recordInteraction.mockResolvedValueOnce({ ok: false, nextInteraction: 9 });
+    f.ready();
+    expect(f.sent(PREVIEW_RECORDING_MESSAGE_TYPE).at(-1).data).toMatchObject({ nextInteraction: 1 });
+    f.message({ type: PREVIEW_INTERACTION_MESSAGE_TYPE, id: "i_0001", at: "2026-10-30T10:00:00.000Z", elementLabel: "button \"Add\"" });
+    await settle();
+    expect(f.sent(PREVIEW_RECORDING_MESSAGE_TYPE).at(-1).data).toMatchObject({ active: true, recordingId: RECORDING.id, nextInteraction: 9 });
+
+    // A refusal that arrives after the recording changed moves nothing.
+    const sent = f.sent(PREVIEW_RECORDING_MESSAGE_TYPE).length;
+    let answer;
+    f.usage.recordInteraction.mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }));
+    f.message({ type: PREVIEW_INTERACTION_MESSAGE_TYPE, id: "i_0009", at: "2026-10-30T10:00:01.000Z", elementLabel: "button \"Add\"" });
+    f.usage.recording.value = { ...RECORDING, id: "rec_bcdefghijklmnopqrstu" };
+    await settle();
+    answer({ ok: false, nextInteraction: 40 });
+    await settle();
+    expect(f.sent(PREVIEW_RECORDING_MESSAGE_TYPE)).toHaveLength(sent + 1);
+    expect(f.sent(PREVIEW_RECORDING_MESSAGE_TYPE).at(-1).data).toMatchObject({ recordingId: "rec_bcdefghijklmnopqrstu", nextInteraction: 1 });
+  });
+
   it("forwards nothing outside a Preview recording, nor ids, paths or labels it cannot trust", async () => {
     const f = mountPick({ recording: { ...RECORDING, state: "stopping" } });
     f.ready();

@@ -49,6 +49,7 @@ const {
   previewToolbarHostVisible,
   previewToolbarTeleportTarget,
   usageRecordingHostId,
+  usageRecordingStripHostId,
   usageRecordingTeleportTarget,
   projectLoadError,
   projectPane,
@@ -197,6 +198,13 @@ const {
     <template #top-right>
       <Vibe64AuthSettingsButton />
     </template>
+    <!-- A phone's recording indicator: a strip below the header, which keeps
+         its room for the pane controls. -->
+    <div
+      v-if="projectSlug"
+      :id="usageRecordingStripHostId"
+      class="studio-home-shell-usage-recording-strip"
+    />
     <section class="generated-ui-screen generated-ui-screen--studio studio-screen d-flex flex-column ga-3">
       <v-alert
         v-if="pageError"
@@ -582,6 +590,19 @@ const {
   width: 22rem;
 }
 
+/* A phone's indicator strip runs the full width below the header. With
+   nothing to show it stays out of the flow; its live region still announces. */
+.studio-home-shell-usage-recording-strip {
+  flex: 0 0 auto;
+  position: absolute;
+  width: 0;
+}
+
+.studio-home-shell-usage-recording-strip:has(.usage-recording-indicator__pill) {
+  position: static;
+  width: 100%;
+}
+
 /* Phone "next pane" control: an M3 tonal pill button with a 40px target. */
 .studio-home-shell-project-mobile-action {
   align-items: center;
@@ -666,11 +687,6 @@ const {
 }
 
 @media (max-width: 600px) {
-  /* A phone's indicator is always compact, so it sizes itself. */
-  .studio-home-shell-usage-recording-host:has(.usage-recording-indicator__pill) {
-    width: auto;
-  }
-
   /* Phone bar budget: the heading takes only the space the L plate and the
      account/Colleague buttons leave. The pane switch and session controls
      keep their size; the project name gives way with an ellipsis, so nothing

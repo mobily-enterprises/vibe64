@@ -584,7 +584,11 @@ file into a source-relative path, finds that file's component (or page) usage
 entry and emits `open-usage` for Usage › Calls there.
 
 While the session's web recording runs, the editor tells the bridge the recording
-and its next interaction number, so a reloaded page continues the numbering. Each
+and its next interaction number: after the highest the bridge reported and the
+highest the recording held when the editor read it, so a reloaded page or a
+second tab continues the numbering. When the recording refuses a number another
+page already used, the editor moves the bridge on to the next free number it
+names, and the refused interaction tags no further requests. Each
 trusted click, form submit or Enter (outside text areas and editable text, not
 while composing) starts one interaction `i_NNNN`. Same-origin fetch and
 XMLHttpRequest calls started within 1 s, before the next interaction, carry

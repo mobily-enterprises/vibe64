@@ -27,6 +27,8 @@ const FINAL_STATES = Object.freeze(["stopped", "failed", "unavailable"]);
 //   stop()             POST /:recordingId/stop (idempotent)
 //   dismiss()          POST /:recordingId/dismiss
 //   recordInteraction({ id, at, label, kind, componentFile })  POST /:recordingId/interactions
+//                      → { ok: true }, or { ok: false, nextInteraction } when another
+//                      Preview page already used that number
 // Every reader of one project's session shares one cached `current` read, so the
 // indicator, the usage view and the Preview controls show the same recording.
 // Realtime changes and operation results update that shared entry. Operations
@@ -113,12 +115,15 @@ function useVibe64UsageRecording({ sessionId = "" } = {}) {
   const loading = computed(() => resource.isInitialLoading.value || pending.value > 0);
   const error = computed(() => actionError.value || resource.loadError.value);
 
-  async function send(suffix, { method = "POST", body, fallback }) {
+  // `refusal(failure)` turns an expected refusal into a result instead of an error.
+  async function send(suffix, { method = "POST", body, fallback, refusal = () => null }) {
     pending.value += 1;
     actionError.value = "";
     try {
       return await getHttpWebClient().request(`${sessionPath.value}${suffix}`, { method, body });
     } catch (failure) {
+      const refused = refusal(failure);
+      if (refused) return refused;
       actionError.value = String(failure?.message || "").trim() || fallback;
       return null;
     } finally {
@@ -158,7 +163,10 @@ function useVibe64UsageRecording({ sessionId = "" } = {}) {
     if (recording.value?.state !== "recording") return null;
     return send(recordingPath("/interactions"), {
       body: { id: interactionId, at, label: String(label).slice(0, 80), kind, componentFile: componentFile || null },
-      fallback: "The interaction could not be recorded."
+      fallback: "The interaction could not be recorded.",
+      refusal: (failure) => (failure?.status === 409 && Number.isSafeInteger(failure.details?.nextInteraction)
+        ? { ok: false, nextInteraction: failure.details.nextInteraction }
+        : null)
     });
   }
 

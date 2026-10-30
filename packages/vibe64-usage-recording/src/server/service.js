@@ -69,9 +69,14 @@ const recordingError = (status, message, code, details) => new AppError(status, 
 const newRecordingId = () => `rec_${[...randomBytes(20)].map((byte) => BASE32[byte & 31]).join("")}`;
 const isoNow = (now) => new Date(now()).toISOString();
 
+// highestInteraction is the number of the highest interaction recorded so far
+// (i_0007 → 7, 0 before the first): a Preview page continues after it.
 function publicRecording(record) {
-  const { id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt, sourceIdentity } = record;
-  return structuredClone({ id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt, sourceIdentity: sourceIdentity ?? null });
+  const { id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt, sourceIdentity, highestInteraction } = record;
+  return structuredClone({
+    id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt,
+    sourceIdentity: sourceIdentity ?? null, highestInteraction: highestInteraction ?? 0
+  });
 }
 
 function storedRecording(value) {
@@ -601,7 +606,8 @@ function createService({
           counts: { requests: 0, functions: 0 },
           truncated: false,
           dismissedAt: null,
-          sourceIdentity: await readSourceIdentity(context.sourceRoot)
+          sourceIdentity: await readSourceIdentity(context.sourceRoot),
+          highestInteraction: 0
         };
         const entry = liveEntry({
           context, record, directory, tracers, outputParameters,
@@ -705,11 +711,17 @@ function createService({
         (componentFile === null || (typeof componentFile === "string" && componentFile.length <= 512 &&
           !componentFile.startsWith("/") && !componentFile.split("/").some((part) => !part || part === "." || part === "..")));
       if (!valid) throw recordingError(422, "This interaction is not valid.", "vibe64_usage_recording_interaction_invalid");
-      if (entry.interactions.has(id)) return { ok: true };
+      // Another Preview page of this recording already used this number; it
+      // continues from the next free one.
+      if (entry.interactions.has(id)) {
+        throw recordingError(409, "This interaction number is already recorded.", "vibe64_usage_recording_interaction_taken",
+          { nextInteraction: entry.record.highestInteraction + 1 });
+      }
       if (entry.interactions.size >= USAGE_RECORDING_LIMITS.interactions) {
         throw recordingError(422, "This recording has reached its interaction limit.", "vibe64_usage_recording_interaction_limit");
       }
       entry.interactions.add(id);
+      entry.record.highestInteraction = Math.max(entry.record.highestInteraction, Number(id.slice(2)));
       await entry.append("interactions.ndjson", { id, at: new Date(Date.parse(at)).toISOString(), label, kind, componentFile });
       return { ok: true };
     },

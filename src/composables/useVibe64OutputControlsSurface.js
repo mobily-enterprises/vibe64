@@ -728,8 +728,8 @@ function useVibe64OutputControlsSurface(props, {
   const previewPickBusy = ref(false);
   const previewPickNoticeText = ref("");
   const previewPickNoticeVisible = ref(false);
-  // The highest interaction number the bridge has reported for this recording;
-  // a page that loads later continues after it.
+  // The highest interaction number this recording is known to hold, from the
+  // bridge's reports and the server; a page that loads later continues after it.
   const previewInteractions = { highest: 0, recordingId: "" };
   let previewIdentityAutomaticAttempt = "";
   let previewIdentityResumeSelection = null;
@@ -1224,6 +1224,10 @@ function useVibe64OutputControlsSurface(props, {
     const current = toValue(recording);
     return current?.state === "recording" && current?.target?.kind === "web" ? String(current.id || "") : "";
   });
+  // What the server had recorded when this editor read the recording: after a
+  // reload, or in a second tab, numbering continues from there.
+  const previewRecordedInteractions = computed(() =>
+    previewRecordingId.value ? Math.max(0, Number(toValue(recording)?.highestInteraction) || 0) : 0);
 
   function postToPreviewBridge(message = {}) {
     const target = previewFrame.value?.contentWindow;
@@ -1316,6 +1320,7 @@ function useVibe64OutputControlsSurface(props, {
     if (previewInteractions.recordingId !== recordingId) {
       Object.assign(previewInteractions, { highest: 0, recordingId });
     }
+    previewInteractions.highest = Math.max(previewInteractions.highest, previewRecordedInteractions.value);
     postToPreviewBridge({
       active: Boolean(recordingId),
       nextInteraction: previewInteractions.highest + 1,
@@ -1324,28 +1329,36 @@ function useVibe64OutputControlsSurface(props, {
     });
   }
 
-  function forwardPreviewInteraction(data = {}) {
+  async function forwardPreviewInteraction(data = {}) {
     const id = String(data?.id || "");
+    const recordingId = previewRecordingId.value;
     if (
       typeof recordInteraction !== "function" ||
-      !previewRecordingId.value ||
-      previewRecordingId.value !== previewInteractions.recordingId ||
+      !recordingId ||
+      recordingId !== previewInteractions.recordingId ||
       !USAGE_INTERACTION_ID_PATTERN.test(id)
     ) {
       return;
     }
     previewInteractions.highest = Math.max(previewInteractions.highest, Number(id.slice(2)));
     const at = Date.parse(String(data?.at || ""));
-    void recordInteraction({
+    const result = await recordInteraction({
       at: new Date(Number.isFinite(at) ? at : Date.now()).toISOString(),
       componentFile: previewComponentSourcePath(data?.componentFile, props.session?.sourcePath) || null,
       id,
       kind: ["enter", "submit"].includes(data?.kind) ? data.kind : "click",
       label: String(data?.elementLabel || "").trim().slice(0, 80) || "element"
     });
+    // Another page of this recording already used the number: the bridge
+    // continues from the next free one the server named.
+    const next = Number(result?.nextInteraction);
+    if (result?.ok === false && Number.isSafeInteger(next) && previewInteractions.recordingId === recordingId) {
+      previewInteractions.highest = Math.max(previewInteractions.highest, next - 1);
+      publishPreviewRecording();
+    }
   }
 
-  watch(previewRecordingId, publishPreviewRecording);
+  watch([previewRecordingId, previewRecordedInteractions], publishPreviewRecording);
   watch(previewPickAvailable, (available) => {
     if (!available) {
       stopPreviewPick();
@@ -2167,7 +2180,7 @@ function useVibe64OutputControlsSurface(props, {
       return;
     }
     if (messageType === PREVIEW_INTERACTION_MESSAGE_TYPE) {
-      forwardPreviewInteraction(event.data);
+      void forwardPreviewInteraction(event.data);
       return;
     }
     if (messageType === PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE) {

@@ -17,7 +17,6 @@ vi.mock("vuetify", async () => {
   return { useDisplay: () => ({ width: harness.width }) };
 });
 vi.mock("vuetify/components/VMenu", () => ({ VMenu: overlay("menu") }));
-vi.mock("vuetify/components/VBottomSheet", () => ({ VBottomSheet: overlay("bottom-sheet") }));
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: (entry) => harness.reports.push(entry) }) }));
 vi.mock("/src/composables/useVibe64ProjectScope.js", async () => {
   const { ref } = await import("vue");
@@ -229,7 +228,8 @@ it("shows nothing without a recording, and the failure reason under Details", as
 
 it("switches between wide and compact by the width of its header host", async () => {
   const view = await mountIndicator({ recording: STATES.recording });
-  expect(observers.at(-1).target === view.host).toBe(true);
+  // The indicator fills its host, so its own width is the host's wherever it is shown.
+  expect(observers.at(-1).target === view.host.children[0]).toBe(true);
   await view.resize(339);
   expect(view.pill()).toBe("2:14 · 37");
   expect(view.button("Stop recording").props.icon).toBe(mdiStop);
@@ -246,9 +246,10 @@ it("switches between wide and compact by the width of its header host", async ()
   const starting = await mountIndicator({ recording: STATES.starting });
   await starting.resize(200);
   expect(starting.pill()).toBe("Starting…");
+  const readyRoot = ready.host.children[0];
   ready.app.unmount();
   mounted.splice(mounted.indexOf(ready.app), 1);
-  expect(observers.find((observer) => observer.target === ready.host)?.disconnected).toBe(true);
+  expect(observers.find((observer) => observer.target === readyRoot)?.disconnected).toBe(true);
 });
 
 it("formats elapsed time as m:ss, then h:mm:ss from one hour", async () => {
@@ -313,10 +314,39 @@ it("opens results from the pill and its menu, dismissing a stopped recording", a
   expect(ready.opened).toEqual([{ recordingId: STARTED.id }]);
   expect(server.requests).toContain(`POST /${STARTED.id}/dismiss`);
 
+});
+
+it("is a full-width strip on a phone, whose tap opens the results and whose Stop stays one tap", async () => {
   harness.width.value = 600;
-  const phone = await mountIndicator({ recording: STATES.recording });
-  expect(phone.nodes((node) => node.props?.["data-kind"] === "bottom-sheet")).toHaveLength(1);
-  harness.width.value = 1024;
+  try {
+    server.routes[`POST /${STARTED.id}/stop`] = () => ({ recording: { ...STATES.recording, state: "stopping" } });
+    const live = await mountIndicator({ recording: STATES.recording });
+    expect(live.host.children[0].props.class).toContain("usage-recording-indicator--strip");
+    // The strip has the room for the full text, however narrow its host measured.
+    await live.resize(200);
+    expect(live.pill()).toBe("Recording 2:14 · 37 requests");
+    const body = live.nodes((node) => node.props?.class === "usage-recording-indicator__body")[0];
+    expect(body.props["aria-haspopup"]).toBeUndefined();
+    expect(textOf(body)).toBe("Recording 2:14 · 37 requests, open results");
+    body.props.onClick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(live.opened).toEqual([{ recordingId: STARTED.id }]);
+    expect(live.nodes((node) => node.props?.["data-kind"] === "menu-content")).toHaveLength(0);
+    const stop = live.button("Stop recording");
+    expect(textOf(stop).trim()).toBe("Stop");
+    expect(stop.props.variant).toBe("text");
+    await live.click("Stop recording");
+    expect(server.requests).toContain(`POST /${STARTED.id}/stop`);
+    expect(live.pill()).toBe("Stopping…");
+
+    const failed = await mountIndicator({ recording: STATES.failed });
+    failed.nodes((node) => node.props?.class === "usage-recording-indicator__body")[0].props.onClick();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(failed.opened).toEqual([]);
+    expect(textOf(failed.host)).toContain("did not load the recorder");
+  } finally {
+    harness.width.value = 1024;
+  }
 });
 
 it("announces start, stop and failure in the live region, never the ticking time", async () => {

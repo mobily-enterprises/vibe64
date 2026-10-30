@@ -137,12 +137,18 @@ it("refetches when realtime reconnects", async () => {
 it("shares operation results with every reader and reports server refusals verbatim", async () => {
   vi.useFakeTimers();
   const refused = Object.assign(new Error("A recording is already running in this session."), { status: 409 });
+  const taken = Object.assign(new Error("This interaction number is already recorded."), { status: 409, details: { nextInteraction: 5 } });
+  const interactionAnswers = [{ ok: true }, taken];
   const view = mountReaders({ responses: {
     "GET /current": { recording: null, serverTime: new Date().toISOString() },
     "GET /targets": { targets: [{ id: "preview", kind: "web", label: "Preview", available: true, parameters: [] }] },
     "POST ": { recording: { ...RUNNING, state: "starting" } },
     [`POST /${RUNNING.id}/stop`]: { recording: { ...RUNNING, state: "stopping" } },
-    [`POST /${RUNNING.id}/interactions`]: { ok: true },
+    [`POST /${RUNNING.id}/interactions`]: () => {
+      const answer = interactionAnswers.shift();
+      if (answer instanceof Error) throw answer;
+      return answer;
+    },
     [`POST /${RUNNING.id}/dismiss`]: refused
   } });
   await flush();
@@ -158,6 +164,10 @@ it("shares operation results with every reader and reports server refusals verba
   view.emit("vibe64.usage-recording.changed", changed({ state: "recording" }));
   await controls.recordInteraction({ id: "i_0001", at: "2026-10-30T10:00:01.000Z", label: "x".repeat(90) });
   expect(view.requests.at(-1).body).toEqual({ id: "i_0001", at: "2026-10-30T10:00:01.000Z", label: "x".repeat(80), kind: "click", componentFile: null });
+  // A number another Preview page already used comes back with the next free one, not as an error.
+  expect(await controls.recordInteraction({ id: "i_0001", at: "2026-10-30T10:00:02.000Z", label: "Save" }))
+    .toEqual({ ok: false, nextInteraction: 5 });
+  expect(controls.error.value).toBe("");
 
   expect(await indicator.stop()).toEqual(expect.objectContaining({ state: "stopping" }));
   expect(controls.recording.value.state).toBe("stopping");
