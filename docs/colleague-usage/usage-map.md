@@ -11,8 +11,9 @@ pages still have entry points, such as commands or library exports.
 
 ## Pick an entry point
 
-On a wide screen, the entry points are listed on the left. On a phone, tap
-**Choose an entry** (or **Entry: <name>**) to open the same list full screen.
+On a wide screen, the entry points are listed on the left and the chosen one
+is named above the modes as **Entry: <name>**. On a phone, tap **Choose an
+entry** (or **Entry: <name>**) to open the same list full screen.
 
 - **Search entries** matches names and file paths.
 - The chips filter by kind and show how many of each exist. Only kinds the
@@ -61,15 +62,16 @@ subsystem. Subsystems the entry never reaches are hidden; **Show untouched**
 shows them faded.
 
 **One subsystem.** Tap a card to see its files or functions, arranged by
-distance from the entry: **Start**, **1 step away** and so on. On a wide
-screen they are boxes with arrows:
+distance from the entry: **Start**, **1 step away** and so on. When there is
+room for two columns of them they are boxes with arrows:
 
 - a solid arrow is an exact call;
 - a dashed arrow is a probable call;
 - a short line ending in an open circle marks unresolved calls.
 
-On a phone the same list shows **calls N → · called by M ←** for each
-function. **All subsystems** goes back.
+On a phone, or beside the chat on a narrower screen, the same functions are
+a list showing **calls N → · called by M ←** for each. **All subsystems** goes
+back.
 
 **One function.** Tap a function to open its details (a side panel, or a
 sheet from the bottom on a phone):
@@ -105,15 +107,17 @@ as **Shared plumbing** on each card; inside a subsystem they are hidden until
 you turn on the **Shared plumbing** chip. Each function shows how many times
 it ran. Arrows between them come from the static calls.
 
-A function marked **Changed since the last scan** ran from a file that has
-changed since Architecture was scanned; **Not in the last scan** means the
-scan does not know it. Re-scan to see their calls.
+A function marked **changed** (**Changed since the last scan** in its
+tooltip and list row) ran from a file that has changed since Architecture was
+scanned; **not scanned** (**Not in the last scan**) means the scan does not
+know it. Re-scan to see their calls.
 
 Some web servers handle every request in one shared process. Their code is
 then shown as one row, **Not separated per request for this server**, with
 everything that ran while recording.
 
-**Record** in the mode bar is always there. When no part of the project can be
+**Record** in the mode bar is always there; where the bar is narrow it is a
+record icon with the tooltip **Record**. When no part of the project can be
 recorded, Usage says **Recording not available for this project's runtimes**
 and names them; Imports and Calls still work.
 
