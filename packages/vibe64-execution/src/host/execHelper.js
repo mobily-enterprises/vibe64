@@ -3905,15 +3905,22 @@ function workspaceTempRoot(ownerUsername = "") {
 
 // The only NODE_OPTIONS this helper sets: a usage recording launch's preload,
 // accepted as a regular file reached through no symbolic link inside the
-// recorder runtime of the installation this helper belongs to.
-const USAGE_RECORDING_NODE_RUNTIME = "../../../vibe64-usage-recording/runtime/node";
-
+// recorder runtime of the installation this helper belongs to: the usage
+// recording package beside the helper's own package, or in a node_modules
+// folder above the helper's real location.
 function usageRecordingNodeOptions(preload = "", helperPath = process.argv[1]) {
   const requested = String(preload);
   try {
-    const root = realpathSync(path.resolve(path.dirname(realpathSync(helperPath)), USAGE_RECORDING_NODE_RUNTIME));
+    const helper = realpathSync(helperPath);
+    const candidates = [path.resolve(path.dirname(helper), "../../../vibe64-usage-recording/runtime/node")];
+    for (let directory = path.dirname(helper); ; directory = path.dirname(directory)) {
+      candidates.push(path.join(directory, "node_modules/@local/vibe64-usage-recording/runtime/node"));
+      if (path.dirname(directory) === directory) break;
+    }
+    const roots = candidates.filter((candidate) => existsSync(candidate)).map((candidate) => realpathSync(candidate));
     if (path.isAbsolute(requested) && !/[\s"'\\]/u.test(requested) && path.resolve(requested) === requested &&
-        realpathSync(requested) === requested && requested.startsWith(`${root}${path.sep}`) && statSync(requested).isFile()) {
+        realpathSync(requested) === requested && statSync(requested).isFile() &&
+        roots.some((root) => requested.startsWith(`${root}${path.sep}`))) {
       return `--import=${requested}`;
     }
   } catch {

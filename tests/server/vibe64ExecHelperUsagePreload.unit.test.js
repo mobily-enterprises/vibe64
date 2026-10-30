@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,37 +7,44 @@ import test from "node:test";
 import { helperChildEnv, usageRecordingNodeOptions as helperNodeOptions } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/src/server/request.js";
 import { usageRecordingNodeOptions as localNodeOptions } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
+import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
 
-// An installation laid out like the source tree and a release: the helper and
-// the recorder runtime are siblings below one packages directory.
-async function installation(t) {
+// Where the checking code and the recorder runtime may sit: the source tree's
+// sibling packages, an application's node_modules, and a helper installed on
+// its own with the runtime in a node_modules folder above it.
+const LAYOUTS = Object.freeze({
+  source: ["packages/vibe64-execution/src/host/execHelper.js", "packages/vibe64-usage-recording/runtime/node"],
+  application: ["app/node_modules/@local/vibe64-execution/src/host/execHelper.js", "app/node_modules/@local/vibe64-usage-recording/runtime/node"],
+  installed: ["lib/vibe64/vibe64-exec-helper", "lib/vibe64/node_modules/@local/vibe64-usage-recording/runtime/node"]
+});
+
+async function installation(t, layout) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-usage-preload-"));
   t.after(() => rm(root, { force: true, recursive: true }));
-  const helper = path.join(root, "install/vibe64-execution/src/host/execHelper.js");
-  const runtime = path.join(root, "install/vibe64-usage-recording/runtime/node");
+  const helper = path.join(root, LAYOUTS[layout][0]);
+  const runtime = path.join(root, LAYOUTS[layout][1]);
   await mkdir(path.dirname(helper), { recursive: true });
   await mkdir(path.join(runtime, "directory.mjs"), { recursive: true });
-  await mkdir(path.join(root, "other"), { recursive: true });
+  await mkdir(path.join(root, "other/vibe64-usage-recording/runtime/node"), { recursive: true });
   await writeFile(helper, "");
   await writeFile(path.join(runtime, "preload.mjs"), "");
-  await writeFile(path.join(root, "other/preload.mjs"), "");
+  await writeFile(path.join(root, "other/vibe64-usage-recording/runtime/node/preload.mjs"), "");
   await symlink(path.join(runtime, "preload.mjs"), path.join(runtime, "alias.mjs"));
-  await symlink(path.join(root, "other/preload.mjs"), path.join(runtime, "outside.mjs"));
-  await symlink(path.join(root, "install"), path.join(root, "linked"));
+  await symlink(path.join(root, "other/vibe64-usage-recording/runtime/node/preload.mjs"), path.join(runtime, "outside.mjs"));
+  await symlink(path.dirname(runtime), path.join(root, "linked"));
   const allowed = path.join(runtime, "preload.mjs");
   return {
     allowed,
     helper,
-    runtime,
     refused: [
-      path.join(root, "other/preload.mjs"),
-      path.join(root, "linked/vibe64-usage-recording/runtime/node/preload.mjs"),
+      path.join(root, "other/vibe64-usage-recording/runtime/node/preload.mjs"),
+      path.join(root, "linked/node/preload.mjs"),
       path.join(runtime, "alias.mjs"),
       path.join(runtime, "outside.mjs"),
       path.join(runtime, "directory.mjs"),
       path.join(runtime, "missing.mjs"),
       `${runtime}/../node/preload.mjs`,
-      "install/vibe64-usage-recording/runtime/node/preload.mjs",
+      path.relative(root, allowed),
       `${allowed} --require=/x`,
       ""
     ]
@@ -45,23 +52,31 @@ async function installation(t) {
 }
 
 test("the exec helper sets NODE_OPTIONS only for the recorder preload of its own installation", async (t) => {
-  const { allowed, helper, refused } = await installation(t);
-  assert.equal(helperNodeOptions(allowed, helper), `--import=${allowed}`);
-  for (const preload of refused) {
-    assert.throws(() => helperNodeOptions(preload, helper), /usage recording preload outside its runtime/u, preload);
+  for (const layout of Object.keys(LAYOUTS)) {
+    const { allowed, helper, refused } = await installation(t, layout);
+    assert.equal(helperNodeOptions(allowed, helper), `--import=${allowed}`, layout);
+    for (const preload of refused) {
+      assert.throws(() => helperNodeOptions(preload, helper), /usage recording preload outside its runtime/u, `${layout}: ${preload}`);
+    }
   }
   // A caller's own NODE_OPTIONS never reaches the child.
-  const env = helperChildEnv({ NODE_OPTIONS: `--import=${allowed}`, KEEP: "yes" },
+  const env = helperChildEnv({ NODE_OPTIONS: "--import=/x/preload.mjs", KEEP: "yes" },
     { home: "/home/member", username: "member" }, "v64d_workspace");
   assert.equal(env.NODE_OPTIONS, undefined);
   assert.equal(env.KEEP, "yes");
 });
 
 test("an unmanaged launch applies the same preload check before setting NODE_OPTIONS", async (t) => {
-  const { allowed, refused, runtime } = await installation(t);
-  assert.equal(localNodeOptions(allowed, runtime), `--import=${allowed}`);
-  for (const preload of refused) {
-    assert.throws(() => localNodeOptions(preload, runtime), { code: "vibe64_usage_recording_preload_invalid" }, preload);
+  // This checkout's own Node.js recorder, as its tracer hands it over.
+  const preload = await realpath(nodejs.prepare({}).nodePreload);
+  assert.equal(localNodeOptions(preload), `--import=${preload}`);
+  for (const layout of ["source", "application"]) {
+    const { allowed, helper, refused } = await installation(t, layout);
+    const checker = path.join(path.dirname(path.dirname(helper)), "server/runVibe64Command.js");
+    assert.equal(localNodeOptions(allowed, checker), `--import=${allowed}`, layout);
+    for (const preload of refused) {
+      assert.throws(() => localNodeOptions(preload, checker), { code: "vibe64_usage_recording_preload_invalid" }, `${layout}: ${preload}`);
+    }
   }
 });
 
