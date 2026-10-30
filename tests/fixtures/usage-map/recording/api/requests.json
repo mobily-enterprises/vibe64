@@ -54,5 +54,6 @@
       "componentFile": "src/components/SessionList.vue"
     }
   ],
-  "nextCursor": null
+  "nextCursor": null,
+  "total": 4
 }

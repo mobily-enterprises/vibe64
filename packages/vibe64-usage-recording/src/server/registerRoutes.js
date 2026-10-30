@@ -39,7 +39,9 @@ function registerRoutes(http, { projectContext = null } = {}) {
         return {
           ...ids(request), ...pageQuery(query),
           ...(query.q !== undefined ? { q: String(query.q) } : {}),
-          ...(query.includeEmpty !== undefined ? { includeEmpty: ["1", "true"].includes(String(query.includeEmpty)) } : {})
+          ...(query.includeEmpty !== undefined ? { includeEmpty: ["1", "true"].includes(String(query.includeEmpty)) } : {}),
+          ...(query.order !== undefined ? { order: String(query.order) } : {}),
+          ...(query.requestId !== undefined ? { requestId: String(query.requestId) } : {})
         };
       }],
     ["GET", "/:recordingId/requests/:requestId/functions", "request-functions.read", "List the project functions one request ran.",

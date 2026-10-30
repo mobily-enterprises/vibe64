@@ -46,8 +46,9 @@ follows it on every pane.
 The `vibe64.usage-recording.*` actions sit under one session's
 `/usage-recordings` routes: list the recordable Output targets, start, read the
 current recording, list recent ones, stop, dismiss, delete, page a recording's
-requests and one request's functions, and record a Preview interaction (a
-click, Enter or submit, with an optional component file). Editor clients send
+requests (oldest or newest first, with the matching total, or one by its id)
+and one request's functions, and record a Preview interaction (a click, Enter
+or submit, with an optional component file). Editor clients send
 interactions from the Preview page bridge while the recording runs. Each
 interaction number is accepted once: a repeat is refused with the next free
 number, and a recording names its highest accepted number so a page opened

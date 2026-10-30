@@ -55,7 +55,7 @@ access. All are excluded from assistant tools.
 | `GET /` | `list` | `{ recordings }`, newest first, at most 10 |
 | `POST /:recordingId/stop` | `stop` | `{ recording }`, idempotent |
 | `POST /:recordingId/dismiss` | `dismiss` | `{ recording }` |
-| `GET /:recordingId/requests?cursor&limit&q&includeEmpty` | `requests.read` | `{ requests, interactions, nextCursor }` |
+| `GET /:recordingId/requests?cursor&limit&q&includeEmpty&order&requestId` | `requests.read` | `{ requests, interactions, nextCursor, total }`: oldest first, or newest first with `order=newest`; `total` counts every matching row; `requestId` reads that one row |
 | `GET /:recordingId/requests/:requestId/functions?cursor&limit` | `request-functions.read` | `{ functions, total, truncated }` |
 | `POST /:recordingId/interactions` | `interaction.record` | `{ ok }` |
 | `DELETE /:recordingId` | `delete` | `{ ok }` |

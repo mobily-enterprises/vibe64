@@ -21,7 +21,8 @@ const OPERATIONS = [
   ["dismiss", "dismiss", "command", { recordingId }],
   ["list", "list", "query", {}],
   ["requests.read", "readRequests", "query", {
-    recordingId, ...page, q: optionalText(200), includeEmpty: { type: "boolean", required: false }
+    recordingId, ...page, q: optionalText(200), includeEmpty: { type: "boolean", required: false },
+    order: { type: "string", enum: ["oldest", "newest"], required: false }, requestId: optionalText(64)
   }],
   ["request-functions.read", "readRequestFunctions", "query", { recordingId, requestId: text(64), ...page }],
   ["interaction.record", "recordInteraction", "command", {
