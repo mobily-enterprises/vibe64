@@ -119,17 +119,28 @@ async function capture(page, name: string) {
 
 const COMPONENT_ENTRY = "entry:component:src/components/SessionList.vue";
 
-for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }, { width: 360, height: 780 }]) {
+// With the chat open, 1280 px leaves Usage about 760 px, narrower than the
+// graph, so a subsystem lists its functions as rows, as phones do; with the
+// chat collapsed it draws the graph.
+for (const viewport of [
+  { width: 1280, height: 800, chat: "open" },
+  { width: 1280, height: 800, chat: "collapsed" },
+  { width: 390, height: 844 },
+  { width: 360, height: 780 }
+]) {
   const phone = viewport.width <= 600;
-  test(`Usage shows what one entry reaches, keeps its address and lists recorded requests at ${viewport.width}px`, async ({ page }) => {
+  const rows = phone || viewport.chat === "open";
+  const name = viewport.chat ? `${viewport.width}px with the chat ${viewport.chat}` : `${viewport.width}px`;
+  test(`Usage shows what one entry reaches, keeps its address and lists recorded requests at ${name}`, async ({ page }) => {
     test.setTimeout(90_000);
-    await page.setViewportSize(viewport);
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const usageRequests = await mockProject(page);
-    const shot = (level: string) => capture(page, `${viewport.width}-${level}`);
+    const shot = (level: string) => capture(page, `${[viewport.width, viewport.chat].filter(Boolean).join("-chat-")}-${level}`);
 
     await page.goto(`${DEVELOPMENT_PATH}/dashboard/system`);
+    if (viewport.chat === "collapsed") await page.getByRole("button", { name: "Collapse chat", exact: true }).click();
     const sheet = page.getByRole("region", { name: "UI and Engine architecture" });
     await expect(sheet.getByRole("heading", { level: 1, name: "Architecture" })).toBeVisible({ timeout: 20_000 });
     await sheet.getByRole("group", { name: "Architecture view" }).getByRole("button", { name: "Usage" }).click();
@@ -163,7 +174,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     await client.click();
     await expect(usage.getByRole("button", { name: "All subsystems" })).toBeVisible();
     await expect(page).toHaveURL(/subsystem=directory%3Asrc|subsystem=directory:src/u);
-    const addSession = phone ? usage.locator(".usage-web__rows .v-list-item").filter({ hasText: "addSession" }) : usage.getByRole("button", { name: /^addSession,/u });
+    const addSession = rows ? usage.locator(".usage-web__rows .v-list-item").filter({ hasText: "addSession" }) : usage.getByRole("button", { name: /^addSession,/u });
     await expect(addSession).toBeVisible();
     await shot("2-functions");
 
@@ -179,6 +190,8 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     // Reload: the address brings back the same entry, mode and subsystem.
     await page.reload();
     await expect(usage.getByRole("button", { name: "All subsystems" })).toBeVisible({ timeout: 20_000 });
+    // The chat opens again on reload.
+    if (viewport.chat === "collapsed") await page.getByRole("button", { name: "Collapse chat", exact: true }).click();
     await expect(addSession).toBeVisible();
     expect(usageRequests.some((request) => request.startsWith("web?") && request.includes(encodeURIComponent(COMPONENT_ENTRY)) && request.includes("subsystemId=directory%3Asrc"))).toBe(true);
 
