@@ -1,22 +1,4 @@
 import {
-  ACTION_REPOSITORY_REMOTE,
-  ACTION_READ_ONBOARDING,
-  ACTION_APPLY_TEMPLATE,
-  ACTION_CREATE_PROJECT,
-  ACTION_LIST_PROJECTS,
-  ACTION_READ_ENGINEERING_SETTINGS,
-  ACTION_READ_ENV,
-  ACTION_READ_PROJECT_SETTINGS,
-  ACTION_READ_PREVIEW_APPLICATION_IDENTITIES,
-  ACTION_SAVE_DEVELOPMENT_DATABASE_SCOPE,
-  ACTION_SAVE_COLLABORATION_SETTINGS,
-  ACTION_SAVE_ENV_USER_VALUES,
-  ACTION_SAVE_ENGINEERING_PROFILE,
-  ACTION_SAVE_PROJECT_PROMPT_HINTS,
-  ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES,
-  ACTION_SELECT_PROJECT
-} from "./actions.js";
-import {
   projectRemoteInputValidator,
   projectIssueInputValidators,
   projectPullRequestInputValidators,
@@ -38,19 +20,26 @@ import {
   previewApplicationIdentitiesInputValidator,
   previewApplicationIdentitiesReadInputValidator
 } from "./inputSchemas.js";
-import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
+import {
+  VIBE64_PROJECT_ROUTE_BASE,
+  requestBody,
+  requestQuery,
+  vibe64RouteHandler,
+  vibe64RouteHttp
+} from "@local/vibe64-core/server/featureRoutes";
 
 function registerRoutes(http, {
-  projectContext = null,
-  routeSurface = "",
-  routeRelativePath = ""
+  projectContext = null
 } = {}) {
-  const routes = createVibe64FeatureRoutes(http, {
-    localRequestMessage: "Vibe64 project routes only accept loopback Studio requests.",
-    projectContext,
-    routeRelativePath,
-    routeSurface,
-    tags: ["studio", "vibe64-project"]
+  const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-project"] }), {
+    routeBase: VIBE64_PROJECT_ROUTE_BASE,
+    relativePath: "vibe64",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({
+      localRequestMessage: "Vibe64 project routes only accept loopback Studio requests.",
+      projectContext
+    })
   });
   routes.actionRoute("GET", "/repository/remote", {
     actionId: "vibe64.project.repository.remote.read",
@@ -58,28 +47,15 @@ function registerRoutes(http, {
   });
   routes.actionRoute("GET", "/repository/branches", {
     actionId: "vibe64.project.repository.branches.read",
-    buildInput: (request) => routes.requestQuery(request),
+    buildInput: (request) => requestQuery(request),
     summary: "List repository branches for a new session."
   });
   routes.actionRoute("PUT", "/repository/workflow", {
     actionId: "vibe64.project.repository.workflow.save",
-    buildInput: (request) => ({ requirePullRequest: routes.requestBody(request).requirePullRequest }),
+    buildInput: (request) => ({ requirePullRequest: requestBody(request).requirePullRequest }),
     summary: "Choose whether Save requires a pull request."
   });
 
-  function githubRoute(method, path, family, operation, validator, summary, bodyLimit) {
-    routes.actionRoute(method, path, {
-      actionId: `vibe64.project.${family}.${operation}`, summary, bodyLimit,
-      buildInput(request) {
-        const data = { ...(method === "GET" ? routes.requestQuery(request) : routes.requestBody(request)), ...request.params };
-        // Derive HTTP fields from the action contract. URL identities take
-        // precedence; actor, repository and operation are never caller inputs.
-        const input = Object.fromEntries(Object.keys(validator.schema.getFieldDefinitions())
-          .filter((name) => data[name] !== undefined).map((name) => [name, data[name]]));
-        return input;
-      }
-    });
-  }
   for (const [method, path, operation, summary, bodyLimit] of [
     ["GET", "/issues", "list", "List GitHub issues for this project."],
     ["POST", "/issues", "create", "Create a GitHub issue in this project.", 300_000],
@@ -92,51 +68,59 @@ function registerRoutes(http, {
     ["PATCH", "/issues/:number", "state", "Close or reopen this project's GitHub issue."],
     ["PUT", "/issues/:number", "edit", "Edit this project's GitHub issue title and description.", 300_000],
     ["PATCH", "/issues/:number/comments/:commentId", "edit-comment", "Edit a comment on this project's GitHub issue.", 300_000]
-  ]) githubRoute(method, path, "issues", operation, projectIssueInputValidators[operation], summary, bodyLimit);
+  ]) routes.actionRoute(method, path, {
+    actionId: `vibe64.project.issues.${operation}`, summary, bodyLimit,
+    buildInput: githubActionInput(method, projectIssueInputValidators[operation])
+  });
   for (const [method, path, operation, summary] of [
     ["GET", "/pull-requests", "list", "List GitHub pull requests for this project."],
     ["GET", "/pull-requests/:number", "read", "Read a GitHub pull request."],
-    ...["ready", "update-branch", "merge"].map((operation) => ["POST", `/pull-requests/:number/${operation}`, operation, `Apply the reviewed ${operation} action to a GitHub pull request.`])
-  ]) githubRoute(method, path, "pull-requests", operation, projectPullRequestInputValidators[operation], summary);
+    ["POST", "/pull-requests/:number/ready", "ready", "Apply the reviewed ready action to a GitHub pull request."],
+    ["POST", "/pull-requests/:number/update-branch", "update-branch", "Apply the reviewed update-branch action to a GitHub pull request."],
+    ["POST", "/pull-requests/:number/merge", "merge", "Apply the reviewed merge action to a GitHub pull request."]
+  ]) routes.actionRoute(method, path, {
+    actionId: `vibe64.project.pull-requests.${operation}`, summary,
+    buildInput: githubActionInput(method, projectPullRequestInputValidators[operation])
+  });
 
   routes.actionRoute("POST", "/repository/remote", {
-    actionId: ACTION_REPOSITORY_REMOTE,
+    actionId: "vibe64.project.repository.remote",
     body: projectRemoteInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: requestBody,
     summary: "Fetch, pull, push or configure the opened local repository."
   });
 
   routes.actionRoute("GET", "/projects", {
-    actionId: ACTION_LIST_PROJECTS,
+    actionId: "vibe64.project.projects.list",
     summary: "List selectable Vibe64 projects."
   });
   routes.actionRoute("GET", "/onboarding", {
-    actionId: ACTION_READ_ONBOARDING,
-    buildInput: routes.requestQuery,
+    actionId: "vibe64.project.onboarding.read",
+    buildInput: requestQuery,
     query: projectOnboardingInputValidator,
     summary: "Inspect project opening state and available templates."
   });
   routes.actionRoute("POST", "/templates/apply", {
-    actionId: ACTION_APPLY_TEMPLATE,
-    buildInput: routes.requestBody,
+    actionId: "vibe64.project.templates.apply",
+    buildInput: requestBody,
     body: projectTemplateInputValidator,
     summary: "Apply a configured template to an empty session source."
   });
   routes.actionRoute("POST", "/projects", {
-    actionId: ACTION_CREATE_PROJECT,
+    actionId: "vibe64.project.projects.create",
     body: projectCreateInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: requestBody,
     summary: "Create and select a Vibe64 project."
   });
   routes.actionRoute("POST", "/projects/select", {
-    actionId: ACTION_SELECT_PROJECT,
+    actionId: "vibe64.project.projects.select",
     body: projectSelectInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: requestBody,
     summary: "Select an existing Vibe64 project."
   });
   routes.actionRoute("GET", "/env", {
-    actionId: ACTION_READ_ENV,
-    buildInput: routes.requestQuery,
+    actionId: "vibe64.project.env.read",
+    buildInput: requestQuery,
     query: projectEnvReadInputValidator,
     summary: "Read project Env values."
   });
@@ -155,72 +139,82 @@ function registerRoutes(http, {
       reply
         .header("cache-control", "no-store")
         .header("pragma", "no-cache");
-      return request.executeAction({ actionId, input: withoutUser(routes.requestBody(request)) });
+      return request.executeAction({ actionId, input: withoutUser(requestBody(request)) });
     });
   }
   routes.actionRoute("PUT", "/env/user-values", {
-    actionId: ACTION_SAVE_ENV_USER_VALUES,
+    actionId: "vibe64.project.env.user-values.save",
     body: projectEnvUserValuesInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: requestBody,
     summary: "Save user-owned project Env values."
   });
   routes.actionRoute("GET", "/settings", {
-    actionId: ACTION_READ_PROJECT_SETTINGS,
-    buildInput: (request) => withoutUser(routes.requestQuery(request)),
+    actionId: "vibe64.project.settings.read",
+    buildInput: (request) => withoutUser(requestQuery(request)),
     query: projectSettingsReadInputValidator,
     summary: "Read Vibe64 and source-owned project settings."
   });
   routes.actionRoute("PUT", "/settings/connections", {
     actionId: "vibe64.project.connections.save",
     body: projectConnectedProjectsInputValidator,
-    buildInput: (request) => withoutUser(routes.requestBody(request)),
+    buildInput: (request) => withoutUser(requestBody(request)),
     statusCode: projectSettingsMutationStatusCode,
     summary: "Save the connected-project list in this source checkout."
   });
   routes.actionRoute("PUT", "/settings/collaboration", {
-    actionId: ACTION_SAVE_COLLABORATION_SETTINGS,
+    actionId: "vibe64.project.collaboration.save",
     body: projectCollaborationInputValidator,
-    buildInput: (request) => withoutUser(routes.requestBody(request)),
+    buildInput: (request) => withoutUser(requestBody(request)),
     statusCode: projectSettingsMutationStatusCode,
     summary: "Save Genesis collaboration guidance in project source."
   });
   routes.actionRoute("PUT", "/settings/prompt-hints", {
-    actionId: ACTION_SAVE_PROJECT_PROMPT_HINTS,
+    actionId: "vibe64.project.prompt-hints.save",
     body: projectPromptHintsInputValidator,
-    buildInput: (request) => withoutUser(routes.requestBody(request)),
+    buildInput: (request) => withoutUser(requestBody(request)),
     statusCode: projectSettingsMutationStatusCode,
     summary: "Save the Vibe64 prompt-suggestion choice."
   });
   routes.actionRoute("PUT", "/settings/development-database", {
-    actionId: ACTION_SAVE_DEVELOPMENT_DATABASE_SCOPE,
+    actionId: "vibe64.project.development-database.scope.save",
     body: projectDevelopmentDatabaseScopeInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: requestBody,
     summary: "Choose whether the host manages one development database per session or per project."
   });
   routes.actionRoute("GET", "/settings/engineering", {
-    actionId: ACTION_READ_ENGINEERING_SETTINGS,
-    buildInput: routes.requestQuery,
+    actionId: "vibe64.project.engineering.read",
+    buildInput: requestQuery,
     query: projectEngineeringSettingsReadInputValidator,
     summary: "Read the Genesis engineering profile from project source."
   });
   routes.actionRoute("PUT", "/settings/engineering", {
-    actionId: ACTION_SAVE_ENGINEERING_PROFILE,
+    actionId: "vibe64.project.engineering.profile.save",
     body: projectEngineeringProfileInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: requestBody,
     summary: "Save the Genesis engineering profile in project source."
   });
   routes.actionRoute("GET", "/preview-identities", {
-    actionId: ACTION_READ_PREVIEW_APPLICATION_IDENTITIES,
-    buildInput: routes.requestQuery,
+    actionId: "vibe64.project.preview-identities.read",
+    buildInput: requestQuery,
     query: previewApplicationIdentitiesReadInputValidator,
     summary: "Read repository-managed app identities from project source."
   });
   routes.actionRoute("PUT", "/preview-identities", {
-    actionId: ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES,
+    actionId: "vibe64.project.preview-identities.save",
     body: previewApplicationIdentitiesInputValidator,
-    buildInput: routes.requestBody,
+    buildInput: requestBody,
     summary: "Save repository-managed app identities to project source."
   });
+}
+
+// Derive HTTP fields from the action contract. URL identities take precedence;
+// actor, repository and operation are never caller inputs.
+function githubActionInput(method, validator) {
+  return function buildGithubActionInput(request) {
+    const data = { ...(method === "GET" ? requestQuery(request) : requestBody(request)), ...request.params };
+    return Object.fromEntries(Object.keys(validator.schema.getFieldDefinitions())
+      .filter((name) => data[name] !== undefined).map((name) => [name, data[name]]));
+  };
 }
 
 function envSecretStatusCode(response = {}) {

@@ -161,10 +161,7 @@ function createVibe64SessionsFeature() {
       });
       registerApprovalCountReader(countWaitingMainChatApprovals);
       project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
-      registerRoutes(http, {
-        routeRelativePath: "vibe64",
-        routeSurface: "app"
-      });
+      registerRoutes(http);
       return { sessions };
     },
     actions({ sessions }) {

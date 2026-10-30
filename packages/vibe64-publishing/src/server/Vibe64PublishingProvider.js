@@ -26,7 +26,7 @@ const Vibe64PublishingProvider = defineFeature({
   },
   setup({ colleague, http, project, sourceEditor }, { actionCatalogue }) {
     const publishing = createPublishingService({ project, sourceEditor });
-    registerRoutes(http, { publishing, routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(http, { publishing });
     colleague.registerWatchSource(publicationWatchSource({ actions: actionCatalogue }));
     return { publishing };
   },

@@ -1,15 +1,4 @@
 import {
-  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING, ACTION_PREVIEW_MODEL_ROUTING,
-  ACTION_READ_CODEX_PROVIDERS, ACTION_SAVE_CODEX_PROVIDER, ACTION_REMOVE_CODEX_PROVIDER,
-  ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
-  ACTION_LOGOUT_ACCOUNT,
-  ACTION_READ_ACCOUNTS,
-  ACTION_READ_ACCOUNT_AUTH_SESSION,
-  ACTION_SAVE_GIT_IDENTITY,
-  ACTION_SAVE_PERSONAL_AI_PROFILE,
-  ACTION_START_ACCOUNT_AUTH
-} from "./actions.js";
-import {
   aiConnectionInputValidators,
   modelRoutingInputValidator,
   modelRoutingReadInputValidator,
@@ -21,162 +10,145 @@ import {
   gitIdentityInputValidator,
   personalAiProfileInputValidator
 } from "./inputSchemas.js";
+import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
-import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import {
+  VIBE64_PROJECT_ROUTE_BASE,
+  requestBody,
+  requestQuery,
+  vibe64RouteHandler,
+  vibe64RouteHttp
+} from "@local/vibe64-core/server/featureRoutes";
 import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
 
+const ACCOUNT_ROUTE_TAGS = Object.freeze(["studio", "vibe64-accounts"]);
+const LOCAL_REQUEST_MESSAGE = "Vibe64 account routes only accept loopback Studio requests.";
+
+// Accounts are reached both inside a project and outside any project, so every
+// route is registered under both scopes.
 function registerRoutes(
   http,
   {
     accounts = null,
     aiConnectionService = null,
     fastify = null,
-    projectContext = null,
-    routeSurface = "",
-    routeRelativePath = "",
-    projectScoped = true
+    projectContext = null
   } = {}
 ) {
   if (!accounts || typeof accounts.subscribeAuthTerminal !== "function") {
     throw new TypeError("registerRoutes requires the Vibe64 Accounts API.");
   }
 
-  const routes = createVibe64FeatureRoutes(http, {
-    localRequestMessage: "Vibe64 account routes only accept loopback Studio requests.",
-    projectContext,
-    routeRelativePath,
-    routeSurface,
-    projectScoped,
-    tags: ["studio", "vibe64-accounts"]
+  const projectRoutes = createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
+    routeBase: VIBE64_PROJECT_ROUTE_BASE,
+    relativePath: "vibe64/accounts",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({ localRequestMessage: LOCAL_REQUEST_MESSAGE, projectContext })
+  });
+  const workspaceRoutes = createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
+    relativePath: "vibe64/accounts",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({ localRequestMessage: LOCAL_REQUEST_MESSAGE, projectScoped: false })
   });
 
-  routes.actionRoute("GET", "", {
-    actionId: ACTION_READ_ACCOUNTS,
-    buildInput: (request) => queryInput(routes, request),
-    query: accountsReadInputValidator,
-    summary: "Read Vibe64 account readiness."
-  });
-
-  if (aiConnectionService) {
-    registerAiConnectionRoutes((method, suffix, handler) => {
-      routes.serviceRoute(method, `/ai-connections${suffix}`, {
-        summary: "Manage AI provider connections."
-      }, async (request) => {
-        try {
-          return await handler({
-            body: routes.requestBody(request),
-            query: routes.requestQuery(request),
-            params: request.params,
-            executeAction: request.executeAction
-          });
-        } catch (error) {
-          return {
-            ...vibe64ErrorResponse(error),
-            statusCode: error.statusCode || 500,
-            ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {})
-          };
-        }
-      });
-    });
+  const bodyInput = (request) => withoutVibe64User(requestBody(request));
+  const queryInput = (request) => withoutVibe64User(requestQuery(request));
+  const operationOptions = {
+    read: { buildInput: queryInput, query: accountsReadInputValidator,
+      summary: "Read Vibe64 account readiness." },
+    "codex-providers.read": { buildInput: () => withoutVibe64User(),
+      summary: "Read curated Codex provider connections." },
+    "codex-providers.save": { body: codexProviderInputValidator, buildInput: bodyInput,
+      summary: "Check and connect a curated Codex provider." },
+    "codex-providers.remove": { body: codexProviderInputValidator, buildInput: bodyInput,
+      summary: "Disconnect a curated Codex provider." },
+    "model-routing.read": { query: modelRoutingReadInputValidator, buildInput: queryInput,
+      summary: "Read model roles, availability, and recommendations." },
+    "model-routing.save": { body: modelRoutingInputValidator, buildInput: bodyInput,
+      summary: "Save the workspace's owner and team AI setups." },
+    "model-routing.preview": { body: modelRoutingInputValidator, buildInput: bodyInput,
+      summary: "Preview the owner and team AI setups without saving or running AI." },
+    "auth.start": { body: accountAuthStartInputValidator, buildInput: bodyInput,
+      summary: "Start an Vibe64 account login flow." },
+    logout: { body: accountIdInputValidator, buildInput: bodyInput,
+      summary: "Log out an Vibe64 account." },
+    "git-identity.save": { body: gitIdentityInputValidator, buildInput: bodyInput,
+      summary: "Save the Git identity used for Vibe64 GitHub operations." },
+    "personal-ai-profile.save": { body: personalAiProfileInputValidator, buildInput: bodyInput,
+      summary: "Save the standalone Vibe64 personal AI profile." },
+    "auth-session.read": { buildInput: sessionInput, params: accountAuthSessionParamsValidator,
+      summary: "Read an Vibe64 account login session." },
+    "auth-session.cancel": { buildInput: sessionInput, params: accountAuthSessionParamsValidator,
+      summary: "Cancel an Vibe64 account login session." }
+  };
+  for (const [method, suffix, operation] of [
+    ["GET", "", "read"],
+    ["GET", "/codex-providers", "codex-providers.read"],
+    ["PATCH", "/codex-providers", "codex-providers.save"],
+    ["POST", "/codex-providers/remove", "codex-providers.remove"],
+    ["GET", "/model-routing", "model-routing.read"],
+    ["PATCH", "/model-routing", "model-routing.save"],
+    ["POST", "/model-routing/preview", "model-routing.preview"],
+    ["POST", "/auth", "auth.start"],
+    ["POST", "/logout", "logout"],
+    ["POST", "/git-identity", "git-identity.save"],
+    ["PATCH", "/personal-ai-profile", "personal-ai-profile.save"],
+    ["GET", "/auth/:sessionId", "auth-session.read"],
+    ["DELETE", "/auth/:sessionId", "auth-session.cancel"]
+  ]) {
+    projectRoutes.actionRoute(method, suffix, { ...operationOptions[operation], actionId: `vibe64.accounts.${operation}` });
+    workspaceRoutes.actionRoute(method, suffix, { ...operationOptions[operation], actionId: `vibe64.accounts.${operation}` });
   }
 
-  routes.actionRoute("GET", "/codex-providers", {
-    actionId: ACTION_READ_CODEX_PROVIDERS,
-    buildInput: () => withoutVibe64User(),
-    summary: "Read curated Codex provider connections."
-  });
-  routes.actionRoute("PATCH", "/codex-providers", {
-    actionId: ACTION_SAVE_CODEX_PROVIDER, body: codexProviderInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Check and connect a curated Codex provider."
-  });
-  routes.actionRoute("POST", "/codex-providers/remove", {
-    actionId: ACTION_REMOVE_CODEX_PROVIDER, body: codexProviderInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Disconnect a curated Codex provider."
-  });
-
-  routes.actionRoute("GET", "/model-routing", {
-    actionId: ACTION_READ_MODEL_ROUTING, query: modelRoutingReadInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestQuery(request)),
-    summary: "Read model roles, availability, and recommendations."
-  });
-  routes.actionRoute("PATCH", "/model-routing", {
-    actionId: ACTION_SAVE_MODEL_ROUTING, body: modelRoutingInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Save the workspace's owner and team AI setups."
-  });
-  routes.actionRoute("POST", "/model-routing/preview", {
-    actionId: ACTION_PREVIEW_MODEL_ROUTING, body: modelRoutingInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Preview the owner and team AI setups without saving or running AI."
-  });
-  routes.actionRoute("POST", "/auth", {
-    actionId: ACTION_START_ACCOUNT_AUTH,
-    body: accountAuthStartInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Start an Vibe64 account login flow."
-  });
-
-  routes.actionRoute("POST", "/logout", {
-    actionId: ACTION_LOGOUT_ACCOUNT,
-    body: accountIdInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Log out an Vibe64 account."
-  });
-
-  routes.actionRoute("POST", "/git-identity", {
-    actionId: ACTION_SAVE_GIT_IDENTITY,
-    body: gitIdentityInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Save the Git identity used for Vibe64 GitHub operations."
-  });
-
-  routes.actionRoute("PATCH", "/personal-ai-profile", {
-    actionId: ACTION_SAVE_PERSONAL_AI_PROFILE,
-    body: personalAiProfileInputValidator,
-    buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Save the standalone Vibe64 personal AI profile."
-  });
-
-  routes.actionRoute("GET", "/auth/:sessionId", {
-    actionId: ACTION_READ_ACCOUNT_AUTH_SESSION,
-    buildInput: sessionInput,
-    params: accountAuthSessionParamsValidator,
-    summary: "Read an Vibe64 account login session."
-  });
-
-  routes.actionRoute("DELETE", "/auth/:sessionId", {
-    actionId: ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
-    buildInput: sessionInput,
-    params: accountAuthSessionParamsValidator,
-    summary: "Cancel an Vibe64 account login session."
-  });
-
-  registerTerminalWebSocketRoute(fastify, {
-    projectContext,
-    projectScoped,
-    resize(service, { cols, request, rows, terminalSessionId }) {
-      return service.resizeAuthTerminal(withVibe64User(request, {
-        sessionId: terminalSessionId
-      }), {
-        cols,
-        rows
+  for (const [routes, projectScoped] of [[projectRoutes, true], [workspaceRoutes, false]]) {
+    if (aiConnectionService) {
+      registerAiConnectionRoutes((method, suffix, handler) => {
+        routes.serviceRoute(method, `/ai-connections${suffix}`, {
+          summary: "Manage AI provider connections."
+        }, async (request) => {
+          try {
+            return await handler({
+              body: requestBody(request),
+              query: requestQuery(request),
+              params: request.params,
+              executeAction: request.executeAction
+            });
+          } catch (error) {
+            return {
+              ...vibe64ErrorResponse(error),
+              statusCode: error.statusCode || 500,
+              ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {})
+            };
+          }
+        });
       });
-    },
-    routePath: `${routes.routeBase}/auth/:terminalSessionId/ws`,
-    service: accounts,
-    subscribe(service, { request, subscriber, terminalSessionId }) {
-      return service.subscribeAuthTerminal(withVibe64User(request, {
-        sessionId: terminalSessionId
-      }), subscriber);
-    },
-    write(service, { data, request, terminalSessionId }) {
-      return service.writeAuthTerminal(withVibe64User(request, {
-        sessionId: terminalSessionId
-      }), data);
     }
-  });
+
+    registerTerminalWebSocketRoute(fastify, {
+      projectContext,
+      projectScoped,
+      resize(service, { cols, request, rows, terminalSessionId }) {
+        return service.resizeAuthTerminal(withVibe64User(request, {
+          sessionId: terminalSessionId
+        }), {
+          cols,
+          rows
+        });
+      },
+      routePath: `${routes.routeBase}/auth/:terminalSessionId/ws`,
+      service: accounts,
+      subscribe(service, { request, subscriber, terminalSessionId }) {
+        return service.subscribeAuthTerminal(withVibe64User(request, {
+          sessionId: terminalSessionId
+        }), subscriber);
+      },
+      write(service, { data, request, terminalSessionId }) {
+        return service.writeAuthTerminal(withVibe64User(request, {
+          sessionId: terminalSessionId
+        }), data);
+      }
+    });
+  }
 }
 
 function registerAiConnectionRoutes(register) {
@@ -199,10 +171,6 @@ function registerAiConnectionRoutes(register) {
       });
     });
   }
-}
-
-function queryInput(routes, request) {
-  return withoutVibe64User(routes.requestQuery(request));
 }
 
 function sessionInput(request) {

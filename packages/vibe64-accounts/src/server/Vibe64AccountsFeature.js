@@ -241,18 +241,7 @@ const Vibe64AccountsFeature = defineFeature({
       accounts,
       aiConnectionService,
       fastify,
-      projectContext,
-      routeRelativePath: "vibe64/accounts",
-      routeSurface: "app"
-    });
-    registerRoutes(http, {
-      accounts,
-      aiConnectionService,
-      fastify,
-      projectContext,
-      projectScoped: false,
-      routeRelativePath: "vibe64/accounts",
-      routeSurface: "app"
+      projectContext
     });
 
     return { accounts, connections };

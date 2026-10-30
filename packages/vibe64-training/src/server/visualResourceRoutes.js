@@ -1,11 +1,14 @@
+import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
-import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import { vibe64RouteHandler, vibe64RouteHttp } from "@local/vibe64-core/server/featureRoutes";
 import { TRAINING_VISUAL_RESOURCE_ACTION } from "./visualResourceActions.js";
 
 const TRAINING_VISUAL_RESOURCE_API_PATH = "/api/vibe64/training/attempts/:attemptId/visuals/:visualId";
 
 function registerTrainingVisualResourceRoutes(http) {
-  const routes = createVibe64FeatureRoutes(http, { projectScoped: false, routeSurface: "app", routeRelativePath: "vibe64/training" });
+  const routes = createActionRouteScope(vibe64RouteHttp(http), {
+    relativePath: "vibe64/training", surface: "app", wrapHandler: vibe64RouteHandler({ projectScoped: false })
+  });
   routes.serviceRoute("GET", "/attempts/:attemptId/visuals/:visualId", { summary: "Read the pinned lesson diagram" }, async (request, reply) => {
     reply.header("Cache-Control", "private, no-store");
     try {

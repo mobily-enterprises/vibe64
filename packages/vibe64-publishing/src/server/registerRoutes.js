@@ -1,9 +1,14 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 
-import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
-
-import { PUBLISHING_ACTIONS as A } from "./actions.js";
+import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
+import {
+  VIBE64_PROJECT_ROUTE_BASE,
+  requestBody,
+  requestQuery,
+  vibe64RouteHandler,
+  vibe64RouteHttp
+} from "@local/vibe64-core/server/featureRoutes";
 
 const CONFLICT_CODES = new Set([
   "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED",
@@ -23,53 +28,51 @@ function publishingStatusCode(response = {}) {
   return 400;
 }
 
-function registerRoutes(http, { publishing, projectContext = null, routeRelativePath = "", routeSurface = "" } = {}) {
-  const routes = createVibe64FeatureRoutes(http, {
-    localRequestMessage: "Vibe64 publishing routes only accept requests from this computer.",
-    projectContext,
-    routeRelativePath,
-    routeSurface,
-    tags: ["studio", "vibe64-publishing"]
+function registerRoutes(http, { publishing, projectContext = null } = {}) {
+  const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-publishing"] }), {
+    routeBase: VIBE64_PROJECT_ROUTE_BASE,
+    relativePath: "vibe64",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({
+      localRequestMessage: "Vibe64 publishing routes only accept requests from this computer.",
+      projectContext
+    })
   });
-  const base = "/publishing";
-  const route = (method, suffix, actionId, summary, buildInput = () => ({}), bodyLimit = 64 * 1024) => {
-    routes.actionRoute(method, `${base}${suffix}`, { actionId, buildInput, bodyLimit, statusCode: publishingStatusCode, summary });
-  };
-  const body = (request) => routes.requestBody(request);
+  const options = { bodyLimit: 64 * 1024, statusCode: publishingStatusCode };
 
-  route("GET", "", A.STATE_READ, "Read this project's publishing targets, saved baseline, keys status and recent releases.");
-  route("GET", "/release/suggestion", A.RELEASE_SUGGEST, "Suggest next versions and draft notes from the saved work.");
-  route("POST", "/release/prepare", A.RELEASE_PREPARE, "Write a version bump and changelog entry into a session for the person to Save.", body);
-  route("POST", "/targets", A.TARGET_ADD, "Add a publishing target.", body);
-  route("PATCH", "/targets/:targetId", A.TARGET_UPDATE, "Change a target's account or channel.", (request) => ({ ...body(request), targetId: request.params.targetId }));
-  route("DELETE", "/targets/:targetId", A.TARGET_REMOVE, "Remove a publishing target.", (request) => ({ targetId: request.params.targetId }));
-  route("POST", "/targets/:targetId/install-key", A.INSTALL_KEY_CREATE, "Create the phone install key for a target.", (request) => ({ targetId: request.params.targetId }));
-  route("POST", "/plan", A.PLAN_READ, "Build the exact release plan for the saved commit and run preflight.", body);
-  route("POST", "/baseline/push", A.BASELINE_PUSH, "Push the saved work to the project's remote, fast-forward only.");
-  route("POST", "/checks", A.CHECKS_RUN, "Run the project's checks on the saved commit.");
-  route("POST", "/dry-run", A.DRYRUN_RUN, "Start a dry run of the current plan.", body);
-  route("POST", "/confirmation", A.CONFIRMATION_OPEN, "Open the person's confirmation for the current plan.", body);
-  route("DELETE", "/confirmation/request", A.CONFIRMATION_DISMISS, "Dismiss a confirmation an assistant asked for.");
-  route("POST", "/releases", A.RELEASE_CONFIRM, "Confirm the plan and release in the background.", body);
-  route("GET", "/releases", A.HISTORY_LIST, "List recent releases and dry runs.", (request) => ({ limit: Number(routes.requestQuery(request).limit) || undefined }));
-  route("GET", "/releases/:releaseId", A.RELEASE_READ, "Read one release.", (request) => ({ releaseId: request.params.releaseId }));
-  route("GET", "/releases/:releaseId/logs", A.LOGS_READ, "Read one release's log.", (request) => ({ releaseId: request.params.releaseId }));
-  route("POST", "/keys", A.KEYS_CREATE, "Create the person's publishing keys with a passphrase.", body);
-  route("POST", "/keys/unlock", A.KEYS_UNLOCK, "Unlock the person's publishing keys for a while.", body);
-  route("POST", "/keys/lock", A.KEYS_LOCK, "Lock the person's publishing keys now.");
-  route("POST", "/accounts", A.ACCOUNT_ADD, "Add a publishing account to the person's keys.", body);
-  route("DELETE", "/accounts/:accountId", A.ACCOUNT_REMOVE, "Remove a publishing account.", (request) => ({ accountId: request.params.accountId }));
-  route("POST", "/recovery-kit", A.RECOVERY_KIT_CREATE, "Create a recovery kit of every publishing key.", body);
-  route("POST", "/recovery-kit/restore", A.RECOVERY_KIT_RESTORE, "Restore publishing keys from a recovery kit.", body, 12 * 1024 * 1024);
-  route("GET", "/toolchains/android/licence", A.LICENCE_READ, "Read Google's Android SDK licence.");
-  route("POST", "/toolchains/android/licence", A.LICENCE_ACCEPT, "Record the person's acceptance of the Android SDK licence.", body);
-  route("POST", "/toolchains/android", A.ANDROID_INSTALL, "Download Java and the Android SDK into the toolchains folder.");
-  route("POST", "/toolchains/python", A.PYTHON_INSTALL, "Set up the Python upload tools in the toolchains folder.");
-  route("POST", "/share", A.SHARE_START, "Share one signed APK on the local network for a few minutes.", body);
-  route("DELETE", "/share", A.SHARE_STOP, "Stop sharing the APK.");
+  routes.actionRoute("GET", "/publishing", { ...options, actionId: "vibe64.publication.state.read", summary: "Read this project's publishing targets, saved baseline, keys status and recent releases." });
+  routes.actionRoute("GET", "/publishing/release/suggestion", { ...options, actionId: "vibe64.publication.release.suggest", summary: "Suggest next versions and draft notes from the saved work." });
+  routes.actionRoute("POST", "/publishing/release/prepare", { ...options, actionId: "vibe64.publication.release.prepare", buildInput: requestBody, summary: "Write a version bump and changelog entry into a session for the person to Save." });
+  routes.actionRoute("POST", "/publishing/targets", { ...options, actionId: "vibe64.publication.target.add", buildInput: requestBody, summary: "Add a publishing target." });
+  routes.actionRoute("PATCH", "/publishing/targets/:targetId", { ...options, actionId: "vibe64.publication.target.update", buildInput: (request) => ({ ...requestBody(request), targetId: request.params.targetId }), summary: "Change a target's account or channel." });
+  routes.actionRoute("DELETE", "/publishing/targets/:targetId", { ...options, actionId: "vibe64.publication.target.remove", buildInput: (request) => ({ targetId: request.params.targetId }), summary: "Remove a publishing target." });
+  routes.actionRoute("POST", "/publishing/targets/:targetId/install-key", { ...options, actionId: "vibe64.publication.install-key.create", buildInput: (request) => ({ targetId: request.params.targetId }), summary: "Create the phone install key for a target." });
+  routes.actionRoute("POST", "/publishing/plan", { ...options, actionId: "vibe64.publication.plan.read", buildInput: requestBody, summary: "Build the exact release plan for the saved commit and run preflight." });
+  routes.actionRoute("POST", "/publishing/baseline/push", { ...options, actionId: "vibe64.publication.baseline.push", summary: "Push the saved work to the project's remote, fast-forward only." });
+  routes.actionRoute("POST", "/publishing/checks", { ...options, actionId: "vibe64.publication.checks.run", summary: "Run the project's checks on the saved commit." });
+  routes.actionRoute("POST", "/publishing/dry-run", { ...options, actionId: "vibe64.publication.dryrun.run", buildInput: requestBody, summary: "Start a dry run of the current plan." });
+  routes.actionRoute("POST", "/publishing/confirmation", { ...options, actionId: "vibe64.publication.confirmation.open", buildInput: requestBody, summary: "Open the person's confirmation for the current plan." });
+  routes.actionRoute("DELETE", "/publishing/confirmation/request", { ...options, actionId: "vibe64.publication.confirmation.dismiss", summary: "Dismiss a confirmation an assistant asked for." });
+  routes.actionRoute("POST", "/publishing/releases", { ...options, actionId: "vibe64.publication.release.confirm", buildInput: requestBody, summary: "Confirm the plan and release in the background." });
+  routes.actionRoute("GET", "/publishing/releases", { ...options, actionId: "vibe64.publication.history.list", buildInput: (request) => ({ limit: Number(requestQuery(request).limit) || undefined }), summary: "List recent releases and dry runs." });
+  routes.actionRoute("GET", "/publishing/releases/:releaseId", { ...options, actionId: "vibe64.publication.release.read", buildInput: (request) => ({ releaseId: request.params.releaseId }), summary: "Read one release." });
+  routes.actionRoute("GET", "/publishing/releases/:releaseId/logs", { ...options, actionId: "vibe64.publication.logs.read", buildInput: (request) => ({ releaseId: request.params.releaseId }), summary: "Read one release's log." });
+  routes.actionRoute("POST", "/publishing/keys", { ...options, actionId: "vibe64.publication.keys.create", buildInput: requestBody, summary: "Create the person's publishing keys with a passphrase." });
+  routes.actionRoute("POST", "/publishing/keys/unlock", { ...options, actionId: "vibe64.publication.keys.unlock", buildInput: requestBody, summary: "Unlock the person's publishing keys for a while." });
+  routes.actionRoute("POST", "/publishing/keys/lock", { ...options, actionId: "vibe64.publication.keys.lock", summary: "Lock the person's publishing keys now." });
+  routes.actionRoute("POST", "/publishing/accounts", { ...options, actionId: "vibe64.publication.account.add", buildInput: requestBody, summary: "Add a publishing account to the person's keys." });
+  routes.actionRoute("DELETE", "/publishing/accounts/:accountId", { ...options, actionId: "vibe64.publication.account.remove", buildInput: (request) => ({ accountId: request.params.accountId }), summary: "Remove a publishing account." });
+  routes.actionRoute("POST", "/publishing/recovery-kit", { ...options, actionId: "vibe64.publication.recovery-kit.create", buildInput: requestBody, summary: "Create a recovery kit of every publishing key." });
+  routes.actionRoute("POST", "/publishing/recovery-kit/restore", { ...options, bodyLimit: 12 * 1024 * 1024, actionId: "vibe64.publication.recovery-kit.restore", buildInput: requestBody, summary: "Restore publishing keys from a recovery kit." });
+  routes.actionRoute("GET", "/publishing/toolchains/android/licence", { ...options, actionId: "vibe64.publication.toolchain.licence.read", summary: "Read Google's Android SDK licence." });
+  routes.actionRoute("POST", "/publishing/toolchains/android/licence", { ...options, actionId: "vibe64.publication.toolchain.licence.accept", buildInput: requestBody, summary: "Record the person's acceptance of the Android SDK licence." });
+  routes.actionRoute("POST", "/publishing/toolchains/android", { ...options, actionId: "vibe64.publication.toolchain.android.install", summary: "Download Java and the Android SDK into the toolchains folder." });
+  routes.actionRoute("POST", "/publishing/toolchains/python", { ...options, actionId: "vibe64.publication.toolchain.python.install", summary: "Set up the Python upload tools in the toolchains folder." });
+  routes.actionRoute("POST", "/publishing/share", { ...options, actionId: "vibe64.publication.share.start", buildInput: requestBody, summary: "Share one signed APK on the local network for a few minutes." });
+  routes.actionRoute("DELETE", "/publishing/share", { ...options, actionId: "vibe64.publication.share.stop", summary: "Stop sharing the APK." });
 
   // The signed APK of a proven phone target, downloaded to this computer.
-  routes.serviceRoute("GET", `${base}/releases/:releaseId/targets/:targetId/apk`, {
+  routes.serviceRoute("GET", "/publishing/releases/:releaseId/targets/:targetId/apk", {
     summary: "Download a signed APK from the release history."
   }, async (request, reply) => {
     let apk;

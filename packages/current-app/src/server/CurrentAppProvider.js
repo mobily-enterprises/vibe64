@@ -24,10 +24,7 @@ const CurrentAppProvider = defineFeature({
       env,
       projectService: project
     });
-    registerRoutes(http, {
-      routeRelativePath: "studio/current-app",
-      routeSurface: "app"
-    });
+    registerRoutes(http);
     return { currentApp };
   },
   actions({ currentApp }) {

@@ -30,8 +30,6 @@ const Vibe64SourceEditorProvider = defineFeature({
       terminalService: terminals
     });
     registerRoutes(http, {
-      routeRelativePath: "vibe64",
-      routeSurface: "app",
       sourceEditor
     });
     terminals.setSourceEditorProvider(sourceEditor);

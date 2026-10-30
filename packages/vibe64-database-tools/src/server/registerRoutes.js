@@ -1,25 +1,13 @@
 import {
   isPlainObject
 } from "@local/vibe64-core/server/core";
+import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import {
-  createVibe64FeatureRoutes
+  VIBE64_PROJECT_ROUTE_BASE,
+  requestBody,
+  vibe64RouteHandler,
+  vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
-import {
-  ACTION_DATABASE_STATE_READ,
-  ACTION_DATABASE_SCHEMA_REFRESH,
-  ACTION_DATABASE_QUERY_RUN,
-  ACTION_DATABASE_QUERY_CANCEL,
-  ACTION_DATABASE_CELL_UPDATE,
-  ACTION_DATABASE_ROW_INSERT,
-  ACTION_DATABASE_ROW_DELETE,
-  ACTION_DATABASE_LOOKUP_SEARCH,
-  ACTION_DATABASE_LAYOUT_SAVE,
-  ACTION_DATABASE_OVERVIEW_SAVE,
-  ACTION_DATABASE_SNIPPET_SAVE,
-  ACTION_DATABASE_SNIPPET_DELETE,
-  ACTION_DATABASE_ASSISTANT_ASK,
-  ACTION_DATABASE_SERVER_CHECK
-} from "./actions.js";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 
 function withSession(request, input = {}) {
@@ -57,105 +45,135 @@ function databaseStatusCode(response = {}) {
 }
 
 function registerRoutes(http, {
-  projectContext = null,
-  routeRelativePath = "",
-  routeSurface = ""
+  projectContext = null
 } = {}) {
-  const routes = createVibe64FeatureRoutes(http, {
-    localRequestMessage: "Vibe64 database routes only accept loopback Studio requests.",
-    projectContext,
-    routeRelativePath,
-    routeSurface,
-    tags: ["studio", "vibe64-database-tools"]
+  const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-database-tools"] }), {
+    routeBase: VIBE64_PROJECT_ROUTE_BASE,
+    relativePath: "vibe64",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({
+      localRequestMessage: "Vibe64 database routes only accept loopback Studio requests.",
+      projectContext
+    })
   });
-  const sessionRoute = "/database/sessions/:sessionId";
-  const route = (method, suffix, actionId, options, buildInput) => {
-    routes.actionRoute(
-      method,
-      `${sessionRoute}${suffix}`,
-      {
-        statusCode: databaseStatusCode,
-        ...options,
-        actionId,
-        buildInput
-      }
-    );
-  };
+  const options = { statusCode: databaseStatusCode };
 
-  route("GET", "", ACTION_DATABASE_STATE_READ, {
-    summary: "Read the selected session database workspace and current refreshed schema."
-  }, (request) => withSession(request));
+  routes.actionRoute("GET", "/database/sessions/:sessionId", {
+    ...options,
+    actionId: "vibe64.database.state.read",
+    summary: "Read the selected session database workspace and current refreshed schema.",
+    buildInput: (request) => withSession(request)
+  });
 
-  route("GET", "/server", ACTION_DATABASE_SERVER_CHECK, {
-    summary: "Sign in to the database server the session's project needs, with the values from its Env."
-  }, (request) => withSession(request));
+  routes.actionRoute("GET", "/database/sessions/:sessionId/server", {
+    ...options,
+    actionId: "vibe64.database.server.check",
+    summary: "Sign in to the database server the session's project needs, with the values from its Env.",
+    buildInput: (request) => withSession(request)
+  });
 
-  route("POST", "/schema/refresh", ACTION_DATABASE_SCHEMA_REFRESH, {
+  routes.actionRoute("POST", "/database/sessions/:sessionId/schema/refresh", {
+    ...options,
+    actionId: "vibe64.database.schema.refresh",
     bodyLimit: 16 * 1024,
-    summary: "Explicitly refresh the selected session database schema."
-  }, (request) => withSession(request, {
-    ...routes.requestBody(request),
-    source: "user"
-  }));
+    summary: "Explicitly refresh the selected session database schema.",
+    buildInput: (request) => withSession(request, {
+      ...requestBody(request),
+      source: "user"
+    })
+  });
 
-  route("POST", "/queries", ACTION_DATABASE_QUERY_RUN, {
+  routes.actionRoute("POST", "/database/sessions/:sessionId/queries", {
+    ...options,
+    actionId: "vibe64.database.query.run",
     bodyLimit: 768 * 1024,
-    summary: "Run one SQL statement against the selected session database."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Run one SQL statement against the selected session database.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 
-  route("POST", "/queries/:queryId/cancel", ACTION_DATABASE_QUERY_CANCEL, {
+  routes.actionRoute("POST", "/database/sessions/:sessionId/queries/:queryId/cancel", {
+    ...options,
+    actionId: "vibe64.database.query.cancel",
     bodyLimit: 16 * 1024,
-    summary: "Cancel an active selected-session database query."
-  }, (request) => withSession(request, {
-    queryId: request.params.queryId
-  }));
+    summary: "Cancel an active selected-session database query.",
+    buildInput: (request) => withSession(request, {
+      queryId: request.params.queryId
+    })
+  });
 
-  route("PATCH", "/cells", ACTION_DATABASE_CELL_UPDATE, {
+  routes.actionRoute("PATCH", "/database/sessions/:sessionId/cells", {
+    ...options,
+    actionId: "vibe64.database.cell.update",
     bodyLimit: 256 * 1024,
-    summary: "Update one editable physical cell identified by query provenance."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Update one editable physical cell identified by query provenance.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 
-  route("POST", "/rows", ACTION_DATABASE_ROW_INSERT, {
+  routes.actionRoute("POST", "/database/sessions/:sessionId/rows", {
+    ...options,
+    actionId: "vibe64.database.row.insert",
     bodyLimit: 512 * 1024,
-    summary: "Insert one row into a selected physical table."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Insert one row into a selected physical table.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 
-  route("POST", "/rows/delete", ACTION_DATABASE_ROW_DELETE, {
+  routes.actionRoute("POST", "/database/sessions/:sessionId/rows/delete", {
+    ...options,
+    actionId: "vibe64.database.row.delete",
     bodyLimit: 256 * 1024,
-    summary: "Delete one confirmed physical source row."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Delete one confirmed physical source row.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 
-  route("POST", "/lookups/search", ACTION_DATABASE_LOOKUP_SEARCH, {
+  routes.actionRoute("POST", "/database/sessions/:sessionId/lookups/search", {
+    ...options,
+    actionId: "vibe64.database.lookup.search",
     bodyLimit: 64 * 1024,
-    summary: "Search a real foreign-key target table for inline autocomplete."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Search a real foreign-key target table for inline autocomplete.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 
-  route("PUT", "/layout", ACTION_DATABASE_LAYOUT_SAVE, {
+  routes.actionRoute("PUT", "/database/sessions/:sessionId/layout", {
+    ...options,
+    actionId: "vibe64.database.layout.save",
     bodyLimit: ERD_LAYOUT_MAX_BYTES + 16 * 1024,
-    summary: "Persist the shared selected-session ERD layout and notify its viewers."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Persist the shared selected-session ERD layout and notify its viewers.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 
-  route("PUT", "/overview", ACTION_DATABASE_OVERVIEW_SAVE, {
+  routes.actionRoute("PUT", "/database/sessions/:sessionId/overview", {
+    ...options,
+    actionId: "vibe64.database.overview.save",
     bodyLimit: 512 * 1024,
-    summary: "Save main actors and their explicit table memberships in project source."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Save main actors and their explicit table memberships in project source.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 
-  route("PUT", "/snippets", ACTION_DATABASE_SNIPPET_SAVE, {
+  routes.actionRoute("PUT", "/database/sessions/:sessionId/snippets", {
+    ...options,
+    actionId: "vibe64.database.snippet.save",
     bodyLimit: 768 * 1024,
-    summary: "Save a selected-session SQL snippet."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Save a selected-session SQL snippet.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 
-  route("DELETE", "/snippets/:snippetId", ACTION_DATABASE_SNIPPET_DELETE, {
+  routes.actionRoute("DELETE", "/database/sessions/:sessionId/snippets/:snippetId", {
+    ...options,
+    actionId: "vibe64.database.snippet.delete",
     bodyLimit: 16 * 1024,
-    summary: "Delete a selected-session SQL snippet."
-  }, (request) => withSession(request, {
-    snippetId: request.params.snippetId
-  }));
+    summary: "Delete a selected-session SQL snippet.",
+    buildInput: (request) => withSession(request, {
+      snippetId: request.params.snippetId
+    })
+  });
 
-  route("POST", "/assistant", ACTION_DATABASE_ASSISTANT_ASK, {
+  routes.actionRoute("POST", "/database/sessions/:sessionId/assistant", {
+    ...options,
+    actionId: "vibe64.database.assistant.ask",
     bodyLimit: 2 * 1024 * 1024,
-    summary: "Ask the focused database copilot with bounded on-demand access to the refreshed schema."
-  }, (request) => withSession(request, routes.requestBody(request)));
+    summary: "Ask the focused database copilot with bounded on-demand access to the refreshed schema.",
+    buildInput: (request) => withSession(request, requestBody(request))
+  });
 }
 
 export {

@@ -1,19 +1,24 @@
-import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
+import {
+  VIBE64_PROJECT_ROUTE_BASE,
+  vibe64RouteHandler,
+  vibe64RouteHttp
+} from "@local/vibe64-core/server/featureRoutes";
 
 function registerRoutes(
   http,
   {
-    projectContext = null,
-    routeSurface = "",
-    routeRelativePath = ""
+    projectContext = null
   } = {}
 ) {
-  const routes = createVibe64FeatureRoutes(http, {
-    localRequestMessage: "Vibe64 City routes only accept loopback Studio requests.",
-    projectContext,
-    routeRelativePath,
-    routeSurface,
-    tags: ["studio", "vibe64-system-graph"]
+  const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-system-graph"] }), {
+    routeBase: VIBE64_PROJECT_ROUTE_BASE,
+    relativePath: "vibe64",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({
+      localRequestMessage: "Vibe64 City routes only accept loopback Studio requests.",
+      projectContext
+    })
   });
   const sessionRoute = "/system-graph/sessions/:sessionId";
 

@@ -93,8 +93,6 @@ function createVibe64TerminalsFeature({
       registerRoutes(http, {
         fastify,
         projectContext: getStudioProjectContext(),
-        routeRelativePath: "vibe64",
-        routeSurface: "app",
         terminals,
         uploads
       });

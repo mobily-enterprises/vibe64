@@ -13,7 +13,8 @@ import { registerTeamAiReadiness } from "../../packages/vibe64-core/src/server/t
 import { registerWorkspaceTeamReader } from "../../packages/vibe64-core/src/server/workspaceTeam.js";
 import { createTeamAiReadiness } from "../../packages/vibe64-accounts/src/server/teamAiReadiness.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
-import { createVibe64FeatureRoutes } from "../../packages/vibe64-core/src/server/featureRoutes.js";
+import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
+import { VIBE64_PROJECT_ROUTE_BASE, vibe64RouteHandler, vibe64RouteHttp } from "../../packages/vibe64-core/src/server/featureRoutes.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { registerVibe64ActionContext, withVibe64ActionContext } from "../../packages/vibe64-core/src/server/actionContext.js";
@@ -190,8 +191,8 @@ test("a project route answers a gated team member with the refusal and the owner
   t.after(() => { releaseReadiness(); releaseTeam(); });
   await withLocalRequestBypass(() => withRouteProject(async ({ projectContext }) => {
     const app = testRouteApp();
-    const routes = createVibe64FeatureRoutes(app.http, { localRequestMessage: "Local only.", projectContext,
-      routeRelativePath: "vibe64", routeSurface: "app" });
+    const routes = createActionRouteScope(vibe64RouteHttp(app.http), { routeBase: VIBE64_PROJECT_ROUTE_BASE,
+      relativePath: "vibe64", surface: "app", wrapHandler: vibe64RouteHandler({ localRequestMessage: "Local only.", projectContext }) });
     routes.actionRoute("GET", "/projects", { actionId: "unit.projects", summary: "List projects." });
     const route = app.registeredRoutes[0];
     const reply = testReply();

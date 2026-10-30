@@ -8,7 +8,7 @@ import Fastify from "fastify";
 import type { Socket } from "socket.io";
 import { WebSocket } from "ws";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
-import { createCapabilityHttpRuntime } from "@jskit-ai/kernel/server/http";
+import { createActionRouteScope, createCapabilityHttpRuntime } from "@jskit-ai/kernel/server/http";
 import { EventProvider } from "@jskit-ai/kernel/server/runtime";
 import { createCapabilityRuntime, defineProvider } from "@jskit-ai/kernel/shared/capabilities";
 import { defineFeature } from "@jskit-ai/kernel/server/features";
@@ -17,7 +17,7 @@ import { AssistantFeature } from "@jskit-ai/assistant-runtime/server";
 import { createConversationRuntime, createConversationTranscript } from "@jskit-ai/assistant-core/server/conversation";
 import { normalizeConversationTurn } from "@jskit-ai/assistant-core/shared/conversation";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import { requestBody, requestQuery, vibe64RouteHandler, vibe64RouteHttp } from "@local/vibe64-core/server/featureRoutes";
 import { createSessionChangedPublisher, vibe64ProjectSessionsRoom, vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { PROJECT_WATCH } from "@local/vibe64-sessions/shared/project-watch";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
@@ -250,14 +250,14 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
           }
         }
       });
-      const routes = createVibe64FeatureRoutes(http, {
-        projectScoped: false, routeRelativePath: "vibe64/colleague", routeSurface: "app", tags: ["vibe64-colleague"]
+      const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["vibe64-colleague"] }), {
+        relativePath: "vibe64/colleague", surface: "app", wrapHandler: vibe64RouteHandler({ projectScoped: false })
       });
-      routes.actionRoute("GET", "", { actionId: "vibe64.colleague.state.read", buildInput: routes.requestQuery, summary: "Read your Colleague conversation." });
-      routes.actionRoute("POST", "/focus", { actionId: "vibe64.colleague.focus.update", buildInput: routes.requestBody, summary: "Colleague focus.update." });
-      routes.actionRoute("POST", "/conversations/fresh", { actionId: "vibe64.colleague.conversation.start-fresh", buildInput: routes.requestBody, summary: "Retain the old conversation and start fresh." });
-      routes.actionRoute("GET", "/conversations/history", { actionId: "vibe64.colleague.conversation.history.read", buildInput: routes.requestQuery, summary: "List retained conversations." });
-      routes.actionRoute("GET", "/conversations/history/page", { actionId: "vibe64.colleague.conversation.history-page.read", buildInput: routes.requestQuery, summary: "Read retained conversation history." });
+      routes.actionRoute("GET", "", { actionId: "vibe64.colleague.state.read", buildInput: requestQuery, summary: "Read your Colleague conversation." });
+      routes.actionRoute("POST", "/focus", { actionId: "vibe64.colleague.focus.update", buildInput: requestBody, summary: "Colleague focus.update." });
+      routes.actionRoute("POST", "/conversations/fresh", { actionId: "vibe64.colleague.conversation.start-fresh", buildInput: requestBody, summary: "Retain the old conversation and start fresh." });
+      routes.actionRoute("GET", "/conversations/history", { actionId: "vibe64.colleague.conversation.history.read", buildInput: requestQuery, summary: "List retained conversations." });
+      routes.actionRoute("GET", "/conversations/history/page", { actionId: "vibe64.colleague.conversation.history-page.read", buildInput: requestQuery, summary: "Read retained conversation history." });
       return { colleague: { ...service,
         close: () => service.close(),
         async send(input, context, options) {
