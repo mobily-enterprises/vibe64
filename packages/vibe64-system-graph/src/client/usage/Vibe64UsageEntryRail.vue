@@ -93,13 +93,19 @@ const rows = computed(() => (props.hasMore ? [...props.entries, { id: "\u0000mor
 .usage-entry-rail { display: flex; flex-direction: column; min-height: 0; height: 100%; gap: 8px; padding: 12px 8px 0; }
 .usage-entry-rail__search { flex: none; padding: 0 4px; }
 .usage-entry-rail__kinds { flex: none; padding: 0 4px; }
-.usage-entry-rail :deep(.usage-entry-rail__kind--selected) { background: rgb(var(--v-theme-secondary-container, var(--v-theme-surface-variant))); }
+.usage-entry-rail__kinds :deep(.v-chip--variant-outlined) { border-color: var(--v64-outline); }
+.usage-entry-rail :deep(.usage-entry-rail__kind--selected) { border-color: transparent; background: var(--v64-secondary-container); color: var(--v64-on-secondary-container); }
 .usage-entry-rail__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .usage-entry-rail__list { flex: 1; min-height: 0; padding-bottom: 8px; }
 .usage-entry-rail__item { min-height: 56px; }
 /* Titles and paths wrap between folders, like request rows. */
 .usage-entry-rail__item :deep(.v-list-item-title) { white-space: normal; overflow-wrap: break-word; }
-.usage-entry-rail__item :deep(.v-list-item-subtitle) { overflow-wrap: break-word; }
+.usage-entry-rail__item :deep(.v-list-item-subtitle) { -webkit-line-clamp: unset; overflow-wrap: break-word; }
 .usage-entry-rail__empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px 12px; }
 .usage-entry-rail__empty p { margin: 0; }
+/* Touch: 48 px targets; chips keep their look and gain an invisible margin. */
+@media (pointer: coarse) {
+  .usage-entry-rail__kinds :deep(.v-chip) { position: relative; overflow: visible; margin-block: 8px; }
+  .usage-entry-rail__kinds :deep(.v-chip)::after { content: ""; position: absolute; inset: -8px 0; }
+}
 </style>

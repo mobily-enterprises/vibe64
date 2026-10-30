@@ -90,7 +90,8 @@ calls** when no exact path reaches it, then **calls N → · called by M ←** a
 how many unresolved calls it makes. **All subsystems** goes back.
 
 **One function.** Tap a function to open its details (a side panel, or a
-sheet from the bottom on a phone):
+sheet from the bottom on a phone). Where the screen is too narrow for a side
+panel, it floats over the view; tap outside it to close it:
 
 - **Calls (exact)**, **Calls (probable)**, **Called by (exact)** and **Called by
   (probable)** list the other functions with the code that makes each call
@@ -140,8 +141,9 @@ Some web servers handle every request in one shared process. Their code is
 then shown as one row, **Not separated per request for this server**, with
 everything that ran while recording.
 
-**Record** in the mode bar is always there; where the bar is narrow it is a
-record icon with the tooltip **Record**. When no part of the project can be
+**Record** is always there: in the mode bar (a record icon where the bar is
+narrow), and on a phone as a record icon beside **Choose an entry**. Its
+tooltip is **Record**. When no part of the project can be
 recorded, Usage says **Recording not available for this project's runtimes**
 and names them; Imports and Calls still work.
 

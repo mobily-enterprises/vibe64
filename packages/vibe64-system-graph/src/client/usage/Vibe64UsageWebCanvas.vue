@@ -76,53 +76,57 @@
           </v-list-item>
         </template>
       </v-list>
-      <div v-else class="usage-web__scroll">
-        <div class="usage-web__plane" :style="{ width: `${plan.width + stubRoom}px`, height: `${plan.height}px` }">
-          <svg class="usage-web__edges" :width="plan.width + stubRoom" :height="plan.height" aria-hidden="true">
-            <defs>
-              <marker id="usage-web-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" class="usage-web__arrow" />
-              </marker>
-            </defs>
-            <path
-              v-for="edge in plan.paths"
-              :key="edge.key"
-              :d="edge.d"
-              marker-end="url(#usage-web-arrow)"
-              class="usage-web__line"
-              :class="[`usage-web__line--${edge.certainty || 'exact'}`, { 'usage-web__line--dim': selectedId && edge.from !== selectedId && edge.to !== selectedId }]"
-            />
-            <g v-for="stub in stubs" :key="stub.id">
-              <line :x1="stub.x" :y1="stub.y" :x2="stub.x + 14" :y2="stub.y" class="usage-web__line usage-web__line--probable" />
-              <circle :cx="stub.x + 19" :cy="stub.y" r="5" class="usage-web__stub"><title>{{ countLabel(stub.count, 'unresolved call') }}</title></circle>
-            </g>
-          </svg>
-          <button
-            v-for="node in nodes"
-            :key="node.id"
-            type="button"
-            class="usage-node"
-            :class="{ 'usage-node--selected': node.id === selectedId, 'usage-node--probable': node.certainty === 'probable', 'usage-node--plumbing': node.plumbing }"
-            :style="nodeStyle(node)"
-            :aria-pressed="node.id === selectedId"
-            :aria-label="nodeLabel(node)"
-            :title="[node.title, node.subtitle, badge(node, true)].filter(Boolean).join('\n')"
-            @click="emit('select', node)"
-          >
-            <span class="usage-node__head">
-              <span class="usage-node__title text-body-medium">{{ node.title }}</span>
-              <span v-if="badge(node)" class="usage-node__badge text-label-small">{{ badge(node) }}</span>
-            </span>
-            <span class="usage-node__subtitle text-body-small">{{ node.location || node.subtitle }}</span>
-          </button>
+      <div v-else class="usage-web__frame">
+        <div ref="scroller" class="usage-web__scroll" @scroll.passive="measureScroll">
+          <div class="usage-web__plane" :style="{ width: `${plan.width + stubRoom}px`, height: `${plan.height}px` }">
+            <svg class="usage-web__edges" :width="plan.width + stubRoom" :height="plan.height" aria-hidden="true">
+              <defs>
+                <marker v-for="certainty in ['exact', 'probable']" :id="`${arrowId}-${certainty}`" :key="certainty" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M 0 0 L 10 5 L 0 10 z" :class="`usage-web__arrow usage-web__arrow--${certainty}`" />
+                </marker>
+              </defs>
+              <path
+                v-for="edge in plan.paths"
+                :key="edge.key"
+                :d="edge.d"
+                :marker-end="`url(#${arrowId}-${edge.certainty === 'probable' ? 'probable' : 'exact'})`"
+                class="usage-web__line"
+                :class="[`usage-web__line--${edge.certainty || 'exact'}`, { 'usage-web__line--dim': selectedId && edge.from !== selectedId && edge.to !== selectedId }]"
+              />
+              <g v-for="stub in stubs" :key="stub.id">
+                <line :x1="stub.x" :y1="stub.y" :x2="stub.x + 14" :y2="stub.y" class="usage-web__line usage-web__line--probable" />
+                <circle :cx="stub.x + 19" :cy="stub.y" r="5" class="usage-web__stub"><title>{{ countLabel(stub.count, 'unresolved call') }}</title></circle>
+              </g>
+            </svg>
+            <button
+              v-for="node in nodes"
+              :key="node.id"
+              type="button"
+              class="usage-node"
+              :class="{ 'usage-node--selected': node.id === selectedId, 'usage-node--probable': node.certainty === 'probable', 'usage-node--plumbing': node.plumbing }"
+              :style="nodeStyle(node)"
+              :aria-pressed="node.id === selectedId"
+              :aria-label="nodeLabel(node)"
+              :title="[node.title, node.subtitle, badge(node, true)].filter(Boolean).join('\n')"
+              @click="emit('select', node)"
+            >
+              <span class="usage-node__head">
+                <span class="usage-node__title text-body-medium">{{ node.title }}</span>
+                <span v-if="badge(node)" class="usage-node__badge text-label-small">{{ badge(node) }}</span>
+              </span>
+              <span class="usage-node__subtitle text-body-small">{{ node.location || node.subtitle }}</span>
+            </button>
+          </div>
         </div>
+        <!-- Columns cut off on the right fade out, saying the canvas scrolls. -->
+        <div v-if="moreRight" class="usage-web__more" aria-hidden="true" />
       </div>
     </template>
   </div>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from "vue";
 import { mdiArrowLeft, mdiCheck } from "@mdi/js";
 
 import {
@@ -168,6 +172,24 @@ const stubs = computed(() => props.nodes.filter((node) => node.unresolved).map((
   const position = plan.value.positions.get(node.id);
   return { id: node.id, count: node.unresolved, x: position.x + NODE.width, y: position.y + NODE.height - 12 };
 }));
+// Arrowheads take their line's colour, so each certainty has its own marker.
+const arrowId = `usage-arrow-${useId()}`;
+
+const scroller = ref(null);
+const moreRight = ref(false);
+function measureScroll() {
+  const element = scroller.value;
+  moreRight.value = Boolean(element) && element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+}
+let resizeObserver = null;
+watch(scroller, (element) => {
+  resizeObserver?.disconnect();
+  resizeObserver = element && typeof ResizeObserver === "function" ? new ResizeObserver(measureScroll) : null;
+  resizeObserver?.observe(element);
+  measureScroll();
+}, { flush: "post" });
+watch(plan, () => nextTick(measureScroll));
+onBeforeUnmount(() => resizeObserver?.disconnect());
 
 function nodeStyle(node) {
   const position = plan.value.positions.get(node.id);
@@ -198,42 +220,54 @@ function nodeLabel(node) {
 
 <style scoped>
 .usage-web { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.usage-web__empty { margin: 0; padding: 8px 0; color: rgb(var(--v-theme-on-surface-variant)); }
+.usage-web__empty { margin: 0; padding: 8px 0; color: var(--v64-on-surface-variant); }
 .usage-web__group { display: flex; flex-direction: column; gap: 8px; }
-.usage-web__group-title { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
+.usage-web__group-title { margin: 0; color: var(--v64-on-surface-variant); }
 .usage-web__cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
-.usage-web__card { min-width: 0; }
+.usage-web__card { min-width: 0; border-color: var(--v64-outline-variant); }
 .usage-web__card--untouched { opacity: .6; }
 .usage-web__card-body { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 0; }
 .usage-web__card-body p { margin: 0; }
-.usage-web__crossings { list-style: none; margin: 0; padding: 0; color: rgb(var(--v-theme-on-surface-variant)); }
+.usage-web__crossings { list-style: none; margin: 0; padding: 0; color: var(--v64-on-surface-variant); }
 .usage-web__crossings li { overflow-wrap: anywhere; }
 .usage-web__untouched { align-self: flex-start; }
+.usage-web__untouched.v-chip--variant-outlined { border-color: var(--v64-outline); }
 .usage-web__zoom { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
 .usage-web__zoom-title { margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .usage-web__legend { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .usage-web__legend-chip svg { margin-right: 6px; }
 .usage-web__rows { background: transparent; padding: 0; }
 .usage-web__rows :deep(.v-list-item-subtitle) { display: flex; flex-direction: column; gap: 2px; -webkit-line-clamp: unset; overflow-wrap: break-word; }
-.usage-web__row-counts { color: rgb(var(--v-theme-on-surface)); }
-.usage-web__scroll { overflow: auto; max-width: 100%; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 12px; background: rgb(var(--v-theme-surface)); }
+.usage-web__row-counts { color: var(--v64-on-surface); }
+.usage-web__frame { position: relative; min-width: 0; }
+.usage-web__scroll { overflow: auto; max-width: 100%; border: 1px solid var(--v64-outline-variant); border-radius: var(--v64-shape-md); background: var(--v64-surface); }
+.usage-web__more { position: absolute; top: 1px; right: 1px; bottom: 1px; width: 48px; pointer-events: none; border-radius: 0 var(--v64-shape-md) var(--v64-shape-md) 0; background: linear-gradient(to right, transparent, var(--v64-surface)); }
 .usage-web__plane { position: relative; }
 .usage-web__edges { position: absolute; inset: 0; pointer-events: none; }
-.usage-web__line { fill: none; stroke: rgb(var(--v-theme-primary)); stroke-width: 1.5; }
-.usage-web__line--probable { stroke: rgb(var(--v-theme-on-surface-variant)); stroke-dasharray: 6 4; }
+.usage-web__line { fill: none; stroke: var(--v64-primary); stroke-width: 1.5; }
+.usage-web__line--probable { stroke: var(--v64-on-surface-variant); stroke-dasharray: 6 4; }
 .usage-web__line--dim { opacity: .18; }
-.usage-web__arrow { fill: rgb(var(--v-theme-on-surface-variant)); }
-.usage-web__stub { fill: rgb(var(--v-theme-surface)); stroke: rgb(var(--v-theme-error)); stroke-width: 1.5; }
-.usage-node { position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px; text-align: left; border-radius: 12px; border: 1px solid rgba(var(--v-border-color), .32); background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); cursor: pointer; overflow: hidden; }
-.usage-node:hover { background: rgba(var(--v-theme-on-surface), .06); }
-.usage-node:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
-.usage-node--selected { border-color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), .12); }
+.usage-web__arrow--exact { fill: var(--v64-primary); }
+.usage-web__arrow--probable { fill: var(--v64-on-surface-variant); }
+.usage-web__stub { fill: var(--v64-surface); stroke: var(--v64-error); stroke-width: 1.5; }
+.usage-node { position: absolute; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px; text-align: left; border-radius: var(--v64-shape-md); border: 1px solid var(--v64-outline); background: var(--v64-surface); color: var(--v64-on-surface); cursor: pointer; overflow: hidden; }
+.usage-node:hover { background: color-mix(in srgb, var(--v64-on-surface) calc(var(--v64-state-hover) * 100%), var(--v64-surface)); }
+.usage-node:focus-visible { outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color); outline-offset: var(--v64-focus-ring-offset); }
+/* Selected stays tinted under the pointer: its hover layer sits on its tint. */
+.usage-node--selected { border-color: var(--v64-primary); background: var(--v64-secondary-container); }
+.usage-node--selected:hover { background: color-mix(in srgb, var(--v64-on-secondary-container) calc(var(--v64-state-hover) * 100%), var(--v64-secondary-container)); }
 .usage-node--probable { border-style: dashed; }
 .usage-node--plumbing { opacity: .7; }
 .usage-node__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: break-word; }
 .usage-node__subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.usage-node__subtitle { color: rgb(var(--v-theme-on-surface-variant)); }
+.usage-node__subtitle { color: var(--v64-on-surface-variant); }
 .usage-node__head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .usage-node__title { flex: 1; min-width: 0; }
-.usage-node__badge { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: 8px; background: rgb(var(--v-theme-surface-variant)); color: rgb(var(--v-theme-on-surface-variant)); }
+.usage-node__badge { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: var(--v64-shape-sm); background: var(--v64-surface-container-highest); color: var(--v64-on-surface-variant); }
+/* Touch: 48 px targets. Chips keep their look and gain an invisible margin. */
+@media (pointer: coarse) {
+  .usage-web__zoom :deep(.v-btn) { min-height: 48px; }
+  .usage-web__untouched, .usage-web__zoom :deep(.v-chip) { position: relative; overflow: visible; margin-block: 8px; }
+  .usage-web__untouched::after, .usage-web__zoom :deep(.v-chip)::after { content: ""; position: absolute; inset: -8px 0; }
+}
 </style>
