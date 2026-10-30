@@ -211,7 +211,9 @@ test("a Preview recording numbers requests, follows its tracers and stops with r
   await trace.hit("r_000001");
   const recordingNow = await waitFor(current, (value) => value?.state === "recording" && value.counts.requests === 1, "recording");
   assert.deepEqual(recordingNow.tracers, [{ runtime: "nodejs", state: "ready", reason: "" }]);
-  assert.ok(published.some((event) => event.realtime.payload.state === "recording" && event.realtime.payload.projectSlug === "demo"));
+  // The state changes before its record is written and published.
+  await waitFor(async () => published.some((event) => event.realtime.payload.state === "recording" && event.realtime.payload.projectSlug === "demo"),
+    Boolean, "the recording event");
   assert.equal(published.at(-1).realtime.event, "vibe64.usage-recording.changed");
   assert.deepEqual(published.at(-1).realtime.audience, { room: `vibe64:project:demo:session:${SESSION_ID}` });
 
