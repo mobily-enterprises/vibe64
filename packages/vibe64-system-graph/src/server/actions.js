@@ -1,6 +1,8 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 
+import { createUsageActions } from "./usageActions.js";
+
 function createSystemGraphActions({ systemGraph }) {
   return [
     ["status.read", "readStatus"],
@@ -15,7 +17,7 @@ function createSystemGraphActions({ systemGraph }) {
     output: null, idempotency: ["refresh", "cancelRefresh"].includes(method) ? "optional" : "none",
     extensions: { assistant: { exclude: true } },
     execute: (input) => systemGraph[method](input)
-  }));
+  })).concat(createUsageActions({ systemGraph }));
 }
 
 export { createSystemGraphActions };

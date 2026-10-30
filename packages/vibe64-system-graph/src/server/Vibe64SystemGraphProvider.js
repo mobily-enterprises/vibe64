@@ -4,6 +4,8 @@ import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
 import { createSystemGraphActions } from "./actions.js";
+import { registerUsageRoutes } from "./usageRoutes.js";
+import { createUsageService } from "./usageWeb.js";
 
 const Vibe64SystemGraphProvider = defineFeature({
   id: "vibe64.system-graph",
@@ -19,12 +21,21 @@ const Vibe64SystemGraphProvider = defineFeature({
   },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   setup({ events, logger, http, project }) {
-    const systemGraph = createService({
-      projectService: project,
-      logger,
-      publishSessionChanged: createSessionChangedPublisher(events)
+    // One System Graph capability: Architecture reads and refresh, plus the
+    // usage queries over the same session's Genesis snapshot.
+    const systemGraph = Object.freeze({
+      ...createService({
+        projectService: project,
+        logger,
+        publishSessionChanged: createSessionChangedPublisher(events)
+      }),
+      ...createUsageService({ projectService: project })
     });
     registerRoutes(http, {
+      routeRelativePath: "vibe64",
+      routeSurface: "app"
+    });
+    registerUsageRoutes(http, {
       routeRelativePath: "vibe64",
       routeSurface: "app"
     });

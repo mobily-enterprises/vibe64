@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
+import * as genesisServer from "@local/vibe64-genesis/server";
 import {
   GENESIS_MACHINE_CITY_PATH,
   GENESIS_PROGRAM_CITY_PATH,
@@ -76,8 +78,10 @@ async function readGenesisCity(projectRoot, kind) {
   const filePath = path.resolve(projectRoot, definition.path);
   const identity = info => [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].join(':');
   let revision;
+  let revisionStat;
   try {
-    revision = identity(await stat(filePath, { bigint: true }));
+    revisionStat = await stat(filePath, { bigint: true });
+    revision = identity(revisionStat);
   } catch (error) {
     cityReads.delete(filePath);
     if (isMissingPathError(error)) {
@@ -106,7 +110,8 @@ async function readGenesisCity(projectRoot, kind) {
     if (identity(await stat(filePath, { bigint: true })) !== revision) {
       throw genesisCityError(kind, "changed while loading. Reload to read the new snapshot.");
     }
-    return { city, exists: true, kind, path: definition.path };
+    const builtAt = new Date(Number(revisionStat.mtimeMs)).toISOString();
+    return { builtAt, city, exists: true, kind, path: definition.path };
   })();
   cityReads.delete(filePath);
   cityReads.set(filePath, pending);
@@ -130,7 +135,52 @@ function requireGenesisCity(record, kind) {
   return record.city;
 }
 
+// The call web is the separate Genesis artifact a Machine City summarises.
+// Only the summary's exact bytes are read: a file another scan replaced in the
+// meantime is refused, never joined to this snapshot. Genesis validates it.
+const CALL_WEB_PATH = ".genesis/call-web.json";
+
+function callWebError(message, code = "vibe64_invalid_genesis_call_web") {
+  const error = vibe64Error(`The call web ${message}`, code);
+  error.details = { path: CALL_WEB_PATH };
+  return error;
+}
+
+function validateGenesisCallWeb(document, files) {
+  const { validateCallWeb } = genesisServer;
+  if (typeof validateCallWeb !== "function") {
+    throw callWebError("cannot be read by this Genesis version.", "vibe64_genesis_call_web_unsupported");
+  }
+  try {
+    return validateCallWeb(document, { files });
+  } catch (error) {
+    if (error?.code === "CALL_WEB_INVALID") throw callWebError(`is invalid: ${error.message}`);
+    throw error;
+  }
+}
+
+async function readGenesisCallWeb(projectRoot, architecture, { validate = validateGenesisCallWeb } = {}) {
+  const summary = architecture?.callWeb;
+  if (!summary) return null;
+  if (summary.path !== CALL_WEB_PATH) throw callWebError(`must be ${CALL_WEB_PATH}.`);
+  let source;
+  try {
+    source = await readFile(path.resolve(projectRoot, CALL_WEB_PATH));
+  } catch (error) {
+    if (isMissingPathError(error)) throw callWebError("is missing. Refresh analysis.", "vibe64_genesis_call_web_missing");
+    throw error;
+  }
+  if (`sha256:${createHash("sha256").update(source).digest("hex")}` !== summary.identity) {
+    throw callWebError("changed since this scan. Reload Architecture.", "vibe64_genesis_call_web_changed");
+  }
+  let document;
+  try { document = JSON.parse(source.toString("utf8")); }
+  catch { throw callWebError("contains invalid JSON."); }
+  return validate(document, architecture.files);
+}
+
 export {
+  readGenesisCallWeb,
   readGenesisCity,
   requireGenesisCity,
   validateGenesisCity
