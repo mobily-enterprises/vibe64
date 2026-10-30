@@ -71,14 +71,14 @@
             color="primary"
             rounded="xl"
             lines="two"
-            class="usage-recordings__request"
+            :class="['usage-recordings__request', { 'usage-recordings__request--secondary': isReadinessRequest(request) }]"
             @click="emit('update:requestId', request.id)"
           >
             <template #prepend>
-              <v-chip size="small" variant="tonal" label class="usage-recordings__method">{{ isBackgroundRequest(request) ? 'ALL' : request.method }}</v-chip>
+              <v-chip size="small" :variant="isReadinessRequest(request) ? 'outlined' : 'tonal'" label class="usage-recordings__method">{{ isBackgroundRequest(request) ? 'ALL' : isReadinessRequest(request) ? 'CHECK' : request.method }}</v-chip>
             </template>
             <v-list-item-title class="text-body-medium">{{ requestTitle(request, routes, requests) }}</v-list-item-title>
-            <v-list-item-subtitle>{{ [isBackgroundRequest(request) ? (onlyBackground(requests) ? 'Everything that ran while recording' : 'Outside any request') : request.status, countLabel(request.fileCount, 'file'), countLabel(request.functionCount, 'function')].filter(Boolean).join(' · ') }}</v-list-item-subtitle>
+            <v-list-item-subtitle>{{ subtitle(request) }}</v-list-item-subtitle>
           </v-list-item>
         </template>
       </v-list>
@@ -90,7 +90,7 @@
 import { computed } from "vue";
 import { mdiMagnify } from "@mdi/js";
 
-import { BACKGROUND_TEXT, countLabel, interactionTitle, isBackgroundRequest, onlyBackground, requestGroups, requestTitle } from "./usageModel.js";
+import { BACKGROUND_TEXT, countLabel, interactionTitle, isBackgroundRequest, isReadinessRequest, onlyBackground, requestGroups, requestTitle } from "./usageModel.js";
 
 const props = defineProps({
   recordings: { type: Array, default: () => [] },
@@ -116,6 +116,12 @@ const recordingItems = computed(() => props.recordings.map((recording) => ({
 const selectedRecording = computed(() => props.recordings.find((recording) => recording.id === props.recordingId) || null);
 const groups = computed(() => requestGroups(props.requests, props.interactions));
 
+function subtitle(request) {
+  const what = isBackgroundRequest(request) ? (onlyBackground(props.requests) ? "Everything that ran while recording" : "Outside any request")
+    : isReadinessRequest(request) ? "Vibe64 checking that the launch started" : request.status;
+  return [what, countLabel(request.fileCount, "file"), countLabel(request.functionCount, "function")].filter(Boolean).join(" · ");
+}
+
 </script>
 
 <style scoped>
@@ -129,4 +135,5 @@ const groups = computed(() => requestGroups(props.requests, props.interactions))
 .usage-recordings__interaction { white-space: normal; overflow-wrap: anywhere; height: auto; min-height: 40px; }
 .usage-recordings__request :deep(.v-list-item-title) { overflow-wrap: anywhere; white-space: normal; }
 .usage-recordings__method { margin-right: 12px; font-family: ui-monospace, monospace; }
+.usage-recordings__request--secondary { color: rgb(var(--v-theme-on-surface-variant)); }
 </style>

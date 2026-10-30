@@ -69,7 +69,10 @@ A request row is `{ id, method, path, status, startedAt, durationMs,
 interaction, functionCount, fileCount }`. A process's work outside any request
 (its start-up, timers, or every request of a server whose requests cannot be
 told apart) is a row with `kind: "background"` and null method, path and
-status. A function is `{ path, hash, name, start, end, count, plumbing }`; a
+status. Vibe64's launch readiness check sends the reserved request id
+`r_000000` while its launch records, which the proxy never assigns; it is a row
+with `kind: "readiness"`, likewise without method, path or status. Neither
+counts as a request or towards plumbing. A function is `{ path, hash, name, start, end, count, plumbing }`; a
 file's top-level code is the function named `""` at 1:1.
 
 Refusals: 409 `vibe64_usage_recording_session_inactive` or

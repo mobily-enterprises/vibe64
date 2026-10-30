@@ -186,6 +186,18 @@ describe("Recording states", () => {
     expect(await view({ mode: "recording", recording: recordingId }, { recordings, requests: read(requests) })).not.toContain("Not separated per request");
   });
 
+  it("shows the launch readiness check as a secondary row of its own", async () => {
+    const check = { id: "r_000000", kind: "readiness", method: null, path: null, status: null, startedAt: null, durationMs: null, interaction: null, functionCount: 2, fileCount: 1 };
+    const html = await render(Vibe64UsageRecordingResults, { recordings: recordingList.recordings, recordingId, requests: [check, ...requests.requests] });
+    expect(html).toContain("Launch readiness check");
+    expect(html).toContain("Vibe64 checking that the launch started · 1 file · 2 functions");
+    expect(html).toMatch(/usage-recordings__request--secondary[\s\S]*CHECK/u);
+    expect(html).not.toContain("Request not in the request log");
+    const shared = { id: "bg_4242", kind: "background", method: null, path: null, status: null, startedAt: null, durationMs: null, interaction: null, functionCount: 21, fileCount: 12 };
+    const sharedHtml = await render(Vibe64UsageRecordingResults, { recordings: recordingList.recordings, recordingId, requests: [check, shared] });
+    expect(sharedHtml).toContain("Not separated per request for this server: its requests share one process");
+  });
+
   it("says when the request log is full, and counts asset loads instead of listing them", async () => {
     const [recording] = recordingList.recordings;
     const full = read({ recordings: [{ ...recording, requestLog: { assets: 2300, full: true } }] });

@@ -295,6 +295,26 @@ test("HTTP launch readiness requires the declared exact success status", async (
   }
 });
 
+test("HTTP launch readiness names itself to the recorder only while its launch records", async () => {
+  const { createServer } = await import("node:http");
+  const seen = [];
+  const server = createServer((request, response) => {
+    seen.push(request.headers["x-vibe64-recording-request"] ?? null);
+    response.writeHead(200);
+    response.end();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const command = httpReadinessProbeCommand({ href: `http://127.0.0.1:${server.address().port}/api/health`, marker: "[[READY]]", timeoutSeconds: 5 });
+    const { VIBE64_USAGE_RECORDING_DIR: _unused, ...unrecorded } = process.env;
+    await execFileAsync("bash", ["-lc", command], { env: unrecorded });
+    await execFileAsync("bash", ["-lc", command], { env: { ...unrecorded, VIBE64_USAGE_RECORDING_DIR: "/recording" } });
+    assert.deepEqual(seen, [null, "r_000000"]);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("HTTP launch readiness allows slow startup and still enforces its deadline", async (t) => {
   const { createServer } = await import("node:http");
   for (const ready of [true, false]) {

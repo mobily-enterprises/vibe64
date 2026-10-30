@@ -101,6 +101,8 @@ phone) shows:
   status and how many files and functions ran. Later requests that no click,
   Enter or submit caused are listed under **Other requests**. A process's
   start-up work is listed first as **Start-up and work outside requests**.
+  **Launch readiness check**, shown dimmed with **CHECK**, is Vibe64 checking
+  that the recorded launch started; it is not one of your requests.
 
 Pick a request to light up only the subsystems that ran. Functions that ran in
 most requests of the recording, such as logging or request setup, are counted

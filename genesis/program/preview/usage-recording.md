@@ -81,7 +81,10 @@ A recording left running by an earlier server process ends as an error.
 
 Each request, local request, terminal run and background scope that ran
 project code becomes a row with its function and file counts. Background rows
-hold a process's start-up and any requests a tracer cannot separate. A row's
+hold a process's start-up and any requests a tracer cannot separate. The
+launch readiness check of a recorded launch carries the reserved id `r_000000`
+and becomes its own readiness row. Neither kind counts as a request or towards
+plumbing. A row's
 functions carry their source position, count, and whether they are plumbing:
 code that ran in most recorded requests. A file's top-level code is its
 function named `""` at 1:1. Malformed trace lines, files over their limits and

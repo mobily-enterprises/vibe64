@@ -261,16 +261,20 @@ function routeTemplateFor(method = "", requestPath = "", routes = []) {
 const BACKGROUND_TEXT = "Not separated per request for this server";
 const OUTSIDE_REQUESTS_TEXT = "Start-up and work outside requests";
 const isBackgroundRequest = (request = {}) => request.kind === "background" || /^bg_[0-9]+$/u.test(String(request.id || ""));
+// Vibe64's own check that a recorded launch started: a secondary row.
+const READINESS_TEXT = "Launch readiness check";
+const isReadinessRequest = (request = {}) => request.kind === "readiness";
 
 // True when project code ran only outside per-request scopes.
 function onlyBackground(requests = []) {
-  const ran = requests.filter((request) => Number(request.functionCount || 0) > 0);
+  const ran = requests.filter((request) => Number(request.functionCount || 0) > 0 && !isReadinessRequest(request));
   return ran.length > 0 && ran.every(isBackgroundRequest);
 }
 
 // A request the full request log missed has no method or path.
 function requestTitle(request = {}, routes = [], requests = [request]) {
   if (isBackgroundRequest(request)) return onlyBackground(requests) ? BACKGROUND_TEXT : OUTSIDE_REQUESTS_TEXT;
+  if (isReadinessRequest(request)) return READINESS_TEXT;
   return routeTemplateFor(request.method, request.path, routes) || request.path || "Request not in the request log";
 }
 
@@ -390,6 +394,7 @@ export {
   functionLabel,
   interactionTitle,
   isBackgroundRequest,
+  isReadinessRequest,
   joinText,
   onlyBackground,
   pathParts,
