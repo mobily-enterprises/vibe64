@@ -9,6 +9,7 @@ import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { activeUsageRecording, stopActiveUsageRecording } from "@local/vibe64-usage-recording/server/activeRecordings";
 import { mergePrependEnvironment } from "@local/vibe64-usage-recording/server/tracers";
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
+import python from "../../packages/vibe64-usage-recording/src/server/tracers/python.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
 
 const HASH = `sha256:${"b".repeat(64)}`;
@@ -107,6 +108,24 @@ test("prepended tracer variables keep both values' segments", () => {
   assert.equal(merge("/py", undefined), "/py");
   assert.deepEqual(mergePrependEnvironment({ PATH: "C:\\ours" }, { PATH: "C:\\theirs" }, ";"), { PATH: "C:\\ours;C:\\theirs" });
   assert.deepEqual(mergePrependEnvironment({}, { PYTHONPATH: "/app" }), {});
+});
+
+test("a prepended variable joins the value the recorded process would inherit", async (t) => {
+  const saved = process.env.PYTHONPATH;
+  process.env.PYTHONPATH = "/inherited/site";
+  t.after(() => {
+    if (saved === undefined) delete process.env.PYTHONPATH;
+    else process.env.PYTHONPATH = saved;
+  });
+  const pythonRun = { id: "py-run", label: "Python run", web: false, available: true, disabledReason: "", runtimes: ["python"], parameters: [] };
+  const { call } = await recorder(t, { targets: [...TARGETS, pythonRun] });
+  await call("start", { targetId: "output:py-run" });
+  const ours = python.prepare({}).prependEnvironment.PYTHONPATH;
+  // The server's own value, unless the launch sets one itself.
+  assert.equal(launchOf({ outputTargetId: "py-run" }).environment.PYTHONPATH, `${ours}${path.delimiter}/inherited/site`);
+  assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "/project" } }).environment.PYTHONPATH,
+    `${ours}${path.delimiter}/project`);
+  assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "" } }).environment.PYTHONPATH, ours);
 });
 
 test("targets list Preview and each terminal Output target with what can be recorded", async (t) => {
