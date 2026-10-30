@@ -468,7 +468,7 @@ const pickerLabel = computed(() => {
   if (mode.value === "recording") {
     const request = selectedRequest.value;
     if (!request) return "Choose a request";
-    return isBackgroundRequest(request) ? `Request: ${requestTitle(request)}` : `Request: ${request.method} ${requestTitle(request, usage.routes.value)}`;
+    return isBackgroundRequest(request) ? `Request: ${requestTitle(request, [], requestRows.value)}` : `Request: ${request.method} ${requestTitle(request, usage.routes.value)}`;
   }
   const entry = usage.entries.items.value.find((item) => item.id === props.state.entry) || (webEntry.value.id === props.state.entry ? webEntry.value : null);
   return entry ? `Entry: ${entry.title}` : "Choose an entry";

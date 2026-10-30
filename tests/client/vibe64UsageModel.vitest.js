@@ -118,8 +118,11 @@ describe("recordings", () => {
     expect(routeTemplateFor("POST", "/api/sessions/42", routes)).toBe("");
     const groups = requestGroups(requests.requests, requests.interactions);
     expect(groups.map((group) => [group.interaction?.id || null, group.requests.map((request) => request.id)])).toEqual([
-      [null, ["r_000002"]], ["i_0001", ["r_000003", "r_000004"]]
+      [null, ["bg_4242", "r_000002"]], ["i_0001", ["r_000003", "r_000004"]]
     ]);
+    // Start-up work beside per-request rows is not the shared-process case.
+    expect(requestTitle(requests.requests[0], routes, requests.requests)).toBe("Start-up and work outside requests");
+    expect(requestTitle(requests.requests[0], routes, [requests.requests[0]])).toBe("Not separated per request for this server");
     expect(interactionTitle(groups[1].interaction)).toBe("Click: button \"Add\" (SessionList.vue)");
   });
 

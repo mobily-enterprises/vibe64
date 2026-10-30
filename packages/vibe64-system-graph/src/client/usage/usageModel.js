@@ -256,18 +256,21 @@ function routeTemplateFor(method = "", requestPath = "", routes = []) {
 
 // Worker and ASGI servers run every request in one process; their project
 // code is recorded under a background scope instead of per request.
+// Beside per-request rows, a background row is a process's start-up and other
+// work outside any request.
 const BACKGROUND_TEXT = "Not separated per request for this server";
+const OUTSIDE_REQUESTS_TEXT = "Start-up and work outside requests";
 const isBackgroundRequest = (request = {}) => request.kind === "background" || /^bg_[0-9]+$/u.test(String(request.id || ""));
-
-function requestTitle(request = {}, routes = []) {
-  if (isBackgroundRequest(request)) return BACKGROUND_TEXT;
-  return routeTemplateFor(request.method, request.path, routes) || request.path || "";
-}
 
 // True when project code ran only outside per-request scopes.
 function onlyBackground(requests = []) {
   const ran = requests.filter((request) => Number(request.functionCount || 0) > 0);
   return ran.length > 0 && ran.every(isBackgroundRequest);
+}
+
+function requestTitle(request = {}, routes = [], requests = [request]) {
+  if (isBackgroundRequest(request)) return onlyBackground(requests) ? BACKGROUND_TEXT : OUTSIDE_REQUESTS_TEXT;
+  return routeTemplateFor(request.method, request.path, routes) || request.path || "";
 }
 
 // Requests under the click that caused them, in recorded order.

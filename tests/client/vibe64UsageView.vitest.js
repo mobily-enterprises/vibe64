@@ -6,6 +6,7 @@ import { createRenderer, createSSRApp, nextTick, ref, shallowRef, ssrContextKey 
 import { renderToString } from "@vue/server-renderer";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { createVuetify } from "vuetify";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const fake = vi.hoisted(() => ({ usage: null, graph: null }));
@@ -71,6 +72,8 @@ const vuetify = () => createVuetify({ ssr: true });
 async function render(component, props) {
   const app = createSSRApp(component, props);
   app.use(vuetify());
+  // The Record dialog inside Usage reads recordings through the app's query client.
+  app.use(VueQueryPlugin, { queryClient: new QueryClient({ defaultOptions: { queries: { retry: false } } }) });
   return (await renderToString(app)).replace(/<!--[\s\S]*?-->/gu, "").replace(/ data-v-[0-9a-f]+/gu, "");
 }
 const usageState = (state) => ({ view: "usage", entry: "", mode: "calls", subsystem: "", recording: "", request: "", ...state });

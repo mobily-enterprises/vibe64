@@ -71,8 +71,8 @@
             <template #prepend>
               <v-chip size="small" variant="tonal" label class="usage-recordings__method">{{ isBackgroundRequest(request) ? 'ALL' : request.method }}</v-chip>
             </template>
-            <v-list-item-title class="text-body-medium">{{ requestTitle(request, routes) }}</v-list-item-title>
-            <v-list-item-subtitle>{{ [isBackgroundRequest(request) ? 'Everything that ran while recording' : request.status, countLabel(request.fileCount, 'file'), countLabel(request.functionCount, 'function')].filter(Boolean).join(' · ') }}</v-list-item-subtitle>
+            <v-list-item-title class="text-body-medium">{{ requestTitle(request, routes, requests) }}</v-list-item-title>
+            <v-list-item-subtitle>{{ [isBackgroundRequest(request) ? (onlyBackground(requests) ? 'Everything that ran while recording' : 'Outside any request') : request.status, countLabel(request.fileCount, 'file'), countLabel(request.functionCount, 'function')].filter(Boolean).join(' · ') }}</v-list-item-subtitle>
           </v-list-item>
         </template>
       </v-list>
