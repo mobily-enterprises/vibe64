@@ -1,5 +1,5 @@
 <template>
-  <section ref="root" class="usage-view" :class="{ 'usage-view--compact': compact, 'usage-view--panel': selected && !compact }" aria-label="Usage">
+  <section ref="root" class="usage-view" :class="{ 'usage-view--compact': compact, 'usage-view--panel': selected && wide }" aria-label="Usage">
     <aside v-if="!compact" class="usage-view__rail">
       <Vibe64UsageRecordingResults v-if="mode === 'recording'" v-bind="recordingBindings" v-on="recordingHandlers" />
       <Vibe64UsageEntryRail v-else v-bind="railBindings" v-on="railHandlers" />
@@ -138,7 +138,7 @@
       </div>
     </div>
 
-    <aside v-if="selected && !compact" class="usage-view__panel">
+    <aside v-if="selected && !compact" class="usage-view__panel" :class="{ 'usage-view__panel--floating': !wide }">
       <Vibe64UsageFunctionPanel v-bind="panelBindings" v-on="panelHandlers" />
     </aside>
     <v-bottom-sheet v-if="compact" :model-value="Boolean(selected)" scrollable @update:model-value="!$event && closePanel()">
@@ -173,6 +173,7 @@ import {
 import { useVibe64UsageWeb } from "./useVibe64UsageWeb.js";
 
 const COMPACT_WIDTH = 600;
+const WIDE_WIDTH = 1040;
 const SEARCH_DELAY_MS = 200;
 const LIVE_REFRESH_MS = 5000;
 
@@ -192,6 +193,7 @@ const emit = defineEmits(["update:state", "refresh", "open-source-file", "select
 const usage = useVibe64UsageWeb({ sessionId: toRef(props, "sessionId") });
 const root = ref(null);
 const compact = ref(false);
+const wide = ref(true);
 const search = ref("");
 const kind = ref("");
 const exactOnly = ref(false);
@@ -476,7 +478,12 @@ let observer = null;
 watch(root, (element) => {
   observer?.disconnect();
   if (!element || typeof ResizeObserver !== "function") return;
-  observer = new ResizeObserver(() => { compact.value = element.clientWidth > 0 && element.clientWidth <= COMPACT_WIDTH; });
+  observer = new ResizeObserver(() => {
+    const width = element.clientWidth;
+    if (!width) return;
+    compact.value = width <= COMPACT_WIDTH;
+    wide.value = width >= WIDE_WIDTH;
+  });
   observer.observe(element);
 }, { flush: "post" });
 onBeforeUnmount(() => {
@@ -489,7 +496,7 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 </script>
 
 <style scoped>
-.usage-view { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
+.usage-view { position: relative; display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
 .usage-view--panel { grid-template-columns: 280px minmax(0, 1fr) 360px; }
 .usage-view--compact { grid-template-columns: minmax(0, 1fr); }
 .usage-view__rail { min-height: 0; overflow: hidden; border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); background: rgb(var(--v-theme-surface-container-low, var(--v-theme-surface))); }
@@ -506,7 +513,8 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view__skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
 .usage-view__skeleton-card { border-radius: 12px; }
 .usage-view__note { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
-.usage-view__panel { min-height: 0; overflow: auto; border-left: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); }
+.usage-view__panel { min-height: 0; overflow: auto; border-left: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); background: rgb(var(--v-theme-surface)); }
+.usage-view__panel--floating { position: absolute; top: 0; right: 0; bottom: 0; z-index: 2; width: min(360px, 100%); box-shadow: 0 4px 16px rgba(0, 0, 0, .16); }
 .usage-view__sheet { max-height: 80vh; overflow: auto; border-radius: 28px 28px 0 0; }
 .usage-view--compact .usage-view__header { padding: 8px 12px; }
 .usage-view--compact .usage-view__content { padding: 8px 12px 24px; }

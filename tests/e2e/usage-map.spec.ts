@@ -204,6 +204,17 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
     await expect(usage.getByRole("switch", { name: "Shared plumbing (5)" })).toBeVisible();
     await shot("7-recorded-functions");
 
+    if (!phone) {
+      // Map's Show usage opens the one entry under a zoomed subsystem.
+      await sheet.getByRole("group", { name: "Architecture view" }).getByRole("button", { name: "Map" }).click();
+      await sheet.locator(".engine-subsystem").filter({ hasText: "Command" }).click();
+      const location = page.getByRole("article", { name: "Zoomed subsystem" }).getByRole("navigation", { name: "Architecture location" });
+      await location.getByRole("button", { name: "Show usage" }).click();
+      await expect(usage.getByRole("region", { name: "Entry points" }).getByRole("option", { name: /Command: demo/u })).toHaveAttribute("aria-selected", "true");
+      await expect(page).toHaveURL(/mode=calls/u);
+      await expect(page).toHaveURL(/entry=entry(?::|%3A)cli-command/u);
+    }
+
     expect(errors).toEqual([]);
   });
 }

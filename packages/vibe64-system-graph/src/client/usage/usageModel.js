@@ -52,13 +52,9 @@ function usageStateFromQuery(query = {}) {
   };
 }
 
-function normalizedUsageState(state = {}) {
-  return usageStateFromQuery(state);
-}
-
 function usageQueryFor(query = {}, state = {}) {
   const next = Object.fromEntries(Object.entries(query).filter(([key]) => !USAGE_QUERY_KEYS.includes(key)));
-  const normalized = normalizedUsageState(state);
+  const normalized = usageStateFromQuery(state);
   if (normalized.view !== "usage") return next;
   next.view = "usage";
   next.mode = normalized.mode;
@@ -67,8 +63,8 @@ function usageQueryFor(query = {}, state = {}) {
 }
 
 function sameUsageState(left = {}, right = {}) {
-  const a = normalizedUsageState(left);
-  const b = normalizedUsageState(right);
+  const a = usageStateFromQuery(left);
+  const b = usageStateFromQuery(right);
   return USAGE_QUERY_KEYS.every((key) => a[key] === b[key]);
 }
 
@@ -85,6 +81,11 @@ function functionLabel(fn = {}) {
 
 function fileName(filePath = "") {
   return String(filePath).split("/").pop();
+}
+
+// Path segments that keep their slash, so long paths wrap between folders.
+function pathParts(filePath = "") {
+  return String(filePath).split(/(?<=\/)/u);
 }
 
 function countLabel(count, singular, plural = `${singular}s`) {
@@ -356,9 +357,7 @@ export {
   MAX_NODES,
   MORE_NODES,
   NODE,
-  USAGE_ENTRY_KINDS,
   USAGE_MODES,
-  USAGE_QUERY_KEYS,
   CERTAINTY_TEXT,
   callGroups,
   callMethodText,
@@ -370,12 +369,12 @@ export {
   depthColumns,
   depthTitle,
   entryKind,
-  fileName,
   functionLabel,
   interactionTitle,
   isBackgroundRequest,
   joinText,
   onlyBackground,
+  pathParts,
   recordedDepths,
   recordingWeb,
   requestGroups,

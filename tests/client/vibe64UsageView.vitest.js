@@ -218,6 +218,28 @@ describe("parts", () => {
   });
 });
 
+describe("actions", () => {
+  it("reads a selected function and opens source at its line with a way back to Usage", async () => {
+    fake.usage = usageReads();
+    const opened = vi.fn();
+    const node = () => ({});
+    const renderer = createRenderer({ createComment: node, createElement: node, createText: node, setText() {}, setElementText() {},
+      patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+    const state = usageState({ entry: PAGE, subsystem: "directory:src" });
+    const app = renderer.createApp({ ...Vibe64UsageView, render: () => null }, { sessionId: "s1", state, "onOpen-source-file": opened });
+    app.provide(ssrContextKey, { modules: new Set() });
+    app.mount({});
+    const view = app._instance.setupState;
+    view.selectNode({ id: "fn:a", functionId: "fn:a", title: "a", file: "src/a.js", start: { line: 3, column: 1 } });
+    expect(fake.usage.detail.run).toHaveBeenCalledWith("fn:a");
+    view.openSource({ path: "src/a.js", line: 3, column: 1 });
+    expect(opened).toHaveBeenCalledWith({ path: "src/a.js", line: 3, column: 1, presentation: "code", origin: "system", systemContext: { usage: state } });
+    view.selectFunction({ id: "fn:b", name: "b", file: "src/b.js", start: { line: 9, column: 2 } });
+    expect(view.selected).toMatchObject({ functionId: "fn:b", title: "b", subtitle: "src/b.js:9" });
+    app.unmount();
+  });
+});
+
 describe("Architecture keeps Usage in the address", () => {
   let app;
   vi.stubGlobal("requestAnimationFrame", (callback) => setTimeout(callback, 0));

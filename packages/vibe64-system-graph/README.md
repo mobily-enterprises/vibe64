@@ -134,3 +134,34 @@ executable entry point. Its file icon has a gold border, star and Main label.
 Supporting files keep compact membership links instead of repeating its body.
 Previously cached facts without an anchor remain readable until re-scanned;
 the viewer never derives one from citations or imports.
+
+## Usage
+
+Architecture's **Map | Usage** switch shows, for one Genesis entry point, only
+what it reaches. `src/server/usageWeb.js` answers four read actions
+(`vibe64.system-graph.usage.entries.read`, `.web.read`, `.function.read`,
+`.join`) on `/vibe64/system-graph/sessions/:sessionId/usage/*`:
+
+- entries: the Machine City's `entryPoints`, searched, filtered by kind and
+  paged by a numeric cursor;
+- Imports: breadth-first over resolved, non-type-only file imports;
+- Calls: breadth-first over exact and probable calls and operation bridges in
+  the Genesis call web, read only when its bytes match the City's `callWeb`
+  identity; pages and components start from every function in their file;
+- function: one function's calls, callers and unresolved calls;
+- join: recorded functions matched to the call web by hash and start, else
+  by name within three lines.
+
+Answers carry the snapshot (`sourceIdentity`, `callWebIdentity`, `builtAt`,
+`stale`) and stay bounded: subsystem counts always, nodes only for a zoomed
+subsystem or a reach within `maxNodes` (300, at most 1,000), 50 unresolved
+calls, 200 rows per function list, 1 MiB, `truncated` when cut. One parsed call
+web per session source is cached for two sessions and ten idle minutes.
+
+`src/client/usage/` holds the view. `Vibe64UsageView` keeps its address state
+(`view`, `entry`, `mode`, `subsystem`, `recording`, `request`) with the
+Architecture view, which writes it to the system dashboard route's query and
+handles `usageOpenRequest` and `restoreRequest`. Recording reads the
+`@local/vibe64-usage-recording` API and opens its Record dialog; that package
+never depends on this one. `usageModel.js` only shapes server answers for
+display.

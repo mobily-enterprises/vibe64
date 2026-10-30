@@ -1,20 +1,67 @@
 # Usage map
 
-People start from an entry point (a page, component, route, action, library
-export, command, job, Program operation or test file) and see which subsystems
-and functions it reaches through Imports, Calls or a Recording. The usage view
-is being added; its shared fixtures describe the documents it reads.
+People start from one entry point (a page, component, route, action, library
+export, command, job, Program operation or test file) and see only what it
+reaches: the files it imports, the functions it may call, or the functions one
+recorded request actually ran. Architecture shows it as Usage beside Map.
 
 ## Sources
 
-- Main: `packages/vibe64-system-graph/src/server/genesisCities.js`
+- Main: `packages/vibe64-system-graph/src/server/usageWeb.js`
+- `packages/vibe64-system-graph/src/server/usageActions.js`
+- `packages/vibe64-system-graph/src/server/usageRoutes.js`
+- `packages/vibe64-system-graph/src/server/genesisCities.js`
+- `packages/vibe64-system-graph/src/client/usage/Vibe64UsageView.vue`
+- `packages/vibe64-system-graph/src/client/usage/Vibe64UsageEntryRail.vue`
+- `packages/vibe64-system-graph/src/client/usage/Vibe64UsageEntryPicker.vue`
+- `packages/vibe64-system-graph/src/client/usage/Vibe64UsageWebCanvas.vue`
+- `packages/vibe64-system-graph/src/client/usage/Vibe64UsageFunctionPanel.vue`
+- `packages/vibe64-system-graph/src/client/usage/Vibe64UsageRecordingResults.vue`
+- `packages/vibe64-system-graph/src/client/usage/usageModel.js`
+- `packages/vibe64-system-graph/src/client/usage/useVibe64UsageWeb.js`
+- `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
 - `tests/fixtures/usage-map/machine-city.json`
 - `tests/fixtures/usage-map/call-web.json`
 - `tests/server/vibe64UsageMapFixtures.unit.test.js`
+- `tests/server/vibe64UsageWeb.unit.test.js`
+- `tests/server/vibe64UsageRoutes.unit.test.js`
+- `tests/client/vibe64UsageModel.vitest.js`
+- `tests/client/vibe64UsageView.vitest.js`
+- `tests/e2e/usage-map.spec.ts`
 
 ## Public contract
 
-The Machine City's architecture gains `entryPoints` and a `callWeb` summary
-whose `identity` names the separate `.genesis/call-web.json` document. Static
-edges are Imports or Calls, each call exact, probable or unresolved; recorded
-functions ran. No usage routes exist yet.
+Four read-only `vibe64.system-graph.usage.*` actions answer on the active
+session's routes under `/vibe64/system-graph/sessions/:sessionId/usage`:
+`entries` (search, kind filter, numeric cursor), `web` (`imports` or `calls`,
+optional `certainty: exact`, one zoomed `subsystemId`, `maxNodes` up to 1,000),
+`function` (one function's calls, callers and unresolved calls, 200 per list)
+and `join` (up to 1,500 recorded functions). They keep Architecture's
+authority, are not offered to the assistant, and add `snapshot` (source
+identity, call-web identity, build time and `stale`) to every answer.
+
+Entries and Imports come from the validated Machine City; Calls come from the
+Genesis call web named by the City's `callWeb` summary, read only when its
+bytes match that identity. Imports follow resolved, non-type-only imports.
+Calls follow exact and probable calls plus operation bridges; a page or
+component starts from every function in its file. Each reached function says
+whether exact calls alone reach it. Unresolved calls stay listed, never
+followed. Without a call web, Calls says so and Imports still works.
+
+Every answer is bounded: subsystems always, files or functions only for a
+zoomed subsystem or when the whole reach fits `maxNodes`, at most 50
+unresolved calls, and at most 1 MiB, with `truncated` when anything was left
+out. No edge names a node the answer does not return. One parsed call web per
+session source stays cached (two sessions, released after 10 idle minutes) and
+reloads when the City names a new identity.
+
+A join matches a recorded function by file hash and exact start, else by name
+within three lines when unique; a changed file is `stale`, anything else
+`none`. A file's top-level code and a function opening the file both start at
+1:1; the recorded name picks the function, any other name the top level.
+
+The system dashboard's address keeps Usage's state (`view`, `entry`, `mode`,
+`subsystem`, `recording`, `request`), so reloads and the source viewer's way
+back restore it. Map's pages and zoomed views offer Show usage. A recorded web
+server that runs every request in one process is labelled "Not separated per
+request for this server" and shows everything that ran.

@@ -66,13 +66,13 @@
             :active="node.id === selectedId"
             color="primary"
             rounded="lg"
-            lines="two"
+            lines="three"
             :title="node.title"
-            :subtitle="node.subtitle"
             @click="emit('select', node)"
           >
-            <template #append>
-              <span class="usage-web__row-counts text-label-medium">{{ rowCounts(node) }}</span>
+            <template #subtitle>
+              <span class="usage-web__row-path"><template v-for="(part, position) in pathParts(node.subtitle)" :key="position">{{ part }}<wbr></template></span>
+              <span class="usage-web__row-counts">{{ rowCounts(node) }}</span>
             </template>
           </v-list-item>
         </template>
@@ -110,9 +110,11 @@
             :title="`${node.title}\n${node.subtitle}`"
             @click="emit('select', node)"
           >
-            <span class="usage-node__title text-body-medium">{{ node.title }}</span>
+            <span class="usage-node__head">
+              <span class="usage-node__title text-body-medium">{{ node.title }}</span>
+              <span v-if="badge(node)" class="usage-node__badge text-label-small">{{ badge(node) }}</span>
+            </span>
             <span class="usage-node__subtitle text-body-small">{{ node.subtitle }}</span>
-            <span v-if="badge(node)" class="usage-node__badge text-label-small">{{ badge(node) }}</span>
           </button>
         </div>
       </div>
@@ -134,6 +136,7 @@ import {
   depthColumns,
   depthTitle,
   joinText,
+  pathParts,
   subsystemCard,
   subsystemSections
 } from "./usageModel.js";
@@ -207,9 +210,8 @@ function nodeLabel(node) {
 .usage-web__legend { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .usage-web__legend-chip svg { margin-right: 6px; }
 .usage-web__rows { background: transparent; padding: 0; }
-.usage-web__rows :deep(.v-list-item-subtitle) { overflow-wrap: anywhere; }
-.usage-web__row-counts { color: rgb(var(--v-theme-on-surface-variant)); white-space: nowrap; margin-left: 8px; }
-.usage-web--compact .usage-web__row-counts { white-space: normal; text-align: right; max-width: 112px; }
+.usage-web__rows :deep(.v-list-item-subtitle) { display: flex; flex-direction: column; gap: 2px; -webkit-line-clamp: unset; overflow-wrap: break-word; }
+.usage-web__row-counts { color: rgb(var(--v-theme-on-surface)); }
 .usage-web__scroll { overflow: auto; max-width: 100%; border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); border-radius: 12px; background: rgb(var(--v-theme-surface)); }
 .usage-web__plane { position: relative; }
 .usage-web__edges { position: absolute; inset: 0; pointer-events: none; }
@@ -226,5 +228,7 @@ function nodeLabel(node) {
 .usage-node--plumbing { opacity: .7; }
 .usage-node__title, .usage-node__subtitle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .usage-node__subtitle { color: rgb(var(--v-theme-on-surface-variant)); }
-.usage-node__badge { position: absolute; top: 6px; right: 8px; padding: 0 6px; border-radius: 8px; background: rgb(var(--v-theme-surface-variant)); color: rgb(var(--v-theme-on-surface-variant)); }
+.usage-node__head { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.usage-node__title { flex: 1; min-width: 0; }
+.usage-node__badge { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; border-radius: 8px; background: rgb(var(--v-theme-surface-variant)); color: rgb(var(--v-theme-on-surface-variant)); }
 </style>

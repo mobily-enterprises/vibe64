@@ -32,6 +32,15 @@ viewer needs no language or package-manager-specific controls.
 For text ownership, generation triggers and freshness, see
 [Where Architecture explanations come from](architecture-explanations.md).
 
+## Map and Usage
+
+The **Map | Usage** switch at the top chooses between this map and **Usage**,
+which starts from one entry point (a page, route, command, library export and
+so on) and shows only the files it imports, the functions it may call, or what
+one recorded request ran. Page cards and zoomed subsystems, Programs and files
+offer **Show usage** to open it there. See
+[See what one entry point uses](usage-map.md).
+
 ## Explore by zooming
 
 1. Click or tap a subsystem to enter with a smooth zoom. Alternatively,
@@ -185,7 +194,8 @@ does not prove that no runtime call exists.
 
 Drag empty space to pan. **Fit** returns to the complete map. **Architecture
 options** (**⋯**) contains **Fit UI**, **Fit Engine**, **Zoom in**, **Zoom out**, the
-UI-call toggle, **Reset arrangement**, **Reload architecture** and **Re-scan project**. On mobile use the
+UI-call toggle, **Reset arrangement**, **Reload architecture** and **Re-scan project**.
+In Usage the menu keeps only **Reload architecture** and **Re-scan project**. On mobile use the
 top bar's **Show project** control if chat fills the screen, then use the same
 menu, pinch and pan; folder and file controls remain keyboard accessible.
 The existing chat divider controls workspace width.
