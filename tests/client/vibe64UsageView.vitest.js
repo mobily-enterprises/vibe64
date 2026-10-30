@@ -28,6 +28,7 @@ import Vibe64UsageView from "../../packages/vibe64-system-graph/src/client/usage
 import Vibe64UsageFunctionPanel from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageFunctionPanel.vue";
 import Vibe64UsageWebCanvas from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageWebCanvas.vue";
 import Vibe64UsageEntryRail from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageEntryRail.vue";
+import Vibe64UsageRecordingResults from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageRecordingResults.vue";
 import Vibe64UiStoryboardView from "../../packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue";
 import { webNodes } from "../../packages/vibe64-system-graph/src/client/usage/usageModel.js";
 
@@ -138,6 +139,17 @@ describe("Imports and Calls states", () => {
     expect(html).toContain("Calls are not available here");
     expect(html).toContain("The last scan did not read calls for this project.");
     expect(html).toContain("Show Imports");
+    const notIgnored = await view({ entry: PAGE }, { web: read(web), snapshot: { ...index.snapshot, callWebIdentity: null, callWebProblem: "not-ignored" } });
+    expect(notIgnored).toContain("Git does not ignore .genesis/call-web.json in this project, so the last scan could not read calls. Add /.genesis/call-web.json to the project&#39;s .gitignore");
+  });
+
+  it("says why a function that ran has no calls: Git, or its language", async () => {
+    const node = { id: "ran:0", functionId: null, title: "handler", subtitle: "app/main.py:3", file: "app/main.py", start: { line: 3, column: 1 }, join: "none" };
+    expect(await render(Vibe64UsageFunctionPanel, { node: { ...node, reason: "language" } }))
+      .toContain("The scan reads calls only in the languages of the project&#39;s Stack components, and this file&#39;s language is not among them.");
+    expect(await render(Vibe64UsageFunctionPanel, { node: { ...node, reason: "not-ignored" } })).toContain("Add /.genesis/call-web.json to the project&#39;s .gitignore");
+    const canvas = await render(Vibe64UsageWebCanvas, { mode: "recording", zoomedId: "directory:app", subsystems: [], nodes: [{ ...node, reason: "language", depth: 0, count: 1, outCount: 0, inCount: 0 }], edges: [] });
+    expect(canvas).toContain("Calls not read in this file&#39;s language");
   });
 });
 
@@ -174,6 +186,32 @@ describe("Recording states", () => {
     expect(await view({ mode: "recording", recording: recordingId }, { recordings, requests: read(requests) })).not.toContain("Not separated per request");
   });
 
+  it("shows the launch readiness check as a secondary row of its own", async () => {
+    const check = { id: "r_000000", kind: "readiness", method: null, path: null, status: null, startedAt: null, durationMs: null, interaction: null, functionCount: 2, fileCount: 1 };
+    const html = await render(Vibe64UsageRecordingResults, { recordings: recordingList.recordings, recordingId, requests: [check, ...requests.requests] });
+    expect(html).toContain("Launch readiness check");
+    expect(html).toContain("Vibe64 checking that the launch started · 1 file · 2 functions");
+    expect(html).toMatch(/usage-recordings__request--secondary[\s\S]*CHECK/u);
+    expect(html).not.toContain("Request not in the request log");
+    const shared = { id: "bg_4242", kind: "background", method: null, path: null, status: null, startedAt: null, durationMs: null, interaction: null, functionCount: 21, fileCount: 12 };
+    const sharedHtml = await render(Vibe64UsageRecordingResults, { recordings: recordingList.recordings, recordingId, requests: [check, shared] });
+    expect(sharedHtml).toContain("Not separated per request for this server: its requests share one process");
+  });
+
+  it("says when the request log is full, and counts asset loads instead of listing them", async () => {
+    const [recording] = recordingList.recordings;
+    const full = read({ recordings: [{ ...recording, requestLog: { assets: 2300, full: true } }] });
+    const missed = { id: "r_020001", method: null, path: null, status: null, startedAt: null, durationMs: null, interaction: null, functionCount: 3, fileCount: 2 };
+    const state = { mode: "recording", recording: recordingId };
+    const html = await view(state, { recordings: full, requests: read({ ...requests, requests: [...requests.requests, missed] }) });
+    expect(html).toContain("Request log full; later requests not recorded");
+    expect(html).toContain("Request not in the request log");
+    expect(html).not.toContain("counted, not listed");
+    expect(await view(state, { recordings, requests: read(requests) })).not.toContain("Request log full");
+    const counted = await render(Vibe64UsageRecordingResults, { recordings: full.data.value.recordings, recordingId, requests: requests.requests, includeEmpty: true });
+    expect(counted).toContain("2,300 script, style, image or font loads counted, not listed.");
+  });
+
   it("lights only the subsystems that ran, with shared plumbing counted per card", async () => {
     const html = await view({ mode: "recording", recording: recordingId, request: "r_000004" }, { recordings, requests: read(requests), result: read(joined) });
     expect(html).toContain("6 functions ran");
@@ -185,6 +223,31 @@ describe("Recording states", () => {
     expect(zoomed).toContain("Not in the last scan");
     expect(zoomed).toMatch(/usage-node__badge[^>]*>not scanned</u);
     expect(zoomed).not.toContain("runAction");
+  });
+
+  it("says when the scan changed since the recording, from the recording's source identity", async () => {
+    const state = { mode: "recording", recording: recordingId, request: "r_000004" };
+    const result = read({ ...joined, join: { ...joined.join, snapshot: index.snapshot } });
+    expect(recordingList.recordings[0].sourceIdentity).toBe(index.snapshot.sourceIdentity);
+    expect(await view(state, { recordings, requests: read(requests), result })).not.toContain("Source changed since this recording");
+    const earlier = read({ recordings: [{ ...recordingList.recordings[0], sourceIdentity: `sha256:${"0".repeat(64)}` }] });
+    expect(await view(state, { recordings: earlier, requests: read(requests), result })).toContain("Source changed since this recording");
+  });
+
+  it("offers Refresh, not Retry, before the project's first scan", async () => {
+    const NOT_SCANNED = { error: "Machine City has not been generated. Refresh analysis first.", errorCode: "vibe64_genesis_city_missing" };
+    const state = { mode: "recording", recording: recordingId, request: "r_000004" };
+    const html = await view(state, { recordings, requests: read(requests), result: read(null, NOT_SCANNED) });
+    expect(html).toContain("Not scanned yet");
+    expect(html).toContain("Refresh the architecture scan to see the subsystems and functions this request ran.");
+    expect(html).toContain("Refresh");
+    expect(html).not.toContain("Retry");
+    expect(html).not.toContain("Machine City has not been generated");
+    const entries = { ...usageReads({ entries: { entries: [], kinds: [] }, snapshot: null }).entries, error: ref(NOT_SCANNED.error), errorCode: ref(NOT_SCANNED.errorCode) };
+    fake.usage = { ...usageReads({ snapshot: null, web: read(null, NOT_SCANNED) }), entries };
+    const calls = await render(Vibe64UsageView, { sessionId: "s1", state: usageState({ entry: PAGE }) });
+    expect(calls).toContain("No entry points found yet. Refresh the architecture scan.");
+    expect(calls).not.toContain("Retry");
   });
 
   it("shows loading, error with Retry and truncation for one request", async () => {

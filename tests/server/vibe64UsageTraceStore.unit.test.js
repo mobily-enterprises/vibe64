@@ -10,7 +10,7 @@ import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { USAGE_RECORDING_LIMITS, USAGE_RECORDING_RETENTION } from "@local/vibe64-usage-recording/shared/contract";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
-import { createTraceReader } from "../../packages/vibe64-usage-recording/src/server/traceStore.js";
+import { createTraceReader, recordingRequestRows } from "../../packages/vibe64-usage-recording/src/server/traceStore.js";
 
 const exec = promisify(execFile);
 const FIXTURE = new URL("../fixtures/usage-map/recording/", import.meta.url);
@@ -117,6 +117,38 @@ test("trace lines are validated, merged per scope and kept per process", async (
   await reader.poll();
   assert.deepEqual(reader.scopeFunctions("r_000002").map(({ name, count }) => ({ name, count })), [{ name: "f8", count: 1 }]);
   assert.equal(reader.problems().malformedLines, 7);
+});
+
+test("the launch readiness check is its own row, outside the counts and plumbing", async (t) => {
+  const directory = await temporary(t);
+  await writeFile(path.join(directory, "requests.ndjson"), ndjson([
+    { id: "r_000001", seq: 1, method: "GET", path: "/api/items", status: 200, startedAt: "2026-10-30T10:00:02.000Z", durationMs: 4, interaction: null }
+  ]));
+  await writeFile(path.join(directory, "hits-nodejs-10.ndjson"), ndjson([
+    header(10),
+    { type: "tracer", state: "ready" },
+    ...declare(0, 0, "server/health.js", 3),
+    ...declare(1, 1, "server/items.js", 9),
+    { type: "scope", scope: "r_000000", kind: "request", startedAt: "2026-10-30T10:00:01.000Z" },
+    { type: "hits", scope: "r_000000", counts: [[0, 1]] },
+    { type: "scope", scope: "r_000001", kind: "request", startedAt: "2026-10-30T10:00:02.000Z" },
+    { type: "hits", scope: "r_000001", counts: [[0, 1], [1, 1]] },
+    { type: "scope", scope: "l_10_1", kind: "local-request", label: "GET /api/items", startedAt: "2026-10-30T10:00:03.000Z" },
+    { type: "hits", scope: "l_10_1", counts: [[0, 1], [1, 1]] },
+    { type: "scope", scope: "r_000002", kind: "request", startedAt: "2026-10-30T10:00:04.000Z" },
+    { type: "hits", scope: "r_000002", counts: [[0, 1], [1, 1]] }
+  ]));
+  const reader = createTraceReader(directory);
+  await reader.poll();
+  assert.deepEqual(reader.counts(), { requests: 3, functions: 2 });
+  const rows = await recordingRequestRows(directory, reader);
+  assert.deepEqual(rows.map(({ id, kind, method, path: requestPath, status }) => ({ id, kind, method, path: requestPath, status })), [
+    { id: "r_000000", kind: "readiness", method: null, path: null, status: null },
+    { id: "r_000001", kind: undefined, method: "GET", path: "/api/items", status: 200 },
+    { id: "l_10_1", kind: undefined, method: "GET", path: "/api/items", status: null },
+    { id: "r_000002", kind: undefined, method: null, path: null, status: null }
+  ]);
+  assert.equal(rows[0].functionCount, 1);
 });
 
 test("trace reads stop at the per-process and per-recording size limits", async (t) => {

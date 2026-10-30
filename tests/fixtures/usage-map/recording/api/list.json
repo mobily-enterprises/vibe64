@@ -29,7 +29,11 @@
       "truncated": false,
       "dismissedAt": null,
       "sourceIdentity": "sha256:42d341358a04358e65283944f12333ee2cb59fa5a535e29b095d3d0afb21ffa1",
-      "highestInteraction": 1
+      "highestInteraction": 1,
+      "requestLog": {
+        "assets": 0,
+        "full": false
+      }
     }
   ]
 }

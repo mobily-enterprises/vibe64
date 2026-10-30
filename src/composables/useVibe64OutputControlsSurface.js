@@ -68,6 +68,7 @@ const PREVIEW_IDENTITY_TIMEOUT_MS = 10000;
 const PREVIEW_RESOURCE_RETRY_DELAY_MS = 250;
 const PREVIEW_RESOURCE_RETRY_LIMIT = 1;
 const PREVIEW_PICK_NO_COMPONENT_TEXT = "No component information on this page. Record while clicking to see its requests.";
+const PREVIEW_PICK_NOT_SCANNED_TEXT = "This project has not been scanned yet. Refresh the architecture scan in Usage, then pick again.";
 
 function previewUrlWithoutDisplayParams(value = "") {
   const text = String(value || "").trim();
@@ -728,6 +729,8 @@ function useVibe64OutputControlsSurface(props, {
   const previewPickBusy = ref(false);
   const previewPickNoticeText = ref("");
   const previewPickNoticeVisible = ref(false);
+  // A notice about a missing scan offers Usage, where the scan is refreshed.
+  const previewPickNoticeOpensUsage = ref(false);
   // The highest interaction number this recording is known to hold, from the
   // bridge's reports and the server; a page that loads later continues after it.
   const previewInteractions = { highest: 0, recordingId: "" };
@@ -1256,9 +1259,15 @@ function useVibe64OutputControlsSurface(props, {
     }
   }
 
-  function showPreviewPickNotice(text) {
+  function showPreviewPickNotice(text, { opensUsage = false } = {}) {
     previewPickNoticeText.value = text;
+    previewPickNoticeOpensUsage.value = opensUsage && typeof openUsage === "function";
     previewPickNoticeVisible.value = true;
+  }
+
+  function openUsageFromPickNotice() {
+    previewPickNoticeVisible.value = false;
+    openUsage?.({ mode: "calls" });
   }
 
   function stopPreviewPick() {
@@ -1300,13 +1309,17 @@ function useVibe64OutputControlsSurface(props, {
       const answer = await readUsageEntries({ limit: 50, q: file.slice(-80) });
       const entry = previewUsageEntryForFile(answer?.entries, file);
       if (!entry) {
-        showPreviewPickNotice(`${file.split("/").pop()} has no usage entry yet. Refresh the architecture scan, then pick again.`);
+        showPreviewPickNotice(`${file.split("/").pop()} has no usage entry yet. Refresh the architecture scan, then pick again.`, { opensUsage: true });
         return null;
       }
       openUsage?.({ entryId: entry.id, mode: "calls" });
       return entry;
     } catch (error) {
-      showPreviewPickNotice(String(error?.message || "").trim() || "Usage could not be read. Pick again.");
+      if (error?.code === "vibe64_genesis_city_missing") {
+        showPreviewPickNotice(PREVIEW_PICK_NOT_SCANNED_TEXT, { opensUsage: true });
+      } else {
+        showPreviewPickNotice(String(error?.message || "").trim() || "Usage could not be read. Pick again.");
+      }
       return null;
     } finally {
       previewPickBusy.value = false;
@@ -2449,9 +2462,11 @@ function useVibe64OutputControlsSurface(props, {
     previewResourceNoticeVisible,
     previewPickAvailable,
     previewPickBusy,
+    previewPickNoticeOpensUsage,
     previewPickNoticeText,
     previewPickNoticeVisible,
     previewPicking,
+    openUsageFromPickNotice,
     stopPreviewPick,
     togglePreviewPick,
     previewState,

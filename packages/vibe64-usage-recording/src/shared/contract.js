@@ -9,6 +9,9 @@ const USAGE_RECORDING_CHANGED_EVENT = "vibe64.usage-recording.changed";
 // The Preview proxy owns request identity: it strips any client-sent value and
 // assigns its own. The interaction header is accepted only while recording.
 const USAGE_RECORDING_REQUEST_HEADER = "x-vibe64-recording-request";
+// Vibe64's launch readiness check sends this id while its launch records. The
+// proxy never assigns it (its ids start at r_000001), so its row stays apart.
+const USAGE_READINESS_REQUEST_ID = "r_000000";
 const USAGE_RECORDING_INTERACTION_HEADER = "x-vibe64-interaction";
 
 // Every tracer receives these three variables (set by the recording service).
@@ -113,6 +116,7 @@ function usageTraceLineProblem(line) {
 export {
   USAGE_INTERACTION_ID_PATTERN,
   USAGE_INTERACTION_KINDS,
+  USAGE_READINESS_REQUEST_ID,
   USAGE_RECORDING_CHANGED_EVENT,
   USAGE_RECORDING_ENVIRONMENT,
   USAGE_RECORDING_ID_PATTERN,

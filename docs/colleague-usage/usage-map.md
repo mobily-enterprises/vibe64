@@ -101,6 +101,8 @@ phone) shows:
   status and how many files and functions ran. Later requests that no click,
   Enter or submit caused are listed under **Other requests**. A process's
   start-up work is listed first as **Start-up and work outside requests**.
+  **Launch readiness check**, shown dimmed with **CHECK**, is Vibe64 checking
+  that the recorded launch started; it is not one of your requests.
 
 Pick a request to light up only the subsystems that ran. Functions that ran in
 most requests of the recording, such as logging or request setup, are counted
@@ -111,7 +113,11 @@ it ran. Arrows between them come from the static calls.
 A function marked **changed** (**Changed since the last scan** in its
 tooltip and list row) ran from a file that has changed since Architecture was
 scanned; **not scanned** (**Not in the last scan**) means the scan does not
-know it. Re-scan to see their calls.
+know it. Re-scan to see their calls. Calls are read only in the languages of
+the project's Stack components; a function in any other language shows **Calls
+not read in this file's language**, and re-scanning does not change that.
+**Source changed since this recording** means Architecture was scanned again
+after the recording; the request is shown against the newer scan.
 
 Some web servers handle every request in one shared process. Their code is
 then shown as one row, **Not separated per request for this server**, with
@@ -130,8 +136,19 @@ and names them; Imports and Calls still work.
   than fits. **Show more** raises the limit to 1,000.
 - **Calls are not available here** means the scan did not read calls for this
   entry or project. **Show Imports** still shows the files it reaches.
+- The scan reads calls only while Git ignores `.genesis/call-web.json`.
+  **Refresh** sets that up itself in the clone's own Git settings, without
+  changing project files. If it cannot (for example in a linked Git worktree),
+  Usage says **Git does not ignore .genesis/call-web.json in this project**,
+  and recorded functions show **Calls not read: Git does not ignore the call
+  web**. Add `/.genesis/call-web.json` to the project's `.gitignore`, then
+  refresh.
 - Errors offer **Retry**. **This entry point is not in the current scan.**
   offers **Choose another**.
+- Before the project's first scan there is nothing to retry: the entry list
+  says **No entry points found yet. Refresh the architecture scan.**, and a
+  recorded request says **Not scanned yet**. Both offer **Refresh**, which
+  runs the scan.
 
 The address keeps the chosen entry, mode, subsystem, recording and request, so
 reloading the page or sharing the address with someone on the same project

@@ -46,7 +46,11 @@ bytes match that identity. Imports follow resolved, non-type-only imports.
 Calls follow exact and probable calls plus operation bridges; a page or
 component starts from every function in its file. Each reached function says
 whether exact calls alone reach it. Unresolved calls stay listed, never
-followed. Without a call web, Calls says so and Imports still works.
+followed. Without a call web, Calls says so and Imports still works; when
+Genesis reported the call web not ignored by Git, the snapshot's
+`callWebProblem` says so and Usage names the fix. A joined function the call web
+cannot know carries a `reason`: `not-ignored`, or `language` for a file whose
+language the scan reads no calls in.
 
 Every answer is bounded: subsystems always, files or functions only for a
 zoomed subsystem or when the whole reach fits `maxNodes`, at most 50

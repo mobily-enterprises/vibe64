@@ -272,6 +272,19 @@ test("recorded functions join exactly, by name and line, as stale or not at all"
   ] });
   assert.deepEqual(withoutCalls.joined.map((item) => item.join), ["none", "stale"]);
   assert.deepEqual(withoutCalls.edges, []);
+  // A function outside the scan's calls says why, when that is known: Git did
+  // not ignore the call web, or the scan reads no calls in its file's language.
+  assert.equal("reason" in withoutCalls.joined[0], false);
+  assert.equal("reason" in withoutCalls.joined[1], false);
+  assert.equal("reason" in missing.joined[0], false);
+  const notIgnored = snapshot({ ...machine, architecture: { ...machine.architecture, callWeb: null,
+    diagnostics: [{ code: "CALL_WEB_NOT_IGNORED", path: ".genesis/call-web.json", message: "Add `/.genesis/call-web.json` to .gitignore" }] } });
+  assert.equal(notIgnored.snapshot.callWebProblem, "not-ignored");
+  assert.equal(index.snapshot.callWebProblem, null);
+  assert.equal(joinFunctions(notIgnored, null, { functions: [{ path: "bin/demo.js", hash: scanned.hash, name: "main", start: { line: 7, column: 1 } }] }).joined[0].reason, "not-ignored");
+  const undeclared = buildCallIndex({ ...callWeb, files: callWeb.files.map((file) => (file.path === "bin/demo.js" ? { ...file, coverage: "none" } : file)) });
+  assert.deepEqual(joinFunctions(index, undeclared, { functions: [{ path: "bin/demo.js", hash: scanned.hash, name: "main", start: { line: 7, column: 1 } }] }).joined,
+    [{ index: 0, functionId: null, subsystemId: scanned.subsystemId, join: "none", reason: "language" }]);
   assert.throws(() => joinFunctions(index, calls, { functions: Array.from({ length: 1501 }, () => request.functions[0]) }), { code: "vibe64_invalid_usage_join_size" });
 
   // A function opening its file shares 1:1 with the file's top-level code.
@@ -365,6 +378,7 @@ test("the service answers each query with the snapshot and reloads a changed cal
     assert.deepEqual(entries.snapshot, {
       sourceIdentity: machine.architecture.sourceHash,
       callWebIdentity: machine.architecture.callWeb.identity,
+      callWebProblem: null,
       builtAt: "2026-10-30T10:00:00.000Z",
       stale: false
     });

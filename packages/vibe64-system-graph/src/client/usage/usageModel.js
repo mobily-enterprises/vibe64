@@ -163,7 +163,7 @@ function webNodes(mode, data = {}) {
   }
   return recordedDepths(data.nodes || [], edges).map((node) => ({
     id: node.id, functionId: node.functionId, title: functionLabel({ name: node.name, start: node.start }), subtitle: `${node.file}:${node.start.line}`,
-    file: node.file, start: node.start, depth: node.depth, certainty: null, count: node.count, plumbing: node.plumbing, join: node.join,
+    file: node.file, start: node.start, depth: node.depth, certainty: null, count: node.count, plumbing: node.plumbing, join: node.join, reason: node.reason,
     outCount: out.get(node.id) || 0, inCount: into.get(node.id) || 0, unresolved: 0
   }));
 }
@@ -261,16 +261,21 @@ function routeTemplateFor(method = "", requestPath = "", routes = []) {
 const BACKGROUND_TEXT = "Not separated per request for this server";
 const OUTSIDE_REQUESTS_TEXT = "Start-up and work outside requests";
 const isBackgroundRequest = (request = {}) => request.kind === "background" || /^bg_[0-9]+$/u.test(String(request.id || ""));
+// Vibe64's own check that a recorded launch started: a secondary row.
+const READINESS_TEXT = "Launch readiness check";
+const isReadinessRequest = (request = {}) => request.kind === "readiness";
 
 // True when project code ran only outside per-request scopes.
 function onlyBackground(requests = []) {
-  const ran = requests.filter((request) => Number(request.functionCount || 0) > 0);
+  const ran = requests.filter((request) => Number(request.functionCount || 0) > 0 && !isReadinessRequest(request));
   return ran.length > 0 && ran.every(isBackgroundRequest);
 }
 
+// A request the full request log missed has no method or path.
 function requestTitle(request = {}, routes = [], requests = [request]) {
   if (isBackgroundRequest(request)) return onlyBackground(requests) ? BACKGROUND_TEXT : OUTSIDE_REQUESTS_TEXT;
-  return routeTemplateFor(request.method, request.path, routes) || request.path || "";
+  if (isReadinessRequest(request)) return READINESS_TEXT;
+  return routeTemplateFor(request.method, request.path, routes) || request.path || "Request not in the request log";
 }
 
 // Requests under the click that caused them, in recorded order.
@@ -309,7 +314,8 @@ function recordingWeb(functions = [], join = null) {
       count: fn.count,
       plumbing: fn.plumbing === true,
       subsystemId: match.subsystemId,
-      join: match.join
+      join: match.join,
+      reason: match.reason
     };
   });
   const edges = (join?.edges || []).filter((edge) => nodes[edge.from] && nodes[edge.to])
@@ -351,8 +357,16 @@ function unavailableRuntimes(targets = []) {
   return [...new Set(targets.flatMap((target) => target.runtimes || []))];
 }
 
-function joinText(join = "") {
+// The error every usage read gives before the project's first scan.
+const NOT_SCANNED_CODE = "vibe64_genesis_city_missing";
+
+// Vibe64 keeps the call web out of Git itself; this is for when it could not.
+const NOT_IGNORED_TEXT = "Git does not ignore .genesis/call-web.json in this project, so the last scan could not read calls. Add /.genesis/call-web.json to the project's .gitignore, then refresh the architecture scan.";
+
+function joinText(join = "", reason = "") {
   if (join === "stale") return "Changed since the last scan";
+  if (join === "none" && reason === "not-ignored") return "Calls not read: Git does not ignore the call web";
+  if (join === "none" && reason === "language") return "Calls not read in this file's language";
   if (join === "none") return "Not in the last scan";
   return "";
 }
@@ -363,6 +377,8 @@ export {
   MAX_NODES,
   MORE_NODES,
   NODE,
+  NOT_IGNORED_TEXT,
+  NOT_SCANNED_CODE,
   USAGE_MODES,
   CERTAINTY_TEXT,
   callGroups,
@@ -378,6 +394,7 @@ export {
   functionLabel,
   interactionTitle,
   isBackgroundRequest,
+  isReadinessRequest,
   joinText,
   onlyBackground,
   pathParts,

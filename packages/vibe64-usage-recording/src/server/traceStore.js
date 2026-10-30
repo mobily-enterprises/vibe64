@@ -4,6 +4,7 @@ import { StringDecoder } from "node:string_decoder";
 
 import {
   USAGE_INTERACTION_ID_PATTERN,
+  USAGE_READINESS_REQUEST_ID,
   USAGE_RECORDING_LIMITS,
   usageScopeKind,
   usageTraceLineProblem
@@ -206,9 +207,11 @@ function createTraceReader(directory) {
   }
 
   // Request-like scopes that ran project code: proxy requests, local requests
-  // and terminal runs. They alone make the counts and the plumbing.
+  // and terminal runs. They alone make the counts and the plumbing; the launch
+  // readiness check, like background work, does not.
   function listedScopes() {
-    return [...scopes.entries()].filter(([, scope]) => scope.kind !== "background" && scope.kind && scope.hits.size > 0);
+    return [...scopes.entries()].filter(([id, scope]) => scope.kind !== "background" && id !== USAGE_READINESS_REQUEST_ID &&
+      scope.kind && scope.hits.size > 0);
   }
 
   // Each process's work outside any request, when it ran project code: its
@@ -300,8 +303,9 @@ function requestRow(id, fields, reader, plumbing) {
 }
 
 // Every request of a recording, in start order: the proxy's requests, local
-// request scopes and terminal runs that tracers reported themselves, and each
-// process's background work (kind "background", no method, path or status).
+// request scopes and terminal runs that tracers reported themselves, each
+// process's background work (kind "background", no method, path or status),
+// and Vibe64's launch readiness check (kind "readiness", likewise).
 async function recordingRequestRows(directory, reader, { runLabel = null } = {}) {
   const plumbing = reader.plumbingKeys();
   const logged = await readRequestLog(directory);
@@ -313,13 +317,17 @@ async function recordingRequestRows(directory, reader, { runLabel = null } = {})
     const durationMs = scope.startedAt && scope.endedAt ? Math.max(0, Date.parse(scope.endedAt) - Date.parse(scope.startedAt)) : null;
     rows.push(requestRow(id, {
       method: method || null,
-      path: scope.kind === "local-request" ? rest.join(" ") || null : scope.label || runLabel,
+      path: scope.kind === "local-request" ? rest.join(" ") || null : scope.kind === "run" ? scope.label || runLabel : null,
       startedAt: scope.startedAt,
       durationMs: Number.isFinite(durationMs) ? durationMs : null
     }, reader, plumbing));
   }
   for (const [id, scope] of reader.backgroundScopes()) {
     rows.push({ ...requestRow(id, { startedAt: scope.startedAt }, reader, plumbing), kind: "background" });
+  }
+  const readiness = reader.scopes().get(USAGE_READINESS_REQUEST_ID);
+  if (readiness?.hits.size) {
+    rows.push({ ...requestRow(USAGE_READINESS_REQUEST_ID, { startedAt: readiness.startedAt }, reader, plumbing), kind: "readiness" });
   }
   return rows.sort((left, right) => String(left.startedAt || "").localeCompare(String(right.startedAt || "")) ||
     left.id.localeCompare(right.id));

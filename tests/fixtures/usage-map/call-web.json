@@ -1,1550 +1,1550 @@
 {
-  "schema": "genesis.call-web.v1",
-  "sourceIdentity": "sha256:42d341358a04358e65283944f12333ee2cb59fa5a535e29b095d3d0afb21ffa1",
-  "files": [
+  "bridges": [
     {
-      "path": "bin/demo.js",
-      "hash": "sha256:83727d224b95dcc0576a41195131f312547efecf2c056843de2e9cc156ed034f",
-      "subsystemId": "directory:bin",
-      "coverage": "generic"
-    },
-    {
-      "path": "packages/core/src/server/logger.js",
-      "hash": "sha256:35890020aa5446a82eeb420cc9ae7fd05942e390b31594c79a240797ad799b06",
-      "subsystemId": "directory:packages/core",
-      "coverage": "generic"
-    },
-    {
-      "path": "packages/core/src/server/metrics.js",
-      "hash": "sha256:542316ab19e26a70a4266139e85e0f2cd5aa4cbe78ac867dd3e4201aa4cba99d",
-      "subsystemId": "directory:packages/core",
-      "coverage": "generic"
-    },
-    {
-      "path": "packages/core/src/server/requestContext.js",
-      "hash": "sha256:3a6356d69ef89e4930c8da0d7683c030792761dd28d16dd57c76c3af8183921d",
-      "subsystemId": "directory:packages/core",
-      "coverage": "generic"
-    },
-    {
-      "path": "packages/core/src/shared/sessionShape.ts",
-      "hash": "sha256:794becc7d7f0256ff2a3f0246d7e295baf248ca91666eb65156fbb5e2c14b1a4",
-      "subsystemId": "directory:packages/core",
-      "coverage": "generic"
-    },
-    {
-      "path": "packages/core/src/shared/text.js",
-      "hash": "sha256:321e7b6bd4e6a48161e37da9f6fafe5fedfbd02df2d086b4826bb1c38fdd7236",
-      "subsystemId": "directory:packages/core",
-      "coverage": "generic"
-    },
-    {
-      "path": "packages/reports/src/server/weeklyReport.js",
-      "hash": "sha256:4cd58960c48084f53c780aa274cc64b151ce423f12747badad39795f6e7fd756",
-      "subsystemId": "directory:packages/reports",
-      "coverage": "generic"
-    },
-    {
-      "path": "packages/sessions/src/server/actions.js",
-      "hash": "sha256:40c5f700aa30605b86776b26d8ecdebfe0b32e3a2fb7ed21a6ecb50b43077162",
-      "subsystemId": "directory:packages/sessions",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "packages/sessions/src/server/routes.js",
-      "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
-      "subsystemId": "directory:packages/sessions",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "packages/sessions/src/server/service.js",
-      "hash": "sha256:24abfcc93e12c75d41f0eed98be27822be8b2e7de7a5a4bb9da5eaf90d35d945",
-      "subsystemId": "directory:packages/sessions",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "packages/sessions/src/server/store.ts",
-      "hash": "sha256:4a00df3acb1cb5e4fd0024185b431dbfae97e96c42098a6c386fea578a941de4",
-      "subsystemId": "directory:packages/sessions",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "server/main.js",
-      "hash": "sha256:4a84d9fa5ef69a92dd4483ab96218bc1c023dad57fa633995ec8f6b2b7d09878",
-      "subsystemId": "directory:server",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "server/router.js",
-      "hash": "sha256:974657a1b7ab864a8afbbe0e013d0e7e4ef49205edcc0ffa4e41a82a72930063",
-      "subsystemId": "directory:server",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "src/api/sessionsClient.js",
-      "hash": "sha256:bd6b645032ac18b376ec96f6d0defb503e7d327180289c9b0cd66afd6892eb7d",
-      "subsystemId": "directory:src",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "src/components/SessionList.vue",
-      "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54",
-      "subsystemId": "directory:src",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "src/pages/SessionsPage.vue",
-      "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
-      "subsystemId": "directory:src",
-      "coverage": "adapter:jskit"
-    },
-    {
-      "path": "tests/sessions.test.js",
-      "hash": "sha256:afcaf7e92dc05964401e8cb08a8a8c0bf790d4873d065bc1ebe0290cde38e9b2",
-      "subsystemId": "directory:tests",
-      "coverage": "generic"
-    }
-  ],
-  "functions": [
-    {
-      "id": "fn:bin/demo.js#module",
-      "file": 0,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
+      "certainty": "exact",
+      "from": 43,
+      "kind": "operation",
+      "operationKey": {
+        "method": "GET",
+        "operation": "/api/sessions",
+        "protocol": "http",
+        "scope": "demo"
       },
-      "end": {
-        "line": 12,
-        "column": 26
-      }
+      "to": 22
     },
     {
-      "id": "fn:bin/demo.js#7:1",
-      "file": 0,
-      "name": "main",
-      "kind": "function",
-      "start": {
-        "line": 7,
-        "column": 1
+      "certainty": "probable",
+      "from": 44,
+      "kind": "operation",
+      "operationKey": {
+        "method": "POST",
+        "operation": "/api/sessions",
+        "protocol": "http",
+        "scope": "demo"
       },
-      "end": {
-        "line": 10,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/logger.js#module",
-      "file": 1,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 11,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/logger.js#1:8",
-      "file": 1,
-      "name": "createLogger",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 1,
-        "column": 8
-      },
-      "end": {
-        "line": 7,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/logger.js#3:5",
-      "file": 1,
-      "name": "info",
-      "kind": "method",
-      "start": {
-        "line": 3,
-        "column": 5
-      },
-      "end": {
-        "line": 5,
-        "column": 6
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/logger.js#9:1",
-      "file": 1,
-      "name": "writeLine",
-      "kind": "function",
-      "start": {
-        "line": 9,
-        "column": 1
-      },
-      "end": {
-        "line": 11,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/metrics.js#module",
-      "file": 2,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 5,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/metrics.js#3:8",
-      "file": 2,
-      "name": "info",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 3,
-        "column": 8
-      },
-      "end": {
-        "line": 5,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/requestContext.js#module",
-      "file": 3,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 17,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/requestContext.js#6:8",
-      "file": 3,
-      "name": "withRequestContext",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 6,
-        "column": 8
-      },
-      "end": {
-        "line": 13,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/requestContext.js#7:10",
-      "file": 3,
-      "name": "handleWithContext",
-      "kind": "closure",
-      "start": {
-        "line": 7,
-        "column": 10
-      },
-      "end": {
-        "line": 12,
-        "column": 4
-      }
-    },
-    {
-      "id": "fn:packages/core/src/server/requestContext.js#15:1",
-      "file": 3,
-      "name": "readContext",
-      "kind": "function",
-      "start": {
-        "line": 15,
-        "column": 1
-      },
-      "end": {
-        "line": 17,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/shared/sessionShape.ts#module",
-      "file": 4,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 4,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/shared/text.js#module",
-      "file": 5,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 3,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/core/src/shared/text.js#1:8",
-      "file": 5,
-      "name": "cleanTitle",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 1,
-        "column": 8
-      },
-      "end": {
-        "line": 3,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/reports/src/server/weeklyReport.js#module",
-      "file": 6,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 6,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/reports/src/server/weeklyReport.js#3:8",
-      "file": 6,
-      "name": "buildWeeklyReport",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 3,
-        "column": 8
-      },
-      "end": {
-        "line": 6,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/actions.js#module",
-      "file": 7,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 6,
-        "column": 3
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/actions.js#4:40",
-      "file": 7,
-      "name": "execute",
-      "kind": "arrow",
-      "start": {
-        "line": 4,
-        "column": 40
-      },
-      "end": {
-        "line": 4,
-        "column": 70
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/actions.js#5:42",
-      "file": 7,
-      "name": "execute",
-      "kind": "arrow",
-      "start": {
-        "line": 5,
-        "column": 42
-      },
-      "end": {
-        "line": 5,
-        "column": 73
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/routes.js#module",
-      "file": 8,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 12,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/routes.js#4:8",
-      "file": 8,
-      "name": "registerSessionRoutes",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 4,
-        "column": 8
-      },
-      "end": {
-        "line": 7,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/routes.js#5:50",
-      "file": 8,
-      "name": "",
-      "kind": "arrow",
-      "start": {
-        "line": 5,
-        "column": 50
-      },
-      "end": {
-        "line": 5,
-        "column": 147
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/routes.js#6:51",
-      "file": 8,
-      "name": "",
-      "kind": "arrow",
-      "start": {
-        "line": 6,
-        "column": 51
-      },
-      "end": {
-        "line": 6,
-        "column": 111
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/routes.js#9:1",
-      "file": 8,
-      "name": "runAction",
-      "kind": "function",
-      "start": {
-        "line": 9,
-        "column": 1
-      },
-      "end": {
-        "line": 12,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/routes.js#10:38",
-      "file": 8,
-      "name": "",
-      "kind": "arrow",
-      "start": {
-        "line": 10,
-        "column": 38
-      },
-      "end": {
-        "line": 10,
-        "column": 78
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/service.js#module",
-      "file": 9,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 16,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/service.js#4:8",
-      "file": 9,
-      "name": "listSessions",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 4,
-        "column": 8
-      },
-      "end": {
-        "line": 6,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/service.js#5:33",
-      "file": 9,
-      "name": "",
-      "kind": "arrow",
-      "start": {
-        "line": 5,
-        "column": 33
-      },
-      "end": {
-        "line": 5,
-        "column": 97
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/service.js#8:8",
-      "file": 9,
-      "name": "createSession",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 8,
-        "column": 8
-      },
-      "end": {
-        "line": 12,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/service.js#14:1",
-      "file": 9,
-      "name": "normalizeSession",
-      "kind": "function",
-      "start": {
-        "line": 14,
-        "column": 1
-      },
-      "end": {
-        "line": 16,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/store.ts#module",
-      "file": 10,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 11,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/store.ts#5:8",
-      "file": 10,
-      "name": "listRecords",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 5,
-        "column": 8
-      },
-      "end": {
-        "line": 7,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:packages/sessions/src/server/store.ts#9:8",
-      "file": 10,
-      "name": "saveRecord",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 9,
-        "column": 8
-      },
-      "end": {
-        "line": 11,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:server/main.js#module",
-      "file": 11,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 8,
-        "column": 117
-      }
-    },
-    {
-      "id": "fn:server/main.js#8:19",
-      "file": 11,
-      "name": "",
-      "kind": "arrow",
-      "start": {
-        "line": 8,
-        "column": 19
-      },
-      "end": {
-        "line": 8,
-        "column": 74
-      }
-    },
-    {
-      "id": "fn:server/router.js#module",
-      "file": 12,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 23,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:server/router.js#2:3",
-      "file": 12,
-      "name": "constructor",
-      "kind": "constructor",
-      "container": "Router",
-      "start": {
-        "line": 2,
-        "column": 3
-      },
-      "end": {
-        "line": 4,
-        "column": 4
-      }
-    },
-    {
-      "id": "fn:server/router.js#6:3",
-      "file": 12,
-      "name": "get",
-      "kind": "method",
-      "container": "Router",
-      "start": {
-        "line": 6,
-        "column": 3
-      },
-      "end": {
-        "line": 8,
-        "column": 4
-      }
-    },
-    {
-      "id": "fn:server/router.js#10:3",
-      "file": 12,
-      "name": "post",
-      "kind": "method",
-      "container": "Router",
-      "start": {
-        "line": 10,
-        "column": 3
-      },
-      "end": {
-        "line": 12,
-        "column": 4
-      }
-    },
-    {
-      "id": "fn:server/router.js#14:3",
-      "file": 12,
-      "name": "add",
-      "kind": "method",
-      "container": "Router",
-      "start": {
-        "line": 14,
-        "column": 3
-      },
-      "end": {
-        "line": 16,
-        "column": 4
-      }
-    },
-    {
-      "id": "fn:server/router.js#18:3",
-      "file": 12,
-      "name": "handle",
-      "kind": "method",
-      "container": "Router",
-      "start": {
-        "line": 18,
-        "column": 3
-      },
-      "end": {
-        "line": 22,
-        "column": 4
-      }
-    },
-    {
-      "id": "fn:src/api/sessionsClient.js#module",
-      "file": 13,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 9,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:src/api/sessionsClient.js#1:8",
-      "file": 13,
-      "name": "fetchSessions",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 1,
-        "column": 8
-      },
-      "end": {
-        "line": 4,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:src/api/sessionsClient.js#6:8",
-      "file": 13,
-      "name": "postSession",
-      "kind": "function",
-      "exported": true,
-      "start": {
-        "line": 6,
-        "column": 8
-      },
-      "end": {
-        "line": 9,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:src/components/SessionList.vue#module",
-      "file": 14,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 25,
-        "column": 12
-      }
-    },
-    {
-      "id": "fn:src/components/SessionList.vue#8:1",
-      "file": 14,
-      "name": "loadSessions",
-      "kind": "function",
-      "start": {
-        "line": 8,
-        "column": 1
-      },
-      "end": {
-        "line": 10,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:src/components/SessionList.vue#12:1",
-      "file": 14,
-      "name": "addSession",
-      "kind": "function",
-      "start": {
-        "line": 12,
-        "column": 1
-      },
-      "end": {
-        "line": 15,
-        "column": 2
-      }
-    },
-    {
-      "id": "fn:src/pages/SessionsPage.vue#module",
-      "file": 15,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 10,
-        "column": 12
-      }
-    },
-    {
-      "id": "fn:tests/sessions.test.js#module",
-      "file": 16,
-      "name": "",
-      "kind": "module",
-      "start": {
-        "line": 1,
-        "column": 1
-      },
-      "end": {
-        "line": 9,
-        "column": 4
-      }
-    },
-    {
-      "id": "fn:tests/sessions.test.js#6:32",
-      "file": 16,
-      "name": "",
-      "kind": "arrow",
-      "start": {
-        "line": 6,
-        "column": 32
-      },
-      "end": {
-        "line": 9,
-        "column": 2
-      }
+      "to": 23
     }
   ],
   "calls": [
     {
+      "callee": "createLogger",
+      "certainty": "probable",
       "from": 0,
+      "method": "import-scope",
+      "site": {
+        "end": {
+          "column": 35,
+          "line": 5
+        },
+        "start": {
+          "column": 16,
+          "line": 5
+        }
+      },
       "targets": [
         3
-      ],
-      "certainty": "probable",
-      "method": "import-scope",
-      "callee": "createLogger",
-      "site": {
-        "start": {
-          "line": 5,
-          "column": 16
-        },
-        "end": {
-          "line": 5,
-          "column": 35
-        }
-      }
+      ]
     },
     {
+      "callee": "main",
+      "certainty": "probable",
       "from": 0,
+      "method": "same-file-name",
+      "site": {
+        "end": {
+          "column": 25,
+          "line": 12
+        },
+        "start": {
+          "column": 7,
+          "line": 12
+        }
+      },
       "targets": [
         1
-      ],
-      "certainty": "probable",
-      "method": "same-file-name",
-      "callee": "main",
-      "site": {
-        "start": {
-          "line": 12,
-          "column": 7
-        },
-        "end": {
-          "line": 12,
-          "column": 25
-        }
-      }
+      ]
     },
     {
+      "callee": "listSessions",
+      "certainty": "probable",
       "from": 1,
+      "method": "import-scope",
+      "site": {
+        "end": {
+          "column": 72,
+          "line": 8
+        },
+        "start": {
+          "column": 26,
+          "line": 8
+        }
+      },
       "targets": [
         27
-      ],
-      "certainty": "probable",
-      "method": "import-scope",
-      "callee": "listSessions",
-      "site": {
-        "start": {
-          "line": 8,
-          "column": 26
-        },
-        "end": {
-          "line": 8,
-          "column": 72
-        }
-      }
+      ]
     },
     {
-      "from": 1,
-      "targets": [],
-      "certainty": "unresolved",
-      "method": "none",
       "callee": "logger.info",
+      "certainty": "unresolved",
+      "from": 1,
+      "method": "none",
       "site": {
-        "start": {
-          "line": 9,
-          "column": 35
-        },
         "end": {
-          "line": 9,
-          "column": 61
+          "column": 61,
+          "line": 9
+        },
+        "start": {
+          "column": 35,
+          "line": 9
         }
-      }
+      },
+      "targets": []
     },
     {
+      "callee": "writeLine",
+      "certainty": "probable",
       "from": 4,
+      "method": "same-file-name",
+      "site": {
+        "end": {
+          "column": 32,
+          "line": 4
+        },
+        "start": {
+          "column": 7,
+          "line": 4
+        }
+      },
       "targets": [
         5
-      ],
-      "certainty": "probable",
-      "method": "same-file-name",
-      "callee": "writeLine",
-      "site": {
-        "start": {
-          "line": 4,
-          "column": 7
-        },
-        "end": {
-          "line": 4,
-          "column": 32
-        }
-      }
+      ]
     },
     {
+      "callee": "createLogger",
+      "certainty": "probable",
       "from": 8,
+      "method": "import-scope",
+      "site": {
+        "end": {
+          "column": 36,
+          "line": 4
+        },
+        "start": {
+          "column": 16,
+          "line": 4
+        }
+      },
       "targets": [
         3
-      ],
-      "certainty": "probable",
-      "method": "import-scope",
-      "callee": "createLogger",
-      "site": {
-        "start": {
-          "line": 4,
-          "column": 16
-        },
-        "end": {
-          "line": 4,
-          "column": 36
-        }
-      }
+      ]
     },
     {
+      "callee": "readContext",
+      "certainty": "probable",
       "from": 10,
+      "method": "same-file-name",
+      "site": {
+        "end": {
+          "column": 41,
+          "line": 8
+        },
+        "start": {
+          "column": 21,
+          "line": 8
+        }
+      },
       "targets": [
         11
-      ],
-      "certainty": "probable",
-      "method": "same-file-name",
-      "callee": "readContext",
-      "site": {
-        "start": {
-          "line": 8,
-          "column": 21
-        },
-        "end": {
-          "line": 8,
-          "column": 41
-        }
-      }
+      ]
     },
     {
+      "callee": "metrics.info",
+      "certainty": "probable",
       "from": 10,
+      "method": "import-scope",
+      "site": {
+        "end": {
+          "column": 33,
+          "line": 9
+        },
+        "start": {
+          "column": 5,
+          "line": 9
+        }
+      },
       "targets": [
         7
-      ],
-      "certainty": "probable",
-      "method": "import-scope",
-      "callee": "metrics.info",
-      "site": {
-        "start": {
-          "line": 9,
-          "column": 5
-        },
-        "end": {
-          "line": 9,
-          "column": 33
-        }
-      }
+      ]
     },
     {
+      "callee": "logger.info",
+      "certainty": "probable",
       "from": 10,
+      "method": "receiver-name",
+      "site": {
+        "end": {
+          "column": 52,
+          "line": 10
+        },
+        "start": {
+          "column": 5,
+          "line": 10
+        }
+      },
       "targets": [
         4,
         7
-      ],
-      "certainty": "probable",
-      "method": "receiver-name",
-      "callee": "logger.info",
-      "site": {
-        "start": {
-          "line": 10,
-          "column": 5
-        },
-        "end": {
-          "line": 10,
-          "column": 52
-        }
-      }
+      ]
     },
     {
-      "from": 10,
-      "targets": [],
-      "certainty": "unresolved",
-      "method": "none",
       "callee": "handler",
+      "certainty": "unresolved",
+      "from": 10,
+      "method": "none",
       "site": {
-        "start": {
-          "line": 11,
-          "column": 12
-        },
         "end": {
-          "line": 11,
-          "column": 37
+          "column": 37,
+          "line": 11
+        },
+        "start": {
+          "column": 12,
+          "line": 11
         }
-      }
+      },
+      "targets": []
     },
     {
-      "from": 16,
-      "targets": [
-        27
-      ],
+      "callee": "listSessions",
       "certainty": "probable",
+      "from": 16,
       "method": "import-scope",
-      "callee": "listSessions",
       "site": {
-        "start": {
-          "line": 4,
-          "column": 26
-        },
         "end": {
-          "line": 4,
-          "column": 54
+          "column": 54,
+          "line": 4
+        },
+        "start": {
+          "column": 26,
+          "line": 4
         }
-      }
-    },
-    {
-      "from": 18,
+      },
       "targets": [
         27
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "listSessions",
-      "site": {
-        "start": {
-          "line": 4,
-          "column": 51
-        },
-        "end": {
-          "line": 4,
-          "column": 70
-        }
-      }
+      ]
     },
     {
+      "callee": "listSessions",
+      "certainty": "exact",
+      "from": 18,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 70,
+          "line": 4
+        },
+        "start": {
+          "column": 51,
+          "line": 4
+        }
+      },
+      "targets": [
+        27
+      ]
+    },
+    {
+      "callee": "createSession",
+      "certainty": "exact",
       "from": 19,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 73,
+          "line": 5
+        },
+        "start": {
+          "column": 53,
+          "line": 5
+        }
+      },
       "targets": [
         29
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "createSession",
-      "site": {
-        "start": {
-          "line": 5,
-          "column": 53
-        },
-        "end": {
-          "line": 5,
-          "column": 73
-        }
-      }
+      ]
     },
     {
+      "callee": "router.get",
+      "certainty": "probable",
       "from": 21,
+      "method": "argument-flow",
+      "site": {
+        "end": {
+          "column": 149,
+          "line": 5
+        },
+        "start": {
+          "column": 3,
+          "line": 5
+        }
+      },
       "targets": [
         38
-      ],
-      "certainty": "probable",
-      "method": "argument-flow",
-      "callee": "router.get",
-      "site": {
-        "start": {
-          "line": 5,
-          "column": 3
-        },
-        "end": {
-          "line": 5,
-          "column": 149
-        }
-      }
+      ]
     },
     {
+      "callee": "withRequestContext",
+      "certainty": "exact",
       "from": 21,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 148,
+          "line": 5
+        },
+        "start": {
+          "column": 31,
+          "line": 5
+        }
+      },
       "targets": [
         9
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "withRequestContext",
-      "site": {
-        "start": {
-          "line": 5,
-          "column": 31
-        },
-        "end": {
-          "line": 5,
-          "column": 148
-        }
-      }
+      ]
     },
     {
+      "callee": "router.post",
+      "certainty": "probable",
       "from": 21,
+      "method": "argument-flow",
+      "site": {
+        "end": {
+          "column": 113,
+          "line": 6
+        },
+        "start": {
+          "column": 3,
+          "line": 6
+        }
+      },
       "targets": [
         39
-      ],
-      "certainty": "probable",
-      "method": "argument-flow",
-      "callee": "router.post",
-      "site": {
-        "start": {
-          "line": 6,
-          "column": 3
-        },
-        "end": {
-          "line": 6,
-          "column": 113
-        }
-      }
+      ]
     },
     {
+      "callee": "withRequestContext",
+      "certainty": "exact",
       "from": 21,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 112,
+          "line": 6
+        },
+        "start": {
+          "column": 32,
+          "line": 6
+        }
+      },
       "targets": [
         9
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "withRequestContext",
-      "site": {
-        "start": {
-          "line": 6,
-          "column": 32
-        },
-        "end": {
-          "line": 6,
-          "column": 112
-        }
-      }
+      ]
     },
     {
+      "callee": "runAction",
+      "certainty": "exact",
       "from": 22,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 147,
+          "line": 5
+        },
+        "start": {
+          "column": 63,
+          "line": 5
+        }
+      },
       "targets": [
         24
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "runAction",
-      "site": {
-        "start": {
-          "line": 5,
-          "column": 63
-        },
-        "end": {
-          "line": 5,
-          "column": 147
-        }
-      }
+      ]
     },
     {
+      "callee": "runAction",
+      "certainty": "exact",
       "from": 23,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 111,
+          "line": 6
+        },
+        "start": {
+          "column": 64,
+          "line": 6
+        }
+      },
       "targets": [
         24
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "runAction",
-      "site": {
-        "start": {
-          "line": 6,
-          "column": 64
-        },
-        "end": {
-          "line": 6,
-          "column": 111
-        }
-      }
+      ]
     },
     {
+      "callee": "action.execute",
+      "certainty": "probable",
       "from": 24,
+      "method": "receiver-name",
+      "site": {
+        "end": {
+          "column": 31,
+          "line": 11
+        },
+        "start": {
+          "column": 10,
+          "line": 11
+        }
+      },
       "targets": [
         18,
         19
-      ],
-      "certainty": "probable",
-      "method": "receiver-name",
-      "callee": "action.execute",
-      "site": {
-        "start": {
-          "line": 11,
-          "column": 10
-        },
-        "end": {
-          "line": 11,
-          "column": 31
-        }
-      }
+      ]
     },
     {
+      "callee": "listRecords",
+      "certainty": "exact",
       "from": 27,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 28,
+          "line": 5
+        },
+        "start": {
+          "column": 10,
+          "line": 5
+        }
+      },
       "targets": [
         32
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "listRecords",
-      "site": {
-        "start": {
-          "line": 5,
-          "column": 10
-        },
-        "end": {
-          "line": 5,
-          "column": 28
-        }
-      }
+      ]
     },
     {
+      "callee": "cleanTitle",
+      "certainty": "exact",
       "from": 28,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 94,
+          "line": 5
+        },
+        "start": {
+          "column": 70,
+          "line": 5
+        }
+      },
       "targets": [
         14
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "cleanTitle",
-      "site": {
-        "start": {
-          "line": 5,
-          "column": 70
-        },
-        "end": {
-          "line": 5,
-          "column": 94
-        }
-      }
+      ]
     },
     {
+      "callee": "normalizeSession",
+      "certainty": "exact",
       "from": 29,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 41,
+          "line": 9
+        },
+        "start": {
+          "column": 18,
+          "line": 9
+        }
+      },
       "targets": [
         30
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "normalizeSession",
-      "site": {
-        "start": {
-          "line": 9,
-          "column": 18
-        },
-        "end": {
-          "line": 9,
-          "column": 41
-        }
-      }
+      ]
     },
     {
+      "callee": "saveRecord",
+      "certainty": "exact",
       "from": 29,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 21,
+          "line": 10
+        },
+        "start": {
+          "column": 3,
+          "line": 10
+        }
+      },
       "targets": [
         33
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "saveRecord",
-      "site": {
-        "start": {
-          "line": 10,
-          "column": 3
-        },
-        "end": {
-          "line": 10,
-          "column": 21
-        }
-      }
+      ]
     },
     {
+      "callee": "cleanTitle",
+      "certainty": "exact",
       "from": 30,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 64,
+          "line": 15
+        },
+        "start": {
+          "column": 41,
+          "line": 15
+        }
+      },
       "targets": [
         14
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "cleanTitle",
-      "site": {
-        "start": {
-          "line": 15,
-          "column": 41
-        },
-        "end": {
-          "line": 15,
-          "column": 64
-        }
-      }
+      ]
     },
     {
+      "callee": "Router",
+      "certainty": "exact",
       "from": 34,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 28,
+          "line": 6
+        },
+        "start": {
+          "column": 16,
+          "line": 6
+        }
+      },
       "targets": [
         37
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "Router",
-      "site": {
-        "start": {
-          "line": 6,
-          "column": 16
-        },
-        "end": {
-          "line": 6,
-          "column": 28
-        }
-      }
+      ]
     },
     {
+      "callee": "registerSessionRoutes",
+      "certainty": "exact",
       "from": 34,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 30,
+          "line": 7
+        },
+        "start": {
+          "column": 1,
+          "line": 7
+        }
+      },
       "targets": [
         21
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "registerSessionRoutes",
-      "site": {
-        "start": {
-          "line": 7,
-          "column": 1
-        },
-        "end": {
-          "line": 7,
-          "column": 30
-        }
-      }
+      ]
     },
     {
+      "callee": "router.handle",
+      "certainty": "exact",
       "from": 35,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 74,
+          "line": 8
+        },
+        "start": {
+          "column": 42,
+          "line": 8
+        }
+      },
       "targets": [
         41
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "router.handle",
-      "site": {
-        "start": {
-          "line": 8,
-          "column": 42
-        },
-        "end": {
-          "line": 8,
-          "column": 74
-        }
-      }
+      ]
     },
     {
+      "callee": "this.add",
+      "certainty": "exact",
       "from": 38,
+      "method": "self",
+      "site": {
+        "end": {
+          "column": 35,
+          "line": 7
+        },
+        "start": {
+          "column": 5,
+          "line": 7
+        }
+      },
       "targets": [
         40
-      ],
-      "certainty": "exact",
-      "method": "self",
-      "callee": "this.add",
-      "site": {
-        "start": {
-          "line": 7,
-          "column": 5
-        },
-        "end": {
-          "line": 7,
-          "column": 35
-        }
-      }
+      ]
     },
     {
+      "callee": "this.add",
+      "certainty": "exact",
       "from": 39,
+      "method": "self",
+      "site": {
+        "end": {
+          "column": 36,
+          "line": 11
+        },
+        "start": {
+          "column": 5,
+          "line": 11
+        }
+      },
       "targets": [
         40
-      ],
-      "certainty": "exact",
-      "method": "self",
-      "callee": "this.add",
-      "site": {
-        "start": {
-          "line": 11,
-          "column": 5
-        },
-        "end": {
-          "line": 11,
-          "column": 36
-        }
-      }
+      ]
     },
     {
-      "from": 41,
-      "targets": [],
-      "certainty": "unresolved",
-      "method": "none",
       "callee": "handler",
+      "certainty": "unresolved",
+      "from": 41,
+      "method": "none",
       "site": {
-        "start": {
-          "line": 20,
-          "column": 34
-        },
         "end": {
-          "line": 20,
-          "column": 50
+          "column": 50,
+          "line": 20
+        },
+        "start": {
+          "column": 34,
+          "line": 20
         }
-      }
+      },
+      "targets": []
     },
     {
+      "callee": "fetchSessions",
+      "certainty": "exact",
       "from": 46,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 41,
+          "line": 9
+        },
+        "start": {
+          "column": 26,
+          "line": 9
+        }
+      },
       "targets": [
         43
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "fetchSessions",
-      "site": {
-        "start": {
-          "line": 9,
-          "column": 26
-        },
-        "end": {
-          "line": 9,
-          "column": 41
-        }
-      }
+      ]
     },
     {
+      "callee": "postSession",
+      "certainty": "exact",
       "from": 47,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 35,
+          "line": 13
+        },
+        "start": {
+          "column": 9,
+          "line": 13
+        }
+      },
       "targets": [
         44
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "postSession",
-      "site": {
-        "start": {
-          "line": 13,
-          "column": 9
-        },
-        "end": {
-          "line": 13,
-          "column": 35
-        }
-      }
+      ]
     },
     {
+      "callee": "loadSessions",
+      "certainty": "exact",
       "from": 47,
+      "method": "checker",
+      "site": {
+        "end": {
+          "column": 23,
+          "line": 14
+        },
+        "start": {
+          "column": 9,
+          "line": 14
+        }
+      },
       "targets": [
         46
-      ],
-      "certainty": "exact",
-      "method": "checker",
-      "callee": "loadSessions",
-      "site": {
-        "start": {
-          "line": 14,
-          "column": 9
-        },
-        "end": {
-          "line": 14,
-          "column": 23
-        }
-      }
+      ]
     },
     {
+      "callee": "createSession",
+      "certainty": "probable",
       "from": 50,
+      "method": "import-scope",
+      "site": {
+        "end": {
+          "column": 53,
+          "line": 7
+        },
+        "start": {
+          "column": 9,
+          "line": 7
+        }
+      },
       "targets": [
         29
-      ],
-      "certainty": "probable",
-      "method": "import-scope",
-      "callee": "createSession",
-      "site": {
-        "start": {
-          "line": 7,
-          "column": 9
-        },
-        "end": {
-          "line": 7,
-          "column": 53
-        }
-      }
+      ]
     },
     {
+      "callee": "listSessions",
+      "certainty": "probable",
       "from": 50,
+      "method": "import-scope",
+      "site": {
+        "end": {
+          "column": 40,
+          "line": 8
+        },
+        "start": {
+          "column": 26,
+          "line": 8
+        }
+      },
       "targets": [
         27
-      ],
-      "certainty": "probable",
-      "method": "import-scope",
-      "callee": "listSessions",
-      "site": {
-        "start": {
-          "line": 8,
-          "column": 26
-        },
-        "end": {
-          "line": 8,
-          "column": 40
-        }
+      ]
+    }
+  ],
+  "diagnostics": [],
+  "files": [
+    {
+      "coverage": "generic",
+      "hash": "sha256:83727d224b95dcc0576a41195131f312547efecf2c056843de2e9cc156ed034f",
+      "path": "bin/demo.js",
+      "subsystemId": "directory:bin"
+    },
+    {
+      "coverage": "generic",
+      "hash": "sha256:35890020aa5446a82eeb420cc9ae7fd05942e390b31594c79a240797ad799b06",
+      "path": "packages/core/src/server/logger.js",
+      "subsystemId": "directory:packages/core"
+    },
+    {
+      "coverage": "generic",
+      "hash": "sha256:542316ab19e26a70a4266139e85e0f2cd5aa4cbe78ac867dd3e4201aa4cba99d",
+      "path": "packages/core/src/server/metrics.js",
+      "subsystemId": "directory:packages/core"
+    },
+    {
+      "coverage": "generic",
+      "hash": "sha256:3a6356d69ef89e4930c8da0d7683c030792761dd28d16dd57c76c3af8183921d",
+      "path": "packages/core/src/server/requestContext.js",
+      "subsystemId": "directory:packages/core"
+    },
+    {
+      "coverage": "generic",
+      "hash": "sha256:794becc7d7f0256ff2a3f0246d7e295baf248ca91666eb65156fbb5e2c14b1a4",
+      "path": "packages/core/src/shared/sessionShape.ts",
+      "subsystemId": "directory:packages/core"
+    },
+    {
+      "coverage": "generic",
+      "hash": "sha256:321e7b6bd4e6a48161e37da9f6fafe5fedfbd02df2d086b4826bb1c38fdd7236",
+      "path": "packages/core/src/shared/text.js",
+      "subsystemId": "directory:packages/core"
+    },
+    {
+      "coverage": "generic",
+      "hash": "sha256:4cd58960c48084f53c780aa274cc64b151ce423f12747badad39795f6e7fd756",
+      "path": "packages/reports/src/server/weeklyReport.js",
+      "subsystemId": "directory:packages/reports"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:40c5f700aa30605b86776b26d8ecdebfe0b32e3a2fb7ed21a6ecb50b43077162",
+      "path": "packages/sessions/src/server/actions.js",
+      "subsystemId": "directory:packages/sessions"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
+      "path": "packages/sessions/src/server/routes.js",
+      "subsystemId": "directory:packages/sessions"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:24abfcc93e12c75d41f0eed98be27822be8b2e7de7a5a4bb9da5eaf90d35d945",
+      "path": "packages/sessions/src/server/service.js",
+      "subsystemId": "directory:packages/sessions"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:4a00df3acb1cb5e4fd0024185b431dbfae97e96c42098a6c386fea578a941de4",
+      "path": "packages/sessions/src/server/store.ts",
+      "subsystemId": "directory:packages/sessions"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:4a84d9fa5ef69a92dd4483ab96218bc1c023dad57fa633995ec8f6b2b7d09878",
+      "path": "server/main.js",
+      "subsystemId": "directory:server"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:974657a1b7ab864a8afbbe0e013d0e7e4ef49205edcc0ffa4e41a82a72930063",
+      "path": "server/router.js",
+      "subsystemId": "directory:server"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:bd6b645032ac18b376ec96f6d0defb503e7d327180289c9b0cd66afd6892eb7d",
+      "path": "src/api/sessionsClient.js",
+      "subsystemId": "directory:src"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54",
+      "path": "src/components/SessionList.vue",
+      "subsystemId": "directory:src"
+    },
+    {
+      "coverage": "adapter:jskit",
+      "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+      "path": "src/pages/SessionsPage.vue",
+      "subsystemId": "directory:src"
+    },
+    {
+      "coverage": "generic",
+      "hash": "sha256:afcaf7e92dc05964401e8cb08a8a8c0bf790d4873d065bc1ebe0290cde38e9b2",
+      "path": "tests/sessions.test.js",
+      "subsystemId": "directory:tests"
+    }
+  ],
+  "functions": [
+    {
+      "end": {
+        "column": 26,
+        "line": 12
+      },
+      "file": 0,
+      "id": "fn:bin/demo.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 10
+      },
+      "file": 0,
+      "id": "fn:bin/demo.js#7:1",
+      "kind": "function",
+      "name": "main",
+      "start": {
+        "column": 1,
+        "line": 7
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 11
+      },
+      "file": 1,
+      "id": "fn:packages/core/src/server/logger.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 7
+      },
+      "exported": true,
+      "file": 1,
+      "id": "fn:packages/core/src/server/logger.js#1:8",
+      "kind": "function",
+      "name": "createLogger",
+      "start": {
+        "column": 8,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 6,
+        "line": 5
+      },
+      "file": 1,
+      "id": "fn:packages/core/src/server/logger.js#3:5",
+      "kind": "method",
+      "name": "info",
+      "start": {
+        "column": 5,
+        "line": 3
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 11
+      },
+      "file": 1,
+      "id": "fn:packages/core/src/server/logger.js#9:1",
+      "kind": "function",
+      "name": "writeLine",
+      "start": {
+        "column": 1,
+        "line": 9
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 5
+      },
+      "file": 2,
+      "id": "fn:packages/core/src/server/metrics.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 5
+      },
+      "exported": true,
+      "file": 2,
+      "id": "fn:packages/core/src/server/metrics.js#3:8",
+      "kind": "function",
+      "name": "info",
+      "start": {
+        "column": 8,
+        "line": 3
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 17
+      },
+      "file": 3,
+      "id": "fn:packages/core/src/server/requestContext.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 13
+      },
+      "exported": true,
+      "file": 3,
+      "id": "fn:packages/core/src/server/requestContext.js#6:8",
+      "kind": "function",
+      "name": "withRequestContext",
+      "start": {
+        "column": 8,
+        "line": 6
+      }
+    },
+    {
+      "end": {
+        "column": 4,
+        "line": 12
+      },
+      "file": 3,
+      "id": "fn:packages/core/src/server/requestContext.js#7:10",
+      "kind": "closure",
+      "name": "handleWithContext",
+      "start": {
+        "column": 10,
+        "line": 7
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 17
+      },
+      "file": 3,
+      "id": "fn:packages/core/src/server/requestContext.js#15:1",
+      "kind": "function",
+      "name": "readContext",
+      "start": {
+        "column": 1,
+        "line": 15
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 4
+      },
+      "file": 4,
+      "id": "fn:packages/core/src/shared/sessionShape.ts#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 3
+      },
+      "file": 5,
+      "id": "fn:packages/core/src/shared/text.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 3
+      },
+      "exported": true,
+      "file": 5,
+      "id": "fn:packages/core/src/shared/text.js#1:8",
+      "kind": "function",
+      "name": "cleanTitle",
+      "start": {
+        "column": 8,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 6
+      },
+      "file": 6,
+      "id": "fn:packages/reports/src/server/weeklyReport.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 6
+      },
+      "exported": true,
+      "file": 6,
+      "id": "fn:packages/reports/src/server/weeklyReport.js#3:8",
+      "kind": "function",
+      "name": "buildWeeklyReport",
+      "start": {
+        "column": 8,
+        "line": 3
+      }
+    },
+    {
+      "end": {
+        "column": 3,
+        "line": 6
+      },
+      "file": 7,
+      "id": "fn:packages/sessions/src/server/actions.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 70,
+        "line": 4
+      },
+      "file": 7,
+      "id": "fn:packages/sessions/src/server/actions.js#4:40",
+      "kind": "arrow",
+      "name": "execute",
+      "start": {
+        "column": 40,
+        "line": 4
+      }
+    },
+    {
+      "end": {
+        "column": 73,
+        "line": 5
+      },
+      "file": 7,
+      "id": "fn:packages/sessions/src/server/actions.js#5:42",
+      "kind": "arrow",
+      "name": "execute",
+      "start": {
+        "column": 42,
+        "line": 5
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 12
+      },
+      "file": 8,
+      "id": "fn:packages/sessions/src/server/routes.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 7
+      },
+      "exported": true,
+      "file": 8,
+      "id": "fn:packages/sessions/src/server/routes.js#4:8",
+      "kind": "function",
+      "name": "registerSessionRoutes",
+      "start": {
+        "column": 8,
+        "line": 4
+      }
+    },
+    {
+      "end": {
+        "column": 147,
+        "line": 5
+      },
+      "file": 8,
+      "id": "fn:packages/sessions/src/server/routes.js#5:50",
+      "kind": "arrow",
+      "name": "",
+      "start": {
+        "column": 50,
+        "line": 5
+      }
+    },
+    {
+      "end": {
+        "column": 111,
+        "line": 6
+      },
+      "file": 8,
+      "id": "fn:packages/sessions/src/server/routes.js#6:51",
+      "kind": "arrow",
+      "name": "",
+      "start": {
+        "column": 51,
+        "line": 6
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 12
+      },
+      "file": 8,
+      "id": "fn:packages/sessions/src/server/routes.js#9:1",
+      "kind": "function",
+      "name": "runAction",
+      "start": {
+        "column": 1,
+        "line": 9
+      }
+    },
+    {
+      "end": {
+        "column": 78,
+        "line": 10
+      },
+      "file": 8,
+      "id": "fn:packages/sessions/src/server/routes.js#10:38",
+      "kind": "arrow",
+      "name": "",
+      "start": {
+        "column": 38,
+        "line": 10
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 16
+      },
+      "file": 9,
+      "id": "fn:packages/sessions/src/server/service.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 6
+      },
+      "exported": true,
+      "file": 9,
+      "id": "fn:packages/sessions/src/server/service.js#4:8",
+      "kind": "function",
+      "name": "listSessions",
+      "start": {
+        "column": 8,
+        "line": 4
+      }
+    },
+    {
+      "end": {
+        "column": 97,
+        "line": 5
+      },
+      "file": 9,
+      "id": "fn:packages/sessions/src/server/service.js#5:33",
+      "kind": "arrow",
+      "name": "",
+      "start": {
+        "column": 33,
+        "line": 5
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 12
+      },
+      "exported": true,
+      "file": 9,
+      "id": "fn:packages/sessions/src/server/service.js#8:8",
+      "kind": "function",
+      "name": "createSession",
+      "start": {
+        "column": 8,
+        "line": 8
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 16
+      },
+      "file": 9,
+      "id": "fn:packages/sessions/src/server/service.js#14:1",
+      "kind": "function",
+      "name": "normalizeSession",
+      "start": {
+        "column": 1,
+        "line": 14
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 11
+      },
+      "file": 10,
+      "id": "fn:packages/sessions/src/server/store.ts#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 7
+      },
+      "exported": true,
+      "file": 10,
+      "id": "fn:packages/sessions/src/server/store.ts#5:8",
+      "kind": "function",
+      "name": "listRecords",
+      "start": {
+        "column": 8,
+        "line": 5
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 11
+      },
+      "exported": true,
+      "file": 10,
+      "id": "fn:packages/sessions/src/server/store.ts#9:8",
+      "kind": "function",
+      "name": "saveRecord",
+      "start": {
+        "column": 8,
+        "line": 9
+      }
+    },
+    {
+      "end": {
+        "column": 117,
+        "line": 8
+      },
+      "file": 11,
+      "id": "fn:server/main.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 74,
+        "line": 8
+      },
+      "file": 11,
+      "id": "fn:server/main.js#8:19",
+      "kind": "arrow",
+      "name": "",
+      "start": {
+        "column": 19,
+        "line": 8
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 23
+      },
+      "file": 12,
+      "id": "fn:server/router.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "container": "Router",
+      "end": {
+        "column": 4,
+        "line": 4
+      },
+      "file": 12,
+      "id": "fn:server/router.js#2:3",
+      "kind": "constructor",
+      "name": "constructor",
+      "start": {
+        "column": 3,
+        "line": 2
+      }
+    },
+    {
+      "container": "Router",
+      "end": {
+        "column": 4,
+        "line": 8
+      },
+      "file": 12,
+      "id": "fn:server/router.js#6:3",
+      "kind": "method",
+      "name": "get",
+      "start": {
+        "column": 3,
+        "line": 6
+      }
+    },
+    {
+      "container": "Router",
+      "end": {
+        "column": 4,
+        "line": 12
+      },
+      "file": 12,
+      "id": "fn:server/router.js#10:3",
+      "kind": "method",
+      "name": "post",
+      "start": {
+        "column": 3,
+        "line": 10
+      }
+    },
+    {
+      "container": "Router",
+      "end": {
+        "column": 4,
+        "line": 16
+      },
+      "file": 12,
+      "id": "fn:server/router.js#14:3",
+      "kind": "method",
+      "name": "add",
+      "start": {
+        "column": 3,
+        "line": 14
+      }
+    },
+    {
+      "container": "Router",
+      "end": {
+        "column": 4,
+        "line": 22
+      },
+      "file": 12,
+      "id": "fn:server/router.js#18:3",
+      "kind": "method",
+      "name": "handle",
+      "start": {
+        "column": 3,
+        "line": 18
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 9
+      },
+      "file": 13,
+      "id": "fn:src/api/sessionsClient.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 4
+      },
+      "exported": true,
+      "file": 13,
+      "id": "fn:src/api/sessionsClient.js#1:8",
+      "kind": "function",
+      "name": "fetchSessions",
+      "start": {
+        "column": 8,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 9
+      },
+      "exported": true,
+      "file": 13,
+      "id": "fn:src/api/sessionsClient.js#6:8",
+      "kind": "function",
+      "name": "postSession",
+      "start": {
+        "column": 8,
+        "line": 6
+      }
+    },
+    {
+      "end": {
+        "column": 12,
+        "line": 25
+      },
+      "file": 14,
+      "id": "fn:src/components/SessionList.vue#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 10
+      },
+      "file": 14,
+      "id": "fn:src/components/SessionList.vue#8:1",
+      "kind": "function",
+      "name": "loadSessions",
+      "start": {
+        "column": 1,
+        "line": 8
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 15
+      },
+      "file": 14,
+      "id": "fn:src/components/SessionList.vue#12:1",
+      "kind": "function",
+      "name": "addSession",
+      "start": {
+        "column": 1,
+        "line": 12
+      }
+    },
+    {
+      "end": {
+        "column": 12,
+        "line": 10
+      },
+      "file": 15,
+      "id": "fn:src/pages/SessionsPage.vue#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 4,
+        "line": 9
+      },
+      "file": 16,
+      "id": "fn:tests/sessions.test.js#module",
+      "kind": "module",
+      "name": "",
+      "start": {
+        "column": 1,
+        "line": 1
+      }
+    },
+    {
+      "end": {
+        "column": 2,
+        "line": 9
+      },
+      "file": 16,
+      "id": "fn:tests/sessions.test.js#6:32",
+      "kind": "arrow",
+      "name": "",
+      "start": {
+        "column": 32,
+        "line": 6
       }
     }
   ],
-  "bridges": [
-    {
-      "from": 43,
-      "to": 22,
-      "kind": "operation",
-      "operationKey": {
-        "protocol": "http",
-        "scope": "demo",
-        "method": "GET",
-        "operation": "/api/sessions"
-      },
-      "certainty": "exact"
-    },
-    {
-      "from": 44,
-      "to": 23,
-      "kind": "operation",
-      "operationKey": {
-        "protocol": "http",
-        "scope": "demo",
-        "method": "POST",
-        "operation": "/api/sessions"
-      },
-      "certainty": "probable"
-    }
-  ],
-  "diagnostics": []
+  "schema": "genesis.call-web.v1",
+  "sourceIdentity": "sha256:42d341358a04358e65283944f12333ee2cb59fa5a535e29b095d3d0afb21ffa1"
 }

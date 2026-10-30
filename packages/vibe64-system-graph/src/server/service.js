@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { lstat, mkdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { writeManagedGitExcludes } from "@local/vibe64-project/server/projectEnvironmentFiles";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { vibe64RuntimePacks } from "@local/vibe64-terminals/server/vibe64OutputTargets";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
@@ -25,6 +26,7 @@ import {
 } from "@local/vibe64-core/server/serverResponses";
 
 import {
+  CALL_WEB_PATH,
   readGenesisCity,
   requireGenesisCity,
   validateGenesisCity
@@ -32,6 +34,17 @@ import {
 
 // The largest inspection request an inspector receives on standard input.
 const ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES = 4 * 1024 * 1024;
+
+// Genesis writes the call web only where Git ignores it. The session clone's
+// own exclude file ignores it, so no project file changes. When that cannot be
+// written, Genesis reports CALL_WEB_NOT_IGNORED and Usage explains the fix.
+async function excludeCallWeb(sourceRoot) {
+  try {
+    await writeManagedGitExcludes(sourceRoot, [CALL_WEB_PATH], { section: "Genesis call web" });
+  } catch {
+    // The scan still runs, without calls.
+  }
+}
 
 function systemResult(operation) {
   return vibe64Result(operation, {
@@ -421,6 +434,7 @@ function createService({
               return merged;
             } : null;
             if (controller.signal.aborted) throw architectureCancelled();
+            await excludeCallWeb(current.sourceRoot);
             return refresher({ projectRoot: current.sourceRoot, write: true, callWeb: true, ...(observations ? { observations } : {}), signal: controller.signal });
           }, { operation: "architecture-refresh" });
           if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");

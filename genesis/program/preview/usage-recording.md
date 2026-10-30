@@ -62,7 +62,10 @@ The recording's directory sits in the session's `usage-recordings` folder,
 outside the source. While a recording is registered in the server process,
 every launch of its target carries the declared runtimes' tracers, and the
 Preview proxy numbers each request, sends that id to the application and logs
-the request without its query. The target restarts to load the recorder.
+the request without its query; script, style, image and font loads are only
+counted, and a full request log is reported on the recording. The target
+restarts to load the recorder. The recording keeps the Machine City's
+`architecture.sourceHash`, the scan it ran against, read by streaming the City.
 
 Node.js loads a preload that instruments project files as they load, Python
 loads a `sitecustomize` recorder through `PYTHONPATH`, and PHP loads a small
@@ -79,7 +82,10 @@ A recording left running by an earlier server process ends as an error.
 
 Each request, local request, terminal run and background scope that ran
 project code becomes a row with its function and file counts. Background rows
-hold a process's start-up and any requests a tracer cannot separate. A row's
+hold a process's start-up and any requests a tracer cannot separate. The
+launch readiness check of a recorded launch carries the reserved id `r_000000`
+and becomes its own readiness row. Neither kind counts as a request or towards
+plumbing. A row's
 functions carry their source position, count, and whether they are plumbing:
 code that ran in most recorded requests. A file's top-level code is its
 function named `""` at 1:1. Malformed trace lines, files over their limits and

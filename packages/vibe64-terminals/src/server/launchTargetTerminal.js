@@ -28,6 +28,11 @@ import {
 import {
   terminalNoGithubActorMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
+import {
+  USAGE_READINESS_REQUEST_ID,
+  USAGE_RECORDING_ENVIRONMENT,
+  USAGE_RECORDING_REQUEST_HEADER
+} from "@local/vibe64-usage-recording/shared/contract";
 
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 const WEB_LAUNCH_READINESS_TIMEOUT_SECONDS = 300;
@@ -155,6 +160,8 @@ function httpReadinessProbeCommand({
     "const deadline = Date.now() + timeoutMs;",
     "const statusFile = process.env.VIBE64_READINESS_STATUS_FILE || '';",
     "const launchPid = Number(process.env.VIBE64_READINESS_LAUNCH_PID || 0);",
+    // A recorded launch shows this check as its own row, not as a request.
+    `const headers = process.env.${USAGE_RECORDING_ENVIRONMENT.directory} ? { ${JSON.stringify(USAGE_RECORDING_REQUEST_HEADER)}: ${JSON.stringify(USAGE_READINESS_REQUEST_ID)} } : {};`,
     "function finish(status) {",
     "  if (statusFile) {",
     "    require('node:fs').writeFileSync(statusFile, `${status}\\n`, { encoding: 'utf8' });",
@@ -184,6 +191,7 @@ function httpReadinessProbeCommand({
     "  try {",
     "    const response = await fetch(href, {",
     "      method,",
+    "      headers,",
     "      redirect: 'manual',",
     "      signal: controller.signal",
     "    });",

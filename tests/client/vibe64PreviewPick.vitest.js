@@ -39,7 +39,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountPick({ entries = ENTRIES, recording = null, readFails = false } = {}) {
+function mountPick({ entries = ENTRIES, recording = null, readFails = false, readError = null } = {}) {
   const outputs = Object.fromEntries([
     "launchButtonsDisabled", "loading", "loadError", "operationBusy", "launchError", "launchStarting", "launchWaiting",
     "outputTargetsLoaded", "terminalDisplayed", "terminalDockVisible", "terminalExpanded", "terminalCanRestart",
@@ -70,6 +70,7 @@ function mountPick({ entries = ENTRIES, recording = null, readFails = false } = 
     openUsage: vi.fn(),
     readUsageEntries: vi.fn(async () => {
       if (readFails) throw new Error("Usage needs a fresh architecture scan.");
+      if (readError) throw readError;
       return { entries };
     }),
     recordInteraction: vi.fn(async () => ({ ok: true })),
@@ -175,6 +176,7 @@ describe("Pick", () => {
     f.message({ type: PREVIEW_PICK_RESULT_MESSAGE_TYPE, componentFile: "src/components/Unscanned.vue", elementLabel: "div" });
     await settle();
     expect(f.state.previewPickNoticeText.value).toBe("Unscanned.vue has no usage entry yet. Refresh the architecture scan, then pick again.");
+    expect(f.state.previewPickNoticeOpensUsage.value).toBe(true);
 
     const failing = mountPick({ readFails: true });
     failing.ready();
@@ -182,8 +184,22 @@ describe("Pick", () => {
     failing.message({ type: PREVIEW_PICK_RESULT_MESSAGE_TYPE, componentFile: "src/components/NoteCard.vue", elementLabel: "div" });
     await settle();
     expect(failing.state.previewPickNoticeText.value).toBe("Usage needs a fresh architecture scan.");
+    expect(failing.state.previewPickNoticeOpensUsage.value).toBe(false);
     expect(f.usage.openUsage).not.toHaveBeenCalled();
     expect(failing.usage.openUsage).not.toHaveBeenCalled();
+  });
+
+  it("offers Usage, where the scan is refreshed, when the project has not been scanned", async () => {
+    const f = mountPick({ readError: Object.assign(new Error("Machine City has not been generated. Refresh analysis first."), { code: "vibe64_genesis_city_missing" }) });
+    f.ready();
+    f.state.togglePreviewPick();
+    f.message({ type: PREVIEW_PICK_RESULT_MESSAGE_TYPE, componentFile: "src/components/NoteCard.vue", elementLabel: "div" });
+    await settle();
+    expect(f.state.previewPickNoticeText.value).toBe("This project has not been scanned yet. Refresh the architecture scan in Usage, then pick again.");
+    expect(f.state.previewPickNoticeOpensUsage.value).toBe(true);
+    f.state.openUsageFromPickNotice();
+    expect(f.state.previewPickNoticeVisible.value).toBe(false);
+    expect(f.usage.openUsage).toHaveBeenCalledWith({ mode: "calls" });
   });
 
   it("ignores a cancelled pick, a result after Cancel, and results from other windows or origins", async () => {

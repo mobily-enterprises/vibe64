@@ -25,6 +25,11 @@ this package owns the recording, its files and the header indicator.
    the query), status and time to `requests.ndjson`. It strips both recording
    headers from every browser request and WebSocket upgrade. A valid
    `x-vibe64-interaction` id is logged with the request while recording.
+   Script, style, image and font loads (`sec-fetch-dest`, development-server
+   module paths such as `/@vite/`, or a source or asset extension when the
+   browser sends no `sec-fetch-dest`) get no id and only increase
+   `recording.requestLog.assets`. Past 20,000 logged lines,
+   `recording.requestLog.full` becomes true and later requests are not logged.
 4. Tracers write `hits-<runtime>-<pid>[-n].ndjson`
    (`vibe64.usage-trace.v1`). The service reads them incrementally and
    publishes `vibe64.usage-recording.changed` to the session's viewers at most
@@ -64,7 +69,10 @@ A request row is `{ id, method, path, status, startedAt, durationMs,
 interaction, functionCount, fileCount }`. A process's work outside any request
 (its start-up, timers, or every request of a server whose requests cannot be
 told apart) is a row with `kind: "background"` and null method, path and
-status. A function is `{ path, hash, name, start, end, count, plumbing }`; a
+status. Vibe64's launch readiness check sends the reserved request id
+`r_000000` while its launch records, which the proxy never assigns; it is a row
+with `kind: "readiness"`, likewise without method, path or status. Neither
+counts as a request or towards plumbing. A function is `{ path, hash, name, start, end, count, plumbing }`; a
 file's top-level code is the function named `""` at 1:1.
 
 Refusals: 409 `vibe64_usage_recording_session_inactive` or
@@ -72,8 +80,9 @@ Refusals: 409 `vibe64_usage_recording_session_inactive` or
 invalid parameters; 503 `vibe64_usage_recording_refused` with
 `details.reason` when the host's admission decision refuses.
 
-`recording.sourceIdentity` is the `sourceIdentity` of the project's
-`.genesis/call-web.json` at start (the Machine City identity), or null.
+`recording.sourceIdentity` is the Machine City's `architecture.sourceHash` at
+start, or null. Genesis sorts keys and the City can be tens of MiB, so start
+streams the file and follows only that field.
 
 ## Host seams
 

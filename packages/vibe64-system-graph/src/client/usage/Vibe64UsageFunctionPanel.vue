@@ -57,7 +57,7 @@
 import { computed } from "vue";
 import { mdiClose, mdiCodeTags } from "@mdi/js";
 
-import { CERTAINTY_TEXT, callGroups, callMethodText, coverageText, functionLabel, joinText } from "./usageModel.js";
+import { CERTAINTY_TEXT, NOT_IGNORED_TEXT, callGroups, callMethodText, coverageText, functionLabel, joinText } from "./usageModel.js";
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -80,6 +80,8 @@ const ranText = computed(() => {
 const joinNote = computed(() => {
   if (!props.node.join || props.node.join === "exact") return "";
   if (props.node.join === "name-line") return "Matched by name near this line: the file moved slightly since the scan.";
+  if (props.node.reason === "not-ignored") return NOT_IGNORED_TEXT;
+  if (props.node.reason === "language") return "The scan reads calls only in the languages of the project's Stack components, and this file's language is not among them.";
   return `${joinText(props.node.join)}. Refresh the architecture scan to see its calls.`;
 });
 

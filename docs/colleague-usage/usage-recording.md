@@ -33,6 +33,14 @@ results. Reloading the page, or using Preview in a second browser tab, keeps
 each click's requests grouped under that click. A command starts running at
 once and the recording follows that run.
 
+The scripts, styles, images and fonts a page loads, including a development
+server's modules, are counted instead of listed: with **Show requests that ran
+no project code** on, the requests list says how many were counted. Preview
+logs up to 20,000 other requests per recording. After that the results say
+**Request log full; later requests not recorded**: what later requests ran is
+still recorded, under **Request not in the request log**, but their method,
+path and status are not.
+
 Only one recording runs in a session at a time. Other sessions are not
 affected, and a recording in another session keeps running when you switch.
 
@@ -42,6 +50,14 @@ Recording follows the project's server-side code in Node.js, Python and PHP.
 Code that runs in the browser is not recorded. A target whose runtime has no
 recorder, such as Go or Rust, shows **Recording not available for `<runtime>`**
 in the Record dialog.
+
+Arrows between recorded functions come from the architecture scan's calls,
+which it reads only in the languages of the project's Stack components. A
+function in another language shows **Calls not read in this file's language**.
+When Git does not ignore `.genesis/call-web.json` and Vibe64 could not set that
+up itself, functions show **Calls not read: Git does not ignore the call web**;
+add `/.genesis/call-web.json` to the project's `.gitignore`, then refresh the
+scan.
 
 ### Node.js
 

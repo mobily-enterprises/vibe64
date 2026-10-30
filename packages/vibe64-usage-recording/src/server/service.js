@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { appendFile, chmod, mkdir, open, readdir, realpath, rm, stat } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { appendFile, chmod, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { AppError } from "@jskit-ai/kernel/server/runtime";
@@ -11,7 +12,7 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { resolveVibe64OutputParameters } from "@local/vibe64-genesis/server";
+import { GENESIS_MACHINE_CITY_PATH, resolveVibe64OutputParameters } from "@local/vibe64-genesis/server";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 
 import { registerActiveUsageRecording, activeUsageRecording } from "./activeRecordings.js";
@@ -64,18 +65,32 @@ const DEFAULT_TIMING = Object.freeze({
   stopIdleMs: 3000
 });
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
+// What a page loads besides its own requests: dev-server modules, scripts,
+// styles, images and fonts. A recording counts them instead of listing each.
+const ASSET_FETCH_DESTINATIONS = new Set(["script", "style", "image", "font"]);
+const DEV_SERVER_PATH = /^\/(?:@vite\/|@fs\/|@id\/|node_modules\/\.vite\/)/u;
+const ASSET_PATH = /\.(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|map|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot)$/u;
 
 const recordingError = (status, message, code, details) => new AppError(status, message, { code, details });
 const newRecordingId = () => `rec_${[...randomBytes(20)].map((byte) => BASE32[byte & 31]).join("")}`;
 const isoNow = (now) => new Date(now()).toISOString();
 
+// Without Fetch Metadata, a source module or asset is known by its extension.
+function isAssetLoad(requestPath = "", fetchDest = "") {
+  const destination = String(fetchDest || "").toLowerCase();
+  return ASSET_FETCH_DESTINATIONS.has(destination) || DEV_SERVER_PATH.test(requestPath) ||
+    (!destination && ASSET_PATH.test(requestPath));
+}
+
 // highestInteraction is the number of the highest interaction recorded so far
 // (i_0007 → 7, 0 before the first): a Preview page continues after it.
+// requestLog counts the asset loads not listed, and says when the Preview
+// request log reached its limit and later requests were not recorded.
 function publicRecording(record) {
-  const { id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt, sourceIdentity, highestInteraction } = record;
+  const { id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt, sourceIdentity, highestInteraction, requestLog } = record;
   return structuredClone({
     id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt,
-    sourceIdentity: sourceIdentity ?? null, highestInteraction: highestInteraction ?? 0
+    sourceIdentity: sourceIdentity ?? null, highestInteraction: highestInteraction ?? 0, requestLog: requestLog ?? { assets: 0, full: false }
   });
 }
 
@@ -83,19 +98,64 @@ function storedRecording(value) {
   return value?.schema === USAGE_RECORDING_SCHEMA && USAGE_RECORDING_ID_PATTERN.test(String(value.id || "")) ? value : null;
 }
 
-// The call web names the source snapshot it was built from in its first lines;
-// a recording keeps it so results can say when the source has changed since.
+// The Machine City's architecture.sourceHash: the scan a recording runs
+// against, so results can say when the source has changed since. Genesis sorts
+// keys and the City can be tens of MiB, so this streams it and follows only
+// strings, nesting and the key at each level until it reaches that one field.
 async function readSourceIdentity(sourceRoot) {
-  let handle = null;
+  const target = ["architecture", "sourceHash"];
+  const keys = [];
+  let inString = false;
+  let escaped = false;
+  let text = "";
+  let afterColon = false;
+  const structure = /["{}[\]:,]/gu;
+  const stringEnd = /["\\]/gu;
+  const stream = createReadStream(path.join(sourceRoot, GENESIS_MACHINE_CITY_PATH), { encoding: "utf8", highWaterMark: 1024 * 1024 });
   try {
-    handle = await open(path.join(sourceRoot, ".genesis", "call-web.json"), "r");
-    const buffer = Buffer.alloc(4096);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    return /"sourceIdentity"\s*:\s*"(sha256:[0-9a-f]{64})"/u.exec(buffer.subarray(0, bytesRead).toString("utf8"))?.[1] || null;
+    for await (const chunk of stream) {
+      let index = 0;
+      while (index < chunk.length) {
+        if (escaped) {
+          escaped = false;
+          index += 1;
+          continue;
+        }
+        const pattern = inString ? stringEnd : structure;
+        pattern.lastIndex = index;
+        const match = pattern.exec(chunk);
+        const end = match ? match.index : chunk.length;
+        if (inString && keys.length <= target.length && text.length < 80) text += chunk.slice(index, Math.min(end, index + 80));
+        if (!match) break;
+        index = end + 1;
+        const found = match[0];
+        if (found === "\\") escaped = true;
+        else if (found === "\"" && !inString) {
+          inString = true;
+          text = "";
+        } else if (found === "\"") {
+          inString = false;
+          if (afterColon && keys.length === target.length && keys.every((key, level) => key === target[level])) {
+            return /^sha256:[0-9a-f]{64}$/u.test(text) ? text : null;
+          }
+          afterColon = false;
+        } else if (found === ":") {
+          keys[keys.length - 1] = text;
+          afterColon = true;
+        } else if (found === "{" || found === "[") {
+          keys.push(null);
+          afterColon = false;
+        } else if (found === "}" || found === "]") {
+          keys.pop();
+          if (!keys.length) return null;
+        } else afterColon = false;
+      }
+    }
+    return null;
   } catch {
     return null;
   } finally {
-    await handle?.close();
+    stream.destroy();
   }
 }
 
@@ -210,7 +270,7 @@ function createService({
   function refreshFromReader(entry) {
     const states = entry.reader.tracerStates();
     entry.record.counts = entry.reader.counts();
-    entry.record.truncated = entry.reader.truncated() || entry.requestLogFull;
+    entry.record.truncated = entry.reader.truncated() || entry.record.requestLog.full;
     entry.record.tracers = entry.record.tracers.map((tracer) => {
       const state = states.get(tracer.runtime);
       if (!state?.ready || tracer.state === "unavailable") return tracer;
@@ -340,7 +400,6 @@ function createService({
       projectSlug: context.projectSlug,
       reader: createTraceReader(directory),
       record,
-      requestLogFull: false,
       requestSeq: 0,
       requestsLogged: 0,
       stopRequested: false,
@@ -375,8 +434,12 @@ function createService({
           }
         };
       },
-      proxyRequest({ method = "", path: requestPath = "", interaction = "" } = {}) {
+      proxyRequest({ method = "", path: requestPath = "", interaction = "", fetchDest = "" } = {}) {
         if (target.kind !== "web" || entry.stopRequested || entry.requestSeq >= 999_999) return null;
+        if (isAssetLoad(String(requestPath || ""), fetchDest)) {
+          entry.record.requestLog.assets += 1;
+          return null;
+        }
         entry.requestSeq += 1;
         const requestId = `r_${String(entry.requestSeq).padStart(6, "0")}`;
         const accepted = USAGE_INTERACTION_ID_PATTERN.test(String(interaction || "")) ? String(interaction) : null;
@@ -386,7 +449,7 @@ function createService({
           interaction: accepted,
           finish({ status = null } = {}) {
             if (entry.requestsLogged >= USAGE_RECORDING_LIMITS.proxyRequestLines) {
-              entry.requestLogFull = true;
+              entry.record.requestLog.full = true;
               return;
             }
             entry.requestsLogged += 1;
@@ -607,7 +670,8 @@ function createService({
           truncated: false,
           dismissedAt: null,
           sourceIdentity: await readSourceIdentity(context.sourceRoot),
-          highestInteraction: 0
+          highestInteraction: 0,
+          requestLog: { assets: 0, full: false }
         };
         const entry = liveEntry({
           context, record, directory, tracers, outputParameters,

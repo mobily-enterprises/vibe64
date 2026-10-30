@@ -1,16 +1,323 @@
 {
   "architecture": {
+    "callWeb": {
+      "counts": {
+        "calls": 36,
+        "exact": 19,
+        "functions": 51,
+        "probable": 14,
+        "unresolved": 3
+      },
+      "coverage": {
+        "adapters": {
+          "jskit": 9
+        },
+        "generic": 8
+      },
+      "identity": "sha256:02f16239c467d304fc0fcb41bf76da722cb81d75652eaaac69c2fcce5122e35d",
+      "path": ".genesis/call-web.json",
+      "sourceIdentity": "sha256:42d341358a04358e65283944f12333ee2cb59fa5a535e29b095d3d0afb21ffa1"
+    },
     "capabilities": {
+      "calls": "complete",
       "dependencies": "partial",
+      "entryPoints": "complete",
+      "functions": "complete",
       "pages": "unconfigured",
       "runtimeCalls": "unsupported",
-      "symbols": "partial",
-      "functions": "complete",
-      "calls": "complete",
-      "entryPoints": "complete"
+      "symbols": "partial"
     },
     "codeHash": "sha256:636b0b568cedaf315d0158d710365cf87dc802cfd181c590d4bc1b96ed3b330e",
     "diagnostics": [],
+    "entryPoints": [
+      {
+        "actionId": "demo.sessions.create",
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 31,
+              "line": 5
+            },
+            "hash": "sha256:40c5f700aa30605b86776b26d8ecdebfe0b32e3a2fb7ed21a6ecb50b43077162",
+            "path": "packages/sessions/src/server/actions.js",
+            "start": {
+              "column": 3,
+              "line": 5
+            }
+          }
+        ],
+        "file": "packages/sessions/src/server/actions.js",
+        "functionIds": [
+          "fn:packages/sessions/src/server/actions.js#5:42"
+        ],
+        "id": "entry:action:demo.sessions.create",
+        "kind": "action",
+        "operationKey": null,
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "demo.sessions.create"
+      },
+      {
+        "actionId": "demo.sessions.list",
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 29,
+              "line": 4
+            },
+            "hash": "sha256:40c5f700aa30605b86776b26d8ecdebfe0b32e3a2fb7ed21a6ecb50b43077162",
+            "path": "packages/sessions/src/server/actions.js",
+            "start": {
+              "column": 3,
+              "line": 4
+            }
+          }
+        ],
+        "file": "packages/sessions/src/server/actions.js",
+        "functionIds": [
+          "fn:packages/sessions/src/server/actions.js#4:40"
+        ],
+        "id": "entry:action:demo.sessions.list",
+        "kind": "action",
+        "operationKey": null,
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "demo.sessions.list"
+      },
+      {
+        "actionId": null,
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 26,
+              "line": 7
+            },
+            "hash": "sha256:918f8d70362e74af516d055f76bb81ffe07db622cab9c72aa9d5fa2cad9a5f73",
+            "path": "package.json",
+            "start": {
+              "column": 5,
+              "line": 7
+            }
+          }
+        ],
+        "file": "bin/demo.js",
+        "functionIds": [
+          "fn:bin/demo.js#module"
+        ],
+        "id": "entry:cli-command:package.json#bin/demo",
+        "kind": "cli-command",
+        "operationKey": null,
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "demo"
+      },
+      {
+        "actionId": null,
+        "componentId": "component:src/components/SessionList.vue",
+        "evidence": [
+          {
+            "end": {
+              "column": 15,
+              "line": 1
+            },
+            "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54",
+            "path": "src/components/SessionList.vue",
+            "start": {
+              "column": 1,
+              "line": 1
+            }
+          }
+        ],
+        "file": "src/components/SessionList.vue",
+        "functionIds": [],
+        "id": "entry:component:src/components/SessionList.vue",
+        "kind": "component",
+        "operationKey": null,
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "SessionList"
+      },
+      {
+        "actionId": null,
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 48,
+              "line": 10
+            },
+            "hash": "sha256:918f8d70362e74af516d055f76bb81ffe07db622cab9c72aa9d5fa2cad9a5f73",
+            "path": "package.json",
+            "start": {
+              "column": 5,
+              "line": 10
+            }
+          }
+        ],
+        "file": "packages/core/src/server/logger.js",
+        "functionIds": [
+          "fn:packages/core/src/server/logger.js#1:8"
+        ],
+        "id": "entry:library-export:packages/core/src/server/logger.js#createLogger",
+        "kind": "library-export",
+        "operationKey": null,
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "createLogger"
+      },
+      {
+        "actionId": null,
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 15,
+              "line": 1
+            },
+            "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+            "path": "src/pages/SessionsPage.vue",
+            "start": {
+              "column": 1,
+              "line": 1
+            }
+          }
+        ],
+        "file": "src/pages/SessionsPage.vue",
+        "functionIds": [],
+        "id": "entry:page:src/pages/SessionsPage.vue",
+        "kind": "page",
+        "operationKey": null,
+        "pageId": "page:src/pages/SessionsPage.vue",
+        "resolution": "resolved",
+        "title": "Sessions"
+      },
+      {
+        "actionId": null,
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 1,
+              "line": 2
+            },
+            "hash": "sha256:24abfcc93e12c75d41f0eed98be27822be8b2e7de7a5a4bb9da5eaf90d35d945",
+            "path": "packages/sessions/src/server/service.js",
+            "start": {
+              "column": 1,
+              "line": 1
+            }
+          }
+        ],
+        "file": "packages/sessions/src/server/service.js",
+        "functionIds": [
+          "fn:packages/sessions/src/server/service.js#4:8"
+        ],
+        "id": "entry:program-operation:genesis/program/sessions/list-sessions.md",
+        "kind": "program-operation",
+        "operationKey": null,
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "List sessions"
+      },
+      {
+        "actionId": null,
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 29,
+              "line": 5
+            },
+            "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
+            "path": "packages/sessions/src/server/routes.js",
+            "start": {
+              "column": 3,
+              "line": 5
+            }
+          }
+        ],
+        "file": "packages/sessions/src/server/routes.js",
+        "functionIds": [
+          "fn:packages/sessions/src/server/routes.js#5:50"
+        ],
+        "id": "entry:route:http:demo:GET:/api/sessions",
+        "kind": "route",
+        "operationKey": {
+          "method": "GET",
+          "operation": "/api/sessions",
+          "protocol": "http",
+          "scope": "demo"
+        },
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "GET /api/sessions"
+      },
+      {
+        "actionId": null,
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 30,
+              "line": 6
+            },
+            "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
+            "path": "packages/sessions/src/server/routes.js",
+            "start": {
+              "column": 3,
+              "line": 6
+            }
+          }
+        ],
+        "file": "packages/sessions/src/server/routes.js",
+        "functionIds": [
+          "fn:packages/sessions/src/server/routes.js#6:51"
+        ],
+        "id": "entry:route:http:demo:POST:/api/sessions",
+        "kind": "route",
+        "operationKey": {
+          "method": "POST",
+          "operation": "/api/sessions",
+          "protocol": "http",
+          "scope": "demo"
+        },
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "POST /api/sessions"
+      },
+      {
+        "actionId": null,
+        "componentId": null,
+        "evidence": [
+          {
+            "end": {
+              "column": 30,
+              "line": 6
+            },
+            "hash": "sha256:afcaf7e92dc05964401e8cb08a8a8c0bf790d4873d065bc1ebe0290cde38e9b2",
+            "path": "tests/sessions.test.js",
+            "start": {
+              "column": 1,
+              "line": 6
+            }
+          }
+        ],
+        "file": "tests/sessions.test.js",
+        "functionIds": [
+          "fn:tests/sessions.test.js#module",
+          "fn:tests/sessions.test.js#6:32"
+        ],
+        "id": "entry:test:tests/sessions.test.js",
+        "kind": "test",
+        "operationKey": null,
+        "pageId": null,
+        "resolution": "resolved",
+        "title": "sessions.test.js"
+      }
+    ],
     "files": [
       {
         "analysis": "unsupported",
@@ -2825,313 +3132,6 @@
     "uiDiscovery": {
       "discoveries": [],
       "status": "unconfigured"
-    },
-    "entryPoints": [
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": null,
-        "operationKey": null,
-        "actionId": "demo.sessions.create",
-        "id": "entry:action:demo.sessions.create",
-        "kind": "action",
-        "title": "demo.sessions.create",
-        "file": "packages/sessions/src/server/actions.js",
-        "functionIds": [
-          "fn:packages/sessions/src/server/actions.js#5:42"
-        ],
-        "evidence": [
-          {
-            "path": "packages/sessions/src/server/actions.js",
-            "hash": "sha256:40c5f700aa30605b86776b26d8ecdebfe0b32e3a2fb7ed21a6ecb50b43077162",
-            "start": {
-              "line": 5,
-              "column": 3
-            },
-            "end": {
-              "line": 5,
-              "column": 31
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": null,
-        "operationKey": null,
-        "actionId": "demo.sessions.list",
-        "id": "entry:action:demo.sessions.list",
-        "kind": "action",
-        "title": "demo.sessions.list",
-        "file": "packages/sessions/src/server/actions.js",
-        "functionIds": [
-          "fn:packages/sessions/src/server/actions.js#4:40"
-        ],
-        "evidence": [
-          {
-            "path": "packages/sessions/src/server/actions.js",
-            "hash": "sha256:40c5f700aa30605b86776b26d8ecdebfe0b32e3a2fb7ed21a6ecb50b43077162",
-            "start": {
-              "line": 4,
-              "column": 3
-            },
-            "end": {
-              "line": 4,
-              "column": 29
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": null,
-        "operationKey": null,
-        "actionId": null,
-        "id": "entry:cli-command:package.json#bin/demo",
-        "kind": "cli-command",
-        "title": "demo",
-        "file": "bin/demo.js",
-        "functionIds": [
-          "fn:bin/demo.js#module"
-        ],
-        "evidence": [
-          {
-            "path": "package.json",
-            "hash": "sha256:918f8d70362e74af516d055f76bb81ffe07db622cab9c72aa9d5fa2cad9a5f73",
-            "start": {
-              "line": 7,
-              "column": 5
-            },
-            "end": {
-              "line": 7,
-              "column": 26
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": "component:src/components/SessionList.vue",
-        "operationKey": null,
-        "actionId": null,
-        "id": "entry:component:src/components/SessionList.vue",
-        "kind": "component",
-        "title": "SessionList",
-        "file": "src/components/SessionList.vue",
-        "functionIds": [],
-        "evidence": [
-          {
-            "path": "src/components/SessionList.vue",
-            "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54",
-            "start": {
-              "line": 1,
-              "column": 1
-            },
-            "end": {
-              "line": 1,
-              "column": 15
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": null,
-        "operationKey": null,
-        "actionId": null,
-        "id": "entry:library-export:packages/core/src/server/logger.js#createLogger",
-        "kind": "library-export",
-        "title": "createLogger",
-        "file": "packages/core/src/server/logger.js",
-        "functionIds": [
-          "fn:packages/core/src/server/logger.js#1:8"
-        ],
-        "evidence": [
-          {
-            "path": "package.json",
-            "hash": "sha256:918f8d70362e74af516d055f76bb81ffe07db622cab9c72aa9d5fa2cad9a5f73",
-            "start": {
-              "line": 10,
-              "column": 5
-            },
-            "end": {
-              "line": 10,
-              "column": 48
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": "page:src/pages/SessionsPage.vue",
-        "componentId": null,
-        "operationKey": null,
-        "actionId": null,
-        "id": "entry:page:src/pages/SessionsPage.vue",
-        "kind": "page",
-        "title": "Sessions",
-        "file": "src/pages/SessionsPage.vue",
-        "functionIds": [],
-        "evidence": [
-          {
-            "path": "src/pages/SessionsPage.vue",
-            "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
-            "start": {
-              "line": 1,
-              "column": 1
-            },
-            "end": {
-              "line": 1,
-              "column": 15
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": null,
-        "operationKey": null,
-        "actionId": null,
-        "id": "entry:program-operation:genesis/program/sessions/list-sessions.md",
-        "kind": "program-operation",
-        "title": "List sessions",
-        "file": "packages/sessions/src/server/service.js",
-        "functionIds": [
-          "fn:packages/sessions/src/server/service.js#4:8"
-        ],
-        "evidence": [
-          {
-            "path": "packages/sessions/src/server/service.js",
-            "hash": "sha256:24abfcc93e12c75d41f0eed98be27822be8b2e7de7a5a4bb9da5eaf90d35d945",
-            "start": {
-              "line": 1,
-              "column": 1
-            },
-            "end": {
-              "line": 2,
-              "column": 1
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": null,
-        "operationKey": {
-          "protocol": "http",
-          "scope": "demo",
-          "method": "GET",
-          "operation": "/api/sessions"
-        },
-        "actionId": null,
-        "id": "entry:route:http:demo:GET:/api/sessions",
-        "kind": "route",
-        "title": "GET /api/sessions",
-        "file": "packages/sessions/src/server/routes.js",
-        "functionIds": [
-          "fn:packages/sessions/src/server/routes.js#5:50"
-        ],
-        "evidence": [
-          {
-            "path": "packages/sessions/src/server/routes.js",
-            "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
-            "start": {
-              "line": 5,
-              "column": 3
-            },
-            "end": {
-              "line": 5,
-              "column": 29
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": null,
-        "operationKey": {
-          "protocol": "http",
-          "scope": "demo",
-          "method": "POST",
-          "operation": "/api/sessions"
-        },
-        "actionId": null,
-        "id": "entry:route:http:demo:POST:/api/sessions",
-        "kind": "route",
-        "title": "POST /api/sessions",
-        "file": "packages/sessions/src/server/routes.js",
-        "functionIds": [
-          "fn:packages/sessions/src/server/routes.js#6:51"
-        ],
-        "evidence": [
-          {
-            "path": "packages/sessions/src/server/routes.js",
-            "hash": "sha256:09aac55008ea76d41d6d92cb58856b68c92446423d7a29af604fe8948caa4575",
-            "start": {
-              "line": 6,
-              "column": 3
-            },
-            "end": {
-              "line": 6,
-              "column": 30
-            }
-          }
-        ]
-      },
-      {
-        "resolution": "resolved",
-        "pageId": null,
-        "componentId": null,
-        "operationKey": null,
-        "actionId": null,
-        "id": "entry:test:tests/sessions.test.js",
-        "kind": "test",
-        "title": "sessions.test.js",
-        "file": "tests/sessions.test.js",
-        "functionIds": [
-          "fn:tests/sessions.test.js#module",
-          "fn:tests/sessions.test.js#6:32"
-        ],
-        "evidence": [
-          {
-            "path": "tests/sessions.test.js",
-            "hash": "sha256:afcaf7e92dc05964401e8cb08a8a8c0bf790d4873d065bc1ebe0290cde38e9b2",
-            "start": {
-              "line": 6,
-              "column": 1
-            },
-            "end": {
-              "line": 6,
-              "column": 30
-            }
-          }
-        ]
-      }
-    ],
-    "callWeb": {
-      "path": ".genesis/call-web.json",
-      "identity": "sha256:a60f0906b2ecf77cd4b6315bb780ce03c5eff22e403dc6174bddc2bd382b4ae5",
-      "sourceIdentity": "sha256:42d341358a04358e65283944f12333ee2cb59fa5a535e29b095d3d0afb21ffa1",
-      "counts": {
-        "functions": 51,
-        "calls": 36,
-        "exact": 19,
-        "probable": 14,
-        "unresolved": 3
-      },
-      "coverage": {
-        "generic": 8,
-        "adapters": {
-          "jskit": 9
-        }
-      }
     }
   },
   "buildings": [

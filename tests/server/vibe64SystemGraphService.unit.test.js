@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -315,6 +316,41 @@ test("refresh delegates to Genesis exactly once and validates its native result"
       GENESIS_MACHINE_CITY_PATH,
       GENESIS_PROGRAM_CITY_PATH
     ]);
+  });
+});
+
+test("refresh keeps the call web out of Git through the clone's own exclude file", async () => {
+  await withTempRoot(async (root) => {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    await writeFile(path.join(root, ".gitignore"), "node_modules/\n");
+    const ignored = [];
+    const service = createService({
+      projectService: projectServiceFor(root),
+      inspectorReader: async () => ({ status: "unconfigured", inspectors: [] }),
+      refresher: async () => {
+        // Genesis asks Git exactly this before it writes the call web.
+        ignored.push(execFileSync("git", ["check-ignore", ".genesis/call-web.json"], { cwd: root, encoding: "utf8" }).trim());
+        return { machine: machineCityFixture(), program: programCityFixture() };
+      }
+    });
+    assert.equal((await service.refresh({ sessionId: "session-1" })).ok, true);
+    assert.deepEqual(ignored, [".genesis/call-web.json"]);
+    assert.equal(await readFile(path.join(root, ".gitignore"), "utf8"), "node_modules/\n", "no project file changes");
+    assert.match(await readFile(path.join(root, ".git/info/exclude"), "utf8"), /^\/\.genesis\/call-web\.json$/mu);
+    assert.deepEqual(execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim(), "?? .gitignore");
+  });
+  // Without a plain Git directory the scan still runs; Genesis then reports
+  // that the call web is not ignored.
+  await withTempRoot(async (root) => {
+    let refreshed = 0;
+    const service = createService({
+      projectService: projectServiceFor(root),
+      inspectorReader: async () => ({ status: "unconfigured", inspectors: [] }),
+      refresher: async () => { refreshed += 1; return { machine: machineCityFixture(), program: programCityFixture() }; }
+    });
+    assert.equal((await service.refresh({ sessionId: "session-1" })).ok, true);
+    assert.equal(refreshed, 1);
+    assert.deepEqual(await readdir(root), []);
   });
 });
 

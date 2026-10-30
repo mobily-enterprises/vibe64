@@ -1007,8 +1007,10 @@ async function proxyPreviewRequest(request, response, {
     const method = String(request.method || "GET").toUpperCase();
     // While the session's Preview is recorded, each request gets the id its
     // functions are counted under, and its method, path and status are logged.
+    // Module and asset loads are only counted.
     const recording = activeUsageRecording(tokenScope.projectScope, tokenScope.sessionId);
     const recordedRequest = recording?.proxyRequest({
+      fetchDest: requestHeader(request, "sec-fetch-dest"),
       interaction: requestHeader(request, USAGE_RECORDING_INTERACTION_HEADER),
       method,
       path: requestUrl.pathname

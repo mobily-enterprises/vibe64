@@ -13,7 +13,8 @@
     "./server/savedEnvValues": "./src/server/savedEnvValues.js",
     "./server/managedRepository": "./src/server/managedRepository.js",
     "./server/project-archive": "./src/server/projectArchive.js",
-    "./server/projectSourceMutationLock": "./src/server/projectSourceMutationLock.js"
+    "./server/projectSourceMutationLock": "./src/server/projectSourceMutationLock.js",
+    "./server/projectEnvironmentFiles": "./src/server/projectEnvironmentFiles.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -71,6 +72,10 @@
           {
             "subpath": "./server/project-archive",
             "summary": "Archives a project into a validated bundle, or removes a practice project, through one resumable deletion lifecycle; hosts add their own resources."
+          },
+          {
+            "subpath": "./server/projectEnvironmentFiles",
+            "summary": "Writes generated environment files and keeps named generated paths out of Git through a managed block in the clone's own exclude file."
           }
         ],
         "capabilities": [

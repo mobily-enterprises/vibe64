@@ -122,6 +122,10 @@ test("the Preview proxy numbers recorded requests and no request content reaches
     headers: { "Content-Type": "application/json", [USAGE_RECORDING_INTERACTION_HEADER]: "i_1;drop" },
     method: "POST"
   });
+  // A script the page loads is counted, not numbered or logged.
+  const script = await send("/assets/bundle", { headers: { ...forged, "Sec-Fetch-Dest": "script" } });
+  assert.equal(script[USAGE_RECORDING_REQUEST_HEADER], undefined);
+  assert.equal((await call("readCurrent")).recording.requestLog.assets, 1);
   assert.deepEqual([first[USAGE_RECORDING_REQUEST_HEADER], second[USAGE_RECORDING_REQUEST_HEADER]], ["r_000001", "r_000002"]);
   assert.equal(first[USAGE_RECORDING_INTERACTION_HEADER], undefined);
   assert.equal(second[USAGE_RECORDING_INTERACTION_HEADER], undefined);

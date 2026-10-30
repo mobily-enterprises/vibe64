@@ -48,7 +48,7 @@
         </v-alert>
 
         <template v-if="mode !== 'recording'">
-          <div v-if="!state.entry" class="usage-view__state" role="status">
+          <div v-if="!state.entry || notScanned" class="usage-view__state" role="status">
             <template v-if="noEntries">
               <h3 class="text-title-medium">No entry points found yet</h3>
               <p class="text-body-medium">No entry points found yet. Refresh the architecture scan.</p>
@@ -71,7 +71,7 @@
           </div>
           <div v-else-if="mode === 'calls' && !webEntry.hasCalls" class="usage-view__state" role="status">
             <h3 class="text-title-medium">Calls are not available here</h3>
-            <p class="text-body-medium">{{ snapshot?.callWebIdentity ? 'No functions are known for this entry.' : 'The last scan did not read calls for this project.' }} Imports still shows the files it reaches.</p>
+            <p class="text-body-medium">{{ snapshot?.callWebIdentity ? 'No functions are known for this entry.' : snapshot?.callWebProblem === 'not-ignored' ? NOT_IGNORED_TEXT : 'The last scan did not read calls for this project.' }} Imports still shows the files it reaches.</p>
             <v-btn variant="tonal" @click="setMode('imports')">Show Imports</v-btn>
           </div>
           <template v-else>
@@ -110,6 +110,11 @@
             <h3 class="text-title-medium">Pick a request</h3>
             <p class="text-body-medium">Each request shows the subsystems and functions that ran for it.</p>
           </div>
+          <div v-else-if="notScanned" class="usage-view__state" role="status">
+            <h3 class="text-title-medium">Not scanned yet</h3>
+            <p class="text-body-medium">Refresh the architecture scan to see the subsystems and functions this request ran.</p>
+            <v-btn variant="tonal" :loading="refreshing" :prepend-icon="mdiRefresh" @click="emit('refresh')">Refresh</v-btn>
+          </div>
           <v-alert v-else-if="usage.result.error.value" type="error" variant="tonal" class="usage-view__banner">
             {{ usage.result.error.value }}
             <template #append><v-btn variant="text" size="small" @click="loadResult(true)">Retry</v-btn></template>
@@ -118,6 +123,9 @@
             <v-skeleton-loader v-for="card in 4" :key="card" type="card" class="usage-view__skeleton-card" />
           </div>
           <template v-else>
+            <v-alert v-if="changedSinceRecording" type="info" variant="tonal" density="compact" class="usage-view__banner">
+              Source changed since this recording
+            </v-alert>
             <v-alert v-if="usage.result.data.value.truncated" type="warning" variant="tonal" density="compact" class="usage-view__banner">
               Showing the first {{ usage.result.data.value.functions.length.toLocaleString() }} of {{ usage.result.data.value.total.toLocaleString() }} functions that ran.
             </v-alert>
@@ -162,6 +170,8 @@ import Vibe64UsageWebCanvas from "./Vibe64UsageWebCanvas.vue";
 import {
   MAX_NODES,
   MORE_NODES,
+  NOT_IGNORED_TEXT,
+  NOT_SCANNED_CODE,
   USAGE_MODES,
   countLabel,
   functionLabel,
@@ -215,7 +225,9 @@ const mode = computed(() => props.state.mode || "calls");
 const snapshot = computed(() => usage.snapshot.value || usage.web.data.value?.snapshot || null);
 const recordings = computed(() => usage.recordings.data.value?.recordings || []);
 const unavailable = computed(() => unavailableRuntimes(usage.targets.data.value?.targets || []));
-const noEntries = computed(() => !usage.entries.items.value.length && !usage.entries.loading.value && !usage.entries.error.value && !search.value && !kind.value && Boolean(usage.snapshot.value));
+// Before the first scan there is nothing to retry: every read needs a scan.
+const notScanned = computed(() => [usage.entries, usage.web, usage.result].some((read) => read.errorCode.value === NOT_SCANNED_CODE));
+const noEntries = computed(() => notScanned.value || (!usage.entries.items.value.length && !usage.entries.loading.value && !usage.entries.error.value && !search.value && !kind.value && Boolean(usage.snapshot.value)));
 const busy = computed(() => [usage.web, usage.result, usage.requests].some((read) => read.loading.value));
 
 function update(patch) {
@@ -269,7 +281,7 @@ const railBindings = computed(() => ({
   kind: kind.value,
   selectedId: props.state.entry,
   loading: usage.entries.loading.value,
-  error: usage.entries.error.value,
+  error: notScanned.value ? "" : usage.entries.error.value,
   hasMore: usage.entries.hasMore.value,
   refreshing: props.refreshing
 }));
@@ -358,6 +370,12 @@ const resultFresh = computed(() => {
   return Boolean(data && data.recordingId === props.state.recording && data.requestId === props.state.request);
 });
 const recorded = computed(() => (resultFresh.value ? recordingWeb(usage.result.data.value.functions, usage.result.data.value.join) : null));
+// The scan the recording ran against is no longer the one its functions were joined to.
+const changedSinceRecording = computed(() => {
+  const recordedScan = selectedRecording.value?.sourceIdentity;
+  const currentScan = resultFresh.value ? usage.result.data.value.join?.snapshot?.sourceIdentity : null;
+  return Boolean(recordedScan && currentScan && recordedScan !== currentScan);
+});
 const requestRows = computed(() => usage.requests.data.value?.requests || []);
 const selectedRequest = computed(() => requestRows.value.find((request) => request.id === props.state.request) || null);
 
@@ -473,7 +491,7 @@ const pickerLabel = computed(() => {
   if (mode.value === "recording") {
     const request = selectedRequest.value;
     if (!request) return "Choose a request";
-    return isBackgroundRequest(request) ? `Request: ${requestTitle(request, [], requestRows.value)}` : `Request: ${request.method} ${requestTitle(request, usage.routes.value)}`;
+    return isBackgroundRequest(request) ? `Request: ${requestTitle(request, [], requestRows.value)}` : `Request: ${[request.method, requestTitle(request, usage.routes.value)].filter(Boolean).join(" ")}`;
   }
   const entry = usage.entries.items.value.find((item) => item.id === props.state.entry) || (webEntry.value.id === props.state.entry ? webEntry.value : null);
   return entry ? `Entry: ${entry.title}` : "Choose an entry";
