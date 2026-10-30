@@ -1,16 +1,24 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { appendFile, cp, mkdir, mkdtemp, readFile, readdir, rm, truncate, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { appendFile, cp, mkdir, mkdtemp, open, readFile, readdir, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { USAGE_RECORDING_LIMITS, USAGE_RECORDING_RETENTION } from "@local/vibe64-usage-recording/shared/contract";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
-import { createTraceReader } from "../../packages/vibe64-usage-recording/src/server/traceStore.js";
+import {
+  createTraceReader,
+  readInteractions,
+  readJsonFile,
+  readRequestLog,
+  writeJsonFile
+} from "../../packages/vibe64-usage-recording/src/server/traceStore.js";
 
 const exec = promisify(execFile);
 const FIXTURE = new URL("../fixtures/usage-map/recording/", import.meta.url);
@@ -134,6 +142,52 @@ test("trace reads stop at the per-process and per-recording size limits", async 
   const one = createTraceReader(single);
   await one.poll();
   assert.equal(one.hitsBytes(), USAGE_RECORDING_LIMITS.hitsBytesPerProcess + USAGE_RECORDING_LIMITS.traceLineBytes);
+});
+
+// "blocked" when a read waits on a FIFO; the FIFOs are then opened for
+// writing and closed, so the waiting read ends.
+async function unlessBlocked(read, fifos) {
+  const result = await Promise.race([read, delay(1000).then(() => "blocked")]);
+  if (result !== "blocked") return result;
+  for (const fifo of fifos) await (await open(fifo, constants.O_WRONLY | constants.O_NONBLOCK).catch(() => null))?.close();
+  await read;
+  return result;
+}
+
+test("recording files are read only as regular files within their caps, and written through no link", async (t) => {
+  const directory = await temporary(t);
+  const outside = await temporary(t);
+  const request = (id) => ({ id, seq: Number(id.slice(2)), method: "GET", path: "/api/x", status: 200, startedAt: at, durationMs: 1, interaction: null });
+  const log = path.join(directory, "requests.ndjson");
+  // A log linked elsewhere is not read.
+  await writeFile(path.join(outside, "requests.ndjson"), ndjson([request("r_000001")]));
+  await symlink(path.join(outside, "requests.ndjson"), log);
+  assert.deepEqual(await readRequestLog(directory), []);
+  // A log is read up to 8 MiB: a line after that is not.
+  await rm(log);
+  const filler = `${"x".repeat(60 * 1024)}\n`;
+  await writeFile(log, ndjson([request("r_000001")]) + filler.repeat(Math.ceil(8 * 1024 * 1024 / filler.length)) + ndjson([request("r_000002")]));
+  assert.deepEqual((await readRequestLog(directory)).map((row) => row.id), ["r_000001"]);
+  // A FIFO is never waited on, as a log or as a hits file; a linked hits file is not read.
+  const fifos = [path.join(directory, "interactions.ndjson"), path.join(directory, "hits-nodejs-7.ndjson")];
+  await exec("mkfifo", fifos);
+  assert.deepEqual(await unlessBlocked(readInteractions(directory), fifos), []);
+  await writeFile(path.join(outside, "hits.ndjson"), ndjson([header(8), { type: "tracer", state: "ready" }, ...declare(0, 0, "lib/a.mjs", 3),
+    { type: "hits", scope: "r_000001", counts: [[0, 1]] }]));
+  await symlink(path.join(outside, "hits.ndjson"), path.join(directory, "hits-nodejs-8.ndjson"));
+  const reader = createTraceReader(directory);
+  assert.equal(await unlessBlocked(reader.poll(), fifos), undefined);
+  assert.deepEqual(reader.counts(), { requests: 0, functions: 0 });
+  // A file Vibe64 replaces is written to a new temporary file, never through
+  // a link placed where it writes; a linked JSON file is not read.
+  const target = path.join(outside, "target.json");
+  await writeFile(target, "unchanged");
+  await symlink(target, path.join(directory, `recording.json.${process.pid}.tmp`));
+  await writeJsonFile(path.join(directory, "recording.json"), { state: "recording" });
+  assert.equal(await readFile(target, "utf8"), "unchanged");
+  assert.deepEqual(await readJsonFile(path.join(directory, "recording.json")), { state: "recording" });
+  await symlink(path.join(directory, "recording.json"), path.join(directory, "linked.json"));
+  assert.equal(await readJsonFile(path.join(directory, "linked.json")), null);
 });
 
 test("a session keeps its newest recordings within the count, size and age limits", async (t) => {

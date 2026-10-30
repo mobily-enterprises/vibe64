@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { appendFile, chmod, mkdir, open, readdir, realpath, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { AppError } from "@jskit-ai/kernel/server/runtime";
@@ -18,10 +18,12 @@ import { registerActiveUsageRecording, activeUsageRecording } from "./activeReco
 import { admitUsageRecording } from "./admission.js";
 import { usageRecordingPath, usageRecordingsPath } from "./recordingFiles.js";
 import {
+  appendJsonLine,
   createTraceReader,
   pageOf,
   readInteractions,
   readJsonFile,
+  readRegularFile,
   recordingRequestRows,
   writeJsonFile
 } from "./traceStore.js";
@@ -86,16 +88,11 @@ function storedRecording(value) {
 // The call web names the source snapshot it was built from in its first lines;
 // a recording keeps it so results can say when the source has changed since.
 async function readSourceIdentity(sourceRoot) {
-  let handle = null;
   try {
-    handle = await open(path.join(sourceRoot, ".genesis", "call-web.json"), "r");
-    const buffer = Buffer.alloc(4096);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    return /"sourceIdentity"\s*:\s*"(sha256:[0-9a-f]{64})"/u.exec(buffer.subarray(0, bytesRead).toString("utf8"))?.[1] || null;
+    const file = await readRegularFile(path.join(sourceRoot, ".genesis", "call-web.json"), 4096);
+    return /"sourceIdentity"\s*:\s*"(sha256:[0-9a-f]{64})"/u.exec(file?.bytes.toString("utf8") || "")?.[1] || null;
   } catch {
     return null;
-  } finally {
-    await handle?.close();
   }
 }
 
@@ -349,7 +346,7 @@ function createService({
       writes: Promise.resolve()
     };
     const append = (name, row) => {
-      entry.writes = entry.writes.then(() => appendFile(path.join(directory, name), `${JSON.stringify(row)}\n`, { mode: 0o660 }))
+      entry.writes = entry.writes.then(() => appendJsonLine(path.join(directory, name), row))
         .catch((error) => logger?.warn?.({ error, recordingId: record.id }, "Usage recording could not append a line."));
       return entry.writes;
     };

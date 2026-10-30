@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import * as genesisServer from "@local/vibe64-genesis/server";
@@ -138,7 +139,10 @@ function requireGenesisCity(record, kind) {
 // The call web is the separate Genesis artifact a Machine City summarises.
 // Only the summary's exact bytes are read: a file another scan replaced in the
 // meantime is refused, never joined to this snapshot. Genesis validates it.
+// It is read only as a regular file, never through a link or from a FIFO,
+// and only up to its size limit.
 const CALL_WEB_PATH = ".genesis/call-web.json";
+const CALL_WEB_MAX_BYTES = 64 * 1024 * 1024;
 
 function callWebError(message, code = "vibe64_invalid_genesis_call_web") {
   const error = vibe64Error(`The call web ${message}`, code);
@@ -163,12 +167,29 @@ async function readGenesisCallWeb(projectRoot, architecture, { validate = valida
   const summary = architecture?.callWeb;
   if (!summary) return null;
   if (summary.path !== CALL_WEB_PATH) throw callWebError(`must be ${CALL_WEB_PATH}.`);
-  let source;
+  let handle;
   try {
-    source = await readFile(path.resolve(projectRoot, CALL_WEB_PATH));
+    handle = await open(path.resolve(projectRoot, CALL_WEB_PATH), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   } catch (error) {
     if (isMissingPathError(error)) throw callWebError("is missing. Refresh analysis.", "vibe64_genesis_call_web_missing");
+    if (error?.code === "ELOOP") throw callWebError("must be a regular file.");
     throw error;
+  }
+  let source;
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) throw callWebError("must be a regular file.");
+    if (info.size > CALL_WEB_MAX_BYTES) throw callWebError("is larger than 64 MiB.");
+    source = Buffer.alloc(info.size);
+    let length = 0;
+    while (length < source.length) {
+      const { bytesRead } = await handle.read(source, length, source.length - length, length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    source = source.subarray(0, length);
+  } finally {
+    await handle.close();
   }
   if (`sha256:${createHash("sha256").update(source).digest("hex")}` !== summary.identity) {
     throw callWebError("changed since this scan. Reload Architecture.", "vibe64_genesis_call_web_changed");

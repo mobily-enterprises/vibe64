@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFile, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -126,6 +126,17 @@ test("a prepended variable joins the value the recorded process would inherit", 
   assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "/project" } }).environment.PYTHONPATH,
     `${ours}${path.delimiter}/project`);
   assert.equal(launchOf({ outputTargetId: "py-run", environment: { PYTHONPATH: "" } }).environment.PYTHONPATH, ours);
+});
+
+test("a recording appends its logs to no file but its own", async (t) => {
+  const { call, root } = await recorder(t);
+  const { recording } = await call("start", { targetId: "preview" });
+  const directory = launchOf({ web: true, outputTargetId: "web" }).environment.VIBE64_USAGE_RECORDING_DIR;
+  const outside = path.join(root, "outside.ndjson");
+  await writeFile(outside, "");
+  await symlink(outside, path.join(directory, "interactions.ndjson"));
+  await call("recordInteraction", { recordingId: recording.id, id: "i_0001", at: new Date().toISOString(), label: "button" });
+  assert.equal(await readFile(outside, "utf8"), "");
 });
 
 test("targets list Preview and each terminal Output target with what can be recorded", async (t) => {
