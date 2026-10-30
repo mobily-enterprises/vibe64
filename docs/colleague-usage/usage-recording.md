@@ -34,6 +34,97 @@ results. A command starts running at once and the recording follows that run.
 Only one recording runs in a session at a time. Other sessions are not
 affected, and a recording in another session keeps running when you switch.
 
+## Runtimes
+
+Recording follows the project's server-side code in Node.js, Python and PHP.
+Code that runs in the browser is not recorded. A target whose runtime has no
+recorder, such as Go or Rust, shows **Recording not available for `<runtime>`**
+in the Record dialog.
+
+### Node.js
+
+Node.js 22.15 or newer. Every Node.js process of the recorded target loads
+Vibe64's recorder at startup. Only your project's own `.js`, `.mjs`, `.cjs`,
+`.ts`, `.mts` and `.cts` files are recorded, never files under `node_modules`.
+Each Preview request that reaches a Node.js server is recorded on its own. A
+terminal target records the whole run. Work outside any request, such as the
+server starting up, is listed first as **Start-up and work outside requests**.
+Each file's top-level code counts as one function. After **Stop** the recorder
+switches itself off.
+
+### Python
+
+Python 3.12 or newer. While a recording is on, every Python process of the
+recorded target loads Vibe64's recorder at startup. Your project's own
+`sitecustomize` still runs. Servers built on the standard library's
+`http.server`, which include Django's `runserver` and the Flask/Werkzeug
+development server, record each Preview request separately. Other servers,
+such as ASGI servers like uvicorn, or gunicorn, record all their work
+together, and the results say **Not separated per request for this server**.
+A terminal target records the whole run of each Python process. Only your
+project's files are recorded: files outside `node_modules`, `vendor`,
+`site-packages`/`dist-packages` and any virtualenv inside the project. Each
+function's calls are counted. Decorated functions show at their `def` line;
+generator expressions and class bodies count as part of the code around them.
+Recording slows CPU-heavy Python code to about twice its normal time. After
+**Stop** the recorder switches itself off and costs nothing. Nothing is
+recorded when Python is older than 3.12 (the recorder reports it), or when the
+target starts Python with `-I`, `-E` or `-S`; then the recording says the
+application did not load the recorder.
+
+### PHP
+
+Recording works with non-thread-safe PHP 8 (the usual command-line build).
+Thread-safe (ZTS) PHP, which FrankenPHP uses, shows **Recording not
+available**.
+
+**Before the first recording.** PHP recording uses a small module built for
+your computer's PHP. Until it is built, the Record dialog shows **Recording
+not available** with the command to run:
+
+    node <vibe64>/packages/vibe64-usage-recording/runtime/php/build.mjs
+
+It needs `phpize` and `php-config` from your PHP's development package (for
+example `php8.3-dev`), `make` and a C compiler. Add
+`--php-config=/path/to/php-config` to build for a PHP that is not first on
+PATH, and `--force` to rebuild. A build is reused for the same PHP version.
+When a Vibe64 update changes the recorder, the dialog asks for the command
+again. The module loads only into recorded processes, through
+`PHP_INI_SCAN_DIR`. Your own PHP settings and extensions keep loading as
+before.
+
+**What is separated per request.**
+- `php artisan serve` and `php -S`, with or without a router script, record
+  each request on its own, including several workers answering at once
+  (`PHP_CLI_SERVER_WORKERS`).
+- A command-line run (a terminal Output target, `php artisan` commands,
+  scripts) records as one run.
+- Worker servers that keep one PHP request alive for many HTTP requests
+  (Laravel Octane, RoadRunner, Swoole, FrankenPHP worker mode) show **Not
+  separated per request for this server**.
+
+**What it records.** Only project files: the paths, function and method names,
+start lines and how many times each ran. Nothing under `vendor/` or
+`node_modules/` is recorded.
+- Files and named functions match the usage map exactly. Methods are matched
+  by their name and line.
+- Closures and arrow functions run, but they have no Calls count on the map.
+- A function whose whole body returns a constant may be removed by OPcache
+  before it runs, so it never appears as called.
+- Each file's content is fingerprinted the first time a process runs it. If
+  that differs from the last scan, the map shows **Changed since the last
+  scan**.
+
+**Stopping.** A running server notices **Stop** at its next request. A request
+already running finishes, and its calls are kept.
+
+**PHP from a package manager that sets its own scan directory.** Some PHP
+builds (for example Nix's `php.withExtensions`) load their extensions only
+while `PHP_INI_SCAN_DIR` is unset. Set `PHP_INI_SCAN_DIR` to that PHP's scan
+directory (shown by `php --ini` as "Scan for additional .ini files in") in the
+environment that starts your project, and recording keeps those extensions
+loaded.
+
 ## The recording indicator
 
 While a recording exists, the project header shows its state beside the
