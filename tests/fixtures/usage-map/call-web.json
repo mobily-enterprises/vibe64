@@ -107,7 +107,7 @@
   ],
   "functions": [
     {
-      "id": "fn:bin/demo.js#1:1",
+      "id": "fn:bin/demo.js#module",
       "file": 0,
       "name": "",
       "kind": "module",
@@ -135,7 +135,7 @@
       }
     },
     {
-      "id": "fn:packages/core/src/server/logger.js#1:1",
+      "id": "fn:packages/core/src/server/logger.js#module",
       "file": 1,
       "name": "",
       "kind": "module",
@@ -192,7 +192,7 @@
       }
     },
     {
-      "id": "fn:packages/core/src/server/metrics.js#1:1",
+      "id": "fn:packages/core/src/server/metrics.js#module",
       "file": 2,
       "name": "",
       "kind": "module",
@@ -221,7 +221,7 @@
       }
     },
     {
-      "id": "fn:packages/core/src/server/requestContext.js#1:1",
+      "id": "fn:packages/core/src/server/requestContext.js#module",
       "file": 3,
       "name": "",
       "kind": "module",
@@ -278,7 +278,7 @@
       }
     },
     {
-      "id": "fn:packages/core/src/shared/sessionShape.ts#1:1",
+      "id": "fn:packages/core/src/shared/sessionShape.ts#module",
       "file": 4,
       "name": "",
       "kind": "module",
@@ -292,7 +292,7 @@
       }
     },
     {
-      "id": "fn:packages/core/src/shared/text.js#1:1",
+      "id": "fn:packages/core/src/shared/text.js#module",
       "file": 5,
       "name": "",
       "kind": "module",
@@ -321,7 +321,7 @@
       }
     },
     {
-      "id": "fn:packages/reports/src/server/weeklyReport.js#1:1",
+      "id": "fn:packages/reports/src/server/weeklyReport.js#module",
       "file": 6,
       "name": "",
       "kind": "module",
@@ -350,7 +350,7 @@
       }
     },
     {
-      "id": "fn:packages/sessions/src/server/actions.js#1:1",
+      "id": "fn:packages/sessions/src/server/actions.js#module",
       "file": 7,
       "name": "",
       "kind": "module",
@@ -392,7 +392,7 @@
       }
     },
     {
-      "id": "fn:packages/sessions/src/server/routes.js#1:1",
+      "id": "fn:packages/sessions/src/server/routes.js#module",
       "file": 8,
       "name": "",
       "kind": "module",
@@ -477,7 +477,7 @@
       }
     },
     {
-      "id": "fn:packages/sessions/src/server/service.js#1:1",
+      "id": "fn:packages/sessions/src/server/service.js#module",
       "file": 9,
       "name": "",
       "kind": "module",
@@ -549,7 +549,7 @@
       }
     },
     {
-      "id": "fn:packages/sessions/src/server/store.ts#1:1",
+      "id": "fn:packages/sessions/src/server/store.ts#module",
       "file": 10,
       "name": "",
       "kind": "module",
@@ -593,7 +593,7 @@
       }
     },
     {
-      "id": "fn:server/main.js#1:1",
+      "id": "fn:server/main.js#module",
       "file": 11,
       "name": "",
       "kind": "module",
@@ -621,7 +621,7 @@
       }
     },
     {
-      "id": "fn:server/router.js#1:1",
+      "id": "fn:server/router.js#module",
       "file": 12,
       "name": "",
       "kind": "module",
@@ -710,7 +710,7 @@
       }
     },
     {
-      "id": "fn:src/api/sessionsClient.js#1:1",
+      "id": "fn:src/api/sessionsClient.js#module",
       "file": 13,
       "name": "",
       "kind": "module",
@@ -754,7 +754,7 @@
       }
     },
     {
-      "id": "fn:src/components/SessionList.vue#1:1",
+      "id": "fn:src/components/SessionList.vue#module",
       "file": 14,
       "name": "",
       "kind": "module",
@@ -796,7 +796,7 @@
       }
     },
     {
-      "id": "fn:src/pages/SessionsPage.vue#1:1",
+      "id": "fn:src/pages/SessionsPage.vue#module",
       "file": 15,
       "name": "",
       "kind": "module",
@@ -810,7 +810,7 @@
       }
     },
     {
-      "id": "fn:tests/sessions.test.js#1:1",
+      "id": "fn:tests/sessions.test.js#module",
       "file": 16,
       "name": "",
       "kind": "module",

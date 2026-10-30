@@ -48,6 +48,7 @@ test("the Machine City summarises the call web it names", () => {
   assert.equal(summary.identity, sha(bytes("call-web.json")));
   assert.equal(summary.sourceIdentity, callWeb.sourceIdentity);
   assert.equal(summary.sourceIdentity, architecture.sourceHash);
+  for (const name of ["functions", "calls", "entryPoints"]) assert.equal(architecture.capabilities[name], "complete", name);
   const certainty = (value) => callWeb.calls.filter((call) => call.certainty === value).length;
   assert.deepEqual(summary.counts, {
     functions: callWeb.functions.length,
@@ -75,7 +76,7 @@ test("call-web files and functions are indexed records of the same snapshot", ()
   for (const fn of callWeb.functions) {
     const file = fileOf(fn);
     assert.ok(file, fn.id);
-    assert.equal(fn.id, `fn:${file.path}#${fn.start.line}:${fn.start.column}`);
+    assert.equal(fn.id, fn.kind === "module" ? `fn:${file.path}#module` : `fn:${file.path}#${fn.start.line}:${fn.start.column}`);
     assert.ok(!ids.has(fn.id), `duplicate ${fn.id}`);
     ids.add(fn.id);
     assert.ok(FUNCTION_KINDS.includes(fn.kind), fn.id);
@@ -139,7 +140,10 @@ test("entry points reference indexed files and call-web functions", () => {
     assert.equal(entry.resolution, "resolved");
     assert.ok(entry.title && files.has(entry.file), entry.id);
     assert.ok(entry.functionIds.every((id) => functionIds.has(id)), entry.id);
-    for (const evidence of entry.evidence) assert.equal(sha(bytes(`project/${evidence.path}`)), evidence.hash, entry.id);
+    for (const evidence of entry.evidence) {
+      assert.equal(files.get(evidence.path)?.hash, evidence.hash, `${entry.id} evidence is an indexed file`);
+      assert.equal(sha(bytes(`project/${evidence.path}`)), evidence.hash, entry.id);
+    }
     for (const field of ["pageId", "componentId", "operationKey", "actionId"]) assert.ok(Object.hasOwn(entry, field), `${entry.id} ${field}`);
     if (["page", "component"].includes(entry.kind)) assert.deepEqual(entry.functionIds, [], `${entry.id} starts from its file`);
     if (entry.kind === "route") assert.ok(entry.operationKey && entry.functionIds.length === 1, entry.id);

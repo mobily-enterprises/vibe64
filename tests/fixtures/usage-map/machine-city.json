@@ -4,7 +4,10 @@
       "dependencies": "partial",
       "pages": "unconfigured",
       "runtimeCalls": "unsupported",
-      "symbols": "partial"
+      "symbols": "partial",
+      "functions": "complete",
+      "calls": "complete",
+      "entryPoints": "complete"
     },
     "codeHash": "sha256:636b0b568cedaf315d0158d710365cf87dc802cfd181c590d4bc1b96ed3b330e",
     "diagnostics": [],
@@ -2891,7 +2894,7 @@
         "title": "demo",
         "file": "bin/demo.js",
         "functionIds": [
-          "fn:bin/demo.js#1:1"
+          "fn:bin/demo.js#module"
         ],
         "evidence": [
           {
@@ -3003,15 +3006,15 @@
         ],
         "evidence": [
           {
-            "path": "genesis/program/sessions/list-sessions.md",
-            "hash": "sha256:d4c50fbd1f62e74850b6c79bd9a7c7807ebb1603be0663968e7574aeae0a940a",
+            "path": "packages/sessions/src/server/service.js",
+            "hash": "sha256:24abfcc93e12c75d41f0eed98be27822be8b2e7de7a5a4bb9da5eaf90d35d945",
             "start": {
               "line": 1,
               "column": 1
             },
             "end": {
-              "line": 1,
-              "column": 16
+              "line": 2,
+              "column": 1
             }
           }
         ]
@@ -3093,7 +3096,7 @@
         "title": "sessions.test.js",
         "file": "tests/sessions.test.js",
         "functionIds": [
-          "fn:tests/sessions.test.js#1:1",
+          "fn:tests/sessions.test.js#module",
           "fn:tests/sessions.test.js#6:32"
         ],
         "evidence": [
@@ -3114,7 +3117,7 @@
     ],
     "callWeb": {
       "path": ".genesis/call-web.json",
-      "identity": "sha256:4a044b9a30ef53defda680f16fa8fe3844f3e5218ddb8be7d236d0c5012ff422",
+      "identity": "sha256:a60f0906b2ecf77cd4b6315bb780ce03c5eff22e403dc6174bddc2bd382b4ae5",
       "sourceIdentity": "sha256:42d341358a04358e65283944f12333ee2cb59fa5a535e29b095d3d0afb21ffa1",
       "counts": {
         "functions": 51,
