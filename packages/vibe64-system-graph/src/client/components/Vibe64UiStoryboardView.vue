@@ -5,21 +5,27 @@
       <div class="ui-storyboard__heading">
         <h1>Architecture</h1>
         <p v-if="refreshProgress" role="status">{{ refreshProgress.message }} · {{ refreshProgress.elapsedSeconds }}s</p>
-        <p v-else>{{ uiIds.length }} pages / screens / scenes · {{ engineIds.length - (externalCount ? 1 : 0) }} subsystems<span v-if="externalCount"> · {{ externalCount }} external packages</span> <span v-if="coverage && coverage !== 'complete'">· {{ coverage }} page discovery</span><span v-if="architecture?.ui?.capabilities?.operationUses === 'unconfigured'" title="This project has no UI-call discovery configured. Missing arrows do not prove there are no calls."> · UI calls not analysed</span></p>
+        <p v-else-if="usageState.view === 'map'">{{ uiIds.length }} pages / screens / scenes · {{ engineIds.length - (externalCount ? 1 : 0) }} subsystems<span v-if="externalCount"> · {{ externalCount }} external packages</span> <span v-if="coverage && coverage !== 'complete'">· {{ coverage }} page discovery</span><span v-if="architecture?.ui?.capabilities?.operationUses === 'unconfigured'" title="This project has no UI-call discovery configured. Missing arrows do not prove there are no calls."> · UI calls not analysed</span></p>
       </div>
+      <v-btn-toggle :model-value="usageState.view" class="ui-storyboard__views" mandatory divided rounded="pill" color="primary" variant="outlined" density="compact" role="group" aria-label="Architecture view" @update:model-value="setArchitectureView">
+        <v-btn value="map">Map</v-btn>
+        <v-btn value="usage">Usage</v-btn>
+      </v-btn-toggle>
       <div class="ui-storyboard__actions">
         <v-btn v-if="refreshing" size="small" variant="text" min-height="44" @click="cancelRefresh">Cancel analysis</v-btn>
-        <v-btn size="small" variant="text" :disabled="!contentCount" @click="fit()">Fit</v-btn>
+        <v-btn v-if="usageState.view === 'map'" size="small" variant="text" :disabled="!contentCount" @click="fit()">Fit</v-btn>
         <v-menu>
           <template #activator="{ props: menuProps }"><v-btn v-bind="menuProps" size="small" variant="text" aria-label="Architecture options" title="Architecture options" min-width="36">⋯</v-btn></template>
           <v-list density="compact">
-            <v-list-item title="Fit UI" :disabled="!uiIds.length" @click="fit(uiIds)" />
-            <v-list-item title="Fit Engine" :disabled="!engineIds.length" @click="fit(engineIds)" />
-            <v-list-item :title="showCalls ? 'Hide UI calls' : 'Show all UI calls'" :disabled="!edges.some(edge => edge.type === 'controller')" @click="toggleCalls" />
-            <v-list-item title="Zoom in" :disabled="!contentCount" @click="zoomControl(true)" />
-            <v-list-item title="Zoom out" :disabled="!contentCount" @click="zoomControl(false)" />
-            <v-list-item title="Reset arrangement" :disabled="!Object.keys(layoutPositions).length" @click="layoutPositions = {}" />
-            <v-divider />
+            <template v-if="usageState.view === 'map'">
+              <v-list-item title="Fit UI" :disabled="!uiIds.length" @click="fit(uiIds)" />
+              <v-list-item title="Fit Engine" :disabled="!engineIds.length" @click="fit(engineIds)" />
+              <v-list-item :title="showCalls ? 'Hide UI calls' : 'Show all UI calls'" :disabled="!edges.some(edge => edge.type === 'controller')" @click="toggleCalls" />
+              <v-list-item title="Zoom in" :disabled="!contentCount" @click="zoomControl(true)" />
+              <v-list-item title="Zoom out" :disabled="!contentCount" @click="zoomControl(false)" />
+              <v-list-item title="Reset arrangement" :disabled="!Object.keys(layoutPositions).length" @click="layoutPositions = {}" />
+              <v-divider />
+            </template>
             <v-list-item title="Reload architecture" :disabled="loading" @click="reload" />
             <v-list-item v-if="refreshing" title="Cancel analysis" @click="cancelRefresh" />
             <v-list-item v-else title="Re-scan project" :disabled="loading" @click="refresh" />
@@ -27,7 +33,7 @@
         </v-menu>
       </div>
     </header>
-    <div ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), goBack($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
+    <div v-show="usageState.view === 'map'" ref="canvas" class="ui-storyboard__canvas" tabindex="-1" @keydown.esc.capture="expandedSubsystemId && ($event.preventDefault(), $event.stopPropagation(), goBack($event))" @wheel.capture="zoomWheel" @touchstart.capture="startPinch" @touchmove.capture="movePinch" @touchend.capture="endPinch" @touchcancel.capture="endPinch">
       <v-alert v-if="error && error !== dismissedError" class="ui-storyboard__error" type="error" variant="tonal" closable @click:close="dismissedError = error">{{ error }}<details v-if="refreshOutput"><summary>Command output</summary><pre style="white-space: pre-wrap; overflow-wrap: anywhere">{{ refreshOutput }}</pre></details></v-alert>
       <v-alert v-if="!refreshing && architecture?.diagnostics?.some(item => item.code === 'ARCHITECTURE_UI_STALE')" class="ui-storyboard__error" type="info" variant="tonal">UI map needs refresh. <v-btn size="small" variant="text" :loading="refreshing" @click="refresh">Re-scan project</v-btn></v-alert>
       <VueFlow v-model:nodes="nodes" :edges="visibleEdges" :min-zoom="0.08" :max-zoom="3"
@@ -37,7 +43,7 @@
         <template #node-page="{ data, selected }">
           <article class="storyboard-page" :class="{ 'storyboard-page--compact': compact, 'storyboard-page--root': !data.parentId, 'storyboard-page--selected': selected, 'architecture-context': expandedSubsystemId && data.id !== selectedPageId }" :title="[data.title, ...data.identities, data.file].filter(Boolean).join('\n')">
             <Handle v-if="data.parentId" id="parent" type="target" :position="Position.Top" />
-            <div class="storyboard-page__meta"><span>{{ data.kind }}</span><span>{{ data.surface }}</span></div>
+            <div class="storyboard-page__meta"><span>{{ data.kind }}</span><span>{{ data.surface }}</span><button v-if="data.file" type="button" class="storyboard-page__usage nodrag nopan" :aria-label="`Show usage of ${data.title}`" @click.stop="showUsage({ q: data.file })">Show usage</button></div>
             <h2>{{ data.title }}</h2>
             <div v-if="data.identities.length" class="storyboard-page__routes"><span v-for="identity in data.identities" :key="identity">{{ identity }}</span></div>
             <p v-else class="storyboard-page__unregistered">No navigation identity recorded</p>
@@ -63,6 +69,7 @@
               <template v-if="currentProgram"><span>›</span><strong>{{ currentProgram.title }}</strong></template>
               <template v-else-if="fileRequest && parentProgram"><span>›</span><button type="button" @click="openProgram(parentProgram.id)">{{ parentProgram.title }}</button></template>
               <template v-if="fileRequest"><span>›</span><strong>{{ fileRequest.path.split('/').pop() }}</strong></template>
+              <button v-if="!data.owner.opaque" type="button" class="subsystem-zoom__usage nodrag nopan" @click="showUsageForDetail(data.owner)">Show usage</button>
               <button type="button" class="subsystem-zoom__close" :aria-label="fileRequest || programId ? 'Back to previous view' : 'Back to Engine'" title="Close this view (Esc)" @click="goBack($event)">×</button>
             </nav>
             <p class="subsystem-zoom__navigation-hint">Scroll to read · Pinch to zoom · Esc / × to go back</p>
@@ -118,22 +125,38 @@
       <div v-else-if="!expandedSubsystemId" class="ui-storyboard__legend">Drag empty space to pan · Zoom into a subsystem to explore · Use ⠿ to arrange <span>Entry points emphasised · Supporting directories subdued</span></div>
       <div v-if="entryWarning" class="ui-storyboard__notice" role="status">{{ entryWarning }}</div>
     </div>
+    <Vibe64UsageView v-if="usageMounted" v-show="usageState.view === 'usage'" class="ui-storyboard__usage"
+      :active="props.active && usageState.view === 'usage'" :session-id="props.sessionId" :state="usageState" :find-request="usageFind"
+      :snapshot-key="usageSnapshotKey" :refreshing="refreshing"
+      @update:state="usageState = usageStateFromQuery($event)" @refresh="refresh" @open-source-file="emit('open-source-file', $event)" @select-preview="emit('select-preview')" />
   </section>
 </template>
 
 <script setup>
 import { computed, markRaw, nextTick, onBeforeUnmount, ref, shallowRef, toRaw, toRef, unref, watch } from 'vue';
 import { BaseEdge, Handle, MarkerType, Position, VueFlow } from '@vue-flow/core';
+import { useRoute, useRouter } from 'vue-router';
 import { useVibe64SystemGraph } from '../composables/useVibe64SystemGraph.js';
+import Vibe64UsageView from '../usage/Vibe64UsageView.vue';
+import { sameQuery, sameUsageState, usageQueryFor, usageStateFromQuery } from '../usage/usageModel.js';
 import Vibe64SubsystemInspector from './Vibe64SubsystemInspector.vue';
 import Vibe64ProgramInspector from './Vibe64ProgramInspector.vue';
 import { architectureOverview, subsystemOutline } from '../architectureModel.js';
 
-const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 }, openProgramRequest: Object });
+const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 }, openProgramRequest: Object, restoreRequest: Object, usageOpenRequest: Object });
 const { architecture, error, loading, refreshing, refreshProgress, refreshOutput, refresh, reload, cancelRefresh } = useVibe64SystemGraph({
   active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), reloadVersion: toRef(props, 'reloadVersion')
 });
-const emit = defineEmits(['inspect-file', 'open-source-file']);
+const emit = defineEmits(['inspect-file', 'open-source-file', 'select-preview']);
+// The system dashboard route's query keeps Usage's state, so a reload reopens
+// the same entry, mode, subsystem, recording and request.
+const route = useRoute();
+const router = useRouter();
+const usageState = ref(usageStateFromQuery(route?.query));
+const usageMounted = ref(usageState.value.view === 'usage');
+const usageFind = shallowRef(null);
+const usageSnapshotKey = computed(() => [architecture.value?.sourceHash, architecture.value?.callWeb?.identity].filter(Boolean).join(':'));
+const onSystemRoute = computed(() => props.active && /\/dashboard\/system\/?$/u.test(route?.path || ''));
 const canvas = ref(null);
 const dismissedError = ref('');
 watch(error, () => { dismissedError.value = ''; });
@@ -496,7 +519,7 @@ let flow;
 const flowReady = ref(false);
 let fitPending = true;
 async function fit(ids) {
-  if (!flow || !props.active || !contentCount.value) return;
+  if (!flow || !props.active || !contentCount.value || usageState.value.view !== 'map') return;
   stopZoomMotion();
   ++navigationVersion;
   gestureTarget = undefined;
@@ -573,7 +596,7 @@ watch(canvas, (element, previous, onCleanup) => {
   // Disabling a generation button can release focus to body. Escape still
   // closes this reader, without handling keys from chat or another dialog.
   const pageEscape = event => {
-    if (event.key !== 'Escape' || event.defaultPrevented || event.target !== document.body || !props.active || !expandedSubsystemId.value) return;
+    if (event.key !== 'Escape' || event.defaultPrevented || event.target !== document.body || !props.active || usageState.value.view !== 'map' || !expandedSubsystemId.value) return;
     event.preventDefault();
     void goBack(event);
   };
@@ -604,6 +627,51 @@ watch(canvas, (element, previous, onCleanup) => {
   onCleanup(() => { observer.disconnect(); document.removeEventListener('keydown', pageEscape); });
 }, { flush: 'post' });
 onBeforeUnmount(() => { stopZoomMotion(); clearTimeout(gestureTimer); });
+
+// Map | Usage: Usage's watchers and actions follow the Map code below.
+let usageMemory = null;
+watch(() => usageState.value.view, view => {
+  if (view === 'usage') usageMounted.value = true;
+  else if (fitPending) void nextTick(() => fit(initialIds.value));
+});
+function setArchitectureView(view) {
+  if (!view || view === usageState.value.view) return;
+  if (view === 'map') { usageMemory = usageState.value; usageState.value = usageStateFromQuery({}); }
+  else usageState.value = usageMemory || usageStateFromQuery({ view: 'usage' });
+}
+function showUsage({ q = '', kind = '' }) {
+  const mode = usageMemory && usageMemory.mode !== 'recording' ? usageMemory.mode : 'calls';
+  usageState.value = usageStateFromQuery({ view: 'usage', mode });
+  usageFind.value = { q, kind };
+}
+function showUsageForDetail(owner) {
+  if (fileRequest.value) return showUsage({ q: fileRequest.value.path });
+  if (currentProgram.value) return showUsage({ q: currentProgram.value.title, kind: 'program-operation' });
+  return showUsage({ q: owner.root && owner.root !== '.' ? `${owner.root}/` : '' });
+}
+watch([usageState, onSystemRoute], ([state, onRoute]) => {
+  if (!onRoute || !router) return;
+  const query = usageQueryFor(route.query, state);
+  if (!sameQuery(query, route.query)) void router.replace({ query });
+}, { immediate: true });
+watch(() => route?.query, query => {
+  // A query without Usage keys (a plain tool switch) keeps the current view.
+  if (!onSystemRoute.value || !query?.view) return;
+  const next = usageStateFromQuery(query);
+  if (!sameUsageState(next, usageState.value)) usageState.value = next;
+});
+let handledUsageOpen = null;
+watch(() => props.usageOpenRequest, request => {
+  if (!request || request === handledUsageOpen) return;
+  handledUsageOpen = request;
+  usageState.value = usageStateFromQuery({ view: 'usage', mode: request.mode || 'recording', entry: request.entryId, recording: request.recordingId, request: request.requestId });
+}, { immediate: true });
+let handledRestore = null;
+watch(() => props.restoreRequest, request => {
+  if (!request?.usage || request === handledRestore) return;
+  handledRestore = request;
+  usageState.value = usageStateFromQuery({ ...request.usage, view: 'usage' });
+}, { immediate: true });
 </script>
 
 <style>
@@ -618,6 +686,11 @@ onBeforeUnmount(() => { stopZoomMotion(); clearTimeout(gestureTimer); });
 .ui-storyboard__heading h1 { margin: 0; font-size: 18px; font-weight: 650; line-height: 26px; }
 .ui-storyboard__heading p { margin: 0; font-size: 11px; line-height: 16px; opacity: .65; }
 .ui-storyboard__actions { display: flex; align-items: center; gap: 4px; }
+.ui-storyboard__views { flex: none; }
+.ui-storyboard__usage { flex: 1; min-height: 0; }
+.storyboard-page__usage { margin-left: auto; color: #367e70; cursor: pointer; text-transform: none; letter-spacing: normal; font-size: 11px; border-radius: 4px; padding: 0 4px; }
+.storyboard-page__usage:hover { background: #dcece6; }
+.storyboard-page__usage:focus-visible { outline: 2px solid #377dcb; }
 .ui-storyboard__canvas { --diagram-label-scale: 2.5; container-type: size; position: relative; flex: 1; min-height: 0; outline: none; overflow: hidden; background-color: #f6f8fb; background-image: radial-gradient(#ced7e2 .8px, transparent .8px); background-size: 22px 22px; }
 .ui-storyboard__canvas :deep(.vue-flow) { height: 100%; }
 .ui-storyboard__canvas :deep(.vue-flow__edge-path) { vector-effect: non-scaling-stroke; }
