@@ -194,7 +194,7 @@ test("the recording files match the recording API fixtures", () => {
   assert.ok(USAGE_RECORDING_STATES.includes(recording.state));
   assert.ok(USAGE_RECORDING_STOP_REASONS.includes(recording.stopReason));
   assert.equal(recording.sourceIdentity, callWeb.sourceIdentity);
-  const apiRecording = Object.fromEntries(Object.entries(recording).filter(([key]) => !["schema", "sourceIdentity", "limits"].includes(key)));
+  const apiRecording = Object.fromEntries(Object.entries(recording).filter(([key]) => !["schema", "limits"].includes(key)));
   assert.deepEqual(json("recording/api/current.json").recording, apiRecording);
   assert.deepEqual(json("recording/api/list.json").recordings, [apiRecording]);
   assert.deepEqual(json("recording/control.json"), { state: "stopping" });
@@ -208,21 +208,27 @@ test("the recording files match the recording API fixtures", () => {
   const interactions = ndjson("recording/interactions.ndjson");
   for (const interaction of interactions) assert.ok(USAGE_INTERACTION_ID_PATTERN.test(interaction.id));
   const all = json("recording/api/requests-include-empty.json");
-  assert.deepEqual(all.requests.map((row) => row.id), requests.map((request) => request.id));
+  // A process's start-up work comes first, as background rows.
+  const background = all.requests.filter((row) => row.kind === "background");
+  assert.ok(background.length && background.every((row, index) => all.requests[index] === row && /^bg_[0-9]+$/u.test(row.id)));
+  assert.ok(background.every((row) => row.method === null && row.path === null && row.status === null && row.durationMs === null));
+  const rows = all.requests.slice(background.length);
+  assert.deepEqual(rows.map((row) => row.id), requests.map((request) => request.id));
   assert.deepEqual(json("recording/api/requests.json").requests, all.requests.filter((row) => row.functionCount > 0));
-  assert.ok(all.requests.some((row) => row.functionCount === 0), "one request ran no project code");
+  assert.ok(rows.some((row) => row.functionCount === 0), "one request ran no project code");
 
-  const captured = all.requests.filter((row) => row.functionCount > 0);
+  const captured = rows.filter((row) => row.functionCount > 0);
   assert.equal(recording.counts.requests, captured.length);
   const ranIn = new Map();
-  for (const row of captured) {
+  for (const row of [...background, ...captured]) {
     const { functions, total, truncated } = json(`recording/api/request-functions/${row.id}.json`);
     assert.deepEqual([total, truncated, row.functionCount, row.fileCount], [functions.length, false, functions.length, new Set(functions.map((fn) => fn.path)).size]);
+    if (row.kind === "background") continue;
     for (const fn of functions) ranIn.set(`${fn.path}#${fn.start.line}:${fn.start.column}`, (ranIn.get(`${fn.path}#${fn.start.line}:${fn.start.column}`) || 0) + 1);
   }
-  for (const row of captured) {
+  for (const row of [...background, ...captured]) {
     for (const fn of json(`recording/api/request-functions/${row.id}.json`).functions) {
-      const share = ranIn.get(`${fn.path}#${fn.start.line}:${fn.start.column}`) / captured.length;
+      const share = (ranIn.get(`${fn.path}#${fn.start.line}:${fn.start.column}`) || 0) / captured.length;
       assert.equal(fn.plumbing, captured.length >= 3 && share >= 0.8, `${row.id} ${fn.name}`);
     }
   }

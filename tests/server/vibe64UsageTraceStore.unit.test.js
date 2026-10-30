@@ -50,23 +50,14 @@ test("the recording API answers the shared fixture exactly", async (t) => {
   for (const name of await readdir(FIXTURE)) {
     if (name !== "api") await cp(new URL(name, FIXTURE), path.join(directory, name));
   }
-  const { sourceIdentity } = JSON.parse(await readFile(path.join(directory, "recording.json"), "utf8"));
   const call = fixtureService(sessionRoot, "2026-10-30T10:03:20.000Z");
-  const withIdentity = (recording) => ({ ...recording, sourceIdentity });
 
-  // The process's start-up work is listed too, first by its start time.
-  const background = {
-    id: "bg_4242", method: null, path: null, status: null, startedAt: "2026-10-30T10:00:01.000Z", durationMs: null,
-    interaction: null, functionCount: 7, fileCount: 4, kind: "background"
-  };
-  const withBackground = (fixture) => ({ ...fixture, requests: [background, ...fixture.requests] });
-  const current = await fixtureJson("current.json");
-  assert.deepEqual(await call("readCurrent"), { ...current, recording: withIdentity(current.recording) });
-  assert.deepEqual(await call("list"), { recordings: (await fixtureJson("list.json")).recordings.map(withIdentity) });
-  assert.deepEqual(await call("readRequests", { recordingId: RECORDING_ID }), withBackground(await fixtureJson("requests.json")));
-  assert.deepEqual(await call("readRequests", { recordingId: RECORDING_ID, includeEmpty: true }),
-    withBackground(await fixtureJson("requests-include-empty.json")));
-  for (const requestId of ["r_000002", "r_000003", "r_000004"]) {
+  // The process's start-up work is the first, background row.
+  assert.deepEqual(await call("readCurrent"), await fixtureJson("current.json"));
+  assert.deepEqual(await call("list"), await fixtureJson("list.json"));
+  assert.deepEqual(await call("readRequests", { recordingId: RECORDING_ID }), await fixtureJson("requests.json"));
+  assert.deepEqual(await call("readRequests", { recordingId: RECORDING_ID, includeEmpty: true }), await fixtureJson("requests-include-empty.json"));
+  for (const requestId of ["bg_4242", "r_000002", "r_000003", "r_000004"]) {
     assert.deepEqual(await call("readRequestFunctions", { recordingId: RECORDING_ID, requestId }), await fixtureJson(`request-functions/${requestId}.json`));
   }
   // Paging, search and the background scope.

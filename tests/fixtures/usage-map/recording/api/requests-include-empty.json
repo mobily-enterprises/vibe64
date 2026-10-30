@@ -1,6 +1,18 @@
 {
   "requests": [
     {
+      "id": "bg_4242",
+      "method": null,
+      "path": null,
+      "status": null,
+      "startedAt": "2026-10-30T10:00:01.000Z",
+      "durationMs": null,
+      "interaction": null,
+      "functionCount": 7,
+      "fileCount": 4,
+      "kind": "background"
+    },
+    {
       "id": "r_000001",
       "method": "GET",
       "path": "/api/sessions",
