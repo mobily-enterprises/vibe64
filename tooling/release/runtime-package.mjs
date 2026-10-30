@@ -32,6 +32,10 @@ const RUNTIME_ENTRIES = [
   "node_modules/@local/vibe64-terminals/src/server/sessionWorkOperationCommand.js",
   "node_modules/@local/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js",
   "node_modules/@local/vibe64-execution/src/server/engines/stdioBridge.js",
+  // Recorded processes load the Node preload, and people run the PHP build
+  // command; the Python and PHP recorder sources ship as package data.
+  "node_modules/@local/vibe64-usage-recording/runtime/node/preload.mjs",
+  "node_modules/@local/vibe64-usage-recording/runtime/php/build.mjs",
   ...ASSISTANT_SQL_RUNTIME_ENTRIES
 ];
 const builtins = new Set(builtinModules.flatMap(name => [name, `node:${name}`]));

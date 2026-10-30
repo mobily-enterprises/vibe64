@@ -79,6 +79,23 @@ test("every Genesis server export ships as a runtime entry", async () => {
   }
 });
 
+test("the usage recorder's Node preload ships bundled and leaves an unrecorded process untouched", async (t) => {
+  const entry = "node_modules/@local/vibe64-usage-recording/runtime/node/preload.mjs";
+  assert.ok(RUNTIME_ENTRIES.includes(entry));
+  assert.ok(RUNTIME_ENTRIES.includes("node_modules/@local/vibe64-usage-recording/runtime/php/build.mjs"));
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-usage-preload-bundle-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const outfile = path.join(root, "preload.mjs");
+  await buildNodeBundle({ appRoot: sourceRoot, entryPoint: path.join(sourceRoot, entry), outfile });
+  const stdout = await new Promise((resolve, reject) => {
+    execFile(process.execPath, [`--import=${outfile}`, "-e", "console.log('ran')"], (error, output) => {
+      if (error) reject(error);
+      else resolve(output);
+    });
+  });
+  assert.equal(stdout, "ran\n");
+});
+
 test("bundled source search helper builds and searches a persistent index", async (t) => {
   const entry = "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js";
   assert.ok(RUNTIME_ENTRIES.includes(entry));
