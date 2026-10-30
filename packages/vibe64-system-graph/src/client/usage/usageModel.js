@@ -83,6 +83,13 @@ function fileName(filePath = "") {
   return String(filePath).split("/").pop();
 }
 
+// A node's one-line place: the file and line, or for a file its last folders.
+function shortLocation(filePath = "", line = null) {
+  if (line) return `${fileName(filePath)}:${line}`;
+  const folders = String(filePath).split("/").slice(0, -1);
+  return folders.length > 2 ? `…/${folders.slice(-2).join("/")}` : folders.join("/");
+}
+
 // Path segments that keep their slash, so long paths wrap between folders.
 function pathParts(filePath = "") {
   return String(filePath).split(/(?<=\/)/u);
@@ -119,13 +126,19 @@ const COUNT_KEYS = Object.freeze({ imports: "fileCount", calls: "functionCount",
 
 function subsystemCard(mode, item = {}) {
   if (mode === "imports") return { count: countLabel(item.fileCount, "file"), detail: "" };
-  if (mode === "calls") return { count: countLabel(item.functionCount, "function"), detail: `${item.exact || 0} exact · ${item.probable || 0} probable` };
+  if (mode === "calls") return { count: countLabel(item.functionCount, "function"), detail: `${Number(item.exact || 0).toLocaleString()} by exact calls · ${Number(item.probable || 0).toLocaleString()} only via probable` };
   return { count: `${countLabel(item.ranCount, "function")} ran`, detail: "", plumbing: item.plumbingCount || 0 };
 }
 
+// Crossings count calls (cards count functions). In Recording they are the
+// static calls between functions that ran, not proof that a call happened.
 function crossingText(mode, crossing = {}) {
   if (mode === "imports") return countLabel(crossing.count, "import");
-  return [crossing.exact && `${crossing.exact} exact`, crossing.probable && `${crossing.probable} probable`].filter(Boolean).join(" · ");
+  const exact = Number(crossing.exact || 0);
+  const probable = Number(crossing.probable || 0);
+  if (mode === "recording") return countLabel(exact + probable, "call in code", "calls in code");
+  const calls = [exact && countLabel(exact, "exact call"), probable && (exact ? `${probable.toLocaleString()} probable` : countLabel(probable, "probable call"))].filter(Boolean).join(", ");
+  return [calls, crossing.renders && `renders ${countLabel(crossing.renders, "component")}`].filter(Boolean).join(" · ");
 }
 
 function depthTitle(depth) {
@@ -149,7 +162,7 @@ function webNodes(mode, data = {}) {
   const { out, into } = edgeCounts(edges);
   if (mode === "imports") {
     return (data.files || []).map((file) => ({
-      id: file.id, title: fileName(file.path), subtitle: file.path, file: file.path, start: null, depth: file.depth,
+      id: file.id, title: fileName(file.path), subtitle: file.path, location: shortLocation(file.path), file: file.path, start: null, depth: file.depth,
       certainty: null, outCount: out.get(file.id) || 0, inCount: into.get(file.id) || 0, unresolved: 0
     }));
   }
@@ -157,12 +170,12 @@ function webNodes(mode, data = {}) {
     const unresolved = new Map();
     for (const item of data.unresolved || []) unresolved.set(item.fromFunctionId, (unresolved.get(item.fromFunctionId) || 0) + 1);
     return (data.functions || []).map((fn) => ({
-      id: fn.id, functionId: fn.id, title: functionLabel(fn), subtitle: `${fn.file}:${fn.start.line}`, file: fn.file, start: fn.start,
+      id: fn.id, functionId: fn.id, title: functionLabel(fn), subtitle: `${fn.file}:${fn.start.line}`, location: shortLocation(fn.file, fn.start.line), file: fn.file, start: fn.start,
       depth: fn.depth, certainty: fn.reach, outCount: fn.callCount || 0, inCount: fn.calledByCount || 0, unresolved: unresolved.get(fn.id) || 0
     }));
   }
   return recordedDepths(data.nodes || [], edges).map((node) => ({
-    id: node.id, functionId: node.functionId, title: functionLabel({ name: node.name, start: node.start }), subtitle: `${node.file}:${node.start.line}`,
+    id: node.id, functionId: node.functionId, title: functionLabel({ name: node.name, start: node.start }), subtitle: `${node.file}:${node.start.line}`, location: shortLocation(node.file, node.start.line),
     file: node.file, start: node.start, depth: node.depth, certainty: null, count: node.count, plumbing: node.plumbing, join: node.join, reason: node.reason,
     outCount: out.get(node.id) || 0, inCount: into.get(node.id) || 0, unresolved: 0
   }));
@@ -179,7 +192,8 @@ function depthColumns(nodes = []) {
   return [...columns.entries()].sort(([left], [right]) => left - right).map(([depth, items]) => ({ depth, items }));
 }
 
-const NODE = Object.freeze({ width: 220, height: 64, columnGap: 72, rowGap: 16, padding: 16 });
+// Room for a two-line title and the file:line below it.
+const NODE = Object.freeze({ width: 220, height: 76, columnGap: 72, rowGap: 16, padding: 16 });
 
 // Fixed positions: a node's column is its depth, its row its order there.
 function canvasLayout(nodes = [], edges = []) {
@@ -210,16 +224,19 @@ function canvasLayout(nodes = [], edges = []) {
 }
 
 const CERTAINTY_TEXT = Object.freeze({ exact: "exact", probable: "probable", unresolved: "unresolved" });
+// How the analysis found each call's target, in plain words.
 const METHOD_TEXT = Object.freeze({
-  checker: "type checker",
+  checker: "proved by types",
   "di-binding": "dependency binding",
-  "route-action": "route action",
-  "argument-flow": "argument flow",
-  "import-scope": "import",
-  "same-file-name": "same-file name",
+  "route-action": "the route's action",
+  "argument-flow": "passed as an argument",
+  "import-scope": "matched by imported name",
+  "same-file-name": "matched by name in this file",
   self: "same class",
-  "receiver-name": "method name",
+  "receiver-name": "matched by method name",
   operation: "request",
+  // Renders rows have their own headings; the tag says the rest.
+  renders: "",
   none: ""
 });
 
@@ -227,8 +244,13 @@ function callMethodText(method = "") {
   return METHOD_TEXT[method] ?? method;
 }
 
+const ANALYSIS_NAMES = Object.freeze({ jskit: "JSKIT" });
+
 function coverageText(coverage = "") {
-  if (coverage.startsWith("adapter:")) return `Calls read by the ${coverage.slice("adapter:".length)} adapter`;
+  if (coverage.startsWith("adapter:")) {
+    const family = coverage.slice("adapter:".length).split(".")[0];
+    return `Calls read by ${ANALYSIS_NAMES[family] || family} analysis, which can prove exact calls`;
+  }
   if (coverage === "generic") return "Calls read by name only: probable at best";
   return "Calls not read for this file";
 }
@@ -404,6 +426,7 @@ export {
   requestTitle,
   routeTemplateFor,
   sameQuery,
+  shortLocation,
   sameUsageState,
   subsystemCard,
   subsystemSections,

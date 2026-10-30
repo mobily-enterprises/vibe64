@@ -31,7 +31,10 @@ const emit = defineEmits(["update:modelValue"]);
 </script>
 
 <style scoped>
-.usage-picker { justify-content: space-between; text-transform: none; letter-spacing: normal; min-height: 44px; }
+.usage-picker { justify-content: space-between; text-transform: none; letter-spacing: normal; min-height: 44px; border-color: var(--v64-outline); }
+@media (pointer: coarse) {
+  .usage-picker { min-height: 48px; }
+}
 .usage-picker :deep(.v-btn__content) { flex: 1; min-width: 0; justify-content: flex-start; }
 .usage-picker__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .usage-picker__dialog { display: flex; flex-direction: column; height: 100%; }

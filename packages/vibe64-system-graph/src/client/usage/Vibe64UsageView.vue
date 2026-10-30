@@ -7,10 +7,14 @@
 
     <div class="usage-view__main">
       <header class="usage-view__header">
-        <Vibe64UsageEntryPicker v-if="compact" v-model="pickerOpen" :label="pickerLabel" :title="mode === 'recording' ? 'Requests' : 'Entry points'">
-          <Vibe64UsageRecordingResults v-if="mode === 'recording'" v-bind="recordingBindings" v-on="recordingHandlers" />
-          <Vibe64UsageEntryRail v-else v-bind="railBindings" v-on="railHandlers" />
-        </Vibe64UsageEntryPicker>
+        <!-- Phones: Record sits beside the picker so the modes keep a full row. -->
+        <div v-if="compact" class="usage-view__picker-row">
+          <Vibe64UsageEntryPicker v-model="pickerOpen" :label="pickerLabel" :title="mode === 'recording' ? 'Requests' : 'Entry points'">
+            <Vibe64UsageRecordingResults v-if="mode === 'recording'" v-bind="recordingBindings" v-on="recordingHandlers" />
+            <Vibe64UsageEntryRail v-else v-bind="railBindings" v-on="railHandlers" />
+          </Vibe64UsageEntryPicker>
+          <v-btn class="usage-view__record usage-view__record--icon" variant="tonal" color="primary" :icon="mdiRecordCircleOutline" aria-label="Record" title="Record" @click="recordOpen = true" />
+        </div>
         <h3 v-if="!compact && mode !== 'recording' && state.entry" class="usage-view__entry text-title-medium">{{ pickerLabel }}</h3>
         <div class="usage-view__controls">
           <v-btn-toggle
@@ -36,7 +40,7 @@
             :aria-checked="exactOnly"
             @click="exactOnly = !exactOnly"
           >Exact only</v-chip>
-          <v-btn class="usage-view__record" variant="tonal" color="primary" :prepend-icon="mdiRecordCircleOutline" title="Record" @click="recordOpen = true"><span class="usage-view__record-label">Record</span></v-btn>
+          <v-btn v-if="!compact" class="usage-view__record" variant="tonal" color="primary" :prepend-icon="mdiRecordCircleOutline" title="Record" @click="recordOpen = true"><span class="usage-view__record-label">Record</span></v-btn>
         </div>
       </header>
       <v-progress-linear :active="busy" indeterminate color="primary" height="2" class="usage-view__progress" />
@@ -147,6 +151,9 @@
       </div>
     </div>
 
+    <!-- Between phone and wide layouts the panel floats over the view: a scrim
+         separates it and closes it. -->
+    <div v-if="selected && !compact && !wide" class="usage-view__scrim" aria-hidden="true" @click="closePanel" />
     <aside v-if="selected && !compact" class="usage-view__panel" :class="{ 'usage-view__panel--floating': !wide }">
       <Vibe64UsageFunctionPanel v-bind="panelBindings" v-on="panelHandlers" />
     </aside>
@@ -260,10 +267,10 @@ function selectEntry(entry) {
 }
 
 // "Show usage" from Map: the entry when exactly one matches, else the
-// filtered list.
+// filtered list. A request naming an entry (Pick) is handled below.
 let handledFind = null;
 watch(() => props.findRequest, async (request) => {
-  if (!request || request === handledFind) return;
+  if (!request || request === handledFind || request.entryId) return;
   handledFind = request;
   search.value = String(request.q || "").slice(0, 80);
   kind.value = request.kind || "";
@@ -315,6 +322,21 @@ watch([() => JSON.stringify(webQuery.value), () => props.active, () => props.ses
 
 const webData = computed(() => usage.web.data.value);
 const webEntry = computed(() => webData.value?.entry || {});
+
+// Pick in Preview opens one entry, which may be far down the list: once the
+// web names it, its title becomes the list's search so the row is in view.
+let handledPick = null;
+let pickedEntry = "";
+watch([() => props.findRequest, webEntry], ([request, entry]) => {
+  if (request?.entryId && request !== handledPick) {
+    handledPick = request;
+    pickedEntry = request.entryId;
+  }
+  if (!pickedEntry || entry.id !== pickedEntry) return;
+  pickedEntry = "";
+  kind.value = "";
+  search.value = String(entry.title || "").slice(0, 80);
+}, { immediate: true });
 const webFresh = computed(() => Boolean(webData.value && webData.value.entry.id === props.state.entry && webData.value.mode === mode.value
   && (mode.value !== "calls" || webData.value.certainty === (exactOnly.value ? "exact" : "all"))));
 
@@ -446,7 +468,8 @@ const canvasBindings = computed(() => ({
   edges: webView.value?.edges || [],
   selectedId: selected.value?.id || "",
   showUntouched: showUntouched.value,
-  compact: compact.value || listCanvas.value
+  compact: compact.value || listCanvas.value,
+  startSubsystemId: mode.value === "recording" ? "" : webEntry.value.subsystemId || ""
 }));
 const canvasHandlers = {
   zoom: (subsystemId) => update({ subsystem: subsystemId }),
@@ -525,10 +548,10 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 </script>
 
 <style scoped>
-.usage-view { position: relative; display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
+.usage-view { position: relative; display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; min-height: 0; min-width: 0; background: var(--v64-surface); color: var(--v64-on-surface); }
 .usage-view--panel { grid-template-columns: 280px minmax(0, 1fr) 360px; }
 .usage-view--compact { grid-template-columns: minmax(0, 1fr); }
-.usage-view__rail { min-height: 0; overflow: hidden; border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); background: rgb(var(--v-theme-surface-container-low, var(--v-theme-surface))); }
+.usage-view__rail { min-height: 0; overflow: hidden; border-right: 1px solid var(--v64-outline-variant); background: var(--v64-surface-container-low); }
 .usage-view__main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .usage-view__header { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 8px; container-type: inline-size; }
 .usage-view__controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
@@ -548,12 +571,26 @@ defineExpose({ compact, selected, pickerOpen, search, kind, exactOnly });
 .usage-view__state h3, .usage-view__state p { margin: 0; }
 .usage-view__skeleton { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 12px; }
 .usage-view__skeleton-card { border-radius: 12px; }
-.usage-view__note { margin: 0; color: rgb(var(--v-theme-on-surface-variant)); }
-.usage-view__panel { min-height: 0; overflow: auto; border-left: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); background: rgb(var(--v-theme-surface)); }
-.usage-view__panel--floating { position: absolute; top: 0; right: 0; bottom: 0; z-index: 2; width: min(360px, 100%); box-shadow: 0 4px 16px rgba(0, 0, 0, .16); }
+.usage-view__note { margin: 0; color: var(--v64-on-surface-variant); }
+.usage-view__panel { min-height: 0; overflow: auto; border-left: 1px solid var(--v64-outline-variant); background: var(--v64-surface); }
+.usage-view__panel--floating { position: absolute; top: 0; right: 0; bottom: 0; z-index: 2; width: min(360px, 100%); border-left: 0; border-radius: var(--v64-shape-lg) 0 0 var(--v64-shape-lg); background: var(--v64-surface-container-high); box-shadow: var(--v64-elevation-3); }
+.usage-view__scrim { position: absolute; inset: 0; z-index: 1; background: rgb(0 0 0 / .32); }
 .usage-view__sheet { max-height: 80vh; overflow: auto; border-radius: 28px 28px 0 0; }
 .usage-view--compact .usage-view__header { padding: 8px 12px; }
 .usage-view--compact .usage-view__content { padding: 8px 12px 24px; }
-.usage-view--compact .usage-view__modes { flex: 1 1 auto; }
+.usage-view__picker-row { display: flex; align-items: center; gap: 8px; }
+.usage-view__picker-row :deep(.usage-picker) { flex: 1 1 auto; width: auto; min-width: 0; }
+.usage-view__record--icon { flex: none; margin-left: 0; }
+/* The modes take a whole row on phones; Exact only wraps below them. */
+.usage-view--compact .usage-view__modes { flex: 1 1 100%; }
 .usage-view--compact .usage-view__modes :deep(.v-btn) { flex: 1 1 0; min-width: 0; padding: 0 8px; }
+.usage-view__controls :deep(.v-chip--variant-outlined) { border-color: var(--v64-outline); }
+/* Touch: 48 px targets; the chip keeps its look and gains an invisible margin. */
+@media (pointer: coarse) {
+  .usage-view__modes { height: 48px; }
+  .usage-view__record { min-height: 48px; }
+  .usage-view__record--icon { width: 48px; height: 48px; }
+  .usage-view__controls :deep(.v-chip) { position: relative; overflow: visible; margin-block: 8px; }
+  .usage-view__controls :deep(.v-chip)::after { content: ""; position: absolute; inset: -8px 0; }
+}
 </style>

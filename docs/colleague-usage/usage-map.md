@@ -13,12 +13,15 @@ pages still have entry points, such as commands or library exports.
 
 On a wide screen, the entry points are listed on the left and the chosen one
 is named above the modes as **Entry: <name>**. On a phone, tap **Choose an
-entry** (or **Entry: <name>**) to open the same list full screen.
+entry** (or **Entry: <name>**) to open the same list full screen. When Preview's
+**Pick element** opens an entry here, its name is put in the list's search.
 
 - **Search entries** matches names and file paths.
 - The chips filter by kind and show how many of each exist. Only kinds the
   project has are shown.
-- Each row shows the entry's name, kind icon and file.
+- Each row shows the entry's name, kind icon and file. A page is named by its
+  address, such as **/app/project/:slug/dashboard/env**, because many page
+  files share names like `index`.
 
 If the list says **No entry points found yet. Refresh the architecture scan.**,
 choose **Refresh**. That runs the same scan as **Architecture options →
@@ -40,45 +43,69 @@ The mode switch has three choices:
 
 - **Imports**: the project files the entry imports, directly or indirectly.
   Imports used only for types are left out.
-- **Calls**: the functions the entry may call. Each call is **exact** (the
-  analyser proved the target), **probable** (likely, for example by method
-  name) or **unresolved** (the target could not be worked out). Probable calls
-  may list several possible targets. Turn on **Exact only** to follow only
-  proven calls.
+- **Calls**: the functions reached from the entry, call by call. Each call is
+  **exact** (the analysis proved the target), **probable** (likely, for
+  example by method name) or **unresolved** (the target could not be worked
+  out). A probable call can list several possible targets. Turn on **Exact
+  only** to follow only proven calls.
 - **Recording**: what actually ran for one request or run you recorded. See
   [Record what runs](usage-recording.md) for making a recording.
 
 A page or component starts from every function in its file, including the
-file's top-level code.
+file's top-level code. Calls then follows the components it renders: a
+**renders** step leads from the file's top-level code to each rendered
+component's, and all of that component's functions count as one step away.
+Their own rendered components are followed the same way, so a page reaches
+the requests its components make. A renders step is exact when the tag is
+resolved through the file's imports.
 
 ## Read the result
 
 **Subsystems.** Each subsystem the entry reaches is a card, grouped like the
 project's **Architecture layout** (alphabetical when it has none). A card
-shows how many files or functions are reached; in Calls also how many are
-reached by exact calls alone, and in Recording how many functions ran. Lines
-such as **→ Sessions · 2 exact** count the calls or imports into another
-subsystem. Subsystems the entry never reaches are hidden; **Show untouched**
-shows them faded.
+counts the files or functions reached, or in Recording the functions that
+ran. In Calls it splits the functions: **9 by exact calls · 22 only via
+probable** means exact calls alone reach 9, and the other 22 need at least one
+probable call. Lines under a card count calls, not functions: **→ Sessions ·
+4 exact calls, 3 probable** are the calls into another subsystem, and
+**renders 1 component** the components rendered there. In Imports they count
+imports. In Recording, **→ Sessions · 9 calls in code** counts the calls the
+code makes between functions that ran; it does not say those calls happened.
+The card holding the entry's own file says **Starts here**. Subsystems the
+entry never reaches are hidden; **Show untouched** shows them faded.
 
 **One subsystem.** Tap a card to see its files or functions, arranged by
-distance from the entry: **Start**, **1 step away** and so on. When there is
+distance from the entry: **Start**, **1 step away** and so on. Lines under its
+heading, such as **→ Core · 1 exact call**, count what leaves it for other
+subsystems. When there is
 room for two columns of them they are boxes with arrows:
 
 - a solid arrow is an exact call;
 - a dashed arrow is a probable call;
 - a short line ending in an open circle marks unresolved calls.
 
+Each box names the function and its file and line, such as
+**service.js:12**; its tooltip gives the full path.
+
 On a phone, or beside the chat on a narrower screen, the same functions are
-a list showing **calls N → · called by M ←** for each. **All subsystems** goes
-back.
+a list instead, without the line legend. Each row says **only via probable
+calls** when no exact path reaches it, then **calls N → · called by M ←** and
+how many unresolved calls it makes. **All subsystems** goes back.
 
 **One function.** Tap a function to open its details (a side panel, or a
-sheet from the bottom on a phone):
+sheet from the bottom on a phone). Where the screen is too narrow for a side
+panel, it floats over the view; tap outside it to close it:
 
 - **Calls (exact)**, **Calls (probable)**, **Called by (exact)** and **Called by
-  (probable)** list the other functions with the code that makes each call.
-  Tap one to move to it.
+  (probable)** list the other functions with the code that makes each call
+  and how its target was found, such as **proved by types** or **matched by
+  imported name**. Tap one to move to it.
+- A note says how the file's calls were read: **Calls read by JSKIT analysis,
+  which can prove exact calls**, or **Calls read by name only: probable at
+  best** where the project's technology has no deeper analysis.
+- **Renders** and **Rendered by** appear on a file's top-level code: the
+  components it renders, and the files that render it, with the tag such as
+  `<EnvPanel>`.
 - **Unresolved call:** rows show the expression whose target is unknown.
 - **Open source** opens the file at that function's line. The code button on a
   row opens the line of that call. Use the source viewer's way back to return
@@ -123,8 +150,9 @@ Some web servers handle every request in one shared process. Their code is
 then shown as one row, **Not separated per request for this server**, with
 everything that ran while recording.
 
-**Record** in the mode bar is always there; where the bar is narrow it is a
-record icon with the tooltip **Record**. When no part of the project can be
+**Record** is always there: in the mode bar (a record icon where the bar is
+narrow), and on a phone as a record icon beside **Choose an entry**. Its
+tooltip is **Record**. When no part of the project can be
 recorded, Usage says **Recording not available for this project's runtimes**
 and names them; Imports and Calls still work.
 
@@ -162,8 +190,8 @@ reopens the same view.
 Imports and Calls are read from the code without running it. A probable call
 might not happen, and an absent arrow does not prove that nothing calls a
 function: dynamic calls stay unresolved. A recording shows what ran in that
-one recording only. Use Calls to see what may happen and Recording to see
-what did.
+one recording only. Calls shows exact and probable calls in the code;
+Recording shows what ran.
 
 Colleague can explain these views and walk you through them. It cannot read
 the project's source or recordings itself; questions about specific code belong

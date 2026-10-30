@@ -17,7 +17,9 @@ import {
 } from "../../packages/vibe64-system-graph/src/server/usageWeb.js";
 import {
   callGroups,
+  callMethodText,
   canvasLayout,
+  coverageText,
   crossingText,
   functionLabel,
   interactionTitle,
@@ -29,6 +31,7 @@ import {
   routeTemplateFor,
   sameQuery,
   sameUsageState,
+  shortLocation,
   subsystemCard,
   subsystemSections,
   unavailableRuntimes,
@@ -72,11 +75,20 @@ describe("presentation", () => {
     expect(functionLabel({ name: "", start: { line: 12 } })).toBe("anonymous (line 12)");
     expect(functionLabel({ name: "read", container: "Store", start: { line: 1 } })).toBe("Store.read");
     expect(functionLabel({ name: "", kind: "module", file: "src/main.js", start: { line: 1 } })).toBe("main.js top level");
-    expect(subsystemCard("calls", { functionCount: 3, exact: 2, probable: 1 })).toEqual({ count: "3 functions", detail: "2 exact · 1 probable" });
+    expect(shortLocation("packages/vibe64-sessions/src/server/service.js", 12)).toBe("service.js:12");
+    expect(shortLocation("packages/sessions/src/server/service.js")).toBe("…/src/server");
+    expect(shortLocation("src/main.js")).toBe("src");
+    // Cards count functions; crossings count calls, and in Recording only the static calls between functions that ran.
+    expect(subsystemCard("calls", { functionCount: 31, exact: 9, probable: 22 })).toEqual({ count: "31 functions", detail: "9 by exact calls · 22 only via probable" });
     expect(subsystemCard("imports", { fileCount: 1 })).toEqual({ count: "1 file", detail: "" });
     expect(subsystemCard("recording", { ranCount: 4, plumbingCount: 2 })).toEqual({ count: "4 functions ran", detail: "", plumbing: 2 });
     expect(crossingText("imports", { count: 2 })).toBe("2 imports");
-    expect(crossingText("calls", { exact: 1, probable: 0 })).toBe("1 exact");
+    expect(crossingText("calls", { exact: 1, probable: 0 })).toBe("1 exact call");
+    expect(crossingText("calls", { exact: 4, probable: 3 })).toBe("4 exact calls, 3 probable");
+    expect(crossingText("calls", { exact: 0, probable: 2, renders: 1 })).toBe("2 probable calls · renders 1 component");
+    expect(crossingText("recording", { exact: 7, probable: 2 })).toBe("9 calls in code");
+    expect(callMethodText("import-scope")).toBe("matched by imported name");
+    expect(coverageText("adapter:jskit.vue-static.v1")).toBe("Calls read by JSKIT analysis, which can prove exact calls");
   });
 
   it("places reached subsystems in layout groups and hides untouched ones behind a count", () => {

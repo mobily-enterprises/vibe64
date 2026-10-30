@@ -3128,7 +3128,127 @@
         "visibility": "public"
       }
     ],
-    "ui": null,
+    "ui": {
+      "schema": "genesis.architecture-observations.v1",
+      "adapter": "fixture.vue-static.v1",
+      "inputs": [
+        {
+          "path": "src/pages/SessionsPage.vue",
+          "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1"
+        },
+        {
+          "path": "src/components/SessionList.vue",
+          "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54"
+        }
+      ],
+      "capabilities": {
+        "pages": "complete",
+        "components": "complete",
+        "entryOperations": "unsupported",
+        "operationUses": "unsupported"
+      },
+      "diagnostics": [],
+      "pages": [
+        {
+          "id": "page:src/pages/SessionsPage.vue",
+          "kind": "page",
+          "title": "Sessions",
+          "surface": "app",
+          "file": "src/pages/SessionsPage.vue",
+          "parentId": null,
+          "resolution": "resolved",
+          "evidence": [
+            {
+              "path": "src/pages/SessionsPage.vue",
+              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+              "start": {
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "line": 1,
+                "column": 15
+              }
+            }
+          ],
+          "fileId": "file:src/pages/SessionsPage.vue",
+          "subsystemId": "directory:src"
+        }
+      ],
+      "registrations": [
+        {
+          "id": "registration:fixture-pages:0",
+          "pageId": "page:src/pages/SessionsPage.vue",
+          "surface": "app",
+          "identity": "/sessions",
+          "resolution": "resolved",
+          "evidence": [
+            {
+              "path": "src/pages/SessionsPage.vue",
+              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+              "start": {
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "line": 1,
+                "column": 15
+              }
+            }
+          ]
+        }
+      ],
+      "components": [
+        {
+          "id": "component:src/components/SessionList.vue",
+          "title": "SessionList",
+          "file": "src/components/SessionList.vue",
+          "resolution": "resolved",
+          "evidence": [
+            {
+              "path": "src/components/SessionList.vue",
+              "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54",
+              "start": {
+                "line": 1,
+                "column": 1
+              },
+              "end": {
+                "line": 1,
+                "column": 15
+              }
+            }
+          ],
+          "fileId": "file:src/components/SessionList.vue",
+          "subsystemId": "directory:src"
+        }
+      ],
+      "componentUses": [
+        {
+          "id": "component-use:page:src/pages/SessionsPage.vue:0",
+          "parentId": "page:src/pages/SessionsPage.vue",
+          "componentId": "component:src/components/SessionList.vue",
+          "title": "SessionList",
+          "resolution": "resolved",
+          "evidence": [
+            {
+              "path": "src/pages/SessionsPage.vue",
+              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+              "start": {
+                "line": 8,
+                "column": 5
+              },
+              "end": {
+                "line": 8,
+                "column": 20
+              }
+            }
+          ]
+        }
+      ],
+      "entryOperations": [],
+      "operationUses": [],
+      "connections": []
+    },
     "uiDiscovery": {
       "discoveries": [],
       "status": "unconfigured"

@@ -66,7 +66,8 @@ test("entries list every kind present, searched, filtered and paged in a stable 
   ]);
   assert.equal(all.entries.length, 10);
   assert.equal(all.nextCursor, null);
-  assert.deepEqual(all.entries[0], { id: PAGE, kind: "page", title: "Sessions", file: "src/pages/SessionsPage.vue", subsystemId: "directory:src", hasCalls: true });
+  assert.deepEqual(all.entries[0], { id: PAGE, kind: "page", title: "/sessions", file: "src/pages/SessionsPage.vue", subsystemId: "directory:src", hasCalls: true },
+    "a page is named by its address, not its file's name");
   assert.equal(all.entries.find((item) => item.kind === "cli-command").subsystemId, "directory:bin");
 
   const searched = readEntries(index, { q: "SESSIONS" });
@@ -138,8 +139,8 @@ test("Calls start from a component's own functions and cross transports through 
     ["directory:packages/core", 1, 0, 1], ["directory:packages/sessions", 10, 2, 8], ["directory:src", 5, 5, 0]
   ]);
   assert.deepEqual(response.crossings, [
-    { fromSubsystemId: "directory:packages/sessions", toSubsystemId: "directory:packages/core", exact: 1, probable: 0 },
-    { fromSubsystemId: "directory:src", toSubsystemId: "directory:packages/sessions", exact: 1, probable: 1 }
+    { fromSubsystemId: "directory:packages/sessions", toSubsystemId: "directory:packages/core", exact: 1, probable: 0, renders: 0 },
+    { fromSubsystemId: "directory:src", toSubsystemId: "directory:packages/sessions", exact: 1, probable: 1, renders: 0 }
   ]);
   assert.ok(response.edges.some((edge) => edge.method === "operation" && edge.from === fn("src/api/sessionsClient.js", 1, 8) && edge.certainty === "exact"));
   assert.deepEqual(response.functions.map((item) => item.depth), [...response.functions.map((item) => item.depth)].sort((left, right) => left - right));
@@ -153,6 +154,30 @@ test("Calls start from a component's own functions and cross transports through 
   ].sort());
   assert.ok(exact.edges.every((edge) => edge.certainty === "exact"));
   assertBoundedEdges(exact, "functions");
+});
+
+test("a page's Calls go on through the components it renders, as renders steps", () => {
+  const pageModule = moduleOf("src/pages/SessionsPage.vue");
+  const listModule = moduleOf("src/components/SessionList.vue");
+  const response = readCallsWeb(index, calls, entry(PAGE), {});
+  const byId = new Map(response.functions.map((item) => [item.id, item]));
+  assert.equal(byId.get(pageModule).depth, 0);
+  for (const rendered of [listModule, fn("src/components/SessionList.vue", 8, 1), fn("src/components/SessionList.vue", 12, 1)]) {
+    assert.equal(byId.get(rendered)?.depth, 1, `${rendered} is one renders step from the page`);
+  }
+  assert.deepEqual(response.edges.filter((edge) => edge.method === "renders"), [{ from: pageModule, to: listModule, certainty: "exact", method: "renders" }]);
+  assert.equal(byId.get(fn("packages/sessions/src/server/routes.js", 5, 50))?.reach, "exact", "the page reaches the server through SessionList's exact request");
+  assert.equal(response.subsystems.find((item) => item.id === "directory:src").functionCount, 6);
+  assert.equal(byId.get(pageModule).callCount, 1, "the renders step counts as a step out");
+  assertBoundedEdges(response, "functions");
+  assert.ok(readCallsWeb(index, calls, entry(PAGE), { certainty: "exact" }).functions.some((item) => item.id === listModule), "exact renders stay in Exact only");
+
+  const page = readFunction(index, calls, { functionId: pageModule });
+  assert.deepEqual(page.calls.map((row) => [row.target.id, row.certainty, row.method, row.callee, row.start]), [[listModule, "exact", "renders", "<SessionList>", { line: 8, column: 5 }]]);
+  const list = readFunction(index, calls, { functionId: listModule });
+  assert.deepEqual(list.calledBy.map((row) => [row.source.id, row.method, row.start]), [[pageModule, "renders", { line: 8, column: 5 }]]);
+  assert.equal(readFunction(index, calls, { functionId: fn("src/components/SessionList.vue", 8, 1) }).calledBy.some((row) => row.method === "renders"), false,
+    "only a file's top-level code stands for the file");
 });
 
 test("Calls honour entry functions, report unresolved calls and zoom into one subsystem", () => {

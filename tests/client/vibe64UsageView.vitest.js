@@ -107,8 +107,10 @@ describe("Imports and Calls states", () => {
   it("shows reached subsystems as cards with certainty, crossings and the untouched chip", async () => {
     const html = await view({ entry: PAGE }, { web: read(callsWeb()) });
     expect(html).toContain("Client");
-    expect(html).toMatch(/\d+ exact · \d+ probable/u);
+    expect(html).toMatch(/\d+ by exact calls · \d+ only via probable/u);
+    expect(html).toContain("1 exact call, 1 probable");
     expect(html).toMatch(/Show untouched \(\d+\)/u);
+    expect(html.match(/Starts here/gu)).toHaveLength(1);
     expect(html).toContain("Exact only");
     expect(html).not.toContain("Source changed since the last scan");
     const imports = await view({ entry: PAGE, mode: "imports" }, { web: read({ ok: true, snapshot: index.snapshot, ...readImportsWeb(index, page, {}) }) });
@@ -121,6 +123,7 @@ describe("Imports and Calls states", () => {
     const html = await view({ entry: PAGE, subsystem: "directory:src" }, { web: read(zoomed) });
     expect(html).toContain("All subsystems");
     for (const label of ["Exact", "Probable", "Unresolved"]) expect(html).toContain(label);
+    expect(html).toMatch(/aria-label="Leaving this subsystem"[\s\S]*1 exact call, 1 probable/u);
     for (const node of webNodes("calls", zoomed)) expect(html).toContain(node.title.replace(/"/gu, "&quot;"));
   });
 
@@ -272,17 +275,22 @@ describe("parts", () => {
     expect(await render(Vibe64UsageFunctionPanel, { node, detail: withUnresolved })).toContain("Unresolved call: <code>systemGraph[method](input)</code>");
   });
 
-  it("lists the zoomed web by depth with call counts on a phone", async () => {
+  it("lists the zoomed web by depth with certainty, call counts and unresolved calls on a phone", async () => {
     const zoomed = callsWeb({ subsystemId: "directory:src" });
     const html = await render(Vibe64UsageWebCanvas, { mode: "calls", compact: true, zoomedId: "directory:src", subsystems: zoomed.subsystems, nodes: webNodes("calls", zoomed), edges: zoomed.edges });
     expect(html).toContain("Start");
     expect(html).toMatch(/calls \d+ → · called by \d+ ←/u);
+    expect(html).not.toContain("Legend");
+    const probable = { id: "fn:a", functionId: "fn:a", title: "handle", subtitle: "server/router.js:18", file: "server/router.js", start: { line: 18, column: 3 }, depth: 1, certainty: "probable", outCount: 2, inCount: 1, unresolved: 1 };
+    const row = await render(Vibe64UsageWebCanvas, { mode: "calls", compact: true, zoomedId: "directory:server", subsystems: zoomed.subsystems, nodes: [probable] });
+    expect(row).toContain("only via probable calls · calls 2 → · called by 1 ← · 1 unresolved call");
   });
 
   it("offers only the kinds present, with counts, and a refresh when empty", async () => {
     const entries = readEntries(index, {});
     const html = await render(Vibe64UsageEntryRail, { entries: entries.entries, kinds: entries.kinds });
     expect(html).toContain("Pages · 1");
+    expect(html, "titles wrap between folders").toContain(">/<wbr>sessions<wbr></div>");
     expect(html).toContain("Library exports · 1");
     expect(html).not.toContain("Jobs ·");
     expect(await render(Vibe64UsageEntryRail, {})).toContain("No entry points found yet. Refresh the architecture scan.");
@@ -307,6 +315,18 @@ describe("actions", () => {
     expect(opened).toHaveBeenCalledWith({ path: "src/a.js", line: 3, column: 1, presentation: "code", origin: "system", systemContext: { usage: state } });
     view.selectFunction({ id: "fn:b", name: "b", file: "src/b.js", start: { line: 9, column: 2 } });
     expect(view.selected).toMatchObject({ functionId: "fn:b", title: "b", subtitle: "src/b.js:9" });
+    app.unmount();
+  });
+
+  it("searches the list for an entry opened by Pick once its web names it", async () => {
+    fake.usage = usageReads({ web: read(callsWeb()) });
+    const node = () => ({});
+    const renderer = createRenderer({ createComment: node, createElement: node, createText: node, setText() {}, setElementText() {},
+      patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+    const app = renderer.createApp({ ...Vibe64UsageView, render: () => null }, { sessionId: "s1", state: usageState({ entry: PAGE }), findRequest: { entryId: PAGE } });
+    app.provide(ssrContextKey, { modules: new Set() });
+    app.mount({});
+    expect(app._instance.setupState.search).toBe("/sessions");
     app.unmount();
   });
 });
@@ -348,10 +368,17 @@ describe("Architecture keeps Usage in the address", () => {
   it("opens the requested recording, and a source-viewer return restores where Usage was", async () => {
     const opened = await mountArchitecture("/app/demo/dashboard/system", { usageOpenRequest: { view: "usage", mode: "recording", recordingId, requestId: "r_000004", nonce: 1 } });
     expect(opened.state.usageState).toEqual(usageState({ mode: "recording", recording: recordingId, request: "r_000004" }));
+    expect(opened.state.usageFind, "a recording opens no entry search").toBe(null);
     await vi.waitFor(() => expect(opened.router.currentRoute.value.query).toEqual({ view: "usage", mode: "recording", recording: recordingId, request: "r_000004" }));
     app.unmount();
     const restored = await mountArchitecture("/app/demo/dashboard/system", { restoreRequest: { usage: { mode: "calls", entry: PAGE, subsystem: "directory:src" }, sequence: 1 } });
     expect(restored.state.usageState).toEqual(usageState({ mode: "calls", entry: PAGE, subsystem: "directory:src" }));
+  });
+
+  it("opens a picked entry in Calls and searches the list for it", async () => {
+    const { state } = await mountArchitecture("/app/demo/dashboard/system", { usageOpenRequest: { view: "usage", mode: "calls", entryId: PAGE, nonce: 2 } });
+    expect(state.usageState).toEqual(usageState({ mode: "calls", entry: PAGE }));
+    expect(state.usageFind).toEqual({ entryId: PAGE });
   });
 
   it("opens Usage from Map's Show usage with a search for that file", async () => {
