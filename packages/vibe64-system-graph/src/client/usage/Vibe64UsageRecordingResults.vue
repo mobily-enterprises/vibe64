@@ -24,6 +24,7 @@
         class="usage-recordings__select"
         @update:model-value="emit('update:recordingId', $event)"
       />
+      <Vibe64UsageRecordingSummary v-if="selectedRecording && sessionId" :recording="selectedRecording" :session-id="sessionId" @deleted="emit('deleted', $event)" />
       <v-text-field
         :model-value="search"
         label="Search requests"
@@ -81,6 +82,7 @@
 </template>
 
 <script setup>
+import { Vibe64UsageRecordingSummary } from "@local/vibe64-usage-recording/client";
 import { computed } from "vue";
 import { mdiMagnify } from "@mdi/js";
 
@@ -98,9 +100,10 @@ const props = defineProps({
   unavailable: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   requestsLoading: { type: Boolean, default: false },
-  error: { type: String, default: "" }
+  error: { type: String, default: "" },
+  sessionId: { type: String, default: "" }
 });
-const emit = defineEmits(["update:recordingId", "update:requestId", "update:search", "update:includeEmpty", "retry"]);
+const emit = defineEmits(["update:recordingId", "update:requestId", "update:search", "update:includeEmpty", "retry", "deleted"]);
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
 const recordingItems = computed(() => props.recordings.map((recording) => ({

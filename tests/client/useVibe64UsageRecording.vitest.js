@@ -177,3 +177,35 @@ it("shares operation results with every reader and reports server refusals verba
   expect(indicator.error.value).toBe("A recording is already running in this session.");
   expect(controls.error.value).toBe("");
 });
+
+it("deletes a recording, letting go of it when it was the current one", async () => {
+  vi.useFakeTimers();
+  const STOPPED = { ...RUNNING, state: "stopped", stoppedAt: "2026-10-30T10:00:31.000Z", stopReason: "time-limit" };
+  const OLDER = "rec_olderrecording2abcde";
+  let latest = { recording: STOPPED, serverTime: new Date().toISOString() };
+  const view = mountReaders({ responses: {
+    "GET /current": () => latest,
+    [`DELETE /${OLDER}`]: { ok: true },
+    [`DELETE /${RUNNING.id}`]: () => {
+      latest = { recording: null, serverTime: new Date().toISOString() };
+      return { ok: true };
+    },
+    "DELETE /rec_refusedrecording2abcd": Object.assign(new Error("You cannot change this session."), { status: 403 })
+  } });
+  await flush();
+  const [indicator, usageView] = view.readers;
+
+  // Another recording goes without touching the current one.
+  expect(await usageView.remove(OLDER)).toEqual({ ok: true });
+  expect(view.requests.map((request) => `${request.method} ${request.path.replace(BASE, "")}`)).toEqual(["GET /current", `DELETE /${OLDER}`]);
+  expect(indicator.recording.value.id).toBe(RUNNING.id);
+
+  expect(await usageView.remove(RUNNING.id)).toEqual({ ok: true });
+  await flush();
+  expect(view.requests.at(-1)).toEqual({ path: `${BASE}/current`, method: "GET", body: undefined });
+  expect(indicator.recording.value).toBe(null);
+
+  expect(await usageView.remove("rec_refusedrecording2abcd")).toBe(null);
+  expect(usageView.error.value).toBe("You cannot change this session.");
+  expect(await usageView.remove("")).toBe(null);
+});

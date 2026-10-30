@@ -169,11 +169,18 @@ A recording stops when you select **Stop**, and also by itself:
 - when the session is closed or archived;
 - when something goes wrong while recording.
 
-The indicator's menu says which one happened. Requests still in progress when
-it stops may be incomplete.
+In **Architecture** › **Usage** › **Recording**, the line under **Recording**
+says which one happened, for example **Stopped after 10 minutes** or **Stopped
+at 2,000 requests**; a failed recording says **Failed:** with the reason. On a
+computer, the indicator's menu also says it while the recording is in the
+header. Requests still in progress when it stops may be incomplete.
 
 ## When it does not work
 
+- **Nothing to record yet**, with **Open Preview** instead of **Start
+  recording**: the session has no Preview or command that can run yet. Open
+  Preview, start the app there (setting the project up first if Preview asks),
+  then select **Record** again.
 - **A recording is already running in this session. Stop it first.** Stop or
   wait for the current one.
 - **Recording needs an active session.** Archived sessions cannot record.
@@ -200,12 +207,17 @@ Older ones are deleted when a new recording starts or the session opens.
 Recordings are not part of the project's source or of archived sessions; they
 are deleted with the session.
 
+To delete one yourself, choose it under **Recording**, select **Delete** on the
+line below it, then **Delete** in **Delete this recording?**. A recording that
+is still running stops first. Deleting cannot be undone.
+
 ## Who can record, and what Colleague can do
 
 Starting, stopping, dismissing and deleting recordings needs control of the
 session, the same as controlling its Preview. People who can only view the
-session can see recordings and their results.
+session can see recordings and their results; their **Delete** is refused with
+the reason.
 
 Colleague can explain recording and the results and walk you through these
-steps. It cannot start or stop a recording or read recording files itself:
-you select **Record**, **Start recording** and **Stop**.
+steps. It cannot start, stop or delete a recording or read recording files
+itself: you select **Record**, **Start recording**, **Stop** and **Delete**.

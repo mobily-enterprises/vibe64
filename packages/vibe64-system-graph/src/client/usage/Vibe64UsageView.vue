@@ -362,6 +362,7 @@ const requestRows = computed(() => usage.requests.data.value?.requests || []);
 const selectedRequest = computed(() => requestRows.value.find((request) => request.id === props.state.request) || null);
 
 const recordingBindings = computed(() => ({
+  sessionId: props.sessionId,
   recordings: recordings.value,
   recordingId: props.state.recording,
   requests: requestRows.value,
@@ -376,6 +377,10 @@ const recordingBindings = computed(() => ({
   error: usage.recordings.error.value || usage.requests.error.value
 }));
 const recordingHandlers = {
+  deleted: () => {
+    update({ recording: "", request: "", subsystem: "" });
+    void loadRecordings();
+  },
   "update:recordingId": (id) => update({ recording: id, request: "", subsystem: "" }),
   "update:requestId": (id) => { pickerOpen.value = false; update({ request: id, subsystem: "" }); },
   "update:search": (value) => { requestSearch.value = value; },

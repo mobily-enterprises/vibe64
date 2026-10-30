@@ -19,6 +19,8 @@ const { error, readTargets, start } = useVibe64UsageRecording({ sessionId: () =>
 
 const targets = ref([]);
 const targetsLoading = ref(false);
+// Read without error and empty: the session has nothing that can run yet.
+const nothingToRecord = ref(false);
 const selectedId = ref("");
 const values = reactive({});
 const submitted = ref(false);
@@ -28,10 +30,12 @@ const notice = reactive({ open: false, text: "", preview: false });
 watch(() => props.modelValue, async (open) => {
   if (!open) return;
   submitted.value = false;
+  nothingToRecord.value = false;
   targetsLoading.value = true;
   const result = await readTargets();
   targetsLoading.value = false;
   targets.value = result?.targets || [];
+  nothingToRecord.value = Boolean(result) && !targets.value.length;
   if (!targets.value.some((target) => target.id === selectedId.value && target.available)) {
     selectedId.value = targets.value.find((target) => target.available)?.id || "";
   }
@@ -88,6 +92,11 @@ function goToPreview() {
   notice.open = false;
   emit("select-preview");
 }
+
+function openPreview() {
+  close();
+  emit("select-preview");
+}
 </script>
 
 <template>
@@ -106,6 +115,13 @@ function goToPreview() {
           headers or data.
         </p>
         <v-progress-linear v-if="targetsLoading" indeterminate />
+        <div v-else-if="nothingToRecord" class="usage-record-dialog__empty" role="status">
+          <p class="usage-record-dialog__empty-title">Nothing to record yet</p>
+          <p>
+            Recording runs this session's Preview or one of the project's commands, and none can run yet. Open Preview,
+            start the app there, then record.
+          </p>
+        </div>
         <v-radio-group v-else v-model="selectedId" class="usage-record-dialog__targets" hide-details>
           <div v-for="target in targets" :key="target.id" class="usage-record-dialog__target">
             <v-radio :disabled="!target.available" :label="targetLabel(target)" :value="target.id" />
@@ -127,10 +143,12 @@ function goToPreview() {
         <v-alert v-if="error && !targetsLoading" density="compact" type="error" variant="tonal">{{ error }}</v-alert>
         <p class="usage-record-dialog__footnote">Stops automatically after 10 minutes or 2,000 requests.</p>
       </v-card-text>
-      <v-card-actions>
+      <v-card-actions class="usage-record-dialog__actions">
         <v-spacer />
         <v-btn variant="text" @click="close">Cancel</v-btn>
+        <v-btn v-if="nothingToRecord" color="primary" variant="flat" @click="openPreview">Open Preview</v-btn>
         <v-btn
+          v-else
           color="primary"
           :disabled="!selectedTarget?.available"
           :loading="starting"
@@ -151,14 +169,42 @@ function goToPreview() {
 </template>
 
 <style scoped>
+/* An M3 dialog: 24 px inside on every side, on phones too. */
+.usage-record-dialog {
+  padding: var(--v64-space-5);
+}
+
 .usage-record-dialog__title {
+  padding: 0 0 var(--v64-space-4);
   font: var(--v64-type-headline-sm);
+  white-space: normal;
 }
 
 .usage-record-dialog__body {
   display: grid;
   align-content: start;
   gap: var(--v64-space-4);
+  padding: 0;
+}
+
+.usage-record-dialog__body p {
+  margin: 0;
+}
+
+.usage-record-dialog__actions {
+  gap: var(--v64-space-2);
+  min-height: 0;
+  padding: var(--v64-space-5) 0 0;
+}
+
+.usage-record-dialog__empty {
+  display: grid;
+  gap: var(--v64-space-1);
+  font: var(--v64-type-body-md);
+}
+
+.usage-record-dialog__empty-title {
+  font: var(--v64-type-title-md);
 }
 
 .usage-record-dialog__target {
