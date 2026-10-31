@@ -7,6 +7,8 @@ import {
   resolveOsUser
 } from "./osUserIdentity.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
 const APP_CREDENTIAL_SCOPE = "app";
 const USER_CREDENTIAL_SCOPE = "user";
 const GITHUB_ACCOUNT_MODE_LOCAL = "local";
@@ -28,6 +30,12 @@ function normalizeGithubAccountMode(value = "", fallback = GITHUB_ACCOUNT_MODE_U
   return fallback === GITHUB_ACCOUNT_MODE_LOCAL ? GITHUB_ACCOUNT_MODE_LOCAL : GITHUB_ACCOUNT_MODE_USER;
 }
 
+/**
+ * @param {RuntimeLogger | null} logger
+ * @param {string} [level]
+ * @param {object} [fields]
+ * @param {string} [message]
+ */
 function logOperationalEvent(logger, level = "info", fields = {}, message = "") {
   const log = typeof logger?.[level] === "function"
     ? logger[level]
