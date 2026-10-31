@@ -168,7 +168,8 @@ function subtitle(request) {
 .usage-recordings__list { flex: 1 1 auto; min-height: 160px; overflow-y: auto; padding: 0; background: transparent; }
 .usage-recordings__interaction { height: auto; min-height: 40px; }
 .usage-recordings__interaction :deep(.v-list-subheader__text) { white-space: normal; overflow: visible; overflow-wrap: break-word; }
-.usage-recordings__request :deep(.v-list-item-title) { overflow-wrap: break-word; white-space: normal; }
+.usage-recordings__request :deep(.v-list-item-title) { overflow-wrap: break-word; white-space: normal; hyphens: manual; }
+.usage-recordings__request :deep(.v-list-item-subtitle) { -webkit-line-clamp: 3; }
 .usage-recordings__method { min-width: 64px; justify-content: center; margin-right: 12px; font-family: ui-monospace, monospace; }
 .usage-recordings__request--secondary { color: rgb(var(--v-theme-on-surface-variant)); }
 .usage-recordings__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 8px; padding: 0 4px; }
