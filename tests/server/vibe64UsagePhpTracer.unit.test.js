@@ -238,6 +238,16 @@ const GENESIS_FUNCTIONS = {
   ]
 };
 
+// A terminal run of bin/run.php: its own file, the service file it includes,
+// and the service's methods and arrow function called three times.
+const RUN_COUNTS = {
+  "bin/run.php#-@1": 1,
+  "src/AlphaService.php#-@1": 1,
+  "src/AlphaService.php#run@6": 3,
+  "src/AlphaService.php#alphaOnly@11": 3,
+  "src/AlphaService.php#-@13": 9
+};
+
 function joinStatus(fn) {
   const records = GENESIS_FUNCTIONS[fn.path] || [];
   if (records.some((record) => record.line === fn.start.line && record.column === fn.start.column)) return "exact";
@@ -335,17 +345,41 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
     assert.equal(scope.kind, "run");
     assert.equal(scope.label, undefined);
     assert.ok(scope.endedAt);
-    assert.deepEqual(Object.fromEntries(scope.counts), {
-      "bin/run.php#-@1": 1,
-      "src/AlphaService.php#run@6": 3,
-      "src/AlphaService.php#alphaOnly@11": 3,
-      "src/AlphaService.php#-@13": 9
-    });
+    assert.deepEqual(Object.fromEntries(scope.counts), RUN_COUNTS);
 
     const web = newRecordingDirectory();
     runPhp(["bin/run.php"], { env: recordedEnvironment({ recordingDirectory: web, targetKind: "web" }) });
     const [background] = readTrace(web);
     assert.equal(background.scopes.get(`bg_${background.pid}`)?.kind, "background");
+  });
+
+  test("an included file's top-level code counts once per include, whichever executor PHP runs", () => {
+    // PHP skips running an included body that only returns a constant (a file
+    // that only declares, or a configuration file) unless an extension such as
+    // Xdebug or PCOV replaces its executor. The counts are the same either way.
+    const probe = recordedEnvironment({ recordingDirectory: newRecordingDirectory(), targetKind: "terminal" });
+    const loaded = runPhp(["-m"], { env: probe }).stdout.split("\n").map((name) => name.trim());
+    const executors = [
+      [],
+      ...(loaded.includes("xdebug") ? [["-d", "xdebug.mode=off"], ["-d", "xdebug.mode=develop"]] : []),
+      ...(loaded.includes("pcov") ? [["-d", "pcov.enabled=0"], ["-d", "pcov.enabled=1"]] : [])
+    ];
+    for (const settings of executors) {
+      for (const [script, output, expected] of [
+        ["bin/run.php", "ran\n", RUN_COUNTS],
+        ["bin/includes.php", "included\n", {
+          "bin/includes.php#-@1": 1,
+          "src/settings.php#-@1": 2,
+          "src/helpers.php#-@1": 1
+        }]
+      ]) {
+        const directory = newRecordingDirectory();
+        const result = runPhp([...settings, script], { env: recordedEnvironment({ recordingDirectory: directory, targetKind: "terminal" }) });
+        assert.equal(result.stdout, output, result.stderr);
+        const [trace] = readTrace(directory);
+        assert.deepEqual(Object.fromEntries(trace.scopes.get(`run_${trace.pid}`).counts), expected, `${settings.join(" ")} ${script}`);
+      }
+    }
   });
 
   test("requests under php -S -t public are recorded one by one, with the project's auto_prepend_file", async () => {
@@ -360,7 +394,11 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
     });
     serverTrace = readTrace(directory);
     const scopes = new Map(serverTrace.flatMap((trace) => [...trace.scopes].map(([id, scope]) => [id, { ...scope, pid: trace.pid }])));
-    const shared = ["prepend.php#-@1", "prepend.php#fixture_prepended@4", "public/index.php#-@1", "src/helpers.php#remember@4"];
+    // Every request includes the helpers and both services' files.
+    const shared = [
+      "prepend.php#-@1", "prepend.php#fixture_prepended@4", "public/index.php#-@1",
+      "src/AlphaService.php#-@1", "src/BetaService.php#-@1", "src/helpers.php#-@1", "src/helpers.php#remember@4"
+    ];
     for (const job of jobs) {
       const scope = scopes.get(job.id);
       assert.equal(scope?.kind, "request", job.id);
@@ -392,9 +430,11 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
     const scopes = new Map(traces.flatMap((trace) => [...trace.scopes]));
     for (const [id, service] of [["r_000001", "Alpha"], ["r_000002", "Beta"], ["r_000003", "Alpha"]]) {
       const keys = scopeKeys(scopes.get(id));
+      const other = service === "Alpha" ? "Beta" : "Alpha";
       assert.ok(keys.includes("server.php#-@1"), id);
       assert.ok(keys.includes(`src/${service}Service.php#run@6`), id);
-      assert.ok(!keys.some((key) => key.includes(service === "Alpha" ? "Beta" : "Alpha")), id);
+      // The front controller includes both services' files but runs one service.
+      assert.deepEqual(keys.filter((key) => key.startsWith(`src/${other}Service.php#`)), [`src/${other}Service.php#-@1`], id);
     }
   });
 
@@ -474,10 +514,13 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
       "prepend.php#-@1": "exact",
       "prepend.php#fixture_prepended@4": "exact",
       "public/index.php#-@1": "exact",
+      "src/helpers.php#-@1": "exact",
       "src/helpers.php#remember@4": "exact",
+      "src/AlphaService.php#-@1": "exact",
       "src/AlphaService.php#run@6": "name-line",
       "src/AlphaService.php#alphaOnly@11": "name-line",
       "src/AlphaService.php#-@13": "none",
+      "src/BetaService.php#-@1": "exact",
       "src/BetaService.php#run@6": "name-line",
       "src/BetaService.php#betaOnly@11": "name-line",
       "src/BetaService.php#-@13": "none"

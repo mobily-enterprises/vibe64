@@ -92,7 +92,8 @@ and becomes its own readiness row. Neither kind counts as a request or towards
 plumbing. A row's
 functions carry their source position, count, and whether they are plumbing:
 code that ran in most recorded requests. A file's top-level code is its
-function named `""` at 1:1. Malformed trace lines, files over their limits and
+function named `""` at 1:1, counted each time the file is loaded; in PHP
+that is each include. Malformed trace lines, files over their limits and
 unknown positions are skipped and counted, never trusted.
 
 ## Indicator

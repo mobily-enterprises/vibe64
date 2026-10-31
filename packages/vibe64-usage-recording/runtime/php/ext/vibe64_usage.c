@@ -12,10 +12,12 @@
  * Otherwise it observes the start of every PHP function declared in a file
  * under the source root (never under vendor/ or node_modules/), counts calls
  * per scope and appends vibe64.usage-trace.v1 lines to its own
- * hits-php-<pid>.ndjson. A request's scope is the Preview proxy's
- * x-vibe64-recording-request id, else a local request scope labelled with the
- * method and path (never the query). A process without an HTTP request is
- * run_<pid> for a terminal target and bg_<pid> for a web target.
+ * hits-php-<pid>.ndjson. A file's top-level code counts once each time it
+ * runs as a script and each time it is included. A request's scope is the
+ * Preview proxy's x-vibe64-recording-request id, else a local request scope
+ * labelled with the method and path (never the query). A process without an
+ * HTTP request is run_<pid> for a terminal target and bg_<pid> for a web
+ * target.
  *
  * It records paths, file hashes, function names, positions and counts only:
  * never arguments, headers, cookies, bodies or query strings. It opens no
@@ -86,7 +88,10 @@ static struct {
 	HashTable counts; /* function index -> calls */
 	uint32_t calls;
 	uint64_t last_tick;
+	bool compile_hooked;
 } v64;
+
+static zend_op_array *(*v64_compile_file_next)(zend_file_handle *file_handle, int type);
 
 #define V64_PUT(literal) smart_str_appendl_ex(&v64.out, literal, sizeof(literal) - 1, 1)
 
@@ -510,16 +515,9 @@ static void v64_tick(void)
 	}
 }
 
-static void v64_begin(zend_execute_data *execute_data)
+static void v64_count(zend_long index)
 {
-	if (!v64.scope_active) {
-		return;
-	}
-	zval *index = zend_hash_index_find(&v64.map, (zend_ulong) (uintptr_t) execute_data->func->op_array.opcodes);
-	if (!index) {
-		return;
-	}
-	zval *count = zend_hash_index_lookup(&v64.counts, (zend_ulong) Z_LVAL_P(index));
+	zval *count = zend_hash_index_lookup(&v64.counts, (zend_ulong) index);
 	if (Z_TYPE_P(count) == IS_LONG) {
 		Z_LVAL_P(count)++;
 	} else {
@@ -528,6 +526,40 @@ static void v64_begin(zend_execute_data *execute_data)
 	if (++v64.calls >= V64_TICK_CALLS || zend_hash_num_elements(&v64.counts) >= V64_FLUSH_ENTRIES) {
 		v64_tick();
 	}
+}
+
+static void v64_begin(zend_execute_data *execute_data)
+{
+	/* An included file's top-level code was counted when it was included. */
+	if (!v64.scope_active || ZEND_CALL_KIND(execute_data) == ZEND_CALL_NESTED_CODE) {
+		return;
+	}
+	zval *index = zend_hash_index_find(&v64.map, (zend_ulong) (uintptr_t) execute_data->func->op_array.opcodes);
+	if (index) {
+		v64_count(Z_LVAL_P(index));
+	}
+}
+
+/* Counts an included file's top-level code once per include, when PHP compiles
+ * (or takes from OPcache) the file for an include or require. PHP skips running
+ * a body that only returns a constant, such as a file that only declares
+ * classes and functions, unless an extension like Xdebug replaces its executor,
+ * so counting the run itself would depend on the PHP setup. Scripts PHP runs
+ * itself (the main script, auto_prepend_file, a router script) are counted when
+ * they start, by the observer. */
+static zend_op_array *v64_compile_file(zend_file_handle *file_handle, int type)
+{
+	zend_op_array *op_array = v64_compile_file_next(file_handle, type);
+	zend_execute_data *includer = EG(current_execute_data);
+	if (op_array && op_array->filename && v64.scope_active && v64.state == V64_ON
+			&& includer && includer->func && ZEND_USER_CODE(includer->func->type)
+			&& includer->opline && includer->opline->opcode == ZEND_INCLUDE_OR_EVAL) {
+		zend_long index = v64_function_index(op_array);
+		if (index >= 0) {
+			v64_count(index);
+		}
+	}
+	return op_array;
 }
 
 /* Called once per function per request: only project functions are observed.
@@ -643,6 +675,9 @@ PHP_MINIT_FUNCTION(vibe64_usage)
 
 PHP_MSHUTDOWN_FUNCTION(vibe64_usage)
 {
+	if (v64.compile_hooked && zend_compile_file == v64_compile_file) {
+		zend_compile_file = v64_compile_file_next;
+	}
 	if (v64.state != V64_OFF) {
 		v64_close();
 		zend_hash_destroy(&v64.files);
@@ -655,6 +690,13 @@ PHP_RINIT_FUNCTION(vibe64_usage)
 {
 	if (v64.state != V64_ON) {
 		return SUCCESS;
+	}
+	if (!v64.compile_hooked) {
+		/* Installed here, after OPcache installs its own at startup, so files
+		 * OPcache already holds still pass through it. */
+		v64_compile_file_next = zend_compile_file;
+		zend_compile_file = v64_compile_file;
+		v64.compile_hooked = true;
 	}
 	bool stopping = v64_stopping();
 	if (v64.pid != getpid()) {

@@ -132,6 +132,11 @@ start lines and how many times each ran. Nothing under `vendor/` or
 `node_modules/` is recorded.
 - Files and named functions match the usage map exactly. Methods are matched
   by their name and line.
+- Each file's top-level code counts as one function: once for the script PHP
+  starts, and once each time a file is included, even a file that only
+  declares classes and functions. `require_once` and `include_once` count a
+  file only the first time. The counts are the same whether or not Xdebug or
+  PCOV is loaded.
 - Closures and arrow functions run, but they have no Calls count on the map.
 - A function whose whole body returns a constant may be removed by OPcache
   before it runs, so it never appears as called.
