@@ -39,6 +39,13 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
+- `packages/vibe64-runtime/src/server/sessionRecords.js`
+- `packages/vibe64-runtime/src/server/sessionCreation.js`
+- `packages/vibe64-runtime/src/server/sessionListing.js`
+- `packages/vibe64-runtime/src/server/sessionArchivePublishing.js`
+- `packages/vibe64-runtime/src/server/sessionRenewalTransitions.js`
+- `packages/vibe64-runtime/src/server/sessionRenewalArchives.js`
+- `packages/vibe64-runtime/src/server/currentSessionRecords.js`
 - `packages/vibe64-runtime/src/server/sessionLocks.js`
 - `tests/server/vibe64Runtime.unit.test.js`
 - `tests/server/vibe64SessionStore.unit.test.js`
@@ -733,7 +740,8 @@ selected-root requirement for every other store. Sessions' create path keeps
 its refusal of source, branch, pull-request and commit options for a
 learning-scoped context, which no current request produces.
 Sources: `packages/vibe64-runtime/src/server/runtime.js`,
-`packages/vibe64-runtime/src/server/sessionStore.js`,
+`packages/vibe64-runtime/src/server/sessionRecordRules.js`,
+`packages/vibe64-runtime/src/server/sessionStoreState.js`,
 `packages/vibe64-sessions/src/server/sessionCreation.js`;
 evidence: `tests/server/vibe64SessionStore.unit.test.js`,
 `tests/server/stateUpgrades.unit.test.js`.
@@ -748,7 +756,7 @@ project session source root only so that the published
 `20261008-learning-practice-history` readers and their tests can verify an
 adopted historical binding; the store refuses that scope without a source root.
 Sources: `packages/vibe64-terminals/src/server/agentSessionCommand.js`,
-`packages/vibe64-runtime/src/server/sessionStore.js`.
+`packages/vibe64-runtime/src/server/sessionStoreState.js`.
 
 
 ### Offline historical practice binding

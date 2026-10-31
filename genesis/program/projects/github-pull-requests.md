@@ -26,6 +26,7 @@ work as a new PR. GitHub remains the PR store.
 - `packages/vibe64-terminals/src/server/repositoryHistory.js`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
+- `packages/vibe64-runtime/src/server/sessionRecords.js`
 - `src/components/studio/GithubPullRequestsPanel.vue`
 - `src/components/studio/GithubPullRequestActions.vue`
 - `src/components/studio/GithubBrowserTabs.vue`

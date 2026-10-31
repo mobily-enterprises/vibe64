@@ -74,6 +74,7 @@ Git commands.
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/ProjectSettingsPanel.vue`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
+- `packages/vibe64-runtime/src/server/sessionRecords.js`
 - `packages/vibe64-runtime/src/server/agentWriteLock.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/sessionSaveCommitMessage.js`

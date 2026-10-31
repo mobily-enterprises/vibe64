@@ -1279,6 +1279,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-sessions/src/server/sessionMessages.js`
 - `packages/vibe64-sessions/src/server/sessionAssistant.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
+- `packages/vibe64-runtime/src/server/sessionConversationStore.js`
 - `packages/vibe64-runtime/src/shared/conversationAttachments.js`
 - `packages/vibe64-runtime/src/shared/assistantSelection.js`
 - `packages/vibe64-runtime/src/shared/agentSettings.js`
