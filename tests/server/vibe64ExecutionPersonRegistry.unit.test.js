@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import {
   DAEMON_USERNAME_PREFIX, assertActablePerson, enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration,
-  registerPerson, upgradePersonRegistry
+  registerPerson, upgradePersonRegistry, withResolvedPrograms
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
 
 const UID = process.getuid();
@@ -169,6 +169,32 @@ test("only the host's exact narrow sudo commands leave an account a person", () 
   // Without the host's list, every rule is administration.
   assert.match(personAccountProblem(person, { ...facts, sudoCommands: [], sudoListing: listing(`(root) NOPASSWD: ${ownerCli}`) }),
     /has sudo rules/u);
+});
+
+test("a narrow command is recognised when sudo prints its program with links resolved", () => {
+  const person = { uid: 1001, username: "merc" };
+  const ownerCli = "/opt/tool/node26/bin/node /srv/tool/owner-cli.mjs --read-connections";
+  const resolve = (program) => {
+    if (program === "/opt/tool/node26/bin/node") return "/nix/store/abc-node-26/bin/node";
+    if (program === "/srv/tool/local") return program;
+    throw Object.assign(new Error("missing"), { code: "ENOENT" });
+  };
+  const sudoCommands = withResolvedPrograms([ownerCli, "/srv/tool/local update", "/gone/tool run"], resolve);
+  assert.deepEqual(sudoCommands, [ownerCli, "/nix/store/abc-node-26/bin/node /srv/tool/owner-cli.mjs --read-connections",
+    "/srv/tool/local update", "/gone/tool run"]);
+  const facts = { groups: ["merc", "vibe64"], loginUids: LOGIN_UIDS, sudoCommands };
+  const listing = (command) => `User merc may run the following commands on host:\n    (root) NOPASSWD: ${command}\n`;
+  // As sudo-rs 0.2 lists the owner CLI rule on Ubuntu 26.04.
+  assert.equal(personAccountProblem(person, { ...facts,
+    sudoListing: listing("/nix/store/abc-node-26/bin/node /srv/tool/owner-cli.mjs --read-connections") }), "");
+  assert.equal(personAccountProblem(person, { ...facts, sudoListing: listing(ownerCli) }), "");
+  for (const command of [
+    "/nix/store/other-node/bin/node /srv/tool/owner-cli.mjs --read-connections",
+    "/nix/store/abc-node-26/bin/node /srv/tool/owner-cli.mjs",
+    "/nix/store/abc-node-26/bin/node /srv/tool/other.mjs --read-connections"
+  ]) {
+    assert.match(personAccountProblem(person, { ...facts, sudoListing: listing(command) }), /has sudo rules/u, command);
+  }
 });
 
 test("application accounts are never people", () => {

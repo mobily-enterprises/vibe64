@@ -2051,6 +2051,22 @@ function sudoRulesProblem(username = "", sudoListing = "", sudoCommands = []) {
   return narrow ? "" : `${username} has sudo rules.`;
 }
 
+// Classic sudo prints a rule's program as written; sudo-rs prints it with its
+// symbolic links resolved. Each declared command is accepted in both forms, the
+// resolved one naming the same root-owned file.
+function withResolvedPrograms(commands = [], resolve = realpathSync) {
+  return commands.flatMap((command) => {
+    const [program, ...args] = command.split(" ");
+    let resolved = program;
+    try {
+      resolved = resolve(program);
+    } catch {
+      // A program that does not exist keeps only its written form.
+    }
+    return resolved === program ? [command] : [command, [resolved, ...args].join(" ")];
+  });
+}
+
 // A missing list allows no sudo rule at all.
 function personSudoCommands(file = PERSON_SUDO_COMMANDS_FILE, ownerUid = 0) {
   let directory;
@@ -2095,7 +2111,7 @@ function hostPersonFacts(username = "") {
   return {
     groups: osGroupNames(username),
     loginUids,
-    sudoCommands: personSudoCommands(),
+    sudoCommands: withResolvedPrograms(personSudoCommands()),
     sudoListing: sudo.error ? "" : String(sudo.stdout || "")
   };
 }
@@ -3989,7 +4005,7 @@ export { APPLICATION_LIMIT_PER_WORKSPACE, APPLICATION_USERNAME_PREFIX, DAEMON_US
   resolveApplicationCwd, retireApplicationAccount,
   assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
   ensureWorkspaceRuntimeBase, managedExecutionControllerLeaseName, managedExecutionRuntimeBase,
-  enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
+  enablePerson, loginUidRange, personAccountProblem, personSudoCommands, withResolvedPrograms, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
   parseEnvironmentFile,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionSliceCgroup, managedExecutionTargetUser,
