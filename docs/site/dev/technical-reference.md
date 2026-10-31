@@ -36,6 +36,7 @@ A Genesis-enabled project has this portable shape:
   .genesis/
     machine-city.json
     program-city.json
+    call-web.json
     verification.json
   application source...
 ```
@@ -61,8 +62,10 @@ The files have deliberately different jobs:
   project operating guide to OpenCode sessions and refreshes it after
   compaction.
 - `.genesis/machine-city.json` and `.genesis/program-city.json` are derived
-  navigation documents rebuilt from the working tree. `genesis init` adds them
-  to `.gitignore`; they are not committed.
+  navigation documents rebuilt from the working tree, and
+  `.genesis/call-web.json` is the derived web of calls between the project's
+  functions. `genesis init` adds all three to `.gitignore`; they are not
+  committed, and Genesis writes the call web only where Git ignores it.
 - `.genesis/verification.json` is present only after declared checks pass. It
   records exact code and Stack hashes; it is evidence, not a correctness claim.
 

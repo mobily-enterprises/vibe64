@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 
 import { codexRuntimeContext } from "@local/studio-terminal-core/server/codexRuntimeContext";
 import {
+  GENESIS_CALL_WEB_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
   addGenesisStack,
   assertGenesisPromptTask,
@@ -729,7 +730,8 @@ test("Vibe64 executes the materialized JSKIT Deployment declaration exactly", as
     assert.deepEqual(deployment.steps.map(({ role, argv }) => ({ role, argv })), [
       { role: "prepare", argv: ["npm", "ci"] },
       { role: "build", argv: ["npm", "run", "build"] },
-      { role: "serve", argv: ["npm", "start"] }
+      // The project declares production mode on its own Serve step; Vibe64 never sets it.
+      { role: "serve", argv: ["env", "NODE_ENV=production", "npm", "start"] }
     ]);
     assert.deepEqual(deployment.readiness, {
       kind: "http",
@@ -746,11 +748,13 @@ test("the exact Genesis boundary exposes the portable derived-artifact contract"
   assert.equal(result.contract, "genesis.derived-artifacts.v1");
   assert.deepEqual(GENESIS_DERIVED_ARTIFACT_PATHS, [
     ".genesis/machine-city.json",
-    ".genesis/program-city.json"
+    ".genesis/program-city.json",
+    ".genesis/call-web.json"
   ]);
+  assert.equal(GENESIS_CALL_WEB_PATH, ".genesis/call-web.json");
   assert.deepEqual(
     result.artifacts.map((artifact) => artifact.recreator),
-    ["index-codebase", "index-codebase"]
+    ["index-codebase", "index-codebase", "index-codebase"]
   );
 });
 

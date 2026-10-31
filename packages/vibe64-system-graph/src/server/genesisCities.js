@@ -5,6 +5,7 @@ import path from "node:path";
 
 import * as genesisServer from "@local/vibe64-genesis/server";
 import {
+  GENESIS_CALL_WEB_PATH,
   GENESIS_MACHINE_CITY_PATH,
   GENESIS_PROGRAM_CITY_PATH,
   MACHINE_CITY_SCHEMA,
@@ -133,7 +134,7 @@ function requireGenesisCity(record, kind) {
 // meantime is refused, never joined to this snapshot. Genesis validates it.
 // It is read only as a regular file, never through a link or from a FIFO,
 // and only up to its size limit.
-const CALL_WEB_PATH = ".genesis/call-web.json";
+const CALL_WEB_PATH = GENESIS_CALL_WEB_PATH;
 const CALL_WEB_MAX_BYTES = 64 * 1024 * 1024;
 
 function callWebError(message, code = "vibe64_invalid_genesis_call_web") {

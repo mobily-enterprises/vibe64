@@ -293,6 +293,10 @@ const GENESIS_PROGRAM_CITY_PATH = GENESIS_DERIVED_ARTIFACTS_BY_ID.get("program-c
 if (!GENESIS_MACHINE_CITY_PATH || !GENESIS_PROGRAM_CITY_PATH) {
   throw new Error("Genesis did not declare both City projection artifacts.");
 }
+const GENESIS_CALL_WEB_PATH = GENESIS_DERIVED_ARTIFACTS_BY_ID.get("call-web")?.path;
+if (!GENESIS_CALL_WEB_PATH) {
+  throw new Error("Genesis did not declare its call-web artifact.");
+}
 
 async function runGenesisOperation(operation, options = {}, catalogOptions = {}) {
   const projectRoot = normalizeText(options.projectRoot);
@@ -527,6 +531,7 @@ export {
   genesisParserEnvironment,
   GENESIS_BLUEPRINT_PATH,
   GENESIS_SUBSYSTEMS_PATH,
+  GENESIS_CALL_WEB_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
   GENESIS_MACHINE_CITY_PATH,
   GENESIS_PROGRAM_CITY_PATH,
