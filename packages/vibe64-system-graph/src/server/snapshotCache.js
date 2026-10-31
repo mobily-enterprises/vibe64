@@ -8,6 +8,12 @@ const GENESIS_SNAPSHOT_IDLE_MS = 2 * 60 * 1000;
 // At most `capacity` keys, least recently read first out. Each key holds one
 // loaded value for one identity; another identity replaces it, and a failed
 // load is not kept.
+/**
+ * @param {object} dependencies
+ * @param {number} dependencies.capacity
+ * @param {number} [dependencies.idleMs]
+ * @param {() => number} [dependencies.now]
+ */
 function createSnapshotCache({ capacity, idleMs = GENESIS_SNAPSHOT_IDLE_MS, now = () => Date.now() } = {}) {
   const entries = new Map();
   let timer = null;

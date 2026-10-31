@@ -7,6 +7,9 @@ import {
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+
 // Query fields each usage route accepts; anything else in the request is
 // ignored rather than passed to the action.
 const USAGE_ROUTES = Object.freeze([
@@ -20,6 +23,11 @@ function picked(source, fields) {
   return Object.fromEntries(fields.filter((field) => source[field] !== undefined).map((field) => [field, source[field]]));
 }
 
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} [options]
+ * @param {StudioProjectContext | null} [options.projectContext]
+ */
 function registerUsageRoutes(
   http,
   {

@@ -3,6 +3,8 @@ import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext
 
 import { USAGE_ENTRY_KINDS } from "./usageWeb.js";
 
+/** @typedef {import("./types.js").SystemGraphService} SystemGraphService */
+
 const sessionId = { type: "string", minLength: 1, maxLength: 256, required: true };
 const optionalText = (maxLength) => ({ type: "string", maxLength, required: false });
 const point = createSchema({
@@ -19,6 +21,10 @@ const recordedFunction = createSchema({
 // Usage reads share Architecture's session read authority. Like the other
 // System Graph reads they are not offered to the assistant; Colleague explains
 // how to use the view instead.
+/**
+ * @param {object} dependencies
+ * @param {SystemGraphService} dependencies.systemGraph
+ */
 function createUsageActions({ systemGraph }) {
   return [
     ["usage.entries.read", "readUsageEntries", {

@@ -36,6 +36,10 @@ import {
 } from "./genesisCities.js";
 import { releaseCallWeb } from "./usageWeb.js";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 // The largest inspection request an inspector receives on standard input.
 const ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES = 4 * 1024 * 1024;
 
@@ -261,6 +265,18 @@ function relationView(relation) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {typeof readGenesisCity} [dependencies.cityReader]
+ * @param {typeof inspectVibe64ArchitectureInspection} [dependencies.inspectorReader]
+ * @param {typeof inspectVibe64ArchitectureLayout} [dependencies.layoutReader]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {typeof vibe64RuntimePacks} [dependencies.runtimeReader]
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {RuntimeLogger} [dependencies.logger]
+ * @param {typeof refreshGenesisCities} [dependencies.refresher]
+ */
 function createService({
   cityReader = readGenesisCity,
   inspectorReader = inspectVibe64ArchitectureInspection,

@@ -3,6 +3,12 @@ import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext
 
 import { createUsageActions } from "./usageActions.js";
 
+/** @typedef {import("./types.js").SystemGraphService} SystemGraphService */
+
+/**
+ * @param {object} dependencies
+ * @param {SystemGraphService} dependencies.systemGraph
+ */
 function createSystemGraphActions({ systemGraph }) {
   return [
     ["status.read", "readStatus"],

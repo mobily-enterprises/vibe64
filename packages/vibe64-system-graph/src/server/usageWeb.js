@@ -14,6 +14,8 @@ import {
 } from "./genesisCities.js";
 import { createSnapshotCache } from "./snapshotCache.js";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 // Usage queries start from one Genesis entry point and return only what it
 // reaches: files through Imports, functions through Calls. Every response is
 // bounded; nothing here returns the project's whole import or call graph.
@@ -662,6 +664,14 @@ function releaseCallWeb(sourceRoot) {
 
 // ---------------------------------------------------------------- service
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {typeof readGenesisCity} [dependencies.cityReader]
+ * @param {typeof readGenesisCallWeb} [dependencies.callWebReader]
+ * @param {typeof inspectVibe64ArchitectureLayout} [dependencies.layoutReader]
+ * @param {typeof callWebs} [dependencies.callWebCache]
+ */
 function createUsageService({
   projectService,
   cityReader = readGenesisCity,

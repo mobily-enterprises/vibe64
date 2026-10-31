@@ -7,6 +7,29 @@ import { createSystemGraphActions } from "./actions.js";
 import { registerUsageRoutes } from "./usageRoutes.js";
 import { createUsageService } from "./usageWeb.js";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
+// One System Graph capability: Architecture reads and refresh, plus the
+// usage queries over the same session's Genesis snapshot.
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEvents} dependencies.events
+ * @param {RuntimeLogger} dependencies.logger
+ * @param {ProjectService} dependencies.project
+ */
+function createSystemGraph({ events, logger, project }) {
+  return Object.freeze({
+    ...createService({
+      projectService: project,
+      logger,
+      publishSessionChanged: createSessionChangedPublisher(events)
+    }),
+    ...createUsageService({ projectService: project })
+  });
+}
+
 const Vibe64SystemGraphProvider = defineFeature({
   id: "vibe64.system-graph",
   domain: "vibe64-system-graph",
@@ -21,16 +44,7 @@ const Vibe64SystemGraphProvider = defineFeature({
   },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   setup({ events, logger, http, project }) {
-    // One System Graph capability: Architecture reads and refresh, plus the
-    // usage queries over the same session's Genesis snapshot.
-    const systemGraph = Object.freeze({
-      ...createService({
-        projectService: project,
-        logger,
-        publishSessionChanged: createSessionChangedPublisher(events)
-      }),
-      ...createUsageService({ projectService: project })
-    });
+    const systemGraph = createSystemGraph({ events, logger, project });
     registerRoutes(http);
     registerUsageRoutes(http);
     return { systemGraph };
@@ -39,5 +53,6 @@ const Vibe64SystemGraphProvider = defineFeature({
 });
 
 export {
-  Vibe64SystemGraphProvider
+  Vibe64SystemGraphProvider,
+  createSystemGraph
 };
