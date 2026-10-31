@@ -7,6 +7,7 @@ import { SOURCE_EDITOR_FOLLOWUP_ANSWER_MAX_CHARS, sourceEditorExplanationFollowu
 import { sourceEditorError } from "./sourceFiles.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
 
 // A follow-up question on a source explanation, answered in the helper
 // thread that explained it.
@@ -64,11 +65,12 @@ function sourceEditorHelperFollowupThread(explanation = {}) {
  * @param {object} [context]
  * @param {object} [input]
  * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
 async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
   emit = null,
-  explanationChats = null,
+  explanationChats,
   explanationTurns,
   isClosed = null,
   terminalService

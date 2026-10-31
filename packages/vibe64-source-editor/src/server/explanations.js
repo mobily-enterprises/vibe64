@@ -73,6 +73,7 @@ import {
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
 
 const SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES = 128 * 1024 * 1024;
 
@@ -94,6 +95,7 @@ function createExplanationOperations({
   temporaryRoot,
   terminalService
 }) {
+  /** @type {SourceEditorExplanationChats} */
   const explanationChats = new Map();
   const explanationTurns = new Map();
   const explanationCache = createSourceEditorExplanationCache({
@@ -424,6 +426,14 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
   };
 }
 
+/**
+ * @param {object} [context]
+ * @param {object} [input]
+ * @param {object} [explanationInput]
+ * @param {object} [template]
+ * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
+ */
 async function createCachedSourceEditorExplanation(
   context = {},
   input = {},
@@ -432,7 +442,7 @@ async function createCachedSourceEditorExplanation(
   {
     cacheState = {},
     emit = null,
-    explanationChats = null,
+    explanationChats,
     isClosed = null
   } = {}
 ) {
@@ -498,11 +508,12 @@ async function createCachedSourceEditorExplanation(
  * @param {object} [context]
  * @param {object} [input]
  * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
 async function streamSourceEditorExplanation(context = {}, input = {}, {
   emit = null,
-  explanationChats = null,
+  explanationChats,
   explanationInput = null,
   explanationTurns,
   isClosed = null,

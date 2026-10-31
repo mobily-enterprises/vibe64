@@ -10,6 +10,7 @@ import { positiveInteger, SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION, sourceEditor
 import { isPlainObject, normalizeSourceEditorRelativePath, sourceEditorError, sourceEditorLanguageForPath } from "./sourceFiles.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {Map<string, object>} SourceEditorExplanationChats - each explanation in memory, by project, session and explanation id */
 
 // Saved source explanations and their cleanup ledger: the record each
 // explanation keeps, normalization, and the helper threads still to delete.
@@ -29,10 +30,6 @@ function normalizeSourceEditorExplanationId(value = "") {
 
 function sourceEditorExplanationMemoryKey(context = {}, explanationId = "") {
   return `${currentProjectScopeKey()}\0${normalizeText(context.sessionId)}:${normalizeSourceEditorExplanationId(explanationId)}`;
-}
-
-function sourceEditorExplanationStore(explanationChats = null) {
-  return explanationChats instanceof Map ? explanationChats : new Map();
 }
 
 function sourceEditorExplanationCleanupPath(context = {}) {
@@ -255,11 +252,16 @@ async function deleteSourceEditorExplanationAgentThread(context = {}, record = {
   return agentCleanup;
 }
 
+/**
+ * @param {object} [context]
+ * @param {string} [explanationId]
+ * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
+ */
 async function readSourceEditorExplanationRecord(context = {}, explanationId = "", {
-  explanationChats = null
+  explanationChats
 } = {}) {
-  const store = sourceEditorExplanationStore(explanationChats);
-  const record = store.get(sourceEditorExplanationMemoryKey(context, explanationId));
+  const record = explanationChats.get(sourceEditorExplanationMemoryKey(context, explanationId));
   if (!record) {
     throw sourceEditorError("Source explanation was not found.", "vibe64_source_explanation_not_found", {
       explanationId
@@ -268,10 +270,15 @@ async function readSourceEditorExplanationRecord(context = {}, explanationId = "
   return normalizeSourceEditorExplanation(record);
 }
 
+/**
+ * @param {object} [context]
+ * @param {object} [explanation]
+ * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
+ */
 async function writeSourceEditorExplanation(context = {}, explanation = {}, {
-  explanationChats = null
+  explanationChats
 } = {}) {
-  const store = sourceEditorExplanationStore(explanationChats);
   const record = normalizeSourceEditorExplanation({
     ...explanation,
     updatedAt: new Date().toISOString()
@@ -280,13 +287,19 @@ async function writeSourceEditorExplanation(context = {}, explanation = {}, {
     context.assistantHelper.conversationId = record.agentThreadId || context.assistantHelper.conversationId;
     context.assistantHelper.runId = record.agentTurnId || context.assistantHelper.runId;
   }
-  store.set(sourceEditorExplanationMemoryKey(context, record.id), record);
+  explanationChats.set(sourceEditorExplanationMemoryKey(context, record.id), record);
   await upsertSourceEditorExplanationCleanupRecord(context, record);
   return record;
 }
 
+/**
+ * @param {object} [context]
+ * @param {string} [explanationId]
+ * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
+ */
 async function readStoppedSourceEditorExplanation(context = {}, explanationId = "", {
-  explanationChats = null
+  explanationChats
 } = {}) {
   try {
     const record = await readSourceEditorExplanationRecord(context, explanationId, {
@@ -434,7 +447,6 @@ export {
   sourceEditorExplanationCleanupPath,
   sourceEditorExplanationCleanupQueues,
   sourceEditorExplanationMemoryKey,
-  sourceEditorExplanationStore,
   sourceEditorHelperRoot,
   upsertSourceEditorExplanationCleanupRecord,
   writeSourceEditorExplanation,

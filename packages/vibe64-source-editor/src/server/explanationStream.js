@@ -1,11 +1,12 @@
 import { normalizeText } from "@local/vibe64-core/server/core";
 
 import { requiredSourceEditorExecutionProfile, resolvedSourceEditorExecutionProfile, runSourceEditorHelperTurn, sourceEditorAgentOperationOptions, sourceEditorExecutionProfileFromFailure, sourceEditorExecutionProfileRequest, sourceEditorExecutionProfileSnapshot } from "./explanationProfile.js";
-import { deleteSourceEditorExplanationAgentThread, normalizeSourceEditorExplanation, normalizeSourceEditorExplanationId, normalizeSourceEditorFollowups, normalizeSourceEditorMessages, readSourceEditorExplanationRecord, readStoppedSourceEditorExplanation, removeSourceEditorExplanationCleanupRecord, sourceEditorExplanationMemoryKey, sourceEditorExplanationStore, writeSourceEditorExplanation } from "./explanationRecords.js";
+import { deleteSourceEditorExplanationAgentThread, normalizeSourceEditorExplanation, normalizeSourceEditorExplanationId, normalizeSourceEditorFollowups, normalizeSourceEditorMessages, readSourceEditorExplanationRecord, readStoppedSourceEditorExplanation, removeSourceEditorExplanationCleanupRecord, sourceEditorExplanationMemoryKey, writeSourceEditorExplanation } from "./explanationRecords.js";
 import { normalizeSourceEditorLineRange, SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS, sourceEditorExplanationMessageId, sourceEditorLines, sourceEditorSelectionForRange, sourceEditorTextHash } from "./explanationText.js";
 import { isPlainObject, readSourceEditorFile, sourceEditorError, sourceEditorErrorResponse } from "./sourceFiles.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
 
 // One streamed assistant turn of a source explanation: its messages, the
 // events it emits, the structured answer it parses, and the explanation
@@ -421,10 +422,16 @@ function sourceEditorAgentStreamHandlers({
   };
 }
 
+/**
+ * @param {object} [context]
+ * @param {object} [initialExplanation]
+ * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
+ */
 function createSourceEditorExplanationStreamState(context = {}, initialExplanation = {}, {
   assistantMessageId = "",
   emit = null,
-  explanationChats = null,
+  explanationChats,
   isClosed = null
 } = {}) {
   let explanation = initialExplanation;
@@ -434,8 +441,7 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
     explanation = value;
   };
   const remember = (patch = {}) => {
-    const store = sourceEditorExplanationStore(explanationChats);
-    const stored = store.get(sourceEditorExplanationMemoryKey(context, explanation.id));
+    const stored = explanationChats.get(sourceEditorExplanationMemoryKey(context, explanation.id));
     if (["stopping", "stopped"].includes(stored?.status) && patch.status !== "failed") {
       explanation = stored;
       return Promise.resolve(explanation);
@@ -445,7 +451,7 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
       ...patch,
       updatedAt: new Date().toISOString()
     });
-    store.set(
+    explanationChats.set(
       sourceEditorExplanationMemoryKey(context, explanation.id),
       explanation
     );
@@ -514,13 +520,14 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
 /**
  * @param {object} [context]
  * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
 async function runTrackedSourceEditorAgentTurn(context = {}, {
   assistantMessageId = "",
   currentExplanation = () => ({}),
   emitEvent = () => {},
-  explanationChats = null,
+  explanationChats,
   fallbackError = "Source explanation failed.",
   remember = async () => ({}),
   run = async () => ({}),
@@ -623,8 +630,14 @@ async function runTrackedSourceEditorAgentTurn(context = {}, {
   }
 }
 
+/**
+ * @param {object} [context]
+ * @param {string} [explanationId]
+ * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
+ */
 async function readSourceEditorExplanation(context = {}, explanationId = "", {
-  explanationChats = null
+  explanationChats
 } = {}) {
   return withSourceEditorExplanationFreshness(
     context,

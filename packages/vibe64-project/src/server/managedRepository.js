@@ -118,18 +118,10 @@ async function cleanupPreparedProjectDirectory(projectsRoot = "", projectContext
 }
 
 /**
- * @param {StudioProjectContext} [projectContext]
+ * @param {StudioProjectContext} projectContext
  * @param {object} [input]
  */
-async function readProjectForService(projectContext = {}, input = {}) {
-  // readable-check: allow method-probe - optional operation: a project context without project reads answers context_unavailable
-  if (typeof projectContext?.readWorkspaceProject !== "function") {
-    throw repositoryServiceError(
-      "vibe64_project_context_unavailable",
-      "Project context is not available.",
-      500
-    );
-  }
+async function readProjectForService(projectContext, input = {}) {
   const result = await projectContext.readWorkspaceProject({
     slug: input.slug || input.projectSlug || input.name
   });

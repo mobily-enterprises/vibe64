@@ -4,11 +4,12 @@ import { normalizeText } from "@local/vibe64-core/server/core";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
 import { sourceEditorAgentOperationOptions, sourceEditorExecutionProfileRequest, sourceEditorExecutionProfileSnapshot } from "./explanationProfile.js";
-import { deleteSourceEditorExplanationAgentThread, mutateSourceEditorExplanationCleanupRecords, normalizeSourceEditorExplanation, readSourceEditorExplanationCleanupRecord, readSourceEditorExplanationRecord, removeSourceEditorExplanationCleanupRecord, shouldCleanupSourceEditorExplanationRecord, sourceEditorCleanupActiveIds, sourceEditorExplanationMemoryKey, sourceEditorExplanationStore, sourceEditorHelperRoot, writeSourceEditorExplanation } from "./explanationRecords.js";
+import { deleteSourceEditorExplanationAgentThread, mutateSourceEditorExplanationCleanupRecords, normalizeSourceEditorExplanation, readSourceEditorExplanationCleanupRecord, readSourceEditorExplanationRecord, removeSourceEditorExplanationCleanupRecord, shouldCleanupSourceEditorExplanationRecord, sourceEditorCleanupActiveIds, sourceEditorExplanationMemoryKey, sourceEditorHelperRoot, writeSourceEditorExplanation } from "./explanationRecords.js";
 import { sourceEditorExplanationWithMessage, withSourceEditorExplanationFreshness } from "./explanationStream.js";
 import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
 
 // Stopping, cleaning up and deleting source explanations, with the helper
 // threads they used.
@@ -16,24 +17,25 @@ import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
  * @param {object} [context]
  * @param {string} [explanationId]
  * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
 async function stopSourceEditorExplanation(context = {}, explanationId = "", {
-  explanationChats = null,
+  explanationChats,
   explanationTurns,
   terminalService
 } = {}) {
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
   if (pendingTurn) {
-    const current = sourceEditorExplanationStore(explanationChats).get(key);
+    const current = explanationChats.get(key);
     if (current) {
-      sourceEditorExplanationStore(explanationChats).set(key, { ...current, status: "stopping" });
+      explanationChats.set(key, { ...current, status: "stopping" });
     }
     pendingTurn.controller.abort();
     await pendingTurn.promise.catch((error) => { if (error?.name !== "AbortError") throw error; });
   }
-  if (pendingTurn && !sourceEditorExplanationStore(explanationChats).has(key)) {
+  if (pendingTurn && !explanationChats.has(key)) {
     return normalizeSourceEditorExplanation({ id: explanationId, status: "stopped" });
   }
   let explanation = await readSourceEditorExplanationRecord(context, explanationId, { explanationChats });
@@ -69,7 +71,7 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
     }
   }
   // Do not yield between checking the current request and publishing its stopped state.
-  const current = sourceEditorExplanationStore(explanationChats).get(
+  const current = explanationChats.get(
     sourceEditorExplanationMemoryKey(context, explanationId)
   );
   const lastAssistant = current?.messages.findLast((entry) => entry.role === "assistant");
@@ -99,17 +101,17 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
  * @param {object} [context]
  * @param {object} [input]
  * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
 async function cleanupSourceEditorExplanations(context = {}, input = {}, {
   all = false,
-  explanationChats = null,
+  explanationChats,
   explanationTurns,
   terminalService
 } = {}) {
   const activeIds = sourceEditorCleanupActiveIds(input.activeExplanationIds);
   const originId = normalizeText(input.originId);
-  const store = sourceEditorExplanationStore(explanationChats);
   const cleaned = [];
   const cleanedHelpers = [];
   const failures = [];
@@ -137,7 +139,7 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, {
         const agentCleanup = await deleteSourceEditorExplanationAgentThread(context, record, {
           terminalService
         });
-        store.delete(key);
+        explanationChats.delete(key);
         if (record.helper) cleanedHelpers.push(record.helper);
         cleaned.push({
           id: record.id,
@@ -171,19 +173,19 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, {
  * @param {object} [context]
  * @param {string} [explanationId]
  * @param {object} [options]
+ * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
 async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
-  explanationChats = null,
+  explanationChats,
   explanationTurns,
   terminalService
 } = {}) {
-  const store = sourceEditorExplanationStore(explanationChats);
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
   pendingTurn?.controller.abort();
   await pendingTurn?.promise.catch(() => null);
-  const explanation = await readSourceEditorExplanationCleanupRecord(context, explanationId) || store.get(key);
+  const explanation = await readSourceEditorExplanationCleanupRecord(context, explanationId) || explanationChats.get(key);
   if (!explanation) {
     return {
       agentCleanup: {
@@ -196,7 +198,7 @@ async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
   const agentCleanup = await deleteSourceEditorExplanationAgentThread(context, explanation, {
     terminalService
   });
-  store.delete(key);
+  explanationChats.delete(key);
   await removeSourceEditorExplanationCleanupRecord(context, explanationId);
   return {
     agentCleanup,
