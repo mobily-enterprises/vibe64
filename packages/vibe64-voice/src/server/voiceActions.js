@@ -28,13 +28,20 @@ const voiceCatalogueTool = Object.freeze({
  * @param {ActionCatalogue} dependencies.actions
  * @param {VoiceService} dependencies.voice
  */
-function createVoiceActions({ actions, voice } = {}) {
-  if (!actions || typeof actions.execute !== "function") {
-    throw new TypeError("createVoiceActions requires the action catalogue.");
+function createVoiceActions({ actions, voice }) {
+  // The Colleague read must authorize the original request afresh. Its
+  // contributor rejects a resolved grant carried over from this action.
+  async function readCatalogueForColleague(context) {
+    const recheckContext = { ...context };
+    delete recheckContext.vibe64Action;
+    await actions.execute({
+      actionId: "vibe64.colleague.state.read",
+      input: {},
+      context: recheckContext
+    });
+    return voice.readCatalogue();
   }
-  if (!voice || typeof voice.readCatalogue !== "function") {
-    throw new TypeError("createVoiceActions requires the Vibe64 Voice API.");
-  }
+
   return Object.freeze([withVibe64ActionContext({
     id: ACTION_READ_VOICE_CATALOGUE,
     version: 1,
@@ -43,18 +50,7 @@ function createVoiceActions({ actions, voice } = {}) {
     output: null,
     extensions: { assistant: voiceCatalogueTool },
     idempotency: "none",
-    async execute(_input, context) {
-      // The Colleague read must authorize the original request afresh. Its
-      // contributor rejects a resolved grant carried over from this action.
-      const recheckContext = { ...context };
-      delete recheckContext.vibe64Action;
-      await actions.execute({
-        actionId: "vibe64.colleague.state.read",
-        input: {},
-        context: recheckContext
-      });
-      return voice.readCatalogue();
-    }
+    execute: (_input, context) => readCatalogueForColleague(context)
   }, { projectScoped: false })]);
 }
 

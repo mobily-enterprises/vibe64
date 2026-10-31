@@ -4,7 +4,7 @@ import { getStudioProjectContext } from "@local/vibe64-core/server/studioProject
 import { isTrustedStudioWebSocketRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { resolveProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { COLLEAGUE_VOICE_SOCKET_URL } from "../shared/routes.js";
-import { ACTION_READ_VOICE_CATALOGUE, createVoiceActions } from "./actions.js";
+import { ACTION_READ_VOICE_CATALOGUE, createVoiceActions } from "./voiceActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -23,9 +23,11 @@ function registerVoiceCatalogueRoute(fastify, actions) {
   }));
 }
 
-// The voice capability: whether the voice proxy is configured, and its voice
-// catalogue.
-/** @param {ReturnType<typeof resolveVoiceProxyConfig>} proxyConfig */
+/**
+ * The voice capability: whether the voice proxy is configured, and its voice
+ * catalogue.
+ * @param {ReturnType<typeof resolveVoiceProxyConfig>} proxyConfig
+ */
 function createVoice(proxyConfig) {
   return Object.freeze({
     available: proxyConfig.available,

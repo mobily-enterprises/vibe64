@@ -17,7 +17,7 @@ import {
 import {
   ACTION_READ_VOICE_CATALOGUE,
   createVoiceActions
-} from "../../packages/vibe64-voice/src/server/actions.js";
+} from "../../packages/vibe64-voice/src/server/voiceActions.js";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
