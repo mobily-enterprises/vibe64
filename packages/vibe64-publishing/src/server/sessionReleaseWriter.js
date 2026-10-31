@@ -18,7 +18,7 @@ function writerError(message, code = "vibe64_publishing_prepare_failed") {
  * @param {SourceEditorService} dependencies.sourceEditor
  * @param {() => string} [dependencies.today]
  */
-function createSessionReleaseWriter({ project, sourceEditor, today = () => new Date().toISOString().slice(0, 10) } = {}) {
+function createSessionReleaseWriter({ project, sourceEditor, today = () => new Date().toISOString().slice(0, 10) }) {
   async function sessionRoot(sessionId) {
     const id = String(sessionId || "").trim();
     if (!id) throw writerError("Open a session first: the version change is written into it for you to review and Save.", "vibe64_publishing_session_required");

@@ -6,7 +6,7 @@
   "type": "module",
   "exports": {
     "./client/publish-page": "./src/client/PublishPage.vue",
-    "./server/actions": "./src/server/actions.js",
+    "./server/actions": "./src/server/publishingActions.js",
     "./server/service": "./src/server/service.js",
     "./server/types": "./src/server/types.js",
     "./shared/destinationCatalog": "./src/shared/destinationCatalog.js"

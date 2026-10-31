@@ -45,6 +45,7 @@ export default [
     "packages/vibe64-genesis/src/server/**",
     "packages/vibe64-packaging/src/server/**",
     "packages/vibe64-project/src/server/**",
+    "packages/vibe64-publishing/src/server/**",
     "packages/vibe64-runtime/src/server/**"
   ]),
   {

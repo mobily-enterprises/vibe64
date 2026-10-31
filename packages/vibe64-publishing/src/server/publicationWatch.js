@@ -1,4 +1,4 @@
-import { PUBLISHING_ACTIONS } from "./actions.js";
+import { PUBLISHING_ACTIONS } from "./publishingActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 

@@ -83,7 +83,7 @@ function createLanShare({ now = () => Date.now(), host = "0.0.0.0", addresses = 
       expiresAt,
       timer: setTimeout(() => { stop(); }, ttlMs)
     };
-    share.timer.unref?.();
+    share.timer.unref();
     return status();
   }
 

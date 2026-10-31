@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
 
-import { PUBLISHING_ACTIONS, createPublishingActions } from "../../packages/vibe64-publishing/src/server/actions.js";
+import { PUBLISHING_ACTIONS, createPublishingActions } from "../../packages/vibe64-publishing/src/server/publishingActions.js";
 import { PUBLISHING_ASSISTANT_OPERATIONS, publishingTool } from "../../packages/vibe64-publishing/src/server/assistantContracts.js";
 
 // The assistant runtime validates every tool output against its schema.

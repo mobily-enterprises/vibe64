@@ -80,8 +80,7 @@ function action({ id, input, execute, kind = "command", assistant = null, channe
  * @param {object} dependencies
  * @param {PublishingService} dependencies.publishing
  */
-function createPublishingActions({ publishing } = {}) {
-  if (!publishing) throw new TypeError("createPublishingActions requires the publishing service.");
+function createPublishingActions({ publishing }) {
   return Object.freeze([
     action({ id: ACTIONS.STATE_READ, input: publishingStateInput, kind: "query", execute: () => publishing.readState(), assistant: publishingTool("state.read") }),
     action({ id: ACTIONS.RELEASE_SUGGEST, input: publishingStateInput, kind: "query", execute: () => publishing.suggestRelease() }),

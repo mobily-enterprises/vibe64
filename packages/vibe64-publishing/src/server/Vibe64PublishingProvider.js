@@ -1,6 +1,6 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
-import { createPublishingActions } from "./actions.js";
+import { createPublishingActions } from "./publishingActions.js";
 import { publicationWatchSource } from "./publicationWatch.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createPublishingService } from "./service.js";

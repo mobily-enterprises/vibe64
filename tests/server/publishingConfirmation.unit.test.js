@@ -8,7 +8,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { createConfirmationService, confirmingActor } from "../../packages/vibe64-publishing/src/server/confirmationService.js";
-import { PERSON_ONLY, PUBLISHING_ACTIONS, createPublishingActions } from "../../packages/vibe64-publishing/src/server/actions.js";
+import { PERSON_ONLY, PUBLISHING_ACTIONS, createPublishingActions } from "../../packages/vibe64-publishing/src/server/publishingActions.js";
 
 const PLAN = `sha256:${"a".repeat(64)}`;
 const OTHER_PLAN = `sha256:${"b".repeat(64)}`;

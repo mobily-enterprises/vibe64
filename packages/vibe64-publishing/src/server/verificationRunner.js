@@ -39,7 +39,7 @@ function checkEnvironment(home, base = process.env) {
  */
 function createVerificationRunner({
   runtimeRoot, repository, verify = verifyGenesisProject, processRunner = checkCommandRunner(), now = () => new Date().toISOString()
-} = {}) {
+}) {
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("Checks need the project's publishing folder.");
   const file = path.join(runtimeRoot, "verification.json");
   const exclusive = serialized();

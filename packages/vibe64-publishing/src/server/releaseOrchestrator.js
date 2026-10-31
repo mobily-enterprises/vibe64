@@ -182,7 +182,7 @@ function createReleaseOrchestrator({
   sourceWriter,
   packaging,
   now = () => new Date().toISOString()
-} = {}) {
+}) {
   if (!path.isAbsolute(resultStore || "")) throw new TypeError("Releases need an absolute result store.");
   const active = new Map(); // record id -> promise
   const releaseCache = new Map(); // commit -> { packaging, versions }
@@ -324,7 +324,7 @@ function createReleaseOrchestrator({
   // that signs in, plus local tool choices (which twine), which do not change
   // where it publishes.
   async function runtimeTarget(planTarget, { tag = null, notes = null } = {}) {
-    const tools = await toolchains.registryTools?.() || {};
+    const tools = await toolchains.registryTools();
     const settings = { ...(planTarget.settings || {}) };
     if (planTarget.destination === "pypi" && tools.twine) settings.twine = tools.twine;
     return { ...planTarget, account: planTarget.account || null, settings, ...(tag ? { tag } : {}), ...(notes ? { notes } : {}) };

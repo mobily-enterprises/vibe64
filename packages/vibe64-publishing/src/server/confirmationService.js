@@ -13,14 +13,11 @@ import {
 import { publishPlanDisplayId } from "@local/vibe64-packaging/server/plan";
 
 import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
+import { publishingError } from "./publishingError.js";
 
 const CONFIRMATIONS_CONTRACT = "vibe64.publishing-confirmations.v1";
 const PLAN_HASH = /^sha256:[0-9a-f]{64}$/u;
 const KEEP = 20;
-
-function confirmationError(message, code) {
-  return Object.assign(new Error(message), { code });
-}
 
 // Who is acting, from the execution context: only a person's own page request
 // is a person. Colleague turns, automation and internal calls never are.
@@ -37,14 +34,14 @@ function confirmingActor({ channel, assistant, user }) {
  * @param {() => number} [dependencies.now]
  * @param {number} [dependencies.ttlMs]
  */
-function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs } = {}) {
+function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs }) {
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("Confirmations need the project's publishing folder.");
   const file = path.join(runtimeRoot, "confirmations.json");
   const exclusive = serialized();
 
   async function read() {
     const value = await readJsonFile(file, () => ({ contract: CONFIRMATIONS_CONTRACT, records: [], pendingRequest: null }));
-    if (value?.contract !== CONFIRMATIONS_CONTRACT) throw confirmationError("Saved confirmations are not readable.", "vibe64_publishing_state_invalid");
+    if (value?.contract !== CONFIRMATIONS_CONTRACT) throw publishingError("Saved confirmations are not readable.", "vibe64_publishing_state_invalid");
     return value;
   }
 
@@ -61,9 +58,9 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
     // this plan and its targets. Nothing runs; the Publish page shows the request.
     request({ planHash, targetIds, requestedBy = "assistant" } = {}) {
       return exclusive(async () => {
-        if (!PLAN_HASH.test(planHash || "")) throw confirmationError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
+        if (!PLAN_HASH.test(planHash || "")) throw publishingError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
         if (!Array.isArray(targetIds) || !targetIds.length || !targetIds.every((id) => typeof id === "string" && id)) {
-          throw confirmationError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_invalid");
+          throw publishingError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_invalid");
         }
         const value = await read();
         value.pendingRequest = {
@@ -100,13 +97,13 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
     redeem({ planHash, token, actor } = {}) {
       return exclusive(async () => {
         if (actor?.kind !== "person") {
-          throw confirmationError("Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
+          throw publishingError("Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
         }
         const value = await read();
         // The token names this person's record; redeeming it says what else is
         // wrong (already used, expired or another plan).
         const index = value.records.findIndex((record) => record.actorId === actor.id && publishConfirmationTokenMatches(record, token));
-        if (index === -1) throw confirmationError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID");
+        if (index === -1) throw publishingError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID");
         const redeemed = redeemPublishConfirmation({ token, planHash, actor, record: value.records[index], now: now() });
         value.records[index] = redeemed;
         if (value.pendingRequest?.planHash === planHash) value.pendingRequest = null;

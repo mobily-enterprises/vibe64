@@ -52,7 +52,7 @@ function plainProof(proof) {
  * @param {() => string} [dependencies.now]
  * @param {string} [dependencies.ghCommand]
  */
-function createCredentialBroker({ keys, packaging, now = () => new Date().toISOString(), ghCommand = "gh" } = {}) {
+function createCredentialBroker({ keys, packaging, now = () => new Date().toISOString(), ghCommand = "gh" }) {
   async function accounts() {
     const status = await keys.status();
     return status.entries.filter((entry) => entry.kind === "account").map((entry) => ({

@@ -37,7 +37,7 @@ function createToolchainManager({
   fetchLicence = androidSdkLicence,
   installers = { installJdk, installAndroidSdk },
   finders = { findJdk, findAndroidSdk }
-} = {}) {
+}) {
   if (!path.isAbsolute(personalRoot || "") || !path.isAbsolute(toolchainsRoot || "")) {
     throw new TypeError("Toolchains need the personal publishing folder and a toolchains folder.");
   }

@@ -27,7 +27,7 @@ function releaseId(at) {
  * @param {string} dependencies.runtimeRoot
  * @param {() => string} [dependencies.now]
  */
-function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOString() } = {}) {
+function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOString() }) {
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("The release history needs the project's publishing folder.");
   const directory = path.join(runtimeRoot, "releases");
   const exclusive = serialized();
