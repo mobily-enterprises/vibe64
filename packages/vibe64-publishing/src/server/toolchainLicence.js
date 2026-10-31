@@ -21,6 +21,15 @@ function licenceError(message, code = "vibe64_publishing_licence_invalid") {
   return Object.assign(new Error(message), { code });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.personalRoot
+ * @param {string} dependencies.toolchainsRoot
+ * @param {() => string} [dependencies.now]
+ * @param {typeof androidSdkLicence} [dependencies.fetchLicence]
+ * @param {{ installJdk: typeof installJdk, installAndroidSdk: typeof installAndroidSdk }} [dependencies.installers]
+ * @param {{ findJdk: typeof findJdk, findAndroidSdk: typeof findAndroidSdk }} [dependencies.finders]
+ */
 function createToolchainManager({
   personalRoot,
   toolchainsRoot,

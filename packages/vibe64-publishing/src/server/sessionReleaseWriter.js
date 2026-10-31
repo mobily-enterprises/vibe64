@@ -5,10 +5,19 @@
 import { prepareReleaseChange } from "@local/vibe64-packaging/server/release";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+
 function writerError(message, code = "vibe64_publishing_prepare_failed") {
   return Object.assign(new Error(message), { code });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ * @param {SourceEditorService} dependencies.sourceEditor
+ * @param {() => string} [dependencies.today]
+ */
 function createSessionReleaseWriter({ project, sourceEditor, today = () => new Date().toISOString().slice(0, 10) } = {}) {
   async function sessionRoot(sessionId) {
     const id = String(sessionId || "").trim();

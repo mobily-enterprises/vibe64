@@ -20,6 +20,8 @@ import {
   publishingTargetUpdateInput
 } from "./inputSchemas.js";
 
+/** @typedef {import("./types.js").PublishingService} PublishingService */
+
 const ACTIONS = Object.freeze({
   STATE_READ: "vibe64.publication.state.read",
   RELEASE_SUGGEST: "vibe64.publication.release.suggest",
@@ -74,6 +76,10 @@ function action({ id, input, execute, kind = "command", assistant = null, channe
   });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {PublishingService} dependencies.publishing
+ */
 function createPublishingActions({ publishing } = {}) {
   if (!publishing) throw new TypeError("createPublishingActions requires the publishing service.");
   return Object.freeze([

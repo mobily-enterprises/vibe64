@@ -12,6 +12,8 @@ import { passthroughEnvironment } from "@local/vibe64-packaging/server/stages";
 
 import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 
+/** @typedef {ReturnType<typeof import("./projectRepository.js").createProjectRepository>} ProjectRepository */
+
 const VERIFICATION_CONTRACT = "vibe64.publishing-verification.v1";
 const KEEP = 10;
 const OUTPUT_TAIL = 4000;
@@ -27,6 +29,14 @@ function checkEnvironment(home, base = process.env) {
   return { ...passthroughEnvironment(base), HOME: home, TMPDIR: home, CI: "1", GIT_TERMINAL_PROMPT: "0" };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.runtimeRoot
+ * @param {ProjectRepository} dependencies.repository
+ * @param {typeof verifyGenesisProject} [dependencies.verify]
+ * @param {ReturnType<typeof checkCommandRunner>} [dependencies.processRunner]
+ * @param {() => string} [dependencies.now]
+ */
 function createVerificationRunner({
   runtimeRoot, repository, verify = verifyGenesisProject, processRunner = checkCommandRunner(), now = () => new Date().toISOString()
 } = {}) {

@@ -1,5 +1,7 @@
 import { PUBLISHING_ACTIONS } from "./actions.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+
 // Colleague's `publication` watch source: the project's latest release, read
 // through the publication state action under the watcher's own project access
 // (and Learn/Develop rule), never from files directly.
@@ -18,6 +20,10 @@ function summary(release) {
   return `${name} failed.`;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue} dependencies.actions
+ */
 function publicationWatchSource({ actions }) {
   return {
     id: "publication",

@@ -48,6 +48,11 @@ function normalizeTarget(input = {}, { now }) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.runtimeRoot
+ * @param {() => string} [dependencies.now]
+ */
 function createTargetsStore({ runtimeRoot, now = () => new Date().toISOString() } = {}) {
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("The targets store needs the project's publishing folder.");
   const file = path.join(runtimeRoot, "targets.json");

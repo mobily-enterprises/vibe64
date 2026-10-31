@@ -36,6 +36,11 @@ import { createTargetsStore } from "./state/targetsStore.js";
 import { createToolchainManager } from "./toolchainLicence.js";
 import { createVerificationRunner } from "./verificationRunner.js";
 
+/** @typedef {ReturnType<typeof import("./toolchainLicence.js").createToolchainManager>} ToolchainManager */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+
 const TWINE_VERSION = "6.1.0";
 
 function serviceError(message, code) {
@@ -80,13 +85,15 @@ async function installTool(toolchainsRoot, command, args, timeout, runCommand) {
   }
 }
 
-function createPublishingService({ project, sourceEditor, env = process.env, roots = null, now = () => new Date().toISOString(), runCommand = runVibe64Command } = {}) {
-  if (!project || typeof project.readCurrentProject !== "function") throw new TypeError("Publishing needs the project service.");
-  const { personalRoot, toolchainsRoot, cacheRoot } = roots || publishingRoots(env);
-  const keys = createAgeStore({ directory: path.join(personalRoot, "keys") });
-  const pythonTools = path.join(toolchainsRoot, "python-publish");
-  const baseToolchains = createToolchainManager({ personalRoot, toolchainsRoot, now });
-  const toolchains = Object.freeze({
+// The toolchains publishing uses: this computer's Android toolchains, and the
+// Python publishing tools in their own folder.
+/**
+ * @param {object} dependencies
+ * @param {ToolchainManager} dependencies.baseToolchains
+ * @param {string} dependencies.pythonTools
+ */
+function createPublishingToolchains({ baseToolchains, pythonTools }) {
+  return Object.freeze({
     ...baseToolchains,
     async status() {
       return { ...await baseToolchains.status(), python: { ready: Boolean(await stat(path.join(pythonTools, "bin", "python")).catch(() => null)), folder: pythonTools } };
@@ -97,7 +104,11 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
         : {};
     }
   });
-  const packaging = Object.freeze({
+}
+
+// The packaging operations releases use, from @local/vibe64-packaging.
+function createPublishingPackaging() {
+  return Object.freeze({
     androidTemplate: CAPACITOR_SHELL_TEMPLATE,
     buildPackage,
     credentialSpecs,
@@ -109,6 +120,25 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     vibe64Destination,
     withStageCredentials
   });
+}
+
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ * @param {SourceEditorService} dependencies.sourceEditor
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {{ personalRoot: string, toolchainsRoot: string, cacheRoot: string } | null} [dependencies.roots]
+ * @param {() => string} [dependencies.now]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ */
+function createPublishingService({ project, sourceEditor, env = process.env, roots = null, now = () => new Date().toISOString(), runCommand = runVibe64Command } = {}) {
+  if (!project || typeof project.readCurrentProject !== "function") throw new TypeError("Publishing needs the project service.");
+  const { personalRoot, toolchainsRoot, cacheRoot } = roots || publishingRoots(env);
+  const keys = createAgeStore({ directory: path.join(personalRoot, "keys") });
+  const pythonTools = path.join(toolchainsRoot, "python-publish");
+  const baseToolchains = createToolchainManager({ personalRoot, toolchainsRoot, now });
+  const toolchains = createPublishingToolchains({ baseToolchains, pythonTools });
+  const packaging = createPublishingPackaging();
   const broker = createCredentialBroker({ keys, packaging, now });
   const lanShare = createLanShare();
   const repository = createProjectRepository({ readProject: () => project.readCurrentProject() });
@@ -310,4 +340,4 @@ function minutes(value) {
   return Math.round(Number(value) * 60 * 1000);
 }
 
-export { createPublishingService, publishingRoots, result as publishingResult };
+export { createPublishingPackaging, createPublishingService, createPublishingToolchains, publishingRoots, result as publishingResult };

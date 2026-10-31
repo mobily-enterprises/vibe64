@@ -12,6 +12,8 @@ import { tagSavedCommit } from "@local/vibe64-packaging/server/tagSavedCommit";
 import { readSourceVersion } from "@local/vibe64-packaging/server/release";
 import { inspectVibe64Packaging } from "@local/vibe64-genesis/server";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 function repositoryError(message, code = "vibe64_publishing_repository_unavailable") {
   return Object.assign(new Error(message), { code });
 }
@@ -26,6 +28,10 @@ function githubRepositoryOf(url = "") {
   return match ? `${match[1]}/${match[2]}` : null;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService["readCurrentProject"]} dependencies.readProject
+ */
 function createProjectRepository({ readProject } = {}) {
   if (typeof readProject !== "function") throw new TypeError("The release repository needs readProject().");
 

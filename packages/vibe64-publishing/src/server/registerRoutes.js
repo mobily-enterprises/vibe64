@@ -10,6 +10,10 @@ import {
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
 
+/** @typedef {import("./types.js").PublishingService} PublishingService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+
 const CONFLICT_CODES = new Set([
   "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED",
   "VIBE64_PUBLISH_CONFIRMATION_USED",
@@ -28,6 +32,12 @@ function publishingStatusCode(response = {}) {
   return 400;
 }
 
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} [options]
+ * @param {PublishingService} options.publishing
+ * @param {StudioProjectContext | null} [options.projectContext]
+ */
 function registerRoutes(http, { publishing, projectContext = null } = {}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-publishing"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,

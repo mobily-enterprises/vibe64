@@ -29,6 +29,17 @@ import { publishingKeysUnlocked, recoveryKitCovers } from "@local/vibe64-packagi
 
 import { sideloadKeyEntryId } from "./credentialBroker.js";
 
+/** @typedef {ReturnType<typeof import("./state/targetsStore.js").createTargetsStore>} TargetsStore */
+/** @typedef {ReturnType<typeof import("./state/releaseHistoryStore.js").createReleaseHistoryStore>} ReleaseHistoryStore */
+/** @typedef {ReturnType<typeof import("./confirmationService.js").createConfirmationService>} ConfirmationService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-packaging/server/keys").createAgeStore>} AgeStore */
+/** @typedef {ReturnType<typeof import("./service.js").createPublishingToolchains>} PublishingToolchains */
+/** @typedef {ReturnType<typeof import("./projectRepository.js").createProjectRepository>} ProjectRepository */
+/** @typedef {ReturnType<typeof import("./verificationRunner.js").createVerificationRunner>} VerificationRunner */
+/** @typedef {ReturnType<typeof import("./credentialBroker.js").createCredentialBroker>} CredentialBroker */
+/** @typedef {ReturnType<typeof import("./sessionReleaseWriter.js").createSessionReleaseWriter>} SessionReleaseWriter */
+/** @typedef {ReturnType<typeof import("./service.js").createPublishingPackaging>} PublishingPackaging */
+
 function releaseError(message, code, details) {
   return Object.assign(new Error(message), { code, ...(details ? { details } : {}) });
 }
@@ -139,6 +150,23 @@ function summarizeRelease(record) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.projectRuntimeRoot
+ * @param {string} dependencies.resultStore
+ * @param {string} [dependencies.cacheDirectory]
+ * @param {TargetsStore} dependencies.targets
+ * @param {ReleaseHistoryStore} dependencies.history
+ * @param {ConfirmationService} dependencies.confirmations
+ * @param {AgeStore} dependencies.keys
+ * @param {PublishingToolchains} dependencies.toolchains
+ * @param {ProjectRepository} dependencies.repository
+ * @param {VerificationRunner} dependencies.verification
+ * @param {CredentialBroker} dependencies.credentials
+ * @param {SessionReleaseWriter} dependencies.sourceWriter
+ * @param {PublishingPackaging} dependencies.packaging
+ * @param {() => string} [dependencies.now]
+ */
 function createReleaseOrchestrator({
   projectRuntimeRoot,
   resultStore,

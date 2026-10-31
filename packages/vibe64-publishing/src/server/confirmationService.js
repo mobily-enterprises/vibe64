@@ -31,6 +31,12 @@ function confirmingActor({ channel, assistant, user }) {
   return { kind: "person", id: String(user?.id || user?.userKey || user?.username || "local-person") };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.runtimeRoot
+ * @param {() => number} [dependencies.now]
+ * @param {number} [dependencies.ttlMs]
+ */
 function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs } = {}) {
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("Confirmations need the project's publishing folder.");
   const file = path.join(runtimeRoot, "confirmations.json");

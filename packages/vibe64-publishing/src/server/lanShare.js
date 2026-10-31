@@ -21,6 +21,12 @@ function lanAddresses(interfaces = os.networkInterfaces()) {
   return addresses.sort((left, right) => Number(right.startsWith("192.168.")) - Number(left.startsWith("192.168.")));
 }
 
+/**
+ * @param {object} dependencies
+ * @param {() => number} [dependencies.now]
+ * @param {string} [dependencies.host]
+ * @param {typeof lanAddresses} [dependencies.addresses]
+ */
 function createLanShare({ now = () => Date.now(), host = "0.0.0.0", addresses = lanAddresses } = {}) {
   let share = null; // { server, key, file, fileName, url, expiresAt, timer }
 

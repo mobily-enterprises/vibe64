@@ -8,6 +8,9 @@ import { promisify } from "node:util";
 
 import { ANDROID_SIDELOAD_KEYSTORE, ANDROID_SIDELOAD_KEY_PASSWORD } from "@local/vibe64-packaging/server";
 
+/** @typedef {ReturnType<typeof import("@local/vibe64-packaging/server/keys").createAgeStore>} AgeStore */
+/** @typedef {ReturnType<typeof import("./service.js").createPublishingPackaging>} PublishingPackaging */
+
 const run = promisify(execFile);
 const ACCOUNT_ID = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 const ACCOUNT_KINDS = Object.freeze(["npm", "pypi", "github"]);
@@ -42,6 +45,13 @@ function plainProof(proof) {
   return result;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {AgeStore} dependencies.keys
+ * @param {PublishingPackaging} dependencies.packaging
+ * @param {() => string} [dependencies.now]
+ * @param {string} [dependencies.ghCommand]
+ */
 function createCredentialBroker({ keys, packaging, now = () => new Date().toISOString(), ghCommand = "gh" } = {}) {
   async function accounts() {
     const status = await keys.status();
