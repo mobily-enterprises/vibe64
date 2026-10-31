@@ -39,6 +39,13 @@ function codexProviderModelCatalog(provider) {
   return nativeModelCatalog({ models });
 }
 
+/**
+ * @param {object} options
+ * @param {string} options.systemRoot
+ * @param {(request: object) => Promise<{ ok?: boolean, failed?: Array<{ error?: string }> }>} [options.invalidateRuntimes]
+ *   stops the agent runtimes that use a provider whose key changes
+ * @param {typeof fetch} [options.fetchImpl]
+ */
 function createCodexProviderConnectionStore({
   systemRoot,
   invalidateRuntimes = async input => {

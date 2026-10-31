@@ -13,6 +13,8 @@ import {
   projectRequestErrorStatusCode
 } from "./projectRequestContext.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+
 // Vibe64 routes are JSKIT action route scopes:
 //
 //   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags }), {
@@ -32,6 +34,11 @@ const PROJECT_API_BASE = resolveScopedApiBasePath({ routeBase: VIBE64_PROJECT_RO
 // The router a Vibe64 scope registers through. Vibe64 checks its own requests
 // in the handler, so routes are public at the JSKIT auth layer; they carry the
 // scope's documentation tags and only the options the router reads.
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} [options]
+ * @param {string[]} [options.tags]
+ */
 function vibe64RouteHttp(http, { tags = [] } = {}) {
   if (!http?.router || typeof http.router.register !== "function") {
     throw new Error("vibe64RouteHttp requires runtime.http with router.register().");

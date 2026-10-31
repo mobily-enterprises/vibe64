@@ -1,5 +1,7 @@
 import { currentProjectRequestContext } from "./projectRequestContext.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+
 const VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD = Object.freeze({
   clientRefresh: Object.freeze({ includeOutputs: true })
 });
@@ -163,6 +165,7 @@ function sessionSummaryPayload(full) {
   };
 }
 
+/** @param {RuntimeEvents} events */
 function createSessionChangedPublisher(events) {
   if (!events || typeof events.publish !== "function") {
     throw new TypeError("createSessionChangedPublisher requires runtime.events.");
