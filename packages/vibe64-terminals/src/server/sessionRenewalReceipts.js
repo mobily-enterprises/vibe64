@@ -22,23 +22,14 @@ import {
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { effectiveVibe64AgentSettings as codexEffectiveAgentSettings } from "@local/vibe64-runtime/shared";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
+import { trimmedText as normalizeText } from "./trimmedText.js";
+import { isRecord } from "./isRecord.js";
+import { record } from "./record.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 // Original application renewal receipt, error and completion policy. This module
 // consumes the existing session store and native result; it never invokes a provider.
-function normalizeText(value) {
-  return String(value || "").trim();
-}
-
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function record(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
 function errorMessage(value, fallback = "Codex could not be prepared.") {
   return normalizeText(value?.error || value?.message || value) || fallback;
 }

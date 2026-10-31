@@ -9,6 +9,7 @@ import {
 import { openCodeError } from "./terminalShared.js";
 import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { record } from "./record.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
@@ -16,10 +17,6 @@ import { normalizeText as text } from "@local/vibe64-core/server/core";
 /** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
 
 const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;
-
-function record(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
 
 /**
  * Application account visibility and catalogue policy use the existing native probes.

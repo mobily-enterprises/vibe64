@@ -1,14 +1,11 @@
 import path from "node:path";
+import { trimmedText as text } from "./trimmedText.js";
 
 const GIT_HISTORY_RECORD_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%s";
 const DEFAULT_CHANGE_FILE_LIMIT = 200;
 const MAX_CHANGE_FILE_LIMIT = 500;
 const DEFAULT_CHANGE_DIFF_LINE_LIMIT = 800;
 const MAX_CHANGE_DIFF_LINE_LIMIT = 5000;
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 function parseGitHistoryRecords(value = "") {
   const fields = String(value || "").split("\0");

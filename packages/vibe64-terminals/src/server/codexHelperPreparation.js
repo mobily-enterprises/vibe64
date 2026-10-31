@@ -4,10 +4,7 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, accountPreparation, providerHost, runOwner }) {
   const { codexAppServerProviderKey, codexAppServerProviderKeyFields } = runtimeHost;

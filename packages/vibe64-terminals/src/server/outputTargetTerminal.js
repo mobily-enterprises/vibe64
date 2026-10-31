@@ -128,6 +128,7 @@ import {
 } from "./outputResults.js";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeOutputTargetId } from "./trimmedText.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -165,10 +166,6 @@ function previewRuntimesForSpec(spec = {}) {
     "git",
     ...(Array.isArray(spec.runtimes) ? spec.runtimes : [])
   ]);
-}
-
-function normalizeOutputTargetId(value = "") {
-  return String(value || "").trim();
 }
 
 

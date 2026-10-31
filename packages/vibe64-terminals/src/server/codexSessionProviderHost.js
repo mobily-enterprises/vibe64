@@ -22,12 +22,9 @@ import { codexTerminalNamespace } from "./terminalShared.js";
 import { subscribeUnixCommandControlChanges } from "./unixJsonCommand.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 const CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE = "vibe64_codex_turn_interrupt_failed";
 

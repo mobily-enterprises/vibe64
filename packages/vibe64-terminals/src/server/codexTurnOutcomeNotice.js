@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 const CODEX_TURN_OUTCOME = Object.freeze({
   PROVIDER_FAILURE: "provider_failure",
@@ -25,10 +26,6 @@ const CODEX_TURN_OUTCOME_MESSAGES = Object.freeze({
 });
 const CODEX_USAGE_BILLING_LINK =
   "[View Codex usage & billing](https://chatgpt.com/codex/settings/usage)";
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";

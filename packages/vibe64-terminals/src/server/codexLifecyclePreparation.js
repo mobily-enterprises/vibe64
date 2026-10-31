@@ -9,6 +9,7 @@ import { renewalCleanupContext, renewalArchivedPredecessorContext } from "./sess
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
@@ -18,10 +19,6 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
 /** @typedef {ReturnType<typeof import("./codexHelperPreparation.js").createCodexHelperPreparation>} CodexHelperPreparation */
 /** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexStartupHealth>} CodexStartupHealth */
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 /**
  * @param {ProjectService} projectService

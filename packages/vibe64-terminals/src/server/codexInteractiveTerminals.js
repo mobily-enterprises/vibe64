@@ -25,6 +25,7 @@ import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecu
 import { recordSessionGitCommandActor } from "./sessionGitCommandActor.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -41,10 +42,6 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_VISIBLE_TERMINAL_DETACHED_IDLE_TIMEOUT_MS = 5_000;
 const CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 4 * 1024 * 1024;
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 /**
  * @param {ProjectService} [projectService]

@@ -12,6 +12,8 @@ import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecu
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV, VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV } from "./agentEnvCommand.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeText } from "./trimmedText.js";
+import { isRecord } from "./isRecord.js";
 
 /** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
 /** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
@@ -26,9 +28,6 @@ const CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS = new Set([
   "VIBE64_CODEX_GIT_COMMAND_SOCKET",
   "VIBE64_CODEX_GIT_COMMAND_TOKEN"
 ]);
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 function codexAgentSettingsFromSession(session = {}) {
   const metadata = session.metadata || {};
@@ -249,10 +248,6 @@ function createCodexRuntimeHost({
     codexAppServerRuntimeOptionsFromSessionMetadata,
     codexAppServerPersistedRuntimeHost
   };
-}
-
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 /**

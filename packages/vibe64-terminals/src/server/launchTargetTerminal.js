@@ -33,6 +33,7 @@ import {
   USAGE_RECORDING_ENVIRONMENT,
   USAGE_RECORDING_REQUEST_HEADER
 } from "@local/vibe64-usage-recording/shared/contract";
+import { executionEnvRecord as normalizeLaunchEnv } from "./executionEnvRecord.js";
 
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 const WEB_LAUNCH_READINESS_TIMEOUT_SECONDS = 300;
@@ -376,16 +377,6 @@ function webLaunchTargetStartupScript({
   ].join("\n");
 
   return studioUserStartupScript(["bash", "-lc", runCommand]);
-}
-
-function normalizeLaunchEnv(env = {}) {
-  if (!env || typeof env !== "object" || Array.isArray(env)) {
-    return {};
-  }
-  return Object.fromEntries(Object.entries(env).map(([key, value]) => [
-    String(key || "").trim(),
-    String(value ?? "")
-  ]).filter(([key]) => Boolean(key)));
 }
 
 function ensurePreviewAuthRuntimeFilePath(filePath = "") {

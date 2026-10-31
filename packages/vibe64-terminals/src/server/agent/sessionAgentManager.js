@@ -32,6 +32,7 @@ import {
   currentRequestIsPracticeProject
 } from "@local/vibe64-core/server/projectRequestContext";
 import { isPracticeProjectRuntime } from "../practiceAgentGuidance.js";
+import { hasOwn } from "../hasOwn.js";
 
 /** @typedef {ReturnType<typeof import("../sessionAttachments.js").createSessionAttachments>} SessionAttachments */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
@@ -115,10 +116,6 @@ const EPHEMERAL_ASSISTANT_SCOPE_FIELDS = new Set([
 ]);
 const EPHEMERAL_ASSISTANT_SCOPE_ID_PATTERN = /^[a-z][a-z0-9_-]{0,127}$/u;
 const EPHEMERAL_ASSISTANT_CONTEXT_MAX_CHARACTERS = 64 * 1024;
-
-function hasOwn(value, key) {
-  return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
-}
 
 function looksLikeExecutionProfileResolution(value = null) {
   return Boolean(

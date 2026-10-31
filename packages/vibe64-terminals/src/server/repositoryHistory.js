@@ -24,14 +24,11 @@ import {
   parseGitHistoryRecords,
   safeChangePath
 } from "./gitRecords.js";
+import { trimmedText as text } from "./trimmedText.js";
 
 const DEFAULT_HISTORY_LIMIT = 30;
 const MAX_HISTORY_LIMIT = 50;
 const HISTORY_TIMEOUT_MS = 30_000;
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 function repositoryError(message, code = "vibe64_repository_history_failed") {
   const error = new Error(message);

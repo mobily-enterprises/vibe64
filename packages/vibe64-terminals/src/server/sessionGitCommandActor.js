@@ -15,14 +15,11 @@ import {
 import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 const NO_GITHUB_TERMINAL_USER_KEY = "runtime";
-
-function normalizeText(value = "") {
-  return String(value || "").trim();
-}
 
 function responseError(message = "", code = "vibe64_session_git_actor_failed", extra = {}) {
   return {

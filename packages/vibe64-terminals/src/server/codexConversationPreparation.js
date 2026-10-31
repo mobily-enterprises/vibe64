@@ -15,6 +15,7 @@ import {
   codexAppServerTurnState, codexConversationIdForWorkdir, codexThreadIdForWorkdir, withCodexState
 } from "./codexConversationStorage.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
@@ -26,10 +27,6 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {ReturnType<typeof import("./sessionTurnCheckpoint.js").createCodexSessionTurnCheckpoint>} CodexSessionTurnCheckpoint */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 function codexEffectiveAgentSettings(agentSettings = {}) {
   return effectiveVibe64AgentSettings(agentSettings);

@@ -8,13 +8,10 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { directoryExists, nonRetryableTerminalFailure } from "./terminalShared.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { codexSelectedModelProviderId } from "./codexRuntimeHost.js";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 function codexReconnectTerminalFailure(error = null) {
   if (error?.code !== CODEX_RECONNECT_REQUIRED_CODE) {

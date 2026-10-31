@@ -12,12 +12,9 @@ import { VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV } from "./codexGitCommand.js";
 import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { codexTerminalNamespace, globalCodexTerminalNamespace } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 const MAX_OPEN_CODEX_TERMINALS = 3;
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 function codexAppTerminalOwnerMetadata(toolHome = {}) {
   return terminalAppOwnerMetadata({

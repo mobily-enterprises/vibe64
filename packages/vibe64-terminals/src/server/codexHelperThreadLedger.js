@@ -8,6 +8,7 @@ import {
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 import { normalizeText } from "@local/vibe64-core/server/core";
+import { isRecord } from "./isRecord.js";
 
 const PROFILE_KEYS = Object.freeze([
   "limits",
@@ -36,10 +37,6 @@ const PROFILE_REQUEST_KEYS = Object.freeze([
   "reasoning",
   "summary"
 ]);
-
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
 
 function ledgerError(message = "", code = "vibe64_codex_helper_ledger_invalid") {
   const error = new Error(normalizeText(message) || "Codex helper ownership record is invalid.");

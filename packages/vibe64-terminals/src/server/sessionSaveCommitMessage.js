@@ -6,6 +6,7 @@ import {
 
 import { cleanupBackgroundTaskHelper, runBackgroundTaskHelperTurn } from "./assistantHelperTurn.js";
 import { SESSION_SAVE_TASK_ID } from "./sessionWorkTasks.js";
+import { trimmedText as text } from "./trimmedText.js";
 
 const MAX_COMMIT_SUBJECT_LENGTH = 72;
 const MAX_PROMPT_FILES = 40;
@@ -27,10 +28,6 @@ const SESSION_SAVE_COMMIT_OUTPUT_SCHEMA = Object.freeze({
   required: ["subject"],
   type: "object"
 });
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 function commitMessageError(message, code, suffix = "failed") {
   const error = new Error(message);

@@ -31,6 +31,7 @@ import { openedFileWithin } from "./openedFileWithin.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionSourcePath as savedSessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { isRecord } from "./isRecord.js";
 
 /** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -62,10 +63,6 @@ const PROMPT_HINT_CLEANUP_REASONS = new Set(["cleanup_paths_invalid", "cleanup_f
 
 function promptHintFailure(message, code, reason, details) {
   return Object.assign(new Error(message), { code, details, reason });
-}
-
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function boundedText(value = "", maximum = 0) {

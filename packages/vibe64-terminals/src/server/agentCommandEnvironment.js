@@ -22,13 +22,10 @@ import {
   prepareCodexGitCommand
 } from "./codexGitCommand.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { record } from "./record.js";
 
 const preparations = new Map();
 const closures = new Map();
-
-function record(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
 
 function commandBoundaryError(name = "") {
   const error = new Error(`Vibe64 could not prepare the session-scoped ${text(name) || "command"} boundary.`);

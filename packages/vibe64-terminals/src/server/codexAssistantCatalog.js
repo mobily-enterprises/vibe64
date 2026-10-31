@@ -1,9 +1,6 @@
 import { CODEX_APP_SERVER_PROVIDER_ID } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { codexTerminalNamespace } from "./terminalShared.js";
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 const CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS = 180_000;
 const CODEX_APP_SERVER_MODEL_CATALOG_CACHE_MS = 30_000;

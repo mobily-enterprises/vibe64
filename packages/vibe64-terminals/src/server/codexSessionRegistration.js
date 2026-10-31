@@ -127,6 +127,7 @@ import {
 import {
   normalizeVibe64AgentRunState
 } from "@local/vibe64-runtime/server/sessionStore";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
 /** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
@@ -145,10 +146,6 @@ const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
 const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
 
 const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 /**
  * @param {object} dependencies

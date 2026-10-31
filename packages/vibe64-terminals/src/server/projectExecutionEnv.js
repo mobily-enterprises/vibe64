@@ -1,14 +1,5 @@
 import { stableHash } from "@local/vibe64-execution/server";
-
-function normalizeExecutionEnvRecord(env = {}) {
-  if (!env || typeof env !== "object" || Array.isArray(env)) {
-    return {};
-  }
-  return Object.fromEntries(Object.entries(env).map(([key, value]) => [
-    String(key || "").trim(),
-    String(value ?? "")
-  ]).filter(([key]) => Boolean(key)));
-}
+import { executionEnvRecord as normalizeExecutionEnvRecord } from "./executionEnvRecord.js";
 
 function executionEnvFingerprint(env = {}) {
   return stableHash(JSON.stringify(Object.entries(normalizeExecutionEnvRecord(env))

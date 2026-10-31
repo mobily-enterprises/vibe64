@@ -7,6 +7,7 @@ import { codexAppServerThreadIdForSession, codexAppServerToolSchemaIdentityForSe
 import { agentTerminalIdentityForWorkdir, agentTerminalIdentityState } from "./agentTerminalIdentity.js";
 import { activeCodexTerminal } from "./codexTerminalAccess.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
@@ -27,10 +28,6 @@ const CODEX_STATE_METADATA_NAMES = Object.freeze([
   "agent_identity_terminal_session_id",
   "agent_identity_workdir"
 ]);
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 // Presentation of an admitted native descriptor is separate from source access.
 // Starting/reacquiring execution still validates the active root through Runtime.

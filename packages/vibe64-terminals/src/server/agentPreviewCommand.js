@@ -53,6 +53,8 @@ import {
   unixCommandSocketPath,
   unixCommandSocketIsPresent
 } from "./unixJsonCommand.js";
+import { trimmedText as normalizeText } from "./trimmedText.js";
+import { isRecord } from "./isRecord.js";
 
 /** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -130,14 +132,6 @@ function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, Math.max(0, Number(ms) || 0));
   });
-}
-
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function normalizeText(value = "") {
-  return String(value || "").trim();
 }
 
 function wrapperHostPath(wrapperHostDir = "") {

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+import { trimmedText as text } from "./trimmedText.js";
 
 // One lifecycle for short tool-less assistant helpers (session naming, Save
 // commit subjects, prompt hints). Each feature supplies only its prompt and the
@@ -12,10 +13,6 @@ import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/
 // execution_profile_missing. Every cleanup error carries a cleanup reason; one
 // raised before the turn ran is marked beforeTurn, and one raised after a failed
 // turn keeps that failure as its cause.
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 function executionProfileSnapshot(value) {
   try {

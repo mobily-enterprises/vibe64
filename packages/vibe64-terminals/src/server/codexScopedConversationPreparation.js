@@ -22,6 +22,9 @@ import {
   codexAppServerFrozenThreadDeleteResponse,
   codexAppServerFrozenTurnInterruptResponse
 } from "./codexSessionProviderHost.js";
+import { trimmedText as normalizeText } from "./trimmedText.js";
+import { isRecord } from "./isRecord.js";
+import { hasOwn } from "./hasOwn.js";
 
 /** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
 /** @typedef {ReturnType<typeof import("./codexHelperPreparation.js").createCodexHelperPreparation>} CodexHelperPreparation */
@@ -31,18 +34,6 @@ import {
 /** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
 
 const CODEX_APP_SERVER_EPHEMERAL_PROGRESS_LIMIT = 24;
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
-
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function hasOwn(value, key) {
-  return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
-}
 
 function codexAppServerConversationResponse(text = "") {
   const rawText = String(text || "").trim();

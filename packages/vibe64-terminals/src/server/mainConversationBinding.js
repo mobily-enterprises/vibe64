@@ -34,6 +34,7 @@ import {
   writeCodexAppServerIdentityMetadata
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { trimmedText as normalizeMessageText } from "./trimmedText.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -684,10 +685,6 @@ async function recordCodexMainMessageDelivery(sessionId, prepared) {
       turnId: refreshMetadata.codex_context_refresh_turn_id
     });
   }
-}
-
-function normalizeMessageText(value) {
-  return String(value || "").trim();
 }
 
 export function sessionBriefingIsDelivered(session = {}) {

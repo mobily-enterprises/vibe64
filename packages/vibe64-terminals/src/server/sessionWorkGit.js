@@ -15,6 +15,7 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { vibe64Host, writeGitWorktreeTree } from "@local/vibe64-execution/server";
 import { parseGitNameStatusZ } from "./gitRecords.js";
+import { trimmedText as text } from "./trimmedText.js";
 
 const SAVE_TIMEOUT_MS = 120_000;
 const SESSION_WORK_COMMAND_SCOPE = Symbol("vibe64-session-work-command-scope");
@@ -34,10 +35,6 @@ function isGitObjectId(value = "") {
 
 function boundedReviewDiff(content = "") {
   return { content: content.slice(0, MAX_REVIEW_DIFF_CHARACTERS), truncated: content.length > MAX_REVIEW_DIFF_CHARACTERS };
-}
-
-function text(value = "") {
-  return String(value || "").trim();
 }
 
 function normalizedDerivedArtifactPaths(paths = []) {

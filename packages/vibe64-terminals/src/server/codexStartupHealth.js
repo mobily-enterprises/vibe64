@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
 /** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
@@ -6,10 +7,6 @@ import crypto from "node:crypto";
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 export const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
 
 export function errorMessage(value, fallback = "Codex could not be prepared.") {
   return normalizeText(value?.error || value?.message || value) || fallback;
