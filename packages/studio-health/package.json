@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     "./server/actions": "./src/server/actions.js",
-    "./server/service": "./src/server/service.js"
+    "./server/service": "./src/server/service.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",

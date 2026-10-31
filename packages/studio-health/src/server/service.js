@@ -19,6 +19,9 @@ import {
   genesisPackageBinDirectory
 } from "@local/vibe64-genesis/server";
 
+/** @typedef {import("@local/vibe64-accounts/server/types").ConnectionsService} ConnectionsService */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 const COMMAND_TIMEOUT_MS = 20_000;
 
 function passedCheck({ id, label, group, expected, observed, explanation }) {
@@ -346,6 +349,13 @@ function packCommandChecks(check, { runCommand, studioRoot }) {
   ];
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ConnectionsService} dependencies.connectionsService
+ * @param {ProjectService} dependencies.projectService
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {string} dependencies.studioRoot
+ */
 function createService({
   connectionsService,
   projectService,

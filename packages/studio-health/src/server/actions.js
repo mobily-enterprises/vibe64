@@ -2,9 +2,15 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { studioHealthQueryInputValidator, studioToolsQueryInputValidator } from "./inputSchemas.js";
 
+/** @typedef {import("./types.js").StudioHealthService} StudioHealthService */
+
 const ACTION_READ_STUDIO_HEALTH = "vibe64.studio-health.read";
 const ACTION_CHECK_STUDIO_TOOLS = "vibe64.studio-health.tools";
 
+/**
+ * @param {object} dependencies
+ * @param {StudioHealthService} dependencies.studioHealth
+ */
 function createActions({ studioHealth } = {}) {
   if (!studioHealth || typeof studioHealth.inspect !== "function") {
     throw new TypeError("createActions requires the Studio Health API.");

@@ -2,6 +2,9 @@ import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import { requestQuery, vibe64RouteHandler, vibe64RouteHttp } from "@local/vibe64-core/server/featureRoutes";
 import { studioHealthQueryInputValidator, studioToolsQueryInputValidator } from "./inputSchemas.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+
+/** @param {RuntimeHttp} http */
 function registerRoutes(http) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "health"] }), {
     relativePath: "studio/health",
