@@ -236,7 +236,7 @@ async function createSourceEditorFixture({
   }
   const serviceOptions = {
     explanationCacheNow,
-    ...(logger ? { logger } : {}),
+    logger: logger || console,
     projectService: {
       async createRuntime() {
         return {
@@ -263,13 +263,11 @@ async function createSourceEditorFixture({
               sourceReady: true
             };
           },
-          ...(typeof writeExclusive === "function"
-            ? {
-                store: {
-                  runSessionExclusive: writeExclusive
-                }
-              }
-            : {})
+          store: {
+            runSessionExclusive: typeof writeExclusive === "function"
+              ? writeExclusive
+              : async (_sessionId, _operationName, operation) => ({ acquired: true, value: await operation() })
+          }
         };
       }
     },

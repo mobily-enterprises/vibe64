@@ -29,7 +29,17 @@ import {
   sourceEditorPathStats,
   sourceEditorResultOffset
 } from "./sourceFiles.js";
-
+import {
+  availableName,
+  changedError,
+  existsError,
+  folderOf,
+  joinRelative,
+  pathExists,
+  protectedError,
+  sameEntry,
+  sameFile
+} from "./fileAreaItems.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 // Files areas: authorization, area-to-root resolution, locking, the
@@ -294,32 +304,11 @@ async function areaOperation(operation, context, input, readUpload) {
   }
 }
 
-function existsError(name) {
-  return sourceEditorError(`“${name}” already exists in this folder.`, "vibe64_files_exists", { name }, 409);
-}
-
-function protectedError(item) {
-  return sourceEditorError(`“${item}” is protected in this area.`, "vibe64_files_protected_entry", { path: item }, 403);
-}
-
-function changedError() {
-  return sourceEditorError("An item changed while it was being moved or copied. Try again.", "vibe64_source_editor_file_changed", {}, 409);
-}
-
 // When putting an item back fails, the error says where it is kept.
 function keptError(context, keptAt) {
   const where = `${context.staging}/${path.basename(keptAt)}`;
   return sourceEditorError(`This could not finish, and the item could not be put back. It is kept as “${where}” for ${STAGING_STALE_DAYS} days; move it back before then.`,
     "vibe64_files_item_kept", { path: where }, 500);
-}
-
-function sameEntry(left, right) {
-  return left.dev === right.dev && left.ino === right.ino;
-}
-
-// The same file, unchanged: identity, size and modification time.
-function sameFile(left, right) {
-  return sameEntry(left, right) && left.size === right.size && left.mtimeMs === right.mtimeMs;
 }
 
 // Holds the folder at `folderPath` open while `perform` runs, if it is still
@@ -373,13 +362,6 @@ async function withStaging(context, perform) {
   return withAreaFolder(context, context.staging, perform);
 }
 
-async function pathExists(absolutePath) {
-  return lstat(absolutePath).then(() => true, (error) => {
-    if (isMissingPathError(error)) return false;
-    throw error;
-  });
-}
-
 // A new, unused name in the staging folder.
 function stagedItem(staging) {
   return staging.at(crypto.randomUUID());
@@ -418,15 +400,6 @@ async function removeStaleStaging(context) {
   });
 }
 
-function folderOf(relativePath) {
-  const parent = path.posix.dirname(relativePath);
-  return parent === "." ? "" : parent;
-}
-
-function joinRelative(folder, name) {
-  return folder ? `${folder}/${name}` : name;
-}
-
 // The names among `names` that already exist in a folder, so one question can
 // cover a whole upload or transfer.
 async function existingNames(context, folder, names = []) {
@@ -444,17 +417,6 @@ async function existingNames(context, folder, names = []) {
     if (await pathExists(absoluteSourceEditorPath(context.sourceRoot, joinRelative(folder, candidate)))) existing.push(candidate);
   }
   return existing;
-}
-
-// "report (1).pdf", "report (2).pdf", …: the first free name beside the original.
-async function availableName(destination, name) {
-  const extension = path.extname(name);
-  const stem = extension ? name.slice(0, -extension.length) : name;
-  for (let number = 1; number < 1000; number += 1) {
-    const candidate = `${stem} (${number})${extension}`;
-    if (!(await pathExists(destination.at(candidate)))) return candidate;
-  }
-  throw sourceEditorError("Too many items with this name already exist here.", "vibe64_files_exists", { name }, 409);
 }
 
 // Where an incoming item goes in the open destination folder under the chosen

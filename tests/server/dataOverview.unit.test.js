@@ -177,9 +177,9 @@ test("real source-editor persistence creates complete JSON, detects stale edits 
     localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: { contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: { host: "127.0.0.1", port: 5432, database: "erd_test", username: "reader" }, write: { host: "127.0.0.1", port: 5432, database: "erd_test", username: "writer" } } })
   };
-  const sourceEditor = createSourceEditor({ projectService, temporaryRoot: root });
+  const sourceEditor = createSourceEditor({ logger: console, projectService, temporaryRoot: root });
   t.after(() => sourceEditor.close());
-  const service = createService({ projectService, sourceEditor, publishLayoutChanged: async (id) => events.push(id), withKnex: () => assert.fail("Overview must not query data") });
+  const service = createService({ logger: { info() {}, warn() {} }, terminalService: {}, projectService, sourceEditor, publishLayoutChanged: async (id) => events.push(id), withKnex: () => assert.fail("Overview must not query data") });
   const input = { sessionId: "test", definition: bookingOverview() };
   const created = await service.saveOverview(input);
   assert.equal(created.ok, true, JSON.stringify(created));
@@ -286,9 +286,11 @@ test("one persisted MySQL overview survives session database changes, UI saves a
       } };
     }
   };
-  const sourceEditor = createSourceEditor({ projectService, temporaryRoot: first.root });
+  const sourceEditor = createSourceEditor({ logger: console, projectService, temporaryRoot: first.root });
   t.after(() => sourceEditor.close());
   const service = createService({
+    logger: { info() {}, warn() {} },
+    terminalService: {},
     projectService, sourceEditor, publishLayoutChanged: async (id) => events.push(id),
     withKnex: () => assert.fail("Overview must use schema metadata, never SQL")
   });

@@ -36,13 +36,13 @@ function resolveObservedFile(sourceRoot = "", relativePath = "") {
  * @param {object} dependencies
  * @param {typeof watchDirectory} [dependencies.createWatcher]
  * @param {number} [dependencies.debounceMs]
- * @param {RuntimeLogger} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createSourceEditorFileObserver({
   createWatcher = watchDirectory,
   debounceMs = DEFAULT_SOURCE_CHANGE_DEBOUNCE_MS,
-  logger = console
-} = {}) {
+  logger
+}) {
   const directories = new Map();
   const normalizedDebounceMs = Math.max(0, Number(debounceMs) || 0);
 
@@ -50,7 +50,7 @@ function createSourceEditorFileObserver({
     try {
       listener(event);
     } catch (error) {
-      logger?.warn?.({ error }, "Source change listener failed.");
+      logger.warn({ error }, "Source change listener failed.");
     }
   }
 
@@ -69,7 +69,7 @@ function createSourceEditorFileObserver({
         updatedAt: new Date().toISOString()
       });
     }, normalizedDebounceMs);
-    target.timer.unref?.();
+    target.timer.unref();
   }
 
   function processDirectoryChange(entry, filename) {
@@ -93,7 +93,7 @@ function createSourceEditorFileObserver({
     });
     entry.watcher = watcher;
     watcher.on("error", (error) => {
-      logger?.warn?.({ directoryPath, error }, "Source file watcher failed.");
+      logger.warn({ directoryPath, error }, "Source file watcher failed.");
       for (const target of [...entry.targets.values()]) {
         broadcast(target, {
           error: String(error?.message || error || "Source file watcher failed."),

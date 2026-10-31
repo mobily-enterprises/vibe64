@@ -11,7 +11,7 @@ import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionCon
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import { registerRoutes as registerSourceRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
-import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/actions.js";
+import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
 import {
   findRegisteredRoute,
   routeProjectParams,

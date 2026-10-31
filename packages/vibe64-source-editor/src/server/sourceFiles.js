@@ -1,26 +1,37 @@
 import crypto from "node:crypto";
 import { constants } from "node:fs";
-import { copyFile, lstat, mkdir, open, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isMissingPathError, normalizeText, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
+import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { normalizePolicyPath, sourceEditorPathExcluded } from "./filePolicy.js";
 import { VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT, VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT, VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
-
+import { sourceEditorLanguageForPath } from "./sourceEditorLanguage.js";
+import {
+  normalizeSourceEditorQuery,
+  sourceEditorFileMatches,
+  sourceEditorResultLimit,
+  sourceEditorResultOffset
+} from "./sourceFileMatches.js";
+import {
+  absoluteSourceEditorPath,
+  normalizeSourceEditorRelativePath,
+  sourceEditorError,
+  sourceEditorPathStats
+} from "./sourceEditorPaths.js";
+import {
+  directoryNode,
+  sourceEditorDirectoryPage,
+  sourceEditorFileRevealTree
+} from "./sourceFileTree.js";
 // Session source files: path policy, tree, file matching, search, resolution
 // and read/create/save. The Files areas and integrations reuse these helpers.
 const SOURCE_EDITOR_CONFLICT_CODE = "vibe64_source_editor_conflict";
 
-const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
-
 const SOURCE_EDITOR_SEARCH_RESULT_LIMIT = 120;
 
 const SOURCE_EDITOR_SEARCH_TIMEOUT_MS = 6000;
-
-const SOURCE_EDITOR_QUERY_MAX_LENGTH = 240;
-
-const SOURCE_EDITOR_TREE_PAGE_LIMIT = 20;
 
 const SOURCE_EDITOR_RESOLVE_EXTENSIONS = [
   ".js",
@@ -157,13 +168,6 @@ async function streamSourceEditorOperation(operation, {
   }
 }
 
-function sourceEditorError(message, code, details = {}, statusCode = 400) {
-  const error = vibe64Error(message, code);
-  error.details = details;
-  error.statusCode = statusCode;
-  return error;
-}
-
 function sourceEditorErrorResponse(error) {
   return {
     ...vibe64ErrorResponse(error, {
@@ -182,69 +186,6 @@ function publicSourceEditorPolicy(policy = {}) {
     maxTreeDepth: policy.maxTreeDepth,
     maxTreeEntries: policy.maxTreeEntries
   };
-}
-
-function normalizeSourceEditorRelativePath(value = "") {
-  const raw = normalizeText(value).replaceAll("\\", "/");
-  if (!raw || raw === "." || raw === "/") {
-    return "";
-  }
-  if (raw.startsWith("/") || /^[A-Za-z]:\//u.test(raw)) {
-    throw sourceEditorError("Source editor paths must be relative to the session source.", "vibe64_invalid_source_editor_path");
-  }
-  const normalized = path.posix.normalize(raw).replace(/^\.\/+/u, "");
-  if (!normalized || normalized === "." || normalized === ".." || normalized.startsWith("../")) {
-    throw sourceEditorError("Source editor path escapes the session source.", "vibe64_invalid_source_editor_path");
-  }
-  return normalized;
-}
-
-function absoluteSourceEditorPath(sourceRoot = "", relativePath = "") {
-  const absolutePath = path.resolve(sourceRoot, relativePath);
-  if (!pathInsideOrEqual(sourceRoot, absolutePath)) {
-    throw sourceEditorError("Source editor path escapes the session source.", "vibe64_invalid_source_editor_path");
-  }
-  return absolutePath;
-}
-
-async function sourceEditorPathStats(sourceRoot = "", relativePath = "") {
-  const absolutePath = absoluteSourceEditorPath(sourceRoot, relativePath);
-  let currentPath = path.resolve(sourceRoot);
-  let stats;
-  for (const segment of ["", ...path.relative(currentPath, absolutePath).split(path.sep).filter(Boolean)]) {
-    currentPath = path.join(currentPath, segment);
-    stats = await lstat(currentPath);
-    if (stats.isSymbolicLink()) {
-      throw sourceEditorError("Source editor does not access paths containing symbolic links.", "vibe64_source_editor_symlink", {
-        path: relativePath
-      }, 403);
-    }
-  }
-  return stats;
-}
-
-function normalizeSourceEditorQuery(value = "") {
-  return normalizeText(value).slice(0, SOURCE_EDITOR_QUERY_MAX_LENGTH);
-}
-
-function sourceEditorFileQueryTokens(value = "") {
-  return normalizeSourceEditorQuery(value)
-    .toLowerCase()
-    .split(/\s+/u)
-    .filter(Boolean);
-}
-
-function sourceEditorResultLimit(value, fallback) {
-  const number = Number(value);
-  if (!Number.isInteger(number) || number <= 0) {
-    return fallback;
-  }
-  return Math.min(number, fallback);
-}
-
-function sourceEditorResultOffset(value) {
-  const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? number : 0;
 }
 
 function sourceEditorPolicyExcludeGlobs(policy = {}) {
@@ -286,152 +227,6 @@ function sourceEditorRipgrepBaseArgs(policy = {}) {
   ];
 }
 
-function orderedTokenIndexes(text = "", tokens = []) {
-  const normalizedText = String(text || "").toLowerCase();
-  const indexes = [];
-  let cursor = 0;
-  for (const token of tokens) {
-    const index = normalizedText.indexOf(token, cursor);
-    if (index < 0) {
-      return null;
-    }
-    indexes.push(index);
-    cursor = index + token.length;
-  }
-  return indexes;
-}
-
-function fuzzyCharacterIndexes(text = "", token = "") {
-  const normalizedText = String(text || "").toLowerCase();
-  const normalizedToken = String(token || "").toLowerCase();
-  const indexes = [];
-  let cursor = 0;
-  for (const character of normalizedToken) {
-    const index = normalizedText.indexOf(character, cursor);
-    if (index < 0) {
-      return null;
-    }
-    indexes.push(index);
-    cursor = index + 1;
-  }
-  return indexes;
-}
-
-function textTokenMatchScore(text = "", token = "") {
-  const normalizedText = String(text || "").toLowerCase();
-  const normalizedToken = String(token || "").toLowerCase();
-  if (!normalizedToken) {
-    return 0;
-  }
-  if (normalizedText === normalizedToken) {
-    return 0;
-  }
-  if (normalizedText.startsWith(normalizedToken)) {
-    return 1;
-  }
-  const substringIndex = normalizedText.indexOf(normalizedToken);
-  if (substringIndex >= 0) {
-    return 2 + substringIndex / 1000;
-  }
-  const fuzzyIndexes = fuzzyCharacterIndexes(normalizedText, normalizedToken);
-  if (!fuzzyIndexes) {
-    return null;
-  }
-  const span = fuzzyIndexes.at(-1) - fuzzyIndexes[0];
-  return 6 + fuzzyIndexes[0] / 1000 + span / 1000000;
-}
-
-function filePathTokenMatchScore(filePath = "", token = "") {
-  const lowerPath = filePath.toLowerCase();
-  const lowerName = path.posix.basename(lowerPath);
-  const lowerStem = lowerName.replace(/\.[^.]*$/u, "");
-  const nameScore = Math.min(
-    textTokenMatchScore(lowerName, token) ?? Number.POSITIVE_INFINITY,
-    textTokenMatchScore(lowerStem, token) ?? Number.POSITIVE_INFINITY
-  );
-  if (Number.isFinite(nameScore)) {
-    return nameScore;
-  }
-  const pathScore = textTokenMatchScore(lowerPath, token);
-  return pathScore === null ? null : 10 + pathScore;
-}
-
-function filePathMatchesQuery(filePath = "", tokens = []) {
-  return !tokens.length || tokens.every((token) => filePathTokenMatchScore(filePath, token) !== null);
-}
-
-function fileMatchScore(filePath = "", queryTokens = []) {
-  const tokens = Array.isArray(queryTokens)
-    ? queryTokens
-    : sourceEditorFileQueryTokens(queryTokens);
-  const lowerPath = filePath.toLowerCase();
-  const lowerQuery = tokens.join(" ");
-  const lowerName = path.posix.basename(lowerPath);
-  if (!tokens.length) {
-    return 5;
-  }
-  if (tokens.length > 1) {
-    const tokenScores = tokens.map((token) => filePathTokenMatchScore(lowerPath, token));
-    if (tokenScores.some((score) => score === null)) {
-      return 99;
-    }
-    const pathIndexes = orderedTokenIndexes(lowerPath, tokens);
-    const nameIndexes = orderedTokenIndexes(lowerName, tokens);
-    const allInName = tokens.every((token) => textTokenMatchScore(lowerName, token) !== null);
-    const basenameTokenCount = tokens
-      .filter((token) => textTokenMatchScore(lowerName, token) !== null)
-      .length;
-    const firstIndex = pathIndexes?.[0] ?? Math.min(...tokens
-      .map((token) => lowerPath.indexOf(token))
-      .filter((index) => index >= 0));
-    const lastIndex = pathIndexes?.at(-1) ?? Math.max(...tokens
-      .map((token) => lowerPath.indexOf(token))
-      .filter((index) => index >= 0));
-    const span = Number.isFinite(firstIndex) && Number.isFinite(lastIndex)
-      ? lastIndex - firstIndex
-      : lowerPath.length;
-    if (nameIndexes?.[0] === 0) {
-      return 1 + span / 1000;
-    }
-    if (nameIndexes) {
-      return 2 + span / 1000;
-    }
-    if (allInName) {
-      return 2.5 + tokenScores.reduce((sum, score) => sum + score, 0) / 100;
-    }
-    if (pathIndexes && firstIndex === 0) {
-      return 3 + span / 1000;
-    }
-    if (pathIndexes) {
-      return 4 + firstIndex / 1000 + span / 1000000;
-    }
-    return 6 - basenameTokenCount + tokenScores.reduce((sum, score) => sum + score, 0) / 100;
-  }
-  if (lowerName === lowerQuery) {
-    return 0;
-  }
-  if (lowerName.startsWith(lowerQuery)) {
-    return 1;
-  }
-  if (lowerName.includes(lowerQuery)) {
-    return 2;
-  }
-  if (lowerPath.startsWith(lowerQuery)) {
-    return 3;
-  }
-  return lowerPath.includes(lowerQuery) ? 4 : 99;
-}
-
-function sortFileMatches(matches = [], query = "") {
-  const queryTokens = sourceEditorFileQueryTokens(query);
-  return matches
-    .map((file) => ({ file, score: fileMatchScore(file.path, queryTokens) }))
-    .sort((left, right) => (
-      left.score - right.score || left.file.path.localeCompare(right.file.path)
-    ))
-    .map(({ file }) => file);
-}
-
 async function sourceEditorFilePaths(context = {}) {
   const paths = [];
   const ripgrepRun = await runRipgrepLines([
@@ -452,30 +247,6 @@ async function sourceEditorFilePaths(context = {}) {
     }
   });
   return { paths, truncated: ripgrepRun.truncated || ripgrepRun.timedOut };
-}
-
-function sourceEditorFileMatches(index, input = {}) {
-  const query = normalizeSourceEditorQuery(input.query || input.q);
-  const queryTokens = sourceEditorFileQueryTokens(query);
-  const limit = sourceEditorResultLimit(input.limit, SOURCE_EDITOR_FILE_MATCH_LIMIT);
-  const matches = [];
-  for (const relativePath of index.paths) {
-    if (filePathMatchesQuery(relativePath, queryTokens)) {
-      matches.push({
-        language: sourceEditorLanguageForPath(relativePath),
-        name: path.posix.basename(relativePath),
-        path: relativePath
-      });
-      if (!queryTokens.length && matches.length >= limit + 1) {
-        break;
-      }
-    }
-  }
-  return {
-    files: sortFileMatches(matches, query).slice(0, limit),
-    query,
-    truncated: index.truncated || matches.length > limit
-  };
 }
 
 function normalizeSourceEditorImportTarget(value = "") {
@@ -626,148 +397,6 @@ async function runRipgrepLines(args = [], {
     { exitCode: result.exitCode },
     500
   );
-}
-
-async function sourceEditorDirectoryPage(context = {}, {
-  limit = SOURCE_EDITOR_TREE_PAGE_LIMIT,
-  offset = 0,
-  path: relativePathValue = ""
-} = {}) {
-  const {
-    policy,
-    sourceRoot
-  } = context;
-  const relativePath = normalizeSourceEditorRelativePath(relativePathValue);
-  if (relativePath && sourceEditorPathExcluded(policy, relativePath)) {
-    throw sourceEditorError("The selected directory is excluded from source editing.", "vibe64_source_editor_directory_excluded", {
-      path: relativePath
-    }, 403);
-  }
-  const absolutePath = absoluteSourceEditorPath(sourceRoot, relativePath);
-  if (relativePath) {
-    const stats = await sourceEditorPathStats(sourceRoot, relativePath);
-    if (!stats.isDirectory()) {
-      throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_path", {
-        path: relativePath
-      });
-    }
-  }
-
-  const depth = relativePath ? relativePath.split("/").length : 0;
-  const normalizedLimit = sourceEditorResultLimit(limit, SOURCE_EDITOR_TREE_PAGE_LIMIT);
-  const normalizedOffset = sourceEditorResultOffset(offset);
-  if (depth >= policy.maxTreeDepth) {
-    return directoryNode(relativePath, [], {
-      hasMore: false,
-      limit: normalizedLimit,
-      loaded: true,
-      nextOffset: normalizedOffset,
-      offset: normalizedOffset,
-      total: 0,
-      truncated: true
-    });
-  }
-
-  const entries = await readdir(absolutePath, {
-    withFileTypes: true
-  });
-  entries.sort((left, right) => {
-    if (left.isDirectory() !== right.isDirectory()) {
-      return left.isDirectory() ? -1 : 1;
-    }
-    return left.name.localeCompare(right.name);
-  });
-
-  const visibleEntries = [];
-  for (const entry of entries) {
-    const childRelativePath = relativePath
-      ? `${relativePath}/${entry.name}`
-      : entry.name;
-    if (sourceEditorPathExcluded(policy, childRelativePath) || entry.isSymbolicLink()) {
-      continue;
-    }
-    if (entry.isDirectory() || entry.isFile()) {
-      visibleEntries.push({
-        entry,
-        relativePath: childRelativePath
-      });
-    }
-  }
-
-  const total = Math.min(visibleEntries.length, policy.maxTreeEntries);
-  const pageEntries = visibleEntries.slice(normalizedOffset, Math.min(total, normalizedOffset + normalizedLimit));
-  const children = await Promise.all(pageEntries.map(async ({ entry, relativePath: childRelativePath }) => {
-    if (entry.isDirectory()) {
-      return directoryNode(childRelativePath, [], {
-        loaded: false
-      });
-    }
-    return sourceEditorFileNode(sourceRoot, childRelativePath);
-  }));
-  const nextOffset = Math.min(total, normalizedOffset + children.length);
-  return directoryNode(relativePath, children, {
-    hasMore: nextOffset < total,
-    limit: normalizedLimit,
-    loaded: true,
-    nextOffset,
-    offset: normalizedOffset,
-    total,
-    truncated: visibleEntries.length > total
-  });
-}
-
-function directoryNode(relativePath = "", children = [], metadata = {}) {
-  return {
-    children,
-    hasMore: metadata.hasMore === true,
-    limit: Number.isInteger(metadata.limit) ? metadata.limit : SOURCE_EDITOR_TREE_PAGE_LIMIT,
-    loaded: metadata.loaded === true,
-    name: relativePath ? path.posix.basename(relativePath) : "",
-    nextOffset: Number.isInteger(metadata.nextOffset) ? metadata.nextOffset : children.length,
-    offset: Number.isInteger(metadata.offset) ? metadata.offset : 0,
-    path: relativePath,
-    total: Number.isInteger(metadata.total) ? metadata.total : children.length,
-    truncated: metadata.truncated === true,
-    type: "directory"
-  };
-}
-
-async function sourceEditorFileNode(sourceRoot = "", relativePath = "") {
-  const stats = await lstat(absoluteSourceEditorPath(sourceRoot, relativePath));
-  return {
-    language: sourceEditorLanguageForPath(relativePath),
-    name: path.posix.basename(relativePath),
-    path: relativePath,
-    size: stats.size,
-    type: "file"
-  };
-}
-
-async function sourceEditorFileRevealTree(context = {}, relativePathValue = "") {
-  const relativePath = normalizeSourceEditorRelativePath(relativePathValue);
-  if (!relativePath) {
-    return null;
-  }
-  const segments = relativePath.split("/").filter(Boolean);
-  if (!segments.length) {
-    return null;
-  }
-  let node = await sourceEditorFileNode(context.sourceRoot, relativePath);
-  for (let index = segments.length - 1; index > 0; index -= 1) {
-    const directoryPath = segments.slice(0, index).join("/");
-    node = directoryNode(directoryPath, [node], {
-      hasMore: false,
-      loaded: false,
-      nextOffset: 1,
-      total: 1
-    });
-  }
-  return directoryNode("", [node], {
-    hasMore: false,
-    loaded: false,
-    nextOffset: 1,
-    total: 1
-  });
 }
 
 function normalizeNewSourceEditorFilePath(value = "") {
@@ -1007,27 +636,6 @@ function sourceEditorFilePayload(relativePath = "", buffer, stats, overrides = {
     text: buffer.toString("utf8"),
     ...overrides
   };
-}
-
-function sourceEditorLanguageForPath(filePath = "") {
-  const basename = path.posix.basename(String(filePath || "")).toLowerCase();
-  const extension = path.posix.extname(basename);
-  if ([".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".vue"].includes(extension)) {
-    return "javascript";
-  }
-  if (extension === ".json") {
-    return "json";
-  }
-  if ([".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"].includes(extension)) {
-    return "cpp";
-  }
-  if ([".sh", ".bash", ".zsh", ".fish"].includes(extension) || ["bashrc", "zshrc"].includes(basename)) {
-    return "shell";
-  }
-  if ([".md", ".markdown", ".todo"].includes(extension) || basename === "todo") {
-    return "markdown";
-  }
-  return "text";
 }
 
 export {

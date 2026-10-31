@@ -32,7 +32,7 @@ function fakeWatcherFactory(records) {
 
 test("source file observer watches only selected files' immediate directories", async () => {
   const watchers = [];
-  const observer = createSourceEditorFileObserver({
+  const observer = createSourceEditorFileObserver({ logger: console,
     createWatcher: fakeWatcherFactory(watchers),
     debounceMs: 0
   });
@@ -77,7 +77,7 @@ test("source file observer watches only selected files' immediate directories", 
 });
 
 test("source file observer rejects paths outside the source root", () => {
-  const observer = createSourceEditorFileObserver({
+  const observer = createSourceEditorFileObserver({ logger: console,
     createWatcher: fakeWatcherFactory([])
   });
   const sourceRoot = path.resolve("/workspace/session/source");
@@ -91,7 +91,7 @@ test("source file observer rejects paths outside the source root", () => {
 test("source file observer closes active watches during service shutdown", async () => {
   const watchers = [];
   const events = [];
-  const observer = createSourceEditorFileObserver({
+  const observer = createSourceEditorFileObserver({ logger: console,
     createWatcher: fakeWatcherFactory(watchers)
   });
   observer.subscribe({

@@ -12,7 +12,7 @@ import { sendVibe64EventStream } from "@local/vibe64-core/server/eventStream";
 import {
   VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
-import { explanationFollowupStreamSchema, explanationStreamSchema } from "./actions.js";
+import { explanationFollowupStreamSchema, explanationStreamSchema } from "./sourceEditorActions.js";
 import { filePreviewImageType } from "../shared/fileTypes.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -31,6 +31,7 @@ async function sendSourceEditorNdjsonStream(reply, run) {
     throw new Error("Source editor streams require a Fastify reply with raw stream access.");
   }
 
+  // readable-check: allow optional-call - platform object: a reply stand-in without hijack() streams through raw directly
   reply.hijack?.();
 
   const rawReply = reply.raw;
@@ -39,6 +40,7 @@ async function sendSourceEditorNdjsonStream(reply, run) {
     closed = true;
   };
 
+  // readable-check: allow optional-call - platform object: a raw reply stand-in may not emit close
   rawReply.on?.("close", markClosed);
   rawReply.writeHead(200, {
     "Cache-Control": "no-cache, no-transform",
@@ -52,7 +54,7 @@ async function sendSourceEditorNdjsonStream(reply, run) {
       rawReply.write("\n");
     }
   }, 15000);
-  heartbeat.unref?.();
+  heartbeat.unref();
 
   const emit = (payload = {}) => {
     if (!closed) {
@@ -67,6 +69,7 @@ async function sendSourceEditorNdjsonStream(reply, run) {
     });
   } finally {
     clearInterval(heartbeat);
+    // readable-check: allow optional-call - platform object: a raw reply stand-in may not emit close
     rawReply.off?.("close", markClosed);
     if (!closed) {
       rawReply.end();
@@ -110,10 +113,7 @@ function sourceInput(request, input = {}) {
  */
 function registerRoutes(http, {
   projectContext = null, sourceEditor
-} = {}) {
-  if (!sourceEditor || typeof sourceEditor.readTree !== "function") {
-    throw new TypeError("registerRoutes requires the Vibe64 Source Editor API.");
-  }
+}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-source-editor"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",

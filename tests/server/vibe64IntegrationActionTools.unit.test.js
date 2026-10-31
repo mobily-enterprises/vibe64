@@ -4,7 +4,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/actions.js";
+import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
 import { createIntegrationSetupRequest, parseIntegrationSetupResponse } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 

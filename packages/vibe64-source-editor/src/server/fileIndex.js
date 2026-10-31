@@ -4,13 +4,18 @@ import path from "node:path";
 
 // Keep filename discovery out of the typing loop. Root-tree refreshes and editor
 // creates invalidate immediately; the age limit also picks up external writers.
+// An index without a snapshot file keeps its names only in memory.
+function keepNamesInMemory() {
+  return "";
+}
+
 /**
  * @param {object} dependencies
  * @param {typeof import("./sourceFiles.js").sourceEditorFilePaths} dependencies.load
- * @param {((context: object) => string) | null} [dependencies.snapshotPath]
+ * @param {(context: object) => string} [dependencies.snapshotPath]
  * @param {() => number} [dependencies.now]
  */
-function createSourceEditorFileIndex({ load, snapshotPath = null, now = Date.now } = {}) {
+function createSourceEditorFileIndex({ load, snapshotPath = keepNamesInMemory, now = Date.now }) {
   const entries = new Map();
   const maxAgeMs = 30_000;
   const maxEntries = 8;
@@ -30,7 +35,7 @@ function createSourceEditorFileIndex({ load, snapshotPath = null, now = Date.now
       entries.set(key, entry);
       while (entries.size > maxEntries) entries.delete(entries.keys().next().value);
       entry.pending = Promise.resolve().then(async () => {
-        const target = snapshotPath?.(context);
+        const target = snapshotPath(context);
         if (target && useSnapshot) {
           try {
             const saved = JSON.parse(await readFile(target, "utf8"));

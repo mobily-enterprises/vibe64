@@ -46,9 +46,9 @@ const explanationFollowupStreamSchema = createSchema({
 /**
  * @param {object} dependencies
  * @param {SourceEditorService} dependencies.sourceEditor
- * @param {PublishFileChanged} [dependencies.publishFileChanged]
+ * @param {PublishFileChanged} dependencies.publishFileChanged
  */
-function createSourceEditorActions({ sourceEditor, publishFileChanged = async () => {} }) {
+function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
   const action = (name, fields, execute, { kind = "command", changed = null, assistant = { exclude: true } } = {}) => withVibe64ActionContext({
     id: `vibe64.source-editor.${name}`, version: 1, kind,
     input: { schema: createSchema({ sessionId: identity, ...fields }), mode: "create" },
@@ -63,7 +63,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
   });
   const query = { kind: "query" };
   const integration = { ...origin, baseHash: { ...text, nullable: true, required: true }, configuration: { ...object, required: true } };
-  return [
+  return Object.freeze([
     action("file-areas.read", {}, (input) => sourceEditor.fileArea(input, "areas"), query),
     // Project areas need no session; the service requires one for session areas.
     ...["tree", "file", "download", "archive", "conflicts", "upload", "create", "save", "rename", "mkdir", "delete", "transfer"].map((operation) => action(`file-area.${operation}`, {
@@ -114,7 +114,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
     action("file.read", { path: { ...filePath, required: true } }, (input) => sourceEditor.readFile(input), query),
     action("file.create", { ...origin, path: { ...filePath, required: true } }, (input) => sourceEditor.createFile(input), { changed: "created" }),
     action("file.save", { ...origin, path: { ...filePath, required: true }, baseHash: requiredText, text: { ...text, required: true } }, (input) => sourceEditor.saveFile(input), { changed: "saved" })
-  ];
+  ]);
 }
 
 export { createSourceEditorActions, explanationFollowupStreamSchema, explanationStreamSchema };

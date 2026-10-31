@@ -45,7 +45,7 @@ async function fixture(t, { locked = false, setup = false, prepareEnvironment, e
 - Command with \`nodejs\` in \`.\`: \`node\` \`scripts/integrations.js\`
 `);
   }
-  const service = createService({
+  const service = createService({ logger: console,
     integrationDiscoveryFetch,
     publishSessionChanged: async (...args) => { notifications.push(args); },
     terminalService: authorize ? { requireAssistantAccess: authorize } : undefined,
@@ -739,7 +739,7 @@ test("n8n registration uses real project Env and nested session locking", { time
   const resource = "https://tools.example/mcp-server/http";
   const issuer = "https://auth.example";
   let posts = 0;
-  const service = createService({ projectService: project, temporaryRoot: path.join(root, "temporary"),
+  const service = createService({ logger: console, projectService: project, temporaryRoot: path.join(root, "temporary"),
     integrationDiscoveryFetch: async (url, options) => {
       if (options.method === "POST") {
         posts++;

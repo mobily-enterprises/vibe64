@@ -7,9 +7,6 @@ import {
 
 /** @param {RuntimeEvents} events */
 function createSourceEditorFileChangedPublisher(events) {
-  if (!events || typeof events.publish !== "function") {
-    throw new TypeError("Source editor event publication requires runtime.events.");
-  }
   return async function publishSourceEditorEvent(result = {}, {
     operation = "updated"
   } = {}) {

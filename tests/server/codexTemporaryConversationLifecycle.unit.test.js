@@ -724,7 +724,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
         return resolvedProfile;
       }
     };
-    const sourceEditor = createSourceEditorService({
+    const sourceEditor = createSourceEditorService({ logger: console,
       projectService: terminalProjectService,
       temporaryRoot,
       terminalService: sourceTerminalService
@@ -882,7 +882,7 @@ for (const startFails of [false, true]) {
         quickHelper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" },
         explain: { follows: "quickHelper" }
       }, nonOwner: {} }, 0);
-      const sourceEditor = createSourceEditorService({
+      const sourceEditor = createSourceEditorService({ logger: console,
         projectService: terminalProjectService,
         temporaryRoot,
         terminalService

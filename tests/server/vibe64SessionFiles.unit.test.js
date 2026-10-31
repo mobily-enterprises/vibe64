@@ -16,7 +16,7 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { registerRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
-import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/actions.js";
+import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
 import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
 const exec = promisify(execFile);
@@ -33,7 +33,7 @@ async function fixture(t) {
     await writeFile(path.join(store.paths("shared-id").dropZoneRoot, "shared.txt"), `${slug} exchange`);
     stores.set(slug, store);
   }
-  const service = createService({ projectService: { async createRuntime() {
+  const service = createService({ logger: console, projectService: { async createRuntime() {
     const store = stores.get(currentProjectRequestContext().slug);
     return { store, getSession: store.readSession };
   } } });

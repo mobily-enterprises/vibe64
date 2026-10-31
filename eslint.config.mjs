@@ -46,7 +46,8 @@ export default [
     "packages/vibe64-packaging/src/server/**",
     "packages/vibe64-project/src/server/**",
     "packages/vibe64-publishing/src/server/**",
-    "packages/vibe64-runtime/src/server/**"
+    "packages/vibe64-runtime/src/server/**",
+    "packages/vibe64-source-editor/src/server/**"
   ]),
   {
     // Over 750 lines, with a factory over 600 whose concerns share mutable state.

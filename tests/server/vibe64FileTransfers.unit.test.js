@@ -16,7 +16,7 @@ import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agent
 import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { registerRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
-import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/actions.js";
+import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
 import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
 // Each project has one live session with a managed source checkout (Repo, a
@@ -48,7 +48,7 @@ async function fixture(t, { sourcesBase } = {}) {
     stores.set(slug, store);
     sources.set(slug, sourceRoot);
   }
-  const service = createService({ projectService: { async createRuntime() {
+  const service = createService({ logger: console, projectService: { async createRuntime() {
     const store = stores.get(currentProjectRequestContext().slug);
     return { store, getSession: store.readSession };
   } } });

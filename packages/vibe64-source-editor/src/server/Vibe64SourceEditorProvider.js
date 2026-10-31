@@ -6,7 +6,7 @@ import {
 } from "./events.js";
 import { createService } from "./service.js";
 import { registerRoutes } from "./registerRoutes.js";
-import { createSourceEditorActions } from "./actions.js";
+import { createSourceEditorActions } from "./sourceEditorActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -47,6 +47,7 @@ const Vibe64SourceEditorProvider = defineFeature({
     registerRoutes(http, {
       sourceEditor
     });
+    // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals
     terminals.setSourceEditorProvider(sourceEditor);
     return { sourceEditor };
   },
@@ -58,6 +59,7 @@ const Vibe64SourceEditorProvider = defineFeature({
    * @param {{ outputs: { sourceEditor: SourceEditorService } }} context
    */
   shutdown({ terminals }, { outputs }) {
+    // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals
     terminals.setSourceEditorProvider(null);
     return outputs.sourceEditor.close();
   }

@@ -46,7 +46,7 @@ from saved project work, and inspect one exact file change at a time.
 - `tests/server/vibe64SourceSearchIndex.unit.test.js`
 - `packages/vibe64-source-editor/src/server/starredFiles.js`
 - `packages/vibe64-source-editor/src/server/registerRoutes.js`
-- `packages/vibe64-source-editor/src/server/actions.js`
+- `packages/vibe64-source-editor/src/server/sourceEditorActions.js`
 - `packages/vibe64-source-editor/src/server/integrationAssistantContracts.js`
 - `packages/vibe64-source-editor/src/server/integrationConfigurationInput.js`
 - `packages/vibe64-source-editor/src/server/integrationSetupInput.js`
@@ -96,7 +96,7 @@ Live file observation and streamed explanation/follow-up responses retain their
 transport-owned callbacks and lifetime. Explanations and follow-ups exist only as
 these streams; there is no separate non-streaming create or follow-up action.
 Each stream validates its body against the same selection and message schema an
-action would (`actions.js`) and receives the authenticated actor, rejecting a
+action would (`sourceEditorActions.js`) and receives the authenticated actor, rejecting a
 malformed request with an ordinary 400 response before streaming starts. Repository investigation and editing
 belong to coding conversations. Colleague discovers two read controls here:
 `integrations.read` projects the same authorized configuration read into slot IDs,

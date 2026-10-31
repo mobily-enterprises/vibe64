@@ -62,27 +62,24 @@ import {
  * @param {typeof runVibe64Command} [dependencies.integrationCommandRunner]
  * @param {typeof fetch} [dependencies.integrationDiscoveryFetch]
  * @param {() => number} [dependencies.explanationCacheNow]
- * @param {RuntimeLogger} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {ReturnType<typeof createSourceEditorFileObserver> | null} [dependencies.sourceFileObserver]
- * @param {TerminalsService | null} [dependencies.terminalService]
+ * @param {TerminalsService} dependencies.terminalService
  * @param {string} [dependencies.temporaryRoot]
  */
 function createService({
   integrationCommandRunner = runVibe64Command,
   integrationDiscoveryFetch = globalThis.fetch,
   explanationCacheNow = Date.now,
-  logger = console,
+  logger,
   projectService,
-  publishSessionChanged = async () => null,
+  publishSessionChanged,
   sourceFileObserver = null,
-  terminalService = null,
+  terminalService,
   temporaryRoot = tmpdir()
-} = {}) {
-  if (!projectService || typeof projectService.createRuntime !== "function") {
-    throw new TypeError("createService requires the Vibe64 Project API.");
-  }
+}) {
   const fileObserver = sourceFileObserver || createSourceEditorFileObserver({
     logger
   });
@@ -279,6 +276,7 @@ function createService({
       });
     },
 
+    // readable-check: allow setter-seam - not a slot: setStarredFile stars a file for one person
     async setStarredFile(input = {}) {
       return runSourceEditorOperation(async () => {
         if (typeof input.starred !== "boolean") {
@@ -320,6 +318,7 @@ function createService({
       return fileSaveOwner ? runSourceEditorOperation(() => fileSaveOwner({ input, save })) : save();
     },
 
+    // readable-check: allow setter-seam - cycle: vibe64.training requires vibe64.source-editor
     setFileSaveOwner(owner = null) {
       if (owner !== null && typeof owner !== "function") throw new TypeError("A source file save owner must be a function.");
       fileSaveOwner = owner;
