@@ -115,6 +115,10 @@ async function cleanupPreparedProjectDirectory(projectsRoot = "", projectContext
   });
 }
 
+/**
+ * @param {StudioProjectContext} [projectContext]
+ * @param {object} [input]
+ */
 async function readProjectForService(projectContext = {}, input = {}) {
   if (typeof projectContext?.readWorkspaceProject !== "function") {
     throw repositoryServiceError(
@@ -139,6 +143,11 @@ function assertProjectRepositoryMode(project = {}, mode = "", message = "Project
   }
 }
 
+/**
+ * @param {ProjectService | null} [projectService]
+ * @param {object} [options]
+ * @param {boolean} [options.requireSourceLock]
+ */
 function assertProjectSessionAuthority(projectService = null, {
   requireSourceLock = false
 } = {}) {

@@ -275,8 +275,8 @@ function projectEnvironmentResult(resolved, input, userRecords) {
  * @param {object} dependencies
  * @param {RuntimeEnv} [dependencies.env]
  * @param {RuntimeLogger | null} [dependencies.logger]
- * @param {(fullName: string, input: object) => Promise<unknown>} [dependencies.inspectConnectedRepository]
- * @param {(fullName: string, branch: string, input: object) => Promise<unknown>} [dependencies.inspectConnectedBranch]
+ * @param {(fullName: string, input: object) => Promise<object>} [dependencies.inspectConnectedRepository]
+ * @param {(fullName: string, branch: string, input: object) => Promise<object>} [dependencies.inspectConnectedBranch]
  * @param {typeof inspectGenesisCollaboration} [dependencies.inspectCollaboration]
  * @param {typeof inspectGenesisEngineering} [dependencies.inspectEngineering]
  * @param {typeof inspectGenesisEnvironment} [dependencies.inspectEnvironment]

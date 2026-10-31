@@ -74,7 +74,7 @@ const NO_HOST_RESOURCES = Object.freeze({
 /**
  * @param {object} dependencies
  * @param {((request: { archiveRoot: string, projectContextRoot: string, projectRuntimeRoot: string, slug: string }) => Promise<unknown>) | null} [dependencies.assertArchiveHeadroom]
- * @param {(request: { slug: string, reason: string }) => Promise<unknown>} dependencies.closeProjectRuntime
+ * @param {(request: { slug: string, reason: string }) => Promise<object>} dependencies.closeProjectRuntime
  * @param {() => Date} [dependencies.clock]
  * @param {typeof NO_HOST_RESOURCES} [dependencies.hostResources]
  * @param {StudioProjectContext} dependencies.projectContext
