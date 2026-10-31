@@ -51,8 +51,34 @@ export default [
     "packages/vibe64-sessions/src/server/**",
     "packages/vibe64-source-editor/src/server/**",
     "packages/vibe64-system-graph/src/server/**",
+    "packages/vibe64-terminals/src/server/**",
     "packages/vibe64-training/src/server/**",
     "packages/vibe64-usage-recording/src/server/**",
     "packages/vibe64-voice/src/server/**"
-  ])
+  ]),
+  {
+    // Over 750 lines, with a factory over 600 whose concerns share mutable state.
+    files: [
+      "packages/vibe64-terminals/src/server/agent/sessionAgentManager.js",
+      "packages/vibe64-terminals/src/server/agentPreviewCommand.js",
+      "packages/vibe64-terminals/src/server/assistantRouting.js",
+      "packages/vibe64-terminals/src/server/outputTargetTerminal.js",
+      "packages/vibe64-terminals/src/server/service.js",
+      "packages/vibe64-terminals/src/server/sessionConversations.js",
+      "packages/vibe64-terminals/src/server/sessionPromptHints.js",
+      "packages/vibe64-terminals/src/server/workspaceSetup.js"
+    ],
+    rules: {
+      "max-lines": "off",
+      "max-lines-per-function": "off"
+    }
+  },
+  {
+    // One browser script, rendered whole by the single function that returns it.
+    files: ["packages/vibe64-terminals/src/server/launchPreviewBridge.js"],
+    rules: {
+      "max-lines": "off",
+      "max-lines-per-function": "off"
+    }
+  }
 ];

@@ -26,7 +26,6 @@ import { VIBE64_UPLOAD_MAX_LABEL } from "@local/vibe64-core/shared";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
-/** @typedef {import("@jskit-ai/uploads-runtime/server/types").RuntimeUploads} RuntimeUploads */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
 /** @typedef {import("./types.js").TerminalsService} TerminalsService */
 
@@ -191,15 +190,13 @@ function normalizeAttachmentMultipartError(error) {
  * @param {RuntimeFastify} options.fastify
  * @param {StudioProjectContext} [options.projectContext]
  * @param {TerminalsService} options.terminals
- * @param {RuntimeUploads} options.uploads
  */
 function registerRoutes(
   http,
   {
     fastify,
     projectContext,
-    terminals,
-    uploads
+    terminals
   } = {}
 ) {
   if (!terminals || typeof terminals !== "object") {

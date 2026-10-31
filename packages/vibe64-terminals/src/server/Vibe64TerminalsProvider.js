@@ -29,7 +29,6 @@ import {
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {import("@jskit-ai/uploads-runtime/server/types").RuntimeUploads} RuntimeUploads */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").TerminalsService} TerminalsService */
 
@@ -81,6 +80,7 @@ function createVibe64TerminalsFeature({
       fastify: "runtime.fastify",
       http: "runtime.http",
       logger: "runtime.logger",
+      // Its provider registers the multipart parser that the attachment routes read.
       uploads: "runtime.uploads",
       project: "vibe64.project"
     },
@@ -99,10 +99,9 @@ function createVibe64TerminalsFeature({
      * @param {RuntimeHttp} capabilities.http
      * @param {RuntimeLogger} capabilities.logger
      * @param {ProjectService} capabilities.project
-     * @param {RuntimeUploads} capabilities.uploads
      * @param {{ actionCatalogue: ActionCatalogue }} context
      */
-    setup({ env, events, fastify, http, logger, project, uploads }, { actionCatalogue }) {
+    setup({ env, events, fastify, http, logger, project }, { actionCatalogue }) {
       const terminals = createService({
         actions: actionCatalogue,
         codexTerminalController,
@@ -117,8 +116,7 @@ function createVibe64TerminalsFeature({
       registerRoutes(http, {
         fastify,
         projectContext: getStudioProjectContext(),
-        terminals,
-        uploads
+        terminals
       });
       fastify.addHook("onReady", async () => {
         // All feature boot hooks (including hosted execution/auth configuration)
