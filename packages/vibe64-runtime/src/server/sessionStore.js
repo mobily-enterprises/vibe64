@@ -718,6 +718,11 @@ async function readActiveSessionMetadataValues({ projectRuntimeRoot = "", name =
   return values;
 }
 
+// The time now, for a store composed without its own clock.
+function systemClock() {
+  return new Date();
+}
+
 function createClockNow(clock) {
   if (typeof clock === "function") {
     return () => toDate(clock());
@@ -932,7 +937,7 @@ function genuineLearningBinding(raw, sessionId) {
  * @param {string} [options.sessionLockProcessPlatform]
  */
 function createVibe64SessionStore({
-  clock = undefined,
+  clock = systemClock,
   logger = null,
   learningScope = null,
   onRenewalArchiveCommitStep = null,
@@ -1277,6 +1282,7 @@ function createVibe64SessionStore({
         metadataPath
       });
     } catch (error) {
+      // readable-check: allow optional-call - data: a caught error's code may be absent or not text
       if (error?.code?.startsWith?.("vibe64_")) {
         throw error;
       }
@@ -1314,6 +1320,7 @@ function createVibe64SessionStore({
     try {
       value = JSON.parse(await readFile(metadataPath, "utf8"));
     } catch (error) {
+      // readable-check: allow optional-call - data: a caught error's code may be absent or not text
       if (error?.code?.startsWith?.("vibe64_")) {
         throw error;
       }
@@ -2609,6 +2616,7 @@ function createVibe64SessionStore({
       ...(write ? {} : { async hasMessage(id) { return conversationRecordHasMessage(record, id); } }),
       async listTurnIds() { return (await transaction.listTurnIds()).filter((id) => !record.rewound.includes(id)); },
       // Identity lookups see the same turns as listTurnIds.
+      // readable-check: allow method-probe - optional operation: a transaction without message lookups offers none
       ...(typeof transaction.findMessageTurnId === "function" ? { async findMessageTurnId(id) {
         const turnId = await transaction.findMessageTurnId(id);
         return turnId && !record.rewound.includes(turnId) ? turnId : "";
@@ -5439,6 +5447,7 @@ function createVibe64SessionStore({
 }
 
 export {
+  systemClock,
   VIBE64_AGENT_RUN_STATE,
   VIBE64_SESSION_SCHEMA_VERSION,
   VIBE64_SESSION_STATUS,

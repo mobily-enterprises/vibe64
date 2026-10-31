@@ -19,6 +19,7 @@ async function runVibe64AgentWriteExclusive(runtime, sessionId = "", operation, 
   if (typeof operation !== "function") {
     throw new TypeError("Exclusive Vibe64 agent work requires an operation.");
   }
+  // readable-check: allow method-probe - optional operation: a runtime without a session store runs the work directly
   if (typeof runtime?.store?.runSessionExclusive !== "function") {
     return {
       acquired: true,
@@ -54,9 +55,6 @@ async function runVibe64AgentWriteExclusive(runtime, sessionId = "", operation, 
 async function runVibe64RenewalAgentWriteExclusive(runtime, sessionId = "", operation, options = {}) {
   if (typeof operation !== "function") {
     throw new TypeError("Exclusive Vibe64 renewal agent work requires an operation.");
-  }
-  if (typeof runtime?.store?.runSessionExclusiveForRenewal !== "function") {
-    throw new TypeError("Exclusive Vibe64 renewal agent work requires the private renewal lock boundary.");
   }
   const exclusive = await runtime.store.runSessionExclusiveForRenewal(
     sessionId,

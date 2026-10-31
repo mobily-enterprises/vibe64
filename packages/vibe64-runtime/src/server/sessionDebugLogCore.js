@@ -78,6 +78,7 @@ function vibe64SessionDebugLog(event = "", details = {}, options = {}) {
   }
 
   const logger = globalThis.console;
+  // readable-check: allow method-probe - platform object: a runtime may have no console
   if (!logger || typeof logger.info !== "function") {
     return entry;
   }

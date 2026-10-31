@@ -24,6 +24,7 @@ import { codexAppServerRuntimeBaseDir } from "./agentProviderRuntimePaths.js";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { isPlainObject } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 import {
@@ -87,10 +88,6 @@ const codexAppServerHelperAuthError = codexAccountReader.error;
 const codexAccountIdentitySignature = codexAccountReader.identitySignature;
 const readBoundedCodexAuthJson = codexAccountReader.readRecord;
 const readCodexSelectedAccountAuth = codexAccountReader.readSelected;
-
-function isPlainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value);
-}
 
 async function readCodexSelectedAccountAccess(options = {}) {
   const toolHomeSource = normalizeAgentText(options.toolHomeSource);

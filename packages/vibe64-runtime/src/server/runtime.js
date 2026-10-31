@@ -1,7 +1,7 @@
-import process from "node:process";
-import { lstat, realpath, rm } from "node:fs/promises";
-import { isDeepStrictEqual } from "node:util";
+import { rm } from "node:fs/promises";
 import path from "node:path";
+import process from "node:process";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   normalizeText,
@@ -17,24 +17,16 @@ import {
   assertGenesisPromptTask,
   renderGenesisPrompt
 } from "@local/vibe64-genesis/server";
-import {
-  vibe64AssistantSelectionFromMetadata
-} from "@local/vibe64-runtime/shared";
 
 import {
   VIBE64_SESSION_STATUS,
   createVibe64SessionStore,
   learningSessionBinding,
-  validateLearningSessionScope,
-  vibe64SessionStatusIsHidden
+  systemClock,
+  validateLearningSessionScope
 } from "./sessionStore.js";
-import {
-  assertSourceInspectionHealthy,
-  sourceInspectionFailure
-} from "./sessionSourceInspection.js";
-import {
-  inspectSessionSourceMergeState
-} from "./sessionSourceGit.js";
+import { assertSourceInspectionHealthy } from "./sessionSourceInspection.js";
+
 import {
   VIBE64_SESSION_CLOSING_AT_METADATA,
   VIBE64_SESSION_CLOSING_REASON_METADATA,
@@ -48,220 +40,13 @@ import {
   restoreRenewalSessionSourceStage,
   stagePreparedRenewalSessionSource
 } from "./sessionWorktreeArchive.js";
+
 import {
-  publicSessionMetadata,
-  workspaceSetupStateFromMetadata
-} from "./workspaceSetupState.js";
-
-const GENESIS_SESSION_KIND = "genesis";
-const SESSION_RENEWAL_HANDOVER_HASH_PATTERN = /^[a-f0-9]{64}$/u;
-
-function unsupportedSessionError(session = {}) {
-  const sessionId = normalizeText(session.sessionId || session.id) || "(unknown)";
-  return vibe64Error(
-    `Session ${sessionId} uses an unsupported runtime format and cannot be opened.`,
-    "vibe64_session_runtime_unsupported"
-  );
-}
-
-function sessionIsSupported(session = {}) {
-  return normalizeText(session.manifest?.runtimeKind) === GENESIS_SESSION_KIND;
-}
-
-function assertSupportedSession(session = {}) {
-  if (!sessionIsSupported(session)) {
-    throw unsupportedSessionError(session);
-  }
-  return session;
-}
-
-function assertUsableSession(session = {}) {
-  if (vibe64SessionStatusIsHidden(session.status)) {
-    throw vibe64Error(
-      `Vibe64 session is reserved for an in-progress renewal: ${normalizeText(session.sessionId) || "(unknown)"}`,
-      "vibe64_session_renewal_private"
-    );
-  }
-  return assertSupportedSession(session);
-}
-
-function requireSessionSourceRoot(session = {}) {
-  const sourceRoot = sessionSourcePath(session);
-  if (!sourceRoot) {
-    const sessionId = normalizeText(session.sessionId || session.id) || "(unknown)";
-    throw vibe64Error(
-      `Session ${sessionId} has no usable source checkout. Create or select a session with source before using this operation.`,
-      "vibe64_session_source_required"
-    );
-  }
-  return sourceRoot;
-}
-
-function plainManifest(manifest = {}) {
-  return {
-    createdAt: normalizeText(manifest.createdAt),
-    product: normalizeText(manifest.product) || "vibe64",
-    revision: Number(manifest.revision) || 1,
-    schemaVersion: Number(manifest.schemaVersion) || 1,
-    sessionId: normalizeText(manifest.sessionId),
-    updatedAt: normalizeText(manifest.updatedAt || manifest.createdAt)
-  };
-}
-
-function plainSessionView(session = {}, {
-  sourceInspection = null,
-  learningScope = null
-} = {}) {
-  const learning = learningSessionBinding(session.metadata, learningScope, session.sessionId);
-  const sourcePath = sessionSourcePath(session);
-  const workspaceSetup = workspaceSetupStateFromMetadata(session.metadata);
-  return {
-    ...(session.archived === true
-      ? {
-          archiveMetadataPath: normalizeText(session.archiveMetadataPath),
-          archivePath: normalizeText(session.archivePath),
-          archived: true,
-          archivedAt: normalizeText(session.archivedAt)
-        }
-      : {}),
-    agentRuns: Array.isArray(session.agentRuns) ? session.agentRuns : [],
-    assistantSelection: vibe64AssistantSelectionFromMetadata(session.metadata, {
-      required: false
-    }),
-    backgroundTasks: Array.isArray(session.backgroundTasks) ? session.backgroundTasks : [],
-    companion: learning ? { id: "learning", label: "Learning" } : {
-      id: GENESIS_SESSION_KIND,
-      label: "Genesis"
-    },
-    ...(learning ? { purpose: "learning", learning,
-      nativeExecutionRoot: session.archived || archivedSessionStatus(session.status) ? ""
-        : learning.noExercise ? learningNativeExecutionRoot(session) : sourcePath } : {}),
-    conversationLogRoot: normalizeText(session.conversationLogRoot),
-    manifest: plainManifest(session.manifest),
-    metadata: publicSessionMetadata(session.metadata),
-    revision: Number(session.revision) || 1,
-    sessionId: normalizeText(session.sessionId),
-    sessionName: normalizeText(session.sessionName),
-    pinnedSessionId: normalizeText(session.pinnedSessionId),
-    sessionRoot: normalizeText(session.sessionRoot),
-    sourceInspection,
-    sourcePath,
-    sourceReady: Boolean(sourcePath),
-    stateRoot: normalizeText(session.stateRoot),
-    status: normalizeText(session.status) || VIBE64_SESSION_STATUS.ACTIVE,
-    updatedAt: normalizeText(session.updatedAt),
-    workspaceSetup
-  };
-}
-
-function archivedSessionStatus(status = "") {
-  return normalizeText(status) === VIBE64_SESSION_STATUS.ARCHIVED;
-}
-
-function sessionSourceCreationFailed(session = {}) {
-  return normalizeText(session?.metadata?.source_creation_failed).toLowerCase() === "yes";
-}
-
-function sessionSourceRecoveryWasSaved(session = {}) {
-  return normalizeText(session?.metadata?.source_recovery_saved).toLowerCase() === "yes";
-}
-
-function sessionHasRenewalHandover(session = {}) {
-  const metadata = session?.metadata && typeof session.metadata === "object"
-    ? session.metadata
-    : {};
-  const acknowledged = normalizeText(metadata.agent_briefing_delivered).toLowerCase() === "yes" &&
-    Boolean(normalizeText(metadata.agent_renewal_seed_acknowledged_at)) &&
-    SESSION_RENEWAL_HANDOVER_HASH_PATTERN.test(
-      normalizeText(metadata.agent_renewal_seed_handover_hash)
-    ) &&
-    Boolean(normalizeText(metadata.agent_renewal_seed_operation_id)) &&
-    Boolean(normalizeText(metadata.agent_renewal_seed_thread_id)) &&
-    Boolean(normalizeText(metadata.agent_renewal_seed_turn_id)) &&
-    Boolean(normalizeText(metadata.renewal_id)) &&
-    Boolean(normalizeText(metadata.renewed_from));
-  const delivered = Boolean(normalizeText(metadata.renewal_handover_delivered_at)) &&
-    Boolean(normalizeText(metadata.renewal_id)) &&
-    Boolean(normalizeText(metadata.renewed_from));
-  return acknowledged || delivered;
-}
-
-function learningNativeExecutionRoot(session) {
-  return path.join(session.stateRoot, "sessions", "active", session.sessionId, "native");
-}
-
-async function requireLearningNativeDirectory(session) {
-  const directory = learningNativeExecutionRoot(session);
-  try {
-    const info = await lstat(directory);
-    if (!info.isDirectory() || info.isSymbolicLink() || await realpath(directory) !== directory) throw new Error("Not a private native directory.");
-  } catch {
-    throw vibe64Error("The learning execution directory is missing or aliased. Ask your administrator to restore the original session; reads do not recreate it.",
-      "vibe64_learning_native_directory_unavailable");
-  }
-  return directory;
-}
-
-async function sessionAvailabilityIssue(session = {}, learningScope = null) {
-  if (!sessionIsSupported(session)) {
-    return {
-      code: "vibe64_session_runtime_unsupported",
-      message: "This session uses an unsupported format. Ask your Vibe64 administrator to preserve its remaining files and retire the record. Start a new session to continue working."
-    };
-  }
-  if (
-    session.archived === true || archivedSessionStatus(session.status) ||
-    sessionSourceCreationFailed(session) || normalizeText(session.metadata?.session_archive_operation)
-  ) {
-    return null;
-  }
-  if (learningSessionBinding(session.metadata, learningScope, session.sessionId)?.noExercise) {
-    try { await requireLearningNativeDirectory(session); return null; }
-    catch (error) { return { code: error.code, message: error.message }; }
-  }
-  const sourcePath = sessionSourcePath(session);
-  if (sourcePath && await pathExists(sourcePath)) {
-    return null;
-  }
-  return {
-    code: "vibe64_session_source_required",
-    message: "The source checkout is missing. Ask your Vibe64 administrator to restore it from a verified backup, then check again. A fresh checkout cannot recover missing unsaved work."
-  };
-}
-
-/**
- * @param {Vibe64SessionRuntime} runtime
- * @param {object} [session]
- */
-async function inspectSessionSource(runtime, session = {}) {
-  assertSupportedSession(session);
-  if (!sessionHasSource(session)) {
-    return null;
-  }
-  if (!runtime.sourceInspectionAvailable || runtime.sourceInspectionError) {
-    return {
-      ...sourceInspectionFailure(),
-      status: "error"
-    };
-  }
-  try {
-    const merge = await inspectSessionSourceMergeState(sessionSourcePath(session));
-    if (merge.hasConflicts) {
-      return {
-        ...sourceInspectionFailure({
-          merge
-        }),
-        status: "error"
-      };
-    }
-    return null;
-  } catch {
-    return {
-      ...sourceInspectionFailure(),
-      status: "error"
-    };
-  }
-}
+  archivedSessionStatus, assertSupportedSession, assertUsableSession, GENESIS_SESSION_KIND,
+  inspectSessionSource, plainSessionView, requireLearningNativeDirectory, requireSessionSourceRoot,
+  sessionAvailabilityIssue, sessionHasRenewalHandover, sessionIsSupported, sessionSourceCreationFailed,
+  sessionSourceRecoveryWasSaved
+} from "./sessionRuntimeChecks.js";
 
 /** @typedef {ReturnType<typeof createVibe64SessionStore>} Vibe64SessionStore */
 
@@ -283,7 +68,7 @@ class Vibe64SessionRuntime {
    * @param {Vibe64SessionStore} [options.store]
    */
   constructor({
-    clock = undefined,
+    clock = systemClock,
     createSessionSource = null,
     inspectSourceByDefault = true,
     learningScope = null,
@@ -341,6 +126,7 @@ class Vibe64SessionRuntime {
    * @param {string} [request.status]
    */
   async createSession({
+    // readable-check: allow dependency-default - input validation: a new session without metadata has none
     metadata = {},
     sessionId = "",
     sourceContext = {},
@@ -549,6 +335,7 @@ class Vibe64SessionRuntime {
   }
 
   async resolvePromptEnvironment() {
+    // readable-check: allow method-probe - input validation: the prompt environment is a value or a function that reads it once
     if (typeof this.promptEnvironment === "function") {
       this.promptEnvironment = Promise.resolve().then(this.promptEnvironment);
     }
