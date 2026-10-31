@@ -1,10 +1,8 @@
+import { trimmedText as normalizeSourceEditorFileValue } from "./trimmedText.js";
+
 const VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT = "vibe64.source-editor.file.changed";
 const VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT = "vibe64.source-editor.sync.error";
 const VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT = "vibe64.source-editor.sync.ready";
-
-function normalizeSourceEditorFileValue(value = "") {
-  return String(value || "").trim();
-}
 
 function safeSourceEditorFileNumber(value) {
   const number = Number(value);

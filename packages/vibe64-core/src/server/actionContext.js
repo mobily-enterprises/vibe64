@@ -10,6 +10,10 @@ import { logOperationalEvent } from "./logging.js";
 import { assertLearningModeAllowsProject } from "./learningMode.js";
 import { assertTeamAiAllowsProject } from "./teamAiGate.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
 function actionContextError(code, message, statusCode = 403) {
   return Object.assign(new Error(message), { code, statusCode });
 }
@@ -97,10 +101,20 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
   });
 }
 
-// Hosts supply authentication and project access through JSKIT's existing
-// context contributor. Both callers are re-authorized for every execution.
+/**
+ * Hosts supply authentication and project access through JSKIT's existing
+ * context contributor. Both callers are re-authorized for every execution.
+ * @param {ActionCatalogue} actions
+ * @param {object} options
+ * @param {ReturnType<typeof getStudioProjectContext>} [options.projectContext]
+ * @param {(request: { request: any, context: object }) => Promise<object | null> | object | null} options.resolveUser
+ * @param {(request: object) => Promise<unknown> | unknown} options.authorizeProject
+ * @param {"all" | "learning-only"} [options.admissionScope]
+ * @param {RuntimeEnv} [options.env]
+ * @param {RuntimeLogger} options.logger
+ */
 function registerVibe64ActionContext(actions, { projectContext, resolveUser, authorizeProject,
-  admissionScope = "all", env = {}, logger = null } = {}) {
+  admissionScope = "all", env = {}, logger } = {}) {
   if (!["all", "learning-only"].includes(admissionScope)) {
     throw new TypeError("Vibe64 action context admissionScope must be all or learning-only.");
   }

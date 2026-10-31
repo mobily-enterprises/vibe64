@@ -49,12 +49,14 @@ function codexProviderModelCatalog(provider) {
 function createCodexProviderConnectionStore({
   systemRoot,
   invalidateRuntimes = async input => {
+    // readable-check: allow optional-call - input validation: a key change's optional steps before and after its runtimes stop
     await input.prepare?.();
+    // readable-check: allow optional-call - input validation: a key change's optional steps before and after its runtimes stop
     await input.publish?.();
     return { ok: true };
   },
   fetchImpl = fetch
-} = {}) {
+}) {
   async function read(providerId, engineId = "codex") {
     const paths = codexProviderPaths(systemRoot, providerId, engineId);
     try {

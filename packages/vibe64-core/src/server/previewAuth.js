@@ -7,6 +7,7 @@ import {
   PREVIEW_IDENTITY_SELECTOR_TYPES,
   PREVIEW_IDENTITY_SELECTOR_USER_ID
 } from "../shared/previewIdentity.js";
+import { vibe64Error as previewIdentityError } from "./core.js";
 
 // The one Preview authentication mode: the app's own Preview identity command
 // (Outputs `#### Preview identity`) signs the selected application user in.
@@ -364,12 +365,6 @@ function timingSafeTextEqual(left = "", right = "") {
   const leftBuffer = Buffer.from(String(left || ""));
   const rightBuffer = Buffer.from(String(right || ""));
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function previewIdentityError(message, code) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
 }
 
 function invalidPreviewIdentityGrant() {

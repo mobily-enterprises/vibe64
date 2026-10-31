@@ -36,6 +36,7 @@ let practiceRequestActor = null;
 // A host whose person requests carry no vibe64User (the local transport)
 // supplies the person here: resolve({request}) returns the actor or null.
 // Returns the unregister function.
+// readable-check: allow module-registry - cycle: vibe64.training requires vibe64.core, whose practice requests it names
 function registerPracticeRequestActor(resolve) {
   if (typeof resolve !== "function") throw new TypeError("Practice request actor requires a resolver.");
   practiceRequestActor = resolve;
@@ -67,6 +68,7 @@ async function resolveProjectRequestContext({
     await assertLearningModeAllowsProject({ actor: vibe64User, slug, request, practice: isPractice });
     await assertTeamAiAllowsProject({ actor: vibe64User });
   };
+  // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
   const practice = resolvedProjectContext.currentPracticeProjectScope?.();
   if (practice) {
     if (slug !== practice.slug) {
@@ -181,18 +183,23 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
   ) {
     return null;
   }
+  // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
   const projectRuntimeRoot = typeof projectContext.projectRuntimeRootForTarget === "function"
     ? projectContext.projectRuntimeRootForTarget(targetRoot)
     : "";
+  // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
   const projectSessionSourceRoot = typeof projectContext.projectSessionSourceRootForTarget === "function"
     ? projectContext.projectSessionSourceRootForTarget(targetRoot)
     : "";
+  // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
   const sourceRoot = typeof projectContext.sourceRootForTarget === "function"
     ? projectContext.sourceRootForTarget(targetRoot)
     : "";
+  // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
   const sourceConfigRoot = typeof projectContext.sourceConfigRootForTarget === "function"
     ? projectContext.sourceConfigRootForTarget(targetRoot)
     : "";
+  // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
   const projectRecordPath = typeof projectContext.projectRecordPathForTarget === "function"
     ? projectContext.projectRecordPathForTarget(targetRoot)
     : "";

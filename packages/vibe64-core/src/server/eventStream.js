@@ -21,6 +21,7 @@ async function sendVibe64EventStream(reply, run, {
     throw new TypeError("sendVibe64EventStream requires run().");
   }
 
+  // readable-check: allow optional-call - platform object: a reply stand-in without hijack() streams through raw directly
   reply.hijack?.();
 
   const rawReply = reply.raw;
@@ -56,6 +57,7 @@ async function sendVibe64EventStream(reply, run, {
     rawReply.write(`data: ${JSON.stringify(payload)}\n\n`);
   }
 
+  // readable-check: allow optional-call - platform object: a raw reply stand-in may not emit close
   rawReply.on?.("close", closeStream);
   rawReply.writeHead(200, {
     "Cache-Control": "no-cache, no-transform",
@@ -73,7 +75,7 @@ async function sendVibe64EventStream(reply, run, {
       rawReply.write(": heartbeat\n\n");
     }
   }, Math.max(1000, Number(heartbeatMs) || 15000));
-  heartbeat.unref?.();
+  heartbeat.unref();
 
   try {
     await run({
@@ -96,6 +98,7 @@ async function sendVibe64EventStream(reply, run, {
     }
   } finally {
     clearInterval(heartbeat);
+    // readable-check: allow optional-call - platform object: a raw reply stand-in may not emit close
     rawReply.off?.("close", closeStream);
     const clientDisconnected = closed;
     closeStream();

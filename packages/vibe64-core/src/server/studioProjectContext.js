@@ -1,99 +1,39 @@
-import { constants as fsConstants } from "node:fs";
-import { createHash } from "node:crypto";
-import { access, lstat, mkdir, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { isDeepStrictEqual } from "node:util";
-import {
-  runVibe64Command
-} from "@local/vibe64-execution/server";
 
-import { assertProjectEffectAdmission, currentPracticeProjectScope, runWithPracticeProjectContext } from "./practiceContext.js";
+import { assertProjectEffectAdmission } from "./practiceContext.js";
 
 import {
-  VIBE64_PROJECTS_ROOT_ENV,
-  resolveDefaultProjectsRoot,
   resolveVibe64Roots,
   resolveExplicitStudioTargetRoot
 } from "./studioRoots.js";
 import {
   normalizeProjectSlug,
   PROJECT_SLUG_MAX_LENGTH,
-  listProjectRuntimeRoots,
-  EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
-  resolveProjectRecordPath,
-  resolveProjectRuntimeRoot,
-  resolveProjectSessionsRoot,
-  resolveProjectDeploymentsRoot,
-  resolveProjectRuntimeFilesRoot,
-  resolveProjectRuntimeConfigRoot,
-  resolveSourceConfigRoot
+  listProjectRuntimeRoots
 } from "./projectState.js";
-import {
-  publicProjectRuntimeOpenState,
-  readProjectRuntimeOpenState
-} from "./projectRuntimeOpenState.js";
-import {
-  readProjectRecordMetadata,
-  updateProjectRecordMetadata
-} from "./projectRecordMetadata.js";
-import {
-  isPlainObject,
-  pathExists,
-  pathInsideOrEqual,
-  relativePathInside
-} from "./core.js";
-import {
-  normalizeProjectDeletion
-} from "./projectDeletion.js";
-import {
-  LEARNING_SPACE_DIR,
-  PRACTICE_SLUG_PATTERN,
-  normalizeProjectTraining,
-  practiceIdFromSlug,
-  practiceLearnerKey,
-  practiceNamespace,
-  practiceProjectDeletedError,
-  practiceSlug
-} from "./learningSpace.js";
-import {
-  PROJECT_REPOSITORY_MODE_GITHUB,
-  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
-  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
-  normalizeProjectGithubRepository,
-  projectRepositoryMetadataFromInput,
-  projectRepositoryStorageRole,
-  projectRepositoryView
-} from "./projectRepository.js";
 
-const DEFAULT_HOSTED_REPOSITORY_BRANCH = "main";
+import { LEARNING_SPACE_DIR } from "./learningSpace.js";
+
+import { createLearningSpaceProjects } from "./learningSpaceProjects.js";
+import { createProjectPaths } from "./projectPaths.js";
+import { createWorkspaceProjectRecords, registerApprovalCountReader } from "./workspaceProjectRecords.js";
+import {
+  assertDirectoryUsable,
+  localProjectKeyFromTargetRoot,
+  normalizeDevelopmentDatabaseName,
+  normalizeDevelopmentDatabaseScope,
+  normalizeRoot,
+  projectCatalogUnavailableError,
+  projectRecord,
+  projectSlugFromName,
+  resolveProjectContextRoot,
+  resolveStudioProjectsRoot,
+  selectedProjectRecord
+} from "./studioProjectRecords.js";
 
 let configuredContext = null;
-// Sessions registers how many main-chat messages wait for the owner's approval.
-let approvalCountReader = null;
-
-function registerApprovalCountReader(reader) {
-  if (typeof reader !== "function") throw new TypeError("An approval count reader must be a function.");
-  approvalCountReader = reader;
-  return () => { if (approvalCountReader === reader) approvalCountReader = null; };
-}
-
-function normalizeRoot(value, fallbackRoot = process.cwd()) {
-  return path.resolve(String(value || "").trim() || fallbackRoot);
-}
-
-function resolveStudioProjectsRoot({
-  env = process.env,
-  explicitRoot = "",
-  home = os.homedir()
-} = {}) {
-  return normalizeRoot(
-    explicitRoot || env[VIBE64_PROJECTS_ROOT_ENV],
-    resolveDefaultProjectsRoot(home)
-  );
-}
-
 function projectCatalogEnabledForRuntimeProfile(runtimeProfile = null) {
   if (runtimeProfile?.projectCatalogEnabled === false) {
     return false;
@@ -106,557 +46,6 @@ function projectCatalogEnabledForRuntimeProfile(runtimeProfile = null) {
     return false;
   }
   return true;
-}
-
-function projectCatalogUnavailableError() {
-  const error = new Error("Project catalog operations are not available in local editor mode.");
-  error.code = "vibe64_project_catalog_unavailable";
-  return error;
-}
-
-function projectSlugExistsError() {
-  const error = new Error("Project name already has local source or runtime state. Choose a different project name.");
-  error.code = "vibe64_project_slug_exists";
-  error.statusCode = 409;
-  return error;
-}
-
-// training-<hex> names a learning-space practice project on both hosts.
-function assertCatalogueSlugAllowed(slug = "") {
-  if (PRACTICE_SLUG_PATTERN.test(slug)) {
-    throw Object.assign(new Error("Project names like training-<id> are reserved for practice projects. Choose a different project name."), {
-      code: "vibe64_project_slug_reserved", statusCode: 409
-    });
-  }
-}
-
-function projectDeletingError() {
-  const error = new Error("Project deletion is in progress. Retry deletion before using this project.");
-  error.code = "vibe64_project_deleting";
-  error.statusCode = 409;
-  return error;
-}
-
-function projectStateMissingError(slug = "") {
-  const error = new Error(`Project state is missing for ${slug}.`);
-  error.code = "vibe64_project_state_missing";
-  return error;
-}
-
-function assertHostedRepositoryMetadata(metadata = {}) {
-  if (projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
-    return metadata;
-  }
-  const error = new Error(
-    "Hosted projects cannot use a project namespace as local source. Correct this project record explicitly before opening it."
-  );
-  error.code = "vibe64_hosted_local_source_unsupported";
-  error.statusCode = 409;
-  throw error;
-}
-
-function projectSlugFromName(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "");
-}
-
-function projectSlugFromInput(input = {}) {
-  const explicitSlug = String(input?.slug || input?.projectSlug || "").trim();
-  if (explicitSlug) {
-    return normalizeProjectSlug(explicitSlug);
-  }
-  return normalizeProjectSlug(projectSlugFromName(input?.name));
-}
-
-function resolveProjectContextRoot({
-  projectsRoot = "",
-  slug = ""
-} = {}) {
-  const normalizedProjectsRoot = normalizeRoot(projectsRoot || resolveStudioProjectsRoot());
-  const normalizedSlug = normalizeProjectSlug(slug);
-  const projectContextRoot = path.resolve(normalizedProjectsRoot, normalizedSlug);
-  if (!pathInsideOrEqual(normalizedProjectsRoot, projectContextRoot)) {
-    const error = new Error("Project root must be inside the Vibe64 projects root.");
-    error.code = "vibe64_project_outside_root";
-    throw error;
-  }
-  return projectContextRoot;
-}
-
-function resolveCatalogProjectRuntimeRoot({
-  systemRoot = "",
-  slug = ""
-} = {}) {
-  const normalizedSystemRoot = normalizeRoot(systemRoot);
-  const normalizedSlug = normalizeProjectSlug(slug);
-  const projectRuntimeRoot = path.resolve(normalizedSystemRoot, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR, normalizedSlug);
-  if (!pathInsideOrEqual(normalizedSystemRoot, projectRuntimeRoot)) {
-    const error = new Error("Project runtime root must be inside the Vibe64 system root.");
-    error.code = "vibe64_project_runtime_outside_root";
-    throw error;
-  }
-  return projectRuntimeRoot;
-}
-
-async function assertDirectoryUsable(directoryPath = "") {
-  try {
-    const linkInfo = await lstat(directoryPath);
-    if (linkInfo.isSymbolicLink()) {
-      const error = new Error(`Project path must not be a symlink: ${directoryPath}`);
-      error.code = "vibe64_project_path_symlink";
-      throw error;
-    }
-    const info = await stat(directoryPath);
-    if (!info.isDirectory()) {
-      const error = new Error(`Project path is not a directory: ${directoryPath}`);
-      error.code = "vibe64_project_path_not_directory";
-      throw error;
-    }
-    await access(directoryPath, fsConstants.R_OK | fsConstants.W_OK);
-  } catch (error) {
-    if (error?.code && error.code.startsWith("vibe64_")) {
-      throw error;
-    }
-    const wrapped = new Error(`Project path is not readable and writable: ${directoryPath}`, { cause: error });
-    wrapped.code = "vibe64_project_path_not_accessible";
-    throw wrapped;
-  }
-}
-
-function projectRecord({
-  path: projectPath = "",
-  projectsRoot = "",
-  selectedPath = "",
-  source = ""
-} = {}) {
-  const resolvedPath = normalizeRoot(projectPath);
-  const hasProjectsRoot = String(projectsRoot || "").trim() !== "";
-  const insideProjectsRoot = hasProjectsRoot && pathInsideOrEqual(projectsRoot, resolvedPath);
-  const basename = path.basename(resolvedPath);
-  return {
-    external: !insideProjectsRoot,
-    name: basename,
-    path: resolvedPath,
-    selected: selectedPath ? normalizeRoot(selectedPath) === resolvedPath : false,
-    slug: insideProjectsRoot ? basename : localProjectSlugFromTargetRoot(resolvedPath),
-    source
-  };
-}
-
-async function selectedProjectRecord({
-  path: projectPath = "",
-  projectRecordPath = "",
-  projectRuntimeRoot = "",
-  projectSessionSourceRoot = "",
-  sourceConfigRoot = "",
-  projectsRoot = "",
-  selectedPath = "",
-  sourceRoot = "",
-  source = ""
-} = {}) {
-  const resolvedPath = normalizeRoot(projectPath);
-  const selectionRecord = projectRecord({
-    path: resolvedPath,
-    projectsRoot,
-    selectedPath,
-    source
-  });
-  const metadata = await projectMetadataWithGitRemote(resolvedPath, {
-    projectRecordPath,
-    repositoryModeFallback: sourceRoot ? PROJECT_REPOSITORY_MODE_LOCAL_SOURCE : "",
-    writeDerivedMetadata: false
-  });
-  const runtime = publicProjectRuntimeOpenState(await readProjectRuntimeOpenState({
-    projectRuntimeRoot
-  }));
-  const repositoryFields = projectRepositoryView(metadata, {
-    fallbackMode: sourceRoot ? PROJECT_REPOSITORY_MODE_LOCAL_SOURCE : ""
-  });
-  if (sourceRoot && repositoryFields.repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
-    const branch = await runGit(sourceRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
-    if (branch || await runGit(sourceRoot, ["rev-parse", "--is-inside-work-tree"]) === "true") {
-      repositoryFields.repository = { ...repositoryFields.repository, defaultBranch: branch };
-    }
-  }
-  const githubRepository = repositoryFields.githubRepository ||
-    normalizeProjectGithubRepository(metadata?.derivedGithubRepository);
-  return {
-    ...selectionRecord,
-    ...repositoryFields,
-    ...(githubRepository ? { githubRepository } : {}),
-    projectRecordPath,
-    projectRuntimeRoot,
-    projectSessionSourceRoot,
-    runtime,
-    sourceConfigRoot,
-    sourceRoot
-  };
-}
-
-function localProjectSlugFromTargetRoot(targetRoot = "") {
-  const slug = projectSlugFromName(path.basename(normalizeRoot(targetRoot)));
-  return slug ? normalizeProjectSlug(slug) : "local-project";
-}
-
-function localProjectKeyFromTargetRoot(targetRoot = "") {
-  const resolvedTargetRoot = normalizeRoot(targetRoot);
-  const hash = createHash("sha256")
-    .update(resolvedTargetRoot)
-    .digest("hex")
-    .slice(0, 12);
-  return `${localProjectSlugFromTargetRoot(resolvedTargetRoot)}-${hash}`;
-}
-
-// A saved practice project belongs to its exact training marker, is not being
-// deleted (unless deletion is the operation) and keeps its managed Git authority.
-function practiceOwnershipDiffers(metadata, training, allowDeleting) {
-  return !isDeepStrictEqual(metadata.training, training) || Boolean(metadata.deletion && !allowDeleting) ||
-    projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT;
-}
-
-function workspaceProjectRecord({
-  metadata = {},
-  projectRecordPath = "",
-  path: projectPath = "",
-  projectRuntimeRoot = "",
-  projectSessionSourceRoot = "",
-  projectsRoot = "",
-  runtime = {}
-} = {}) {
-  const resolvedPath = normalizeRoot(projectPath);
-  const repositoryFields = projectRepositoryView(metadata);
-  const repositoryStorage = projectRuntimeRoot
-    ? projectRepositoryStorageRole({
-        mode: repositoryFields.repositoryMode,
-        projectRuntimeRoot
-      })
-    : null;
-  const deletion = normalizeProjectDeletion(metadata.deletion);
-  return {
-    ...repositoryFields,
-    canonicalRepositoryPath: repositoryStorage?.pathField === "canonicalRepositoryPath"
-      ? repositoryStorage.path
-      : "",
-    deploymentsRoot: projectRuntimeRoot
-      ? resolveProjectDeploymentsRoot({
-          projectRuntimeRoot
-        })
-      : "",
-    allowSharedDatabaseSessions: metadata.allowSharedDatabaseSessions === true,
-    developmentDatabaseScope: normalizeDevelopmentDatabaseScope(
-      metadata.developmentDatabaseScope
-    ),
-    developmentDatabaseName: normalizeDevelopmentDatabaseName(
-      metadata.developmentDatabaseName
-    ),
-    path: resolvedPath,
-    projectRoot: resolvedPath,
-    projectRootRelative: path.relative(normalizeRoot(projectsRoot), resolvedPath),
-    projectRecordPath,
-    projectRuntimeRoot,
-    projectSessionSourceRoot,
-    githubMirrorPath: repositoryStorage?.pathField === "githubMirrorPath"
-      ? repositoryStorage.path
-      : "",
-    runtimeConfigRoot: projectRuntimeRoot
-      ? resolveProjectRuntimeConfigRoot({
-          projectRuntimeRoot
-        })
-      : "",
-    runtimeRoot: projectRuntimeRoot
-      ? resolveProjectRuntimeFilesRoot({
-          projectRuntimeRoot
-        })
-      : "",
-    runtime: publicProjectRuntimeOpenState(runtime),
-    ...(deletion ? { deletion } : {}),
-    sessionsRoot: projectRuntimeRoot
-      ? resolveProjectSessionsRoot({
-          projectRuntimeRoot
-        })
-      : "",
-    slug: path.basename(resolvedPath)
-  };
-}
-
-function projectMetadataPath(projectRecordPath = "") {
-  const normalizedRecordPath = String(projectRecordPath || "").trim();
-  return normalizedRecordPath ? path.resolve(normalizedRecordPath) : "";
-}
-
-function projectMetadataFromInput(input = {}, {
-  defaultRepositoryBranch = "",
-  defaultRepositoryMode = ""
-} = {}) {
-  if (Object.hasOwn(input, "allowSharedDatabaseSessions") && typeof input.allowSharedDatabaseSessions !== "boolean") {
-    const error = new Error("Shared database session override must be a boolean.");
-    error.code = "vibe64_project_metadata_invalid";
-    throw error;
-  }
-  const repositoryMetadata = projectRepositoryMetadataFromInput(input, {
-    defaultBranch: defaultRepositoryBranch,
-    defaultMode: defaultRepositoryMode
-  });
-  return {
-    ...repositoryMetadata,
-    ...(Object.hasOwn(input, "allowSharedDatabaseSessions")
-      ? { allowSharedDatabaseSessions: input.allowSharedDatabaseSessions } : {}),
-    ...(Object.hasOwn(input, "training") ? { training: normalizeProjectTraining(input.training) } : {}),
-    ...(Object.hasOwn(input, "developmentDatabaseScope")
-      ? {
-          developmentDatabaseScope: normalizeDevelopmentDatabaseScope(
-            input.developmentDatabaseScope
-          )
-        }
-      : {}),
-    ...(Object.hasOwn(input, "developmentDatabaseName")
-      ? {
-          developmentDatabaseName: normalizeDevelopmentDatabaseName(
-            input.developmentDatabaseName
-          )
-        }
-      : {}),
-    ...(input?.deletion ? { deletion: normalizeProjectDeletion(input.deletion) } : {})
-  };
-}
-
-function normalizeDevelopmentDatabaseScope(value = "session") {
-  const scope = String(value || "session").trim();
-  if (!["project", "session"].includes(scope)) {
-    const error = new Error(`Invalid development database scope: ${scope || "(empty)"}.`);
-    error.code = "vibe64_development_database_scope_invalid";
-    throw error;
-  }
-  return scope;
-}
-
-function normalizeDevelopmentDatabaseName(value = "") {
-  const name = String(value || "").trim();
-  if (name && !/^[a-z0-9][a-z0-9_]{0,62}$/u.test(name)) {
-    const error = new Error(`Invalid development database name: ${name}.`);
-    error.code = "vibe64_development_database_name_invalid";
-    throw error;
-  }
-  return name;
-}
-
-function normalizeProjectMetadata(metadata = {}) {
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    const error = new Error("Project metadata must be an object.");
-    error.code = "vibe64_project_metadata_invalid";
-    throw error;
-  }
-  if (Object.keys(metadata).length === 0) {
-    return {};
-  }
-  const unsupportedFields = Object.keys(metadata)
-    .filter((field) => ![
-      "deletion",
-      "developmentDatabaseName",
-      "developmentDatabaseScope",
-      "allowSharedDatabaseSessions",
-      "repository",
-      "training"
-    ].includes(field));
-  if (unsupportedFields.length > 0) {
-    const error = new Error(`Project metadata contains unsupported fields: ${unsupportedFields.join(", ")}.`);
-    error.code = "vibe64_project_metadata_field_unsupported";
-    throw error;
-  }
-  const normalized = projectMetadataFromInput(metadata);
-  return normalized;
-}
-
-async function readProjectMetadata({
-  projectRecordPath = ""
-} = {}) {
-  const metadataPath = projectMetadataPath(projectRecordPath);
-  return metadataPath
-    ? normalizeProjectMetadata(await readProjectRecordMetadata(metadataPath))
-    : {};
-}
-
-async function writeProjectMetadata(projectRecordPath = "", metadata = {}, options = {}) {
-  const metadataPath = projectMetadataPath(projectRecordPath);
-  if (!metadataPath) {
-    throw new Error("writeProjectMetadata requires projectRecordPath.");
-  }
-  const normalizedMetadata = projectMetadataFromInput(metadata, options);
-  await updateProjectRecordMetadata(metadataPath, () => normalizedMetadata);
-  return normalizedMetadata;
-}
-
-async function workspaceProjectRecordForPath({
-  projectRecordPath = "",
-  path: projectPath = "",
-  projectRuntimeRoot = "",
-  projectSessionSourceRoot = "",
-  projectsRoot = ""
-} = {}) {
-  const resolvedPath = normalizeRoot(projectPath);
-  const metadata = assertHostedRepositoryMetadata(await readProjectMetadata({
-    projectRecordPath
-  }));
-  const runtime = await readProjectRuntimeOpenState({
-    projectRuntimeRoot
-  });
-  return workspaceProjectRecord({
-    metadata,
-    projectRecordPath,
-    path: resolvedPath,
-    projectRuntimeRoot,
-    projectSessionSourceRoot,
-    projectsRoot,
-    runtime
-  });
-}
-
-async function projectMetadataWithGitRemote(projectPath = "", {
-  projectRecordPath = "",
-  repositoryModeFallback = "",
-  writeDerivedMetadata = false
-} = {}) {
-  const metadata = await readProjectMetadata({
-    projectRecordPath
-  });
-  if (projectRepositoryView(metadata).repository) {
-    return metadata;
-  }
-  const githubRepository = await githubRepositoryFromGitRemotes(projectPath);
-  if (!githubRepository) {
-    return metadata;
-  }
-  const derivedMetadata = {
-    ...metadata,
-    repository: repositoryModeFallback
-      ? { mode: repositoryModeFallback }
-      : {
-          github: githubRepository,
-          mode: PROJECT_REPOSITORY_MODE_GITHUB
-        },
-    derivedGithubRepository: githubRepository
-  };
-  if (writeDerivedMetadata) {
-    await writeProjectMetadata(projectRecordPath, derivedMetadata);
-  }
-  return derivedMetadata;
-}
-
-async function githubRepositoryFromGitRemotes(projectPath = "") {
-  const insideGit = await runGit(projectPath, ["rev-parse", "--is-inside-work-tree"]);
-  if (insideGit !== "true") {
-    return null;
-  }
-
-  const originUrl = await runGit(projectPath, ["remote", "get-url", "origin"]);
-  const originRepository = githubRepositoryFromRemoteUrl(originUrl);
-  if (originRepository) {
-    return originRepository;
-  }
-
-  const remoteNames = (await runGit(projectPath, ["remote"]))
-    .split(/\r?\n/u)
-    .map((remoteName) => remoteName.trim())
-    .filter(Boolean)
-    .filter((remoteName) => remoteName !== "origin");
-  const githubRepositories = [];
-  for (const remoteName of remoteNames) {
-    const repository = githubRepositoryFromRemoteUrl(await runGit(projectPath, ["remote", "get-url", remoteName]));
-    if (repository && !githubRepositories.some((existing) => existing.fullName === repository.fullName)) {
-      githubRepositories.push(repository);
-    }
-  }
-  return githubRepositories.length === 1 ? githubRepositories[0] : null;
-}
-
-function githubRepositoryFromRemoteUrl(remoteUrl = "") {
-  const parsed = parseGithubRemote(remoteUrl);
-  if (!parsed) {
-    return null;
-  }
-  return {
-    canPush: false,
-    cloneUrl: `https://github.com/${parsed.fullName}.git`,
-    fullName: parsed.fullName,
-    isPrivate: false,
-    name: parsed.name,
-    owner: parsed.owner,
-    url: `https://github.com/${parsed.fullName}`,
-    viewerPermission: "",
-    visibility: ""
-  };
-}
-
-async function runGitCommand(cwd = "", args = [], {
-  timeout = 5000
-} = {}) {
-  const resolvedCwd = normalizeRoot(cwd);
-  return runVibe64Command({
-    actor: "daemon",
-    allowedRoots: [resolvedCwd],
-    args,
-    command: "git",
-    cwd: resolvedCwd,
-    envPolicy: "project",
-    gitSafeDirectories: [resolvedCwd],
-    mode: "capture",
-    purpose: "source-editor",
-    runtimes: ["git"],
-    timeout
-  });
-}
-
-function gitCommandOutput(result = {}) {
-  return String(result.stdout || result.output || "").trim();
-}
-
-async function runGit(cwd = "", args = []) {
-  try {
-    const result = await runGitCommand(cwd, args);
-    return result.ok ? gitCommandOutput(result) : "";
-  } catch {
-    return "";
-  }
-}
-
-function parseGithubRemote(value = "") {
-  const rawValue = String(value || "").trim();
-  if (!rawValue) {
-    return null;
-  }
-  const sshMatch = rawValue.match(/^git@github\.com:([^/\s]+)\/([^/\s]+?)(?:\.git)?$/iu);
-  if (sshMatch) {
-    return githubRemoteRecord(sshMatch[1], sshMatch[2]);
-  }
-  try {
-    const url = new URL(rawValue);
-    if (url.hostname.toLowerCase() !== "github.com") {
-      return null;
-    }
-    const [owner, repository] = url.pathname
-      .replace(/^\/+|\/+$/gu, "")
-      .replace(/\.git$/iu, "")
-      .split("/");
-    return githubRemoteRecord(owner, repository);
-  } catch {
-    return null;
-  }
-}
-
-function githubRemoteRecord(owner = "", repository = "") {
-  const normalizedOwner = String(owner || "").trim();
-  const normalizedRepository = String(repository || "").trim();
-  if (!normalizedOwner || !normalizedRepository) {
-    return null;
-  }
-  return {
-    fullName: `${normalizedOwner}/${normalizedRepository}`,
-    name: normalizedRepository,
-    owner: normalizedOwner
-  };
 }
 
 function createStudioProjectContext({
@@ -697,12 +86,6 @@ function createStudioProjectContext({
   // The default managed source root is a real folder in the person's home,
   // so a test process must name its space explicitly.
   const learningSpaceRootNamed = Boolean(String(learningSpace?.root || explicitManagedSourceRoot || "").trim());
-  function learningSpaceStorageRoot() {
-    if (!learningSpaceRootNamed && process.env.NODE_TEST_CONTEXT) {
-      throw new Error("A test must pass explicitManagedSourceRoot or learningSpace.root; the default learning space is in the real home folder.");
-    }
-    return learningSpaceRoot;
-  }
   let selectedTargetRoot = resolveExplicitStudioTargetRoot({
     cwd,
     env,
@@ -710,275 +93,11 @@ function createStudioProjectContext({
   });
   let selectionSource = selectedTargetRoot ? "explicit" : "";
 
-  function practiceScope(slug) {
-    const scope = currentPracticeProjectScope(practiceOwner);
-    if (scope && slug !== undefined && normalizeProjectSlug(slug) !== scope.slug) {
-      throw Object.assign(new Error("Practice access cannot select another project."), { code: "vibe64_practice_scope_mismatch" });
-    }
-    return scope;
-  }
+  const learningProjects = createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed, practiceOwner, systemRoot });
 
-  async function practiceDirectoryExists(directory) {
-    let current = path.parse(directory).root;
-    for (const part of directory.slice(current.length).split(path.sep)) {
-      current = path.join(current, part);
-      let info;
-      try { info = await lstat(current); }
-      catch (error) { if (error.code === "ENOENT") return false; throw error; }
-      if (!info.isDirectory() || info.isSymbolicLink()) {
-        throw Object.assign(new Error("Practice storage must contain only real directories; inspect it before retrying."), { code: "vibe64_practice_path_unsafe" });
-      }
-    }
-    return true;
-  }
+  const paths = createProjectPaths({ managedSourceRoot, practiceOwner, projectCatalogEnabled, projectsRoot, systemRoot });
 
-  // Each skipped entry warns once per process: listings run on every
-  // Projects page load, and the scrap upgrade, not the listing, clears them.
-  const warnedSkippedEntries = new Set();
-  function skipLearningSpaceEntry(entry, reason) {
-    const key = `${entry}: ${reason}`;
-    if (!warnedSkippedEntries.has(key)) {
-      warnedSkippedEntries.add(key);
-      console.warn(`Vibe64 learning space: skipped ${key}`);
-    }
-    return null;
-  }
-
-  // The learning-space project a practice slug names: its marker is valid,
-  // names that practice, and its namespace is a real directory. Null when the
-  // space has no such project; an unsafe or invalid one is skipped with a warning.
-  // `deleting` reports a deletion marker (a removal that stopped part-way).
-  async function readLearningSpaceProject(slug) {
-    const practiceId = practiceIdFromSlug(slug);
-    if (!practiceId) return null;
-    const projectRuntimeRoot = resolveCatalogProjectRuntimeRoot({ slug, systemRoot });
-    let metadata;
-    try { metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot })); }
-    catch (error) {
-      if (error instanceof SyntaxError || error.code === "ENOTDIR") return skipLearningSpaceEntry(slug, "unreadable project record");
-      throw error;
-    }
-    if (!isPlainObject(metadata) || !metadata.training) return null;
-    let training;
-    try { training = normalizeProjectTraining(metadata.training); }
-    catch (error) {
-      if (error.code === "vibe64_project_training_invalid") return skipLearningSpaceEntry(slug, "invalid training marker");
-      throw error;
-    }
-    if (training.practiceId !== practiceId || metadata.repository?.mode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
-      return skipLearningSpaceEntry(slug, "training marker names another practice project");
-    }
-    try {
-      if (!await practiceDirectoryExists(practiceNamespace(learningSpaceStorageRoot(), training).projectContextRoot)) return null;
-    } catch (error) {
-      if (error.code === "vibe64_practice_path_unsafe") return skipLearningSpaceEntry(slug, error.message);
-      throw error;
-    }
-    return Object.freeze({ slug, learnerKey: training.learnerKey, practiceId, training, deleting: Boolean(metadata.deletion) });
-  }
-
-  async function readDirectoryEntries(directory) {
-    try {
-      return await readdir(directory, { withFileTypes: true });
-    } catch (error) {
-      if (error.code === "ENOENT") return [];
-      throw error;
-    }
-  }
-
-  // Every practice project in the space (one learner's with learnerKey), as
-  // {slug, learnerKey, practiceId, training}. Unsafe or invalid entries are
-  // skipped with a warning and never change the listing for the others.
-  async function listLearningSpaceProjects({ learnerKey } = {}) {
-    const learners = [];
-    for (const entry of await readDirectoryEntries(learningSpaceStorageRoot())) {
-      if (learnerKey !== undefined && entry.name !== learnerKey) continue;
-      if (entry.isDirectory()) learners.push(entry.name);
-      else skipLearningSpaceEntry(entry.name, "not a real directory");
-    }
-    const projects = [];
-    for (const learner of learners) {
-      for (const practice of await readDirectoryEntries(path.join(learningSpaceStorageRoot(), learner))) {
-        const entry = path.join(learner, practice.name);
-        const slug = practiceSlug(practice.name);
-        if (!practice.isDirectory() || practiceIdFromSlug(slug) !== practice.name) {
-          skipLearningSpaceEntry(entry, "not a practice project directory");
-          continue;
-        }
-        const project = await readLearningSpaceProject(slug);
-        if (project?.learnerKey === learner) projects.push(project);
-        else if (project) skipLearningSpaceEntry(entry, "training marker names another learner");
-      }
-    }
-    return projects.sort((left, right) => left.slug.localeCompare(right.slug));
-  }
-
-  // A practice runtime root in the shared inventory is never a catalogue
-  // orphan: the catalogue sweep leaves every training slug with a marker.
-  async function isLearningSpaceRuntime(slug, projectRuntimeRoot) {
-    if (!PRACTICE_SLUG_PATTERN.test(slug)) return false;
-    let metadata;
-    try { metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot })); }
-    catch (error) { if (error instanceof SyntaxError) return false; throw error; }
-    if (!metadata?.training) return false;
-    if (!await readLearningSpaceProject(slug)) skipLearningSpaceEntry(slug, "practice runtime without its learning-space project");
-    return true;
-  }
-
-  // The one practice scope, on both hosts. allowDeleting admits only the
-  // learner's own deletion: it requires write access and lets that owner see
-  // and resume its deletion marker. requireProject is the ordinary page
-  // admission: a project without its record, or one being deleted, is a
-  // deleted practice project (not found).
-  async function runWithPracticeProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe",
-    allowDeleting = false, requireProject = false } = {}, operation) {
-    if (typeof operation !== "function") {
-      throw new TypeError("Practice access requires an owning callback.");
-    }
-    if (allowDeleting === true && practiceAccess !== "write") {
-      throw new TypeError("Practice deletion requires explicit write access.");
-    }
-    if (!["observe", "control", "write", "create"].includes(practiceAccess)) {
-      throw new TypeError("Practice access requires an explicit supported operation scope.");
-    }
-    const training = normalizeProjectTraining(inputTraining);
-    for (const value of [training.pin.course, training.pin.topic, training.pin.lesson, training.pin, training.exercise, training]) {
-      Object.freeze(value);
-    }
-    if (practiceLearnerKey(actor) !== training.learnerKey) {
-      throw Object.assign(new Error("Practice access belongs to the admitted learner."), { code: "vibe64_practice_scope_mismatch" });
-    }
-    const { slug, projectsRoot: practiceProjectsRoot, projectContextRoot } = practiceNamespace(learningSpaceStorageRoot(), training);
-    // Preserve original runtime inventory, upgrade and canonical Git ownership.
-    const projectRuntimeRoot = resolveCatalogProjectRuntimeRoot({ slug, systemRoot });
-    for (const directory of [projectContextRoot, projectRuntimeRoot]) await practiceDirectoryExists(directory);
-    const projectRecordPath = resolveProjectRecordPath({ projectRuntimeRoot });
-    const metadata = await readProjectMetadata({ projectRecordPath });
-    if (requireProject && practiceAccess !== "create" && (!Object.keys(metadata).length || (metadata.deletion && !allowDeleting))) {
-      throw practiceProjectDeletedError();
-    }
-    if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot) || Object.keys(metadata).length) {
-      if (practiceOwnershipDiffers(metadata, training, allowDeleting)) {
-        throw Object.assign(new Error("Practice project has missing or different ownership. Keep it intact and ask the owner to inspect it."), { code: "vibe64_practice_scope_mismatch" });
-      }
-    }
-    const scope = Object.freeze({ training, access: practiceAccess, slug, projectsRoot: practiceProjectsRoot, systemRoot,
-      targetRoot: projectContextRoot, projectRecordPath, projectRuntimeRoot, projectSessionSourceRoot: projectContextRoot,
-      sourceRoot: "", sourceConfigRoot: "", vibe64User: actor, ...(allowDeleting ? { allowDeleting: true } : {}) });
-    return runWithPracticeProjectContext(practiceOwner, scope, operation);
-  }
-
-  function targetIsCatalogProjectHome(targetRoot = "") {
-    if (!projectCatalogEnabled || !projectsRoot) {
-      return false;
-    }
-    const relativePath = relativePathInside(normalizeRoot(projectsRoot), normalizeRoot(targetRoot));
-    if (!relativePath) {
-      return false;
-    }
-    if (relativePath.includes(path.sep)) {
-      return false;
-    }
-    try {
-      return normalizeProjectSlug(relativePath) === relativePath;
-    } catch {
-      return false;
-    }
-  }
-
-  function externalProjectRuntimeRootForTarget(targetRoot = "") {
-    return path.join(
-      systemRoot,
-      EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
-      localProjectKeyFromTargetRoot(targetRoot)
-    );
-  }
-
-  function externalProjectSessionSourceRootForTarget(targetRoot = "") {
-    return path.join(
-      managedSourceRoot,
-      localProjectKeyFromTargetRoot(targetRoot)
-    );
-  }
-
-  function projectContextRootForSlug(slug = "") {
-    const scope = practiceScope(slug);
-    if (scope) return scope.targetRoot;
-    return resolveProjectContextRoot({
-      projectsRoot,
-      slug: normalizeProjectSlug(slug)
-    });
-  }
-
-  function projectRecordPathForSlug(slug = "") {
-    return resolveProjectRecordPath({
-      projectRuntimeRoot: projectRuntimeRootForSlug(slug)
-    });
-  }
-
-  function projectRecordPathForTarget(targetRoot = "") {
-    const scope = practiceScope();
-    if (scope && normalizeRoot(targetRoot) === scope.targetRoot) return scope.projectRecordPath;
-    return targetIsCatalogProjectHome(targetRoot)
-      ? resolveProjectRecordPath({
-          projectRuntimeRoot: projectRuntimeRootForTarget(targetRoot)
-        })
-      : "";
-  }
-
-  function projectRuntimeRootForSlug(slug = "") {
-    const scope = practiceScope(slug);
-    if (scope) return scope.projectRuntimeRoot;
-    if (!projectCatalogEnabled) {
-      return resolveProjectRuntimeRoot({
-        projectRuntimeRoot: projectContextRootForSlug(slug)
-      });
-    }
-    return resolveCatalogProjectRuntimeRoot({
-      slug,
-      systemRoot
-    });
-  }
-
-  function projectRuntimeRootForTarget(targetRoot = "") {
-    const scope = practiceScope();
-    if (scope && normalizeRoot(targetRoot) === scope.targetRoot) return scope.projectRuntimeRoot;
-    return targetIsCatalogProjectHome(targetRoot)
-      ? resolveCatalogProjectRuntimeRoot({
-          slug: path.basename(normalizeRoot(targetRoot)),
-          systemRoot
-        })
-      : externalProjectRuntimeRootForTarget(targetRoot);
-  }
-
-  function projectSessionSourceRootForSlug(slug = "") {
-    const scope = practiceScope(slug);
-    if (scope) return scope.projectSessionSourceRoot;
-    return projectContextRootForSlug(slug);
-  }
-
-  function projectSessionSourceRootForTarget(targetRoot = "") {
-    const scope = practiceScope();
-    if (scope && normalizeRoot(targetRoot) === scope.targetRoot) return scope.projectSessionSourceRoot;
-    return targetIsCatalogProjectHome(targetRoot)
-      ? projectContextRootForSlug(path.basename(normalizeRoot(targetRoot)))
-      : externalProjectSessionSourceRootForTarget(targetRoot);
-  }
-
-  function sourceRootForTarget(targetRoot = "") {
-    const scope = practiceScope();
-    if (scope && normalizeRoot(targetRoot) === scope.targetRoot) return "";
-    return targetIsCatalogProjectHome(targetRoot) ? "" : normalizeRoot(targetRoot);
-  }
-
-  function sourceConfigRootForTarget(targetRoot = "") {
-    const sourceRoot = sourceRootForTarget(targetRoot);
-    return sourceRoot
-      ? resolveSourceConfigRoot({
-          sourceRoot
-        })
-      : "";
-  }
+  const workspaceRecords = createWorkspaceProjectRecords({ learningProjects, paths, projectCatalogEnabled, projectsRoot, systemRoot });
 
   function selectedProject() {
     return selectedTargetRoot
@@ -1009,13 +128,13 @@ function createStudioProjectContext({
     return selectedTargetRoot
       ? selectedProjectRecord({
         path: selectedTargetRoot,
-        projectRecordPath: projectRecordPathForTarget(selectedTargetRoot),
-        projectRuntimeRoot: projectRuntimeRootForTarget(selectedTargetRoot),
-        projectSessionSourceRoot: projectSessionSourceRootForTarget(selectedTargetRoot),
+        projectRecordPath: paths.projectRecordPathForTarget(selectedTargetRoot),
+        projectRuntimeRoot: paths.projectRuntimeRootForTarget(selectedTargetRoot),
+        projectSessionSourceRoot: paths.projectSessionSourceRootForTarget(selectedTargetRoot),
         projectsRoot,
         selectedPath: selectedTargetRoot,
-        sourceConfigRoot: sourceConfigRootForTarget(selectedTargetRoot),
-        sourceRoot: sourceRootForTarget(selectedTargetRoot),
+        sourceConfigRoot: paths.sourceConfigRootForTarget(selectedTargetRoot),
+        sourceRoot: paths.sourceRootForTarget(selectedTargetRoot),
         source: selectionSource
       })
       : null;
@@ -1035,7 +154,7 @@ function createStudioProjectContext({
     }
 
     const listingTargetRoot = selectedTargetRoot;
-    const listed = await listWorkspaceProjects();
+    const listed = await workspaceRecords.listWorkspaceProjects();
     const projects = listed.projects
       .map((entry) => {
         const selectionRecord = projectRecord({
@@ -1059,7 +178,7 @@ function createStudioProjectContext({
       !catalogSelection &&
       listingTargetRoot &&
       selectedTargetRoot === listingTargetRoot &&
-      targetIsCatalogProjectHome(listingTargetRoot)
+      paths.targetIsCatalogProjectHome(listingTargetRoot)
     ) {
       selectedTargetRoot = "";
       selectionSource = "";
@@ -1075,389 +194,6 @@ function createStudioProjectContext({
     };
   }
 
-  async function listWorkspaceProjects() {
-    const scope = practiceScope();
-    if (scope) {
-      const result = await readWorkspaceProject({ slug: scope.slug });
-      return { ...result, projects: [result.project] };
-    }
-    if (!projectCatalogEnabled) {
-      return {
-        ok: true,
-        projects: [],
-        projectsRoot
-      };
-    }
-
-    await mkdir(projectsRoot, {
-      recursive: true
-    });
-    const entries = await readdir(projectsRoot, {
-      withFileTypes: true
-    });
-    const projectPaths = entries
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(projectsRoot, entry.name))
-      .filter((entry) => {
-        try {
-          normalizeProjectSlug(path.basename(entry));
-          return true;
-        } catch {
-          return false;
-        }
-      });
-    const projects = (await Promise.all(projectPaths.map((projectPath) => workspaceProjectRecordForPath({
-      projectRecordPath: projectRecordPathForTarget(projectPath),
-      path: projectPath,
-      projectRuntimeRoot: projectRuntimeRootForTarget(projectPath),
-      projectSessionSourceRoot: projectSessionSourceRootForTarget(projectPath),
-      projectsRoot
-    }).catch((error) => {
-      // A catalogue entry with a retired training marker (an old hosted
-      // practice project awaiting the scrap upgrade) is not a project of the
-      // catalogue; it never takes the other projects' listing down with it.
-      if (error?.code === "vibe64_project_training_invalid") {
-        return skipLearningSpaceEntry(path.basename(projectPath), "catalogue entry with an invalid training marker");
-      }
-      throw error;
-    }))))
-      .filter((project) => project?.repository)
-      .sort((left, right) => left.slug.localeCompare(right.slug));
-    return {
-      ok: true,
-      projects: approvalCountReader ? await Promise.all(projects.map(async (project) => ({
-        ...project, approvalsWaiting: await approvalCountReader(project)
-      }))) : projects,
-      projectsRoot
-    };
-  }
-
-  // Startup maintenance, never a read: removes the runtime root of every
-  // catalogue project whose record survives but whose project directory is
-  // gone (a removal that stopped part-way). Practice runtimes of the learning
-  // space are kept. Returns the removed slugs, one at a time, for the caller's log.
-  async function sweepOrphanProjectRuntimeRoots() {
-    if (!projectCatalogEnabled) {
-      return [];
-    }
-    const runtimeEntries = await readdir(path.join(systemRoot, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR), {
-      withFileTypes: true
-    }).catch((error) => {
-      if (error?.code === "ENOENT") {
-        return [];
-      }
-      throw error;
-    });
-    const removed = [];
-    for (const entry of runtimeEntries.sort((left, right) => left.name.localeCompare(right.name))) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      try {
-        normalizeProjectSlug(entry.name);
-      } catch {
-        continue;
-      }
-      const runtimeRoot = projectRuntimeRootForSlug(entry.name);
-      if (
-        await pathExists(projectContextRootForSlug(entry.name)) ||
-        !await pathExists(resolveProjectRecordPath({ projectRuntimeRoot: runtimeRoot })) ||
-        await isLearningSpaceRuntime(entry.name, runtimeRoot)
-      ) {
-        continue;
-      }
-      await rm(runtimeRoot, {
-        force: true,
-        recursive: true
-      });
-      removed.push(entry.name);
-    }
-    return removed;
-  }
-
-  // The catalogue serves its own projects; without it only practice access does.
-  function catalogueOrPracticeScope() {
-    const scope = practiceScope();
-    if (!projectCatalogEnabled && !scope) {
-      throw projectCatalogUnavailableError();
-    }
-    return scope;
-  }
-
-  function workspaceProjectRecordForSlug(slug, scope) {
-    return workspaceProjectRecordForPath({
-      projectRecordPath: projectRecordPathForSlug(slug),
-      path: projectContextRootForSlug(slug),
-      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
-      projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
-      projectsRoot: scope?.projectsRoot || projectsRoot
-    });
-  }
-
-  async function createWorkspaceProjectRecord(input = {}, {
-    prepare = null
-  } = {}) {
-    const scope = catalogueOrPracticeScope();
-
-    const slug = projectSlugFromInput(input);
-    if (!scope) assertCatalogueSlugAllowed(slug);
-    const projectContextRoot = projectContextRootForSlug(slug);
-    const projectRuntimeRoot = projectRuntimeRootForSlug(slug);
-    if (scope && (scope.access !== "create" || !isDeepStrictEqual(normalizeProjectTraining(input.training), scope.training))) {
-      throw Object.assign(new Error("Practice creation requires its exact saved training marker."), { code: "vibe64_practice_scope_mismatch" });
-    }
-    if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot)) {
-      throw projectSlugExistsError();
-    }
-    const metadata = assertHostedRepositoryMetadata(projectMetadataFromInput(input, {
-      defaultRepositoryBranch: DEFAULT_HOSTED_REPOSITORY_BRANCH,
-      defaultRepositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
-    }));
-    if (scope && projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
-      throw Object.assign(new Error("Practice creation requires its managed Git authority."), { code: "vibe64_practice_scope_mismatch" });
-    }
-    let project = null;
-    let sourceCreated = false;
-    let runtimeCreated = false;
-    try {
-      await Promise.all([
-        mkdir(path.dirname(projectContextRoot), {
-          recursive: true
-        }),
-        mkdir(path.dirname(projectRuntimeRoot), {
-          recursive: true,
-          ...(scope ? { mode: 0o700 } : {})
-        })
-      ]);
-      await mkdir(projectRuntimeRoot, scope ? { mode: 0o700 } : undefined);
-      runtimeCreated = true;
-      await mkdir(projectContextRoot);
-      sourceCreated = true;
-      if (typeof prepare === "function") {
-        // The trusted initializer may adjust repository metadata, but gets its own marker copy.
-        await prepare({
-          metadata: metadata.training
-            ? { ...metadata, training: normalizeProjectTraining(metadata.training) }
-            : metadata,
-          projectContextRoot,
-          projectRuntimeRoot,
-          slug
-        });
-      }
-      await writeProjectMetadata(projectRecordPathForSlug(slug), metadata);
-      project = await workspaceProjectRecordForSlug(slug, scope);
-    } catch (error) {
-      await Promise.all([
-        ...(sourceCreated ? [rm(projectContextRoot, {
-          force: true,
-          recursive: true
-        })] : []),
-        ...(runtimeCreated ? [rm(projectRuntimeRoot, {
-          force: true,
-          recursive: true
-        })] : [])
-      ]);
-      if (error?.code === "EEXIST") {
-        throw projectSlugExistsError();
-      }
-      throw error;
-    }
-    return {
-      ok: true,
-      project,
-      projectsRoot: scope?.projectsRoot || projectsRoot
-    };
-  }
-
-  async function assertWorkspaceProjectAvailable(input = {}) {
-    const slug = projectSlugFromInput(input);
-    assertCatalogueSlugAllowed(slug);
-    if (
-      await pathExists(projectContextRootForSlug(slug)) ||
-      await pathExists(projectRuntimeRootForSlug(slug))
-    ) {
-      throw projectSlugExistsError();
-    }
-    return {
-      projectContextRoot: projectContextRootForSlug(slug),
-      slug,
-    };
-  }
-
-  async function readWorkspaceProject(input = {}) {
-    const scope = catalogueOrPracticeScope();
-
-    const slug = projectSlugFromInput(input);
-    const projectContextRoot = projectContextRootForSlug(slug);
-    if (scope) await readWorkspaceProjectState({ slug });
-    await assertDirectoryUsable(projectContextRoot);
-    const project = await workspaceProjectRecordForSlug(slug, scope);
-    if (project.deletion && input.allowDeleting !== true) {
-      throw projectDeletingError();
-    }
-    if (!project.repository) {
-      const error = new Error("Vibe64 projects must have repository metadata.");
-      error.code = "vibe64_project_repository_missing";
-      throw error;
-    }
-    return {
-      ok: true,
-      project,
-      projectsRoot: scope?.projectsRoot || projectsRoot
-    };
-  }
-
-  async function updateWorkspaceProjectMetadata(input = {}) {
-    const scope = catalogueOrPracticeScope();
-
-    assertProjectEffectAdmission();
-    const slug = projectSlugFromInput(input);
-    const projectContextRoot = projectContextRootForSlug(slug);
-    await assertDirectoryUsable(projectContextRoot);
-    await updateWorkspaceProjectState({ slug }, async (currentMetadata) => {
-      const metadata = assertHostedRepositoryMetadata({
-        ...currentMetadata,
-        ...projectMetadataFromInput({
-          ...input,
-          repository: input.repository || currentMetadata.repository
-        })
-      });
-      return metadata;
-    });
-    const project = await workspaceProjectRecordForSlug(slug, scope);
-    return {
-      ok: true,
-      project,
-      projectsRoot: scope?.projectsRoot || projectsRoot
-    };
-  }
-
-  async function readWorkspaceProjectState(input = {}) {
-    const scope = catalogueOrPracticeScope();
-    const slug = projectSlugFromInput(input);
-    if (scope) {
-      for (const directory of [scope.targetRoot, scope.projectRuntimeRoot, scope.projectSessionSourceRoot]) {
-        await practiceDirectoryExists(directory);
-      }
-    }
-    const metadata = assertHostedRepositoryMetadata(await readProjectMetadata({
-      projectRecordPath: projectRecordPathForSlug(slug)
-    }));
-    if (scope && (Object.keys(metadata).length || await pathExists(scope.targetRoot) || await pathExists(scope.projectRuntimeRoot)) &&
-        practiceOwnershipDiffers(metadata, scope.training, scope.allowDeleting === true)) {
-      throw Object.assign(new Error("Practice project ownership changed. Keep it intact and ask the owner to inspect it."), { code: "vibe64_practice_scope_mismatch" });
-    }
-    return {
-      metadata,
-      projectContextRoot: projectContextRootForSlug(slug),
-      projectRecordPath: projectRecordPathForSlug(slug),
-      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
-      slug
-    };
-  }
-
-  async function updateWorkspaceProjectState(input = {}, update, {
-    allowDeleting = false
-  } = {}) {
-    if (!projectCatalogEnabled && !practiceScope()) {
-      throw projectCatalogUnavailableError();
-    }
-    assertProjectEffectAdmission();
-    if (typeof update !== "function") {
-      throw new TypeError("updateWorkspaceProjectState requires an update function.");
-    }
-    const slug = projectSlugFromInput(input);
-    const state = {
-      projectContextRoot: projectContextRootForSlug(slug),
-      projectRecordPath: projectRecordPathForSlug(slug),
-      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
-      slug
-    };
-    const metadata = await updateProjectRecordMetadata(state.projectRecordPath, async (current) => {
-      const currentMetadata = assertHostedRepositoryMetadata(normalizeProjectMetadata(current));
-      if (!Object.keys(currentMetadata).length) {
-        throw projectStateMissingError(state.slug);
-      }
-      if (currentMetadata.deletion && !allowDeleting) {
-        throw projectDeletingError();
-      }
-      // Snapshot the immutable marker before invoking the existing updater.
-      const training = currentMetadata.training
-        ? normalizeProjectTraining(currentMetadata.training)
-        : undefined;
-      const nextMetadata = assertHostedRepositoryMetadata(normalizeProjectMetadata(await update(currentMetadata, {
-        ...state,
-        metadata: currentMetadata
-      })));
-      if (!isDeepStrictEqual(training, nextMetadata.training)) {
-        const error = new Error("Project training provenance is fixed at creation and cannot be added, changed or removed by an update.");
-        error.code = "vibe64_project_training_immutable";
-        throw error;
-      }
-      return nextMetadata;
-    });
-    return {
-      ...state,
-      metadata
-    };
-  }
-
-  async function beginWorkspaceProjectDeletion(input = {}) {
-    return updateWorkspaceProjectState(input, (metadata) => ({
-      ...metadata,
-      deletion: metadata.deletion || normalizeProjectDeletion({
-        startedAt: input.startedAt || new Date().toISOString(),
-        steps: {}
-      })
-    }), {
-      allowDeleting: true
-    });
-  }
-
-  async function completeWorkspaceProjectDeletionStep(input = {}) {
-    const step = String(input.step || "").trim();
-    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u.test(step)) {
-      const error = new Error("Project deletion step is invalid.");
-      error.code = "vibe64_project_deletion_step_invalid";
-      throw error;
-    }
-    return updateWorkspaceProjectState(input, (metadata) => ({
-      ...metadata,
-      deletion: normalizeProjectDeletion({
-        ...metadata.deletion,
-        steps: {
-          ...metadata.deletion?.steps,
-          [step]: input.completedAt || new Date().toISOString()
-        }
-      })
-    }), {
-      allowDeleting: true
-    });
-  }
-
-  async function discardWorkspaceProjectRecord(input = {}) {
-    assertProjectEffectAdmission();
-    const state = await readWorkspaceProjectState(input);
-    if (!Object.keys(state.metadata).length) {
-      throw projectStateMissingError(state.slug);
-    }
-    if (state.metadata.deletion) {
-      const error = new Error("Project creation cleanup cannot remove a project being deleted.");
-      error.code = "vibe64_project_deleting";
-      throw error;
-    }
-    await Promise.all([
-      rm(state.projectContextRoot, {
-        force: true,
-        recursive: true
-      }),
-      rm(state.projectRuntimeRoot, {
-        force: true,
-        recursive: true
-      })
-    ]);
-  }
-
   async function selectWorkspaceProject(input = {}) {
     if (!projectCatalogEnabled) {
       throw projectCatalogUnavailableError();
@@ -1465,7 +201,7 @@ function createStudioProjectContext({
 
     assertProjectEffectAdmission();
     const slug = normalizeProjectSlug(input?.slug || input?.projectSlug || input?.name);
-    practiceScope(slug);
+    paths.practiceScope(slug);
     const projectContextRoot = resolveProjectContextRoot({
       projectsRoot,
       slug
@@ -1481,7 +217,7 @@ function createStudioProjectContext({
       throw projectCatalogUnavailableError();
     }
 
-    const created = await createWorkspaceProjectRecord(input);
+    const created = await workspaceRecords.createWorkspaceProjectRecord(input);
     selectedTargetRoot = created.project.projectRoot;
     selectionSource = "workspace";
     return listProjects();
@@ -1497,19 +233,19 @@ function createStudioProjectContext({
   }
 
   return Object.freeze({
-    currentPracticeProjectScope: () => practiceScope(),
-    runWithPracticeProjectScope,
-    listLearningSpaceProjects,
-    readLearningSpaceProject,
+    currentPracticeProjectScope: () => paths.practiceScope(),
+    runWithPracticeProjectScope: learningProjects.runWithPracticeProjectScope,
+    listLearningSpaceProjects: learningProjects.listLearningSpaceProjects,
+    readLearningSpaceProject: learningProjects.readLearningSpaceProject,
     get learningSpaceRoot() {
       return learningSpaceRoot;
     },
-    assertWorkspaceProjectAvailable,
-    beginWorkspaceProjectDeletion,
-    completeWorkspaceProjectDeletionStep,
+    assertWorkspaceProjectAvailable: workspaceRecords.assertWorkspaceProjectAvailable,
+    beginWorkspaceProjectDeletion: workspaceRecords.beginWorkspaceProjectDeletion,
+    completeWorkspaceProjectDeletionStep: workspaceRecords.completeWorkspaceProjectDeletionStep,
     createWorkspaceProject,
-    createWorkspaceProjectRecord,
-    discardWorkspaceProjectRecord,
+    createWorkspaceProjectRecord: workspaceRecords.createWorkspaceProjectRecord,
+    discardWorkspaceProjectRecord: workspaceRecords.discardWorkspaceProjectRecord,
     get projectsRoot() {
       return projectsRoot;
     },
@@ -1542,21 +278,21 @@ function createStudioProjectContext({
       return Boolean(selectedTargetRoot);
     },
     listProjects,
-    listWorkspaceProjects,
-    readWorkspaceProject,
-    readWorkspaceProjectState,
+    listWorkspaceProjects: workspaceRecords.listWorkspaceProjects,
+    readWorkspaceProject: workspaceRecords.readWorkspaceProject,
+    readWorkspaceProjectState: workspaceRecords.readWorkspaceProjectState,
     requireSelectedTargetRoot,
     selectWorkspaceProject,
-    sweepOrphanProjectRuntimeRoots,
-    updateWorkspaceProjectMetadata,
-    projectRecordPathForSlug,
-    projectRecordPathForTarget,
-    projectRuntimeRootForSlug,
-    projectRuntimeRootForTarget,
-    projectSessionSourceRootForSlug,
-    projectSessionSourceRootForTarget,
-    sourceConfigRootForTarget,
-    sourceRootForTarget
+    sweepOrphanProjectRuntimeRoots: workspaceRecords.sweepOrphanProjectRuntimeRoots,
+    updateWorkspaceProjectMetadata: workspaceRecords.updateWorkspaceProjectMetadata,
+    projectRecordPathForSlug: paths.projectRecordPathForSlug,
+    projectRecordPathForTarget: paths.projectRecordPathForTarget,
+    projectRuntimeRootForSlug: paths.projectRuntimeRootForSlug,
+    projectRuntimeRootForTarget: paths.projectRuntimeRootForTarget,
+    projectSessionSourceRootForSlug: paths.projectSessionSourceRootForSlug,
+    projectSessionSourceRootForTarget: paths.projectSessionSourceRootForTarget,
+    sourceConfigRootForTarget: paths.sourceConfigRootForTarget,
+    sourceRootForTarget: paths.sourceRootForTarget
   });
 }
 

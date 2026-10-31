@@ -1,10 +1,6 @@
-const PROJECT_DELETION_STEP_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
+import { vibe64Error as projectDeletionError } from "./core.js";
 
-function projectDeletionError(message, code) {
-  const error = new Error(message);
-  error.code = code;
-  return error;
-}
+const PROJECT_DELETION_STEP_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 
 function normalizeProjectDeletion(value = null) {
   if (!value) {

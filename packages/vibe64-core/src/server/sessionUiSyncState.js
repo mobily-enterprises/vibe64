@@ -1,12 +1,7 @@
+import { isPlainObject } from "./core.js";
+import { trimmedText as normalizedSessionUiSyncValue } from "./trimmedText.js";
+
 const sessionUiSyncStates = new Map();
-
-function isPlainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value);
-}
-
-function normalizedSessionUiSyncValue(value = "") {
-  return String(value || "").trim();
-}
 
 function cloneSessionUiSyncRecord(record = null) {
   return isPlainObject(record)

@@ -2,6 +2,7 @@
 // has none; a host with people registers its reader once at startup.
 let teamReader = null;
 
+// readable-check: allow module-registry - filled by a composing host repository; convert with its supplier
 function registerWorkspaceTeamReader(reader) {
   if (typeof reader !== "function") throw new TypeError("A workspace team reader must be a function.");
   teamReader = reader;

@@ -1,4 +1,5 @@
 import { currentProjectRequestContext } from "./projectRequestContext.js";
+import { normalizePlainObject as record } from "./serverResponses.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 
@@ -21,10 +22,6 @@ function vibe64ProjectSessionsRoom(projectSlug) {
 
 function vibe64SessionViewersRoom(projectSlug, sessionId) {
   return `vibe64:project:${projectSlug}:session:${sessionId}`;
-}
-
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 // clientRefresh names the client reads a session change invalidates: the
@@ -167,9 +164,6 @@ function sessionSummaryPayload(full) {
 
 /** @param {RuntimeEvents} events */
 function createSessionChangedPublisher(events) {
-  if (!events || typeof events.publish !== "function") {
-    throw new TypeError("createSessionChangedPublisher requires runtime.events.");
-  }
   return async function publishSessionChanged(sessionIdValue = "", {
     operation = "updated",
     originId: eventOriginId = "",
