@@ -52,6 +52,14 @@ same session starts its assistant (a slow Claude start can take 15–20 seconds)
 It shows **Pending** meanwhile and is refused only if that start takes longer
 than a minute.
 
+A Main chat message that is still **Pending** when you switch to another
+session is not marked failed and does not wait for you to return. It is sent,
+once and with the same identity, as soon as the assistant can take it, even
+while that session is out of view. If the chat briefly loses its connection
+while the message waits, it stays **Pending** and is sent once the chat
+reconnects. Choose **Cancel** on it if you no longer want it sent. This works
+the same on desktop and mobile.
+
 The assistant is shown as working (the animated indicator and the **Assistant
 working** dot on a temporary chat tab) only while its turn is actually
 running. Sending, choosing a recipient, connecting and an unconfirmed delivery
