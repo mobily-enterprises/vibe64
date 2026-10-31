@@ -695,7 +695,8 @@ function createService({
   });
   const agentDatabaseCommand = createAgentDatabaseCommandService({
     logger,
-    projectService
+    projectService,
+    readDatabaseTools: () => databaseToolsProvider
   });
   const agentSessionCommand = createAgentSessionCommandService({
     retryWorkspaceSetup: sessionId => prepareWorkspaceSetup(sessionId, { publish: true, retry: true }),
@@ -2543,28 +2544,35 @@ function createService({
       }, { operation: "session-source-create" });
     },
 
+    // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals
     setSourceEditorProvider(provider = null) {
       sourceEditorProvider = provider;
     },
+    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setConnectedPreparation(prepare) {
       if (typeof prepare !== "function") throw new TypeError("Connected preparation requires its Sessions owner.");
       connectedPreparation = prepare;
     },
+    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setPlanCompleted(handler) {
       if (typeof handler !== "function") throw new TypeError("Plan completion requires its Sessions owner.");
       planCompleted = handler;
     },
 
+    // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider(provider = null) {
       databaseToolsProvider = provider;
-      agentDatabaseCommand.setDatabaseToolsProvider(provider);
     },
 
+    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setProductionEnvironmentProvider(provider = null) {
+      // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
       agentEnvCommand.setProductionEnvironmentProvider(provider);
     },
 
+    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setSavedEnvValueProvider(provider = null) {
+      // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
       agentEnvCommand.setSavedEnvValueProvider(provider);
     },
 

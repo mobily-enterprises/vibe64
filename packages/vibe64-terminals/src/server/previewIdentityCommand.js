@@ -142,6 +142,7 @@ function normalizePreviewIdentityCommandResponse(value = {}, {
       code: String(value.code || "vibe64_preview_identity_application_rejected").trim().slice(0, 128),
       error: String(value.error || "Application preview identity was rejected.").trim().slice(0, 2000),
       ok: false,
+      // readable-check: allow setter-seam - not a slot: setCookie is the application's cookie list
       setCookie,
       signedOut: value.signedOut === true,
       statusCode: Number.isInteger(statusCodeValue) && statusCodeValue >= 400 && statusCodeValue < 600
@@ -160,6 +161,7 @@ function normalizePreviewIdentityCommandResponse(value = {}, {
   return {
     identity,
     ok: true,
+    // readable-check: allow setter-seam - not a slot: setCookie is the application's cookie list
     setCookie,
     signedOut,
     statusCode: 200

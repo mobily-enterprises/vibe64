@@ -29,6 +29,7 @@ const EXAMPLE_RESPONSE = Object.freeze({
   protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   requestId: EXAMPLE_REQUEST_ID,
   ok: true,
+  // readable-check: allow setter-seam - not a slot: setCookie is the example response's cookie list
   setCookie: ["app_session=abc123; Path=/; HttpOnly; SameSite=Lax"],
   identity: { displayName: "Admin", email: "admin@example.com", userId: "1" }
 });
@@ -39,6 +40,7 @@ const EXAMPLE_REJECTION = Object.freeze({
   code: "user_not_found",
   error: "No active user has that email.",
   statusCode: 404,
+  // readable-check: allow setter-seam - not a slot: setCookie is the example rejection's cookie list
   setCookie: []
 });
 

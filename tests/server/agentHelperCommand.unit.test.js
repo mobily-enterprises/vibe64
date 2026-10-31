@@ -125,13 +125,13 @@ setInterval(() => {}, 1000);
 test("helper and individual database commands use the same authenticated session socket", async (t) => {
   const { root, helper } = await fixture(t);
   const calls = [];
+  const databaseTools = {
+    async refreshSchema(input) { calls.push(input); return { ok: true, schema: { tables: [] } }; }
+  };
   const command = createAgentDatabaseCommandService({ projectService: {
     async readCurrentProject() { return { slug: "demo", projectRoot: root }; },
     async runInProjectContext(slug, operation) { assert.equal(slug, "demo"); return operation(); }
-  } });
-  command.setDatabaseToolsProvider({
-    async refreshSchema(input) { calls.push(input); return { ok: true, schema: { tables: [] } }; }
-  });
+  }, readDatabaseTools: () => databaseTools });
   t.after(() => command.closeAllForSession("helper-session"));
   const prepared = await prepareAgentDatabaseCommand({ commandService: command, sessionId: "helper-session", wrapperHostDir: root });
   const env = { ...process.env, ...prepared.env };

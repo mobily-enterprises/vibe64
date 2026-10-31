@@ -208,26 +208,15 @@ const commandServers = createSessionCommandServers({
  * @param {object} dependencies
  * @param {RuntimeLogger | null} [dependencies.logger]
  * @param {ProjectService} dependencies.projectService
+ * @param {() => object | null} dependencies.readDatabaseTools the installed database tools service, or null without one
  */
-function createAgentDatabaseCommandService({ logger = null, projectService } = {}) {
-  if (!projectService || typeof projectService.readCurrentProject !== "function" || typeof projectService.runInProjectContext !== "function") {
-    throw new TypeError("createAgentDatabaseCommandService requires the Vibe64 Project API.");
-  }
+function createAgentDatabaseCommandService({ logger = null, projectService, readDatabaseTools }) {
   const projectBinding = createAgentCommandProjectBinding(projectService, {
     sessionRequired: ["Vibe64 database command session id is required.", "vibe64_agent_database_command_session_required"],
     projectRequired: ["Vibe64 database command could not bind this session to a project.", "vibe64_agent_database_command_project_required"],
     unbound: ["This database command is not bound to an active session.", "vibe64_agent_database_command_session_unbound"],
     changed: ["Vibe64 database command session project no longer matches its bound project.", "vibe64_agent_database_command_project_binding_changed"]
   });
-  let databaseToolsProvider = null;
-
-  function setDatabaseToolsProvider(provider = null) {
-    if (provider !== null && typeof provider?.refreshSchema !== "function") {
-      throw new TypeError("The database tools provider must expose refreshSchema(), or be null.");
-    }
-    databaseToolsProvider = provider;
-  }
-
   async function bindSession(sessionId = "") {
     const binding = await projectBinding.bind(sessionId);
     return {
@@ -246,17 +235,18 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
     try {
       result = validateCommand(parsed);
       if (!result) {
-        if (!databaseToolsProvider) throw vibe64Error("The session Database tool is unavailable.", "vibe64_agent_database_command_unavailable");
+        const databaseTools = readDatabaseTools();
+        if (!databaseTools) throw vibe64Error("The session Database tool is unavailable.", "vibe64_agent_database_command_unavailable");
         if (parsed.command === "erd" || parsed.command === "overview") {
           const payload = await projectBinding.run(sessionId, () => {
-            if (parsed.command === "overview") return databaseToolsProvider.readOverview({ sessionId });
-            if (parsed.positionals[1] === "apply") return databaseToolsProvider.moveErdTables({ sessionId, changes: input.changes });
-            return databaseToolsProvider.readErd({ sessionId });
+            if (parsed.command === "overview") return databaseTools.readOverview({ sessionId });
+            if (parsed.positionals[1] === "apply") return databaseTools.moveErdTables({ sessionId, changes: input.changes });
+            return databaseTools.readErd({ sessionId });
           });
           if (payload?.ok === false) throw vibe64Error(payload.error, payload.code);
           result = { exitCode: 0, ok: true, stdout: `${JSON.stringify(payload, null, 2)}\n` };
         } else {
-          const refreshed = await projectBinding.run(sessionId, () => databaseToolsProvider.refreshSchema({
+          const refreshed = await projectBinding.run(sessionId, () => databaseTools.refreshSchema({
             sessionId,
             source: "agent"
           }));
@@ -300,7 +290,7 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
     return { closed: closed + (bound && closed === 0 ? 1 : 0), ok: true };
   }
 
-  return Object.freeze({ bindSession, closeAllForSession, run, setDatabaseToolsProvider });
+  return Object.freeze({ bindSession, closeAllForSession, run });
 }
 
 async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wrapperHostDir = "" } = {}) {

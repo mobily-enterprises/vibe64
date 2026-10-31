@@ -367,18 +367,9 @@ const commandServers = createSessionCommandServers({
 function createAgentEnvCommandService({
   logger = null,
   projectService,
+  // readable-check: allow dependency-default - filled by a composing host repository; convert with its supplier
   productionEnvironmentProvider = null
-} = {}) {
-  if (
-    !projectService ||
-    typeof projectService.readCurrentProject !== "function" ||
-    typeof projectService.readEnv !== "function" ||
-    typeof projectService.runInProjectContext !== "function" ||
-    typeof projectService.saveEnvUserValues !== "function"
-  ) {
-    throw new TypeError("createAgentEnvCommandService requires the Vibe64 Project Env API.");
-  }
-
+}) {
   // The person whose request prepared this agent; a host's saved values
   // apply that person's permissions.
   const projectBinding = createAgentCommandProjectBinding(projectService, {
@@ -390,17 +381,23 @@ function createAgentEnvCommandService({
   let productionProvider = null;
   let savedValueProvider = null;
 
+  // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
   function setSavedEnvValueProvider(provider = null) {
     savedValueProvider = assertSavedEnvValueProvider(provider);
   }
 
+  // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
   function setProductionEnvironmentProvider(provider = null) {
     if (
       provider !== null &&
       (!provider ||
+        // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
         typeof provider.readRecords !== "function" ||
+        // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
         typeof provider.isUserValueRecord !== "function" ||
+        // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
         typeof provider.setVariable !== "function" ||
+        // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
         typeof provider.removeVariable !== "function")
     ) {
       throw new TypeError("Vibe64 production Env provider must expose readRecords(), isUserValueRecord(), setVariable(), and removeVariable(), or be null.");
@@ -447,6 +444,7 @@ function createAgentEnvCommandService({
         }
       }), `Development Env ${key} could not be removed.`);
     },
+    // readable-check: allow setter-seam - not a slot: setVariable saves one Development Env variable
     async setVariable({
       key = "",
       secret = false,
@@ -488,6 +486,7 @@ function createAgentEnvCommandService({
         `Production Env ${key} could not be removed.`
       );
     },
+    // readable-check: allow setter-seam - not a slot: setVariable saves one production Env variable
     async setVariable({
       key = "",
       projectSlug = "",
@@ -733,7 +732,9 @@ function createAgentEnvCommandService({
     bindSession,
     closeAllForSession,
     run,
+    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setProductionEnvironmentProvider,
+    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setSavedEnvValueProvider
   });
 }
