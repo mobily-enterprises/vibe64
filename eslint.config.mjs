@@ -48,6 +48,7 @@ export default [
     "packages/vibe64-project/src/server/**",
     "packages/vibe64-publishing/src/server/**",
     "packages/vibe64-runtime/src/server/**",
+    "packages/vibe64-sessions/src/server/**",
     "packages/vibe64-source-editor/src/server/**",
     "packages/vibe64-system-graph/src/server/**",
     "packages/vibe64-training/src/server/**",
