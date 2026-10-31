@@ -6,7 +6,7 @@
   "type": "module",
   "exports": {
     "./client": "./src/client/index.js",
-    "./server/actions": "./src/server/actions.js",
+    "./server/actions": "./src/server/accountsActions.js",
     "./server/accountRealtimeEvents": "./src/server/accountRealtimeEvents.js",
     "./server/githubCliAuth": "./src/server/githubCliAuth.js",
     "./server/registerRoutes": "./src/server/registerRoutes.js",

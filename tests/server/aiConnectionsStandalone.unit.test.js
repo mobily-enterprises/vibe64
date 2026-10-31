@@ -11,7 +11,7 @@ import { testRouteApp, findRegisteredRoute, testReply } from "./vibe64RouteTestH
 
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/actions.js";
+import { createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 
 function registerRoutes(http, options) {
   const actions = createActionCatalogue();
@@ -82,7 +82,7 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
     }
   }
   const storedBefore = await readFile(aiConnections.filePath, "utf8");
-  const reopened = createAiConnectionRuntime({ systemRoot, terminals });
+  const reopened = createAiConnectionRuntime({ publishConnectionChanged: async () => null, systemRoot, terminals });
   assert.equal((await reopened.resolveConnection("deepseek")).apiKey, "fixture-deepseek-private-key");
   assert.equal(await readFile(aiConnections.filePath, "utf8"), storedBefore);
 
@@ -150,7 +150,7 @@ test("project AI readiness accepts Claude or OpenCode without requiring Codex", 
 test("private runtime publication cannot report connection success without the native owner's write barrier", async t => {
   const systemRoot = await mkdtemp(path.join(os.tmpdir(), "v64-ai-barrier-"));
   t.after(() => rm(systemRoot, { recursive: true, force: true }));
-  const runtime = createAiConnectionRuntime({ systemRoot, terminals: {
+  const runtime = createAiConnectionRuntime({ publishConnectionChanged: async () => null, systemRoot, terminals: {
     async verifyAssistantConnection() { return { ok: true }; },
     async invalidateAgentRuntimes() { return { ok: true }; }
   } });

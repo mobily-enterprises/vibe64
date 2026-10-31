@@ -19,9 +19,9 @@ function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
 
-// Every account, connection and auth-session change is a global
-// entity.changed event; only the actor, entity and realtime parts differ.
 /**
+ * Every account, connection and auth-session change is a global
+ * entity.changed event; only the actor, entity and realtime parts differ.
  * @param {RuntimeEvents} events
  * @param {object} change
  * @param {string | null} [change.actorId]
@@ -168,15 +168,9 @@ function vibe64ConnectionsChangedActionEvent({ operation = "updated" } = {}) {
 
 /**
  * @param {object} dependencies
- * @param {RuntimeEvents | null} [dependencies.events]
+ * @param {RuntimeEvents} dependencies.events
  */
-function createVibe64AccountsChangedPublisher({ events = null } = {}) {
-  if (!events || typeof events.publish !== "function") {
-    return async function publishNoop() {
-      return null;
-    };
-  }
-
+function createVibe64AccountsChangedPublisher({ events }) {
   return async function publishVibe64AccountsChanged(accountId = "", {
     actorId = null,
     account = null,
@@ -231,15 +225,9 @@ function createVibe64AccountsChangedPublisher({ events = null } = {}) {
 
 /**
  * @param {object} dependencies
- * @param {RuntimeEvents | null} [dependencies.events]
+ * @param {RuntimeEvents} dependencies.events
  */
-function createVibe64ConnectionsChangedPublisher({ events = null } = {}) {
-  if (!events || typeof events.publish !== "function") {
-    return async function publishNoop() {
-      return null;
-    };
-  }
-
+function createVibe64ConnectionsChangedPublisher({ events }) {
   return async function publishVibe64ConnectionsChanged(connectionId = "", {
     connected,
     operation = "updated",
@@ -267,15 +255,9 @@ function createVibe64ConnectionsChangedPublisher({ events = null } = {}) {
 
 /**
  * @param {object} dependencies
- * @param {RuntimeEvents | null} [dependencies.events]
+ * @param {RuntimeEvents} dependencies.events
  */
-function createVibe64AccountAuthSessionChangedPublisher({ events = null } = {}) {
-  if (!events || typeof events.publish !== "function") {
-    return async function publishNoop() {
-      return null;
-    };
-  }
-
+function createVibe64AccountAuthSessionChangedPublisher({ events }) {
   return async function publishVibe64AccountAuthSessionChanged(session = {}, {
     actorId = "",
     operation = "updated",

@@ -120,6 +120,8 @@ test("native account logout and credential restoration drain old processes and c
     }
   });
   const accounts = createAccountsService({
+    publishAccountChanged: async () => null,
+    publishAuthSessionChanged: async () => null,
     accountRuntime: createAccountsRuntime({ daemonHome: toolHome, systemRoot }),
     projectService,
     invalidateAgentRuntimes: (input) => controller.invalidateAppServerRuntimes(input),

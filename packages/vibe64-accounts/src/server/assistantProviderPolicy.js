@@ -1,4 +1,5 @@
 import { aiConnectionError } from "./aiConnectionError.js";
+import { trimmedText as text } from "./trimmedText.js";
 
 const OPENCODE_NATIVE_ENDPOINT_CODE = "opencode-native";
 // The Z.AI model Vibe64 starts on: free, and verified directly against Z.AI.
@@ -57,10 +58,6 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
     routeLabel: "Z.AI Personal Coding Plan"
   })
 });
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function assistantProviderPolicy(provider = {}) {
   const modelProviderId = text(provider.id || provider.modelProviderId);

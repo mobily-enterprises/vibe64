@@ -41,7 +41,7 @@ loopback/no-login lane. Other account actions remain excluded.
 
 ## Sources
 
-- `packages/vibe64-accounts/src/server/actions.js`
+- `packages/vibe64-accounts/src/server/accountsActions.js`
 - `packages/vibe64-accounts/src/server/inputSchemas.js`
 - `packages/vibe64-accounts/src/server/routingAssistantContracts.js`
 - `tests/server/vibe64AccountActionDispatch.unit.test.js`
@@ -118,7 +118,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/studio-health/src/server/service.js`
-- `packages/studio-health/src/server/actions.js`
+- `packages/studio-health/src/server/studioHealthActions.js`
 - `packages/studio-health/src/server/inputSchemas.js`
 - `packages/studio-health/src/server/registerRoutes.js`
 - `src/components/studio/StudioHealthScreen.vue`

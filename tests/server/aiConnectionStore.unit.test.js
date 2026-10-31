@@ -37,6 +37,8 @@ async function fixture(t, options = {}) {
     filePath,
     verificationCalls,
     store: createAiConnectionStore({
+      onConnectionChanged: () => null,
+      readModelIds: async () => [],
       filePath,
       async verifyConnection(input) {
         verificationCalls.push(input);
@@ -251,6 +253,8 @@ test("a running Zen model check reports restart interruption and can cancel befo
   await firstModelStarted;
 
   const restartedStore = createAiConnectionStore({
+    onConnectionChanged: () => null,
+    readModelIds: async () => [],
     filePath: store.filePath,
     async verifyConnection() {
       return { ok: true };

@@ -1,6 +1,6 @@
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createAssistantRoutingStore, validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
-import { ASSISTANT_SETUP_ROLES, assistantSetupRoleValue, isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_SETUP_ROLES, assistantSetupRoleValue } from "@local/vibe64-runtime/shared/assistantRouting";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { watch } from "node:fs";
@@ -10,7 +10,6 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-
 
 import {
   closeTerminalSession,
@@ -24,16 +23,10 @@ import {
   GITHUB_RECONNECT_REQUIRED_MESSAGE,
   githubCliAccountFailureMessage
 } from "./githubCliAuth.js";
-import {
-  validateGitIdentityInputs
-} from "../shared/gitIdentityInput.js";
+import { validateGitIdentityInputs } from "../shared/gitIdentityInput.js";
 import { cleanAuthOutput, deviceUserCode, OPENAI_API_KEY_REDACTION_PATTERN, redactedAuthOutputTail } from "../shared/authOutput.js";
-import {
-  vibe64Result
-} from "@local/vibe64-core/server/serverResponses";
-import {
-  isVibe64DebugLoggingEnabled
-} from "@local/vibe64-core/shared";
+import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
+import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 import {
   CODEX_AUTH_RECONNECTING_CODE,
   CODEX_AUTH_RECONNECTING_MESSAGE,
@@ -48,15 +41,8 @@ import {
   readCodexLoginId,
   writeCodexAuthMarker
 } from "@local/vibe64-core/server/codexAuthState";
+
 import {
-  projectServiceNamespaceRoot
-} from "@local/vibe64-core/server/projectServiceSelection";
-import {
-  resolveStudioTargetRoot,
-  resolveVibe64SystemRoot
-} from "@local/vibe64-core/server/studioRoots";
-import {
-  appCredentialContext,
   APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
@@ -70,17 +56,22 @@ import {
   runVibe64Command,
   shellQuote
 } from "@local/vibe64-execution/server";
-import {
-  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  codexRuntimeContext
-} from "@local/studio-terminal-core/server/codexRuntimeContext";
+import { STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 import { claudeStatusStartFailed, readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { logAccountChange, runLoggedAccountChange } from "./accountChangeLog.js";
+import {
+  ALL_CODEX_AUTH_MODES,
+  API_KEY_AUTH_MODE,
+  authError,
+  BROWSER_AUTH_MODE,
+  createAccountsRuntime,
+  DEVICE_AUTH_MODE,
+  resolveVibe64AccountsRoot
+} from "./accountsRuntime.js";
 
+/** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -90,9 +81,6 @@ import { logAccountChange, runLoggedAccountChange } from "./accountChangeLog.js"
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
-const BROWSER_AUTH_MODE = "browser";
-const DEVICE_AUTH_MODE = "device";
-const API_KEY_AUTH_MODE = "api_key";
 const CODEX_DEVICE_AUTH_URL = "https://auth.openai.com/codex/device";
 const GITHUB_DEVICE_AUTH_URL = "https://github.com/login/device";
 const GITHUB_GIT_CREDENTIAL_HELPER = "gh auth git-credential";
@@ -106,12 +94,6 @@ const GITHUB_STATUS_TRANSIENT_FAILURE_PATTERN = /\b(?:EAGAIN|EINTR|EBUSY|resourc
 const GITHUB_STATUS_TEMPORARILY_UNAVAILABLE_CODE = "vibe64_github_status_temporarily_unavailable";
 const GITHUB_HOSTS_RELATIVE_PATH = Object.freeze([".config", "gh", "hosts.yml"]);
 const GITHUB_GITCONFIG_RELATIVE_PATH = Object.freeze([".gitconfig"]);
-const ALL_CODEX_AUTH_MODES = Object.freeze([
-  BROWSER_AUTH_MODE,
-  DEVICE_AUTH_MODE,
-  API_KEY_AUTH_MODE
-]);
-
 const ACCOUNT_DEFINITIONS = Object.freeze({
   claude: Object.freeze({ id: "claude", label: "Claude Code", required: false, scope: APP_CREDENTIAL_SCOPE }),
   codex: Object.freeze({
@@ -128,12 +110,6 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
   })
 });
 const DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS = Object.freeze(["codex", "claude", "github"]);
-
-function resolveVibe64AccountsRoot(targetRoot) {
-  return resolveStudioTargetRoot({
-    explicitRoot: targetRoot
-  });
-}
 
 function isUserCredentialContext(context = {}) {
   return context?.scope === USER_CREDENTIAL_SCOPE || context?.accountMode === GITHUB_ACCOUNT_MODE_USER;
@@ -428,7 +404,9 @@ function currentProcessMatchesHostIdentity({
 } = {}) {
   const expectedUid = normalizeProcessId(hostUid ?? uid);
   const expectedGid = normalizeProcessId(hostGid ?? gid);
+  // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
   const actualUid = typeof process.getuid === "function" ? process.getuid() : null;
+  // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
   const actualGid = typeof process.getgid === "function" ? process.getgid() : null;
   return expectedUid !== null &&
     expectedGid !== null &&
@@ -1133,21 +1111,6 @@ function blockedReason(accounts = []) {
   return firstMissingAccount ? String(firstMissingAccount.message || "") : "";
 }
 
-function authError(code, message, extra = {}) {
-  return {
-    ...extra,
-    code,
-    error: message,
-    errors: [
-      {
-        code,
-        message
-      }
-    ],
-    ok: false
-  };
-}
-
 function authTerminalMetadata(accountId, mode, githubContext = null, actorId = "") {
   const metadata = {
     accountId,
@@ -1163,18 +1126,9 @@ function authTerminalMetadata(accountId, mode, githubContext = null, actorId = "
   return metadata;
 }
 
-function unsupportedAuthMode(accountId, mode, accountRuntime = {}) {
-  if (
-    accountId === "codex" &&
-    typeof accountRuntime.codexModeAllowed === "function" &&
-    accountRuntime.codexModeAllowed(mode) !== true
-  ) {
-    return authError(
-      "unsupported_auth_mode",
-      typeof accountRuntime.unsupportedCodexAuthModeMessage === "function"
-        ? accountRuntime.unsupportedCodexAuthModeMessage(mode)
-        : "This Codex login method is not available for this Vibe64 account runtime."
-    );
+function unsupportedAuthMode(accountId, mode, accountRuntime) {
+  if (accountId === "codex" && accountRuntime.codexModeAllowed(mode) !== true) {
+    return authError("unsupported_auth_mode", accountRuntime.unsupportedCodexAuthModeMessage(mode));
   }
   return null;
 }
@@ -1265,151 +1219,37 @@ function authenticatingAccount(accountId = "") {
   };
 }
 
-function normalizeCodexAuthModes(modes = ALL_CODEX_AUTH_MODES) {
-  const normalizedModes = Array.isArray(modes) && modes.length
-    ? modes
-    : ALL_CODEX_AUTH_MODES;
-  return new Set(
-    normalizedModes
-      .map((mode) => String(mode || "").trim().toLowerCase())
-      .filter((mode) => ALL_CODEX_AUTH_MODES.includes(mode))
-  );
-}
-
 /**
+ * accountRuntime (from createAccountsRuntime) owns roots, credential homes
+ * and the AI management policy; the service owns login sessions and status reads.
  * @param {object} dependencies
- * @param {string[]} [dependencies.allowedCodexAuthModes]
- * @param {string} [dependencies.daemonHome]
- * @param {number | null} [dependencies.daemonGid]
- * @param {number | null} [dependencies.daemonUid]
- * @param {string} [dependencies.daemonUsername]
- * @param {((input: object) => object) | null} [dependencies.debugInput]
+ * @param {AccountsRuntime} dependencies.accountRuntime
  * @param {RuntimeEnv} [dependencies.env]
- * @param {string} [dependencies.githubAccountMode]
- * @param {object | null} [dependencies.previousGithub]
- * @param {ProjectService | null} [dependencies.projectService]
- * @param {((input: object) => Promise<object | null>) | null} [dependencies.requireAiManagement]
- * @param {boolean} [dependencies.requireExplicitRoots]
- * @param {string} [dependencies.systemRoot]
- * @param {string} [dependencies.targetRoot]
- * @param {((mode: string) => string) | null} [dependencies.unsupportedCodexAuthModeMessage]
- */
-function createAccountsRuntime({
-  allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
-  daemonHome = "",
-  daemonGid = null,
-  daemonUid = null,
-  daemonUsername = "",
-  debugInput = null,
-  env = process.env,
-  githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
-  previousGithub = null,
-  projectService = null,
-  requireAiManagement = null,
-  requireExplicitRoots = true,
-  systemRoot = "",
-  targetRoot = "",
-  unsupportedCodexAuthModeMessage = null
-} = {}) {
-  const explicitSystemRoot = String(systemRoot || "").trim();
-  const resolvedSystemRoot = requireExplicitRoots && !explicitSystemRoot
-    ? ""
-    : resolveVibe64SystemRoot({
-        env,
-        explicitRoot: systemRoot
-      });
-  const codexAuthModes = normalizeCodexAuthModes(allowedCodexAuthModes);
-
-  function currentTargetRoot() {
-    const selectedTargetRoot = String(targetRoot || projectServiceNamespaceRoot(projectService)).trim();
-    return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot) : "";
-  }
-
-  return Object.freeze({
-    claudeContext() {
-      return appCredentialContext({
-        home: daemonHome || undefined,
-        gid: daemonGid ?? undefined,
-        uid: daemonUid ?? undefined,
-        username: daemonUsername
-      });
-    },
-    codexContext() {
-      return codexRuntimeContext({
-        env,
-        gid: daemonGid ?? undefined,
-        home: daemonHome || undefined,
-        requireSystemRoot: requireExplicitRoots,
-        systemRoot: resolvedSystemRoot,
-        uid: daemonUid ?? undefined,
-        username: daemonUsername
-      });
-    },
-    codexModeAllowed(mode = "") {
-      return codexAuthModes.has(String(mode || "").trim().toLowerCase());
-    },
-    currentTargetRoot,
-    debugInput(input = {}) {
-      return typeof debugInput === "function" ? debugInput(input) || {} : {};
-    },
-    githubContext(input = {}) {
-      return githubCredentialContext(input, {
-        accountMode: githubAccountMode
-      });
-    },
-    previousGithub(input = {}) {
-      return typeof previousGithub === "function" ? previousGithub(input) : null;
-    },
-    // The one answer to who may manage AI here: Claude and Codex sign-in,
-    // saved provider keys, model access and model routing. Hosts may
-    // override it; by default only the workspace owner may.
-    requireAiManagement(input = {}) {
-      if (typeof requireAiManagement === "function") return requireAiManagement(input);
-      return isAssistantRoutingOwner(input.vibe64User) ? null
-        : authError("vibe64_owner_required", "Only the workspace owner can manage AI connections and models.");
-    },
-    systemRoot: resolvedSystemRoot,
-    unsupportedCodexAuthModeMessage(mode = "") {
-      return typeof unsupportedCodexAuthModeMessage === "function"
-        ? unsupportedCodexAuthModeMessage(mode)
-        : "This Codex login method is not available for this Vibe64 account runtime.";
-    }
-  });
-}
-
-// accountRuntime (from createAccountsRuntime) owns roots, credential homes
-// and the AI management policy; the service owns login sessions and status reads.
-/**
- * @param {object} dependencies
- * @param {ReturnType<typeof createAccountsRuntime>} dependencies.accountRuntime
- * @param {RuntimeEnv} [dependencies.env]
- * @param {TerminalsService["invalidateAgentRuntimes"]} [dependencies.invalidateAgentRuntimes]
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {TerminalsService["invalidateAgentRuntimes"]} dependencies.invalidateAgentRuntimes
+ * @param {RuntimeLogger} dependencies.logger
  * @param {PersonalAiProfileStore | null} [dependencies.personalProfileStore]
- * @param {TerminalsService["inspectAssistantRoutingConfiguration"] | null} [dependencies.inspectRoutingConfiguration]
- * @param {PublishAccountChanged} [dependencies.publishAccountChanged]
- * @param {PublishAuthSessionChanged} [dependencies.publishAuthSessionChanged]
- * @param {TerminalsService["readClaudeAccountStatus"] | null} [dependencies.readClaudeAccountStatus]
+ * @param {TerminalsService["inspectAssistantRoutingConfiguration"] | null} dependencies.inspectRoutingConfiguration
+ * @param {PublishAccountChanged} dependencies.publishAccountChanged
+ * @param {PublishAuthSessionChanged} dependencies.publishAuthSessionChanged
+ * @param {TerminalsService["readClaudeAccountStatus"] | null} dependencies.readClaudeAccountStatus
  * @param {typeof runDefaultHostCommand} [dependencies.runHostToolCommand]
  * @param {typeof runVibe64Command} [dependencies.runAuthTerminalCommand]
  */
 function createService({
   accountRuntime,
   env = process.env,
-  invalidateAgentRuntimes = async () => null,
-  logger = null,
+  invalidateAgentRuntimes,
+  logger,
+  // readable-check: allow dependency-default - data: a personal AI profile is kept only by a local runtime with a system folder
   personalProfileStore = null,
-  inspectRoutingConfiguration = null,
-  publishAccountChanged = async () => null,
-  publishAuthSessionChanged = async () => null,
+  inspectRoutingConfiguration,
+  publishAccountChanged,
+  publishAuthSessionChanged,
   // Claude conversations' own status read; Accounts shows what they use.
-  readClaudeAccountStatus = null,
+  readClaudeAccountStatus,
   runHostToolCommand = runDefaultHostCommand,
   runAuthTerminalCommand = runVibe64Command
-} = {}) {
-  if (!accountRuntime) {
-    throw new TypeError("Vibe64 Accounts requires an account runtime from createAccountsRuntime.");
-  }
+}) {
   const authSessions = new Map();
   const claudeBrowserFiles = new Map();
   let codexStatusRead = null;
@@ -1417,11 +1257,7 @@ function createService({
   const routingStore = () => createAssistantRoutingStore({ systemRoot: resolvedSystemRoot });
   const cancelledAuthSessions = new Set();
   const finalizedCodexAuthSessions = new Set();
-  const resolvedPersonalProfileStore = personalProfileStore &&
-    typeof personalProfileStore.read === "function" &&
-    typeof personalProfileStore.write === "function"
-    ? personalProfileStore
-    : null;
+  // readable-check: allow method-probe - input validation: a host's account runtime may run host tool commands itself; the service's runner applies otherwise
   const accountRunHostCommand = typeof accountRuntime.runHostToolCommand === "function"
     ? (commandArgs, options = {}) => accountRuntime.runHostToolCommand(commandArgs, options, {
         fallback: runHostToolCommand
@@ -1881,9 +1717,9 @@ function createService({
         github: USER_CREDENTIAL_SCOPE
       },
       ready,
-      ...(resolvedPersonalProfileStore ? {
+      ...(personalProfileStore ? {
         personalProfile: {
-          ...(await resolvedPersonalProfileStore.read()),
+          ...(await personalProfileStore.read()),
           available: true,
           scope: "installation"
         }
@@ -2333,7 +2169,7 @@ function createService({
   }
 
   async function routingView(configuration, input) {
-    if (typeof inspectRoutingConfiguration !== "function") throw new Error("Model routing is unavailable on this host.");
+    if (!inspectRoutingConfiguration) throw new Error("Model routing is unavailable on this host.");
     const [result, team] = await Promise.all([
       inspectRoutingConfiguration(configuration, { vibe64User: input.vibe64User || null,
         ...(input.preferProvider ? { preferProvider: input.preferProvider } : {}) }), readWorkspaceTeam()]);
@@ -2399,7 +2235,7 @@ function createService({
   return Object.freeze({
     initializeModelRouting,
     readModelRouting,
-    async previewModelRouting(input = {}) {
+    async previewModelRouting(input) {
       return accountsResult(async () => {
         const failure = aiManagementError(input);
         if (failure) return failure;
@@ -2407,7 +2243,7 @@ function createService({
         return routingView(configuration, input);
       });
     },
-    async saveModelRouting(input = {}) {
+    async saveModelRouting(input) {
       return accountsResult(async () => {
         const failure = aiManagementError(input);
         if (failure) return failure;
@@ -2465,7 +2301,7 @@ function createService({
       });
     },
 
-    async startAuth(input = {}) {
+    async startAuth(input) {
       return accountChange("start-sign-in", input, { accountId: String(input.accountId || ""), mode: String(input.mode || "") }, async () => {
         const accountId = normalizedAccountId(input.accountId);
         authDebug("server.auth.start.request", {
@@ -2532,7 +2368,7 @@ function createService({
       });
     },
 
-    async saveGitIdentity(input = {}) {
+    async saveGitIdentity(input) {
       return accountsResult(async () => {
         const githubContext = githubContextForInput(input);
         if (!githubContext.ok) {
@@ -2572,14 +2408,14 @@ function createService({
       });
     },
 
-    readCodexProviders(input = {}) {
+    readCodexProviders(input) {
       return accountsResult(async () => {
         const failure = aiManagementError(input);
         if (failure) return failure;
         return { ok: true, providers: await codexProviders.list() };
       });
     },
-    saveCodexProvider(input = {}) {
+    saveCodexProvider(input) {
       return accountChange("save-provider-key", input, { engineId: input.engineId, modelProviderId: input.modelProviderId }, async () => {
         const failure = aiManagementError(input);
         if (failure) return failure;
@@ -2589,7 +2425,7 @@ function createService({
         return { ok: true, providers, routing };
       });
     },
-    removeCodexProvider(input = {}) {
+    removeCodexProvider(input) {
       return accountChange("remove-provider-key", input, { engineId: input.engineId, modelProviderId: input.modelProviderId }, async () => {
         const failure = aiManagementError(input);
         if (failure) return failure;
@@ -2599,9 +2435,9 @@ function createService({
       });
     },
 
-    async savePersonalAiProfile(input = {}) {
+    async savePersonalAiProfile(input) {
       return accountsResult(async () => {
-        if (!resolvedPersonalProfileStore) {
+        if (!personalProfileStore) {
           return authError(
             "personal_profile_unavailable",
             "Personal profile settings are not available in this Vibe64 runtime."
@@ -2610,7 +2446,7 @@ function createService({
         return {
           ok: true,
           personalProfile: {
-            ...(await resolvedPersonalProfileStore.write({
+            ...(await personalProfileStore.write({
               preferredName: input.preferredName
             })),
             available: true,
@@ -2620,11 +2456,11 @@ function createService({
       });
     },
 
-    async readAuthSession(input = {}) {
+    async readAuthSession(input) {
       return accountsResult(() => readSessionWithAccount(input));
     },
 
-    async logout(input = {}) {
+    async logout(input) {
       return accountChange("logout", input, { accountId: String(input.accountId || "") }, async () => {
         const accountId = normalizedAccountId(input.accountId);
         authDebug("server.auth.logout.start", {
@@ -2697,9 +2533,9 @@ function createService({
       });
     },
 
-    async cancelAuthSession(input = {}) {
-      return accountChange("cancel-sign-in", input, { authSessionId: String(input?.sessionId || input || "") }, async () => {
-        const id = String(input?.sessionId || input || "");
+    async cancelAuthSession(input) {
+      return accountChange("cancel-sign-in", input, { authSessionId: String(input.sessionId || input || "") }, async () => {
+        const id = String(input.sessionId || input || "");
         const metadata = authMetadata(id, input);
         if (!metadata || !sessionVisibleToInput(input, metadata)) {
           return authError("unknown_auth_session", "Account auth session not found.");

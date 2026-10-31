@@ -38,6 +38,7 @@ export default [
     "packages/current-app/src/server/**",
     "packages/studio-health/src/server/**",
     "packages/studio-terminal-core/src/server/**",
+    "packages/vibe64-accounts/src/server/**",
     "packages/vibe64-core/src/server/**",
     "packages/vibe64-execution/src/server/**",
     "packages/vibe64-genesis/src/server/**",
@@ -46,6 +47,7 @@ export default [
   {
     // Over 750 lines, with a factory over 600 whose concerns share mutable state.
     files: [
+      "packages/vibe64-accounts/src/server/service.js",
       "packages/vibe64-runtime/src/server/sessionStore.js"
     ],
     rules: {

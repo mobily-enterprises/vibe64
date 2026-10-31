@@ -6,16 +6,16 @@ import { verifyZaiConnection } from "./zaiConnectionVerifier.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {ReturnType<typeof import("./aiConnectionStore.js").createAiConnectionStore>} AiConnectionStore */
-/** @typedef {ReturnType<typeof import("./service.js").createAccountsRuntime>} AccountsRuntime */
+/** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64ConnectionsChangedPublisher>} PublishConnectionChanged */
 
 /**
  * @param {object} dependencies
  * @param {string} dependencies.systemRoot
  * @param {TerminalsService} dependencies.terminals
- * @param {PublishConnectionChanged} [dependencies.publishConnectionChanged]
+ * @param {PublishConnectionChanged} dependencies.publishConnectionChanged
  */
-function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionChanged = async () => null } = {}) {
+function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionChanged }) {
   return createAiConnectionStore({
     filePath: path.join(systemRoot, "ai-connections", "connections.json"),
     async withConnectionChange(change, publish) {
@@ -60,9 +60,9 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
   });
 }
 
-// The OpenCode connection hooks only; the Accounts feature registers the
-// Claude and Codex sign-in status hooks itself.
 /**
+ * The OpenCode connection hooks only; the Accounts feature registers the
+ * Claude and Codex sign-in status hooks itself.
  * @param {object} dependencies
  * @param {AiConnectionStore} dependencies.aiConnections
  * @param {TerminalsService} dependencies.terminals

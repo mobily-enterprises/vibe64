@@ -30,12 +30,12 @@ import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/termin
 const ACCOUNT_ROUTE_TAGS = Object.freeze(["studio", "vibe64-accounts"]);
 const LOCAL_REQUEST_MESSAGE = "Vibe64 account routes only accept loopback Studio requests.";
 
-// Accounts are reached both inside a project and outside any project, so every
-// route is registered under both scopes.
 /**
+ * Accounts are reached both inside a project and outside any project, so every
+ * route is registered under both scopes.
  * @param {RuntimeHttp} http
  * @param {object} options
- * @param {AccountsService | null} [options.accounts]
+ * @param {AccountsService} options.accounts
  * @param {AiConnectionService | null} [options.aiConnectionService]
  * @param {RuntimeFastify | null} [options.fastify]
  * @param {StudioProjectContext | null} [options.projectContext]
@@ -43,16 +43,12 @@ const LOCAL_REQUEST_MESSAGE = "Vibe64 account routes only accept loopback Studio
 function registerRoutes(
   http,
   {
-    accounts = null,
+    accounts,
     aiConnectionService = null,
     fastify = null,
     projectContext = null
-  } = {}
-) {
-  if (!accounts || typeof accounts.subscribeAuthTerminal !== "function") {
-    throw new TypeError("registerRoutes requires the Vibe64 Accounts API.");
   }
-
+) {
   const projectRoutes = createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64/accounts",

@@ -332,6 +332,9 @@ test("Accounts reads and saves both setups for the owner only and refuses person
     readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "openai", connectionIdentity: `fixture-${modelProviderId}` })
   });
   const service = createService({
+    invalidateAgentRuntimes: async () => null,
+    publishAccountChanged: async () => null,
+    publishAuthSessionChanged: async () => null,
     accountRuntime: createAccountsRuntime({ systemRoot: root, targetRoot: root,
       requireAiManagement: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } }),
     inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options) });

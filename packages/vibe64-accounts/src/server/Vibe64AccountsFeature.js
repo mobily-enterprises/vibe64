@@ -1,6 +1,6 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
-import { createActions, createAiConnectionActions } from "./actions.js";
+import { createAccountsActions, createAiConnectionActions } from "./accountsActions.js";
 import {
   createVibe64AccountAuthSessionChangedPublisher,
   createVibe64AccountsChangedPublisher,
@@ -10,9 +10,9 @@ import { registerRoutes } from "./registerRoutes.js";
 import { createAiConnectionRuntime, configureAiConnectionRuntime } from "./aiConnectionRuntime.js";
 import { createAiConnectionService } from "./aiConnectionService.js";
 import { createTeamAiReadiness } from "./teamAiReadiness.js";
+import { createAccountsRuntime } from "./accountsRuntime.js";
 import {
   blockedReason,
-  createAccountsRuntime,
   createService,
   GITHUB_ACCOUNT_MODE_LOCAL,
   hasAccountSelection
@@ -40,7 +40,7 @@ import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").AccountsService} AccountsService */
-/** @typedef {ReturnType<typeof import("./service.js").createAccountsRuntime>} AccountsRuntime */
+/** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
@@ -51,17 +51,17 @@ import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 
 /**
  * @param {object} dependencies
- * @param {AccountsRuntime | null} [dependencies.accountRuntime]
- * @param {ProjectService | null} [dependencies.project]
+ * @param {AccountsRuntime | null} dependencies.accountRuntime
+ * @param {ProjectService} dependencies.project
  * @param {string} [dependencies.systemRoot]
  * @param {string} [dependencies.targetRoot]
  */
 function createDefaultAccountRuntime({
-  accountRuntime = null,
-  project = null,
+  accountRuntime,
+  project,
   systemRoot = "",
   targetRoot = ""
-} = {}) {
+}) {
   return accountRuntime || createAccountsRuntime({
     githubAccountMode: GITHUB_ACCOUNT_MODE_LOCAL,
     projectService: project,
@@ -92,16 +92,13 @@ async function connectionAccountStatusInput(input = {}, project) {
  * @param {object} dependencies
  * @param {AccountsService} dependencies.accounts
  * @param {ProjectService} dependencies.project
- * @param {((input: object) => ReturnType<TerminalsService["listAssistantCapabilities"]>) | null} [dependencies.listAssistantCapabilities]
+ * @param {((input: object) => ReturnType<TerminalsService["listAssistantCapabilities"]>) | null} dependencies.listAssistantCapabilities
  */
-function createConnections({ accounts, project, listAssistantCapabilities = null } = {}) {
-  if (!accounts || typeof accounts.getStatus !== "function") {
-    throw new TypeError("createConnections requires the Vibe64 Accounts API.");
-  }
-  if (!project || typeof project.readCurrentProject !== "function") {
-    throw new TypeError("createConnections requires the Vibe64 Project API.");
-  }
-
+function createConnections({
+  accounts,
+  project,
+  listAssistantCapabilities
+}) {
   return Object.freeze({
     async getStatus(input = {}) {
       const accountInput = await connectionAccountStatusInput(input, project);
@@ -154,11 +151,11 @@ const Vibe64AccountsFeature = defineFeature({
     events: "runtime.events",
     fastify: "runtime.fastify",
     http: "runtime.http",
+    logger: "runtime.logger",
     project: "vibe64.project"
   },
   optional: {
     accountRuntime: "vibe64.accounts.runtime",
-    logger: "runtime.logger",
     terminals: "vibe64.terminals"
   },
   provides: {
@@ -171,14 +168,14 @@ const Vibe64AccountsFeature = defineFeature({
   },
   /**
    * @param {object} capabilities
-   * @param {AccountsRuntime} [capabilities.accountRuntime]
+   * @param {AccountsRuntime | null} capabilities.accountRuntime
    * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeFastify} capabilities.fastify
    * @param {RuntimeHttp} capabilities.http
-   * @param {RuntimeLogger} [capabilities.logger]
+   * @param {RuntimeLogger} capabilities.logger
    * @param {ProjectService} capabilities.project
-   * @param {TerminalsService} [capabilities.terminals]
+   * @param {TerminalsService | null} capabilities.terminals
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
   setup({ accountRuntime, env, events, fastify, http, logger, project, terminals }, { actionCatalogue }) {
@@ -193,6 +190,7 @@ const Vibe64AccountsFeature = defineFeature({
       ? createPersonalAiProfileStore({ systemRoot })
       : null;
     const resolvedAccountRuntime = createDefaultAccountRuntime({ accountRuntime, project, systemRoot, targetRoot });
+    // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
     const listAssistantCapabilities = typeof terminals?.listAssistantCapabilities === "function"
       // The reader's user is the authority option, not catalogue input: a page
       // outside a project (Studio Health) has no project user to fall back on.
@@ -201,9 +199,11 @@ const Vibe64AccountsFeature = defineFeature({
     const accounts = createService({
       accountRuntime: resolvedAccountRuntime,
       personalProfileStore,
+      // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
       inspectRoutingConfiguration: typeof terminals?.inspectAssistantRoutingConfiguration === "function"
         ? (configuration, options) => terminals.inspectAssistantRoutingConfiguration(configuration, options) : null,
       invalidateAgentRuntimes: async (input = {}) => {
+        // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
         if (typeof terminals?.invalidateAgentRuntimes === "function") {
           return terminals.invalidateAgentRuntimes(input);
         }
@@ -212,6 +212,7 @@ const Vibe64AccountsFeature = defineFeature({
       logger,
       publishAccountChanged: createVibe64AccountsChangedPublisher({ events }),
       publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({ events }),
+      // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
       readClaudeAccountStatus: typeof terminals?.readClaudeAccountStatus === "function"
         ? () => terminals.readClaudeAccountStatus() : null
     });
@@ -221,6 +222,7 @@ const Vibe64AccountsFeature = defineFeature({
     });
 
     // Project admission's team AI gate reads the team setup through live access.
+    // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
     if (resolvedAccountRuntime.systemRoot && typeof terminals?.requireAssistantSelectionAccess === "function") {
       const teamAi = createTeamAiReadiness({
         readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: resolvedAccountRuntime.systemRoot }).read(),
@@ -234,6 +236,7 @@ const Vibe64AccountsFeature = defineFeature({
       });
     }
 
+    // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
     if (typeof terminals?.configureAssistantRuntime === "function") {
       terminals.configureAssistantRuntime({
         async claudeConnectionStatus() {
@@ -286,7 +289,7 @@ const Vibe64AccountsFeature = defineFeature({
 
     return { accounts, connections };
   },
-  actions: ({ accounts }) => createActions({ accounts })
+  actions: ({ accounts }) => createAccountsActions({ accounts })
 });
 
 export {

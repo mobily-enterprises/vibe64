@@ -9,7 +9,7 @@ import {
   ACTION_READ_ACCOUNT_AUTH_SESSION,
   ACTION_SAVE_GIT_IDENTITY,
   ACTION_SAVE_PERSONAL_AI_PROFILE
-} from "../../packages/vibe64-accounts/src/server/actions.js";
+} from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import {

@@ -1,18 +1,15 @@
 import { ASSISTANT_SETUP_ROLES, assistantSetupRoleValue } from "@local/vibe64-runtime/shared/assistantRouting";
 
-// Whether the team setup has a model team members can use: some team role
-// (after "Same as") is a selection whose live access is Workspace use and
-// available. The answer is kept for the routing revision until the next
-// accounts or connections change, so project admission reads access rarely.
 /**
+ * Whether the team setup has a model team members can use: some team role
+ * (after "Same as") is a selection whose live access is Workspace use and
+ * available. The answer is kept for the routing revision until the next
+ * accounts or connections change, so project admission reads access rarely.
  * @param {object} dependencies
  * @param {() => Promise<object>} dependencies.readRoutingConfiguration
  * @param {(selection: object, options: object) => Promise<object>} dependencies.readSelectionAccess
  */
-function createTeamAiReadiness({ readRoutingConfiguration, readSelectionAccess } = {}) {
-  if (typeof readRoutingConfiguration !== "function" || typeof readSelectionAccess !== "function") {
-    throw new TypeError("Team AI readiness needs the routing reader and the selection access reader.");
-  }
+function createTeamAiReadiness({ readRoutingConfiguration, readSelectionAccess }) {
   let memo = null;
 
   async function compute(nonOwner, actor) {

@@ -20,7 +20,7 @@ import {
 } from "./accountRealtimeEvents.js";
 
 /** @typedef {import("./types.js").AccountsService} AccountsService */
-/** @typedef {ReturnType<typeof import("./service.js").createAccountsRuntime>} AccountsRuntime */
+/** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {ReturnType<typeof import("./aiConnectionService.js").createAiConnectionService>} AiConnectionService */
 
 const ACTION_READ_CODEX_PROVIDERS = "vibe64.accounts.codex-providers.read";
@@ -60,11 +60,7 @@ const gitIdentityTool = Object.freeze({
  * @param {object} dependencies
  * @param {AccountsService} dependencies.accounts
  */
-function createActions({ accounts } = {}) {
-  if (!accounts || typeof accounts.getStatus !== "function") {
-    throw new TypeError("createActions requires the Vibe64 Accounts API.");
-  }
-
+function createAccountsActions({ accounts }) {
   return Object.freeze([
     {
       extensions: { assistant: modelRoutingTool("read") },
@@ -121,9 +117,7 @@ function createActions({ accounts } = {}) {
       input: accountsReadInputValidator,
       output: null,
       idempotency: "none",
-      async execute(input) {
-        return accounts.getStatus(input);
-      }
+      execute: (input) => accounts.getStatus(input)
     },
     {
       id: ACTION_LOGOUT_ACCOUNT,
@@ -136,9 +130,7 @@ function createActions({ accounts } = {}) {
         vibe64AccountsChangedActionEvent(),
         vibe64ConnectionsChangedActionEvent()
       ],
-      async execute(input) {
-        return accounts.logout(input);
-      }
+      execute: (input) => accounts.logout(input)
     },
     {
       extensions: { assistant: gitIdentityTool },
@@ -152,9 +144,7 @@ function createActions({ accounts } = {}) {
         vibe64AccountsChangedActionEvent(),
         vibe64ConnectionsChangedActionEvent()
       ],
-      async execute(input) {
-        return accounts.saveGitIdentity(input);
-      }
+      execute: (input) => accounts.saveGitIdentity(input)
     },
     {
       id: ACTION_SAVE_PERSONAL_AI_PROFILE,
@@ -166,9 +156,7 @@ function createActions({ accounts } = {}) {
       events: [
         vibe64AccountsChangedActionEvent()
       ],
-      async execute(input) {
-        return accounts.savePersonalAiProfile(input);
-      }
+      execute: (input) => accounts.savePersonalAiProfile(input)
     },
     {
       id: ACTION_START_ACCOUNT_AUTH,
@@ -182,9 +170,7 @@ function createActions({ accounts } = {}) {
         vibe64ConnectionsChangedActionEvent(),
         vibe64AccountAuthSessionChangedActionEvent()
       ],
-      async execute(input) {
-        return accounts.startAuth(input);
-      }
+      execute: (input) => accounts.startAuth(input)
     },
     {
       id: ACTION_READ_ACCOUNT_AUTH_SESSION,
@@ -193,9 +179,7 @@ function createActions({ accounts } = {}) {
       input: accountAuthSessionInputValidator,
       output: null,
       idempotency: "none",
-      async execute(input) {
-        return accounts.readAuthSession(input);
-      }
+      execute: (input) => accounts.readAuthSession(input)
     },
     {
       id: ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
@@ -204,9 +188,7 @@ function createActions({ accounts } = {}) {
       input: accountAuthSessionInputValidator,
       output: null,
       idempotency: "optional",
-      async execute(input) {
-        return accounts.cancelAuthSession(input);
-      }
+      execute: (input) => accounts.cancelAuthSession(input)
     }
   ].map((definition) => withVibe64ActionContext({
     ...definition, extensions: definition.extensions || { assistant: { exclude: true } }
@@ -218,11 +200,15 @@ function createActions({ accounts } = {}) {
  * @param {AiConnectionService} dependencies.aiConnectionService
  * @param {AccountsRuntime["requireAiManagement"]} dependencies.requireAiManagement
  */
-function createAiConnectionActions({ aiConnectionService, requireAiManagement } = {}) {
-  if (!aiConnectionService || typeof requireAiManagement !== "function") {
-    throw new TypeError("AI connection actions require the connection service and host management policy.");
+function createAiConnectionActions({ aiConnectionService, requireAiManagement }) {
+  // Every AI connection operation is the AI manager's alone.
+  async function manageAiConnection(operation, input) {
+    const denied = await requireAiManagement({ vibe64User: input.vibe64User });
+    if (denied) return { ...denied, statusCode: 403 };
+    return aiConnectionService[operation](input);
   }
-  return Object.entries(aiConnectionInputValidators).map(([operation, input]) => withVibe64ActionContext({
+
+  return Object.freeze(Object.entries(aiConnectionInputValidators).map(([operation, input]) => withVibe64ActionContext({
     id: `vibe64.accounts.ai-connections.${operation}`,
     version: 1, kind: ["list", "catalog"].includes(operation) ? "query" : "command",
     input, output: null, idempotency: "none",
@@ -259,12 +245,8 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement } 
         })) };
       }
     } : { exclude: true } },
-    async execute(input) {
-      const denied = await requireAiManagement({ vibe64User: input.vibe64User });
-      if (denied) return { ...denied, statusCode: 403 };
-      return aiConnectionService[operation](input);
-    }
-  }, { projectScoped: false }));
+    execute: (input) => manageAiConnection(operation, input)
+  }, { projectScoped: false })));
 }
 
 export {
@@ -281,5 +263,5 @@ export {
   ACTION_SAVE_GIT_IDENTITY,
   ACTION_SAVE_PERSONAL_AI_PROFILE,
   ACTION_START_ACCOUNT_AUTH,
-  createActions
+  createAccountsActions
 };

@@ -6,7 +6,7 @@ import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { createActions, createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/actions.js";
+import { createAccountsActions, createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 import { createAiConnectionService } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
 import { createAiConnectionStore } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
 import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
@@ -53,7 +53,7 @@ test("all account operations use project-independent canonical contracts and aut
     const aiConnectionService = Object.fromEntries(cases.filter((entry) => entry[2].startsWith("ai-connections.")).map((entry) => [entry[3], record(entry[3])]));
     const actions = createActionCatalogue({ events: { async publish(event) { events.push(event); } } });
     actions.register({ contributorId: "accounts", domain: "accounts", actions: [
-      ...createActions({ accounts }), ...createAiConnectionActions({ aiConnectionService, requireAiManagement })
+      ...createAccountsActions({ accounts }), ...createAiConnectionActions({ aiConnectionService, requireAiManagement })
     ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { resolveUser: async () => user,
       authorizeProject() { throw new Error("Account access must not require a project."); } });
@@ -134,7 +134,7 @@ test("Colleague reads every saved provider's readiness through the original owne
   const filePath = path.join(root, "connections.json");
   let verifications = 0;
   let changes = 0;
-  const store = createAiConnectionStore({ filePath,
+  const store = createAiConnectionStore({ readModelIds: async () => [], filePath,
     async verifyConnection() { verifications++; return { ok: true }; },
     async onConnectionChanged() { changes++; }
   });
@@ -233,7 +233,7 @@ test("Colleague reads every saved provider's readiness through the original owne
     error: "Saved AI connection status could not be read. Go to AI Accounts for details." });
   assert.equal(reads, beforeReads);
   managementAllowed = true;
-  service = createAiConnectionService();
+  service = createAiConnectionService({});
   response = await execute();
   assert.deepEqual(response.result, { ok: true, unavailable: true, connections: [] });
 });
@@ -247,7 +247,7 @@ test("Colleague saves the person's own stated Git name and email and returns onl
   } };
   const member = { username: "member", role: "member" };
   const actions = createActionCatalogue({ events: { async publish() {} } });
-  actions.register({ contributorId: "accounts", domain: "accounts", actions: createActions({ accounts })
+  actions.register({ contributorId: "accounts", domain: "accounts", actions: createAccountsActions({ accounts })
     .map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => member,
     authorizeProject() { assert.fail("A Git identity belongs to the person, not a project."); } });
