@@ -173,10 +173,10 @@ test("only the host's exact narrow sudo commands leave an account a person", () 
 
 test("a narrow command is recognised when sudo prints its program with links resolved", () => {
   const person = { uid: 1001, username: "merc" };
-  const ownerCli = "/opt/tool/node26/bin/node /srv/tool/owner-cli.mjs --read-connections";
+  const ownerCli = "/srv/tool/node26/bin/node /srv/tool/owner-cli.mjs --read-connections";
   // node26 links to a wrapper whose bin/node links to the runtime itself.
   const files = new Map([
-    ["/opt/tool/node26/bin/node", "/nix/store/slim-node-26/bin/node"],
+    ["/srv/tool/node26/bin/node", "/nix/store/slim-node-26/bin/node"],
     ["/nix/store/wrapper-node-26/bin/node", "/nix/store/slim-node-26/bin/node"],
     ["/nix/store/slim-node-26/bin/node", "/nix/store/slim-node-26/bin/node"],
     ["/nix/store/other-node/bin/node", "/nix/store/other-node/bin/node"]
