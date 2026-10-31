@@ -51,9 +51,9 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/assistant-core": "0.2.6",
-    "@jskit-ai/assistant-runtime": "0.2.8",
-    "@jskit-ai/assistant-voice": "0.2.8",
+    "@jskit-ai/assistant-core": "0.2.7",
+    "@jskit-ai/assistant-runtime": "0.2.9",
+    "@jskit-ai/assistant-voice": "0.2.9",
     "@jskit-ai/kernel": "0.2.3",
     "@jskit-ai/realtime": "0.2.6",
     "@jskit-ai/shell-web": "0.2.3",
