@@ -108,7 +108,7 @@ async function createSourceEditorFixture({
   extraFiles = [],
   logger = undefined,
   sessionState = null,
-  sourceFileObserver = null,
+  sourceFileObserver = undefined,
   terminalService = null,
   writeExclusive = null
 } = {}) {

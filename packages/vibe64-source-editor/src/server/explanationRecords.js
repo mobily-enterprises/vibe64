@@ -9,6 +9,8 @@ import { sourceEditorAgentOperationOptions, sourceEditorExecutionProfileRequest,
 import { positiveInteger, SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION, sourceEditorExplanationMessageId } from "./explanationText.js";
 import { isPlainObject, normalizeSourceEditorRelativePath, sourceEditorError, sourceEditorLanguageForPath } from "./sourceFiles.js";
 
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 // Saved source explanations and their cleanup ledger: the record each
 // explanation keeps, normalization, and the helper threads still to delete.
 const SOURCE_EDITOR_EXPLANATION_CLEANUP_FILE = "source-editor-explanation-cleanup.json";
@@ -204,8 +206,14 @@ async function readSourceEditorExplanationCleanupRecord(context = {}, explanatio
     .find((record) => record.id === normalizedId) || null;
 }
 
+/**
+ * @param {object} [context]
+ * @param {object} [record]
+ * @param {object} [options]
+ * @param {TerminalsService} options.terminalService
+ */
 async function deleteSourceEditorExplanationAgentThread(context = {}, record = {}, {
-  terminalService = null
+  terminalService
 } = {}) {
   if (record.helper) {
     const helper = record.helper;

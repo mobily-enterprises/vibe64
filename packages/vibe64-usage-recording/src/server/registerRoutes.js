@@ -19,9 +19,9 @@ const pageQuery = (query = {}) => ({
 /**
  * @param {RuntimeHttp} http
  * @param {object} [options]
- * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {StudioProjectContext} [options.projectContext]
  */
-function registerRoutes(http, { projectContext = null } = {}) {
+function registerRoutes(http, { projectContext } = {}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-usage-recording"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",

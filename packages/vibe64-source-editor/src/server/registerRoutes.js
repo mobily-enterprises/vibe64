@@ -108,11 +108,11 @@ function sourceInput(request, input = {}) {
 /**
  * @param {RuntimeHttp} http
  * @param {object} options
- * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {StudioProjectContext} [options.projectContext]
  * @param {SourceEditorService} options.sourceEditor
  */
 function registerRoutes(http, {
-  projectContext = null, sourceEditor
+  projectContext, sourceEditor
 }) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-source-editor"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,

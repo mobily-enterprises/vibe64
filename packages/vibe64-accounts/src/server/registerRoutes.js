@@ -36,17 +36,17 @@ const LOCAL_REQUEST_MESSAGE = "Vibe64 account routes only accept loopback Studio
  * @param {RuntimeHttp} http
  * @param {object} options
  * @param {AccountsService} options.accounts
- * @param {AiConnectionService | null} [options.aiConnectionService]
- * @param {RuntimeFastify | null} [options.fastify]
- * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {AiConnectionService | null} options.aiConnectionService
+ * @param {RuntimeFastify} options.fastify
+ * @param {StudioProjectContext} [options.projectContext]
  */
 function registerRoutes(
   http,
   {
     accounts,
-    aiConnectionService = null,
-    fastify = null,
-    projectContext = null
+    aiConnectionService,
+    fastify,
+    projectContext
   }
 ) {
   const projectRoutes = createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {

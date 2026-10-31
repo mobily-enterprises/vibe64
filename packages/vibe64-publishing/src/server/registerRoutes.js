@@ -36,9 +36,9 @@ function publishingStatusCode(response = {}) {
  * @param {RuntimeHttp} http
  * @param {object} [options]
  * @param {PublishingService} options.publishing
- * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {StudioProjectContext} [options.projectContext]
  */
-function registerRoutes(http, { publishing, projectContext = null } = {}) {
+function registerRoutes(http, { publishing, projectContext } = {}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-publishing"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",

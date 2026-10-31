@@ -6,6 +6,8 @@ import { createSourceEditorExplanationStreamState, readSourceEditorExplanation, 
 import { SOURCE_EDITOR_FOLLOWUP_ANSWER_MAX_CHARS, sourceEditorExplanationFollowupMessage, sourceEditorExplanationFollowupPrompt, sourceEditorExplanationMessageId, sourceEditorExplanationSummary } from "./explanationText.js";
 import { sourceEditorError } from "./sourceFiles.js";
 
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 // A follow-up question on a source explanation, answered in the helper
 // thread that explained it.
 const SOURCE_EDITOR_FOLLOWUP_OUTPUT_SCHEMA = Object.freeze({
@@ -58,12 +60,18 @@ function sourceEditorHelperFollowupThread(explanation = {}) {
   return agentThreadId;
 }
 
+/**
+ * @param {object} [context]
+ * @param {object} [input]
+ * @param {object} [options]
+ * @param {TerminalsService} options.terminalService
+ */
 async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
   emit = null,
   explanationChats = null,
   explanationTurns,
   isClosed = null,
-  terminalService = null
+  terminalService
 } = {}) {
   const message = sourceEditorExplanationFollowupMessage(input.message);
   const baseExplanation = await readSourceEditorExplanation(context, input.explanationId, {

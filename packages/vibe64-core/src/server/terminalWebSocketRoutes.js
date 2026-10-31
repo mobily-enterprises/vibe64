@@ -28,7 +28,7 @@ function publicTerminalSnapshot(session = {}) {
 /**
  * @param {RuntimeFastify} fastify
  * @param {object} [options]
- * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {StudioProjectContext} [options.projectContext]
  * @param {boolean} [options.projectScoped]
  * @param {string} options.routePath
  * @param {(service: object, input: object) => Promise<object>} options.resize
@@ -40,7 +40,7 @@ function publicTerminalSnapshot(session = {}) {
 function registerTerminalWebSocketRoute(
   fastify,
   {
-    projectContext = null,
+    projectContext,
     projectScoped = true,
     routePath,
     resize,

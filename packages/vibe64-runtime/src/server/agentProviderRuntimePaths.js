@@ -19,7 +19,7 @@ function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
 }
 
 function processUid() {
-  // readable-check: allow method-probe - platform object: process.getuid() exists only on POSIX
+  // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
   return typeof process.getuid === "function" ? process.getuid() : "user";
 }
 

@@ -125,8 +125,9 @@ export function createVibe64ConversationExecution({
         if (typeof env[name] !== "string" || !path.isAbsolute(env[name])) throw new TypeError(`Native ${name} must be an absolute directory.`);
         processHome[field] = env[name];
       }
-      // readable-check: allow optional-call - platform object: process.getuid() exists only on POSIX
-      const root = await mkdtemp(path.join(os.tmpdir(), `v64-conversation-${process.getuid?.() ?? "user"}-`));
+      // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
+      const uid = typeof process.getuid === "function" ? process.getuid() : "user";
+      const root = await mkdtemp(path.join(os.tmpdir(), `v64-conversation-${uid}-`));
       const socketPath = path.join(root, "stream.sock");
       const outputPath = logPath || path.join(root, "stderr.log");
       let id;

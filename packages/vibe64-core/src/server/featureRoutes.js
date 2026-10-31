@@ -72,7 +72,7 @@ function routeOptions({ actionId, body, bodyLimit, meta = {}, params, query, sum
 // route's status code for the response.
 function vibe64RouteHandler({
   localRequestMessage = "Vibe64 routes only accept loopback Studio requests.",
-  projectContext = null,
+  projectContext,
   projectScoped = true
 } = {}) {
   return function wrapVibe64Route(handler, { method, path, options = {} }) {

@@ -494,13 +494,19 @@ async function createCachedSourceEditorExplanation(
   return explanation;
 }
 
+/**
+ * @param {object} [context]
+ * @param {object} [input]
+ * @param {object} [options]
+ * @param {TerminalsService} options.terminalService
+ */
 async function streamSourceEditorExplanation(context = {}, input = {}, {
   emit = null,
   explanationChats = null,
   explanationInput = null,
   explanationTurns,
   isClosed = null,
-  terminalService = null
+  terminalService
 } = {}) {
   const preparedInput = explanationInput || await sourceEditorExplanationInput(context, input);
   const createdAt = new Date().toISOString();

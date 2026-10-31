@@ -107,7 +107,7 @@ function sourceEditorAgentOperationOptions(context = {}, options = {}, {
 }
 
 /**
- * @param {TerminalsService | null} [terminalService]
+ * @param {TerminalsService} terminalService
  * @param {object} [context]
  */
 async function describeSourceEditorAgentProvider(terminalService, context = {}) {
@@ -119,7 +119,7 @@ async function describeSourceEditorAgentProvider(terminalService, context = {}) 
 }
 
 /**
- * @param {TerminalsService | null} [terminalService]
+ * @param {TerminalsService} terminalService
  * @param {object} [context]
  */
 async function resolveSourceEditorAgentExecutionProfile(terminalService, context = {}) {

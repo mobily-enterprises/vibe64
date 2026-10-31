@@ -6,6 +6,7 @@ import { positiveInteger, sourceEditorExplanationSummary } from "./explanationTe
 import { readSourceEditorFile, sourceEditorError } from "./sourceFiles.js";
 import { readSourceInterpretation, writeSourceInterpretation } from "./sourceInterpretations.js";
 
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 // The cache of finished source explanations, keyed by the code and question
@@ -14,8 +15,13 @@ const SOURCE_EDITOR_EXPLANATION_CACHE_MAX_ENTRIES = 64;
 
 const SOURCE_EDITOR_EXPLANATION_CACHE_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * @param {TerminalsService} terminalService
+ * @param {object} [context]
+ * @param {object | null} [template]
+ */
 async function sourceEditorCompletedCacheIdentityUnchanged(
-  terminalService = null,
+  terminalService,
   context = {},
   template = null
 ) {

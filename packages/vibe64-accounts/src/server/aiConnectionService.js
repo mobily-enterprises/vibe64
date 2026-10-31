@@ -13,9 +13,9 @@ import { runLoggedAccountChange } from "./accountChangeLog.js";
  * @param {AiConnectionStore} dependencies.aiConnections
  * @param {(query: object, vibe64User: object | null) => Promise<object>} dependencies.readAssistantCapabilities
  * @param {AccountsService["initializeModelRouting"]} dependencies.initializeModelRouting
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  */
-function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting, logger = null }) {
+function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting, logger }) {
   // OpenCode connection changes are account changes too: one line each.
   function connectionChange(operation, { modelProviderId, vibe64User } = {}, work) {
     return runLoggedAccountChange(logger, operation,

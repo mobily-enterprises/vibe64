@@ -26,12 +26,12 @@ function picked(source, fields) {
 /**
  * @param {RuntimeHttp} http
  * @param {object} [options]
- * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {StudioProjectContext} [options.projectContext]
  */
 function registerUsageRoutes(
   http,
   {
-    projectContext = null
+    projectContext
   } = {}
 ) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-system-graph"] }), {

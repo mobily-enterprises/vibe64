@@ -28,8 +28,7 @@ function holdProcessGroup(processGroupId) {
     child.once("exit", () => { if (reaper === child) reaper = null; });
     child.stdin.on("error", () => {});
     child.unref();
-    // readable-check: allow optional-call - platform object: a detached child stand-in may lack it
-    child.stdin.unref?.();
+    child.stdin.unref();
     reaper = child;
     for (const execution of detachedExecutions.values()) {
       if (execution.scopeEmpty !== true && execution.pid !== processGroupId) child.stdin.write(`+${execution.pid}\n`);
@@ -67,10 +66,8 @@ async function waitForDetachedSpawn(child) {
       settled = true;
       callback(value);
     };
-    // readable-check: allow optional-call - platform object: a detached child stand-in may lack it
-    child.once?.("spawn", () => settle(resolve));
-    // readable-check: allow optional-call - platform object: a detached child stand-in may lack it
-    child.once?.("error", (error) => settle(reject, error));
+    child.once("spawn", () => settle(resolve));
+    child.once("error", (error) => settle(reject, error));
   });
 }
 
@@ -98,8 +95,7 @@ async function runDetachedCommand(request = {}, {
         pid: Number(child.pid)
       });
       holdProcessGroup(Number(child.pid));
-      // readable-check: allow optional-call - platform object: a detached child stand-in may lack it
-      child.once?.("exit", () => {
+      child.once("exit", () => {
         if (!processGroupExists(child.pid) && detachedExecutions.has(executionId)) {
           detachedExecutions.set(executionId, {
             child,
@@ -110,8 +106,7 @@ async function runDetachedCommand(request = {}, {
         }
       });
     }
-    // readable-check: allow optional-call - platform object: a detached child stand-in may lack it
-    child.unref?.();
+    child.unref();
     return commandResult({
       execution: request.execution,
       exitCode: 0,
@@ -126,8 +121,7 @@ async function runDetachedCommand(request = {}, {
       { execution: request.execution }
     );
   } finally {
-    // readable-check: allow optional-call - data: the log handle exists only once its file opened
-    await logHandle?.close?.().catch(() => null);
+    await logHandle?.close().catch(() => null);
   }
 }
 
@@ -157,8 +151,7 @@ function signalProcessGroup(processGroupId = null, signal = "SIGTERM") {
     if (process.platform === "win32") {
       const execution = [...detachedExecutions.values()]
         .find((candidate) => candidate.pid === Number(processGroupId));
-      // readable-check: allow optional-call - data: a restored execution has no child of this process
-      execution?.child?.kill?.(signal);
+      execution?.child?.kill(signal);
     } else {
       process.kill(-Number(processGroupId), signal);
     }

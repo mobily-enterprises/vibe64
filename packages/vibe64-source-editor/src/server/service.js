@@ -65,7 +65,7 @@ import {
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {ReturnType<typeof createSourceEditorFileObserver> | null} [dependencies.sourceFileObserver]
+ * @param {ReturnType<typeof createSourceEditorFileObserver>} [dependencies.sourceFileObserver]
  * @param {TerminalsService} dependencies.terminalService
  * @param {string} [dependencies.temporaryRoot]
  */
@@ -76,13 +76,10 @@ function createService({
   logger,
   projectService,
   publishSessionChanged,
-  sourceFileObserver = null,
+  sourceFileObserver = createSourceEditorFileObserver({ logger }),
   terminalService,
   temporaryRoot = tmpdir()
 }) {
-  const fileObserver = sourceFileObserver || createSourceEditorFileObserver({
-    logger
-  });
   const fileIndex = createSourceEditorFileIndex({
     load: sourceEditorFilePaths,
     snapshotPath: (context) => path.join(sourceEditorIndexDirectory(context), "filenames.json")
@@ -298,7 +295,7 @@ function createService({
     async streamFileChanges(input = {}, stream = {}) {
       const context = await sourceEditorContext(input.sessionId);
       const file = await sourceEditorExistingFile(context, input.path);
-      return streamSourceEditorFileChanges(context, file, stream, fileObserver);
+      return streamSourceEditorFileChanges(context, file, stream, sourceFileObserver);
     },
 
     async saveFile(input = {}) {
@@ -381,7 +378,7 @@ function createService({
 
     async close() {
       await explanations.close();
-      fileObserver.close();
+      sourceFileObserver.close();
       fileIndex.clear();
       return searchIndex.close();
     }

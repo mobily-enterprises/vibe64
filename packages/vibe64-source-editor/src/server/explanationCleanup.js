@@ -8,12 +8,20 @@ import { deleteSourceEditorExplanationAgentThread, mutateSourceEditorExplanation
 import { sourceEditorExplanationWithMessage, withSourceEditorExplanationFreshness } from "./explanationStream.js";
 import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
 
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 // Stopping, cleaning up and deleting source explanations, with the helper
 // threads they used.
+/**
+ * @param {object} [context]
+ * @param {string} [explanationId]
+ * @param {object} [options]
+ * @param {TerminalsService} options.terminalService
+ */
 async function stopSourceEditorExplanation(context = {}, explanationId = "", {
   explanationChats = null,
   explanationTurns,
-  terminalService = null
+  terminalService
 } = {}) {
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
@@ -87,11 +95,17 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
   }));
 }
 
+/**
+ * @param {object} [context]
+ * @param {object} [input]
+ * @param {object} [options]
+ * @param {TerminalsService} options.terminalService
+ */
 async function cleanupSourceEditorExplanations(context = {}, input = {}, {
   all = false,
   explanationChats = null,
   explanationTurns,
-  terminalService = null
+  terminalService
 } = {}) {
   const activeIds = sourceEditorCleanupActiveIds(input.activeExplanationIds);
   const originId = normalizeText(input.originId);
@@ -153,10 +167,16 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, {
   };
 }
 
+/**
+ * @param {object} [context]
+ * @param {string} [explanationId]
+ * @param {object} [options]
+ * @param {TerminalsService} options.terminalService
+ */
 async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
   explanationChats = null,
   explanationTurns,
-  terminalService = null
+  terminalService
 } = {}) {
   const store = sourceEditorExplanationStore(explanationChats);
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
