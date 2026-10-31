@@ -114,7 +114,7 @@ removes it; Training never imports Colleague. See
 
 Sources: `packages/vibe64-core/src/server/learnThreads.js`,
 `packages/vibe64-core/src/server/learningMode.js`,
-`packages/vibe64-colleague/src/server/service.js`,
+`packages/vibe64-colleague/src/server/colleagueThreads.js`,
 `packages/vibe64-colleague/src/server/protocol.js`.
 
 ### Version 1 lessons

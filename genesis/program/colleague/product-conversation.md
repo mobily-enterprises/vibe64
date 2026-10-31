@@ -31,7 +31,7 @@ no saved request or application operation is replayed merely by reopening.
 The browser facade's `cancelDelivery` always answers: a message the
 application already accepted stays history, and any other is passed to the
 JSKIT conversation's own delivery cancel, fenced like every other facade
-operation (`packages/vibe64-colleague/src/server/service.js`).
+operation (`packages/vibe64-colleague/src/server/browserConversations.js`).
 
 Browser focus uses the existing realtime connection and original `focus.update`
 action authorization. Its transient binding releases on socket disconnect or
@@ -47,6 +47,18 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js`
 - `packages/vibe64-colleague/src/server/colleagueActions.js`
 - Main: `packages/vibe64-colleague/src/server/service.js`
+- `packages/vibe64-colleague/src/server/colleagueServiceState.js`
+- `packages/vibe64-colleague/src/server/colleagueRecords.js`
+- `packages/vibe64-colleague/src/server/colleagueThreads.js`
+- `packages/vibe64-colleague/src/server/colleagueConversations.js`
+- `packages/vibe64-colleague/src/server/colleagueWorker.js`
+- `packages/vibe64-colleague/src/server/colleagueWatches.js`
+- `packages/vibe64-colleague/src/server/colleagueHistory.js`
+- `packages/vibe64-colleague/src/server/focusAndNavigation.js`
+- `packages/vibe64-colleague/src/server/browserConversations.js`
+- `packages/vibe64-colleague/src/server/colleagueTurns.js`
+- `packages/vibe64-colleague/src/server/colleaguePresentation.js`
+- `packages/vibe64-colleague/src/server/colleagueFailure.js`
 - `packages/vibe64-colleague/src/server/attention.js`
 - `packages/vibe64-colleague/src/server/assignments.js`
 - `packages/vibe64-colleague/src/server/conversationSummary.js`
