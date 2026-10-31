@@ -2486,10 +2486,10 @@ function createService({
     publishConversation: event => mainConversations.publishNative(event)
   });
   const terminalControls = createTerminalControls({
-    readAgentTerminal: (sessionId, terminalSessionId, options) => service.readAgentTerminal(sessionId, terminalSessionId, options),
-    writeAgentTerminal: (sessionId, terminalSessionId, data, input) => service.writeAgentTerminal(sessionId, terminalSessionId, data, input),
-    readGlobalTerminal: (terminalSessionId) => service.readGlobalCodexTerminal(terminalSessionId),
-    writeGlobalTerminal: (terminalSessionId, data, options) => service.writeGlobalCodexTerminal(terminalSessionId, data, options)
+    readAgentScreen: (sessionId, terminalSessionId, options) => service.readAgentTerminal(sessionId, terminalSessionId, options),
+    writeAgentInput: (sessionId, terminalSessionId, data, input) => service.writeAgentTerminal(sessionId, terminalSessionId, data, input),
+    readGlobalScreen: (terminalSessionId) => service.readGlobalCodexTerminal(terminalSessionId),
+    writeGlobalInput: (terminalSessionId, data, options) => service.writeGlobalCodexTerminal(terminalSessionId, data, options)
   });
 
   const service = {
