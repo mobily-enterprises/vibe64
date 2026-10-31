@@ -8,6 +8,8 @@ import { runVibe64Command, writeGitWorktreeTree } from "@local/vibe64-execution/
 import { assertRenewalId as assertSessionRenewalId } from "./sessionRenewalIds.js";
 import { runSourceCommand } from "./sourceCommand.js";
 
+/** @typedef {ReturnType<typeof import("./sessionStore.js").createVibe64SessionStore>} Vibe64SessionStore */
+
 // Git and file facts about a session's worktree: commands with their limits,
 // recovery artifact names, renewal stage paths, dirtiness and owned removal.
 const GIT_TIMEOUT_MS = 30_000;

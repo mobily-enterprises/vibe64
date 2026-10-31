@@ -19,9 +19,9 @@ const recordedFunction = createSchema({
 });
 
 // A usage read on one session's scan, with the fields its query takes.
-function usageAction(operation, execute, fields) {
+function usageAction({ id, fields, execute }) {
   return withVibe64ActionContext({
-    id: `vibe64.system-graph.${operation}`, version: 1,
+    id, version: 1,
     kind: "query",
     input: { schema: createSchema({ sessionId, ...fields }), mode: "create" },
     output: null, idempotency: "none",
@@ -39,24 +39,40 @@ function usageAction(operation, execute, fields) {
  */
 function createUsageActions({ systemGraph }) {
   return Object.freeze([
-    usageAction("usage.entries.read", (input) => systemGraph.readUsageEntries(input), {
-      kind: { type: "string", enum: USAGE_ENTRY_KINDS, required: false },
-      q: optionalText(80),
-      cursor: optionalText(32),
-      limit: { type: "integer", min: 1, max: 200, required: false }
+    usageAction({
+      id: "vibe64.system-graph.usage.entries.read",
+      fields: {
+        kind: { type: "string", enum: USAGE_ENTRY_KINDS, required: false },
+        q: optionalText(80),
+        cursor: optionalText(32),
+        limit: { type: "integer", min: 1, max: 200, required: false }
+      },
+      execute: (input) => systemGraph.readUsageEntries(input)
     }),
-    usageAction("usage.web.read", (input) => systemGraph.readUsageWeb(input), {
-      entryId: { type: "string", minLength: 1, maxLength: 2048, required: true },
-      mode: { type: "string", enum: ["imports", "calls"], required: true },
-      certainty: { type: "string", enum: ["all", "exact"], required: false },
-      subsystemId: optionalText(2048),
-      maxNodes: { type: "integer", min: 1, max: 1000, required: false }
+    usageAction({
+      id: "vibe64.system-graph.usage.web.read",
+      fields: {
+        entryId: { type: "string", minLength: 1, maxLength: 2048, required: true },
+        mode: { type: "string", enum: ["imports", "calls"], required: true },
+        certainty: { type: "string", enum: ["all", "exact"], required: false },
+        subsystemId: optionalText(2048),
+        maxNodes: { type: "integer", min: 1, max: 1000, required: false }
+      },
+      execute: (input) => systemGraph.readUsageWeb(input)
     }),
-    usageAction("usage.function.read", (input) => systemGraph.readUsageFunction(input), {
-      functionId: { type: "string", minLength: 1, maxLength: 4096, required: true }
+    usageAction({
+      id: "vibe64.system-graph.usage.function.read",
+      fields: {
+        functionId: { type: "string", minLength: 1, maxLength: 4096, required: true }
+      },
+      execute: (input) => systemGraph.readUsageFunction(input)
     }),
-    usageAction("usage.join", (input) => systemGraph.joinUsage(input), {
-      functions: { type: "array", items: recordedFunction, required: true }
+    usageAction({
+      id: "vibe64.system-graph.usage.join",
+      fields: {
+        functions: { type: "array", items: recordedFunction, required: true }
+      },
+      execute: (input) => systemGraph.joinUsage(input)
     })
   ]);
 }

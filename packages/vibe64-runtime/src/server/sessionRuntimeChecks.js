@@ -10,6 +10,8 @@ import { sourceInspectionFailure } from "./sessionSourceInspection.js";
 import { VIBE64_SESSION_STATUS, learningSessionBinding, vibe64SessionStatusIsHidden } from "./sessionStore.js";
 import { publicSessionMetadata, workspaceSetupStateFromMetadata } from "./workspaceSetupState.js";
 
+/** @typedef {import("./runtime.js").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 // What a session runtime checks and shows of a session: whether it is
 // supported and usable, its plain view, its renewal handover and whether its
 // source and learning directory are available.
