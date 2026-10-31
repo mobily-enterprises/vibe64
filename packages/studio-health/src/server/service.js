@@ -367,7 +367,7 @@ function createService({
   }
 
   return Object.freeze({
-    async inspect(input = {}) {
+    async inspect(input) {
       const packs = Boolean(runtimePackRoot());
       const nodeMajor = packs ? "26" : await requiredNodeMajor(studioRoot);
       const check = (definition) => commandCheck({ plainExit: !packs, ...definition });
@@ -462,7 +462,7 @@ function createService({
     },
 
     // The rows a screen shows for named tools: run now, nothing remembered.
-    async checkTools(input = {}) {
+    async checkTools(input) {
       const ids = String(input.ids || "").split(",").map((id) => id.trim()).filter(Boolean);
       return checkLocalTools(ids, { cwd: studioRoot, runCommand });
     }

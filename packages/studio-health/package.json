@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./server/actions": "./src/server/actions.js",
+    "./server/actions": "./src/server/studioHealthActions.js",
     "./server/service": "./src/server/service.js",
     "./server/types": "./src/server/types.js"
   },

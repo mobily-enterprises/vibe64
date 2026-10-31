@@ -1,9 +1,13 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
 import { resolveStudioAppRoot } from "@local/vibe64-core/server/studioRoots";
-import { createActions } from "./actions.js";
+import { createStudioHealthActions } from "./studioHealthActions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
+
+/** @typedef {import("@local/vibe64-accounts/server/types").ConnectionsService} ConnectionsService */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 
 const StudioHealthProvider = defineFeature({
   id: "vibe64.studio-health",
@@ -20,6 +24,12 @@ const StudioHealthProvider = defineFeature({
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
+  /**
+   * @param {object} capabilities
+   * @param {ConnectionsService} capabilities.connections
+   * @param {RuntimeHttp} capabilities.http
+   * @param {ProjectService} capabilities.project
+   */
   setup({ connections, http, project }) {
     const studioHealth = createService({
       connectionsService: connections,
@@ -30,7 +40,7 @@ const StudioHealthProvider = defineFeature({
     return { studioHealth };
   },
   actions({ studioHealth }) {
-    return createActions({ studioHealth });
+    return createStudioHealthActions({ studioHealth });
   }
 });
 

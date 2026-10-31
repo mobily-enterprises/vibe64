@@ -11,10 +11,7 @@ const ACTION_CHECK_STUDIO_TOOLS = "vibe64.studio-health.tools";
  * @param {object} dependencies
  * @param {StudioHealthService} dependencies.studioHealth
  */
-function createActions({ studioHealth } = {}) {
-  if (!studioHealth || typeof studioHealth.inspect !== "function") {
-    throw new TypeError("createActions requires the Studio Health API.");
-  }
+function createStudioHealthActions({ studioHealth }) {
   return Object.freeze([withVibe64ActionContext({
     id: ACTION_READ_STUDIO_HEALTH,
     version: 1,
@@ -49,9 +46,7 @@ function createActions({ studioHealth } = {}) {
       }
     } },
     idempotency: "none",
-    execute(input) {
-      return studioHealth.inspect(input);
-    }
+    execute: (input) => studioHealth.inspect(input)
   }, { projectScoped: false }), withVibe64ActionContext({
     id: ACTION_CHECK_STUDIO_TOOLS,
     version: 1,
@@ -62,14 +57,12 @@ function createActions({ studioHealth } = {}) {
       description: "Check now whether named tools run on the person's own computer, for example ids \"ruby,cpp\" (Stack runtime ids such as python, ruby, java, php, go, rust, cpp, or node, git, gh, ripgrep, claude, codex, opencode). A tool counts only when it starts and reports its version through the same PATH projects use. Each result says ready, missing or broken, the version and folder found, and for a missing tool the one install command for this computer with any password note. Use it when the person asks whether something is installed, or after they ran an install command, instead of guessing. It only reads: never run the install command for them, and never use sudo. A host that supplies its own tools answers managed with no rows."
     } },
     idempotency: "none",
-    execute(input) {
-      return studioHealth.checkTools(input);
-    }
+    execute: (input) => studioHealth.checkTools(input)
   }, { projectScoped: false })]);
 }
 
 export {
   ACTION_CHECK_STUDIO_TOOLS,
   ACTION_READ_STUDIO_HEALTH,
-  createActions
+  createStudioHealthActions
 };

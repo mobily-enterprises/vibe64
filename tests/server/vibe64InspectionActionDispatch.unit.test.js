@@ -4,8 +4,8 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { createActions as createCurrentAppActions } from "../../packages/current-app/src/server/actions.js";
-import { createActions as createHealthActions } from "../../packages/studio-health/src/server/actions.js";
+import { createCurrentAppActions } from "../../packages/current-app/src/server/currentAppActions.js";
+import { createStudioHealthActions } from "../../packages/studio-health/src/server/studioHealthActions.js";
 import { registerRoutes as registerCurrentApp } from "../../packages/current-app/src/server/registerRoutes.js";
 import { registerRoutes as registerHealth } from "../../packages/studio-health/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
@@ -24,7 +24,7 @@ test("current-app and Studio Health inspections resolve current actor and their 
     };
     const definitions = [
       ...createCurrentAppActions({ currentApp: { inspectCurrentApp: capture("current-app") } }),
-      ...createHealthActions({ studioHealth: { inspect: capture("health") } })
+      ...createStudioHealthActions({ studioHealth: { inspect: capture("health") } })
     ];
     actions.register({ contributorId: "inspection", domain: "inspection", actions: definitions.map((definition) => ({
       channels: ["api", "automation"], surfaces: ["app"], ...definition

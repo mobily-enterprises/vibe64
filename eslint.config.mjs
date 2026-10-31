@@ -36,6 +36,7 @@ export default [
   // Server packages converted to typed features; the base config warns for the rest.
   ...typedFeaturesConfig([
     "packages/current-app/src/server/**",
+    "packages/studio-health/src/server/**",
     "packages/studio-terminal-core/src/server/**",
     "packages/vibe64-core/src/server/**",
     "packages/vibe64-execution/src/server/**",
