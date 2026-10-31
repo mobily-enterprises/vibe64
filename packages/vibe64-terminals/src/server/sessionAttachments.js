@@ -20,6 +20,9 @@ import {
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+
 function attachmentDirectory(paths, id) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id)) {
     throw Object.assign(new Error("Attachment id is invalid."), { statusCode: 400 });
@@ -48,6 +51,11 @@ async function readSavedAttachment(paths, id) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {RuntimeEnv} [dependencies.env]
+ */
 function createSessionAttachments({ projectService, env = process.env }) {
   async function attachmentContext(context) {
     const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });

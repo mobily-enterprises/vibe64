@@ -7,6 +7,10 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { cleanupBackgroundTaskHelper, runBackgroundTaskHelperTurn } from "./assistantHelperTurn.js";
 
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const TASK_ID = "session-name";
 const PROFILE = defineVibe64AgentExecutionProfileRequest({
   profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
@@ -43,6 +47,13 @@ function parseSessionName(value) {
 
 // signal is the server's shutdown signal: a name is discarded work, so
 // shutdown stops a running Helper turn and closes it instead of waiting for it.
+/**
+ * @param {object} dependencies
+ * @param {SessionAgentManager} dependencies.agent
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {RuntimeLogger} dependencies.logger
+ * @param {AbortSignal | null} [dependencies.signal]
+ */
 function createSessionNaming({ agent, publishSessionChanged, logger, signal = null } = {}) {
   const active = new Map();
   const sessionKey = ({ runtime, session }) => `${runtime.stateRoot}/${session.sessionId || session.id}`;

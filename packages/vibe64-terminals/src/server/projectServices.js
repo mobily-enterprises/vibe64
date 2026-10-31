@@ -10,6 +10,14 @@ import {
 } from "@local/vibe64-execution/server";
 import { vibe64RuntimePacks } from "./vibe64OutputTargets.js";
 
+/**
+ * @param {object} dependencies
+ * @param {typeof inspectVibe64ProjectServices} [dependencies.inspect]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {typeof inspectVibe64Service} [dependencies.inspectExecution]
+ * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
+ * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwned]
+ */
 function createProjectServices({
   inspect = inspectVibe64ProjectServices,
   runCommand = runVibe64Command,

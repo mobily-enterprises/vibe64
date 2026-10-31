@@ -13,14 +13,18 @@ import {
 import { createTerminalActions } from "./actions.js";
 import { prepareCodexAttachmentStorage } from "./codexAttachments.js";
 import {
-  createProjectRuntimeChangedPublisher
+  createProjectRuntimeChangedPublisher,
+  createTerminalSessionChangedPublishers
 } from "./events.js";
-import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { registerRoutes } from "./registerRoutes.js";
 import {
   createService,
   startProjectRuntimeDormancyCleanupSchedule
 } from "./service.js";
+
+/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 const LIVE_HOST_ENV_KEYS = Object.freeze([
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
@@ -46,6 +50,12 @@ function terminalsProviderEnv(runtimeEnv = {}, liveEnv = process.env) {
   return env;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
+ * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
+ * @param {ProjectServices | null} [dependencies.projectServices]
+ */
 function createVibe64TerminalsFeature({
   codexTerminalController = {},
   opencodeTerminalController = {},
@@ -71,8 +81,8 @@ function createVibe64TerminalsFeature({
       channels: ["api", "automation", "internal"],
       surfaces: ["app"]
     },
+    /** @param {{ fastify: RuntimeFastify, logger: RuntimeLogger }} capabilities */
     setup({ env, events, fastify, http, logger, project, uploads }, { actionCatalogue }) {
-      const sessionChanged = createSessionChangedPublisher(events);
       const terminals = createService({
         actions: actionCatalogue,
         codexTerminalController,
@@ -82,13 +92,7 @@ function createVibe64TerminalsFeature({
         projectServices,
         projectService: project,
         publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
-        publishSessionChanged: {
-          agentTerminal: sessionChanged,
-          agentTerminalClosed: sessionChanged,
-          outputTarget: sessionChanged,
-          outputTargetClosed: sessionChanged,
-          outputTargetStopped: sessionChanged
-        }
+        publishSessionChanged: createTerminalSessionChangedPublishers(events)
       });
       registerRoutes(http, {
         fastify,

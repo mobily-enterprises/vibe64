@@ -351,6 +351,14 @@ async function completeOpenCodeSessionRenewalHandover({ input, operationId, clie
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.operationId
+ * @param {object} dependencies.approved the approved renewal handover
+ * @param {string} dependencies.clientMessageId
+ * @param {object} dependencies.context
+ * @param {typeof import("./openCodeConversationStorage.js").writeOpenCodeSessionMetadata} dependencies.writeSessionMetadata
+ */
 function createOpenCodeSessionRenewalSeedReceipt({ operationId, approved, clientMessageId, context, writeSessionMetadata }) {
   let acknowledgement = null;
   let acknowledgedAt = "";

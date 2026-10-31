@@ -12,6 +12,15 @@ import {
 } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
+/** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
+/** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
+/** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -34,6 +43,17 @@ function codexSessionWorktreeIsUnavailable(session = {}) {
   return codexSessionWorktreeWasRemoved(session) || codexSessionWorktreeIsClosing(session);
 }
 
+/**
+ * @param {object} dependencies
+ * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
+ * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
+ * @param {AgentSessionCommandService} dependencies.agentSessionCommand
+ * @param {CodexGitCommandService} dependencies.codexGitCommand
+ * @param {RuntimeEnv} dependencies.env
+ * @param {ProjectService} dependencies.projectService
+ * @param {RunVibe64Command} dependencies.runCommand
+ */
 function createCodexSessionEnvironment({
   agentDatabaseCommand,
   agentEnvCommand,

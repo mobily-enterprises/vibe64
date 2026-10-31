@@ -8,6 +8,9 @@ import { agentTerminalIdentityForWorkdir, agentTerminalIdentityState } from "./a
 import { activeCodexTerminal } from "./codexTerminalAccess.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
+
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_STATE_METADATA_NAMES = Object.freeze([
   "codex_conversation_id",
@@ -96,6 +99,11 @@ function withCodexState(response = {}, session = {}) {
 
 // Read only the original bounded state files. Every read stays fresh; this
 // storage projection never creates a session runtime or acquires a provider.
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {CodexAppServerRunOwner} dependencies.runOwner
+ */
 function createCodexConversationStorage({ projectService, runOwner }) {
   const { readAgentRunForSession: readCodexAppServerAgentRunForSession } = runOwner;
   async function readCodexStateSession(sessionId = "") {

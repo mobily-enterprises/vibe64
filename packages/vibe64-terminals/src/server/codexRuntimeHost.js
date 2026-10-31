@@ -13,6 +13,12 @@ import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV, VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV } from "./agentEnvCommand.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
+/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+
 const CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER = "\u001f";
 const CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS = new Set([
   VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV,
@@ -249,6 +255,14 @@ function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+/**
+ * @param {object} dependencies
+ * @param {CodexRuntimeHost} dependencies.runtimeHost
+ * @param {CodexAccountPreparation} dependencies.accountPreparation
+ * @param {CodexSessionEnvironment} dependencies.sessionEnvironment
+ * @param {ProjectService} dependencies.projectService
+ * @param {RunVibe64Command} dependencies.runCommand
+ */
 function createCodexSessionRuntimeHost({
   runtimeHost,
   accountPreparation,

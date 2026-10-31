@@ -53,6 +53,41 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 
+/** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
+/** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
+/** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+
+/**
+ * @param {object} dependencies
+ * @param {AgentDatabaseCommandService | null} [dependencies.agentDatabaseCommand]
+ * @param {AgentEnvCommandService | null} [dependencies.agentEnvCommand]
+ * @param {AgentPreviewCommandService | null} [dependencies.agentPreviewCommand]
+ * @param {AgentSessionCommandService | null} [dependencies.agentSessionCommand]
+ * @param {CodexGitCommandService | null} [dependencies.codexGitCommand]
+ * @param {string} [dependencies.command]
+ * @param {typeof createOpenCodeServerProcess} [dependencies.createServerProcess]
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {() => SessionAgentManager | null} [dependencies.getAssistantManager]
+ * @param {(request: object) => Promise<object[]>} [dependencies.listConnections]
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {typeof prepareAgentSessionCommandEnvironment} [dependencies.prepareCommandEnvironment]
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {(event: object) => unknown} dependencies.publishConversation
+ * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
+ * @param {typeof readOpenCodeCatalog} [dependencies.readCatalogCommand]
+ * @param {typeof readOpenCodeZenModelIds} [dependencies.readZenModelsCommand]
+ * @param {typeof writeSessionGitCommandActor} [dependencies.recordGitActor]
+ * @param {(selection: object) => Promise<object | null>} [dependencies.resolveConnection]
+ * @param {typeof verifyOpenCodeApiKey} [dependencies.verifyConnectionCommand]
+ */
 function createOpenCodeSessionRegistration({
   agentDatabaseCommand = null,
   agentEnvCommand = null,

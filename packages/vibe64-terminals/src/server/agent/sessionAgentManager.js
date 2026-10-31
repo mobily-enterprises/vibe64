@@ -33,6 +33,9 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import { isPracticeProjectRuntime } from "../practiceAgentGuidance.js";
 
+/** @typedef {ReturnType<typeof import("../sessionAttachments.js").createSessionAttachments>} SessionAttachments */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
+
 const SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE = "vibe64_agent_provider_binding_conflict";
 const EXECUTION_PROFILE_RESOLUTION_FIELDS = new Set([
   "limits",
@@ -282,6 +285,17 @@ function untrustedExecutionProfileResolutionError(provider = {}, sessionId = "",
   );
 }
 
+/**
+ * @param {object} dependencies
+ * @param {SessionAttachments | null} [dependencies.attachments]
+ * @param {ConversationRuntime} dependencies.conversationRuntime
+ * @param {string} [dependencies.defaultProviderId]
+ * @param {(context: object) => Promise<object>} [dependencies.readAssistantAccess]
+ * @param {((selection: object) => Promise<object | null>) | null} [dependencies.readProviderUsage]
+ * @param {(user: object | null) => Promise<object | null>} [dependencies.resolveAssistantUser]
+ * @param {(() => Promise<object>) | null} [dependencies.readRoutingConfiguration]
+ * @param {object[]} [dependencies.providers] the session agent providers, one per engine
+ */
 function createSessionAgentManager({
   attachments = null,
   conversationRuntime,

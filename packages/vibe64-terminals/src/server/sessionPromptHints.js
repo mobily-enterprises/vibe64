@@ -32,6 +32,10 @@ import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionSourcePath as savedSessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v3";
 const PROMPT_HINT_TASK_DIRECTORY = "assistant/prompt-hint-tasks";
 const SHARED_PROMPT_HINTS_ARTIFACT = "assistant/shared-prompt-hints.json";
@@ -401,6 +405,19 @@ async function readPromptHintGenesisFile(sourceRoot = "", relativePath = "", max
   }
 }
 
+/**
+ * @param {object} dependencies
+ * @param {number} [dependencies.cacheMaxEntries]
+ * @param {number} [dependencies.cacheTtlMs]
+ * @param {SessionAgentManager} dependencies.agent
+ * @param {((event: object) => void) | null} [dependencies.diagnostic]
+ * @param {() => number} [dependencies.now]
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {typeof readPromptHintBlueprint} [dependencies.readBlueprintText]
+ * @param {typeof readPromptHintSubsystems} [dependencies.readSubsystemsText]
+ * @param {typeof savedSessionSourcePath} [dependencies.sessionSourcePath]
+ */
 function createSessionPromptHintsService({
   cacheMaxEntries = PROMPT_HINT_CACHE_MAX_ENTRIES,
   cacheTtlMs = PROMPT_HINT_CACHE_TTL_MS,

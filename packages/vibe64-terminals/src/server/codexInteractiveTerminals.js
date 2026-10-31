@@ -26,6 +26,17 @@ import { recordSessionGitCommandActor } from "./sessionGitCommandActor.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
+/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
+/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexUnavailableWorktreeHandler>} CodexUnavailableWorktreeHandler */
+/** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+
 const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_VISIBLE_TERMINAL_DETACHED_IDLE_TIMEOUT_MS = 5_000;
 const CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 4 * 1024 * 1024;
@@ -53,6 +64,19 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
   return endpoint ? codexAppServerEndpointForTarget(endpoint) : "";
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEnv} dependencies.env
+ * @param {ProjectService} dependencies.projectService
+ * @param {RunVibe64Command} dependencies.runCommand
+ * @param {CodexRuntimeHost} dependencies.runtimeHost
+ * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
+ * @param {CodexAccountPreparation} dependencies.accountPreparation
+ * @param {CodexSessionEnvironment} dependencies.sessionEnvironment
+ * @param {CodexAppServerRunOwner} dependencies.runOwner
+ * @param {CodexConversationPreparation["threadReadiness"]} dependencies.withThreadReadiness
+ * @param {CodexUnavailableWorktreeHandler} dependencies.unavailableWorktree
+ */
 function createCodexInteractiveTerminals({
   env,
   projectService,

@@ -10,6 +10,15 @@ import { codexTerminalNamespace } from "./terminalShared.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
+/** @typedef {ReturnType<typeof import("./codexSessionProviderHost.js").createCodexSessionProviderHost>} CodexSessionProviderHost */
+/** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
+/** @typedef {ReturnType<typeof import("./codexHelperPreparation.js").createCodexHelperPreparation>} CodexHelperPreparation */
+/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexStartupHealth>} CodexStartupHealth */
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -28,6 +37,17 @@ async function terminalSessionSourceRootForSession(projectService, sessionId) {
 
 // Authorized application facts and cleanup effects. Native stop/recovery and
 // session-closure coordination belong to assistant-core's runtime lifecycle.
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {CodexRuntimeHost} dependencies.runtimeHost
+ * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
+ * @param {CodexSessionEnvironment} dependencies.sessionEnvironment
+ * @param {CodexSessionProviderHost} dependencies.providerHost
+ * @param {CodexConversationPreparation} dependencies.conversationPreparation
+ * @param {CodexHelperPreparation} dependencies.helperPreparation
+ * @param {CodexStartupHealth} dependencies.health
+ */
 function createCodexLifecyclePreparation({
   projectService, runtimeHost, sessionRuntimeHost, sessionEnvironment, providerHost,
   conversationPreparation, helperPreparation, health

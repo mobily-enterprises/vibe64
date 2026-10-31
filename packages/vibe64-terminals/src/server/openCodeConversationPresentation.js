@@ -8,6 +8,10 @@ import { conversationMessageId, upstreamMessageId } from "./openCodeConversation
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+
 const OPENCODE_AGENT_RUN_ID = "opencode_server";
 const OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS = 1_000;
 const OPENCODE_REASONING_HEADLINE_MAX_CHARS = 120;
@@ -30,6 +34,13 @@ function openCodeReasoningHeadline(value = "") {
 }
 
 // Product progress summaries and publication use the original native inventory.
+/**
+ * @param {object} dependencies
+ * @param {() => SessionAgentManager} dependencies.getAssistantManager
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {OpenCodeSharedRuntime["turns"]} dependencies.turns
+ * @param {OpenCodeSharedRuntime["temporaryConversations"]} dependencies.temporaryConversations
+ */
 function createOpenCodeConversationPresentation({ getAssistantManager, publishSessionChanged, turns, temporaryConversations }) {
   const progressPublishes = new Map();
   const progressPublishedAt = new Map();

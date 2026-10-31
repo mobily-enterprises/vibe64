@@ -20,6 +20,9 @@ import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 const AGENT_DATABASE_COMMAND_NAME = "vibe64-database";
 const AGENT_DATABASE_COMMAND_SOCKET_NAME = "database-command.sock";
 const AGENT_DATABASE_COMMAND_CONTRACT_VERSION = "1";
@@ -201,6 +204,11 @@ const commandServers = createSessionCommandServers({
   errorBody: (payload) => ({ ...payload, exitCode: 1, stderr: `${payload.error}\n` })
 });
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {ProjectService} dependencies.projectService
+ */
 function createAgentDatabaseCommandService({ logger = null, projectService } = {}) {
   if (!projectService || typeof projectService.readCurrentProject !== "function" || typeof projectService.runInProjectContext !== "function") {
     throw new TypeError("createAgentDatabaseCommandService requires the Vibe64 Project API.");

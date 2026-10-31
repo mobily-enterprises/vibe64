@@ -128,6 +128,17 @@ import {
   normalizeVibe64AgentRunState
 } from "@local/vibe64-runtime/server/sessionStore";
 
+/** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
+/** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
 
 const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
@@ -138,6 +149,32 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+/**
+ * @param {object} dependencies
+ * @param {(context: object) => Promise<boolean>} [dependencies.connectionStatus]
+ * @param {CodexProviderConnectionStore["list"]} [dependencies.listConnections]
+ * @param {AgentDatabaseCommandService | null} [dependencies.agentDatabaseCommand]
+ * @param {AgentEnvCommandService | null} [dependencies.agentEnvCommand]
+ * @param {AgentPreviewCommandService | null} [dependencies.agentPreviewCommand]
+ * @param {AgentSessionCommandService | null} [dependencies.agentSessionCommand]
+ * @param {typeof assertCodexAuthPreflightReady} [dependencies.codexAuthPreflight]
+ * @param {number} [dependencies.codexAppServerActiveReconcileMs]
+ * @param {number} [dependencies.codexAppServerDaemonWellbeingMs]
+ * @param {object} [dependencies.codexAppServerProviderOptions]
+ * @param {typeof createCodexAppServerAgentProvider} [dependencies.codexAppServerProviderFactory]
+ * @param {typeof createCodexHelperThreadLedger} [dependencies.codexHelperThreadLedgerFactory]
+ * @param {boolean} [dependencies.codexToolHomeRequired]
+ * @param {string} [dependencies.codexToolHomeSource]
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {CodexGitCommandService | null} [dependencies.codexGitCommand]
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {ProjectService} dependencies.projectService
+ * @param {((event: object) => unknown) | null} [dependencies.publishConversation]
+ * @param {((sessionId: string, options: object) => Promise<unknown>) | null} [dependencies.continueGoalAfterAccountChange]
+ * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ */
 function createCodexSessionRegistration({
   connectionStatus = async () => true,
   listConnections = async () => [],

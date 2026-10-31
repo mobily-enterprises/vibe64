@@ -36,6 +36,19 @@ import {
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 import { normalizePlainObject as record } from "@local/vibe64-core/server/serverResponses";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
+/** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
+/** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
+/** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
+/** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
+/** @typedef {typeof import("@local/vibe64-execution/server").inspectVibe64Service} InspectVibe64Service */
+/** @typedef {typeof import("./agentCommandEnvironment.js").prepareAgentSessionCommandEnvironment} PrepareAgentSessionCommandEnvironment */
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+
 const OPENCODE_HELPER_AGENT_ID = "vibe64-helper";
 const OPENCODE_HELPER_SUBAGENT_PREFIX = "vibe64-helper-";
 const OPENCODE_EPHEMERAL_AGENT_ID = "vibe64-ephemeral";
@@ -143,6 +156,23 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
+ * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
+ * @param {AgentSessionCommandService} dependencies.agentSessionCommand
+ * @param {CodexGitCommandService} dependencies.codexGitCommand
+ * @param {string} dependencies.command
+ * @param {CreateOpenCodeServerProcess} dependencies.createServerProcess
+ * @param {RuntimeEnv} dependencies.env
+ * @param {() => SessionAgentManager} dependencies.getAssistantManager
+ * @param {(request: object) => Promise<object[]>} dependencies.listConnections
+ * @param {PrepareAgentSessionCommandEnvironment} dependencies.prepareCommandEnvironment
+ * @param {ProjectService} dependencies.projectService
+ * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
+ * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
+ */
 function createOpenCodeHostPreparation({
   agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
   codexGitCommand, command, createServerProcess, env, getAssistantManager,
@@ -549,6 +579,33 @@ function safeOpenCodeEnvironment(baseEnv = {}, {
   });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string} [dependencies.apiKey]
+ * @param {string} [dependencies.cacheRoot]
+ * @param {string} [dependencies.canonicalUrl]
+ * @param {string} [dependencies.command]
+ * @param {typeof runVibe64Command} [dependencies.commandRunner]
+ * @param {string} [dependencies.dbPath]
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {object} [dependencies.execution]
+ * @param {string} [dependencies.expectedVersion]
+ * @param {typeof fetch} [dependencies.fetchImpl]
+ * @param {string} [dependencies.hostContextResolver]
+ * @param {InspectVibe64Service} dependencies.inspectExecution
+ * @param {object} [dependencies.managedEnv]
+ * @param {string} [dependencies.modelProviderId]
+ * @param {boolean} [dependencies.packageInstalls]
+ * @param {number} [dependencies.port]
+ * @param {string} [dependencies.privateRoot]
+ * @param {object[]} [dependencies.providerConnections]
+ * @param {typeof OPENCODE_READY_TIMEOUT_MS} [dependencies.readinessTimeoutMs]
+ * @param {boolean} [dependencies.seededPrivateRoot]
+ * @param {string} [dependencies.sessionEnvironmentRegistry]
+ * @param {string[]} [dependencies.shimDirs]
+ * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
+ * @param {string} [dependencies.workdir]
+ */
 async function createOpenCodeServerProcess({
   apiKey = "",
   cacheRoot = "",

@@ -9,8 +9,27 @@ import { OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
 import { openCodeError, throwVibe64OpenCodeError as runtimeFailure,
   openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "./terminalShared.js";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
+/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {ReturnType<typeof import("./openCodeConversationEvents.js").createOpenCodeConversationEvents>} OpenCodeConversationEvents */
+/** @typedef {ReturnType<typeof import("./openCodeConversationPresentation.js").createOpenCodeConversationPresentation>} OpenCodeConversationPresentation */
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+
 // Authorized application facts and awaited product cleanup. The supplied native
 // owner retains process/turn state, readiness, stopping and retry coordination.
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {() => SessionAgentManager} dependencies.getAssistantManager
+ * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
+ * @param {OpenCodeHostPreparation} dependencies.hostPreparation
+ * @param {OpenCodeMainMessagePreparation} dependencies.mainMessagePreparation
+ * @param {OpenCodeConversationEvents} dependencies.events
+ * @param {OpenCodeConversationPresentation} dependencies.presentation
+ * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
+ */
 function createOpenCodeLifecyclePreparation({
   projectService, getAssistantManager, sharedRuntime, hostPreparation,
   mainMessagePreparation, events, presentation, resolveConnection

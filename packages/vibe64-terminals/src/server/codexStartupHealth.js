@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
 
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexStartupHealth>} CodexStartupHealth */
+
 export const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 
 function normalizeText(value) {
@@ -155,6 +159,12 @@ export function createCodexStartupHealth(publishSessionChanged) {
 
 // Application workspace policy uses the existing native retirement API before
 // publishing its original blocked-health result. The writer keeps its original contract.
+/**
+ * @param {object} dependencies
+ * @param {CodexAppServerRunOwner} dependencies.runOwner
+ * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
+ * @param {CodexStartupHealth} dependencies.health
+ */
 export function createCodexUnavailableWorktreeHandler({ runOwner, sessionRuntimeHost, health }) {
   const { codexAppServerRuntimeOptionsForSession } = sessionRuntimeHost;
   const { blocked: writeCodexAppServerBlocked } = health;

@@ -5,6 +5,9 @@ import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 // Retain the existing persisted task identity; checkpoints now cover every
 // session assistant, including writable temporary conversations.
 const SESSION_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
@@ -62,6 +65,11 @@ async function checkpointSessionTurn({
 
 // Preserve the original Codex Main and temporary checkpoint projections.
 // The native owner still decides when the existing callback is invoked.
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ */
 function createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged }) {
   function normalizeText(value) {
     return String(value || "").trim();

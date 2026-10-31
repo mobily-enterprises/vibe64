@@ -35,6 +35,11 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+
 const SESSION_BRANCH_PREFIX = "vibe64/";
 
 function sourceError(message = "", code = "vibe64_session_source_failed") {
@@ -540,6 +545,18 @@ async function attachSessionSource(store, sessionId = "", metadata = {}) {
     : write();
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {string} [dependencies.expectedCommit]
+ * @param {string} [dependencies.expectedSourceRef]
+ * @param {ProjectService} [dependencies.project]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {Vibe64SessionRuntime} dependencies.runtime
+ * @param {object} [dependencies.session]
+ * @param {Vibe64SessionStore} dependencies.store
+ * @param {object | null} [dependencies.vibe64User]
+ */
 async function createSessionSource({
   env = process.env,
   expectedCommit = "",

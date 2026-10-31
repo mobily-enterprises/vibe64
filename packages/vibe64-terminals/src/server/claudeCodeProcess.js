@@ -5,6 +5,10 @@ import { logOperationalEvent, sanitizeOperationText, shouldRedactLogField } from
 import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 import { claudeCodeArguments as nativeClaudeArguments, claudeFlagSettings as nativeClaudeFlagSettings, createClaudeCodeProcess as startClaude } from "@jskit-ai/assistant-core/server/claude-process";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64RestoredService} StopVibe64RestoredService */
+
 const CLAUDE_CODE_VERSION = "2.1.289";
 
 
@@ -25,6 +29,17 @@ function claudeCodeArguments(options = {}) {
   return nativeClaudeArguments({ permissionMode: "bypassPermissions", settings: claudeFlagSettings(), ...options });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RunVibe64Command} dependencies.commandRunner
+ * @param {StopVibe64RestoredService} dependencies.stopExecution
+ * @param {object} dependencies.credentialHome
+ * @param {object} dependencies.execution
+ * @param {string[]} dependencies.shimDirs
+ * @param {(executionId: string) => unknown} dependencies.onStarted
+ * @param {RuntimeLogger | null} dependencies.logger
+ * @param {string} dependencies.accountQuery the account query this process answers, if it runs one
+ */
 async function createClaudeCodeProcess({
   commandRunner, stopExecution, credentialHome, execution, shimDirs, onStarted, logger, accountQuery, ...options
 } = {}) {

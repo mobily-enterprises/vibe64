@@ -44,6 +44,8 @@ import {
 } from "./terminalShared.js";
 import { startResourceWorkflow } from "./resourceWorkflow.js";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";
 const CONNECTED_PREPARATION_LABEL = "Preparing connected projects";
@@ -207,6 +209,17 @@ function workspaceSetupRunKey(sessionId = "") {
   return terminalNamespace(WORKSPACE_SETUP_RUN_NAMESPACE, sessionId);
 }
 
+/**
+ * @param {object} dependencies
+ * @param {() => Date} [dependencies.clock]
+ * @param {null} [dependencies.inspect]
+ * @param {typeof inspectGenesisProjectFormat} [dependencies.inspectProjectFormat]
+ * @param {((request: object) => Promise<object>) | null} [dependencies.connectedPreparation]
+ * @param {ProjectService} dependencies.projectService
+ * @param {(request: object) => Promise<object>} [dependencies.startWorkflow]
+ * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ */
 function createWorkspaceSetupRunner({
   clock = () => new Date(),
   inspect: suppliedInspect = null,

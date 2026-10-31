@@ -35,6 +35,14 @@ import {
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {ReturnType<typeof import("./openCodeConversationEvents.js").createOpenCodeConversationEvents>} OpenCodeConversationEvents */
+/** @typedef {ReturnType<typeof import("./openCodeConversationPresentation.js").createOpenCodeConversationPresentation>} OpenCodeConversationPresentation */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+
 export const MAIN_CONVERSATION_STATE_KEY = "assistant_changeover";
 const STATE_KEY = MAIN_CONVERSATION_STATE_KEY;
 export const MAIN_CONVERSATION_PRESENTATION = Object.freeze({
@@ -666,6 +674,13 @@ export const CLAUDE_PREPARATION_DELIVERY_STAGES = Object.freeze(["git-actor", "g
 
 // The existing Claude owner shares this application policy across its retained entries.
 // Main/scoped/renewal predicates remain the original distinct rules.
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEnv} dependencies.env
+ * @param {RecordSessionGitCommandActor} dependencies.recordGitActor
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {(timing: object) => void} [dependencies.onTiming]
+ */
 export function createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged, onTiming = () => {} }) {
   const error = claudeConversationError;
   const ENGINE = "claude";
@@ -727,6 +742,15 @@ export function createClaudeConversationMessagePolicy({ env, recordGitActor, pub
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {RuntimeEnv} dependencies.env
+ * @param {RecordSessionGitCommandActor} dependencies.recordGitActor
+ * @param {OpenCodeHostPreparation} dependencies.hostPreparation
+ * @param {OpenCodeConversationEvents} dependencies.events
+ * @param {OpenCodeConversationPresentation} dependencies.presentation
+ */
 export function createOpenCodeMainMessagePreparation({ projectService, env, recordGitActor, hostPreparation, events, presentation }) {
   const text = (value = "") => String(value ?? "").trim();
   const { prepareProcess, storedUpstreamSessionId, upstreamSessionOptions } = hostPreparation;

@@ -12,6 +12,12 @@ import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencod
 import { openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./terminalShared.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {ReturnType<typeof import("./openCodeConversationEvents.js").createOpenCodeConversationEvents>} OpenCodeConversationEvents */
+/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 function openCodeExecutionProfile(input = {}) {
   if (!input?.executionProfile) {
     return null;
@@ -71,6 +77,15 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
     : executionProfile.limits.timeoutMs;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {OpenCodeMainMessagePreparation["contextFor"]} dependencies.contextFor
+ * @param {OpenCodeHostPreparation} dependencies.hostPreparation
+ * @param {OpenCodeConversationEvents} dependencies.events
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareSessionCleanup
+ */
 export function createOpenCodeScopedPreparation({
   projectService, contextFor, hostPreparation, events, publishSessionChanged, prepareSessionCleanup
 }) {

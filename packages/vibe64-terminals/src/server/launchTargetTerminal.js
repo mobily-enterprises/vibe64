@@ -441,6 +441,13 @@ function normalizeOpenTarget({
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {object} [dependencies.launchTarget]
+ * @param {typeof DEFAULT_WEB_LAUNCH_TARGET_PORT} [dependencies.preferredPort]
+ * @param {(request: object) => Promise<object>} [dependencies.resolveLaunch]
+ * @param {object} [dependencies.session]
+ */
 async function createVibe64WebLaunchTargetTerminalSpec({
   launchTarget = {},
   preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT,

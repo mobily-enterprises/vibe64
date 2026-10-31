@@ -14,6 +14,18 @@ import {
   subscribeTerminalSession, writeTerminalSessionText
 } from "@local/vibe64-execution/server/terminalSessions";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
+/** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
+/** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
+/** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
+/** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {typeof import("./agentCommandEnvironment.js").prepareAgentSessionCommandEnvironment} PrepareAgentSessionCommandEnvironment */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64RestoredService} StopVibe64RestoredService */
+
 const ENGINE = "claude";
 
 // Interactive Claude asks first-run setup (including a login choice) and
@@ -43,6 +55,22 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
 }
 
 // Vibe64's selected settings, managed command environment and Genesis host facts.
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEnv} dependencies.env
+ * @param {ProjectService} dependencies.projectService
+ * @param {() => string} dependencies.command
+ * @param {object} dependencies.credentialHome
+ * @param {RunVibe64Command} dependencies.commandRunner
+ * @param {StopVibe64RestoredService} dependencies.stopExecution
+ * @param {CodexProviderConnectionStore} dependencies.providerConnections
+ * @param {PrepareAgentSessionCommandEnvironment} dependencies.prepareCommandEnvironment
+ * @param {CodexGitCommandService} dependencies.codexGitCommand
+ * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
+ * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
+ * @param {AgentSessionCommandService} dependencies.agentSessionCommand
+ */
 function createClaudeConversationEnvironment({
   env, projectService, command, credentialHome, commandRunner, stopExecution,
   providerConnections, prepareCommandEnvironment, codexGitCommand, agentDatabaseCommand,

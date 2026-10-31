@@ -14,6 +14,9 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantReplyAsksPerson, latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const STATE_KEY = "assistant_routing_request";
 // Messages the person cancelled in this chat, newest last and bounded. A send
 // never admits one again, and a snapshot never offers one for recovery.
@@ -109,6 +112,21 @@ function withSelection(context, selection) {
 // Cancel also needs the chat's context without the agent-write lock (open), the
 // interrupt Stop uses (interrupt), and the native attempt's discard, which runs
 // under that lock (discardPending).
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.systemRoot
+ * @param {boolean} [dependencies.allowAuto]
+ * @param {SessionAgentManager} dependencies.agent
+ * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<unknown>} dependencies.exclusive
+ * @param {(sessionId: string, input: object, context: object) => Promise<object>} dependencies.dispatch
+ * @param {PublishSessionChanged} dependencies.publish
+ * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} [dependencies.prepareSelection]
+ * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
+ * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.interrupt
+ * @param {typeof import("./assistantChangeover.js").discardAssistantChangeoverMessage} dependencies.discardPending
+ * @param {(timing: object) => void} [dependencies.onTiming]
+ * @param {((sessionId: string, details: object) => Promise<unknown>) | null} [dependencies.onPlanCompleted]
+ */
 function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection = async () => {},
   open, interrupt, discardPending, onTiming = () => {}, onPlanCompleted = null }) {
   const running = new Map();

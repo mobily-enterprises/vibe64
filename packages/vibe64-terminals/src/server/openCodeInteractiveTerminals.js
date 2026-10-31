@@ -6,8 +6,22 @@ import { opencodeTerminalNamespace, vibe64Result } from "./terminalShared.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
+/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+
 const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
 
+/**
+ * @param {object} dependencies
+ * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
+ * @param {OpenCodeMainMessagePreparation["contextFor"]} dependencies.contextFor
+ * @param {OpenCodeHostPreparation} dependencies.hostPreparation
+ * @param {RuntimeEnv} dependencies.env
+ * @param {RecordSessionGitCommandActor} dependencies.recordGitActor
+ */
 export function createOpenCodeInteractiveTerminals({ sharedRuntime, contextFor, hostPreparation, env, recordGitActor }) {
   const { processes } = sharedRuntime;
   const { prepareProcess, upstreamSessionOptions, storedUpstreamSessionId } = hostPreparation;

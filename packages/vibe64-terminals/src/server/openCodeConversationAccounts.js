@@ -10,6 +10,11 @@ import { openCodeError } from "./terminalShared.js";
 import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
+/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+
 const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;
 
 function record(value = null) {
@@ -17,6 +22,19 @@ function record(value = null) {
 }
 
 // Application account visibility and catalogue policy use the existing native probes.
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.command
+ * @param {CreateOpenCodeServerProcess} dependencies.createServerProcess
+ * @param {RuntimeEnv} dependencies.env
+ * @param {(request: object) => Promise<object[]>} dependencies.listConnections
+ * @param {typeof import("./opencodeServerProcess.js").readOpenCodeCatalog} dependencies.readCatalogCommand
+ * @param {typeof import("./opencodeServerProcess.js").readOpenCodeZenModelIds} dependencies.readZenModelsCommand
+ * @param {OpenCodeHostPreparation["sharedRoots"]} dependencies.sharedRoots
+ * @param {typeof import("./opencodeServerProcess.js").verifyOpenCodeApiKey} dependencies.verifyConnectionCommand
+ * @param {OpenCodeMainMessagePreparation} dependencies.mainMessagePreparation
+ * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
+ */
 function createOpenCodeConversationAccounts({
   command, createServerProcess, env, listConnections, readCatalogCommand,
   readZenModelsCommand, sharedRoots, verifyConnectionCommand, mainMessagePreparation, resolveConnection

@@ -1,10 +1,17 @@
 import { previewDiagnosticUrl } from "../shared/launchPreviewProtocol.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
 const PREVIEW_DIAGNOSTIC_EVENTS = new Set([
   "resource.failed", "resource.retry", "resource.retry.skipped", "resource.retry.unavailable",
   "frame.requested", "iframe.loaded", "iframe.ready"
 ]);
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeLogger | null} dependencies.logger
+ * @param {() => number} [dependencies.now]
+ */
 function createPreviewDiagnosticRecorder({ logger, now = Date.now } = {}) {
   let windowStartedAt = 0;
   let recorded = 0;

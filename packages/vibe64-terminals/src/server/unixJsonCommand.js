@@ -170,6 +170,22 @@ async function listenUnixJsonCommandServer(server, socketPath = "") {
 // `token` names the entry token the route accepts (default "token"); `status`
 // maps a result to its HTTP status (default 200). `<routePrefix>/health` is
 // served for every server.
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.routePrefix
+ * @param {object} [dependencies.routes] each route's handler, by path
+ * @param {string[]} [dependencies.extraTokens]
+ * @param {string} dependencies.label
+ * @param {number} dependencies.maxBytes
+ * @param {object} dependencies.invalidJsonError
+ * @param {object} dependencies.tooLargeError
+ * @param {object} dependencies.notFound
+ * @param {object} dependencies.rejection
+ * @param {object} dependencies.requestFailure
+ * @param {(payload: object) => object} [dependencies.errorBody]
+ * @param {number} dependencies.directoryMode
+ * @param {number} [dependencies.healthTimeoutMs]
+ */
 function createSessionCommandServers({
   routePrefix,
   routes = {},

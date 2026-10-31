@@ -51,6 +51,10 @@ import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const AGENT_SESSION_COMMAND_NAME = "vibe64-session-command";
 const AGENT_SESSION_COMMAND_RUNNER_NAME = "vibe64-session-command-runner";
 const AGENT_SESSION_COMMAND_SOCKET_NAME = "session-command.sock";
@@ -428,6 +432,19 @@ const commandServers = createSessionCommandServers({
   directoryMode: 0o700
 });
 
+/**
+ * @param {object} dependencies
+ * @param {((request: object) => Promise<object>) | null} [dependencies.sendProjectMessage]
+ * @param {((request: object) => Promise<object>) | null} [dependencies.readProjectPreview]
+ * @param {((sessionId: string, input: object, options: object) => Promise<object>) | null} [dependencies.reportWorkflowOutcome]
+ * @param {((sessionId: string) => Promise<unknown>) | null} [dependencies.retryWorkspaceSetup]
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
+ * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwnedExecutions]
+ */
 function createAgentSessionCommandService({
   sendProjectMessage = null,
   readProjectPreview = null,

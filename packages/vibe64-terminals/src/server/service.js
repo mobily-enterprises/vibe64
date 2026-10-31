@@ -191,6 +191,15 @@ import {
 } from "./sessionPromptHints.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./events.js").createProjectRuntimeChangedPublisher>} ProjectRuntimeChangedPublisher */
+/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+/** @typedef {ReturnType<typeof import("./events.js").createTerminalSessionChangedPublishers>} TerminalSessionChangedPublishers */
+
 // The runtime proved this message never reached the assistant. Say so in the
 // response, so the browser shows the failure instead of an uncertain receipt.
 // Only Vibe64's own coded failures keep their message; internal ones do not.
@@ -525,6 +534,21 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue | null} [dependencies.actions]
+ * @param {((actor: object, request: object) => Promise<unknown>) | null} [dependencies.authorizeCodexGitActorAccess]
+ * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
+ * @param {ProjectServices | null} [dependencies.projectServices]
+ * @param {ProjectService} dependencies.projectService
+ * @param {ProjectRuntimeChangedPublisher} [dependencies.publishProjectRuntimeChanged]
+ * @param {TerminalSessionChangedPublishers} [dependencies.publishSessionChanged]
+ * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
+ */
 function createService({
   actions = null,
   authorizeCodexGitActorAccess = null,

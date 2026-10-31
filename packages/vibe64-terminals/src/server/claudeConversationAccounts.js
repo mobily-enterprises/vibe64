@@ -14,6 +14,12 @@ import { claudeConversationError as error } from "./terminalShared.js";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/claude-turn").createClaudeConversationOwner>} ClaudeConversationOwner */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64RestoredService} StopVibe64RestoredService */
+
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 // The person's Claude plan, named as AI Accounts names it.
@@ -47,6 +53,20 @@ function claudeCapabilities(initialization, connected, connections = []) {
 }
 
 // Account visibility, identity and Helper policy; native queries use the existing owner.
+/**
+ * @param {object} dependencies
+ * @param {ClaudeConversationOwner} dependencies.owner
+ * @param {string} dependencies.configRoot
+ * @param {CodexProviderConnectionStore} dependencies.providerConnections
+ * @param {(context?: object) => Promise<object>} dependencies.accountStatus
+ * @param {(context: object) => Promise<boolean>} dependencies.connectionStatus
+ * @param {(options: object) => ReturnType<typeof import("./claudeCodeProcess.js").createClaudeCodeProcess>} dependencies.createProcess
+ * @param {() => string} dependencies.command
+ * @param {RunVibe64Command} dependencies.commandRunner
+ * @param {StopVibe64RestoredService} dependencies.stopExecution
+ * @param {object} dependencies.credentialHome
+ * @param {RuntimeEnv} dependencies.env
+ */
 function createClaudeConversationAccounts({ owner, configRoot, providerConnections, accountStatus, connectionStatus,
   createProcess, command, commandRunner, stopExecution, credentialHome, env }) {
   const accountQueries = owner.createAccountQueries({

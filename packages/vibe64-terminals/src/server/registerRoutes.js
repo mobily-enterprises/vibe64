@@ -24,6 +24,12 @@ import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/termin
 
 import { VIBE64_UPLOAD_MAX_LABEL } from "@local/vibe64-core/shared";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
+/** @typedef {import("@jskit-ai/uploads-runtime/server/types").RuntimeUploads} RuntimeUploads */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("./types.js").TerminalsService} TerminalsService */
+
 const VIBE64_TERMINALS_UNAVAILABLE = "Vibe64 terminal service is unavailable.";
 
 function outputResultContentDisposition(name = "download") {
@@ -177,6 +183,14 @@ function normalizeAttachmentMultipartError(error) {
   return error;
 }
 
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} options
+ * @param {RuntimeFastify} options.fastify
+ * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {TerminalsService} options.terminals
+ * @param {RuntimeUploads} options.uploads
+ */
 function registerRoutes(
   http,
   {

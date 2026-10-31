@@ -14,6 +14,12 @@ import { discardAssistantChangeoverMessage, requireCompletedConversationRewind, 
 import { createMainConversationBinding, readMainConversationHistory, MAIN_CONVERSATION_PRESENTATION } from "./mainConversationBinding.js";
 import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
 
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
+/** @typedef {ReturnType<typeof import("./sessionAttachments.js").createSessionAttachments>} SessionAttachments */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const textFields = [
   "title", "draft", "displayMessage", "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage",
   "recoveryNotice", "recoveryOperation", "recoveryConflictId", "recoveryContext", "recoveryOutcome",
@@ -134,6 +140,24 @@ function requireSuccess(result) {
 const teamTemporaryModesRefusal = () => Object.assign(new Error("Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom."),
   { code: "vibe64_assistant_owner_required", statusCode: 403 });
 
+/**
+ * @param {object} dependencies
+ * @param {SessionAgentManager} dependencies.sessionAgent
+ * @param {ConversationRuntime} dependencies.conversationRuntime
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {SessionAttachments} dependencies.attachments
+ * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>, lock: object) => Promise<object>} dependencies.runAgentWrite
+ * @param {number} dependencies.routingWaitMs
+ * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.readSessionContext
+ * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareAgentSkills
+ * @param {string} dependencies.systemRoot
+ * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} [dependencies.prepareSelection]
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {(event: object) => unknown} [dependencies.publishConversation]
+ * @param {number} [dependencies.temporarySaveDelayMs]
+ * @param {number} [dependencies.temporaryCompletionAttempts]
+ * @param {number} [dependencies.temporaryCompletionRetryMs]
+ */
 function createSessionConversations({
   sessionAgent,
   conversationRuntime,

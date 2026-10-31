@@ -16,6 +16,16 @@ import {
 } from "./codexConversationStorage.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
+/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
+/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexStartupHealth>} CodexStartupHealth */
+/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexUnavailableWorktreeHandler>} CodexUnavailableWorktreeHandler */
+/** @typedef {ReturnType<typeof import("./sessionTurnCheckpoint.js").createCodexSessionTurnCheckpoint>} CodexSessionTurnCheckpoint */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -26,6 +36,18 @@ function codexEffectiveAgentSettings(agentSettings = {}) {
 
 // Application preparation only. Existing native owners invoke these phases;
 // this facility creates no native owner, queue, retained state or session read.
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {CodexRuntimeHost} dependencies.runtimeHost
+ * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
+ * @param {CodexAccountPreparation} dependencies.accountPreparation
+ * @param {CodexSessionEnvironment} dependencies.sessionEnvironment
+ * @param {CodexStartupHealth} dependencies.health
+ * @param {CodexUnavailableWorktreeHandler} dependencies.unavailableWorktree
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {CodexSessionTurnCheckpoint} dependencies.checkpoint
+ */
 function createCodexConversationPreparation({
   projectService,
   runtimeHost,

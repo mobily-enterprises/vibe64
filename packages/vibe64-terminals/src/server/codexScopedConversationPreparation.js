@@ -23,6 +23,13 @@ import {
   codexAppServerFrozenTurnInterruptResponse
 } from "./codexSessionProviderHost.js";
 
+/** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
+/** @typedef {ReturnType<typeof import("./codexHelperPreparation.js").createCodexHelperPreparation>} CodexHelperPreparation */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
+/** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
+/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
+
 const CODEX_APP_SERVER_EPHEMERAL_PROGRESS_LIMIT = 24;
 
 function normalizeText(value) {
@@ -89,6 +96,16 @@ function codexDetachedChatTurnError(error, {
 }
 
 
+/**
+ * @param {object} dependencies
+ * @param {CodexConversationPreparation} dependencies.conversationPreparation
+ * @param {CodexHelperPreparation} dependencies.helperPreparation
+ * @param {CodexRuntimeHost} dependencies.runtimeHost
+ * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
+ * @param {CodexAccountPreparation} dependencies.accountPreparation
+ * @param {CodexSessionEnvironment} dependencies.sessionEnvironment
+ * @param {(vibe64User: object | null) => Promise<object>} dependencies.actorMetadata
+ */
 function createCodexScopedConversationPreparation({
   conversationPreparation: codexConversationPreparation,
   helperPreparation,

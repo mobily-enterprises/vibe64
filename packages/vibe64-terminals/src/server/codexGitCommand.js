@@ -38,6 +38,10 @@ import {
   unixCommandSocketPath
 } from "./unixJsonCommand.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 const CODEX_GIT_COMMAND_DIR_NAME = "codex-git-command";
 const CODEX_GIT_COMMAND_WRAPPER_NAMES = Object.freeze(["git", "gh", "vibe64-github"]);
 const CODEX_GIT_COMMAND_INPUT_MAX_BYTES = 20 * 1024 * 1024;
@@ -539,6 +543,11 @@ function githubAuthenticationRejected(result = {}) {
 // only, never on disk or in logs.
 const ACTOR_CREDENTIAL_TTL_MS = 5 * 60_000;
 
+/**
+ * @param {object} dependencies
+ * @param {() => number} [dependencies.now]
+ * @param {number} [dependencies.ttlMs]
+ */
 function createActorCredentialCache({ now = Date.now, ttlMs = ACTOR_CREDENTIAL_TTL_MS } = {}) {
   const entries = new Map();
   return Object.freeze({
@@ -795,6 +804,16 @@ function logGitCommandResult(logger, result = {}, fields = {}) {
   }, "Vibe64 Codex git command finished.");
 }
 
+/**
+ * @param {object} dependencies
+ * @param {((actor: object, request: object) => Promise<unknown>) | null} [dependencies.authorizeActorAccess]
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {typeof fetch} [dependencies.fetch]
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {() => number} [dependencies.now]
+ * @param {ProjectService} dependencies.projectService
+ * @param {typeof runVibe64Command} [dependencies.runGatewayCommand]
+ */
 function createCodexGitCommandService({
   authorizeActorAccess = null,
   env = process.env,

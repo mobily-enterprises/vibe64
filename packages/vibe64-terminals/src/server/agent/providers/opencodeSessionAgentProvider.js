@@ -13,6 +13,16 @@ import {
 import { OPENCODE_EXPECTED_VERSION, throwVibe64OpenCodeError as runtimeFailure } from "../../opencodeServerProcess.js";
 import { openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "../../terminalShared.js";
 
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
+/** @typedef {ReturnType<typeof import("../../opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {ReturnType<typeof import("../../openCodeConversationAccounts.js").createOpenCodeConversationAccounts>} OpenCodeConversationAccounts */
+/** @typedef {ReturnType<typeof import("../../mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {ReturnType<typeof import("../../openCodeScopedPreparation.js").createOpenCodeScopedPreparation>} OpenCodeScopedPreparation */
+/** @typedef {ReturnType<typeof import("../../openCodeLifecyclePreparation.js").createOpenCodeLifecyclePreparation>} OpenCodeLifecyclePreparation */
+/** @typedef {ReturnType<typeof import("../../sessionRenewalReceipts.js").createOpenCodeSessionRenewalPreparation>} OpenCodeSessionRenewalPreparation */
+/** @typedef {ReturnType<typeof import("../../openCodeInteractiveTerminals.js").createOpenCodeInteractiveTerminals>} OpenCodeInteractiveTerminals */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const OPENCODE_HELPER_PROFILE_REVISION =
   `opencode-${OPENCODE_EXPECTED_VERSION}-selected-model-tool-free-v1`;
 
@@ -40,6 +50,20 @@ function resolveOpenCodeHelperExecutionProfile(context = {}, request = {}) {
   });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
+ * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
+ * @param {OpenCodeHostPreparation} [dependencies.hostPreparation]
+ * @param {OpenCodeConversationAccounts} dependencies.accounts
+ * @param {OpenCodeMainMessagePreparation} [dependencies.mainMessagePreparation]
+ * @param {OpenCodeScopedPreparation} [dependencies.scopedPreparation]
+ * @param {OpenCodeLifecyclePreparation} [dependencies.lifecyclePreparation]
+ * @param {OpenCodeSessionRenewalPreparation} [dependencies.renewalPreparation]
+ * @param {OpenCodeInteractiveTerminals} [dependencies.terminals]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareSessionCleanup
+ */
 function createOpenCodeSessionAgentProvider({
   sharedRuntime,
   runNativeDetachedConversation,

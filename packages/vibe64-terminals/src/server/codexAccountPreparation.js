@@ -9,6 +9,9 @@ import { directoryExists, nonRetryableTerminalFailure } from "./terminalShared.j
 import { errorMessage } from "./codexStartupHealth.js";
 import { codexSelectedModelProviderId } from "./codexRuntimeHost.js";
 
+/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -30,6 +33,15 @@ function codexReconnectTerminalFailure(error = null) {
   });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {CodexRuntimeHost} dependencies.runtimeHost
+ * @param {CodexProviderConnectionStore} dependencies.providerConnections
+ * @param {boolean} dependencies.codexToolHomeRequired
+ * @param {typeof import("@jskit-ai/assistant-core/server/codex-provider").assertCodexAuthPreflightReady} dependencies.codexAuthPreflight
+ * @param {string} dependencies.codexToolHomeSource
+ * @param {object} dependencies.codexAppServerProviderOptions
+ */
 function createCodexAccountPreparation({
   runtimeHost,
   providerConnections,

@@ -35,6 +35,19 @@ import {
   vibe64HelperExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
 
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-provider").createCodexAppServerProviderOwner>} CodexAppServerProviderOwner */
+/** @typedef {ReturnType<typeof import("../../codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
+/** @typedef {ReturnType<typeof import("../../codexLifecyclePreparation.js").createCodexLifecyclePreparation>} CodexLifecyclePreparation */
+/** @typedef {ReturnType<typeof import("../../sessionRenewalReceipts.js").createCodexSessionRenewalPreparation>} CodexSessionRenewalPreparation */
+/** @typedef {ReturnType<typeof import("../../codexConversationStorage.js").createCodexConversationStorage>} CodexConversationStorage */
+/** @typedef {ReturnType<typeof import("../../codexAssistantCatalog.js").createCodexAssistantCatalog>} CodexAssistantCatalog */
+/** @typedef {ReturnType<typeof import("../../codexInteractiveTerminals.js").createCodexInteractiveTerminals>} CodexInteractiveTerminals */
+/** @typedef {ReturnType<typeof import("../../sessionAttachments.js").createCodexSessionAttachmentRenewal>} CodexSessionAttachmentRenewal */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {ReturnType<typeof import("../../sessionTurnCheckpoint.js").createCodexSessionTurnCheckpoint>} CodexSessionTurnCheckpoint */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const CODEX_ATTACHMENT_MAX_ITEMS = 10;
 const CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000, 5_000]);
 const CODEX_HELPER_PROFILE_REVISION = "codex-helper-selected-v4";
@@ -428,6 +441,24 @@ function codexAttachmentLimitResult(input = {}) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {(context: object) => Promise<boolean>} [dependencies.connectionStatus]
+ * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
+ * @param {(request: object) => Promise<object[]>} [dependencies.listConnections]
+ * @param {CodexAppServerRunOwner} dependencies.runOwner
+ * @param {CodexAppServerProviderOwner} dependencies.providerOwner
+ * @param {CodexConversationPreparation} dependencies.conversationPreparation
+ * @param {CodexLifecyclePreparation} [dependencies.lifecyclePreparation]
+ * @param {CodexSessionRenewalPreparation} [dependencies.renewalPreparation]
+ * @param {CodexConversationStorage} dependencies.storage
+ * @param {CodexAssistantCatalog} dependencies.catalog
+ * @param {CodexInteractiveTerminals} dependencies.terminals
+ * @param {CodexSessionAttachmentRenewal} dependencies.attachments
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {CodexSessionTurnCheckpoint} dependencies.checkpoint
+ */
 function createCodexSessionAgentProvider({
   connectionStatus = async () => true,
   runNativeDetachedConversation,

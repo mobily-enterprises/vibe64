@@ -5,11 +5,28 @@ import { claudeConversationError as error } from "./terminalShared.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./claudeConversationStorage.js").createClaudeConversationStorage>} ClaudeConversationStorage */
+/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createClaudeConversationMessagePolicy>} ClaudeConversationMessagePolicy */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/claude-turn").createClaudeConversationOwner>} ClaudeConversationOwner */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 const now = () => new Date().toISOString();
 
 // The native owner emits once; Vibe64 persists and publishes its existing effects.
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {ClaudeConversationStorage} dependencies.storage
+ * @param {ClaudeConversationMessagePolicy} dependencies.messagePolicy
+ * @param {ClaudeConversationOwner} dependencies.owner
+ * @param {object} dependencies.accountQueries the account catalogue and usage queries
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {RuntimeLogger} dependencies.logger
+ */
 function createClaudeConversationEvents({ projectService, storage, messagePolicy, owner, accountQueries, publishSessionChanged, logger }) {
   const { save } = storage;
   const { snapshot } = owner;

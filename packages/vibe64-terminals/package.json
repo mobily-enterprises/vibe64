@@ -31,7 +31,8 @@
     "./server/teamSetupSessionUpgrade": "./src/server/teamSetupSessionUpgrade.js",
     "./server/clonedDefaultBranchUpgrade": "./src/server/clonedDefaultBranchUpgrade.js",
     "./server/sessionWorkTasks": "./src/server/sessionWorkTasks.js",
-    "./server/sessionRenewalHandover": "./src/server/sessionRenewalHandover.js"
+    "./server/sessionRenewalHandover": "./src/server/sessionRenewalHandover.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",

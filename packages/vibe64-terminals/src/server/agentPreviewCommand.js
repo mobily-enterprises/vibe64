@@ -54,6 +54,11 @@ import {
   unixCommandSocketIsPresent
 } from "./unixJsonCommand.js";
 
+/** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
 const AGENT_PLAYWRIGHT_COMMAND_NAME = "vibe64-playwright";
 const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
@@ -540,6 +545,18 @@ function logPreviewCommandResult(logger, result = {}, fields = {}) {
   }, "Vibe64 agent preview command finished.");
 }
 
+/**
+ * @param {object} dependencies
+ * @param {OutputTargetTerminalController | null} [dependencies.launchTarget]
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {ProjectService} dependencies.projectService
+ * @param {typeof readSessionUiSyncStateForSession} [dependencies.readSessionUiState]
+ * @param {typeof runVibe64Command} [dependencies.runManagedCommand]
+ * @param {typeof stopVibe64Execution} [dependencies.stopManagedExecution]
+ * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwnedExecutions]
+ * @param {typeof vibe64ManagedExecutionProvider} [dependencies.resourceProvider]
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ */
 function createAgentPreviewCommandService({
   launchTarget = null,
   logger = null,

@@ -36,6 +36,9 @@ import {
   unixCommandSocketPath
 } from "./unixJsonCommand.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 const AGENT_ENV_COMMAND_NAME = "vibe64-env";
 const AGENT_ENV_COMMAND_SOCKET_NAME = "env-command.sock";
 const AGENT_ENV_COMMAND_CONTRACT_VERSION = "1";
@@ -355,6 +358,12 @@ const commandServers = createSessionCommandServers({
   errorBody: (payload) => ({ ...payload, exitCode: 1, stderr: `${payload.error}\n` })
 });
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {ProjectService} dependencies.projectService
+ * @param {object | null} [dependencies.productionEnvironmentProvider] a host's production Env values
+ */
 function createAgentEnvCommandService({
   logger = null,
   projectService,

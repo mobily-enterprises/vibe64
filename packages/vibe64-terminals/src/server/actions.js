@@ -35,6 +35,8 @@ import {
   temporaryConversationTurnActionInputValidator
 } from "./inputSchemas.js";
 
+/** @typedef {import("./types.js").TerminalsService} TerminalsService */
+
 const ACTION_START_OUTPUT_TARGET = "vibe64.terminals.output-target.start";
 const ACTION_OPEN_OUTPUT_TARGET = "vibe64.terminals.output-target.open";
 const ACTION_SELECT_PREVIEW_IDENTITY = "vibe64.terminals.preview-identity.select";
@@ -68,6 +70,10 @@ function action({ assistant, channels, execute, id, idempotency = "optional", in
   });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {TerminalsService} dependencies.terminals
+ */
 function createTerminalActions({ terminals } = {}) {
   if (!terminals) {
     throw new TypeError("createTerminalActions requires terminals.");

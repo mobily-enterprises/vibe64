@@ -4,11 +4,20 @@ import path from "node:path";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 
+/** @typedef {import("./types.js").TerminalsService} TerminalsService */
+
 const DEFAULT_HELPER_TIMEOUT_MS = 120000;
 
 // The original Colleague retained Helper lifetime. The parent supplies its own
 // private root, durable receipt and scope prefix (Colleague's summaries keep
 // "summary"); native execution remains with Terminals.
+/**
+ * @param {object} dependencies
+ * @param {TerminalsService} dependencies.terminals
+ * @param {string} dependencies.root the parent's private folder for its Helper
+ * @param {object} dependencies.receipt the parent's durable record of its Helper, with read() and write()
+ * @param {string} [dependencies.scopePrefix]
+ */
 function createRetainedConversationHelper({ terminals, root, receipt, scopePrefix = "summary" }) {
   if (!path.isAbsolute(root || "") || typeof receipt?.read !== "function" ||
       typeof receipt?.write !== "function" || !/^[a-z][a-z0-9]{0,31}$/u.test(scopePrefix)) {

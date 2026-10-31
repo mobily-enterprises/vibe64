@@ -9,6 +9,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
+
 const CONTEXT_COMPACTION_REASON = "context_compacted";
 const CODEX_CONTEXT_REFRESH_PENDING_METADATA = Object.freeze([
   "codex_context_refresh_pending",
@@ -237,6 +240,11 @@ async function clearCodexAppServerContextRefreshPending(store, sessionId = "", {
 
 // This application receipt keeps the original bounded read and stale-thread fence.
 // Native event interpretation remains in the existing shared codecs.
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {CodexAppServerRunOwner} dependencies.runOwner
+ */
 function createCodexContextRefreshMarker({ projectService, runOwner }) {
   const { readAgentRunForSession: readCodexAppServerAgentRunForSession } = runOwner;
   function normalizeText(value) {

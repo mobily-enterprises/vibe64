@@ -35,10 +35,44 @@ import {
 import { claudeConversationError as error, claudeTerminalNamespace } from "../../terminalShared.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {ReturnType<typeof import("../../codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {ReturnType<typeof import("../../agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
+/** @typedef {ReturnType<typeof import("../../agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/** @typedef {ReturnType<typeof import("../../agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
+/** @typedef {ReturnType<typeof import("../../agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 const now = () => new Date().toISOString();
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {ProjectService} dependencies.projectService
+ * @param {RuntimeLogger | null} dependencies.logger
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {(event: object) => unknown} dependencies.publishConversation
+ * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
+ * @param {() => string} [dependencies.command]
+ * @param {object} [dependencies.credentialHome]
+ * @param {typeof createClaudeCodeProcess} [dependencies.createProcess]
+ * @param {typeof runVibe64Command} [dependencies.commandRunner]
+ * @param {typeof stopVibe64RestoredService} [dependencies.stopExecution]
+ * @param {(context: object) => Promise<boolean>} [dependencies.connectionStatus]
+ * @param {string} [dependencies.systemRoot]
+ * @param {(context?: object) => Promise<object>} [dependencies.accountStatus]
+ * @param {typeof prepareAgentSessionCommandEnvironment} [dependencies.prepareCommandEnvironment]
+ * @param {typeof recordSessionGitCommandActor} [dependencies.recordGitActor]
+ * @param {CodexGitCommandService} dependencies.codexGitCommand
+ * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
+ * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
+ * @param {AgentSessionCommandService} dependencies.agentSessionCommand
+ */
 function createClaudeConversationHost({
   env = process.env, projectService, logger, publishSessionChanged: publishApplicationSessionChanged = async () => {},
   publishConversation,

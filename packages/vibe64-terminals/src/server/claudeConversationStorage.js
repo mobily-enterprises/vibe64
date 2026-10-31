@@ -38,7 +38,11 @@ export async function prepareCopiedScopedClaudeConversations(root) {
   return count;
 }
 
-/** Vibe64's existing session metadata and retained scoped-Claude receipt storage. */
+/**
+ * Vibe64's existing session metadata and retained scoped-Claude receipt storage.
+ * @param {object} dependencies
+ * @param {typeof import("./terminalShared.js").claudeConversationError} dependencies.createError
+ */
 function createClaudeConversationStorage({ createError: error }) {
   async function metadata(context, values) {
     if (context.assistantScope) return;

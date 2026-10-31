@@ -11,6 +11,11 @@ import { openCodeFingerprint as fingerprint } from "./opencodeServerProcess.js";
 import { conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
+/** @typedef {ReturnType<typeof import("./openCodeConversationPresentation.js").createOpenCodeConversationPresentation>} OpenCodeConversationPresentation */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 function openCodeMessageError(message = {}) {
   const failure = readOpenCodeMessageError(message);
   const hook = /GENESIS_HOOK_FAILURE (\{[^\n]*\})/u.exec(failure);
@@ -103,6 +108,13 @@ function openCodeRunRealtimePayload(run = {}) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
+ * @param {OpenCodeConversationPresentation} dependencies.presentation
+ */
 function createOpenCodeConversationEvents({ projectService, publishSessionChanged, sharedRuntime, presentation }) {
   const { turns, temporaryConversations } = sharedRuntime;
   const { disposeReasoningSummary, publishOpenCodeProgress, dropOpenCodeProgress,

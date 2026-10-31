@@ -10,6 +10,10 @@ import {
 import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL as PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "@local/vibe64-genesis/server";
 import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+
 const PREVIEW_IDENTITY_COMMAND_MAX_OUTPUT_BYTES = 512 * 1024;
 const PREVIEW_IDENTITY_COMMAND_MAX_COOKIES = 64;
 const PREVIEW_IDENTITY_COMMAND_MAX_COOKIE_BYTES = 16 * 1024;
@@ -175,6 +179,18 @@ function parsePreviewIdentityCommandResponse(stdout = "", options = {}) {
   return normalizePreviewIdentityCommandResponse(value, options);
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string[]} [dependencies.allowedRoots]
+ * @param {object | null} [dependencies.capability]
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {ProjectService} [dependencies.project]
+ * @param {RunVibe64Command} dependencies.runCommand
+ * @param {string[]} [dependencies.runtimes]
+ * @param {object} [dependencies.session]
+ * @param {string} [dependencies.sourceRoot]
+ * @param {string} [dependencies.targetHref]
+ */
 function createPreviewIdentityCommandRunner({
   allowedRoots = [],
   capability = null,

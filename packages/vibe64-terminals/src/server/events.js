@@ -1,5 +1,9 @@
 import { createVibe64ProjectChangedPublisher } from "@local/vibe64-project/server/actions";
+import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+
+/** @param {RuntimeEvents} events */
 function createProjectRuntimeChangedPublisher(events) {
   const publishProjectChanged = createVibe64ProjectChangedPublisher({ events });
   return async function publishProjectRuntimeChanged(result = {}, { action = "", dormant = false } = {}) {
@@ -17,6 +21,21 @@ function createProjectRuntimeChangedPublisher(events) {
   };
 }
 
+// The session changes the terminals service publishes, one publisher per kind
+// of change; they all share one session change publisher.
+/** @param {RuntimeEvents} events */
+function createTerminalSessionChangedPublishers(events) {
+  const sessionChanged = createSessionChangedPublisher(events);
+  return {
+    agentTerminal: sessionChanged,
+    agentTerminalClosed: sessionChanged,
+    outputTarget: sessionChanged,
+    outputTargetClosed: sessionChanged,
+    outputTargetStopped: sessionChanged
+  };
+}
+
 export {
-  createProjectRuntimeChangedPublisher
+  createProjectRuntimeChangedPublisher,
+  createTerminalSessionChangedPublishers
 };

@@ -129,6 +129,11 @@ import {
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
 const OUTPUT_METADATA = Object.freeze({
   agentHref: "output_target_agent_href",
   href: "output_target_open_href",
@@ -2056,6 +2061,21 @@ async function resolveLaunchPreviewStatus({
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {((sessionId: string, context: object) => Promise<object>) | null} [dependencies.ensureWorkspacePrepared]
+ * @param {ProjectServices["ensure"]} [dependencies.ensureProjectServices]
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {typeof startResourceWorkflow} [dependencies.startWorkflow]
+ * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
+ * @param {(sessionId: string) => Promise<unknown>} [dependencies.stopPreviewBrowsers]
+ * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
+ * @param {typeof setVibe64WorkflowPhase} [dependencies.setWorkflowPhase]
+ * @param {(sessionId: string) => object | null} [dependencies.sessionAdmissionFailure]
+ */
 function createOutputTargetTerminalController({
   ensureWorkspacePrepared = null,
   ensureProjectServices = async () => {},
