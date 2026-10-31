@@ -57,6 +57,13 @@ import { inspectErdLayout, moveErdTables } from "./erdLayout.js";
 import { defaultTableQuery } from "../shared/sqlQuoting.js";
 import { DATA_OVERVIEW_INSTRUCTIONS, DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, dataOverviewCoverage, validateDataOverview } from "../shared/dataOverview.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {ReturnType<typeof import("./events.js").createDatabaseLayoutChangedPublisher>} PublishLayoutChanged */
+
 function databaseResult(operation) {
   return vibe64Result(operation, {
     fallbackCode: "vibe64_database_operation_failed",
@@ -97,6 +104,15 @@ function auditSql(sql = "") {
   return String(sql || "").slice(0, 32 * 1024);
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishLayoutChanged} [dependencies.publishLayoutChanged]
+ * @param {SourceEditorService | null} [dependencies.sourceEditor]
+ * @param {TerminalsService | null} [dependencies.terminalService]
+ * @param {typeof withSessionKnex} [dependencies.withKnex]
+ */
 function createService({
   logger = null,
   projectService,
@@ -132,6 +148,13 @@ function createService({
 
   // A receipt whose helper close is unconfirmed is kept and retried; its error
   // names the copilot helper and keeps the native owner's reason and code.
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {string} artifact
+   * @param {object | null} vibe64User
+   * @param {object | null} [renewalCleanup]
+   */
   async function cleanupAssistant(runtime, sessionId, artifact, vibe64User, renewalCleanup = null) {
     const saved = renewalCleanup
       ? await runtime.store.readArtifactForRenewal(sessionId, artifact)

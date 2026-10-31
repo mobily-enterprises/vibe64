@@ -10,6 +10,8 @@ import {
 } from "@local/vibe64-core/server/core";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+
 const SCHEMA_ARTIFACT_PATH = "database/schema.json";
 const ERD_LAYOUT_ARTIFACT_PATH = "database/erd-layout.json";
 const HISTORY_LIMIT = 50;
@@ -52,6 +54,10 @@ function parseArtifact(value = "", label = "Database state") {
   }
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ */
 async function readSchemaSnapshot(store, sessionId = "") {
   return parseArtifact(
     await store.readArtifact(sessionId, SCHEMA_ARTIFACT_PATH),
@@ -59,6 +65,11 @@ async function readSchemaSnapshot(store, sessionId = "") {
   );
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [schema]
+ */
 async function writeSchemaSnapshot(store, sessionId = "", schema = {}) {
   await store.writeJsonArtifact(sessionId, SCHEMA_ARTIFACT_PATH, schema);
   return schema;
@@ -81,6 +92,11 @@ function normalizedWorkspace(value = null) {
   };
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object | null} [vibe64User]
+ */
 async function readWorkspace(store, sessionId = "", vibe64User = null) {
   const value = parseArtifact(
     await store.readArtifact(sessionId, workspaceArtifactPath(vibe64User)),
@@ -100,6 +116,12 @@ function serializeWrite(key = "", operation) {
   });
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object | null} [vibe64User]
+ * @param {(workspace: object) => object | Promise<object>} operation
+ */
 async function mutateWorkspace(store, sessionId = "", vibe64User = null, operation) {
   if (typeof operation !== "function") {
     throw new TypeError("mutateWorkspace requires an operation.");
@@ -223,6 +245,10 @@ function normalizedLayout(value = null) {
   };
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ */
 async function readErdLayout(store, sessionId = "") {
   return normalizedLayout(parseArtifact(
     await store.readArtifact(sessionId, ERD_LAYOUT_ARTIFACT_PATH),
@@ -230,6 +256,13 @@ async function readErdLayout(store, sessionId = "") {
   ));
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [layout]
+ * @param {object} [options]
+ * @param {number} [options.expectedRevision]
+ */
 async function saveErdLayout(store, sessionId = "", layout = {}, { expectedRevision } = {}) {
   const normalized = normalizedLayout(layout);
   if (Buffer.byteLength(JSON.stringify(normalized)) > ERD_LAYOUT_MAX_BYTES) {

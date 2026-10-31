@@ -1,6 +1,9 @@
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { VIBE64_DATABASE_LAYOUT_CHANGED_EVENT } from "../shared/events.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+
+/** @param {RuntimeEvents} events */
 function createDatabaseLayoutChangedPublisher(events) {
   return (sessionId, session) => events.publish({
     type: "entity.changed",

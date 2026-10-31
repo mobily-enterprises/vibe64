@@ -10,6 +10,9 @@ import {
 } from "@local/vibe64-core/server/featureRoutes";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+
 function withSession(request, input = {}) {
   const {
     vibe64User: _ignoredUser,
@@ -44,6 +47,11 @@ function databaseStatusCode(response = {}) {
   return 400;
 }
 
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} [options]
+ * @param {StudioProjectContext | null} [options.projectContext]
+ */
 function registerRoutes(http, {
   projectContext = null
 } = {}) {

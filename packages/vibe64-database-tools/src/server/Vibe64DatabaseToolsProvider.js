@@ -11,6 +11,14 @@ import {
   createService
 } from "./service.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").DatabaseToolsService} DatabaseToolsService */
+
 const Vibe64DatabaseToolsProvider = defineFeature({
   actionDefaults: {
     channels: ["api", "automation", "internal"],
@@ -30,6 +38,15 @@ const Vibe64DatabaseToolsProvider = defineFeature({
     sourceEditor: "vibe64.source-editor",
     terminals: "vibe64.terminals"
   },
+  /**
+   * @param {object} capabilities
+   * @param {RuntimeEvents} capabilities.events
+   * @param {RuntimeHttp} capabilities.http
+   * @param {RuntimeLogger} capabilities.logger
+   * @param {ProjectService} capabilities.project
+   * @param {SourceEditorService} capabilities.sourceEditor
+   * @param {TerminalsService} capabilities.terminals
+   */
   setup({ events, http, logger, project, sourceEditor, terminals }) {
     const databaseTools = createService({
       logger,
@@ -42,6 +59,10 @@ const Vibe64DatabaseToolsProvider = defineFeature({
     terminals.setDatabaseToolsProvider(databaseTools);
     return { databaseTools };
   },
+  /**
+   * @param {{ terminals: TerminalsService }} capabilities
+   * @param {{ outputs: { databaseTools: DatabaseToolsService } }} context
+   */
   shutdown({ terminals }, { outputs }) {
     terminals.setDatabaseToolsProvider(null);
     return outputs.databaseTools.close();

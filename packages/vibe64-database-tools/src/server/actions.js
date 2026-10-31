@@ -16,6 +16,8 @@ import {
   databaseStateInputValidator
 } from "./inputSchemas.js";
 
+/** @typedef {import("./types.js").DatabaseToolsService} DatabaseToolsService */
+
 const ACTION_DATABASE_STATE_READ = "vibe64.database.state.read";
 const ACTION_DATABASE_OVERVIEW_SAVE = "vibe64.database.overview.save";
 const ACTION_DATABASE_SCHEMA_REFRESH = "vibe64.database.schema.refresh";
@@ -45,6 +47,10 @@ function action({ execute, id, input, kind = "command", assistant }) {
   });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {DatabaseToolsService} dependencies.databaseTools
+ */
 function createDatabaseActions({ databaseTools } = {}) {
   if (!databaseTools) {
     throw new TypeError("createDatabaseActions requires databaseTools.");

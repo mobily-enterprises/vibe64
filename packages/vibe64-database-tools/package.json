@@ -10,7 +10,8 @@
     "./server/actions": "./src/server/actions.js",
     "./server/connection": "./src/server/connection.js",
     "./server/service": "./src/server/service.js",
-    "./server/sqlite-worker": "./src/server/sqliteWorker.js"
+    "./server/sqlite-worker": "./src/server/sqliteWorker.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",
