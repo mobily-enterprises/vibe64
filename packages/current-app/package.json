@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./server/actions": "./src/server/actions.js"
+    "./server/actions": "./src/server/actions.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",

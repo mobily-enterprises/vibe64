@@ -11,6 +11,9 @@ import {
   inspectVibe64Outputs
 } from "@local/vibe64-genesis/server";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 const EXPECTED_UNCONFIGURED_CODES = new Set([
   "BLUEPRINT_REQUIRED",
   "STACK_REQUIRED"
@@ -54,6 +57,12 @@ function outputsView(root = "", outputs = {}) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {typeof inspectVibe64Outputs} [dependencies.inspectOutputs]
+ * @param {ProjectService} dependencies.projectService
+ */
 function createService({
   env = process.env,
   inspectOutputs = inspectVibe64Outputs,

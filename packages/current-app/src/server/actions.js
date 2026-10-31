@@ -3,8 +3,14 @@ import {
   currentAppQueryInputValidator
 } from "./inputSchemas.js";
 
+/** @typedef {import("./types.js").CurrentAppService} CurrentAppService */
+
 const ACTION_READ_CURRENT_APP = "vibe64.current-app.read";
 
+/**
+ * @param {object} dependencies
+ * @param {CurrentAppService} dependencies.currentApp
+ */
 function createActions({ currentApp } = {}) {
   if (!currentApp || typeof currentApp.inspectCurrentApp !== "function") {
     throw new TypeError("createActions requires the current-app API.");

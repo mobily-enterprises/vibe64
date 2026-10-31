@@ -9,6 +9,14 @@ import {
   currentAppQueryInputValidator
 } from "./inputSchemas.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} [options]
+ * @param {StudioProjectContext | null} [options.projectContext]
+ */
 function registerRoutes(http, {
   projectContext = null
 } = {}) {
