@@ -11,6 +11,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { publishError } from "../../errors.js";
+import { artifactFilesChecksum } from "../../artifactFilesChecksum.js";
 import { distributionFileVersion, normalizeProjectName } from "../../packers/pythonDist/index.js";
 import { pep440FromSemver } from "../../release/version.js";
 import {
@@ -93,10 +94,6 @@ function distributions(artifacts, version) {
     throw publishError("VIBE64_PUBLISH_VERSION_MISMATCH", `The distributions are version ${built}, not ${pep440FromSemver(version)}.`);
   }
   return { files, project: [...projects][0], version: built };
-}
-
-function expectedChecksum(artifacts) {
-  return namedFilesChecksum(artifactFiles(artifacts));
 }
 
 function unescapeHtml(value) {
@@ -249,7 +246,7 @@ const pypiDestination = Object.freeze({
   instances: INSTANCES,
   channels: Object.freeze([]),
   credentials: Object.freeze([CREDENTIAL]),
-  expectedChecksum,
+  expectedChecksum: artifactFilesChecksum,
   dryRun,
   upload,
   readBack,

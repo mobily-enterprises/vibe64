@@ -16,20 +16,16 @@ import { canonicalJson, sha256 } from "./canonical.js";
 import { publishError } from "./errors.js";
 import { pathWithin } from "./paths.js";
 import { runStageCommand } from "./projectCommands.js";
+import { tail } from "./tail.js";
 
 const VIBE64_PUBLISH_ARTIFACTS_CONTRACT = "vibe64.publish-artifacts.v1";
 const BUILD_ENVIRONMENT_PASSTHROUGH = Object.freeze(["PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TERM"]);
 const CREDENTIAL_NAME = /(?:TOKEN|SECRET|PASSWORD|PASSPHRASE|PRIVATE_KEY|API_KEY|CREDENTIAL|_AUTH)/iu;
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const PLAN_HASH = /^sha256:([0-9a-f]{64})$/u;
-const OUTPUT_LIMIT = 64 * 1024;
-
-function stageError(code, message, details) {
-  return publishError(code, message, details);
-}
 
 function absolute(value, label) {
-  if (typeof value !== "string" || !path.isAbsolute(value)) throw stageError("VIBE64_PUBLISH_STAGE_INVALID", `${label} must be an absolute path.`);
+  if (typeof value !== "string" || !path.isAbsolute(value)) throw publishError("VIBE64_PUBLISH_STAGE_INVALID", `${label} must be an absolute path.`);
   return path.resolve(value);
 }
 
@@ -58,22 +54,17 @@ function buildStageEnvironment({ baseEnvironment = process.env, declared = [], h
   });
   for (const entry of declared) {
     if (!/^[A-Z_][A-Z0-9_]*$/u.test(entry?.name || "") || typeof entry.value !== "string") {
-      throw stageError("VIBE64_PUBLISH_STAGE_INVALID", "Build Environment entries need an uppercase name and a text value.");
+      throw publishError("VIBE64_PUBLISH_STAGE_INVALID", "Build Environment entries need an uppercase name and a text value.");
     }
     if (CREDENTIAL_NAME.test(entry.name)) {
-      throw stageError("VIBE64_PUBLISH_CREDENTIAL_IN_BUILD", `Build Environment ${entry.name} looks like a credential; builds run without credentials.`);
+      throw publishError("VIBE64_PUBLISH_CREDENTIAL_IN_BUILD", `Build Environment ${entry.name} looks like a credential; builds run without credentials.`);
     }
     if (Object.hasOwn(environment, entry.name)) {
-      throw stageError("VIBE64_PUBLISH_STAGE_INVALID", `Build Environment ${entry.name} is reserved by the build stage.`);
+      throw publishError("VIBE64_PUBLISH_STAGE_INVALID", `Build Environment ${entry.name} is reserved by the build stage.`);
     }
     environment[entry.name] = entry.value;
   }
   return environment;
-}
-
-function tail(text) {
-  const value = String(text || "");
-  return value.length > OUTPUT_LIMIT ? value.slice(-OUTPUT_LIMIT) : value;
 }
 
 // Runs Vibe64's own pinned tools (signing, upload, toolchain setup) without a
@@ -108,7 +99,7 @@ async function listFiles(root, prefix = "") {
     const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) files.push(...await listFiles(root, relative));
     else if (entry.isFile()) files.push(relative);
-    else throw stageError("VIBE64_PUBLISH_ARTIFACT_INVALID", `Artifact ${relative} is not a regular file.`);
+    else throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", `Artifact ${relative} is not a regular file.`);
   }
   return files;
 }
@@ -120,15 +111,15 @@ function artifactsDigest(manifest) {
 
 function resultDirectory(resultStore, planHash, packageId) {
   const match = PLAN_HASH.exec(planHash || "");
-  if (!match) throw stageError("VIBE64_PUBLISH_STAGE_INVALID", "A stage needs the plan hash.");
-  if (!ID.test(packageId || "")) throw stageError("VIBE64_PUBLISH_STAGE_INVALID", "A stage needs a package id.");
+  if (!match) throw publishError("VIBE64_PUBLISH_STAGE_INVALID", "A stage needs the plan hash.");
+  if (!ID.test(packageId || "")) throw publishError("VIBE64_PUBLISH_STAGE_INVALID", "A stage needs a package id.");
   return path.join(absolute(resultStore, "Result store"), match[1], packageId);
 }
 
 async function readArtifacts(directory) {
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"));
   if (manifest?.contract !== VIBE64_PUBLISH_ARTIFACTS_CONTRACT) {
-    throw stageError("VIBE64_PUBLISH_ARTIFACT_INVALID", "The result store holds no Vibe64 artifact manifest.");
+    throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", "The result store holds no Vibe64 artifact manifest.");
   }
   return { directory, manifest, digest: artifactsDigest(manifest) };
 }
@@ -139,11 +130,11 @@ async function verifyArtifacts(artifacts) {
   const present = await listFiles(filesRoot);
   const declared = artifacts.manifest.files.map(({ path: file }) => file);
   if (present.join("\n") !== declared.join("\n")) {
-    throw stageError("VIBE64_PUBLISH_ARTIFACT_CHANGED", "The stored artifacts no longer match their manifest.");
+    throw publishError("VIBE64_PUBLISH_ARTIFACT_CHANGED", "The stored artifacts no longer match their manifest.");
   }
   for (const file of artifacts.manifest.files) {
     if (await fileSha256(path.join(filesRoot, file.path)) !== file.sha256) {
-      throw stageError("VIBE64_PUBLISH_ARTIFACT_CHANGED", `Artifact ${file.path} changed after it was built.`);
+      throw publishError("VIBE64_PUBLISH_ARTIFACT_CHANGED", `Artifact ${file.path} changed after it was built.`);
     }
   }
   return artifacts;
@@ -176,12 +167,12 @@ async function runBuildStage({
   if (stored) return stored;
   const directory = resultDirectory(resultStore, planHash, packageId);
   const roots = allowedRoots.map((root) => absolute(root, "Allowed root"));
-  if (!roots.length) throw stageError("VIBE64_PUBLISH_STAGE_INVALID", "A build stage needs the roots it may run in.");
+  if (!roots.length) throw publishError("VIBE64_PUBLISH_STAGE_INVALID", "A build stage needs the roots it may run in.");
   const outputPaths = outputs.map((output) => absolute(output, "Build output"));
-  if (!outputPaths.length) throw stageError("VIBE64_PUBLISH_STAGE_INVALID", "A build stage needs at least one output.");
+  if (!outputPaths.length) throw publishError("VIBE64_PUBLISH_STAGE_INVALID", "A build stage needs at least one output.");
   for (const candidate of [...outputPaths, ...steps.map((step) => absolute(step.cwd, "Build step directory"))]) {
     if (!roots.some((root) => pathWithin(root, candidate, { allowRoot: true }))) {
-      throw stageError("VIBE64_PUBLISH_STAGE_INVALID", `${candidate} is outside the build's allowed roots.`);
+      throw publishError("VIBE64_PUBLISH_STAGE_INVALID", `${candidate} is outside the build's allowed roots.`);
     }
   }
   const home = await mkdtemp(path.join(os.tmpdir(), "vibe64-build-home-"));
@@ -191,11 +182,11 @@ async function runBuildStage({
     const env = buildStageEnvironment({ baseEnvironment, declared: environment, home, cacheDirectory });
     for (const step of steps) {
       if (!Array.isArray(step.argv) || !step.argv.length || step.argv.some((value) => typeof value !== "string")) {
-        throw stageError("VIBE64_PUBLISH_STAGE_INVALID", `Build step ${step.label} needs argv.`);
+        throw publishError("VIBE64_PUBLISH_STAGE_INVALID", `Build step ${step.label} needs argv.`);
       }
       const result = await runCommand({ command: step.argv[0], args: step.argv.slice(1), cwd: step.cwd, env, signal, projectSlug });
       if (result?.ok !== true) {
-        throw stageError("VIBE64_PUBLISH_BUILD_FAILED", `${step.label} failed${result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`}.`, {
+        throw publishError("VIBE64_PUBLISH_BUILD_FAILED", `${step.label} failed${result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`}.`, {
           step: step.label,
           output: tail(`${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`)
         });
@@ -205,7 +196,7 @@ async function runBuildStage({
     await mkdir(filesRoot, { recursive: true });
     for (const output of outputPaths) {
       const details = await stat(output).catch(() => null);
-      if (!details) throw stageError("VIBE64_PUBLISH_BUILD_FAILED", `The build did not produce ${path.basename(output)}.`);
+      if (!details) throw publishError("VIBE64_PUBLISH_BUILD_FAILED", `The build did not produce ${path.basename(output)}.`);
       await cp(output, path.join(filesRoot, path.basename(output)), { recursive: true, errorOnExist: true, force: false });
     }
     const files = [];
@@ -231,7 +222,7 @@ async function runBuildStage({
 async function withStageCredentials({ credentials = [], obtainCredential, tempRoot = os.tmpdir() } = {}, operation) {
   if (typeof operation !== "function") throw new TypeError("withStageCredentials requires an operation.");
   if (credentials.length && typeof obtainCredential !== "function") {
-    throw stageError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "This destination needs credentials and none were supplied.");
+    throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "This destination needs credentials and none were supplied.");
   }
   const directory = await mkdtemp(path.join(absolute(tempRoot, "Credential temp root"), "vibe64-credentials-"));
   const buffers = [];
@@ -241,11 +232,11 @@ async function withStageCredentials({ credentials = [], obtainCredential, tempRo
     const stdin = {};
     for (const spec of credentials) {
       if (!ID.test(spec?.id || "") || !["file", "stdin"].includes(spec.delivery)) {
-        throw stageError("VIBE64_PUBLISH_STAGE_INVALID", "Credential specs need an id and a file or stdin delivery.");
+        throw publishError("VIBE64_PUBLISH_STAGE_INVALID", "Credential specs need an id and a file or stdin delivery.");
       }
       const value = await obtainCredential(spec);
       if (typeof value !== "string" && !Buffer.isBuffer(value)) {
-        throw stageError("VIBE64_PUBLISH_CREDENTIAL_MISSING", `${spec.label || spec.id} is not available.`);
+        throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", `${spec.label || spec.id} is not available.`);
       }
       const buffer = Buffer.isBuffer(value) ? value : Buffer.from(value, "utf8");
       buffers.push(buffer);
@@ -264,12 +255,14 @@ async function withStageCredentials({ credentials = [], obtainCredential, tempRo
 }
 
 function expectedChecksum(destination, artifacts) {
+  // readable-check: allow method-probe - data: a destination definition may compute its own expected checksum
   return typeof destination.expectedChecksum === "function" ? destination.expectedChecksum(artifacts) : artifacts.digest;
 }
 
 // A destination's credential specs may depend on the target (for example a
 // private package that needs a sign-in even to be read back).
 function credentialSpecs(destination, field, target) {
+  // readable-check: allow method-probe - data: a destination definition's credential specs are a list or a function of the target
   const specs = typeof destination[field] === "function" ? destination[field](target) : destination[field];
   return Array.isArray(specs) ? specs : [];
 }
@@ -284,11 +277,11 @@ async function readBackTarget({ destination, target, version, artifacts, obtainC
     ? await withStageCredentials({ credentials, obtainCredential, tempRoot }, (supplied) => destination.readBack({ target, version, artifacts, credentials: supplied, toolchains }))
     : await destination.readBack({ target, version, artifacts, toolchains });
   if (!result || typeof result.published !== "boolean") {
-    throw stageError("VIBE64_PUBLISH_READ_BACK_INVALID", `${destination.label} returned no read-back result.`);
+    throw publishError("VIBE64_PUBLISH_READ_BACK_INVALID", `${destination.label} returned no read-back result.`);
   }
   const expected = expectedChecksum(destination, artifacts);
   if (result.published && result.checksum !== expected) {
-    throw stageError(
+    throw publishError(
       "VIBE64_PUBLISH_VERSION_CONFLICT",
       `${destination.label} already has ${version} with different contents. Publish a new version instead.`,
       { target: target.id, version, published: result.checksum || null, expected }
@@ -325,7 +318,7 @@ async function publishTarget({
   }, (credentials) => destination.upload({ target, version, artifacts, credentials, toolchains }));
   const after = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains });
   if (!after.published) {
-    throw stageError("VIBE64_PUBLISH_NOT_PROVEN", `${destination.label} accepted the upload but does not show ${version} yet.`, {
+    throw publishError("VIBE64_PUBLISH_NOT_PROVEN", `${destination.label} accepted the upload but does not show ${version} yet.`, {
       target: target.id,
       version,
       upload: upload ?? null

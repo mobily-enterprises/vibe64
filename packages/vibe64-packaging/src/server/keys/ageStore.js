@@ -56,7 +56,7 @@ function createAgeStore({
   now = () => Date.now(),
   workFactor = DEFAULT_WORK_FACTOR,
   defaultWindowMs = DEFAULT_WINDOW_MS
-} = {}) {
+}) {
   if (!path.isAbsolute(directory || "")) throw new TypeError("The publishing key store needs an absolute folder.");
   const file = path.join(directory, "keys.age");
   const indexFile = path.join(directory, "keys-index.json");

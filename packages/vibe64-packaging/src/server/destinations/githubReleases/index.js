@@ -12,6 +12,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { publishError } from "../../errors.js";
+import { artifactFilesChecksum } from "../../artifactFilesChecksum.js";
 import {
   artifactFiles,
   commandPrefix,
@@ -50,10 +51,6 @@ function releaseSettings(target, version) {
     tag,
     notes
   };
-}
-
-function expectedChecksum(artifacts) {
-  return namedFilesChecksum(artifactFiles(artifacts));
 }
 
 async function credentialToken(credentials) {
@@ -236,7 +233,7 @@ const githubReleasesDestination = Object.freeze({
   channels: CHANNELS,
   credentials: Object.freeze([CREDENTIAL]),
   readBackCredentials: Object.freeze([CREDENTIAL]),
-  expectedChecksum,
+  expectedChecksum: artifactFilesChecksum,
   dryRun,
   upload,
   readBack,

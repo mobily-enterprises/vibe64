@@ -53,21 +53,26 @@ async function buildPackage({
   commit,
   packaging,
   packageId,
+  // readable-check: allow dependency-default - data: the release version, none for a build-only package
   version = null,
+  // readable-check: allow dependency-default - data: the release plan's hash, none for a build-only package
   planHash = null,
   resultStore,
   workRoot = os.tmpdir(),
   baseEnvironment = process.env,
   cacheDirectory = "",
+  // readable-check: allow dependency-default - data: an Android version code, none for other packers
   versionCode = null,
+  // readable-check: allow dependency-default - data: the local toolchain folders, none for a packer that needs none
   toolchains = {},
   contentArtifacts = null,
   projectSlug = "",
   signal
-} = {}, dependencies = {}) {
+}, dependencies = {}) {
   const entry = packaging?.packages?.find((candidate) => candidate.id === packageId);
   if (!entry) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Packaging declares no package ${packageId}.`);
   const packer = vibe64Packer(entry.packer);
+  // readable-check: allow method-probe - data: a packer definition has templates() only when it builds from a template
   const template = typeof packer.templates === "function" ? packer.templates() : null;
   const key = planHash || buildOnlyKey({ commit, packagingHash: packaging.packagingHash, packageId, version, versionCode, template });
   const stored = await storedArtifacts({ resultStore, planHash: key, packageId });

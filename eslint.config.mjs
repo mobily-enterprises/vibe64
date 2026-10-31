@@ -43,6 +43,7 @@ export default [
     "packages/vibe64-database-tools/src/server/**",
     "packages/vibe64-execution/src/server/**",
     "packages/vibe64-genesis/src/server/**",
+    "packages/vibe64-packaging/src/server/**",
     "packages/vibe64-project/src/server/**",
     "packages/vibe64-runtime/src/server/**"
   ]),

@@ -61,6 +61,7 @@ async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot,
   const facts = {};
   for (const target of targets) {
     const destination = vibe64Destination(target.destination);
+    // readable-check: allow method-probe - data: a destination definition without verifyCredential() cannot be released to yet
     if (typeof destination.verifyCredential !== "function") {
       facts[target.id] = { ok: false, message: `${destination.label} cannot be released to yet.` };
       continue;

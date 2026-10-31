@@ -23,34 +23,30 @@ const KEYSTORE = Object.freeze({ id: "android-sideload-keystore", label: "Sidelo
 const KEY_PASSWORD = Object.freeze({ id: "android-sideload-key-password", label: "Sideload key password", delivery: "file" });
 const CERTIFICATE = /^[0-9a-f]{64}$/u;
 
-function sideloadError(code, message, details) {
-  return publishError(code, message, details);
-}
-
 function sideloadSettings(target) {
   const settings = settingsOf(target);
   const certificateSha256 = settings.certificateSha256 ? String(settings.certificateSha256).toLowerCase().replace(/:/gu, "") : null;
   if (certificateSha256 !== null && !CERTIFICATE.test(certificateSha256)) {
-    throw sideloadError("VIBE64_PUBLISH_TARGET_INVALID", "The sideload key fingerprint must be a SHA-256 certificate digest.");
+    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "The sideload key fingerprint must be a SHA-256 certificate digest.");
   }
   const keyAlias = settings.keyAlias || SIDELOAD_KEY_ALIAS;
-  if (!/^[A-Za-z0-9._-]{1,64}$/u.test(keyAlias)) throw sideloadError("VIBE64_PUBLISH_TARGET_INVALID", "The key alias is letters, digits, dots, dashes or underscores.");
+  if (!/^[A-Za-z0-9._-]{1,64}$/u.test(keyAlias)) throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "The key alias is letters, digits, dots, dashes or underscores.");
   return { certificateSha256, keyAlias };
 }
 
 function unsignedApk(artifacts) {
   const files = artifactFiles(artifacts);
   if (files.length !== 1 || !files[0].name.endsWith("-unsigned.apk")) {
-    throw sideloadError("VIBE64_PUBLISH_ARTIFACT_INVALID", "Install on my phone signs exactly one unsigned APK.");
+    throw publishError("VIBE64_PUBLISH_ARTIFACT_INVALID", "Install on my phone signs exactly one unsigned APK.");
   }
   return files[0];
 }
 
 async function signingTools(toolchains = {}) {
   const sdk = await describeAndroidSdk({ androidHome: toolchains.androidHome });
-  if (!sdk.ok) throw sideloadError("VIBE64_PUBLISH_TOOLCHAIN_MISSING", sdk.message, { missing: sdk.missing });
+  if (!sdk.ok) throw publishError("VIBE64_PUBLISH_TOOLCHAIN_MISSING", sdk.message, { missing: sdk.missing });
   if (typeof toolchains.javaHome !== "string" || !path.isAbsolute(toolchains.javaHome)) {
-    throw sideloadError("VIBE64_PUBLISH_TOOLCHAIN_MISSING", "Signing needs a Java home.");
+    throw publishError("VIBE64_PUBLISH_TOOLCHAIN_MISSING", "Signing needs a Java home.");
   }
   const java = path.join(toolchains.javaHome, "bin", "java");
   return {
@@ -63,7 +59,7 @@ async function signingTools(toolchains = {}) {
 async function run(argv, { cwd, home, failure, code = "VIBE64_PUBLISH_SIGN_FAILED", runCommand = spawnCommand }) {
   const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env: toolchainEnvironment(process.env, { HOME: home }) });
   if (result?.ok !== true) {
-    throw sideloadError(code, failure, { exitCode: result?.exitCode ?? null, output: `${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`.slice(-4000) });
+    throw publishError(code, failure, { exitCode: result?.exitCode ?? null, output: `${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`.slice(-4000) });
   }
   return result;
 }
@@ -77,7 +73,7 @@ async function verifySigned(tools, apk, home) {
     code: "VIBE64_PUBLISH_NOT_PROVEN"
   });
   const digests = [...result.stdout.matchAll(/^Signer #\d+ certificate SHA-256 digest: ([0-9a-f]{64})$/gmu)].map((match) => match[1]);
-  if (digests.length !== 1) throw sideloadError("VIBE64_PUBLISH_NOT_PROVEN", "The signed APK must have exactly one signer.");
+  if (digests.length !== 1) throw publishError("VIBE64_PUBLISH_NOT_PROVEN", "The signed APK must have exactly one signer.");
   return digests[0];
 }
 
@@ -94,7 +90,7 @@ async function badging(tools, apk, home) {
 }
 
 function publishedDirectory(artifacts, target) {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(target?.id || "")) throw sideloadError("VIBE64_PUBLISH_TARGET_INVALID", "The target needs an id.");
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(target?.id || "")) throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "The target needs an id.");
   return path.join(artifacts.directory, "signed", target.id);
 }
 
@@ -115,14 +111,14 @@ async function readBack({ target, artifacts, toolchains }) {
   if (!proof) return { published: false };
   const file = path.join(directory, proof.file);
   if (!await stat(file).catch(() => null) || await fileSha256Hex(file) !== proof.signedSha256) {
-    throw sideloadError("VIBE64_PUBLISH_ARTIFACT_CHANGED", "The signed APK changed after it was signed.");
+    throw publishError("VIBE64_PUBLISH_ARTIFACT_CHANGED", "The signed APK changed after it was signed.");
   }
   const tools = await signingTools(toolchains);
   const certificateSha256 = await withToolHome((home) => verifySigned(tools, file, home));
-  if (certificateSha256 !== proof.certificateSha256) throw sideloadError("VIBE64_PUBLISH_NOT_PROVEN", "The signed APK's signer differs from its proof.");
+  if (certificateSha256 !== proof.certificateSha256) throw publishError("VIBE64_PUBLISH_NOT_PROVEN", "The signed APK's signer differs from its proof.");
   const { certificateSha256: expected } = sideloadSettings(target);
   if (expected && expected !== certificateSha256) {
-    throw sideloadError("VIBE64_PUBLISH_KEY_MISMATCH", "This APK is signed with a different key from the one phones already trust.");
+    throw publishError("VIBE64_PUBLISH_KEY_MISMATCH", "This APK is signed with a different key from the one phones already trust.");
   }
   return {
     published: true,
@@ -146,7 +142,7 @@ async function upload({ target, version, artifacts, credentials, toolchains }) {
   const { certificateSha256: expected, keyAlias } = sideloadSettings(target);
   const keystore = credentials?.files?.[KEYSTORE.id];
   const password = credentials?.files?.[KEY_PASSWORD.id];
-  if (!keystore || !password) throw sideloadError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "Signing needs the sideload distribution key and its password.");
+  if (!keystore || !password) throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "Signing needs the sideload distribution key and its password.");
   const apk = unsignedApk(artifacts);
   const tools = await signingTools(toolchains);
   const directory = publishedDirectory(artifacts, target);
@@ -167,11 +163,11 @@ async function upload({ target, version, artifacts, credentials, toolchains }) {
     ], { cwd: home, home, failure: "apksigner could not sign the APK with this key." });
     const certificateSha256 = await verifySigned(tools, signed, home);
     if (expected && expected !== certificateSha256) {
-      throw sideloadError("VIBE64_PUBLISH_KEY_MISMATCH", "This key is not the one phones already trust for this app, so they would refuse the update.");
+      throw publishError("VIBE64_PUBLISH_KEY_MISMATCH", "This key is not the one phones already trust for this app, so they would refuse the update.");
     }
     const manifest = await badging(tools, signed, home);
     if (version && manifest.versionName !== version) {
-      throw sideloadError("VIBE64_PUBLISH_VERSION_MISMATCH", `The APK is version ${manifest.versionName}, not ${version}.`);
+      throw publishError("VIBE64_PUBLISH_VERSION_MISMATCH", `The APK is version ${manifest.versionName}, not ${version}.`);
     }
     const signedSha256 = await fileSha256Hex(signed);
     const proof = {

@@ -9,16 +9,12 @@ import path from "node:path";
 
 import { runVibe64Command } from "@local/vibe64-execution/server";
 
+import { tail } from "./tail.js";
+
 const COMMAND_TIMEOUT_MS = 60 * 60_000;
-const OUTPUT_LIMIT = 64 * 1024;
 // The gateway owns these: HOME and the XDG folders become the command's own
 // home, PATH comes from the tools the host provides.
 const GATEWAY_OWNED = /^(?:HOME|PATH|TMPDIR|LOGNAME|USER|XDG_[A-Z_]+)$/u;
-
-function tail(text) {
-  const value = String(text || "");
-  return value.length > OUTPUT_LIMIT ? value.slice(-OUTPUT_LIMIT) : value;
-}
 
 function callerPathFolders(env) {
   const inherited = new Set(String(process.env.PATH || "").split(path.delimiter));
