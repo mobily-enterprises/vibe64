@@ -26,6 +26,18 @@ const CHECKPOINT_OUTCOMES = new Set([
 ]);
 const checkpointOperations = new Map();
 
+/**
+ * @param {object} checkpoint
+ * @param {string} [checkpoint.outerTurnId]
+ * @param {string} [checkpoint.outcome]
+ * @param {object} [checkpoint.project] the project the git commands run for
+ * @param {typeof runVibe64Command} [checkpoint.runCommand]
+ * @param {string} [checkpoint.sessionId]
+ * @param {number} [checkpoint.temporaryDiskBudgetBytes]
+ * @param {number} [checkpoint.temporaryDiskReserveBytes]
+ * @param {string} [checkpoint.timestamp]
+ * @param {string} [checkpoint.worktreePath]
+ */
 async function createGitTurnCheckpoint({
   outerTurnId = "",
   outcome = "completed",
@@ -59,6 +71,18 @@ async function createGitTurnCheckpoint({
 // managed job on a hosted workspace) instead of one job per git step. The
 // daemon still serializes snapshots per worktree, resolves the disk settings
 // and, through the command's own env, the commit identity.
+/**
+ * @param {object} checkpoint
+ * @param {string} [checkpoint.outerTurnId]
+ * @param {string} [checkpoint.outcome]
+ * @param {object} [checkpoint.project] the project the git commands run for
+ * @param {typeof runVibe64Command} [checkpoint.runCommand]
+ * @param {string} [checkpoint.sessionId]
+ * @param {number} [checkpoint.temporaryDiskBudgetBytes]
+ * @param {number} [checkpoint.temporaryDiskReserveBytes]
+ * @param {string} [checkpoint.timestamp]
+ * @param {string} [checkpoint.worktreePath]
+ */
 async function createGitTurnCheckpointAsOneJob({
   outerTurnId = "",
   outcome = "completed",
@@ -124,6 +148,15 @@ function checkpointJobValue(result = {}) {
   );
 }
 
+/**
+ * @param {object} checkpoint
+ * @param {ReturnType<typeof checkpointIdentity>} [checkpoint.identity]
+ * @param {object} [checkpoint.project] the project the git commands run for
+ * @param {ReturnType<typeof checkpointRefs>} [checkpoint.refs]
+ * @param {typeof runVibe64Command} [checkpoint.runCommand]
+ * @param {number} [checkpoint.temporaryDiskBudgetBytes]
+ * @param {number} [checkpoint.temporaryDiskReserveBytes]
+ */
 async function createGitTurnCheckpointUnlocked({
   identity = {},
   project = {},

@@ -28,7 +28,22 @@ function processExists(pid) {
   }
 }
 
-/** Common native-conversation execution facility backed by Vibe64's policy gateway. */
+/**
+ * Common native-conversation execution facility backed by Vibe64's policy gateway.
+ * @param {object} options
+ * @param {typeof runVibe64Command} [options.commandRunner]
+ * @param {typeof stopVibe64RestoredService} [options.stopExecution]
+ * @param {typeof inspectVibe64Service} [options.inspectExecution]
+ * @param {object} [options.credentialHome] the account home the native process runs with
+ * @param {object} [options.execution] execution record fields every start adds
+ * @param {string[]} [options.shimDirs]
+ * @param {string} [options.purpose]
+ * @param {string} [options.capturePurpose]
+ * @param {string} [options.operationId]
+ * @param {string} [options.label]
+ * @param {string} [options.logPath]
+ * @param {(executionId: string) => unknown} [options.onStarted]
+ */
 export function createVibe64ConversationExecution({
   commandRunner = runVibe64Command, stopExecution = stopVibe64RestoredService, inspectExecution = inspectVibe64Service,
   credentialHome = { home: os.homedir() }, execution = {}, shimDirs = [],
