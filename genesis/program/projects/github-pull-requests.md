@@ -22,7 +22,9 @@ work as a new PR. GitHub remains the PR store.
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
+- `packages/vibe64-terminals/src/server/sessionSourceCommands.js`
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`
+- `packages/vibe64-terminals/src/server/sessionWorkPublication.js`
 - `packages/vibe64-terminals/src/server/repositoryHistory.js`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`

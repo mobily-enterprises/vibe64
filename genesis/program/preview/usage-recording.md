@@ -33,6 +33,8 @@ follows it on every pane.
 - `packages/vibe64-usage-recording/src/client/usageRecordingText.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/launchPreviewProxy.js`
+- `packages/vibe64-terminals/src/server/launchPreviewForwarding.js`
+- `packages/vibe64-terminals/src/server/launchPreviewHeaders.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `tests/server/vibe64UsageRecordingService.unit.test.js`

@@ -81,15 +81,22 @@ Git commands.
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
 - Main: `packages/vibe64-terminals/src/server/sessionWorkSave.js`
+- `packages/vibe64-terminals/src/server/sessionWorkInspection.js`
+- `packages/vibe64-terminals/src/server/sessionWorkPublication.js`
+- `packages/vibe64-terminals/src/server/sessionWorkSaveRecovery.js`
 - `packages/vibe64-terminals/src/server/sessionGitCommandActor.js`
 - `packages/vibe64-terminals/src/server/sessionWorkGit.js`
+- `packages/vibe64-terminals/src/server/sessionWorkCommands.js`
 - `packages/vibe64-terminals/src/server/sessionWorkAuthority.js`
 - `packages/vibe64-terminals/src/server/githubRemoteHeads.js`
 - `packages/vibe64-terminals/src/server/sessionWorkUpdate.js`
+- `packages/vibe64-terminals/src/server/sessionWorkUpdateRecovery.js`
 - `packages/vibe64-terminals/src/shared/sessionWorkProblem.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `packages/vibe64-terminals/src/server/sessionIncomingContributions.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
+- `packages/vibe64-terminals/src/server/sessionSourceCommands.js`
 - `packages/vibe64-project/src/server/localRepositoryRemote.js`
 - `src/components/studio/repository/Vibe64LocalRemoteControls.vue`
 - `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`

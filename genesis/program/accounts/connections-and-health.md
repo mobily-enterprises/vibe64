@@ -128,6 +128,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-terminals/src/server/codexAccountPreparation.js`
 - `packages/vibe64-terminals/src/server/codexAssistantCatalog.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
+- `packages/vibe64-terminals/src/server/openCodeHostPreparation.js`
 - `packages/vibe64-terminals/src/server/openCodeConversationAccounts.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`

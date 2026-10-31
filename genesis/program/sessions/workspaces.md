@@ -61,11 +61,13 @@ that turn without dropping either half. No saved history is rewritten.
 - `tests/server/vibe64AgentSpecs.unit.test.js`
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `tests/server/sessionNaming.unit.test.js`
 - `tests/server/sessionRename.unit.test.js`
 - `tests/e2e/session-naming.spec.ts`
 - `src/components/studio/vibe64-session/Vibe64RenameSessionDialog.vue`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
+- `packages/vibe64-terminals/src/server/sessionSourceCommands.js`
 - `packages/vibe64-terminals/src/server/clonedDefaultBranchUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261030-cloned-default-branch.js`
 - `tests/server/clonedDefaultBranchUpgrade.unit.test.js`

@@ -207,6 +207,7 @@ Changing the composer selection never rewrites historical attribution.
 - `packages/vibe64-sessions/src/server/sessionPresence.js`
 - `src/composables/useVibe64SessionTypingPresence.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
+- `packages/vibe64-terminals/src/server/openCodeHostPreparation.js`
 - `packages/vibe64-terminals/src/server/openCodeScopedPreparation.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js`

@@ -18,9 +18,12 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
 - `packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
+- `packages/vibe64-terminals/src/server/openCodeHostPreparation.js`
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
+- `packages/vibe64-terminals/src/server/agentEnvCommandText.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `packages/vibe64-core/src/server/envUserValues.js`
 - `packages/vibe64-core/src/server/runtimeConfig.js`
 - `src/composables/useRuntimeConfigDotenvDownload.js`

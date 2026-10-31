@@ -1,143 +1,55 @@
-import { mkdir, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 
-import {
-  USER_CREDENTIAL_SCOPE,
-  normalizeText,
-  resolveGithubHomeForStoredActor,
-  runVibe64Command
-} from "@local/vibe64-execution/server";
+import { normalizeText, resolveGithubHomeForStoredActor, runVibe64Command } from "@local/vibe64-execution/server";
 import {
   SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
   sessionGitCommandActorFromMetadata,
   sessionRequiresGithubActor
 } from "./sessionGitCommandActor.js";
-import {
-  logOperationalEvent,
-  sanitizeLogText
-} from "@local/vibe64-core/server/logging";
-import {
-  codexAttachmentHostRoot,
-  prepareCodexAttachmentRoot
-} from "@local/vibe64-runtime/server/codexAttachmentPaths";
+import { prepareCodexAttachmentRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import { fetchReachesGithubAsGit, listGithubRemoteHeads } from "./githubRemoteHeads.js";
 import { currentProjectSlug } from "./terminalShared.js";
+import { createSessionCommandServers } from "./unixJsonCommand.js";
 import {
-  writeExecutableFileIfChanged
-} from "./writeExecutableFileIfChanged.js";
+  CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS,
+  CODEX_GIT_COMMAND_WRAPPER_NAMES,
+  commandEnvironment,
+  commandHostDir,
+  commandSocketHostPath,
+  VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV,
+  VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV,
+  VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV,
+  VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV,
+  VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
+  writeWrappers
+} from "./codexGitCommandWrappers.js";
 import {
-  createSessionCommandServers,
-  shortCommandHash,
-  unixCommandSocketPath
-} from "./unixJsonCommand.js";
+  actorCredentialKey,
+  CODEX_GIT_COMMAND_TIMEOUT_MS,
+  commandOutput,
+  commandRequiresGithubToken,
+  commitAuthorOptions,
+  createActorCredentialCache,
+  gatewayGitIdentityUserKey,
+  githubAuthenticationRejected,
+  logGitCommandResult,
+  readGithubToken,
+  responseError
+} from "./codexGitCommandOperations.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
-const CODEX_GIT_COMMAND_DIR_NAME = "codex-git-command";
-const CODEX_GIT_COMMAND_WRAPPER_NAMES = Object.freeze(["git", "gh", "vibe64-github"]);
 const CODEX_GIT_COMMAND_INPUT_MAX_BYTES = 20 * 1024 * 1024;
-const CODEX_GIT_COMMAND_TIMEOUT_MS = 30_000;
-const CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS = 2000;
-const CODEX_LOCAL_GIT_OPERATIONS = new Set([
-  "add",
-  "am",
-  "apply",
-  "archive",
-  "bisect",
-  "blame",
-  "branch",
-  "bundle",
-  "cat-file",
-  "check-attr",
-  "check-ignore",
-  "check-mailmap",
-  "check-ref-format",
-  "checkout",
-  "cherry",
-  "cherry-pick",
-  "clean",
-  "commit",
-  "config",
-  "describe",
-  "diff",
-  "diff-files",
-  "diff-index",
-  "diff-tree",
-  "fast-export",
-  "fast-import",
-  "for-each-ref",
-  "format-patch",
-  "fsck",
-  "gc",
-  "grep",
-  "hash-object",
-  "help",
-  "index-pack",
-  "init",
-  "log",
-  "ls-files",
-  "ls-tree",
-  "merge",
-  "merge-base",
-  "merge-file",
-  "merge-index",
-  "merge-tree",
-  "mktag",
-  "mktree",
-  "mv",
-  "name-rev",
-  "notes",
-  "prune",
-  "read-tree",
-  "rebase",
-  "reflog",
-  "replace",
-  "reset",
-  "restore",
-  "rev-list",
-  "rev-parse",
-  "rm",
-  "show",
-  "show-branch",
-  "show-ref",
-  "sparse-checkout",
-  "stage",
-  "stash",
-  "status",
-  "switch",
-  "tag",
-  "update-index",
-  "update-ref",
-  "verify-commit",
-  "verify-pack",
-  "verify-tag",
-  "whatchanged",
-  "worktree",
-  "write-tree"
-]);
-const GIT_GLOBAL_OPTIONS_WITH_VALUES = new Set([
-  "-C",
-  "-c",
-  "--exec-path",
-  "--git-dir",
-  "--namespace",
-  "--super-prefix",
-  "--work-tree"
-]);
-const VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV = "VIBE64_CODEX_GIT_COMMAND_SESSION_ID";
-const VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV = "VIBE64_CODEX_GIT_COMMAND_SOCKET";
-const VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV = "VIBE64_CODEX_GIT_COMMAND_TOKEN";
-const VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV = "VIBE64_CODEX_GIT_COMMAND_GENERATION";
-const VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV = "VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR";
 const CODEX_GIT_COMMAND_METADATA_NAMES = Object.freeze([
   ...SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
   "agent_identity_conversation_id",
@@ -170,226 +82,6 @@ const commandServers = createSessionCommandServers({
   },
   healthTimeoutMs: CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS
 });
-
-function attachmentRuntimeKey({
-  sessionId = "",
-  stateRoot = ""
-} = {}) {
-  return shortCommandHash([
-    normalizeText(stateRoot),
-    normalizeText(sessionId)
-  ].join("\n"));
-}
-
-function commandHostDir({
-  env = process.env,
-  sessionId = "",
-  stateRoot = ""
-} = {}) {
-  return path.join(
-    codexAttachmentHostRoot({
-      env
-    }),
-    CODEX_GIT_COMMAND_DIR_NAME,
-    attachmentRuntimeKey({
-      sessionId,
-      stateRoot
-    })
-  );
-}
-
-function commandSocketHostPath({
-  env = process.env,
-  sessionId = "",
-  stateRoot = ""
-} = {}) {
-  const hostDir = commandHostDir({ env, sessionId, stateRoot });
-  return unixCommandSocketPath(path.join(hostDir, "git-command.sock"), { env });
-}
-
-function wrapperHostPath(options = {}, command = "") {
-  return path.join(commandHostDir(options), command);
-}
-
-function wrapperScriptSource() {
-  return `#!/usr/bin/env node
-import http from "node:http";
-import path from "node:path";
-import process from "node:process";
-
-const allowedCommands = new Set(${JSON.stringify(CODEX_GIT_COMMAND_WRAPPER_NAMES)});
-const command = path.basename(process.argv[1] || "");
-
-function fail(message, code = 1) {
-  process.stderr.write(String(message || "Codex git command failed.") + "\\n");
-  process.exit(code);
-}
-
-function readStdinBase64() {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    process.stdin.on("data", (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
-    });
-    process.stdin.once("error", reject);
-    process.stdin.once("end", () => resolve(Buffer.concat(chunks).toString("base64")));
-  });
-}
-
-function requestSocket({ body, socketPath }) {
-  const requestBody = JSON.stringify(body);
-  return new Promise((resolve, reject) => {
-    let connected = false;
-    const request = http.request({
-      headers: {
-        "Content-Length": Buffer.byteLength(requestBody),
-        "Content-Type": "application/json"
-      },
-      method: "POST",
-      path: "/codex-git-command/run",
-      socketPath
-    }, (response) => {
-      let text = "";
-      response.setEncoding("utf8");
-      response.on("data", (chunk) => {
-        text += chunk;
-      });
-      response.once("end", () => resolve({
-        statusCode: response.statusCode,
-        text
-      }));
-      response.once("error", rejectTransport);
-    });
-    // Only connection establishment has a transport deadline. The executor
-    // owns the command budget and must finish cleanup before returning a result.
-    const connectionTimer = setTimeout(() => {
-      const error = new Error("Managed Git control connection timed out.");
-      error.code = "ETIMEDOUT";
-      request.destroy(error);
-    }, ${CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS});
-    function rejectTransport(error) {
-      clearTimeout(connectionTimer);
-      error.controlConnected = connected;
-      reject(error);
-    }
-    request.once("error", rejectTransport);
-    request.once("socket", (socket) => {
-      const onConnect = () => {
-        connected = true;
-        clearTimeout(connectionTimer);
-      };
-      if (socket.connecting) {
-        socket.once("connect", onConnect);
-      } else {
-        onConnect();
-      }
-    });
-    request.end(requestBody);
-  });
-}
-
-if (!allowedCommands.has(command)) {
-  fail("Codex git command wrapper was invoked with an unsupported command.");
-}
-
-const socketPath = process.env.${VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV} || "";
-const sessionId = process.env.${VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV} || "";
-const token = process.env.${VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV} || "";
-const generationId = process.env.${VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV} || "";
-const noStdinParentPid = Number.parseInt(
-  process.env.VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID || "",
-  10
-);
-
-if (!socketPath || !sessionId || !token || !generationId) {
-  fail("vibe64_agent_control_unavailable: Managed Git control identity is unavailable. The requested command was not submitted. Reconnect the assistant.");
-}
-
-const inputBase64 = command === "vibe64-github" || noStdinParentPid === process.ppid
-  ? ""
-  : await readStdinBase64();
-const response = await requestSocket({
-  socketPath,
-  body: {
-    args: process.argv.slice(2),
-    command,
-    cwd: process.cwd(),
-    generationId,
-    inputBase64,
-    sessionId,
-    token
-  }
-}).catch((error) => {
-  const code = String(error?.code || "UNKNOWN");
-  if (error.controlConnected) {
-    fail("vibe64_codex_git_command_transport_lost: Managed Git command response was lost (" + code + "). Its outcome is unknown. Check the result before retrying a write.");
-  }
-  if (["ECONNREFUSED", "ENOENT", "ENOTSOCK", "ETIMEDOUT"].includes(code)) {
-    fail("vibe64_agent_control_unavailable: Managed Git control connection failed (" + code + "). The requested command was not submitted. Reconnect the assistant.");
-  }
-  fail(error?.message || error || "Codex git command request failed.");
-});
-
-let payload = {};
-try {
-  payload = JSON.parse(response.text || "{}");
-} catch {
-  fail("vibe64_codex_git_command_response_invalid: Managed Git returned an unreadable response. Its outcome is unknown. Check the result before retrying a write.");
-}
-if (!payload || typeof payload !== "object" || Array.isArray(payload) || typeof payload.ok !== "boolean") {
-  fail("vibe64_codex_git_command_response_invalid: Managed Git returned an incomplete response. Its outcome is unknown. Check the result before retrying a write.");
-}
-
-if (payload.stdout) {
-  process.stdout.write(Buffer.from(String(payload.stdout), payload.outputEncoding === "base64" ? "base64" : "utf8"));
-}
-if (payload.stderr) {
-  process.stderr.write(Buffer.from(String(payload.stderr), payload.outputEncoding === "base64" ? "base64" : "utf8"));
-}
-const timedOut = payload.timedOut === true;
-const hasPlatformFailure = payload.ok === false && (timedOut || payload.code !== "vibe64_codex_git_command_failed");
-if (timedOut) {
-  process.stderr.write(String(payload.code || "vibe64_codex_git_command_timed_out") + ": " + String(payload.error || "Managed Git command timed out.") + "\\n");
-} else if (hasPlatformFailure && !payload.stderr && payload.error) {
-  const prefix = payload.code ? String(payload.code) + ": " : "";
-  process.stderr.write(prefix + String(payload.error) + "\\n");
-}
-if (hasPlatformFailure) {
-  if (payload.diagnostic) {
-    process.stderr.write("Managed Git diagnostic: " + JSON.stringify(payload.diagnostic) + "\\n");
-  }
-  if (payload.diagnostic?.commandSubmitted === false) {
-    process.stderr.write("The requested command was not submitted.\\n");
-  } else if (timedOut) {
-    process.stderr.write("The command's effects are unconfirmed. Check the result before retrying a write.\\n");
-  }
-}
-
-const exitCode = Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok === false ? 1 : 0);
-process.exitCode = exitCode;
-`;
-}
-
-async function writeWrappers(options = {}) {
-  const dir = commandHostDir(options);
-  await mkdir(dir, {
-    recursive: true
-  });
-  const source = wrapperScriptSource();
-  await Promise.all(CODEX_GIT_COMMAND_WRAPPER_NAMES.map(async (command) => {
-    const filePath = wrapperHostPath(options, command);
-    await writeExecutableFileIfChanged(filePath, source);
-  }));
-}
-
-function responseError(message = "", code = "vibe64_codex_git_command_failed", extra = {}) {
-  return {
-    ...extra,
-    code,
-    error: message,
-    ok: false
-  };
-}
 
 function noGithubGitCommandActorFromSession(session = {}, {
   command = ""
@@ -505,298 +197,6 @@ function localGitCommandToolHome() {
     ok: true,
     toolHomeSource: homedir()
   };
-}
-
-function commandOutput(result = {}) {
-  const captured = result.stderr || result.stdout;
-  return normalizeText(captured
-    ? Buffer.from(captured, result.outputEncoding === "base64" ? "base64" : "utf8").toString("utf8")
-    : result.error || result.output);
-}
-
-function commandOutputTail(value = "", limit = 1000) {
-  return sanitizeLogText(normalizeText(value)).slice(-limit);
-}
-
-// Git and gh report a rejected GitHub credential with these messages. The
-// session repository operation relays its Git output in its JSON stdout.
-const GITHUB_AUTHENTICATION_REJECTED = /Authentication failed|Invalid username or (?:password|token)|returned error: 401|HTTP 401|Bad credentials/iu;
-
-function githubAuthenticationRejected(result = {}) {
-  if (result?.ok === true) return false;
-  const decode = (value) => value
-    ? Buffer.from(value, result.outputEncoding === "base64" ? "base64" : "utf8").toString("utf8")
-    : "";
-  return GITHUB_AUTHENTICATION_REJECTED.test(
-    [decode(result?.stderr), decode(result?.stdout), result?.error, result?.output].filter(Boolean).join("\n")
-  );
-}
-
-// Each GitHub session-work operation needs the actor's token, and each read is
-// a managed job run as that person. One actor's token is reused for a short
-// time and dropped when GitHub rejects it. It lives in this process's memory
-// only, never on disk or in logs.
-const ACTOR_CREDENTIAL_TTL_MS = 5 * 60_000;
-
-/**
- * @param {object} dependencies
- * @param {() => number} [dependencies.now]
- * @param {number} [dependencies.ttlMs]
- */
-function createActorCredentialCache({ now = Date.now, ttlMs = ACTOR_CREDENTIAL_TTL_MS } = {}) {
-  const entries = new Map();
-  return Object.freeze({
-    // load() returns { cacheable, value }; only a settled answer is kept.
-    async read(actorKey, load) {
-      const at = now();
-      for (const [key, entry] of entries) {
-        if (entry.expiresAt <= at) entries.delete(key);
-      }
-      const cached = entries.get(actorKey);
-      if (cached) return cached.value;
-      const { cacheable, value } = await load();
-      if (cacheable) entries.set(actorKey, { expiresAt: now() + ttlMs, value });
-      return value;
-    },
-    drop(actorKey) {
-      entries.delete(actorKey);
-    }
-  });
-}
-
-function actorCredentialKey(session = {}, actor = {}, toolHome = {}) {
-  return JSON.stringify([gatewayGitIdentityUserKey(session, actor, toolHome), normalizeText(toolHome.toolHomeSource)]);
-}
-
-function commandArgv(command = "", args = []) {
-  return [
-    normalizeText(command),
-    ...(Array.isArray(args) ? args.map((arg) => String(arg)) : [])
-  ].filter(Boolean);
-}
-
-function commandSummary(command = "", args = []) {
-  return commandArgv(command, args)
-    .map((part) => sanitizeLogText(part))
-    .join(" ");
-}
-
-function gitCommandPurpose(command = "", args = [], fallback = "") {
-  const explicit = normalizeText(fallback);
-  if (explicit) {
-    return explicit;
-  }
-  const normalizedCommand = normalizeText(command);
-  const primaryArg = normalizeText(Array.isArray(args) ? args[0] : "");
-  if (normalizedCommand && primaryArg) {
-    return `codex-git-command.${normalizedCommand}.${primaryArg}`;
-  }
-  return normalizedCommand ? `codex-git-command.${normalizedCommand}` : "codex-git-command";
-}
-
-function gatewayGitIdentityUserKey(session = {}, actor = {}, toolHome = {}) {
-  return actor.githubRequired === false
-    ? normalizeText(session.metadata?.session_git_command_actor_user_key)
-    : normalizeText(toolHome.ownerUserKey || actor.actorUserKey);
-}
-
-function gitOperation(args = []) {
-  const values = Array.isArray(args) ? args.map((arg) => String(arg)) : [];
-  for (let index = 0; index < values.length; index += 1) {
-    const value = normalizeText(values[index]);
-    if (!value) {
-      continue;
-    }
-    if (GIT_GLOBAL_OPTIONS_WITH_VALUES.has(value)) {
-      index += 1;
-      continue;
-    }
-    if (value.startsWith("--git-dir=") ||
-      value.startsWith("--work-tree=") ||
-      value.startsWith("--namespace=") ||
-      value.startsWith("--exec-path=") ||
-      value.startsWith("--super-prefix=")) {
-      continue;
-    }
-    if (value.startsWith("-")) {
-      continue;
-    }
-    return value;
-  }
-  return "";
-}
-
-function commandRequiresGithubToken(command = "", args = []) {
-  if (normalizeText(command) === "gh") {
-    return true;
-  }
-  const operation = gitOperation(args);
-  return !operation || !CODEX_LOCAL_GIT_OPERATIONS.has(operation);
-}
-
-async function readGithubToken({
-  actor = {},
-  gatewayCommandRunner,
-  session = {},
-  toolHome = {}
-} = {}) {
-  const userKey = gatewayGitIdentityUserKey(session, actor, toolHome);
-  const credentialRoot = normalizeText(toolHome.toolHomeSource);
-  const result = await gatewayCommandRunner({
-    actor: "owner-user",
-    allowedRoots: [credentialRoot],
-    args: ["auth", "token"],
-    command: "gh",
-    cwd: credentialRoot,
-    envPolicy: "auth",
-    execution: { label: "Reading your GitHub sign-in", operationId: "github-token-read" },
-    gitTransport: "none",
-    mode: "capture",
-    project: {
-      ownerUserKey: toolHome.ownerUserKey
-    },
-    purpose: "github-api",
-    runtimes: ["gh"],
-    session: {
-      metadata: session.metadata || {},
-      sessionId: actor.sessionId
-    },
-    timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
-    userKey
-  });
-  if (result?.timedOut === true) {
-    return responseError(
-      "GitHub credential lookup timed out.",
-      result.code || "vibe64_codex_git_command_timed_out",
-      { exitCode: 1, signal: result.signal || "", timedOut: true, executionId: result.execution?.id }
-    );
-  }
-  const token = result?.ok === true ? normalizeText(result.stdout) : "";
-  if (!token) {
-    const error = normalizeText(result?.stderr || result?.error);
-    return responseError(
-      error || "GitHub authentication is not ready for this Vibe64 account.",
-      "vibe64_codex_git_command_github_auth_unavailable",
-      { statusCode: 403, errorCode: result?.code, executionId: result?.execution?.id }
-    );
-  }
-  return {
-    ok: true,
-    token
-  };
-}
-
-// Session-work writes run as the workspace service. Where each person has their
-// own OS account (the user credential scope), the commit author's Git name and
-// email are read as that person, in their tool home, every time a write that
-// creates commits starts, so a name saved in Account applies to the next Save.
-// Elsewhere Vibe64 runs as the person and the command env reads their Git
-// config itself. Git exits 1 when no name or email is set: the commit then
-// carries a stand-in named after the person. A read that fails (a timeout on a
-// busy host, any other error) uses that person's last answered read since the
-// server started, so load neither fails the Save nor records a stand-in for
-// someone whose name Git has; with no answered read yet, the write is refused.
-async function commitAuthorOptions({
-  actor = {},
-  answeredAuthors,
-  gatewayCommandRunner,
-  logger = null,
-  session = {},
-  toolHome = {}
-} = {}) {
-  const credentialRoot = normalizeText(toolHome.toolHomeSource);
-  if (toolHome.ok === false || toolHome.credentialScope !== USER_CREDENTIAL_SCOPE || !credentialRoot) {
-    return { ok: true, options: {} };
-  }
-  const userKey = normalizeText(toolHome.ownerUserKey);
-  const authorKey = JSON.stringify([userKey, credentialRoot]);
-  const result = await gatewayCommandRunner({
-    actor: "owner-user",
-    allowedRoots: [credentialRoot],
-    args: ["config", "--get-regexp", "^user\\.(name|email)$"],
-    command: "git",
-    cwd: credentialRoot,
-    envPolicy: "auth",
-    execution: { label: "Reading your Git identity", operationId: "git-identity-read" },
-    gitTransport: "none",
-    mode: "capture",
-    project: {
-      ownerUserKey: toolHome.ownerUserKey
-    },
-    purpose: "account",
-    runtimes: ["git"],
-    session: {
-      metadata: session.metadata || {},
-      sessionId: actor.sessionId
-    },
-    timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
-    userKey
-  });
-  const unset = result?.ok !== true && Number(result?.exitCode) === 1 && result?.timedOut !== true;
-  if (result?.ok !== true && !unset) {
-    const answered = answeredAuthors.get(authorKey);
-    logOperationalEvent(logger, "warn", {
-      code: normalizeText(result?.code) || "vibe64_session_git_author_read_failed",
-      component: "vibe64.session_git_author",
-      event: "vibe64.session_git_author.read_failed",
-      executionId: normalizeText(result?.execution?.id),
-      timedOut: result?.timedOut === true,
-      usedLastAnswer: Boolean(answered),
-      userKey
-    }, "The commit author's Git identity could not be read.");
-    return answered
-      ? { ok: true, options: answered }
-      : responseError(
-          "Vibe64 could not read your Git name and email just now, so nothing was changed. Try again.",
-          "vibe64_session_git_author_unavailable",
-          { executionId: normalizeText(result?.execution?.id) || null }
-        );
-  }
-  const values = {};
-  for (const line of String(unset ? "" : result.stdout || "").split("\n")) {
-    const match = /^user\.(name|email) (.+)$/iu.exec(line.trim());
-    if (match) values[match[1].toLowerCase()] = normalizeText(match[2]);
-  }
-  const options = Object.freeze({
-    ...(values.name && values.email ? { personGitIdentity: Object.freeze({ email: values.email, name: values.name }) } : {}),
-    userKey
-  });
-  answeredAuthors.set(authorKey, options);
-  return { ok: true, options };
-}
-
-function logGitCommandResult(logger, result = {}, fields = {}) {
-  const ok = result?.ok !== false && Number(result?.exitCode || 0) === 0;
-  const args = Array.isArray(fields.args) ? fields.args : [];
-  const stdoutTail = ok ? "" : commandOutputTail(commandOutput({ stdout: result.stdout, outputEncoding: result.outputEncoding }));
-  const stderrTail = ok ? "" : commandOutputTail(commandOutput({ stderr: result.stderr, outputEncoding: result.outputEncoding }));
-  const outputTail = ok ? "" : commandOutputTail(commandOutput(result));
-  return logOperationalEvent(logger, ok ? "info" : "warn", {
-    code: result?.code || "",
-    command: normalizeText(fields.command),
-    commandKind: normalizeText(fields.command),
-    commandSummary: commandSummary(fields.command, args),
-    component: "vibe64.codex_git_command",
-    cwd: normalizeText(fields.cwd),
-    durationMs: Number(fields.durationMs || 0),
-    ...(fields.phaseElapsedMs ? { phaseElapsedMs: fields.phaseElapsedMs } : {}),
-    errorCode: normalizeText(result?.errorCode || result?.code),
-    executionId: normalizeText(result?.executionId),
-    event: "vibe64.codex_git_command.finished",
-    exitCode: Number(result?.exitCode ?? (ok ? 0 : 1)),
-    outputTail,
-    purpose: gitCommandPurpose(fields.command, args, fields.purpose),
-    ok,
-    sessionId: normalizeText(fields.sessionId),
-    signal: normalizeText(result?.signal),
-    source: normalizeText(fields.actorSource),
-    sourceRoot: normalizeText(fields.workdir || fields.cwd),
-    stage: normalizeText(fields.stage),
-    stderrTail,
-    stdoutTail,
-    timedOut: result?.timedOut === true,
-    userKey: normalizeText(fields.actorUserKey)
-  }, "Vibe64 Codex git command finished.");
 }
 
 /**
@@ -1209,32 +609,6 @@ function createCodexGitCommandService({
     run,
     sessionWorkSaveContext
   };
-}
-
-function commandEnvironment({
-  env = process.env,
-  generationId = "",
-  sessionId = "",
-  stateRoot = "",
-  token = ""
-} = {}) {
-  const hostDir = commandHostDir({
-    env,
-    sessionId,
-    stateRoot
-  });
-  const commandEnv = {
-    [VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV]: normalizeText(generationId),
-    [VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV]: normalizeText(sessionId),
-    [VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV]: commandSocketHostPath({
-      env,
-      sessionId,
-      stateRoot
-    }),
-    [VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV]: normalizeText(token),
-    [VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV]: hostDir
-  };
-  return commandEnv;
 }
 
 async function prepareCodexGitCommand({
