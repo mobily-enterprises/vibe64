@@ -2,6 +2,9 @@ import { createRetainedConversationHelper } from "@local/vibe64-terminals/server
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 const summarySchema = createSchema({
   summary: { type: "string", required: true, minLength: 1, maxLength: 1600 },
   citations: { type: "array", required: true, maxLength: 6, items: { type: "string", maxLength: 128 } }
@@ -11,6 +14,12 @@ const outputSchema = { type: "object", additionalProperties: false, required: ["
   summary: { type: "string", maxLength: 1600 }, citations: { type: "array", maxItems: 6, items: { type: "string", maxLength: 128 } }
 } };
 
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {TerminalsService} dependencies.terminals
+ * @param {(state: object) => Promise<unknown>} dependencies.persist
+ */
 function createConversationSummary({ actions, terminals, persist }) {
   function helperFor(state) {
     return createRetainedConversationHelper({ terminals, root: path.join(state.root, "summaries"),

@@ -1,8 +1,16 @@
 import { attachDirectRequestActionExecutor } from "@jskit-ai/kernel/server/http";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../shared/focusRealtime.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
+
 // Focus belongs to one existing authenticated browser connection. The action
 // retains access/input checks; the socket supplies only its cleanup lifetime.
+/**
+ * @param {object} dependencies
+ * @param {RuntimeRealtime} dependencies.realtime
+ * @param {ActionCatalogue} dependencies.actions
+ */
 function registerColleagueFocus({ realtime, actions }) {
   return realtime.onConnection(({ socket, readRequest }) => {
     const bindings = new Map();

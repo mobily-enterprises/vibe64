@@ -19,6 +19,11 @@ import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations, suspendAssignment } from "./assignments.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and choose an available Colleague model in AI setup before using Colleague.";
 // Learn threads teach; only Develop delegates work. Develop can still read and
 // switch the mode for the person. Learn threads watch only their lesson's
@@ -141,6 +146,16 @@ function colleagueBrowserStream(streaming) {
     message.status === "inProgress" ? { ...message, text: trimIncompleteSurrogate(message.text) } : message) } : streaming;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {AccountsService} dependencies.accounts
+ * @param {TerminalsService} dependencies.terminals
+ * @param {string} dependencies.systemRoot
+ * @param {RuntimeEvents} dependencies.events
+ * @param {number} [dependencies.watchPollMs]
+ * @param {number} [dependencies.watchDebounceMs]
+ */
 function createColleagueService({ actions, accounts, terminals, systemRoot, events, watchPollMs = 30000, watchDebounceMs = 250 }) {
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("Colleague needs the private application system root.");
   const toolLimits = { maxToolArgumentBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT, maxToolResultBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT };

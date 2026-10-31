@@ -5,6 +5,8 @@ import { guideReceipt, presentationClientId } from "@local/vibe64-training/share
 import { TRAINING_GUIDE_CAPTION_LIMIT } from "@local/vibe64-training/shared/learning-vocabulary";
 import { VIBE64_COLLEAGUE_PANES, VIBE64_COLLEAGUE_SESSION_PANES } from "../shared/navigationPanes.js";
 
+/** @typedef {import("./types.js").ColleagueService} ColleagueService */
+
 const text = { type: "string", noTrim: false, maxLength: 256, required: false };
 const integrationId = { ...text, noTrim: true, minLength: 1, maxLength: 200 };
 const integrationEnvironment = { type: "string", required: false, enum: ["development", "production"] };
@@ -104,6 +106,12 @@ const assignmentOutput = { mode: "replace", schema: createSchema({ ok: { type: "
 
 // navigationPanes are the project views a composed host adds to navigation.open,
 // each { pane, meaning } (the vibe64.colleague.navigation-panes capability).
+/**
+ * @param {ColleagueService} colleague
+ * @param {object} [options]
+ * @param {ReturnType<typeof createColleagueUsageKnowledge>} [options.usage]
+ * @param {Array<{ pane: string, meaning: string }>} [options.navigationPanes]
+ */
 function createColleagueActions(colleague, { usage = createColleagueUsageKnowledge(), navigationPanes = [] } = {}) {
   for (const { pane, meaning } of navigationPanes) {
     if (!/^[a-z][a-z0-9-]{0,63}$/u.test(pane || "") || VIBE64_COLLEAGUE_PANES.includes(pane) || !meaning) {

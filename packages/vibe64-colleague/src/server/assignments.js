@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { readWatchedConversation, watchUpdate } from "./attention.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationTranscript>} ConversationTranscript */
+
 const assignmentCommands = new Set([
   "vibe64.colleague.assignment.message.send", "vibe64.colleague.assignment.review.create", "vibe64.colleague.assignment.update",
   "vibe64.colleague.assignment.relay"
@@ -34,6 +37,12 @@ function assignmentSummary(assignment, detail = false) {
 
 // Assignments retain intent and account for sends. Native turns, product actions,
 // watches and Colleague's existing worker still own execution and wakeups.
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {(state: object) => Promise<unknown>} dependencies.persist
+ * @param {ConversationTranscript} dependencies.transcript
+ */
 function createAssignmentOperations({ actions, persist, transcript }) {
   function scoped(context, assignment) {
     return { surface: "app", channel: "automation", requestMeta: context.requestMeta,

@@ -12,6 +12,10 @@ function guidedPlaceMatches(command, focus) {
 // One pending browser navigation per connection: begin waits for the browser's
 // acknowledgement (or times out), and acknowledge accepts only a receipt that
 // matches the command's Learning state, guided place and guide highlight.
+/**
+ * @param {object} dependencies
+ * @param {() => void} dependencies.changed
+ */
 function createColleagueNavigationCoordination({ changed }) {
   function begin(connection, command) {
     connection.navigation = command;

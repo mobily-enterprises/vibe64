@@ -6,6 +6,16 @@ import { createColleagueActions, colleagueConversationDataSchema, colleagueConve
 import { createColleagueService } from "./service.js";
 import { registerColleagueFocus } from "./registerColleagueFocus.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
+/** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").ColleagueService} ColleagueService */
+/** @typedef {import("./types.js").ColleagueBrowserFocus} ColleagueBrowserFocus */
+
+/** @param {RuntimeHttp} http */
 function registerColleagueRoutes(http) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["vibe64-colleague"] }), {
     relativePath: "vibe64/colleague", surface: "app", wrapHandler: vibe64RouteHandler({ projectScoped: false })
@@ -26,6 +36,35 @@ function registerColleagueRoutes(http) {
   }
 }
 
+// The Colleague capability: the service, with its browser conversations
+// carrying the schemas their actions validate.
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {AccountsService} dependencies.accounts
+ * @param {TerminalsService} dependencies.terminals
+ * @param {RuntimeEvents} dependencies.events
+ * @param {string} dependencies.systemRoot
+ */
+function createColleague({ actions, accounts, terminals, events, systemRoot }) {
+  const colleague = createColleagueService({ actions, accounts, terminals, events, systemRoot });
+  return { ...colleague,
+    browserConversations: { ...colleague.browserConversations,
+      conversationDataSchema: colleagueConversationDataSchema,
+      conversationSelectionSchema: colleagueConversationSelectionSchema }
+  };
+}
+
+// Colleague's browser focus: closing it stops following the browser.
+/**
+ * @param {object} dependencies
+ * @param {RuntimeRealtime} dependencies.realtime
+ * @param {ActionCatalogue} dependencies.actions
+ */
+function createColleagueBrowserFocus({ realtime, actions }) {
+  return { close: registerColleagueFocus({ realtime, actions }) };
+}
+
 const Vibe64ColleagueProvider = defineFeature({
   id: "vibe64.colleague", domain: "vibe64-colleague",
   requires: { accounts: "vibe64.accounts", http: "runtime.http", terminals: "vibe64.terminals", events: "runtime.events" },
@@ -34,15 +73,15 @@ const Vibe64ColleagueProvider = defineFeature({
   provides: { colleague: "vibe64.colleague" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   setup({ accounts, http, terminals, events }, { actionCatalogue }) {
-    const colleague = createColleagueService({ actions: actionCatalogue, accounts, terminals, events, systemRoot: getStudioProjectContext().systemRoot });
+    const colleague = createColleague({ actions: actionCatalogue, accounts, terminals, events, systemRoot: getStudioProjectContext().systemRoot });
     registerColleagueRoutes(http);
-    return { colleague: { ...colleague,
-      browserConversations: { ...colleague.browserConversations,
-        conversationDataSchema: colleagueConversationDataSchema,
-        conversationSelectionSchema: colleagueConversationSelectionSchema }
-    } };
+    return { colleague };
   },
   actions: ({ colleague, navigationPanes }) => createColleagueActions(colleague, { navigationPanes: navigationPanes || [] }),
+  /**
+   * @param {object} _deps
+   * @param {{ outputs: { colleague: ColleagueService } }} context
+   */
   shutdown(_deps, { outputs }) { return outputs.colleague.close(); }
 });
 
@@ -54,9 +93,13 @@ const Vibe64ColleagueFocusProvider = defineFeature({
   requires: { colleague: "vibe64.colleague", realtime: "runtime.realtime" },
   provides: { browserFocus: "vibe64.colleague.browser-focus" },
   setup({ realtime }, { actionCatalogue }) {
-    return { browserFocus: { close: registerColleagueFocus({ realtime, actions: actionCatalogue }) } };
+    return { browserFocus: createColleagueBrowserFocus({ realtime, actions: actionCatalogue }) };
   },
+  /**
+   * @param {object} _deps
+   * @param {{ outputs: { browserFocus: ColleagueBrowserFocus } }} context
+   */
   shutdown(_deps, { outputs }) { outputs.browserFocus.close(); }
 });
 
-export { Vibe64ColleagueProvider, Vibe64ColleagueFocusProvider, registerColleagueRoutes };
+export { Vibe64ColleagueProvider, Vibe64ColleagueFocusProvider, createColleague, createColleagueBrowserFocus, registerColleagueRoutes };
