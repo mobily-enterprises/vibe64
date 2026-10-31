@@ -11,10 +11,7 @@ const ACTION_READ_CURRENT_APP = "vibe64.current-app.read";
  * @param {object} dependencies
  * @param {CurrentAppService} dependencies.currentApp
  */
-function createActions({ currentApp } = {}) {
-  if (!currentApp || typeof currentApp.inspectCurrentApp !== "function") {
-    throw new TypeError("createActions requires the current-app API.");
-  }
+function createCurrentAppActions({ currentApp }) {
   return Object.freeze([withVibe64ActionContext({
     id: ACTION_READ_CURRENT_APP,
     version: 1,
@@ -23,13 +20,11 @@ function createActions({ currentApp } = {}) {
     output: null,
     extensions: { assistant: { exclude: true } },
     idempotency: "none",
-    execute(input) {
-      return currentApp.inspectCurrentApp(input);
-    }
+    execute: (input) => currentApp.inspectCurrentApp(input)
   })]);
 }
 
 export {
   ACTION_READ_CURRENT_APP,
-  createActions
+  createCurrentAppActions
 };

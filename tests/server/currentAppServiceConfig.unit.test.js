@@ -71,7 +71,7 @@ test("current app returns the explicit Vibe64 Outputs contract", async () => {
       })
     });
 
-    const response = await service.inspectCurrentApp();
+    const response = await service.inspectCurrentApp({});
 
     assert.equal(response.ok, true);
     assert.equal(response.ready, true);
@@ -98,7 +98,7 @@ test("current app tells the Outputs reason when the host is still preparing its 
           return { status };
         } }
       });
-      await service.inspectCurrentApp();
+      await service.inspectCurrentApp({});
     }
     assert.deepEqual(seen, [true, false]);
   });
@@ -115,7 +115,7 @@ test("missing Vibe64 Outputs declarations are unconfigured, not guessed", async 
       projectService: projectService(root)
     });
 
-    const response = await service.inspectCurrentApp();
+    const response = await service.inspectCurrentApp({});
 
     assert.equal(response.ok, true);
     assert.equal(response.ready, false);
@@ -135,7 +135,7 @@ test("a project without a baseline source is unconfigured until a session exists
     projectService: projectService("")
   });
 
-  const response = await service.inspectCurrentApp();
+  const response = await service.inspectCurrentApp({});
 
   assert.equal(response.ok, true);
   assert.equal(response.status, "unconfigured");
@@ -159,7 +159,7 @@ test("current app never inspects a project namespace as source", async () => {
     }
   });
 
-  const response = await service.inspectCurrentApp();
+  const response = await service.inspectCurrentApp({});
 
   assert.equal(response.ok, true);
   assert.equal(response.status, "unconfigured");
@@ -212,7 +212,7 @@ test("unexpected Genesis inspection errors remain visible", async () => {
       projectService: projectService(root)
     });
 
-    const response = await service.inspectCurrentApp();
+    const response = await service.inspectCurrentApp({});
 
     assert.equal(response.ok, false);
     assert.equal(response.code, "EACCES");

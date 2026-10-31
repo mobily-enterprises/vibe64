@@ -67,16 +67,8 @@ function createService({
   env = process.env,
   inspectOutputs = inspectVibe64Outputs,
   projectService
-} = {}) {
-  if (
-    !projectService ||
-    typeof projectService.createRuntime !== "function" ||
-    typeof projectService.projectInspectionEnvironment !== "function"
-  ) {
-    throw new TypeError("createService requires the Vibe64 Project API.");
-  }
-
-  async function rootForInput(input = {}) {
+}) {
+  async function rootForInput(input) {
     const sessionId = String(input.sessionId || "").trim();
     if (!sessionId) {
       return projectServiceSourceRoot(projectService);
@@ -97,7 +89,7 @@ function createService({
     return root;
   }
 
-  async function projectEnvironment(input = {}) {
+  async function projectEnvironment(input) {
     const userEnvironment = await projectService.projectInspectionEnvironment({
       scope: "dev",
       sessionId: input.sessionId
@@ -110,8 +102,7 @@ function createService({
 
   // A host that supplies resources (a managed database) may not have prepared
   // them yet; Preview then says Vibe64 is on it rather than asking for values.
-  async function resourcesBeingPrepared(input = {}) {
-    if (typeof projectService.projectEnvironmentStatus !== "function") return false;
+  async function resourcesBeingPrepared(input) {
     try {
       return (await projectService.projectEnvironmentStatus({ scope: "dev", sessionId: input.sessionId })).status === "not-prepared";
     } catch {
@@ -120,7 +111,7 @@ function createService({
   }
 
   return Object.freeze({
-    async inspectCurrentApp(input = {}) {
+    async inspectCurrentApp(input) {
       return currentAppResult(async () => {
         const root = await rootForInput(input);
         if (!root) {
