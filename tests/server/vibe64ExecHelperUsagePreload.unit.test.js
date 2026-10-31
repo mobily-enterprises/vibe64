@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { helperChildEnv, usageRecordingNodeOptions as helperNodeOptions } from "../../packages/vibe64-execution/src/host/execHelper.js";
+import { DAEMON_USERNAME_PREFIX, helperChildEnv, usageRecordingNodeOptions as helperNodeOptions } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/src/server/request.js";
 import { usageRecordingNodeOptions as localNodeOptions } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
@@ -61,7 +61,7 @@ test("the exec helper sets NODE_OPTIONS only for the recorder preload of its own
   }
   // A caller's own NODE_OPTIONS never reaches the child.
   const env = helperChildEnv({ NODE_OPTIONS: "--import=/x/preload.mjs", KEEP: "yes" },
-    { home: "/home/member", username: "member" }, "v64d_workspace");
+    { home: "/home/member", username: "member" }, `${DAEMON_USERNAME_PREFIX}workspace`);
   assert.equal(env.NODE_OPTIONS, undefined);
   assert.equal(env.KEEP, "yes");
 });
