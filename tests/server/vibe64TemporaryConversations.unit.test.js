@@ -16,7 +16,7 @@ import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
-import { ACTION_READ_CONVERSATION_CONTEXT } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { ACTION_READ_CONVERSATION_CONTEXT } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 import {

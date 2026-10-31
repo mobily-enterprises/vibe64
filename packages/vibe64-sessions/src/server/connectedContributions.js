@@ -7,6 +7,8 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
+import { text } from "./trimmedText.js";
+import { trustedAssistantUser } from "./trustedAssistantUser.js";
 
 /** @typedef {import("./types.js").SessionsService} SessionsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
@@ -14,12 +16,9 @@ import { publicSession, sessionResult } from "./sessionResults.js";
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {ReturnType<typeof import("./sessionWorkOperations.js").createSessionWorkOperations>} SessionWorkOperations */
 
 const CONNECTED_SESSION_NAME_METADATA = "connected_session_name";
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 // The reported result of bringing one connected checkout up to date.
 function connectedUpdateOutcome(update, branch) {
@@ -34,18 +33,16 @@ function connectedUpdateOutcome(update, branch) {
  * Connected-source orchestration: a working session's contributions to the
  * projects it is connected to, through each receiving project's own actions.
  * sessions() is the owning session service, for its Save, Update, inspection
- * and creation; saveOrUpdateRunning(sessionId) reports its in-process work.
+ * and creation; workOperations reports its in-process Save and Update.
  * @param {object} dependencies
- * @param {ActionCatalogue | null} dependencies.actions
+ * @param {ActionCatalogue} dependencies.actions
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {(input?: object) => object | null} dependencies.trustedAssistantUser
- * @param {(sessionId: string) => boolean} dependencies.saveOrUpdateRunning
+ * @param {SessionWorkOperations} dependencies.workOperations
  * @param {() => SessionsService} dependencies.sessions
  */
-function createConnectedContributions({ actions, project, terminals, publishSessionChanged, trustedAssistantUser,
-  saveOrUpdateRunning, sessions }) {
+function createConnectedContributions({ actions, project, terminals, publishSessionChanged, workOperations, sessions }) {
   function executeConnectedAction(projectSlug, actionId, input, requestContext = {}) {
     const origin = currentProjectRequestContext();
     if (!origin?.slug || origin.learningScope || origin.slug === projectSlug ||
@@ -357,12 +354,10 @@ function createConnectedContributions({ actions, project, terminals, publishSess
   async function refreshConnectedContribution(runtime, session, branch) {
     const sessionId = session.sessionId;
     const skipped = reason => ({ ok: true, sessionId, status: "skipped", reason });
-    if (saveOrUpdateRunning(sessionId)) {
+    if (workOperations.isRunning(sessionId)) {
       return skipped("A Save or Update is already running in it.");
     }
-    const agent = typeof terminals.agentSessionState === "function"
-      ? await terminals.agentSessionState(sessionId, { runtime, session })
-      : null;
+    const agent = await terminals.agentSessionState(sessionId, { runtime, session });
     if (agent?.turn?.active) return skipped("Its agent is working. Update it once the agent finishes.");
     const check = await sessions().checkSessionUpdates(sessionId, { force: true });
     if (check?.ok === false) return skipped(text(check.error) || `It could not be checked against ${branch}.`);
@@ -413,11 +408,11 @@ function createConnectedContributions({ actions, project, terminals, publishSess
   }
 
   const methods = Object.freeze({
-    async prepareConnectedSources(sessionId, input = {}, requestContext = {}) {
+    async prepareConnectedSources(sessionId, input, requestContext) {
       return sessionResult(() => terminals.runConnectedSourcePreparation(sessionId, input,
         context => prepareConnectedSourcesInsideAgentWrite(context, input, requestContext)));
     },
-    async reviewConnectedReplacement(sessionId, input = {}, requestContext = {}) {
+    async reviewConnectedReplacement(sessionId, input, requestContext) {
       return sessionResult(async () => {
         const runtime = await project.createRuntime({ inspectSource: false });
         const session = await runtime.getSession(sessionId, { inspectSource: false });
@@ -425,7 +420,7 @@ function createConnectedContributions({ actions, project, terminals, publishSess
         return incoming;
       });
     },
-    async replaceConnectedSource(sessionId, input = {}, requestContext = {}) {
+    async replaceConnectedSource(sessionId, input, requestContext) {
       return sessionResult(() => terminals.runConnectedSourcePreparation(sessionId, input, async ({ runtime, session }) => {
         assertProjectEffectAdmission();
         const sources = sessionConnectedSources(session);
@@ -457,7 +452,7 @@ function createConnectedContributions({ actions, project, terminals, publishSess
     inspectConnectedContributionSource(input = {}) {
       return project.connectedContributionSource(input);
     },
-    async inspectConnectedDevelopmentInputs(sessionId, input = {}, requestContext = {}) {
+    async inspectConnectedDevelopmentInputs(sessionId, input, requestContext) {
       return sessionResult(async () => {
         const runtime = await project.createRuntime({ inspectSource: false });
         const session = await runtime.getSession(sessionId, { inspectSource: false });
@@ -479,7 +474,7 @@ function createConnectedContributions({ actions, project, terminals, publishSess
         return project.inspectConnectedDevelopmentInputs({ session, projects, environment: await runtime.resolvePromptEnvironment() });
       });
     },
-    async connectedContributionWork(operation, input = {}, requestContext = {}) {
+    async connectedContributionWork(operation, input, requestContext) {
       return sessionResult(async () => {
         const contribution = parseSessionConnectedContribution(input.contribution);
         if (!contribution) throw new TypeError("Connected work requires its exact saved contribution binding.");
@@ -511,7 +506,7 @@ function createConnectedContributions({ actions, project, terminals, publishSess
         return { ...work, sessionId: session.sessionId };
       });
     },
-    async allocateConnectedSource(input = {}) {
+    async allocateConnectedSource(input) {
       return sessionResult(async () => {
         assertProjectEffectAdmission();
         if (currentProjectRequestContext()?.learningScope) throw new TypeError("Learning cannot allocate working contribution sources.");

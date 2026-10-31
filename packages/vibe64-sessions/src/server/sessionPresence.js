@@ -95,9 +95,6 @@ function presencePayload(input = {}, {
 
 /** @param {RuntimeEvents} events */
 function createSessionPresencePublisher(events) {
-  if (!events || typeof events.publish !== "function") {
-    throw new TypeError("Session presence publication requires runtime.events.");
-  }
   return async function publishSessionPresence(payload = {}) {
     const presence = presencePayload(payload, {
       expiresAt: Date.parse(payload.expiresAt) || Date.now(),
@@ -129,7 +126,7 @@ function createSessionPresencePublisher(events) {
  * @param {number} [dependencies.idleMs]
  * @param {number} [dependencies.maxEntries]
  * @param {() => number} [dependencies.now]
- * @param {(error: Error) => void} [dependencies.onPublishError]
+ * @param {(error: Error) => void} dependencies.onPublishError
  * @param {ReturnType<typeof createSessionPresencePublisher>} dependencies.publishPresence
  * @param {typeof setTimeout} [dependencies.setTimer]
  */
@@ -138,13 +135,10 @@ function createSessionPresenceService({
   idleMs = SESSION_PRESENCE_IDLE_MS,
   maxEntries = SESSION_PRESENCE_MAX_ENTRIES,
   now = () => Date.now(),
-  onPublishError = () => {},
+  onPublishError,
   publishPresence,
   setTimer = setTimeout
-} = {}) {
-  if (typeof publishPresence !== "function") {
-    throw new TypeError("Session presence requires publishPresence().");
-  }
+}) {
   const entries = new Map();
   let closed = false;
 
@@ -199,6 +193,7 @@ function createSessionPresenceService({
     entry.timer = setTimer(() => {
       void expireEntry(key, entry);
     }, delay);
+    // readable-check: allow optional-call - platform object: an injected timer need not be a Node timer
     entry.timer?.unref?.();
   }
 

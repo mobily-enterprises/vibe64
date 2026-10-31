@@ -6,8 +6,8 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionConnectedSources, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
-import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
-import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import { createSessionRenewalDraft, createSessionRenewalState } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
@@ -48,7 +48,8 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
         async writeMetadataValue(id, key, value) { sessionsByProject[projectSlug].get(id).metadata[key] = value; },
         async readMetadataValue(id, key) { return sessionsByProject[projectSlug].get(id).metadata[key] || ""; },
         async writeSessionLabel(id, name) { sessionsByProject[projectSlug].get(id).sessionName = name; return name; },
-        async assertSessionCreationAbsent(id) { assert.equal(sessionsByProject[projectSlug].has(id), false); }
+        async assertSessionCreationAbsent(id) { assert.equal(sessionsByProject[projectSlug].has(id), false); },
+        async listSessionsForRenewal() { return []; }
       },
       async getSession(id) { return structuredClone(sessionsByProject[projectSlug].get(id) || null); },
       async listSessionSummaries() { return [...sessionsByProject[projectSlug].values()]; },

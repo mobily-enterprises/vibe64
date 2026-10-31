@@ -2244,7 +2244,7 @@ test("source read preserves reconnection timeout and requires original project s
 test("captured practice control cannot admit fresh user work or session and repository creation", async t => {
   const { createStudioProjectContext } = await import("../../packages/vibe64-core/src/server/studioProjectContext.js");
   const { captureProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
-  const { createService: createSessions } = await import("../../packages/vibe64-sessions/src/server/service.js");
+  const { createSessionsService: createSessions } = await import("./vibe64SessionsTestHelpers.js");
   const { createManagedProjectRepositoryService } = await import("../../packages/vibe64-project/src/server/managedRepository.js");
   const lock = agentWriteLockHarness();
   const f = await terminalServiceFixture(t, lock, { assistantSelection: CODEX_SELECTION,

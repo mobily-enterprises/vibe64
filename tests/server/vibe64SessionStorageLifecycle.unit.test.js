@@ -3,7 +3,7 @@ import { mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promis
 import path from "node:path";
 import test from "node:test";
 
-import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";

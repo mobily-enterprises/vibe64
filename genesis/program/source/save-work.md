@@ -92,11 +92,14 @@ Git commands.
 - `packages/vibe64-project/src/server/localRepositoryRemote.js`
 - `src/components/studio/repository/Vibe64LocalRemoteControls.vue`
 - `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`
-- `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/sessionWork.js`
+- `packages/vibe64-sessions/src/server/sessionWorkRecovery.js`
+- `packages/vibe64-sessions/src/server/sessionRepositoryUpdates.js`
+- `packages/vibe64-sessions/src/server/sessionWorkOperations.js`
 - `packages/vibe64-sessions/src/server/repositoryUpdateProbe.js`
 - `packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
-- `packages/vibe64-sessions/src/server/actions.js`
+- `packages/vibe64-sessions/src/server/sessionActions.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/assistantContracts.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`

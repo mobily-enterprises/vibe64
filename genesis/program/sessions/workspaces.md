@@ -11,7 +11,7 @@ that turn without dropping either half. No saved history is rewritten.
 
 ## Sources
 
-- `packages/vibe64-sessions/src/server/actions.js`
+- `packages/vibe64-sessions/src/server/sessionActions.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/inputPatterns.js`
 - `packages/vibe64-sessions/src/server/assistantContracts.js`
@@ -19,6 +19,9 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-core/src/server/projectState.js`
 
 - Main: `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/sessionCatalogue.js`
+- `packages/vibe64-sessions/src/server/sessionCreation.js`
+- `packages/vibe64-sessions/src/server/sessionPolicySlots.js`
 - `packages/vibe64-sessions/src/server/sessionArchive.js`
 - `packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
@@ -731,7 +734,7 @@ its refusal of source, branch, pull-request and commit options for a
 learning-scoped context, which no current request produces.
 Sources: `packages/vibe64-runtime/src/server/runtime.js`,
 `packages/vibe64-runtime/src/server/sessionStore.js`,
-`packages/vibe64-sessions/src/server/service.js`;
+`packages/vibe64-sessions/src/server/sessionCreation.js`;
 evidence: `tests/server/vibe64SessionStore.unit.test.js`,
 `tests/server/stateUpgrades.unit.test.js`.
 

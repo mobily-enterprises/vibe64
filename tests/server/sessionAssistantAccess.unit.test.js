@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 
 test("assistant access exposes purpose decisions without private connection identities", async () => {
   const session = { sessionId: "session-1" };

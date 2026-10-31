@@ -5,7 +5,7 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 
-import { createProjectWatchActions, createSessionActions } from "./actions.js";
+import { createProjectWatchActions, createSessionActions } from "./sessionActions.js";
 import { registerProjectWatch } from "./projectWatch.js";
 import { createRepositoryUpdateProbe } from "./repositoryUpdateProbe.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
@@ -15,6 +15,7 @@ import { createVibe64ProjectChangedPublisher } from "@local/vibe64-project/serve
 import { countWaitingMainChatApprovals } from "./mainChatApprovals.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
+import { createTerminalsSetupRunner } from "./sessionWorkspaceSetup.js";
 import {
   createSessionPresencePublisher,
   createSessionPresenceService
@@ -39,12 +40,9 @@ import {
  * session. Shutdown stops the archive loop between sessions.
  * @param {object} dependencies
  * @param {(options: { signal: AbortSignal }) => Promise<object>} dependencies.recover
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  */
-function createSessionRenewalRecoveryTask({ recover, logger = null } = {}) {
-  if (typeof recover !== "function") {
-    throw new TypeError("Session renewal recovery task requires recover().");
-  }
+function createSessionRenewalRecoveryTask({ recover, logger }) {
   let activeRecovery = null;
   let started = false;
   let stopped = false;
@@ -195,9 +193,11 @@ function createVibe64SessionsFeature() {
         publishSessionChanged: createSessionChangedPublisher(events),
         sessionPresence,
         sourceEditor,
-        terminals
+        terminals,
+        workspaceSetupRunner: createTerminalsSetupRunner(terminals)
       });
       registerApprovalCountReader(countWaitingMainChatApprovals);
+      // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
       project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
       registerRoutes(http);
       return { sessions };

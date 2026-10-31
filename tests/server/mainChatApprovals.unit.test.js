@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import {
   ACTION_APPROVE_MAIN_CHAT_APPROVAL,
   ACTION_DECLINE_MAIN_CHAT_APPROVAL,
@@ -13,7 +13,7 @@ import {
   ACTION_SEND_AGENT_MESSAGE,
   ACTION_WITHDRAW_MAIN_CHAT_APPROVAL,
   createSessionActions
-} from "../../packages/vibe64-sessions/src/server/actions.js";
+} from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import {
   MAIN_CHAT_APPROVALS_METADATA,
   countWaitingMainChatApprovals
@@ -143,14 +143,14 @@ test("only the owner declines, with an optional note", async () => {
   assert.equal(entry.note, "Not now, I'm deploying.");
   assert.deepEqual(entry.decidedBy, { id: "tony", username: "tony", displayName: "Tony" });
   assert.equal(sessionEvents.at(-1), "main-chat-approval-declined");
-  await assert.rejects(service.approveMainChatApproval("s1", "message-0003", { expectedRevision: 1, vibe64User: owner }),
+  await assert.rejects(service.approveMainChatApproval("s1", "message-0003", { expectedRevision: 1, vibe64User: owner }, {}),
     { statusCode: 409, message: "This message was already declined." });
 });
 
 test("approval sends the message as the owner with its sender, keeping an edited original", async () => {
   const { service, sent, entries, sessionEvents } = harness();
   await service.sendAgentMessage("s1", { message: "Add a toggel", messageId: "message-0004", vibe64User: ana });
-  await assert.rejects(service.approveMainChatApproval("s1", "message-0004", { expectedRevision: 1, vibe64User: ana }),
+  await assert.rejects(service.approveMainChatApproval("s1", "message-0004", { expectedRevision: 1, vibe64User: ana }, {}),
     { statusCode: 403 });
   const browserAuthority = { sessionId: "s1", actorId: "tony" };
   const result = await service.approveMainChatApproval("s1", "message-0004",
@@ -179,7 +179,7 @@ test("a failed approval returns to waiting with its error and retries with the s
   const { service, sent, entries, metadata } = harness({ deliver: async () => (attempt += 1) === 1
     ? { ok: false, error: "The assistant started another turn. Review it before sending." } : { ok: true } });
   await service.sendAgentMessage("s1", { message: "Fix the header", messageId: "message-0005", vibe64User: ana });
-  const failed = await service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, vibe64User: owner });
+  const failed = await service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, vibe64User: owner }, {});
   assert.equal(failed.ok, false);
   assert.equal(entries()[0].status, "waiting");
   assert.equal(entries()[0].error, "The assistant started another turn. Review it before sending.");
@@ -189,10 +189,10 @@ test("a failed approval returns to waiting with its error and retries with the s
   const stuck = JSON.parse(metadata.get(MAIN_CHAT_APPROVALS_METADATA));
   stuck.entries[0].status = "sending";
   metadata.set(MAIN_CHAT_APPROVALS_METADATA, JSON.stringify(stuck));
-  await assert.rejects(service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, text: "Fix the footer", vibe64User: owner }),
+  await assert.rejects(service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, text: "Fix the footer", vibe64User: owner }, {}),
     { statusCode: 409, code: "vibe64_main_chat_approval_sending" });
   assert.equal(entries()[0].text, "Fix the header");
-  assert.equal((await service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, vibe64User: owner })).ok, true);
+  assert.equal((await service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, vibe64User: owner }, {})).ok, true);
   assert.deepEqual(sent.map(({ input }) => input.messageId), ["approval_message-0005_1", "approval_message-0005_1"]);
   assert.equal(entries()[0].status, "sent");
   assert.equal(entries()[0].error, "");

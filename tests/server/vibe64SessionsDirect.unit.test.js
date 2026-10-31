@@ -44,15 +44,13 @@ import {
   ACTION_REVIEW_INCOMING,
   ACTION_CHANGE_INCOMING,
   createSessionActions
-} from "../../packages/vibe64-sessions/src/server/actions.js";
+} from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import {
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
   vibe64AssistantSelectionFromMetadata
 } from "../../packages/vibe64-runtime/src/shared/index.js";
-import {
-  createService
-} from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
@@ -565,7 +563,7 @@ test("conversation history includes the current live snapshot for reconnecting c
       } }
     };
   } } });
-  const result = await service.readSessionConversationLog("session-1");
+  const result = await service.readSessionConversationLog("session-1", {});
   assert.equal(result.ok, true);
   assert.equal(result.conversationStream, conversationStream);
   assert.deepEqual(result.conversationLog, []);
@@ -1412,7 +1410,7 @@ test("members can Save and create pull requests independently of AI access", asy
   ]);
   const published = await service.createSessionPullRequest("session-1", {
     title: "Member changes", vibe64User: { username: "member", role: "member" }
-  });
+  }, {});
   assert.equal(published.ok, true, published.error);
   assert.equal(published.pullRequest.number, 12);
 });
@@ -2645,7 +2643,7 @@ test("live workspace preparation prevents retry and archive races", async () => 
   assert.equal(archived.ok, false);
   assert.equal(archived.code, "vibe64_workspace_setup_running");
 
-  const retried = await service.retryWorkspaceSetup("session-1");
+  const retried = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(retried.ok, false);
   assert.equal(retried.code, "vibe64_workspace_setup_running");
 });
@@ -3457,7 +3455,7 @@ test("session listing reports unavailable sessions separately without changing c
     terminals: {},
     workspaceSetupRunner: { isRunning: () => false, wait: () => null }
   });
-  assert.deepEqual(await service.listSessions(), {
+  assert.deepEqual(await service.listSessions({}), {
     ok: true, sessions: [{ ...healthy, agentActivity: { active: false, revision: 7 } }],
     unavailableSessions: [unavailable], creation, lastOpenedSessionId: "", limits
   });
@@ -3498,7 +3496,7 @@ test("session listing reads saved activity without opening chats and isolates un
       terminals: {},
       workspaceSetupRunner: { isRunning: () => false, wait: () => null }
     });
-    const result = await service.listSessions();
+    const result = await service.listSessions({});
     assert.equal(result.ok, true);
     assert.deepEqual(result.sessions, summaries.map((session) => ({
       ...session,
@@ -3565,7 +3563,7 @@ test("session responses enforce the ordinary three-session policy on the server"
       scope: "session"
     });
 
-    const available = await harness.service.listSessions();
+    const available = await harness.service.listSessions({});
     assert.deepEqual(available.creation, {
       canCreate: true,
       mode: "direct",
@@ -3607,7 +3605,7 @@ test("shared database override admits the third session and rejects a fourth on 
       managed: true, scope: "project", allowSharedDatabaseSessions: true,
       projectRuntimeRoot: projectRuntimeRoot(targetRoot)
     });
-    assert.equal((await harness.service.listSessions()).creation.canCreate, true);
+    assert.equal((await harness.service.listSessions({})).creation.canCreate, true);
     const third = await harness.service.createSession();
     assert.equal(third.ok, true, JSON.stringify(third));
     assert.equal(third.limits.maxOpenSessions, 3);
@@ -3712,7 +3710,7 @@ test("an unfinished renewal durably reserves the shared-database session slot", 
           scope: "project"
         });
 
-        const listed = await harness.service.listSessions();
+        const listed = await harness.service.listSessions({});
         assert.equal(listed.creation.canCreate, false);
         assert.equal(listed.creation.showCreateAction, false);
         assert.deepEqual(listed.limits, {
@@ -4169,28 +4167,28 @@ test("workspace preparation explicitly reruns succeeded recipes and retains retr
     }
   });
 
-  const repeated = await service.retryWorkspaceSetup("session-1");
+  const repeated = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(repeated.ok, true);
   assert.equal(repeated.workspaceSetup.status, "running");
   assert.equal(startCount, 1);
   assert.deepEqual(retryValues, [true]);
 
   status = "unconfigured";
-  const newlyConfigured = await service.retryWorkspaceSetup("session-1");
+  const newlyConfigured = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(newlyConfigured.ok, true);
   assert.equal(newlyConfigured.workspaceSetup.status, "running");
   assert.equal(startCount, 2);
   assert.deepEqual(retryValues, [true, true]);
 
   status = "failed";
-  const retried = await service.retryWorkspaceSetup("session-1");
+  const retried = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(retried.ok, true);
   assert.equal(retried.workspaceSetup.status, "running");
   assert.equal(startCount, 3);
   assert.deepEqual(retryValues, [true, true, true]);
 
   status = "required";
-  const required = await service.retryWorkspaceSetup("session-1");
+  const required = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(required.ok, true);
   assert.equal(required.workspaceSetup.status, "running");
   assert.equal(startCount, 4);
@@ -4198,7 +4196,7 @@ test("workspace preparation explicitly reruns succeeded recipes and retains retr
 
   status = "failed";
   admissionBlocked = true;
-  const blocked = await service.retryWorkspaceSetup("session-1");
+  const blocked = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(blocked.ok, false);
   assert.equal(blocked.code, "vibe64_agent_write_mode_busy");
   assert.equal(blocked.retryable, true);
@@ -4206,20 +4204,20 @@ test("workspace preparation explicitly reruns succeeded recipes and retains retr
   assert.equal(startCount, 5);
 
   status = "succeeded";
-  const changedButBusy = await service.retryWorkspaceSetup("session-1");
+  const changedButBusy = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(changedButBusy.code, "vibe64_agent_write_mode_busy");
   assert.equal(status, "succeeded", "current preparation still uses the original admission guard");
   assert.equal(startCount, 6);
 
   admissionBlocked = false;
-  const changed = await service.retryWorkspaceSetup("session-1");
+  const changed = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(changed.ok, true);
   assert.equal(changed.workspaceSetup.status, "running");
   assert.equal(startCount, 7);
   assert.equal(retryValues.at(-1), true);
 
   status = "running";
-  const unconfirmed = await service.retryWorkspaceSetup("session-1");
+  const unconfirmed = await service.retryWorkspaceSetup("session-1", {});
   assert.equal(unconfirmed.code, "vibe64_workspace_setup_retry_not_available");
   assert.equal(startCount, 7, "running preparation does not authorize another run");
 
@@ -4236,7 +4234,7 @@ test("workspace preparation explicitly reruns succeeded recipes and retains retr
       }
     }
   });
-  assert.equal((await terminalOwned.retryWorkspaceSetup("session-1")).ok, true);
+  assert.equal((await terminalOwned.retryWorkspaceSetup("session-1", {})).ok, true);
   assert.deepEqual(terminalCalls, [["prepare", "session-1", true]]);
 });
 

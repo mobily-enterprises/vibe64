@@ -24,7 +24,7 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
-import { createSessionActions } from "../../../packages/vibe64-sessions/src/server/actions.js";
+import { createSessionActions } from "../../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createTerminalActions } from "@local/vibe64-terminals/server/actions";
 import { mainConversationId, temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { createMainBrowserConversations } from "../../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";

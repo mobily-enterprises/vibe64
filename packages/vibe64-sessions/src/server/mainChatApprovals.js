@@ -3,6 +3,7 @@ import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantR
 import { readActiveSessionMetadataValues } from "@local/vibe64-runtime/server/sessionStore";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { currentProjectRequestContext, currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
+import { text } from "./trimmedText.js";
 
 /** @typedef {ReturnType<typeof import("@local/vibe64-project/server/actions").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -19,10 +20,6 @@ const KEPT_ENTRIES = 200;
 const NOTE_MAX_LENGTH = 500;
 // Leaves room for the delivery id, which conversations limit to 128 word characters.
 const ENTRY_ID_PATTERN = /^[A-Za-z0-9_-]{8,100}$/u;
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 function failure(message, code, statusCode) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -71,16 +68,16 @@ async function countWaitingMainChatApprovals({ projectRuntimeRoot = "" } = {}) {
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
  * @param {(sessionId: string, input: object, options?: object) => Promise<object>} dependencies.deliver
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
- * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {PublishProjectChanged} dependencies.publishProjectChanged
  */
 function createMainChatApprovals({
   project,
   terminals,
   deliver,
-  publishSessionChanged = async () => null,
-  publishProjectChanged = async () => null
-} = {}) {
+  publishSessionChanged,
+  publishProjectChanged
+}) {
   async function change(sessionId, reason, operation, payload = null) {
     const runtime = await project.createRuntime({ inspectSource: false });
     const result = await runtime.store.mutateSession(sessionId, async () => {
@@ -150,7 +147,7 @@ function createMainChatApprovals({
       const team = await readWorkspaceTeam();
       const runtime = await project.createRuntime({ inspectSource: false });
       const session = await runtime.getSession(sessionId, { inspectSource: false });
-      const steer = (await terminals.agentSessionState?.(sessionId, { runtime, session }))?.turn?.active === true;
+      const steer = (await terminals.agentSessionState(sessionId, { runtime, session }))?.turn?.active === true;
       return change(sessionId, "main-chat-approval-queued", (approvals) => {
         const existing = approvals.entries.find((entry) => entry.id === id);
         if (existing?.sender.id === sender.id && existing.text === message) {

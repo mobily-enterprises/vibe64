@@ -25,8 +25,8 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
-import { createService as createSessionService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/server/sessionRealtimeEvents.js";

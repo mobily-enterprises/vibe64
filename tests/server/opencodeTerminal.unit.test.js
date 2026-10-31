@@ -7,8 +7,8 @@ import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conve
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { registerVibe64ActionContext } from "../../packages/vibe64-core/src/server/actionContext.js";
-import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
-import { createService as createSessionService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import assert from "node:assert/strict";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";

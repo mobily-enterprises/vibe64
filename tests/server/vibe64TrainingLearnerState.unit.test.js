@@ -1943,13 +1943,13 @@ test("actual saved exercise caller admits only its same original local Project r
 
 test("a practice session is an ordinary local project session that stays the learner's after the lesson ends", async t => {
   const f = await fixture(t);
-  const [{ createStudioProjectContext }, { createService: createProject }, { createService: createSessions },
+  const [{ createStudioProjectContext }, { createService: createProject }, { createSessionsService: createSessions },
     { createManagedProjectRepositoryService }, { createSessionSource },
     { assertProjectEffectAdmission, captureProjectRequestContext,
       runWithProjectRequestContext, runWithResolvedProjectRequestContext }] = await Promise.all([
     import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
     import("../../packages/vibe64-project/src/server/service.js"),
-    import("../../packages/vibe64-sessions/src/server/service.js"),
+    import("./vibe64SessionsTestHelpers.js"),
     import("../../packages/vibe64-project/src/server/managedRepository.js"),
     import("../../packages/vibe64-terminals/src/server/sessionSource.js"),
     import("../../packages/vibe64-core/src/server/projectRequestContext.js")

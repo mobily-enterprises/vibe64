@@ -12,9 +12,7 @@ import {
 import {
   createService as createCurrentAppService
 } from "../../packages/current-app/src/server/service.js";
-import {
-  createService as createSessionsService
-} from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionsService } from "./vibe64SessionsTestHelpers.js";
 import {
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";

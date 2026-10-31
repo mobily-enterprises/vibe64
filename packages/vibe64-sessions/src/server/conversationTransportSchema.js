@@ -5,6 +5,7 @@ function conflict(path, detail) {
   return new TypeError(`Conversation products declare "${path}" differently (${detail}); give it one shared definition.`);
 }
 
+// readable-check: allow method-probe - data: a field definition nests a schema only when it declares one
 const nestedSchema = (field) => typeof field?.schema?.getFieldDefinitions === "function" ? field.schema : null;
 const openObject = (field) => field.type === "object" && field.additionalProperties === true && !nestedSchema(field);
 

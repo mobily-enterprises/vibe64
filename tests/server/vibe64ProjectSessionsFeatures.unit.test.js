@@ -6,7 +6,7 @@ import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
-import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 
 import {
   Vibe64ProjectProvider

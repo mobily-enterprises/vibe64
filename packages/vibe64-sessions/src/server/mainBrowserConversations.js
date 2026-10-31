@@ -8,7 +8,7 @@ import {
   ACTION_READ_CONVERSATION_CONTEXT,
   ACTION_SEND_AGENT_MESSAGE,
   ACTION_UPDATE_ASSISTANT_SELECTION
-} from "./actions.js";
+} from "./sessionActions.js";
 import { agentMessageActionInputValidator, assistantSelectionUpdateActionInputValidator } from "./inputSchemas.js";
 import { mainConversationTarget, temporaryConversationTarget } from "../shared/conversationIdentity.js";
 
@@ -49,10 +49,7 @@ function operationResult(result) {
  * @param {ActionCatalogue} dependencies.actions
  * @param {TerminalsService} dependencies.terminals
  */
-function createMainBrowserConversations({ actions, terminals } = {}) {
-  if (typeof actions?.execute !== "function" || typeof terminals?.openBrowserConversation !== "function") {
-    throw new TypeError("Main browser conversations require the original action catalogue and terminal conversation owner.");
-  }
+function createMainBrowserConversations({ actions, terminals }) {
   return Object.freeze({
     // Main and temporary conversations share one transport; each accepts its own envelope.
     conversationDataSchema: conversationTransportSchema([mainConversationDataSchema, terminals.temporaryConversationDataSchema]),

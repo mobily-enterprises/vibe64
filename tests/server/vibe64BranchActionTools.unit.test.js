@@ -5,7 +5,7 @@ import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
-import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("branch tools bound discovery, preserve exact source reviews and reject caller authority", async () => {

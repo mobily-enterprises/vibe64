@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 
 function fixture(operation = null) {
   const events = [];

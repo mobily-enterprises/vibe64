@@ -123,7 +123,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-execution/src/server/engines/helperClient.js`
 - `packages/vibe64-runtime/src/shared/assistantSelection.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
-- `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/sessionAssistant.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js`
 - `packages/vibe64-terminals/src/server/codexAccountPreparation.js`
 - `packages/vibe64-terminals/src/server/codexAssistantCatalog.js`

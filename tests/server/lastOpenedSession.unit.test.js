@@ -8,8 +8,8 @@ import {
   ACTION_LIST_SESSIONS,
   ACTION_UPDATE_CURRENT_SESSION,
   createSessionActions
-} from "../../packages/vibe64-sessions/src/server/actions.js";
-import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+} from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 
 const ada = Object.freeze({ uid: 1001, username: "ada" });
 const bob = Object.freeze({ uid: 1002, username: "bob" });
@@ -31,7 +31,7 @@ function projectService(stateRoot, { pinned = "", sessionIds = ["s1", "s2", "s3"
     async createRuntime() {
       return {
         stateRoot,
-        store: { async readAgentRuns() { return []; } },
+        store: { async listSessionsForRenewal() { return []; }, async readAgentRuns() { return []; } },
         async listSessionSummaries() {
           return project.sessionIds.map((sessionId) => ({ sessionId, status: "active", revision: 1 }));
         },
@@ -92,7 +92,7 @@ test("each person keeps one record per project, independent of other people and 
     assert.equal(await lastOpened(beta, bob), "");
     // The standalone editor has no signed-in person; it keeps its own record.
     assert.equal(await lastOpened(alpha), "");
-    await alpha.updateCurrentSession("s2");
+    await alpha.updateCurrentSession("s2", {});
     assert.equal(await lastOpened(alpha), "s2");
     assert.equal(await lastOpened(alpha, ada), "s3");
     assert.equal((await recordFiles(path.join(root, "alpha"))).length, 3);

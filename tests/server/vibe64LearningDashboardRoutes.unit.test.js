@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { registerRoutes as registerProjectRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";

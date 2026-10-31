@@ -1199,7 +1199,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `tests/server/mainChatApprovals.unit.test.js`
 - `tests/client/vibe64MainChatApprovals.vitest.js`
 
-- `packages/vibe64-sessions/src/server/actions.js`
+- `packages/vibe64-sessions/src/server/sessionActions.js`
 - `tests/server/vibe64ConversationActionDispatch.unit.test.js`
 
 - `packages/vibe64-terminals/src/server/projectMessage.js`
@@ -1276,7 +1276,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
-- `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/sessionMessages.js`
+- `packages/vibe64-sessions/src/server/sessionAssistant.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/shared/conversationAttachments.js`
 - `packages/vibe64-runtime/src/shared/assistantSelection.js`

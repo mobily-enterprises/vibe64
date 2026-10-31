@@ -12,20 +12,17 @@ const REPOSITORY_UPDATE_PROBE_RETRY_MS = 60_000;
  * @param {object} dependencies
  * @param {typeof clearTimeout} [dependencies.clearTimer]
  * @param {() => number} [dependencies.now]
- * @param {(error: Error, projectSlug: string) => void} [dependencies.onError]
+ * @param {(error: Error, projectSlug: string) => void} dependencies.onError
  * @param {(slug: string, state: object) => Promise<object>} dependencies.probe
  * @param {typeof setTimeout} [dependencies.setTimer]
  */
 function createRepositoryUpdateProbe({
   clearTimer = clearTimeout,
   now = Date.now,
-  onError = () => {},
+  onError,
   probe,
   setTimer = setTimeout
-} = {}) {
-  if (typeof probe !== "function") {
-    throw new TypeError("The repository update probe requires probe().");
-  }
+}) {
   const projects = new Map();
   let closed = false;
 
@@ -65,6 +62,7 @@ function createRepositoryUpdateProbe({
       entry.timer = null;
       void run(slug, entry);
     }, delay);
+    // readable-check: allow optional-call - platform object: an injected timer need not be a Node timer
     entry.timer?.unref?.();
   }
 

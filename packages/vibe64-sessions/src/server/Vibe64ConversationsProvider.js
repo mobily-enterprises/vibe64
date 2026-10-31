@@ -24,7 +24,6 @@ const Vibe64ConversationsProvider = defineFeature({
   setup({ sessions, colleague, http }) {
     const main = sessions.browserConversations;
     const product = colleague?.browserConversations;
-    if (typeof main?.open !== "function") throw new TypeError("Main conversations require their session-owned browser facade.");
     const subscribeActionId = "vibe64.conversation.subscribe";
     return {
       conversations: {

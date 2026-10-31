@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   ACTION_LIST_ASSISTANT_CAPABILITIES,
   ACTION_UPDATE_ASSISTANT_MODEL_ACCESS
-} from "../../packages/vibe64-sessions/src/server/actions.js";
+} from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import {
   registerRoutes
 } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";

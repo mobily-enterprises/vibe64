@@ -6,8 +6,8 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionConnectedSubmissions, sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
-import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
-import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("connected Save commits and records each receiver, resumes after failure, and never publishes the main project", async () => {
@@ -47,6 +47,7 @@ test("connected Save commits and records each receiver, resumes after failure, a
       repository: { defaultBranch: "main", github: { fullName: `example/${target}` } } });
     const runtimeFor = target => ({
       async getSession(id) { const value = sessions.get(target); assert.equal(value.sessionId, id); return value; },
+      async listSessionSummaries() { return []; },
       store: {
         async readBackgroundTask(id, key) { return tasks.get(`${id}:${key}`) || null; },
         async writeBackgroundTaskEvent(id, key, { patch }) {

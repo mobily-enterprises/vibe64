@@ -14,8 +14,9 @@ work as a new PR. GitHub remains the PR store.
 - `packages/vibe64-project/src/server/assistantContracts.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-core/src/server/projectRepository.js`
-- `packages/vibe64-sessions/src/server/service.js`
-- `packages/vibe64-sessions/src/server/actions.js`
+- `packages/vibe64-sessions/src/server/sessionWork.js`
+- `packages/vibe64-sessions/src/server/sessionCreation.js`
+- `packages/vibe64-sessions/src/server/sessionActions.js`
 - `packages/vibe64-sessions/src/server/assistantContracts.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`

@@ -1,16 +1,14 @@
 import { assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { publicSession, sessionResult } from "./sessionResults.js";
+import { text } from "./trimmedText.js";
+import { trustedAssistantUser } from "./trustedAssistantUser.js";
 
-/** @typedef {ReturnType<typeof import("./service.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
+/** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 // A session's persisted archive progress. Unreadable progress is refused with
 // one coded error so recovery never guesses at what was already removed.
@@ -39,9 +37,8 @@ function readSessionArchiveOperation(metadata = {}) {
  * @param {TerminalsService} dependencies.terminals
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {(input?: object) => object | null} dependencies.trustedAssistantUser
  */
-function createSessionArchive({ project, terminals, setupRunner, publishSessionChanged, trustedAssistantUser }) {
+function createSessionArchive({ project, terminals, setupRunner, publishSessionChanged }) {
   let archivePreparation = null;
 
   // Stopping: preview, AI turns and remaining tools stop before anything is removed.
@@ -50,13 +47,9 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
   async function stopSessionWork(runtime, session) {
     const { sessionId } = session;
     await terminals.closeSessionTerminals(sessionId, { session, forgetConversationBinding: true });
-    if (typeof terminals.removeOutputResultsForSession === "function") {
-      await terminals.removeOutputResultsForSession(sessionId);
-    }
+    await terminals.removeOutputResultsForSession(sessionId);
     // The final close: renewal and changeover never reach here.
-    if (typeof terminals.removeSessionCommandHelpers === "function") {
-      await terminals.removeSessionCommandHelpers(sessionId, { runtime });
-    }
+    await terminals.removeSessionCommandHelpers(sessionId, { runtime });
   }
 
   /**
@@ -82,7 +75,6 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
 
   // Resources: the project releases what it holds for the session.
   async function releaseSessionResources(sessionId) {
-    if (typeof project.releaseSessionResources !== "function") return;
     const released = await project.releaseSessionResources({ sessionId });
     if (released?.ok === false) {
       throw new Error(released.error || "Session resources could not be archived.");
@@ -275,6 +267,7 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
     archiveSession,
     prepareArchive: (context) => archivePreparation?.(context),
     resumeSessionArchives,
+    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setArchivePreparation
   };
 }

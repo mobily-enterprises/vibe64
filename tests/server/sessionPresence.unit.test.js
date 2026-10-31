@@ -131,6 +131,7 @@ test("heartbeats replace local expiry and stale updates cannot rewind presence",
   const service = createSessionPresenceService({
     clearTimer: clock.clearTimer,
     now: clock.now,
+    onPublishError: () => {},
     publishPresence: async (payload) => published.push(payload),
     setTimer: clock.setTimer
   });
@@ -158,6 +159,7 @@ test("explicit idle retains a short sequence tombstone and origins remain indepe
   const service = createSessionPresenceService({
     clearTimer: clock.clearTimer,
     now: clock.now,
+    onPublishError: () => {},
     publishPresence: async (payload) => published.push(payload),
     setTimer: clock.setTimer
   });
@@ -219,6 +221,7 @@ test("temporary chats have independent presence sequences and expiry within the 
   const service = createSessionPresenceService({
     clearTimer: clock.clearTimer,
     now: clock.now,
+    onPublishError: () => {},
     publishPresence: async (payload) => published.push(payload),
     setTimer: clock.setTimer
   });

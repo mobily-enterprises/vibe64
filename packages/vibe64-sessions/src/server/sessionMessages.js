@@ -1,0 +1,172 @@
+import crypto from "node:crypto";
+import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
+import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
+import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
+import { createMainChatApprovals } from "./mainChatApprovals.js";
+import { sessionResult } from "./sessionResults.js";
+import { text } from "./trimmedText.js";
+import { trustedAssistantUser } from "./trustedAssistantUser.js";
+
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {ReturnType<typeof import("@local/vibe64-project/server/actions").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+/** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
+
+function messageText(input = {}) {
+  return text(input.message);
+}
+
+/**
+ * What people send a session's assistant: a message, sent now or held for
+ * the workspace owner's approval, an interrupted turn, and the integration
+ * setup a turn asked for.
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ * @param {PublishProjectChanged} dependencies.publishProjectChanged
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {WorkspaceSetupRunner} dependencies.setupRunner
+ * @param {SourceEditorService} dependencies.sourceEditor
+ * @param {TerminalsService} dependencies.terminals
+ */
+function createSessionMessages({ project, publishProjectChanged, publishSessionChanged, setupRunner, sourceEditor, terminals }) {
+  const mainChatApprovals = createMainChatApprovals({
+    project, terminals, publishSessionChanged, publishProjectChanged,
+    deliver: (sessionId, input, options) => messages.sendAgentMessage(sessionId, input, options)
+  });
+
+  const messages = Object.freeze({
+    async sendAgentMessage(sessionId, input = {}, options = {}) {
+      const request = messageText(input);
+      if (!request) {
+        return {
+          code: "vibe64_agent_message_input_required",
+          error: "Assistant messages require text.",
+          ok: false
+        };
+      }
+      // A team member's main-chat message waits for the owner's approval,
+      // except in their own lesson, which runs on the team setup.
+      const vibe64User = trustedAssistantUser(input);
+      if (vibe64User && !isAssistantRoutingOwner(vibe64User) && !currentRequestIsPracticeProject()) {
+        return { ...await mainChatApprovals.enqueue(sessionId, { message: request, messageId: text(input.messageId),
+          attachmentIds: input.attachmentIds || [] }, { vibe64User }), sessionId };
+      }
+      const startedAt = Date.now();
+      await setupRunner.wait(sessionId);
+      const runtime = await project.createRuntime({ inspectSource: false });
+      const messageId = text(input.messageId) || crypto.randomUUID();
+      vibe64SessionDebugLog("server.sessions.sendAgentMessage.dispatching", {
+        durationMs: Date.now() - startedAt,
+        messageId,
+        sessionId
+      });
+      const { messageSource, ...message } = input;
+      try {
+        const result = await terminals.sendAgentMessage(sessionId, {
+          ...message,
+          ...(messageSource === "lesson" ? { turnMetadata: { source: "lesson" } } : {}),
+          messageId,
+          message: request
+        }, {
+          ...(options.browserAuthority ? { browserAuthority: options.browserAuthority } : {}),
+          runtime,
+          vibe64User
+        });
+        const accepted = result?.ok !== false;
+        await publishSessionChanged(sessionId, {
+          originId: text(input.originId),
+          reason: accepted
+            ? "session-agent-message-accepted"
+            : "session-agent-message-failed",
+          session: await runtime.getSession(sessionId, {
+            inspectSource: false
+          })
+        });
+        return {
+          ...result,
+          messageId,
+          ok: accepted,
+          sessionId
+        };
+      } catch (error) {
+        vibe64SessionDebugLog("server.sessions.sendAgentMessage.error", {
+          error: vibe64SessionDebugError(error),
+          sessionId
+        });
+        throw error;
+      }
+    },
+
+    readMainChatApprovals(sessionId, input) {
+      return mainChatApprovals.read(sessionId, { vibe64User: trustedAssistantUser(input) });
+    },
+
+    editMainChatApproval(sessionId, approvalId, input) {
+      return mainChatApprovals.edit(sessionId, approvalId, input, { vibe64User: trustedAssistantUser(input) });
+    },
+
+    withdrawMainChatApproval(sessionId, approvalId, input) {
+      return mainChatApprovals.withdraw(sessionId, approvalId, input, { vibe64User: trustedAssistantUser(input) });
+    },
+
+    declineMainChatApproval(sessionId, approvalId, input) {
+      return mainChatApprovals.decline(sessionId, approvalId, input, { vibe64User: trustedAssistantUser(input) });
+    },
+
+    approveMainChatApproval(sessionId, approvalId, input, options) {
+      return mainChatApprovals.approve(sessionId, approvalId, input, {
+        vibe64User: trustedAssistantUser(input), browserAuthority: options.browserAuthority || null
+      });
+    },
+
+    async interruptAgentTurn(sessionId, input) {
+      return sessionResult(async () => {
+        const result = await terminals.interruptAgentTurn(sessionId, input, {
+          runtime: await project.createRuntime({ inspectSource: false })
+        });
+        if (result?.ok !== false) {
+          await publishSessionChanged(sessionId, {
+            originId: text(input.originId),
+            reason: "session-agent-turn-interrupted"
+          });
+        }
+        return result;
+      }, "Vibe64 could not interrupt the assistant.");
+    },
+
+    async resumeIntegrationContinuation(sessionId, input) {
+      return sessionResult(async () => {
+        await setupRunner.wait(sessionId);
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const result = await terminals.resumeIntegrationContinuation(sessionId, {
+          turnId: input.turnId, requestId: input.requestId
+        }, {
+          runtime, vibe64User: trustedAssistantUser(input),
+          readIntegrationConfiguration: () => sourceEditor.readIntegrations({ sessionId })
+        });
+        await publishSessionChanged(sessionId, {
+          reason: "integration-setup-completed", session: null
+        });
+        return { ...result, sessionId, turnId: input.turnId };
+      });
+    },
+
+    async skipIntegrationSetupRequest(sessionId, input) {
+      return sessionResult(async () => {
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const integrationSetup = await runtime.store.skipIntegrationSetupRequest(sessionId, {
+          turnId: input.turnId, requestId: input.requestId
+        });
+        await publishSessionChanged(sessionId, {
+          reason: "integration-setup-skipped", session: null
+        });
+        return { ok: true, sessionId, turnId: input.turnId, integrationSetup };
+      });
+    }
+  });
+  return messages;
+}
+
+export { createSessionMessages };

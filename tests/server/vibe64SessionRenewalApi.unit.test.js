@@ -16,7 +16,7 @@ import {
   ACTION_RETRY_SESSION_RENEWAL,
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   createSessionActions
-} from "../../packages/vibe64-sessions/src/server/actions.js";
+} from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import {
   sessionRenewalConfirmationActionInputValidator,
   sessionRenewalConfirmationInputValidator,

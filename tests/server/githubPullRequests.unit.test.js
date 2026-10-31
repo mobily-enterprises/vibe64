@@ -15,7 +15,7 @@ import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-exe
 import { prepareSessionPullRequestBranch, saveSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import { checkSessionUpdatesDirect, updateSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
-import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
 import getPlacements from "../../src/placement.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
