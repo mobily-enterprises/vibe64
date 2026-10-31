@@ -161,16 +161,16 @@ async function listenUnixJsonCommandServer(server, socketPath = "") {
   server.unref?.();
 }
 
-// The per-session control servers of one agent command. Each server listens on
-// its own Unix socket and accepts only requests that carry its random token,
-// its session and its generation; the agent receives all three in its
-// environment. `routes` maps each route path to { handle, token, status }:
-// `handle` receives { commandService, input, request, response, sessionId }
-// and returns the JSON result, or undefined after writing the response itself;
-// `token` names the entry token the route accepts (default "token"); `status`
-// maps a result to its HTTP status (default 200). `<routePrefix>/health` is
-// served for every server.
 /**
+ * The per-session control servers of one agent command. Each server listens on
+ * its own Unix socket and accepts only requests that carry its random token,
+ * its session and its generation; the agent receives all three in its
+ * environment. `routes` maps each route path to { handle, token, status }:
+ * `handle` receives { commandService, input, request, response, sessionId }
+ * and returns the JSON result, or undefined after writing the response itself;
+ * `token` names the entry token the route accepts (default "token"); `status`
+ * maps a result to its HTTP status (default 200). `<routePrefix>/health` is
+ * served for every server.
  * @param {object} dependencies
  * @param {string} dependencies.routePrefix
  * @param {object} [dependencies.routes] each route's handler, by path

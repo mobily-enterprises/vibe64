@@ -30,10 +30,10 @@ function readSessionArchiveOperation(metadata = {}) {
   return operation;
 }
 
-// Archive: stop the session's work, release its resources, then remove its
-// source, recording each durable phase so startup resumes an interrupted one.
-// A host may add idempotent preparation between those phases.
 /**
+ * Archive: stop the session's work, release its resources, then remove its
+ * source, recording each durable phase so startup resumes an interrupted one.
+ * A host may add idempotent preparation between those phases.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
@@ -59,8 +59,8 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
     }
   }
 
-  // The host's optional preparation runs on every attempt, at whichever phase.
   /**
+   * The host's optional preparation runs on every attempt, at whichever phase.
    * @param {((request: object) => Promise<object>) | null} prepare
    * @param {Vibe64SessionRuntime} runtime
    * @param {string} sessionId

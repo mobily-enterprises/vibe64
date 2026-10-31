@@ -3,12 +3,12 @@ const REPOSITORY_UPDATE_PROBE_INTERVAL_MS = 30_000;
 // After a failed probe, the slowest the product allows.
 const REPOSITORY_UPDATE_PROBE_RETRY_MS = 60_000;
 
-// One probe timer per project, kept only while the project is in use: a
-// browser watches it, or the last probe found an agent turn running in it.
-// `probe(slug, { memory, watched })` returns { inUse, failed }; `memory` lives
-// as long as the project's record. A probe never overlaps itself: ticks that
-// pass while one runs are skipped.
 /**
+ * One probe timer per project, kept only while the project is in use: a
+ * browser watches it, or the last probe found an agent turn running in it.
+ * `probe(slug, { memory, watched })` returns { inUse, failed }; `memory` lives
+ * as long as the project's record. A probe never overlaps itself: ticks that
+ * pass while one runs are skipped.
  * @param {object} dependencies
  * @param {typeof clearTimeout} [dependencies.clearTimer]
  * @param {() => number} [dependencies.now]

@@ -33,8 +33,8 @@ function openCodeReasoningHeadline(value = "") {
   return words.length ? `${words.join(" ")}…` : sentence;
 }
 
-// Product progress summaries and publication use the original native inventory.
 /**
+ * Product progress summaries and publication use the original native inventory.
  * @param {object} dependencies
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
  * @param {PublishSessionChanged} dependencies.publishSessionChanged

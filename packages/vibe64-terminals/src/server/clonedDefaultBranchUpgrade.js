@@ -49,8 +49,8 @@ async function backUpClonedBranch(backupPath, label, record) {
   }
 }
 
-// What the proof needs from a session clone's record, or why it is skipped.
 /**
+ * What the proof needs from a session clone's record, or why it is skipped.
  * @param {Vibe64SessionStore} store
  * @param {string} sessionId
  */

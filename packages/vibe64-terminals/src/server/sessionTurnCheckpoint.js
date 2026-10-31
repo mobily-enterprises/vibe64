@@ -63,9 +63,9 @@ async function checkpointSessionTurn({
   return { ok: !failure, processed: true, task, ...(failure ? { error: failure } : { checkpoint }) };
 }
 
-// Preserve the original Codex Main and temporary checkpoint projections.
-// The native owner still decides when the existing callback is invoked.
 /**
+ * Preserve the original Codex Main and temporary checkpoint projections.
+ * The native owner still decides when the existing callback is invoked.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.projectService
  * @param {PublishSessionChanged} dependencies.publishSessionChanged

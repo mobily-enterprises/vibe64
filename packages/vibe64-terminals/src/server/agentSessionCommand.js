@@ -535,8 +535,8 @@ function createAgentSessionCommandService({
     return runWithProjectRequestContext(projectBinding.get(normalizedSessionId)?.projectContext || {}, run);
   }
 
-  // Cross-project commands act for the person who submitted the current request.
   /**
+   * Cross-project commands act for the person who submitted the current request.
    * @param {Vibe64SessionStore} store
    * @param {string} sessionId
    * @param {object} binding

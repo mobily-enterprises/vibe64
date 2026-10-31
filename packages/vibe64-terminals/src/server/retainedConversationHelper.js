@@ -8,10 +8,10 @@ import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, vibe64AgentExecutionProfileAuditSn
 
 const DEFAULT_HELPER_TIMEOUT_MS = 120000;
 
-// The original Colleague retained Helper lifetime. The parent supplies its own
-// private root, durable receipt and scope prefix (Colleague's summaries keep
-// "summary"); native execution remains with Terminals.
 /**
+ * The original Colleague retained Helper lifetime. The parent supplies its own
+ * private root, durable receipt and scope prefix (Colleague's summaries keep
+ * "summary"); native execution remains with Terminals.
  * @param {object} dependencies
  * @param {TerminalsService} dependencies.terminals
  * @param {string} dependencies.root the parent's private folder for its Helper

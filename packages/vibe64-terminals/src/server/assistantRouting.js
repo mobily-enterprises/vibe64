@@ -121,12 +121,12 @@ function withSelection(context, selection) {
   };
 }
 
-// The ordinary conversation owns delivery and history. This record only holds
-// the one request being prepared, its working plan snapshot and follow-up.
-// Cancel also needs the chat's context without the agent-write lock (open), the
-// interrupt Stop uses (interrupt), and the native attempt's discard, which runs
-// under that lock (discardPending).
 /**
+ * The ordinary conversation owns delivery and history. This record only holds
+ * the one request being prepared, its working plan snapshot and follow-up.
+ * Cancel also needs the chat's context without the agent-write lock (open), the
+ * interrupt Stop uses (interrupt), and the native attempt's discard, which runs
+ * under that lock (discardPending).
  * @param {object} dependencies
  * @param {string} dependencies.systemRoot
  * @param {boolean} [dependencies.allowAuto]

@@ -97,9 +97,9 @@ function withCodexState(response = {}, session = {}) {
   };
 }
 
-// Read only the original bounded state files. Every read stays fresh; this
-// storage projection never creates a session runtime or acquires a provider.
 /**
+ * Read only the original bounded state files. Every read stays fresh; this
+ * storage projection never creates a session runtime or acquires a provider.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.projectService
  * @param {CodexAppServerRunOwner} dependencies.runOwner

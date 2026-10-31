@@ -87,9 +87,9 @@ export async function requireMainConversationAdmission(runtime, sessionId, curre
   requireCompletedConversationRewind(current.session || await runtime.getSession(sessionId, { inspectSource: false }));
 }
 
-// Only a server-constructed learning runtime can opt into a source-less cwd.
-// Its original store reader validates the exact active durable scope each time.
 /**
+ * Only a server-constructed learning runtime can opt into a source-less cwd.
+ * Its original store reader validates the exact active durable scope each time.
  * @param {Vibe64SessionRuntime} runtime
  * @param {string} sessionId
  * @param {object} [options]
@@ -104,10 +104,10 @@ export async function learningSessionExecutionRoot(runtime, sessionId, { allowCl
   return runtime.learningScope.noExercise === true ? executionRoot : "";
 }
 
-// Read application context without inspecting source or acquiring a native
-// conversation. Codex/OpenCode require matching snapshots; Claude retains its
-// captured/pinned snapshot.
 /**
+ * Read application context without inspecting source or acquiring a native
+ * conversation. Codex/OpenCode require matching snapshots; Claude retains its
+ * captured/pinned snapshot.
  * @param {string} engine
  * @param {ProjectService} projectService
  * @param {string} sessionId
@@ -185,10 +185,10 @@ function claudeConversationScope(id, options) {
   return scope;
 }
 
-// Cleanup and activity reach what the Claude owner retains for a session by its
-// key alone. They need no workspace or Claude selection: a session whose source
-// was never created or was already removed can still be closed and inspected.
 /**
+ * Cleanup and activity reach what the Claude owner retains for a session by its
+ * key alone. They need no workspace or Claude selection: a session whose source
+ * was never created or was already removed can still be closed and inspected.
  * @param {ProjectService} projectService
  * @param {string} sessionId
  * @param {object} [options]
@@ -708,9 +708,9 @@ function codexContextRefreshPending(session = {}) {
 // Claude message preparation marks these stages on JSKIT's delivery observer.
 export const CLAUDE_PREPARATION_DELIVERY_STAGES = Object.freeze(["git-actor", "genesis-rendered"]);
 
-// The existing Claude owner shares this application policy across its retained entries.
-// Main/scoped/renewal predicates remain the original distinct rules.
 /**
+ * The existing Claude owner shares this application policy across its retained entries.
+ * Main/scoped/renewal predicates remain the original distinct rules.
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
  * @param {RecordSessionGitCommandActor} dependencies.recordGitActor
@@ -1012,9 +1012,9 @@ export async function publishMainConversationEvent(namespaceForSession, publishA
   if (publishConversation) await publishConversation({ namespace: namespaceForSession(sessionId), sessionId, event });
 }
 
-// The original files remain authoritative. This composition does not open a
-// provider, copy a native run, create a runtime record or subscribe to output.
 /**
+ * The original files remain authoritative. This composition does not open a
+ * provider, copy a native run, create a runtime record or subscribe to output.
  * @param {Vibe64SessionStore} store
  * @param {string} sessionId
  * @param {object} context
@@ -1134,9 +1134,9 @@ function turnConversationKey(turn) {
   return selection?.engineId === "codex" ? "codex" : vibe64AssistantConversationKey(selection);
 }
 
-// The transcript remains authoritative. Delivery cursors and pending native
-// writes share one record so Send and AI changes use the same boundary.
 /**
+ * The transcript remains authoritative. Delivery cursors and pending native
+ * writes share one record so Send and AI changes use the same boundary.
  * @param {Vibe64SessionStore} store
  * @param {string} sessionId
  */

@@ -21,8 +21,8 @@ function record(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-// Application account visibility and catalogue policy use the existing native probes.
 /**
+ * Application account visibility and catalogue policy use the existing native probes.
  * @param {object} dependencies
  * @param {string} dependencies.command
  * @param {CreateOpenCodeServerProcess} dependencies.createServerProcess

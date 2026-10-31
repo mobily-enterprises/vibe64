@@ -31,6 +31,7 @@ import {
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@jskit-ai/uploads-runtime/server/types").RuntimeUploads} RuntimeUploads */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("./types.js").TerminalsService} TerminalsService */
 
 const LIVE_HOST_ENV_KEYS = Object.freeze([
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
@@ -126,6 +127,12 @@ function createVibe64TerminalsFeature({
       return { terminals };
     },
     actions: ({ terminals }) => createTerminalActions({ terminals }),
+    /**
+     * @param {object} capabilities
+     * @param {RuntimeEnv} capabilities.env
+     * @param {RuntimeLogger} capabilities.logger
+     * @param {{ outputs: { terminals: TerminalsService } }} context
+     */
     async boot({ env, logger }, { outputs }) {
       await prepareCodexAttachmentStorage({ env });
       const schedule = startProjectRuntimeDormancyCleanupSchedule({
@@ -135,6 +142,10 @@ function createVibe64TerminalsFeature({
       cleanupSchedules.set(outputs.terminals, schedule);
       await schedule.runNow();
     },
+    /**
+     * @param {object} _dependencies
+     * @param {{ outputs: { terminals: TerminalsService } }} context
+     */
     async shutdown(_dependencies, { outputs }) {
       cleanupSchedules.get(outputs.terminals)?.stop();
       cleanupSchedules.delete(outputs.terminals);

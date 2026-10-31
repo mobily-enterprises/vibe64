@@ -584,10 +584,10 @@ function createSessionActions({ sessions } = {}) {
   ]);
 }
 
-// A browser page's watch of a project it has open, or of one session it shows.
-// Only its realtime connection (projectWatch.js) executes it, with the binding
-// that releases what the watch holds when the page leaves or disconnects.
 /**
+ * A browser page's watch of a project it has open, or of one session it shows.
+ * Only its realtime connection (projectWatch.js) executes it, with the binding
+ * that releases what the watch holds when the page leaves or disconnects.
  * @param {object} dependencies
  * @param {RepositoryUpdateProbe} dependencies.probe
  */

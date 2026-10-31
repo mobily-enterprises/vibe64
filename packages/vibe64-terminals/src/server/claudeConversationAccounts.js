@@ -52,8 +52,8 @@ function claudeCapabilities(initialization, connected, connections = []) {
   };
 }
 
-// Account visibility, identity and Helper policy; native queries use the existing owner.
 /**
+ * Account visibility, identity and Helper policy; native queries use the existing owner.
  * @param {object} dependencies
  * @param {ClaudeConversationOwner} dependencies.owner
  * @param {string} dependencies.configRoot

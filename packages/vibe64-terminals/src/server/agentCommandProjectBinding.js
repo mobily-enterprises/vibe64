@@ -9,11 +9,11 @@ function projectContextRoot(project = {}) {
   return root ? path.resolve(root) : "";
 }
 
-// Binds each agent session to the project that prepared its command, and runs
-// later requests only inside that same project. `errors` gives each command
-// its own [message, code] for: sessionRequired, projectRequired, unbound and
-// changed. `capture()` adds command-specific fields to a new binding.
 /**
+ * Binds each agent session to the project that prepared its command, and runs
+ * later requests only inside that same project. `errors` gives each command
+ * its own [message, code] for: sessionRequired, projectRequired, unbound and
+ * changed. `capture()` adds command-specific fields to a new binding.
  * @param {ProjectService} projectService
  * @param {object} errors
  * @param {object} [options]

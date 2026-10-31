@@ -178,9 +178,9 @@ export function createCodexStartupHealth(publishSessionChanged) {
     failure: writeCodexAppServerFailure, blocked: writeCodexAppServerBlocked };
 }
 
-// Application workspace policy uses the existing native retirement API before
-// publishing its original blocked-health result. The writer keeps its original contract.
 /**
+ * Application workspace policy uses the existing native retirement API before
+ * publishing its original blocked-health result. The writer keeps its original contract.
  * @param {object} dependencies
  * @param {CodexAppServerRunOwner} dependencies.runOwner
  * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost

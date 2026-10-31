@@ -35,9 +35,9 @@ function codexEffectiveAgentSettings(agentSettings = {}) {
   return effectiveVibe64AgentSettings(agentSettings);
 }
 
-// Application preparation only. Existing native owners invoke these phases;
-// this facility creates no native owner, queue, retained state or session read.
 /**
+ * Application preparation only. Existing native owners invoke these phases;
+ * this facility creates no native owner, queue, retained state or session read.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.projectService
  * @param {CodexRuntimeHost} dependencies.runtimeHost

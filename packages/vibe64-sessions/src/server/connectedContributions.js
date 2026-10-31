@@ -30,11 +30,11 @@ function connectedUpdateOutcome(update, branch) {
   return { status: "skipped", reason: text(update?.error) || `It could not be updated to ${branch}.` };
 }
 
-// Connected-source orchestration: a working session's contributions to the
-// projects it is connected to, through each receiving project's own actions.
-// sessions() is the owning session service, for its Save, Update, inspection
-// and creation; saveOrUpdateRunning(sessionId) reports its in-process work.
 /**
+ * Connected-source orchestration: a working session's contributions to the
+ * projects it is connected to, through each receiving project's own actions.
+ * sessions() is the owning session service, for its Save, Update, inspection
+ * and creation; saveOrUpdateRunning(sessionId) reports its in-process work.
  * @param {object} dependencies
  * @param {ActionCatalogue | null} dependencies.actions
  * @param {ProjectService} dependencies.project

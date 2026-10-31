@@ -39,9 +39,9 @@ async function terminalSessionSourceRootForSession(projectService, sessionId) {
   }
 }
 
-// Authorized application facts and cleanup effects. Native stop/recovery and
-// session-closure coordination belong to assistant-core's runtime lifecycle.
 /**
+ * Authorized application facts and cleanup effects. Native stop/recovery and
+ * session-closure coordination belong to assistant-core's runtime lifecycle.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.projectService
  * @param {CodexRuntimeHost} dependencies.runtimeHost

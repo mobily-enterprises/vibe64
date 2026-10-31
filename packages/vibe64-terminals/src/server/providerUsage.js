@@ -52,9 +52,9 @@ function normalizeUsage(providerId, value) {
   return { status: windows.length ? "available" : "unavailable", kind: "quota", windows };
 }
 
-// Account snapshots are optional and memory-only. Turn execution never awaits a
-// balance request, and the HTTP read never makes an upstream request of its own.
 /**
+ * Account snapshots are optional and memory-only. Turn execution never awaits a
+ * balance request, and the HTTP read never makes an upstream request of its own.
  * @param {object} dependencies
  * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
  * @param {typeof fetch} [dependencies.fetchImpl]

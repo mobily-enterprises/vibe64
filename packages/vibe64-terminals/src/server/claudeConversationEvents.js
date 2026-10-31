@@ -16,8 +16,8 @@ const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 const now = () => new Date().toISOString();
 
-// The native owner emits once; Vibe64 persists and publishes its existing effects.
 /**
+ * The native owner emits once; Vibe64 persists and publishes its existing effects.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.projectService
  * @param {ClaudeConversationStorage} dependencies.storage

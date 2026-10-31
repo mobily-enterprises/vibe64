@@ -33,10 +33,10 @@ import {
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
-// Startup resumes interrupted archives, then interrupted renewals. Each step
-// runs even when the other fails, and every failure is logged with its
-// session. Shutdown stops the archive loop between sessions.
 /**
+ * Startup resumes interrupted archives, then interrupted renewals. Each step
+ * runs even when the other fails, and every failure is logged with its
+ * session. Shutdown stops the archive loop between sessions.
  * @param {object} dependencies
  * @param {(options: { signal: AbortSignal }) => Promise<object>} dependencies.recover
  * @param {RuntimeLogger | null} [dependencies.logger]
@@ -205,6 +205,12 @@ function createVibe64SessionsFeature() {
     actions({ sessions }) {
       return createSessionActions({ sessions });
     },
+    /**
+     * @param {object} capabilities
+     * @param {RuntimeLogger} capabilities.logger
+     * @param {ProjectService} capabilities.project
+     * @param {{ outputs: { sessions: SessionsService } }} context
+     */
     boot({ logger, project }, { outputs }) {
       if (!String(project?.targetRoot || "").trim()) {
         return;
@@ -261,9 +267,9 @@ const TURN_ACTIVE_REASONS = new Set([
   "opencode-server-turn-active"
 ]);
 
-// The repository updates capability: the update probe, and close(), which
-// stops the project watches and the probe.
 /**
+ * The repository updates capability: the update probe, and close(), which
+ * stops the project watches and the probe.
  * @param {object} dependencies
  * @param {RepositoryUpdateProbe} dependencies.probe
  * @param {() => void} dependencies.closeWatches

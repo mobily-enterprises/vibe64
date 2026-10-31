@@ -17,9 +17,9 @@ import { openCodeError, throwVibe64OpenCodeError as runtimeFailure,
 /** @typedef {ReturnType<typeof import("./openCodeConversationPresentation.js").createOpenCodeConversationPresentation>} OpenCodeConversationPresentation */
 /** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
 
-// Authorized application facts and awaited product cleanup. The supplied native
-// owner retains process/turn state, readiness, stopping and retry coordination.
 /**
+ * Authorized application facts and awaited product cleanup. The supplied native
+ * owner retains process/turn state, readiness, stopping and retry coordination.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.projectService
  * @param {() => SessionAgentManager} dependencies.getAssistantManager

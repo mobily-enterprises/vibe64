@@ -18,7 +18,7 @@ const Vibe64ConversationsProvider = defineFeature({
   /**
    * @param {object} capabilities
    * @param {SessionsService} capabilities.sessions
-   * @param {ColleagueService} [capabilities.colleague]
+   * @param {ColleagueService | null} capabilities.colleague
    * @param {RuntimeHttp} capabilities.http
    */
   setup({ sessions, colleague, http }) {

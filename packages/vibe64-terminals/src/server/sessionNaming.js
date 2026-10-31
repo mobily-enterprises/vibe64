@@ -45,9 +45,9 @@ function parseSessionName(value) {
   return result.name;
 }
 
-// signal is the server's shutdown signal: a name is discarded work, so
-// shutdown stops a running Helper turn and closes it instead of waiting for it.
 /**
+ * signal is the server's shutdown signal: a name is discarded work, so
+ * shutdown stops a running Helper turn and closes it instead of waiting for it.
  * @param {object} dependencies
  * @param {SessionAgentManager} dependencies.agent
  * @param {PublishSessionChanged} dependencies.publishSessionChanged

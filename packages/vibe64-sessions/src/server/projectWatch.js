@@ -6,10 +6,10 @@ import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../shared/projectWatch.js"
 
 const PROJECT_WATCH_ACTION = "vibe64.sessions.project.watch";
 
-// A watch belongs to one authenticated browser connection. The action checks
-// the person's access to the project and decides what the watch holds: realtime
-// rooms and the project's update probe. The socket supplies only its lifetime.
 /**
+ * A watch belongs to one authenticated browser connection. The action checks
+ * the person's access to the project and decides what the watch holds: realtime
+ * rooms and the project's update probe. The socket supplies only its lifetime.
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
  * @param {RuntimeRealtime} dependencies.realtime

@@ -21,9 +21,11 @@ function createProjectRuntimeChangedPublisher(events) {
   };
 }
 
-// The session changes the terminals service publishes, one publisher per kind
-// of change; they all share one session change publisher.
-/** @param {RuntimeEvents} events */
+/**
+ * The session changes the terminals service publishes, one publisher per kind
+ * of change; they all share one session change publisher.
+ * @param {RuntimeEvents} events
+ */
 function createTerminalSessionChangedPublishers(events) {
   const sessionChanged = createSessionChangedPublisher(events);
   return {

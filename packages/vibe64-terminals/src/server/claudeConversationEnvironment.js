@@ -54,8 +54,8 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
   await rename(temporary, file);
 }
 
-// Vibe64's selected settings, managed command environment and Genesis host facts.
 /**
+ * Vibe64's selected settings, managed command environment and Genesis host facts.
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
  * @param {ProjectService} dependencies.projectService

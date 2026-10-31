@@ -136,8 +136,8 @@ function requiredIncomingSessionId(value = "") {
   return sessionId;
 }
 
-// Project history is readable without a session; a given session pins it to that session's base.
 /**
+ * Project history is readable without a session; a given session pins it to that session's base.
  * @param {ProjectService} project
  * @param {string} [value]
  */
@@ -223,9 +223,11 @@ function legacyCodexAssistantSelection() {
   });
 }
 
-// The workspace setup runner sessions use unless a host supplies one: the
-// terminals' own setup.
-/** @param {TerminalsService} terminals */
+/**
+ * The workspace setup runner sessions use unless a host supplies one: the
+ * terminals' own setup.
+ * @param {TerminalsService} terminals
+ */
 function createTerminalsSetupRunner(terminals) {
   return Object.freeze({
     isRunning: (sessionId) => typeof terminals.workspaceSetupIsRunning === "function" &&
@@ -690,15 +692,15 @@ function createService({
     });
   }
 
-  // A failed Update that the session's own repository has since repaired
-  // outside Save or Update (an assistant or a person using Git directly) no
-  // longer applies once its checkout proves all of this: HEAD contains the
-  // saved version the Update was trying to reach, or Update has nothing left
-  // to apply; no merge, rebase, cherry-pick or revert is unfinished; and no
-  // file is conflicted. The record keeps its checkpoint and conflict evidence
-  // and gains an event saying why it was resolved. Anything else leaves the
-  // failure, and its reason, as it was.
   /**
+   * A failed Update that the session's own repository has since repaired
+   * outside Save or Update (an assistant or a person using Git directly) no
+   * longer applies once its checkout proves all of this: HEAD contains the
+   * saved version the Update was trying to reach, or Update has nothing left
+   * to apply; no merge, rebase, cherry-pick or revert is unfinished; and no
+   * file is conflicted. The record keeps its checkpoint and conflict evidence
+   * and gains an event saying why it was resolved. Anything else leaves the
+   * failure, and its reason, as it was.
    * @param {Vibe64SessionRuntime} runtime
    * @param {object} session
    * @param {object} task

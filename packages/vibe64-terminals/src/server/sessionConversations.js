@@ -98,8 +98,8 @@ function visibleContextText(message) {
   return separator < 0 ? message.text : prefix + assistantGoalObjective(objective, { objective: objective.slice(separator + 2) });
 }
 
-// Capture only the canonical visible transcript, never native prompts or live reasoning.
 /**
+ * Capture only the canonical visible transcript, never native prompts or live reasoning.
  * @param {Vibe64SessionStore} store
  * @param {string} sessionId
  */
