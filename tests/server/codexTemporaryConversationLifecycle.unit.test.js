@@ -1769,6 +1769,7 @@ async function withConversationController(operation, {
         },
         projectContextRoot,
         store: {
+          paths() { return {}; },
           async readBackgroundTask() { return null; },
           async readSessionForRenewal() { return { ...session, backgroundTasks: [] }; },
           async withReadableSessionPaths(sessionId, operation) {
