@@ -17,7 +17,7 @@ Genesis without creating another interpretation of the application.
 - Main: `packages/vibe64-system-graph/src/server/service.js`
 - `packages/vibe64-system-graph/src/server/genesisCities.js`
 - `packages/vibe64-system-graph/src/server/snapshotCache.js`
-- `packages/vibe64-system-graph/src/server/actions.js`
+- `packages/vibe64-system-graph/src/server/systemGraphActions.js`
 - `packages/vibe64-system-graph/src/server/registerRoutes.js`
 - `tests/server/vibe64SystemGraphRoutes.unit.test.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`

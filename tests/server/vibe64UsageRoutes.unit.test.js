@@ -4,7 +4,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
-import { createSystemGraphActions } from "../../packages/vibe64-system-graph/src/server/actions.js";
+import { createSystemGraphActions } from "../../packages/vibe64-system-graph/src/server/systemGraphActions.js";
 import { registerUsageRoutes } from "../../packages/vibe64-system-graph/src/server/usageRoutes.js";
 import {
   findRegisteredRoute,

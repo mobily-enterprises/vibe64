@@ -196,7 +196,8 @@ test('loaded Cities are released after two idle minutes and when a scan starts',
     assert.notEqual(reloaded, first, 'two idle minutes release the parsed City');
     assert.deepEqual(reloaded.city, first.city);
 
-    const service = createService({
+    const service = createService({ logger: console,
+      publishSessionChanged: async () => null,
       projectService: projectServiceFor(root),
       inspectorReader: async () => ({ status: 'unconfigured', inspectors: [] }),
       refresher: async () => {
@@ -212,7 +213,8 @@ test('loaded Cities are released after two idle minutes and when a scan starts',
 test("Genesis City status reports both missing documents without scanning source", async () => {
   await withTempRoot(async (root) => {
     await writeFile(path.join(root, "broken-source.js"), "this is deliberately not valid JavaScript {\n", "utf8");
-    const service = createService({
+    const service = createService({ logger: console,
+      publishSessionChanged: async () => null,
       projectService: projectServiceFor(root),
       refresher: async () => {
         throw new Error("refresh should not run while reading status");
@@ -246,7 +248,8 @@ test("Genesis City status reports both missing documents without scanning source
 test("Genesis City status reports both ready documents and the service exposes no raw City reads", async () => {
   await withTempRoot(async (root) => {
     await writeCities(root, { machine: machineCityFixture(), program: programCityFixture() });
-    const service = createService({
+    const service = createService({ logger: console,
+      publishSessionChanged: async () => null,
       projectService: projectServiceFor(root)
     });
 
@@ -264,7 +267,8 @@ test("Genesis City schema validation rejects corrupt documents and broken refere
     const invalidMachine = machineCityFixture();
     invalidMachine.schema = "genesis.machine-city.v0";
     await writeCities(root, { machine: invalidMachine });
-    const service = createService({
+    const service = createService({ logger: console,
+      publishSessionChanged: async () => null,
       projectService: projectServiceFor(root)
     });
 
@@ -311,7 +315,8 @@ test("refresh delegates to Genesis exactly once and validates its native result"
     const machine = machineCityFixture();
     const program = programCityFixture();
     const calls = [];
-    const service = createService({
+    const service = createService({ logger: console,
+      publishSessionChanged: async () => null,
       projectService: projectServiceFor(root),
       inspectorReader: async () => ({ status: "unconfigured", inspectors: [] }),
       refresher: async (input) => {
@@ -355,7 +360,8 @@ test("refresh keeps the call web out of Git through the clone's own exclude file
     execFileSync("git", ["init", "-q"], { cwd: root });
     await writeFile(path.join(root, ".gitignore"), "node_modules/\n");
     const ignored = [];
-    const service = createService({
+    const service = createService({ logger: console,
+      publishSessionChanged: async () => null,
       projectService: projectServiceFor(root),
       inspectorReader: async () => ({ status: "unconfigured", inspectors: [] }),
       refresher: async () => {
@@ -374,7 +380,8 @@ test("refresh keeps the call web out of Git through the clone's own exclude file
   // that the call web is not ignored.
   await withTempRoot(async (root) => {
     let refreshed = 0;
-    const service = createService({
+    const service = createService({ logger: console,
+      publishSessionChanged: async () => null,
       projectService: projectServiceFor(root),
       inspectorReader: async () => ({ status: "unconfigured", inspectors: [] }),
       refresher: async () => { refreshed += 1; return { machine: machineCityFixture(), program: programCityFixture() }; }
@@ -413,7 +420,7 @@ test('configured architecture inspection uses managed execution and publishes on
   await withTempRoot(async root => {
     const projectService = { ...projectServiceFor(root), async readCurrentProject() { return { slug: 'fixture' }; }, async projectInspectionEnvironment() { return { FIXTURE: '1' }; } };
     const calls = []; const machine = architectureFixture();
-    const service = createService({ projectService, inspectorReader: async () => inspectorFixture(), runtimeReader: ids => { assert.deepEqual(ids, ['nodejs']); return { available: true, runtimes: ['fixture-node'] }; },
+    const service = createService({ logger: console, publishSessionChanged: async () => null, projectService, inspectorReader: async () => inspectorFixture(), runtimeReader: ids => { assert.deepEqual(ids, ['nodejs']); return { available: true, runtimes: ['fixture-node'] }; },
       refresher: async input => { calls.push(input); const observed = await input.observations(machine.architecture); calls.push({ published: observed }); return { machine, program: programCityFixture() }; },
       runCommand: async input => {
         assert.equal(input.actor, 'app'); assert.equal(input.mode, 'capture'); assert.equal(input.purpose, 'source'); assert.equal(input.envPolicy, 'project');
@@ -443,7 +450,7 @@ test('each inspector gets its own shared cache folder beside the session, outsid
     const inspection = inspectorFixture();
     inspection.inspectors.push({ ...inspection.inspectors[0], id: 'second', title: 'Second', argv: ['node', 'second.mjs'] });
     const requests = [];
-    const service = createService({ projectService, inspectorReader: async () => inspection, runtimeReader: () => ({ available: true, runtimes: [] }),
+    const service = createService({ logger: console, publishSessionChanged: async () => null, projectService, inspectorReader: async () => inspection, runtimeReader: () => ({ available: true, runtimes: [] }),
       refresher: async input => { await input.observations(architectureFixture().architecture); return { machine: architectureFixture(), program: programCityFixture() }; },
       runCommand: async input => { requests.push(JSON.parse(input.input)); return { ok: true, stdout: JSON.stringify({ ...emptyObservations(), adapter: input.args[0] }) }; }
     });
@@ -474,7 +481,8 @@ test('each inspector gets its own shared cache folder beside the session, outsid
 test('architecture refresh respects the existing assistant write admission lock', async () => {
   await withTempRoot(async root => {
     const base = projectServiceFor(root);
-    const service = createService({
+    const service = createService({ logger: console,
+      publishSessionChanged: async () => null,
       projectService: { async createRuntime() {
         const runtime = await base.createRuntime();
         return { ...runtime, store: { async runSessionExclusive(sessionId, lock, operation, options) {
@@ -496,7 +504,7 @@ test('invalid output and changed Stack never reach architecture publication', as
     const projectService = { ...projectServiceFor(root), async readCurrentProject() { return {}; }, async projectInspectionEnvironment() { return {}; } };
     for (const failure of ['invalid-json', 'invalid-evidence', 'changed-stack']) {
       const calls = []; let reads = 0;
-      const service = createService({ projectService, runtimeReader: () => ({ available: true, runtimes: [] }),
+      const service = createService({ logger: console, publishSessionChanged: async () => null, projectService, runtimeReader: () => ({ available: true, runtimes: [] }),
         inspectorReader: async () => ({ ...inspectorFixture(), stackHash: failure === 'changed-stack' && reads++ ? 'changed' : 'stack-hash' }),
         refresher: async input => { calls.push(input); const machine = architectureFixture(); await input.observations(machine.architecture); assert.fail('Invalid inspection must not publish'); },
         runCommand: async () => ({ ok: true, stdout: failure === 'invalid-json' ? 'broken' : JSON.stringify(failure === 'invalid-evidence' ? { ...emptyObservations(), inputs: [{ path: 'src/catalog.js', hash: 'stale' }] } : emptyObservations()) })
@@ -516,7 +524,7 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
     let interrupted; const aborted = new Promise(resolve => { interrupted = resolve; });
     let cleanup; const cleanupReady = new Promise(resolve => { cleanup = resolve; });
     const calls = [];
-    const service = createService({ projectService, inspectorReader: async () => inspectorFixture(), runtimeReader: () => ({ available: true, runtimes: [] }),
+    const service = createService({ logger: console, publishSessionChanged: async () => null, projectService, inspectorReader: async () => inspectorFixture(), runtimeReader: () => ({ available: true, runtimes: [] }),
       refresher: async input => { calls.push(input); const observed = await input.observations(machine.architecture); calls.push({ published: observed }); return { machine, program: programCityFixture() }; },
       runCommand: async ({ signal }) => { started(); await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true })); interrupted(); await cleanupReady; return { ok: false, stdout: '' }; }
     });
@@ -542,7 +550,7 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
 test('missing declared inspector prerequisites fail before source scanning or publication', async () => {
   await withTempRoot(async root => {
     const machine = architectureFixture(); await writeCities(root, { machine });
-    const service = createService({ projectService: projectServiceFor(root),
+    const service = createService({ logger: console, publishSessionChanged: async () => null, projectService: projectServiceFor(root),
       runtimeReader: () => ({ available: true, runtimes: [] }),
       inspectorReader: async () => { const inspection = inspectorFixture(); inspection.inspectors[0].requiredFiles = ['tools/missing-inspector.py']; return inspection; },
       refresher: async () => { assert.fail('Missing inspector must be rejected before scanning source'); },
@@ -561,7 +569,7 @@ test('failed inspectors retain bounded command diagnostics and the preceding art
     const machine = architectureFixture(); await writeCities(root, { machine });
     const calls = [];
     const projectService = { ...projectServiceFor(root), async readCurrentProject() { return {}; }, async projectInspectionEnvironment() { return {}; } };
-    const service = createService({ projectService, runtimeReader: () => ({ available: true, runtimes: [] }), inspectorReader: async () => inspectorFixture(),
+    const service = createService({ logger: console, publishSessionChanged: async () => null, projectService, runtimeReader: () => ({ available: true, runtimes: [] }), inspectorReader: async () => inspectorFixture(),
       refresher: async input => { calls.push(input); const observed = await input.observations(machine.architecture); calls.push({ published: observed }); return { machine, program: programCityFixture() }; },
       runCommand: async () => ({ ok: false, exitCode: 1, stderr: 'x'.repeat(4000) + 'Required module missing.' })
     });
@@ -584,7 +592,7 @@ test('Architecture view keeps public ranges and complete dependency evidence wit
     const evidence = { path: machine.architecture.files[0].path, hash: machine.architecture.files[0].hash, start: {line:1,column:1}, end: {line:1,column:20} };
     machine.architecture.relations = [{ id: 'dependency', fromFileId: publicSymbol.fileId, targetFileId: publicSymbol.fileId, resolution: 'resolved', kind: 'type-import', typeOnly: true, specifier: './catalog.js', evidence }];
     await writeCities(root, { machine });
-    const service = createService({ projectService: projectServiceFor(root) });
+    const service = createService({ logger: console, publishSessionChanged: async () => null, projectService: projectServiceFor(root) });
     const response = await service.readArchitecture({sessionId:'session-1'});
     assert.equal(response.ok, true, response.error);
     assert.deepEqual(response.architecture.symbols.map(symbol => symbol.id), ['public']);
@@ -604,7 +612,7 @@ test('Architecture projects hash-matched source size and declared entry files wi
   await withTempRoot(async root => {
     const machine = architectureFixture();
     await writeCities(root, { machine });
-    const service = createService({ projectService: projectServiceFor(root),
+    const service = createService({ logger: console, publishSessionChanged: async () => null, projectService: projectServiceFor(root),
       inspectorReader: async ({projectRoot}) => { assert.equal(projectRoot, root); return { status: 'ready', inspectors: [{ entryFiles: ['src/catalog.js', 'missing/Main.kt'] }] }; },
       layoutReader: async ({projectRoot}) => { assert.equal(projectRoot, root); return { status: 'ready', groups: [{id:'work',title:'Application work',kind:'layer',purpose:'Handles work.',subsystems:[{root:'.',title:'Catalog',description:'Lists books.'}]}] }; },
       runCommand: async () => { throw new Error('Read must not execute project commands'); }
@@ -621,7 +629,7 @@ test('Architecture projects hash-matched source size and declared entry files wi
     machine.architecture.files[0].hash = 'other-snapshot';
     await writeCities(root, { machine });
     assert.equal((await service.readArchitecture({sessionId:'session-1'})).architecture.files[0].sourceLines, null);
-    const malformed = createService({ projectService: projectServiceFor(root), inspectorReader: async () => { throw new Error('Malformed entry declarations'); }, layoutReader: async () => { throw new Error('Malformed group declarations'); } });
+    const malformed = createService({ logger: console, publishSessionChanged: async () => null, projectService: projectServiceFor(root), inspectorReader: async () => { throw new Error('Malformed entry declarations'); }, layoutReader: async () => { throw new Error('Malformed group declarations'); } });
     const retained = await malformed.readArchitecture({sessionId:'session-1'});
     assert.equal(retained.ok, true);
     assert.match(retained.architecture.entryPointDiagnostic, /Malformed entry declarations/);
@@ -640,7 +648,7 @@ test('scan status and notifications survive readers leaving, duplicate admission
     const entered = new Promise(resolve => { started = resolve; });
     let calls = 0;
     const events = [];
-    const service = createService({
+    const service = createService({ logger: console,
       projectService: projectServiceFor(root),
       inspectorReader: async () => ({ status: 'unconfigured', inspectors: [] }),
       publishSessionChanged: async (sessionId, payload) => { events.push({ sessionId, reason: payload.reason, refresh: (await service.readRefreshStatus({ sessionId })).refresh }); },

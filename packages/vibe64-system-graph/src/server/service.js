@@ -34,7 +34,7 @@ import {
   requireGenesisCity,
   validateGenesisCity
 } from "./genesisCities.js";
-import { releaseCallWeb } from "./usageWeb.js";
+import { releaseCallWeb } from "./usageService.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -273,8 +273,8 @@ function relationView(relation) {
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof vibe64RuntimePacks} [dependencies.runtimeReader]
  * @param {ProjectService} dependencies.projectService
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
- * @param {RuntimeLogger} [dependencies.logger]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {RuntimeLogger} dependencies.logger
  * @param {typeof refreshGenesisCities} [dependencies.refresher]
  */
 function createService({
@@ -284,16 +284,10 @@ function createService({
   runCommand = runVibe64Command,
   runtimeReader = vibe64RuntimePacks,
   projectService,
-  publishSessionChanged = async () => null,
-  logger = console,
+  publishSessionChanged,
+  logger,
   refresher = refreshGenesisCities
-} = {}) {
-  if (!projectService || typeof projectService.createRuntime !== "function") {
-    throw new TypeError("createService requires the Vibe64 Project API.");
-  }
-  if (typeof cityReader !== "function" || typeof refresher !== "function") {
-    throw new TypeError("createService requires Genesis City reader and refresher functions.");
-  }
+}) {
   const refreshes = new Map();
 
   function refreshSnapshot(pending) {

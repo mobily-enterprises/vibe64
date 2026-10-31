@@ -5,16 +5,16 @@
 // clicks, while re-parsing after a longer pause costs only a second or two.
 const GENESIS_SNAPSHOT_IDLE_MS = 2 * 60 * 1000;
 
-// At most `capacity` keys, least recently read first out. Each key holds one
-// loaded value for one identity; another identity replaces it, and a failed
-// load is not kept.
 /**
+ * At most `capacity` keys, least recently read first out. Each key holds one
+ * loaded value for one identity; another identity replaces it, and a failed
+ * load is not kept.
  * @param {object} dependencies
  * @param {number} dependencies.capacity
  * @param {number} [dependencies.idleMs]
  * @param {() => number} [dependencies.now]
  */
-function createSnapshotCache({ capacity, idleMs = GENESIS_SNAPSHOT_IDLE_MS, now = () => Date.now() } = {}) {
+function createSnapshotCache({ capacity, idleMs = GENESIS_SNAPSHOT_IDLE_MS, now = () => Date.now() }) {
   const entries = new Map();
   let timer = null;
 
@@ -26,7 +26,7 @@ function createSnapshotCache({ capacity, idleMs = GENESIS_SNAPSHOT_IDLE_MS, now 
     if (entries.size) {
       const next = Math.min(...[...entries.values()].map((entry) => entry.usedAt + idleMs)) - current;
       timer = setTimeout(sweep, Math.max(1000, next));
-      timer.unref?.();
+      timer.unref();
     }
   }
 

@@ -18,42 +18,47 @@ const recordedFunction = createSchema({
   start: { type: "object", schema: point, required: true }
 });
 
-// Usage reads share Architecture's session read authority. Like the other
-// System Graph reads they are not offered to the assistant; Colleague explains
-// how to use the view instead.
-/**
- * @param {object} dependencies
- * @param {SystemGraphService} dependencies.systemGraph
- */
-function createUsageActions({ systemGraph }) {
-  return [
-    ["usage.entries.read", "readUsageEntries", {
-      kind: { type: "string", enum: USAGE_ENTRY_KINDS, required: false },
-      q: optionalText(80),
-      cursor: optionalText(32),
-      limit: { type: "integer", min: 1, max: 200, required: false }
-    }],
-    ["usage.web.read", "readUsageWeb", {
-      entryId: { type: "string", minLength: 1, maxLength: 2048, required: true },
-      mode: { type: "string", enum: ["imports", "calls"], required: true },
-      certainty: { type: "string", enum: ["all", "exact"], required: false },
-      subsystemId: optionalText(2048),
-      maxNodes: { type: "integer", min: 1, max: 1000, required: false }
-    }],
-    ["usage.function.read", "readUsageFunction", {
-      functionId: { type: "string", minLength: 1, maxLength: 4096, required: true }
-    }],
-    ["usage.join", "joinUsage", {
-      functions: { type: "array", items: recordedFunction, required: true }
-    }]
-  ].map(([operation, method, fields]) => withVibe64ActionContext({
+// A usage read on one session's scan, with the fields its query takes.
+function usageAction(operation, execute, fields) {
+  return withVibe64ActionContext({
     id: `vibe64.system-graph.${operation}`, version: 1,
     kind: "query",
     input: { schema: createSchema({ sessionId, ...fields }), mode: "create" },
     output: null, idempotency: "none",
     extensions: { assistant: { exclude: true } },
-    execute: (input) => systemGraph[method](input)
-  }));
+    execute
+  });
+}
+
+/**
+ * Usage reads share Architecture's session read authority. Like the other
+ * System Graph reads they are not offered to the assistant; Colleague explains
+ * how to use the view instead.
+ * @param {object} dependencies
+ * @param {SystemGraphService} dependencies.systemGraph
+ */
+function createUsageActions({ systemGraph }) {
+  return Object.freeze([
+    usageAction("usage.entries.read", (input) => systemGraph.readUsageEntries(input), {
+      kind: { type: "string", enum: USAGE_ENTRY_KINDS, required: false },
+      q: optionalText(80),
+      cursor: optionalText(32),
+      limit: { type: "integer", min: 1, max: 200, required: false }
+    }),
+    usageAction("usage.web.read", (input) => systemGraph.readUsageWeb(input), {
+      entryId: { type: "string", minLength: 1, maxLength: 2048, required: true },
+      mode: { type: "string", enum: ["imports", "calls"], required: true },
+      certainty: { type: "string", enum: ["all", "exact"], required: false },
+      subsystemId: optionalText(2048),
+      maxNodes: { type: "integer", min: 1, max: 1000, required: false }
+    }),
+    usageAction("usage.function.read", (input) => systemGraph.readUsageFunction(input), {
+      functionId: { type: "string", minLength: 1, maxLength: 4096, required: true }
+    }),
+    usageAction("usage.join", (input) => systemGraph.joinUsage(input), {
+      functions: { type: "array", items: recordedFunction, required: true }
+    })
+  ]);
 }
 
 export { createUsageActions };
