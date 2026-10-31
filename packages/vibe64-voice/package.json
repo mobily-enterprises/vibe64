@@ -8,7 +8,8 @@
     "./client": "./src/client/index.js",
     "./shared/avatars": "./src/shared/avatars.js",
     "./shared/routes": "./src/shared/routes.js",
-    "./server": "./src/server/Vibe64VoiceProvider.js"
+    "./server": "./src/server/Vibe64VoiceProvider.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",

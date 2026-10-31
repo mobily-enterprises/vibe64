@@ -1,6 +1,9 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 
+/** @typedef {import("./types.js").VoiceService} VoiceService */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+
 const ACTION_READ_VOICE_CATALOGUE = "vibe64.voice.catalogue.read";
 const emptyInput = Object.freeze({
   schema: createSchema({})
@@ -20,6 +23,11 @@ const voiceCatalogueTool = Object.freeze({
   }
 });
 
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {VoiceService} dependencies.voice
+ */
 function createVoiceActions({ actions, voice } = {}) {
   if (!actions || typeof actions.execute !== "function") {
     throw new TypeError("createVoiceActions requires the action catalogue.");

@@ -6,6 +6,15 @@ import { resolveProjectRequestContext, runWithProjectRequestContext } from "@loc
 import { COLLEAGUE_VOICE_SOCKET_URL } from "../shared/routes.js";
 import { ACTION_READ_VOICE_CATALOGUE, createVoiceActions } from "./actions.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
+/** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
+
+/**
+ * @param {RuntimeFastify} fastify
+ * @param {ActionCatalogue} actions
+ */
 function registerVoiceCatalogueRoute(fastify, actions) {
   fastify.get("/api/vibe64/voice/voices", request => actions.execute({
     actionId: ACTION_READ_VOICE_CATALOGUE,
@@ -14,11 +23,28 @@ function registerVoiceCatalogueRoute(fastify, actions) {
   }));
 }
 
+// The voice capability: whether the voice proxy is configured, and its voice
+// catalogue.
+/** @param {ReturnType<typeof resolveVoiceProxyConfig>} proxyConfig */
+function createVoice(proxyConfig) {
+  return Object.freeze({
+    available: proxyConfig.available,
+    readCatalogue: () => readVoiceCatalogue(proxyConfig)
+  });
+}
+
 const Vibe64VoiceProvider = defineFeature({
   id: "vibe64.voice",
   actionDefaults: { channels: ["api", "internal"], surfaces: ["app"] },
   requires: { colleague: "vibe64.colleague", env: "runtime.env", fastify: "runtime.fastify", project: "vibe64.project", sessions: "vibe64.sessions" },
   provides: { voice: "vibe64.voice" },
+  /**
+   * @param {object} capabilities
+   * @param {RuntimeEnv} capabilities.env
+   * @param {RuntimeFastify} capabilities.fastify
+   * @param {SessionsService} capabilities.sessions
+   * @param {{ actionCatalogue: ActionCatalogue }} context
+   */
   setup({ env, fastify, sessions }, { actionCatalogue }) {
     const config = { ...process.env, ...env };
     const proxyConfig = resolveVoiceProxyConfig({ endpoint: config.VIBE64_VOICE_ENDPOINT, accessTokenFile: config.VIBE64_VOICE_ACCESS_TOKEN_FILE });
@@ -44,13 +70,10 @@ const Vibe64VoiceProvider = defineFeature({
           context: { channel: "api", surface: "app", requestMeta: { request } } });
       }
     });
-    return { voice: Object.freeze({
-      available: proxyConfig.available,
-      readCatalogue: () => readVoiceCatalogue(proxyConfig)
-    }) };
+    return { voice: createVoice(proxyConfig) };
   },
   actions({ voice }, { actionCatalogue }) {
     return createVoiceActions({ actions: actionCatalogue, voice });
   }
 });
-export { Vibe64VoiceProvider, registerVoiceCatalogueRoute };
+export { Vibe64VoiceProvider, createVoice, registerVoiceCatalogueRoute };
