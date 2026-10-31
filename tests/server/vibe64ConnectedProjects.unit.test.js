@@ -162,7 +162,7 @@ test("settings create and maintain the complete repository list, including an em
     const project = service(root, {
       inspectConnectedRepository: async (name) => { access.push(name); return { permissions: { push: true } }; }
     });
-    const initial = await project.readSettings();
+    const initial = await project.readSettings({});
     assert.equal(initial.ok, true);
     assert.equal(initial.connectedProjects.exists, false);
     assert.equal((await readConnectedProjects(root)).exists, false, "reading Settings never creates the connection file");
@@ -175,7 +175,7 @@ test("settings create and maintain the complete repository list, including an em
     const typed = [customLibrary, { ...composition, type: "npm" }];
     const added = await project.saveConnectedProjects({ projects: typed, revision: created.connectedProjects.revision });
     assert.equal(added.ok, true, JSON.stringify(added));
-    assert.deepEqual((await project.readSettings()).connectedProjects.projects, typed);
+    assert.deepEqual((await project.readSettings({})).connectedProjects.projects, typed);
     const inherited = await project.saveConnectedProjects({ projects: [{ ...library, script: customLibrary.script }], revision: added.connectedProjects.revision });
     assert.equal(inherited.ok, true);
     assert.deepEqual((await readConnectedProjects(root)).projects, [{ ...library, script: customLibrary.script }]);
@@ -184,10 +184,10 @@ test("settings create and maintain the complete repository list, including an em
     assert.deepEqual((await readConnectedProjects(root)).projects, [library, composition], "omitting type removes an explicit override");
     const empty = await project.saveConnectedProjects({ projects: [], revision: defaults.connectedProjects.revision });
     assert.equal(empty.ok, true);
-    assert.deepEqual((await project.readSettings()).connectedProjects.projects, []);
+    assert.deepEqual((await project.readSettings({})).connectedProjects.projects, []);
     await writeFile(path.join(root, "vibe64.connections.json"), "broken");
     assert.equal((await project.saveConnectedProjects({ projects: [], revision: empty.connectedProjects.revision })).ok, false);
-    assert.equal((await project.readSettings()).connectedProjects.available, false);
+    assert.equal((await project.readSettings({})).connectedProjects.available, false);
     assert.equal(await readFile(path.join(root, "vibe64.connections.json"), "utf8"), "broken");
   });
 });

@@ -37,8 +37,6 @@ import {
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   assertProjectDirectoryUsable,
-  createStudioProjectContext,
-  getStudioProjectContext,
   normalizeDevelopmentDatabaseName,
   normalizeDevelopmentDatabaseScope
 } from "@local/vibe64-core/server/studioProjectContext";
@@ -269,11 +267,10 @@ function projectEnvironmentResult(resolved, input, userRecords) {
  * @param {typeof inspectGenesisProject} [dependencies.inspectProject]
  * @param {typeof listGenesisTemplates} [dependencies.listTemplates]
  * @param {typeof applyGenesisTemplate} [dependencies.applyTemplate]
- * @param {StudioProjectContext | null} [dependencies.projectContext]
+ * @param {StudioProjectContext} dependencies.projectContext
  * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
  * @param {typeof setGenesisCollaboration} [dependencies.setCollaboration]
  * @param {typeof setGenesisEngineeringProfile} [dependencies.setEngineeringProfile]
- * @param {string} [dependencies.targetRoot]
  */
 function createService({
   env = process.env,
@@ -290,23 +287,17 @@ function createService({
   inspectProject = inspectGenesisProject,
   listTemplates = listGenesisTemplates,
   applyTemplate = applyGenesisTemplate,
-  projectContext = null,
+  projectContext,
   publishProjectChanged = announceNoProjectChange,
   setCollaboration = setGenesisCollaboration,
-  setEngineeringProfile = setGenesisEngineeringProfile,
-  targetRoot = ""
+  setEngineeringProfile = setGenesisEngineeringProfile
 }) {
   let resourceEnvironmentProvider = null;
   let savedEnvValueProvider = null;
   let templateApplicationObserver = null;
-  const studioProjectContext = projectContext || (String(targetRoot || "").trim()
-    ? createStudioProjectContext({
-        explicitTargetRoot: targetRoot
-      })
-    : getStudioProjectContext());
 
   function selectedTargetRoot() {
-    return String(currentProjectTargetRoot() || studioProjectContext.targetRoot || "").trim();
+    return String(currentProjectTargetRoot() || projectContext.targetRoot || "").trim();
   }
 
   function requireSelectedTargetRoot() {
@@ -314,17 +305,17 @@ function createService({
     if (target) {
       return target;
     }
-    return studioProjectContext.requireSelectedTargetRoot();
+    return projectContext.requireSelectedTargetRoot();
   }
 
   // The project's address: the request's slug, else the selected project's
   // (a local directory's name normalized, never the raw directory name).
   function currentProjectSlug() {
-    return String(currentProjectRequestContext()?.slug || studioProjectContext.selectedProject?.slug || "").trim();
+    return String(currentProjectRequestContext()?.slug || projectContext.selectedProject?.slug || "").trim();
   }
 
   function serviceDataRoot() {
-    return String(studioProjectContext.serviceDataRoot || "").trim();
+    return String(projectContext.serviceDataRoot || "").trim();
   }
 
   function selectedSourceRoot() {
@@ -336,9 +327,9 @@ function createService({
     if (!target) {
       return "";
     }
-    // readable-check: allow method-probe - optional operation: a project context without per-target sources has no selected source
-    return typeof studioProjectContext.sourceRootForTarget === "function"
-      ? studioProjectContext.sourceRootForTarget(target)
+    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
+    return typeof projectContext.sourceRootForTarget === "function"
+      ? projectContext.sourceRootForTarget(target)
       : "";
   }
 
@@ -365,9 +356,9 @@ function createService({
     if (!target) {
       return "";
     }
-    // readable-check: allow method-probe - optional operation: a project context without per-target runtimes has no selected runtime
-    if (typeof studioProjectContext.projectRuntimeRootForTarget === "function") {
-      return studioProjectContext.projectRuntimeRootForTarget(target);
+    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
+    if (typeof projectContext.projectRuntimeRootForTarget === "function") {
+      return projectContext.projectRuntimeRootForTarget(target);
     }
     return "";
   }
@@ -378,9 +369,9 @@ function createService({
       return requestRoot;
     }
     const target = selectedTargetRoot();
-    // readable-check: allow method-probe - optional operation: a project context without per-target session sources has none selected
-    return target && typeof studioProjectContext.projectSessionSourceRootForTarget === "function"
-      ? studioProjectContext.projectSessionSourceRootForTarget(target)
+    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
+    return target && typeof projectContext.projectSessionSourceRootForTarget === "function"
+      ? projectContext.projectSessionSourceRootForTarget(target)
       : "";
   }
 
@@ -654,7 +645,6 @@ function createService({
   }
 
   async function revealEnvSecretState(input = {}) {
-    assertEnvOwner(input, "Only the Vibe64 owner can reveal development secrets.");
     const key = normalizeRuntimeConfigKey(input.key);
     const { config } = await envConfig(input);
     const record = config.view?.records?.find((candidate) => candidate?.key === key);
@@ -744,8 +734,8 @@ function createService({
 
   async function listProjectsState() {
     const requestContext = currentProjectRequestContext();
-    if (!requestContext?.targetRoot || studioProjectContext.requestContextMatchesSelectedProject(requestContext)) {
-      const listed = await studioProjectContext.listProjects();
+    if (!requestContext?.targetRoot || projectContext.requestContextMatchesSelectedProject(requestContext)) {
+      const listed = await projectContext.listProjects();
       const currentProject = listed.currentProject
         ? publicProject(listed.currentProject, {
             selected: true
@@ -764,7 +754,7 @@ function createService({
         projects
       };
     }
-    const listed = await studioProjectContext.listWorkspaceProjects();
+    const listed = await projectContext.listWorkspaceProjects();
     const current = listed.projects.find((project) => project.slug === requestContext.slug) || {};
     const projects = listed.projects.map((project) => publicProject(project, {
       context: project.slug === requestContext.slug ? requestContext : null,
@@ -785,7 +775,7 @@ function createService({
 
   async function currentProjectState() {
     const listed = await listProjectsState();
-    return listed.currentProject || null;
+    return listed.currentProject;
   }
 
   async function notifyGithubChanged(project, payload = { githubRefresh: true }, reason = "github-refreshed") {
@@ -930,12 +920,6 @@ function createService({
   }
 
   async function savePromptHintsState(input = {}) {
-    if (!canEditProjectSettings(input)) {
-      throw vibe64Error(
-        "Only the Vibe64 project owner can change prompt suggestions.",
-        "vibe64_owner_required"
-      );
-    }
     const { settings } = await saveProjectPromptHints({
       projectRuntimeRoot: selectedProjectRuntimeRoot(),
       settings: { promptHints: input.promptHints }
@@ -1055,7 +1039,7 @@ function createService({
             slug
           });
         }
-        await studioProjectContext.updateWorkspaceProjectMetadata({
+        await projectContext.updateWorkspaceProjectMetadata({
           ...(developmentDatabaseName ? { developmentDatabaseName } : {}),
           developmentDatabaseScope: scope,
           ...(Object.hasOwn(input, "allowSharedDatabaseSessions")
@@ -1285,7 +1269,7 @@ function createService({
     vibe64User = null
   } = {}) {
     return runWithResolvedProjectRequestContext({
-      projectContext: studioProjectContext,
+      projectContext,
       request: {
         allowDeleting,
         vibe64User,
@@ -1313,7 +1297,7 @@ function createService({
       return result;
     },
     get selectedProject() {
-      return studioProjectContext.selectedProject;
+      return projectContext.selectedProject;
     },
 
     get targetRoot() {
@@ -1321,10 +1305,10 @@ function createService({
     },
 
     async createProject(input) {
-      if (studioProjectContext.runtimeProfile?.projectCatalogEnabled === false) {
+      if (projectContext.runtimeProfile?.projectCatalogEnabled === false) {
         return catalogUnavailable();
       }
-      return projectResult(() => studioProjectContext.createWorkspaceProject(input));
+      return projectResult(() => projectContext.createWorkspaceProject(input));
     },
 
     async createRuntime(options = {}) {
@@ -1376,8 +1360,8 @@ function createService({
     // learning space, outside the catalogue that listProjects reads.
     async listPracticeProjectSlugs() {
       // readable-check: allow method-probe - optional operation: a project context without a learning space lists no practice projects
-      if (typeof studioProjectContext.listLearningSpaceProjects !== "function") return [];
-      return (await studioProjectContext.listLearningSpaceProjects()).map(project => project.slug);
+      if (typeof projectContext.listLearningSpaceProjects !== "function") return [];
+      return (await projectContext.listLearningSpaceProjects()).map(project => project.slug);
     },
 
     async listProjects({ actor = null } = {}) {
@@ -1502,7 +1486,7 @@ function createService({
     async repositoryRemote(input) {
       return projectResult(async () => localRepositoryRemote(await currentProjectState(), input, { logger }));
     },
-    async repositoryBranches(input = {}) {
+    async repositoryBranches(input) {
       return projectResult(async () => repositoryBranches(await currentProjectState(), input, { env }));
     },
     async resolveSessionBranch(input = {}) {
@@ -1565,7 +1549,6 @@ function createService({
     },
     async saveRepositoryWorkflow(input) {
       return projectResult(async () => {
-        if (!canEditProjectSettings(input)) throw vibe64Error("Only the project owner can change the repository workflow.", "vibe64_owner_required");
         requireGithubRepository(await currentProjectState(), "Pull request workflow");
         const workflow = await runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(),
           () => saveProjectRepositoryWorkflow(selectedProjectRuntimeRoot(), input.requirePullRequest),
@@ -1656,7 +1639,7 @@ function createService({
       return projectResult(() => readEnvState(input));
     },
 
-    async readEngineeringSettings(input = {}) {
+    async readEngineeringSettings(input) {
       return projectResult(async () => ({
         engineering: await engineeringProfileState(input),
         ok: true
@@ -1691,7 +1674,7 @@ function createService({
       return projectResult(() => saveConnectedProjectsState(input));
     },
 
-    async readSettings(input = {}) {
+    async readSettings(input) {
       return projectResult(async () => {
         const [collaboration, connectedProjects, { settings }, currentProject] = await Promise.all([
           collaborationSettingsState(input),
@@ -1832,10 +1815,10 @@ function createService({
     },
 
     async selectProject(input) {
-      if (studioProjectContext.runtimeProfile?.projectCatalogEnabled === false) {
+      if (projectContext.runtimeProfile?.projectCatalogEnabled === false) {
         return catalogUnavailable();
       }
-      return projectResult(() => studioProjectContext.selectWorkspaceProject(input));
+      return projectResult(() => projectContext.selectWorkspaceProject(input));
     }
   });
   return service;

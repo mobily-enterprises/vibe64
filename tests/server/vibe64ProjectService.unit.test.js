@@ -304,7 +304,7 @@ test("hosted engineering settings follow the selected session source and save th
     });
     await service.createProject({ name: "Engineering catalogue" });
 
-    const unavailable = await service.readEngineeringSettings();
+    const unavailable = await service.readEngineeringSettings({});
     assert.equal(unavailable.ok, true);
     assert.equal(unavailable.engineering.available, false);
     assert.match(unavailable.engineering.unavailableReason, /Create or select an AI session/u);
@@ -332,7 +332,7 @@ test("hosted engineering settings follow the selected session source and save th
     });
     await store.updateCurrentSession(sessionId);
 
-    const initial = await service.readEngineeringSettings();
+    const initial = await service.readEngineeringSettings({});
     assert.equal(initial.engineering.available, true);
     assert.equal(initial.engineering.profile.id, "focused.v1");
     assert.equal(initial.engineering.source.sessionId, sessionId);
@@ -451,7 +451,7 @@ test("managed development database scope is project state and changes only witho
       managedDevelopmentDatabase: true
     });
 
-    const initial = await service.readSettings();
+    const initial = await service.readSettings({});
     assert.deepEqual(initial.developmentDatabase, {
       allowSharedDatabaseSessions: false,
       canChange: true,
@@ -484,7 +484,7 @@ test("managed development database scope is project state and changes only witho
       runtimeKind: "genesis",
       sessionId: "ghost-session"
     });
-    assert.deepEqual((await service.readSettings()).developmentDatabase, {
+    assert.deepEqual((await service.readSettings({})).developmentDatabase, {
       allowSharedDatabaseSessions: false,
       canChange: true,
       managed: true,
@@ -507,7 +507,7 @@ test("managed development database scope is project state and changes only witho
       runtimeKind: "genesis",
       sessionId: "open-session"
     });
-    const oneOpen = (await service.readSettings()).developmentDatabase;
+    const oneOpen = (await service.readSettings({})).developmentDatabase;
     assert.equal(oneOpen.canChange, false);
     assert.equal(oneOpen.openSessionCount, 1);
     assert.equal(oneOpen.options.project.available, true);
@@ -533,7 +533,7 @@ test("managed development database scope is project state and changes only witho
       runtimeKind: "genesis",
       sessionId: "second-open-session"
     });
-    const twoOpen = (await service.readSettings()).developmentDatabase;
+    const twoOpen = (await service.readSettings({})).developmentDatabase;
     assert.equal(twoOpen.canChange, false);
     assert.equal(twoOpen.openSessionCount, 2);
     assert.equal(twoOpen.options.project.available, false);
@@ -566,7 +566,7 @@ test("managed development database scope is project state and changes only witho
     await store.publishSessionArchive("open-session");
     await store.writeStatus("second-open-session", "archived");
     await store.publishSessionArchive("second-open-session");
-    assert.deepEqual((await service.readSettings()).developmentDatabase, {
+    assert.deepEqual((await service.readSettings({})).developmentDatabase, {
       allowSharedDatabaseSessions: false,
       canChange: true,
       managed: true,
@@ -1208,8 +1208,8 @@ test("standalone collaboration is keyed to the exact local source folder", async
       tone: "playful"
     });
 
-    assert.equal((await firstService.readSettings()).collaboration.requirements, "First folder");
-    assert.equal((await secondService.readSettings()).collaboration.requirements, "");
+    assert.equal((await firstService.readSettings({})).collaboration.requirements, "First folder");
+    assert.equal((await secondService.readSettings({})).collaboration.requirements, "");
     await assert.rejects(stat(path.join(firstRoot, "settings", "ai-policy.json")), {
       code: "ENOENT"
     });

@@ -112,7 +112,7 @@ test("branch listing and session selection honor the host's per-user credential 
   t.after(() => rm(root, { recursive: true, force: true }));
   const branchProject = { ...project, projectRuntimeRoot: root };
   // A missing web-user identity must fail before looking for the daemon's GitHub login.
-  const listed = await service.repositoryBranches();
+  const listed = await service.repositoryBranches({});
   assert.equal(listed.ok, false);
   assert.equal(listed.errors[0].code, "vibe64_os_user_required");
   await assert.rejects(service.resolveSessionBranch({ selection: {
