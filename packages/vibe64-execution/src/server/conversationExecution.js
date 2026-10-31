@@ -48,7 +48,7 @@ export function createVibe64ConversationExecution({
   commandRunner = runVibe64Command, stopExecution = stopVibe64RestoredService, inspectExecution = inspectVibe64Service,
   credentialHome = { home: os.homedir() }, execution = {}, shimDirs = [],
   purpose = "assistant", capturePurpose = purpose, operationId = "conversation", label = "Assistant", logPath, onStarted
-} = {}) {
+}) {
   const entries = new Map();
   async function stop(id, options = {}) {
     const entry = entries.get(id);
@@ -125,6 +125,7 @@ export function createVibe64ConversationExecution({
         if (typeof env[name] !== "string" || !path.isAbsolute(env[name])) throw new TypeError(`Native ${name} must be an absolute directory.`);
         processHome[field] = env[name];
       }
+      // readable-check: allow optional-call - platform object: process.getuid() exists only on POSIX
       const root = await mkdtemp(path.join(os.tmpdir(), `v64-conversation-${process.getuid?.() ?? "user"}-`));
       const socketPath = path.join(root, "stream.sock");
       const outputPath = logPath || path.join(root, "stderr.log");

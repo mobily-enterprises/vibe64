@@ -6,6 +6,7 @@ import {
   normalizeOsUsername,
   resolveOsUser
 } from "./osUserIdentity.js";
+import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
@@ -14,10 +15,6 @@ const USER_CREDENTIAL_SCOPE = "user";
 const GITHUB_ACCOUNT_MODE_LOCAL = "local";
 const GITHUB_ACCOUNT_MODE_USER = "user";
 const VIBE64_GITHUB_ACCOUNT_MODE_ENV = "VIBE64_GITHUB_ACCOUNT_MODE";
-
-function normalizeText(value = "") {
-  return String(value || "").trim();
-}
 
 function normalizeGithubAccountMode(value = "", fallback = GITHUB_ACCOUNT_MODE_USER) {
   const normalized = normalizeText(value).toLowerCase();
@@ -37,8 +34,10 @@ function normalizeGithubAccountMode(value = "", fallback = GITHUB_ACCOUNT_MODE_U
  * @param {string} [message]
  */
 function logOperationalEvent(logger, level = "info", fields = {}, message = "") {
+  // readable-check: allow method-probe - input validation: a logger without this level logs at info, and an absent one logs nothing
   const log = typeof logger?.[level] === "function"
     ? logger[level]
+    // readable-check: allow method-probe - input validation: a logger without this level logs at info, and an absent one logs nothing
     : typeof logger?.info === "function"
       ? logger.info
       : null;
@@ -105,7 +104,9 @@ function currentUserCredentialContext() {
 
 function appCredentialContext({
   home = os.homedir(),
+  // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
   gid = typeof process.getgid === "function" ? process.getgid() : null,
+  // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
   uid = typeof process.getuid === "function" ? process.getuid() : null,
   username = ""
 } = {}) {

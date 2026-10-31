@@ -17,6 +17,7 @@ let installedProvider = null;
 const VIBE64_MANAGED_EXECUTION_REQUIRED_ENV = "VIBE64_MANAGED_EXECUTION_REQUIRED";
 
 function installVibe64ManagedExecutionProvider(provider = null) {
+  // readable-check: allow method-probe - input validation: a host's managed execution provider is checked when it is installed
   if (!provider || typeof provider.runCommand !== "function" || typeof provider.stopExecution !== "function") {
     throw new TypeError("A managed execution provider requires runCommand and stopExecution operations.");
   }
@@ -51,6 +52,7 @@ async function startVibe64Workflow(input = {}) {
     if (vibe64ManagedExecutionRequired()) throw new Error("The managed workflow provider is unavailable.");
     return { ok: true, workflow: null };
   }
+  // readable-check: allow method-probe - optional operation: a managed execution provider without workflows refuses them
   if (typeof installedProvider.startWorkflow !== "function") {
     throw new Error("The installed managed execution provider does not support workflows.");
   }

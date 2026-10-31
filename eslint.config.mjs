@@ -1,4 +1,4 @@
-import { baseConfig, nodeConfig, vueConfig, webConfig } from "@jskit-ai/config-eslint/server";
+import { baseConfig, nodeConfig, typedFeaturesConfig, vueConfig, webConfig } from "@jskit-ai/config-eslint/server";
 
 export default [
   {
@@ -32,5 +32,9 @@ export default [
   ...baseConfig,
   ...vueConfig,
   ...webConfig,
-  ...nodeConfig
+  ...nodeConfig,
+  // Server packages converted to typed features; the base config warns for the rest.
+  ...typedFeaturesConfig([
+    "packages/vibe64-execution/src/server/**"
+  ])
 ];

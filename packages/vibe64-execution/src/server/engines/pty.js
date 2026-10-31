@@ -59,6 +59,7 @@ function terminalSessionInputForRequest(request = {}, {
   return {
     args: (input = {}) => {
       const payloadPath = ptyHelperPayloadPath(terminal.helperPayloadRoot);
+      // readable-check: allow method-probe - input validation: arguments are a list or a function of the terminal input
       const payloadArgs = typeof request.args === "function"
         ? request.args(input)
         : request.args;
@@ -116,6 +117,7 @@ async function runPtyCommand(request = {}, {
       namespaceLimitPrefix: terminal.namespaceLimitPrefix,
       onClose: async (input) => {
         try {
+          // readable-check: allow method-probe - input validation: a terminal's optional step when it closes
           if (typeof terminal.onClose === "function") {
             await terminal.onClose(input);
           }

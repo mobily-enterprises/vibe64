@@ -85,7 +85,7 @@ test("a local detached service ends with the server that started it, even when i
     // ended, so a saved Claude or helper execution ID no longer blocks its chat.
     const restored = await stopVibe64RestoredService(started.executionId, { allowMissingRecordScopeRecovery: true });
     assert.deepEqual(restored, { executionId: started.executionId, ok: true, scopeEmpty: true, stopped: false });
-    const conversation = createVibe64ConversationExecution();
+    const conversation = createVibe64ConversationExecution({});
     assert.equal((await conversation.stop(started.executionId)).scopeEmpty, true);
   } finally {
     if (started?.pid && groupExists(started.pid)) process.kill(-started.pid, "SIGKILL");

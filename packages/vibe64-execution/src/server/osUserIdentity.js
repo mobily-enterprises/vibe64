@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { trimmedText as normalizeOsUsername } from "./trimmedText.js";
 
 const execFile = promisify(execFileCallback);
 
@@ -15,10 +16,6 @@ const NON_LOGIN_SHELLS = new Set([
 
 const OBVIOUS_SERVICE_ACCOUNT_PATTERN =
   /^(?:_|adm|bin|daemon|games|lp|mail|man|messagebus|news|nobody|proxy|sync|sys|systemd-|uucp|www-data$|_apt$|backup$|list$|irc$|gnats$)/u;
-
-function normalizeOsUsername(value = "") {
-  return String(value || "").trim();
-}
 
 function assertSafeOsUsername(username = "") {
   const normalized = normalizeOsUsername(username);

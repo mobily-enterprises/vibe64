@@ -38,9 +38,11 @@ const checkpointOperations = new Map();
  * @param {string} [checkpoint.timestamp]
  * @param {string} [checkpoint.worktreePath]
  */
+// readable-check: allow dependency-default - input validation: a checkpoint request, whose project defaults to none
 async function createGitTurnCheckpoint({
   outerTurnId = "",
   outcome = "completed",
+  // readable-check: allow dependency-default - input validation: a checkpoint request, whose project defaults to none
   project = {},
   runCommand = runVibe64Command,
   sessionId = "",
@@ -67,11 +69,11 @@ async function createGitTurnCheckpoint({
   }));
 }
 
-// The daemon's checkpoint: the same git sequence run as one command (one
-// managed job on a hosted workspace) instead of one job per git step. The
-// daemon still serializes snapshots per worktree, resolves the disk settings
-// and, through the command's own env, the commit identity.
 /**
+ * The daemon's checkpoint: the same git sequence run as one command (one
+ * managed job on a hosted workspace) instead of one job per git step. The
+ * daemon still serializes snapshots per worktree, resolves the disk settings
+ * and, through the command's own env, the commit identity.
  * @param {object} checkpoint
  * @param {string} [checkpoint.outerTurnId]
  * @param {string} [checkpoint.outcome]
@@ -83,6 +85,7 @@ async function createGitTurnCheckpoint({
  * @param {string} [checkpoint.timestamp]
  * @param {string} [checkpoint.worktreePath]
  */
+// readable-check: allow dependency-default - input validation: a checkpoint request, whose project defaults to none
 async function createGitTurnCheckpointAsOneJob({
   outerTurnId = "",
   outcome = "completed",

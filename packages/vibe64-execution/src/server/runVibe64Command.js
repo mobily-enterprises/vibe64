@@ -220,6 +220,7 @@ async function runVibe64Command(input = {}) {
       resolveLinks: !request.applicationAccount
     });
     assertManagedSourceFilesystemActor(actor, request, cwd);
+    // readable-check: allow method-probe - input validation: arguments are a list or a function of the command input
     const resolveArgs = (input = {}) => typeof request.args === "function"
       ? request.args(input)
       : request.args;

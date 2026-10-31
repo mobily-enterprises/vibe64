@@ -394,6 +394,7 @@ function normalizeVibe64CommandRequest(input = {}) {
       ? Number(request.maxBuffer)
       : DEFAULT_COMMAND_MAX_BUFFER_BYTES,
     mode,
+    // readable-check: allow method-probe - input validation: a request's optional output observer
     onOutput: typeof request.onOutput === "function" ? request.onOutput : null,
     outputEncoding: normalizeEnum(
       request.outputEncoding,

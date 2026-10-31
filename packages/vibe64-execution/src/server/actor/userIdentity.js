@@ -48,7 +48,9 @@ function homeEnvForUser(user = {}, env = {}) {
 
 function currentProcessIdentity() {
   return {
+    // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
     gid: typeof process.getgid === "function" ? process.getgid() : null,
+    // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
     uid: typeof process.getuid === "function" ? process.getuid() : null
   };
 }
