@@ -19,7 +19,7 @@ import { conversationObservation, readWatchedConversation, watchUpdate } from ".
 import { createWatchSources, stateWatchUpdate } from "../../packages/vibe64-colleague/src/server/watchSources.js";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions, learnInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createColleagueNavigationCoordination } from "../../packages/vibe64-colleague/src/server/navigationCoordination.js";
-import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { Vibe64ColleagueProvider, Vibe64ColleagueFocusProvider } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js";

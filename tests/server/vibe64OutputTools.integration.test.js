@@ -6,7 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createPreviewPreparationFixture } from "../fixtures/previewPreparation.js";
 
 test("native output tools inspect, launch, restart, stop and close a real declared preview", { timeout: 20_000 }, async (t) => {

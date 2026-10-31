@@ -8,7 +8,7 @@ import { createDatabaseActions } from "../../packages/vibe64-database-tools/src/
 import { registerRoutes as registerDatabaseRoutes } from "../../packages/vibe64-database-tools/src/server/registerRoutes.js";
 import { createSystemGraphActions } from "../../packages/vibe64-system-graph/src/server/systemGraphActions.js";
 import { registerRoutes as registerSystemGraphRoutes } from "../../packages/vibe64-system-graph/src/server/registerRoutes.js";
-import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
 // Learning v2: a lesson's practice project is an ordinary project in the

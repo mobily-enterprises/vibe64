@@ -11,7 +11,7 @@ import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionCon
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
-import { ACTION_READ_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { ACTION_READ_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { registerRoutes as registerSessions } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { registerRoutes as registerTerminals } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";

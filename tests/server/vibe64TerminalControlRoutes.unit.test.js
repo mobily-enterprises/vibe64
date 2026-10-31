@@ -8,7 +8,7 @@ import {
   createTerminalActions,
   ACTION_CREATE_TEMPORARY_CONVERSATION,
   ACTION_START_TEMPORARY_CONVERSATION_TURN
-} from "../../packages/vibe64-terminals/src/server/actions.js";
+} from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import {
   findRegisteredRoute,
   routeProjectParams,

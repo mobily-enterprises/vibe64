@@ -27,7 +27,7 @@ import {
   ACTION_START_TEMPORARY_CONVERSATION_TURN,
   ACTION_STOP_TEMPORARY_CONVERSATION,
   createTerminalActions
-} from "../../packages/vibe64-terminals/src/server/actions.js";
+} from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 
 function actionById(actions, id) {
   const action = actions.find((entry) => entry.id === id);

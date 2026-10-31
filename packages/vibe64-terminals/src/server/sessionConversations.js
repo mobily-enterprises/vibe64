@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { conversationMessageVersion } from "@jskit-ai/assistant-core/server/conversation";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { ACTION_START_TEMPORARY_CONVERSATION_TURN, ACTION_STOP_TEMPORARY_CONVERSATION,
-  ACTION_UPDATE_TEMPORARY_CONVERSATION } from "./actions.js";
+  ACTION_UPDATE_TEMPORARY_CONVERSATION } from "./terminalActions.js";
 import { temporaryConversationTurnActionInputValidator, temporaryConversationUpdateInputValidator } from "./inputSchemas.js";
 import { parseIntegrationSetupRequest, normalizeVibe64AgentTaskResult, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending,

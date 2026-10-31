@@ -10,7 +10,7 @@ import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";

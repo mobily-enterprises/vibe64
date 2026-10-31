@@ -6,7 +6,7 @@ import {
   ACTION_CANCEL_SESSION_PROMPT_HINTS,
   ACTION_GENERATE_SESSION_PROMPT_HINTS,
   createTerminalActions
-} from "../../packages/vibe64-terminals/src/server/actions.js";
+} from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import {
   registerRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";

@@ -749,7 +749,7 @@ Non-collapsible mobile terminals expose Exit full screen / Full screen through
 and restores navigation without closing or interrupting the native terminal.
 The separate Close terminal action retains its process-lifecycle meaning.
 The contracts and adapters are in
-`packages/vibe64-terminals/src/server/actions.js`, `inputSchemas.js` and
+`packages/vibe64-terminals/src/server/terminalActions.js`, `inputSchemas.js` and
 `registerRoutes.js`; HTTP/direct authority and byte-stream evidence is in
 `tests/server/vibe64TerminalActionDispatch.unit.test.js`.
 Standalone local-editor sessions do not request the hosted member-message queue;
@@ -1242,7 +1242,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/agentPlanCommand.js`
 - `packages/vibe64-terminals/src/server/assistantPlanUpgrade.js`
 - `src/components/studio/vibe64-session/Vibe64WorkPlan.vue`
-- `packages/vibe64-terminals/src/server/actions.js`
+- `packages/vibe64-terminals/src/server/terminalActions.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/assistantPlanLifecycle.test.js`
 - `tests/client/vibe64WorkPlan.vitest.js`

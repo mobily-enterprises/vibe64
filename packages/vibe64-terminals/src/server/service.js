@@ -179,6 +179,7 @@ import {
   vibe64AssistantConversationKey,
   vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
+import { createTerminalControls } from "./terminalControls.js";
 import { createWorkspaceSetupRunner } from "./workspaceSetup.js";
 import { createCodexSessionRegistration } from "./codexSessionRegistration.js";
 import { createOpenCodeSessionRegistration } from "./openCodeSessionRegistration.js";
@@ -2459,6 +2460,13 @@ function createService({
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event)
   });
+  const terminalControls = createTerminalControls({
+    readAgentTerminal: (sessionId, terminalSessionId, options) => service.readAgentTerminal(sessionId, terminalSessionId, options),
+    writeAgentTerminal: (sessionId, terminalSessionId, data, input) => service.writeAgentTerminal(sessionId, terminalSessionId, data, input),
+    readGlobalTerminal: (terminalSessionId) => service.readGlobalCodexTerminal(terminalSessionId),
+    writeGlobalTerminal: (terminalSessionId, data, options) => service.writeGlobalCodexTerminal(terminalSessionId, data, options)
+  });
+
   const service = {
     ...sessionConversations,
     // A temporary send refused before admission uses Main's definite rejection.
@@ -3887,6 +3895,19 @@ function createService({
       }
     },
 
+    // Main chat pauses or blocks its own goal through the goal control its
+    // admitted turn carries; any other caller is refused.
+    requestMainGoalControl(operation, input, context) {
+      // readable-check: allow method-probe - input validation: only an admitted Main conversation's request carries its goal controls
+      if (typeof context.mainGoalControl?.[operation] !== "function" ||
+          (context.vibe64Action?.project || currentProjectRequestContext())?.slug !== context.projectSlug) {
+        throw Object.assign(new Error("Only this goal's admitted Main conversation can request this goal control."), {
+          code: "vibe64_main_goal_control_required", statusCode: 403
+        });
+      }
+      return context.mainGoalControl[operation](input);
+    },
+
     async readAgentGoal(sessionId, options = {}, { canonical = false } = {}) {
       const context = await assistantSessionOptions(sessionId, options);
       let view;
@@ -4054,7 +4075,7 @@ function createService({
       return canonical ? result : completeResult(result);
     },
 
-    async readAgentPlanUsage(sessionId, options = {}) {
+    async readAgentPlanUsage(sessionId, options) {
       return sessionAgent.readPlanUsage(sessionId, await assistantSessionOptions(sessionId, options));
     },
 
@@ -4239,7 +4260,7 @@ function createService({
 
     reconcileAgentSessions,
 
-    async reconcileOpenAgentSessions(options = {}) {
+    async reconcileOpenAgentSessions(options) {
       const closedRuntime = await closeProjectRuntimeIfOpenMarkerMissing(
         "server.terminals.reconcileOpenAgentSessions.closedProject"
       );
@@ -4348,6 +4369,15 @@ function createService({
       return sessionAgent.readTerminal(sessionId, terminalSessionId, options);
     },
 
+    readAgentTerminalControl: terminalControls.readAgentTerminalControl,
+    checkAgentTerminalText: terminalControls.checkAgentTerminalText,
+    writeAgentTerminalText: terminalControls.writeAgentTerminalText,
+    writeAgentTerminalKey: terminalControls.writeAgentTerminalKey,
+    readGlobalCodexTerminalControl: terminalControls.readGlobalCodexTerminalControl,
+    checkGlobalCodexTerminalText: terminalControls.checkGlobalCodexTerminalText,
+    writeGlobalCodexTerminalText: terminalControls.writeGlobalCodexTerminalText,
+    writeGlobalCodexTerminalKey: terminalControls.writeGlobalCodexTerminalKey,
+
     readEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
       return sessionAgent.readEphemeralConversation(scope, ephemeralInput(input), options);
     },
@@ -4412,13 +4442,13 @@ function createService({
       }));
     },
 
-    selectPreviewIdentity(sessionId, input = {}, options = {}) {
-      return outputTarget.selectPreviewIdentity(sessionId, input, options);
+    selectPreviewIdentity(sessionId, { identityName = "", mode, publicHost = "", publicProtocol = "" }) {
+      return outputTarget.selectPreviewIdentity(sessionId, { identityName, mode }, { publicHost, publicProtocol });
     },
 
-    startAgentTerminal(sessionId, input = {}, options = {}) {
+    startAgentTerminal(sessionId, input) {
       assertProjectEffectAdmission();
-      return runMainAgentWrite(sessionId, options, async (context) => {
+      return runMainAgentWrite(sessionId, { vibe64User: input.vibe64User || null }, async (context) => {
         await prepareAgentSkillsInsideAgentWrite(sessionId, context);
         return sessionAgent.startTerminal(sessionId, input, context);
       }, { operation: "start-agent-terminal" });

@@ -72,7 +72,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/current-app/src/server/inputSchemas.js`
 - `packages/current-app/src/server/registerRoutes.js`
 - `packages/current-app/src/server/service.js`
-- `packages/vibe64-terminals/src/server/actions.js`
+- `packages/vibe64-terminals/src/server/terminalActions.js`
 - `packages/vibe64-terminals/src/server/outputAssistantContracts.js`
 - `packages/vibe64-terminals/src/server/inputSchemas.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`

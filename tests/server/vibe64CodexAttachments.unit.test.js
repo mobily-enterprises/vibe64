@@ -24,7 +24,7 @@ import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-r
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
-import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import {
   registerMultipartSupport
 } from "@jskit-ai/uploads-runtime/server/multipart/registerMultipartSupport";

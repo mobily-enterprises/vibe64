@@ -4,7 +4,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
-import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 test("the native JSKIT catalogue exposes bounded conversation contracts without internal state", () => withRouteProject(async ({ projectContext, slug }) => {

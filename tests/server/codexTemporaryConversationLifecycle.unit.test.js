@@ -19,7 +19,7 @@ import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conve
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { registerVibe64ActionContext } from "../../packages/vibe64-core/src/server/actionContext.js";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
-import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
+import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
 import { Vibe64ConversationsProvider } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";

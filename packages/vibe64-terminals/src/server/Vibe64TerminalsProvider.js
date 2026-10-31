@@ -10,7 +10,7 @@ import {
 import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
-import { createTerminalActions } from "./actions.js";
+import { createTerminalActions } from "./terminalActions.js";
 import { prepareCodexAttachmentStorage } from "./codexAttachments.js";
 import {
   createProjectRuntimeChangedPublisher,
