@@ -24,6 +24,15 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
 - `packages/vibe64-sessions/src/server/sessionResults.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalWorkflow.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalScheduler.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalAdmission.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalPredecessor.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalSuccessor.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalRestoration.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalCompletion.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalAccess.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalRules.js`
 - `src/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`

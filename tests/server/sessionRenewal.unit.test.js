@@ -6,10 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  createSessionRenewalController,
-  inspectSessionRenewalEligibility
-} from "../../packages/vibe64-sessions/src/server/sessionRenewal.js";
+import { createSessionRenewalController } from "../../packages/vibe64-sessions/src/server/sessionRenewal.js";
+import { inspectSessionRenewalEligibility } from "../../packages/vibe64-sessions/src/server/sessionRenewalRules.js";
 import {
   SESSION_RENEWAL_STAGE,
   SESSION_RENEWAL_STATUS,
@@ -1205,6 +1203,7 @@ function fixture({
     }
   };
   const newController = (overrides = {}) => createSessionRenewalController({
+    prepareArchive: async () => undefined,
     project,
     publishSessionChanged: async (_sessionId, event) => events.push(event),
     renewalActorResolver: () => resolveRenewalActor,
@@ -1712,7 +1711,13 @@ test("same-named sessions in two hosted projects schedule by durable renewal ide
     }
   });
   const controller = createSessionRenewalController({
+    prepareArchive: async () => undefined,
     project,
+    publishSessionChanged: async () => null,
+    renewalActorResolver: () => null,
+    resolveSuccessorAssistant: async () => {
+      throw new TypeError("Session renewal requires an assistant selection resolver before confirmation.");
+    },
     setupRunner,
     terminals
   });
@@ -2470,7 +2475,7 @@ test("confirmed renewal creates a hidden successor and selects it only after ack
     () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
     (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
   );
-  await context.controller.inspectSessionRenewal(OLD_SESSION_ID);
+  await context.controller.inspectSessionRenewal(OLD_SESSION_ID, {});
 
   assert.equal(context.calls.close, 2);
   assert.equal(context.calls.seed, 1);
@@ -3139,7 +3144,7 @@ test("successor setup failure leaves the predecessor open and a new controller r
     () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
     (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
   );
-  await restartedController.inspectSessionRenewal(OLD_SESSION_ID);
+  await restartedController.inspectSessionRenewal(OLD_SESSION_ID, {});
   assert.equal(context.currentSessionId, completed.successor.sessionId);
   assert.equal(context.calls.close, 3);
   assert.equal(context.calls.generate, 1);
@@ -4544,7 +4549,7 @@ test("archive failure restores the acknowledged predecessor before exposing a re
     () => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
     (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED
   );
-  await context.controller.inspectSessionRenewal(OLD_SESSION_ID);
+  await context.controller.inspectSessionRenewal(OLD_SESSION_ID, {});
   assert.equal(context.currentSessionId, completed.successor.sessionId);
   assert.equal(context.calls.compact, 2);
 });

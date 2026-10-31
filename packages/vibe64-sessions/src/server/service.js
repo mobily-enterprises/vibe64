@@ -46,7 +46,8 @@ import {
   sessionRenewalAdvisory
 } from "./sessionRenewalAdvisory.js";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
-import { createSessionRenewalController, sessionHasActiveAgentRun } from "./sessionRenewal.js";
+import { createSessionRenewalController } from "./sessionRenewal.js";
+import { sessionHasActiveAgentRun } from "./sessionRenewalRules.js";
 import { presenceActor } from "./sessionPresence.js";
 import { createMainChatApprovals } from "./mainChatApprovals.js";
 import { createConnectedContributions } from "./connectedContributions.js";

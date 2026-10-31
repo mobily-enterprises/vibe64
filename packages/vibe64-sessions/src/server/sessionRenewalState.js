@@ -506,9 +506,6 @@ function assertSessionRenewalDraftVersion(state = {}, {
  * @param {string} [sessionId]
  */
 async function readSessionRenewalState(runtime, sessionId = "") {
-  if (typeof runtime?.store?.readSessionRenewalStateRecord !== "function") {
-    throw new TypeError("Session renewal state requires the project renewal-state reader.");
-  }
   const raw = await runtime.store.readSessionRenewalStateRecord(sessionId);
   if (!normalizeText(raw)) {
     return null;
@@ -535,9 +532,6 @@ async function readSessionRenewalState(runtime, sessionId = "") {
  * @param {object} [value]
  */
 async function writeSessionRenewalState(runtime, sessionId = "", value = {}) {
-  if (typeof runtime?.store?.writeSessionRenewalStateRecord !== "function") {
-    throw new TypeError("Session renewal state requires the project renewal-state writer.");
-  }
   const state = normalizeSessionRenewalState(value, {
     expectedSessionId: sessionId
   });
@@ -551,12 +545,6 @@ async function writeSessionRenewalState(runtime, sessionId = "", value = {}) {
  * @param {(state: object) => object | Promise<object>} operation
  */
 async function mutateSessionRenewalState(runtime, sessionId = "", operation) {
-  if (typeof operation !== "function") {
-    throw new TypeError("Session renewal state mutation requires an operation.");
-  }
-  if (typeof runtime?.store?.runSessionRenewalStateExclusive !== "function") {
-    throw new TypeError("Session renewal state requires the project renewal-state mutation boundary.");
-  }
   return runtime.store.runSessionRenewalStateExclusive(sessionId, async () => {
     const current = await readSessionRenewalState(runtime, sessionId);
     const next = await operation(current);

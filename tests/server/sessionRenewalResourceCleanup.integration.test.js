@@ -525,6 +525,7 @@ async function renewalHarness(targetRoot, {
     }
   };
   const controller = createSessionRenewalController({
+    prepareArchive: async () => undefined,
     project: {
       async createRuntime() {
         return runtime;
@@ -533,6 +534,8 @@ async function renewalHarness(targetRoot, {
         return projectService.releaseSessionResources(input);
       }
     },
+    publishSessionChanged: async () => null,
+    renewalActorResolver: () => null,
     async resolveSuccessorAssistant(input, { session, vibe64User }) {
       assert.equal(input.assistantSelection, undefined);
       assert.equal(session.sessionId, PREDECESSOR_ID);
