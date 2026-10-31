@@ -12,12 +12,14 @@ users without turning that convenience into a production sign-in mechanism.
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-terminals/src/server/previewIdentityCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-core/src/server/previewAuth.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/launchPreviewAuth.js`
 - `src/components/studio/PreviewIdentitySettings.vue`
 - `packages/vibe64-project/src/shared/onboardingRequest.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`

@@ -1301,6 +1301,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/codexGitCommandWrappers.js`
 - `packages/vibe64-terminals/src/server/unixJsonCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommandText.js`
 - `packages/vibe64-terminals/src/server/agentDatabaseCommand.js`

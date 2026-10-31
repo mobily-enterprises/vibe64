@@ -16,6 +16,7 @@ host provide managed system values separately.
 - Main: `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js`
 - `packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js`
 - `packages/vibe64-terminals/src/server/opencodeServerProcess.js`
 - `packages/vibe64-terminals/src/server/openCodeHostPreparation.js`

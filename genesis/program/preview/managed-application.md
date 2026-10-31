@@ -82,9 +82,17 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-genesis/src/server/outputs.js`
 - Main: `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/outputTargetMetadata.js`
+- `packages/vibe64-terminals/src/server/launchPreviewStatus.js`
+- `packages/vibe64-terminals/src/server/launchPreviewReadiness.js`
+- `packages/vibe64-terminals/src/server/launchRestart.js`
+- `packages/vibe64-terminals/src/server/previewPublicOrigin.js`
+- `packages/vibe64-terminals/src/server/launchPreviewAuth.js`
 - `packages/vibe64-terminals/src/server/launchTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js`
+- `packages/vibe64-terminals/src/server/agentPreviewStatusText.js`
 - `packages/vibe64-terminals/src/server/browserTestCleanup.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
