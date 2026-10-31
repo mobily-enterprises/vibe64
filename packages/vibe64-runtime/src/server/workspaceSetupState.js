@@ -3,6 +3,8 @@ import {
 } from "@local/vibe64-core/server/core";
 import stripAnsi from "strip-ansi";
 
+/** @typedef {ReturnType<typeof import("./sessionStore.js").createVibe64SessionStore>} Vibe64SessionStore */
+
 const WORKSPACE_SETUP_METADATA_NAME = "workspace_setup";
 const WORKSPACE_SETUP_DIAGNOSTIC_MAX_LENGTH = 1600;
 const WORKSPACE_SETUP_TRANSCRIPT_MAX_LENGTH = 32 * 1024;
@@ -86,6 +88,13 @@ function publicSessionMetadata(metadata = {}) {
   ).filter(([name]) => name !== WORKSPACE_SETUP_METADATA_NAME));
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [value]
+ * @param {object} [options]
+ * @param {boolean} [options.renewal]
+ */
 async function writeWorkspaceSetupState(store, sessionId = "", value = {}, {
   renewal = false
 } = {}) {

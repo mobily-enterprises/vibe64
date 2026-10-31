@@ -1,3 +1,5 @@
+/** @typedef {import("./runtime.js").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 const VIBE64_AGENT_WRITE_LOCK = "agent-write-mode";
 
 const VIBE64_AGENT_WRITE_BUSY_RESULT = Object.freeze({
@@ -7,6 +9,12 @@ const VIBE64_AGENT_WRITE_BUSY_RESULT = Object.freeze({
   retryable: true
 });
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} [sessionId]
+ * @param {(context?: object) => Promise<unknown>} operation
+ * @param {object} [options]
+ */
 async function runVibe64AgentWriteExclusive(runtime, sessionId = "", operation, options = {}) {
   if (typeof operation !== "function") {
     throw new TypeError("Exclusive Vibe64 agent work requires an operation.");
@@ -37,6 +45,12 @@ async function runVibe64AgentWriteExclusive(runtime, sessionId = "", operation, 
       };
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} [sessionId]
+ * @param {(context?: object) => Promise<unknown>} operation
+ * @param {object} [options]
+ */
 async function runVibe64RenewalAgentWriteExclusive(runtime, sessionId = "", operation, options = {}) {
   if (typeof operation !== "function") {
     throw new TypeError("Exclusive Vibe64 renewal agent work requires an operation.");

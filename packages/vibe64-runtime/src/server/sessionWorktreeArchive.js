@@ -17,6 +17,8 @@ import {
 import { runSourceCommand } from "./sourceCommand.js";
 import { assertRenewalId as assertSessionRenewalId } from "./sessionRenewalIds.js";
 
+/** @typedef {ReturnType<typeof import("./sessionStore.js").createVibe64SessionStore>} Vibe64SessionStore */
+
 const GIT_TIMEOUT_MS = 30_000;
 const SNAPSHOT_TIMEOUT_MS = 60_000;
 const COMMAND_BUFFER_BYTES = 50 * 1024 * 1024;
@@ -74,6 +76,11 @@ function parseNullSeparatedPaths(value = "") {
     .filter(Boolean);
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {object} [values]
+ */
 async function writeMetadataValues(store, sessionId, values = {}) {
   for (const [name, value] of Object.entries(values)) {
     await store.writeMetadataValue(sessionId, name, value);

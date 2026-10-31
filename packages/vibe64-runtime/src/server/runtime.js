@@ -229,6 +229,10 @@ async function sessionAvailabilityIssue(session = {}, learningScope = null) {
   };
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {object} [session]
+ */
 async function inspectSessionSource(runtime, session = {}) {
   assertSupportedSession(session);
   if (!sessionHasSource(session)) {
