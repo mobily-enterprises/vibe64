@@ -2,6 +2,12 @@ import { assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending } 
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { publicSession, sessionResult } from "./sessionResults.js";
 
+/** @typedef {ReturnType<typeof import("./service.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 function text(value = "") {
   return String(value || "").trim();
 }
@@ -27,6 +33,14 @@ function readSessionArchiveOperation(metadata = {}) {
 // Archive: stop the session's work, release its resources, then remove its
 // source, recording each durable phase so startup resumes an interrupted one.
 // A host may add idempotent preparation between those phases.
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ * @param {TerminalsService} dependencies.terminals
+ * @param {WorkspaceSetupRunner} dependencies.setupRunner
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {(input?: object) => object | null} dependencies.trustedAssistantUser
+ */
 function createSessionArchive({ project, terminals, setupRunner, publishSessionChanged, trustedAssistantUser }) {
   let archivePreparation = null;
 
@@ -46,6 +60,12 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
   }
 
   // The host's optional preparation runs on every attempt, at whichever phase.
+  /**
+   * @param {((request: object) => Promise<object>) | null} prepare
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {string} phase
+   */
   async function runArchivePreparation(prepare, runtime, sessionId, phase) {
     if (!prepare) return;
     const prepared = await prepare({

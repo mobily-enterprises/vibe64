@@ -55,6 +55,16 @@ import { readLastOpenedSessionId, rememberLastOpenedSessionId } from "./lastOpen
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 
+/** @typedef {ReturnType<typeof import("./sessionPresence.js").createSessionPresenceService>} SessionPresenceService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-project/server/actions").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+/** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 function text(value = "") {
   return String(value || "").trim();
 }
@@ -101,6 +111,11 @@ function cachedRepositoryUpdateCheck(session = {}) {
   }
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} sessionId
+ * @param {object} [result]
+ */
 async function persistRepositoryUpdateCheck(runtime, sessionId, result = {}) {
   const status = normalizeRepositoryUpdateCheck(result);
   await runtime.store.writeMetadataValue(
@@ -122,6 +137,10 @@ function requiredIncomingSessionId(value = "") {
 }
 
 // Project history is readable without a session; a given session pins it to that session's base.
+/**
+ * @param {ProjectService} project
+ * @param {string} [value]
+ */
 async function optionalRepositorySession(project, value = "") {
   const sessionId = text(value);
   if (!sessionId) {
@@ -162,6 +181,7 @@ function messageText(input = {}) {
   return text(input.message);
 }
 
+/** @param {TerminalsService} terminals */
 function sessionRuntimeOptions(terminals) {
   const createSessionSource = typeof terminals?.createSessionSource === "function"
     ? (context) => terminals.createSessionSource(context)
@@ -203,6 +223,40 @@ function legacyCodexAssistantSelection() {
   });
 }
 
+// The workspace setup runner sessions use unless a host supplies one: the
+// terminals' own setup.
+/** @param {TerminalsService} terminals */
+function createTerminalsSetupRunner(terminals) {
+  return Object.freeze({
+    isRunning: (sessionId) => typeof terminals.workspaceSetupIsRunning === "function" &&
+      terminals.workspaceSetupIsRunning(sessionId),
+    start: ({ retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
+      session.sessionId,
+      { retry, runtime, session, waitMs }
+    ),
+    startRenewal: ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
+      session.sessionId,
+      { retry, runtime, session }
+    ),
+    wait: (sessionId) => typeof terminals.waitForWorkspaceSetup === "function"
+      ? terminals.waitForWorkspaceSetup(sessionId)
+      : null
+  });
+}
+
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue | null} [dependencies.actions]
+ * @param {AccountsService["initializeModelRouting"]} dependencies.initializeModelRouting
+ * @param {ProjectService} dependencies.project
+ * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {((actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>) | null} [dependencies.renewalActorResolver]
+ * @param {SessionPresenceService | null} [dependencies.sessionPresence]
+ * @param {SourceEditorService | null} [dependencies.sourceEditor]
+ * @param {TerminalsService} dependencies.terminals
+ * @param {ReturnType<typeof createTerminalsSetupRunner> | null} [dependencies.workspaceSetupRunner]
+ */
 function createService({
   actions = null,
   initializeModelRouting,
@@ -231,21 +285,7 @@ function createService({
     throw new TypeError("Vibe64 session presence requires update() and close().");
   }
   assertRenewalActorResolver(renewalActorResolver);
-  const setupRunner = workspaceSetupRunner || Object.freeze({
-    isRunning: (sessionId) => typeof terminals.workspaceSetupIsRunning === "function" &&
-      terminals.workspaceSetupIsRunning(sessionId),
-    start: ({ retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
-      session.sessionId,
-      { retry, runtime, session, waitMs }
-    ),
-    startRenewal: ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
-      session.sessionId,
-      { retry, runtime, session }
-    ),
-    wait: (sessionId) => typeof terminals.waitForWorkspaceSetup === "function"
-      ? terminals.waitForWorkspaceSetup(sessionId)
-      : null
-  });
+  const setupRunner = workspaceSetupRunner || createTerminalsSetupRunner(terminals);
   const activeSaveOperations = new Map();
   const activeUpdateOperations = new Map();
   const activeRepositoryUpdateChecks = new Map();
@@ -330,6 +370,10 @@ function createService({
     return { assistantSelection: decision.effectiveSelection, assistantRouting: preferences };
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object[] | null} [openSessions]
+   */
   async function sessionsOccupyingPolicySlots(runtime, openSessions = null) {
     const visible = Array.isArray(openSessions)
       ? openSessions
@@ -368,6 +412,13 @@ function createService({
     return [...visible, ...reservations];
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sourceSessionId
+   * @param {string} canonicalCommit
+   * @param {object} [options]
+   * @param {string} [options.originId]
+   */
   async function publishCanonicalChanged(runtime, sourceSessionId, canonicalCommit, {
     originId = ""
   } = {}) {
@@ -445,6 +496,11 @@ function createService({
     });
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {object} [options]
+   */
   async function prepareUpdatedWorkspace(runtime, sessionId, options = {}) {
     try {
       const session = await runtime.getSession(sessionId, { inspectSource: false });
@@ -475,6 +531,11 @@ function createService({
     }
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} session
+   * @param {object} task
+   */
   async function recoverInterruptedSave(runtime, session, task) {
     const failedPublication = task?.status === "failed" && (
       task.stage === "publishing" || task.code === "vibe64_session_save_publication_unknown"
@@ -536,6 +597,11 @@ function createService({
     }
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} session
+   * @param {object} task
+   */
   async function recoverInterruptedUpdate(runtime, session, task) {
     if (task?.status !== "running" || typeof terminals.recoverSessionWorkUpdate !== "function") {
       return task;
@@ -580,6 +646,12 @@ function createService({
     }
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {object} [saveResult]
+   * @param {object} [options]
+   */
   async function resolveSupersededUpdateFailure(runtime, sessionId, saveResult = {}, options = {}) {
     if (
       saveResult?.reconciled !== true ||
@@ -626,6 +698,11 @@ function createService({
   // file is conflicted. The record keeps its checkpoint and conflict evidence
   // and gains an event saying why it was resolved. Anything else leaves the
   // failure, and its reason, as it was.
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} session
+   * @param {object} task
+   */
   async function resolveRepairedUpdateFailure(runtime, session, task) {
     if (task?.status !== "failed" || typeof terminals.inspectSessionUpdateFailure !== "function") {
       return task;
@@ -2083,4 +2160,4 @@ function createService({
   return service;
 }
 
-export { createService };
+export { createService, createTerminalsSetupRunner };

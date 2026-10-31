@@ -8,6 +8,13 @@ import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionS
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
 
+/** @typedef {import("./types.js").SessionsService} SessionsService */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 const CONNECTED_SESSION_NAME_METADATA = "connected_session_name";
 
 function text(value = "") {
@@ -27,6 +34,16 @@ function connectedUpdateOutcome(update, branch) {
 // projects it is connected to, through each receiving project's own actions.
 // sessions() is the owning session service, for its Save, Update, inspection
 // and creation; saveOrUpdateRunning(sessionId) reports its in-process work.
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue | null} dependencies.actions
+ * @param {ProjectService} dependencies.project
+ * @param {TerminalsService} dependencies.terminals
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {(input?: object) => object | null} dependencies.trustedAssistantUser
+ * @param {(sessionId: string) => boolean} dependencies.saveOrUpdateRunning
+ * @param {() => SessionsService} dependencies.sessions
+ */
 function createConnectedContributions({ actions, project, terminals, publishSessionChanged, trustedAssistantUser,
   saveOrUpdateRunning, sessions }) {
   function executeConnectedAction(projectSlug, actionId, input, requestContext = {}) {
@@ -82,6 +99,11 @@ function createConnectedContributions({ actions, project, terminals, publishSess
     return connected;
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {object} requestContext
+   */
   async function assertConnectedWorkSaved(runtime, sessionId, requestContext) {
     const current = await runtime.getSession(sessionId, { inspectSource: false });
     // Read each integration branch live before taking snapshots, so Save
@@ -179,6 +201,11 @@ function createConnectedContributions({ actions, project, terminals, publishSess
       : result;
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} contribution
+   * @param {object} session
+   */
   async function resolveConnectedSession(runtime, contribution, session) {
     const visited = new Set();
     while (session) {

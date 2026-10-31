@@ -34,6 +34,13 @@ import {
   writeSessionRenewalState
 } from "./sessionRenewalState.js";
 
+/** @typedef {ReturnType<typeof import("./service.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
+/** @typedef {ReturnType<typeof import("./sessionArchive.js").createSessionArchive>} SessionArchive */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 const SESSION_RENEWAL_THREAD_UNREADABLE_CODE =
   "vibe64_session_renewal_thread_unreadable";
 const SESSION_RENEWAL_MANUAL_DRAFT_CODES = new Set([
@@ -182,6 +189,10 @@ function manualDraftForGenerationError(error = null) {
   }
 }
 
+/**
+ * @param {TerminalsService} terminals
+ * @param {object | null} [basis]
+ */
 function manualDraftTemplate(terminals, basis = null) {
   if (!basis?.source) {
     return "";
@@ -235,6 +246,10 @@ function assertWorkspaceIdle(session = {}, setupRunner = null) {
   }
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} [sessionId]
+ */
 async function assertNoRepositoryOperation(runtime, sessionId = "") {
   const [save, update] = await Promise.all([
     runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID),
@@ -388,6 +403,19 @@ function publicRenewalResult(state = null, extra = {}, vibe64User = null) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
+ * @param {SessionArchive["prepareArchive"] | null} [dependencies.prepareArchive]
+ * @param {ProjectService} dependencies.project
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {() => ((actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>) | null} [dependencies.renewalActorResolver]
+ * @param {((input: object, options: object) => Promise<object>) | null} [dependencies.resolveSuccessorAssistant]
+ * @param {typeof setTimeout} [dependencies.setTimeoutFn]
+ * @param {WorkspaceSetupRunner} dependencies.setupRunner
+ * @param {TerminalsService} dependencies.terminals
+ * @param {number} [dependencies.workflowLockRetryMs]
+ */
 function createSessionRenewalController({
   clearTimeoutFn = clearTimeout,
   prepareArchive = null,
@@ -433,6 +461,10 @@ function createSessionRenewalController({
     });
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} [sessionId]
+   */
   async function readInternalSession(runtime, sessionId = "") {
     if (typeof runtime.getSessionForRenewal !== "function") {
       throw new TypeError("Session renewal requires the private renewal session reader.");
@@ -538,6 +570,11 @@ function createSessionRenewalController({
     return authorization;
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   * @param {object} successor
+   */
   async function readSuccessorProcessExitProofReleaseAuthorization(runtime, state, successor) {
     if (typeof runtime.store.readArtifactForRenewal !== "function") {
       throw new TypeError("Session renewal requires private artifact reads.");
@@ -558,6 +595,11 @@ function createSessionRenewalController({
     return assertSuccessorProcessExitProofReleaseAuthorization(value, state, successor);
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   * @param {object} successor
+   */
   async function authorizeSuccessorProcessExitProofRelease(runtime, state, successor) {
     if (typeof runtime.store.writeJsonArtifactForRenewal !== "function") {
       throw new TypeError("Session renewal requires atomic private artifact writes.");
@@ -582,6 +624,11 @@ function createSessionRenewalController({
     });
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} [sessionId]
+   * @param {object | null} [session]
+   */
   async function assertPredecessorIdle(runtime, sessionId = "", session = null) {
     const predecessor = session || await runtime.getSession(sessionId, {
       inspectSource: false
@@ -674,6 +721,12 @@ function createSessionRenewalController({
     );
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   * @param {object} [options]
+   * @param {boolean} [options.thawAdmission]
+   */
   async function restorePreAcknowledgementSource(runtime, state, {
     thawAdmission = true
   } = {}) {
@@ -1046,12 +1099,20 @@ function createSessionRenewalController({
     };
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} [sessionId]
+   */
   async function captureReviewConversation(runtime, sessionId = "") {
     return conversationFingerprint(
       await runtime.readConversationLogPage(sessionId, { limit: 1 })
     );
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   */
   async function completeRenewalArchive(runtime, state) {
     const sourceSessionId = state.sessionId;
     const successorSessionId = state.successor.sessionId;
@@ -1161,6 +1222,10 @@ function createSessionRenewalController({
     }));
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   */
   async function runCompletedRenewalMaintenance(runtime, state) {
     if (!state.commit?.committedAt || state.status !== SESSION_RENEWAL_STATUS.COMPLETED) {
       return state;
@@ -1270,6 +1335,11 @@ function createSessionRenewalController({
     }
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   * @param {object} [input]
+   */
   async function finalizeCommittedRenewal(runtime, state, input = {}) {
     const commit = state.commit;
     if (!commit?.committedAt) {
@@ -1340,6 +1410,11 @@ function createSessionRenewalController({
     return runCompletedRenewalMaintenance(runtime, completed);
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   * @param {object} [input]
+   */
   async function finalizeCompletedRenewal(runtime, state, input = {}) {
     if (state.commit?.committedAt) {
       return finalizeCommittedRenewal(runtime, state, input);
@@ -1410,6 +1485,10 @@ function createSessionRenewalController({
     }
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} state
+   */
   async function cleanupRenewalSuccessor(runtime, state) {
     const nextSessionId = normalizeText(state.successor?.sessionId);
     if (!nextSessionId) {
@@ -1866,6 +1945,11 @@ function createSessionRenewalController({
     }
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} initialState
+   * @param {object} [input]
+   */
   async function advanceConfirmedRenewal(runtime, initialState, input = {}) {
     assertWorkflowAdmissionOpen();
     let state = initialState;

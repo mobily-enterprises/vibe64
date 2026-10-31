@@ -20,9 +20,27 @@ import {
   createSessionPresenceService
 } from "./sessionPresence.js";
 
+/** @typedef {import("./types.js").SessionsService} SessionsService */
+/** @typedef {import("./types.js").SessionRepositoryUpdates} SessionRepositoryUpdates */
+/** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
+/** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
+/** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 // Startup resumes interrupted archives, then interrupted renewals. Each step
 // runs even when the other fails, and every failure is logged with its
 // session. Shutdown stops the archive loop between sessions.
+/**
+ * @param {object} dependencies
+ * @param {(options: { signal: AbortSignal }) => Promise<object>} dependencies.recover
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ */
 function createSessionRenewalRecoveryTask({ recover, logger = null } = {}) {
   if (typeof recover !== "function") {
     throw new TypeError("Session renewal recovery task requires recover().");
@@ -80,6 +98,11 @@ function createSessionRenewalRecoveryTask({ recover, logger = null } = {}) {
   });
 }
 
+/**
+ * @param {SessionsService} sessions
+ * @param {object} [options]
+ * @param {AbortSignal} options.signal
+ */
 async function resumeInterruptedSessionWork(sessions, { signal } = {}) {
   const failures = [];
   for (const [step, resume] of [
@@ -103,6 +126,11 @@ function createVibe64SessionsFeature() {
   const recoveryTasks = new WeakMap();
   const stoppedServices = new WeakSet();
 
+  /**
+   * @param {SessionsService} sessions
+   * @param {RuntimeLogger} logger
+   * @param {ProjectService} project
+   */
   function recoveryTaskFor(sessions, logger, project) {
     if (stoppedServices.has(sessions)) {
       return null;
@@ -140,6 +168,16 @@ function createVibe64SessionsFeature() {
       channels: ["api", "automation", "internal"],
       surfaces: ["app"]
     },
+    /**
+     * @param {object} capabilities
+     * @param {AccountsService} capabilities.accounts
+     * @param {RuntimeEvents} capabilities.events
+     * @param {RuntimeHttp} capabilities.http
+     * @param {ProjectService} capabilities.project
+     * @param {SourceEditorService} capabilities.sourceEditor
+     * @param {TerminalsService} capabilities.terminals
+     * @param {{ actionCatalogue: ActionCatalogue }} context
+     */
     setup({ accounts, events, http, project, sourceEditor, terminals }, { actionCatalogue }) {
       const sessionPresence = createSessionPresenceService({
         onPublishError: (error) => {
@@ -173,6 +211,10 @@ function createVibe64SessionsFeature() {
       }
       recoveryTaskFor(outputs.sessions, logger, project)?.start();
     },
+    /**
+     * @param {{ terminals: TerminalsService }} capabilities
+     * @param {{ outputs: { sessions: SessionsService } }} context
+     */
     async shutdown({ terminals }, { outputs }) {
       const sessions = outputs.sessions;
       stoppedServices.add(sessions);
@@ -219,6 +261,20 @@ const TURN_ACTIVE_REASONS = new Set([
   "opencode-server-turn-active"
 ]);
 
+// The repository updates capability: the update probe, and close(), which
+// stops the project watches and the probe.
+/**
+ * @param {object} dependencies
+ * @param {RepositoryUpdateProbe} dependencies.probe
+ * @param {() => void} dependencies.closeWatches
+ */
+function createRepositoryUpdates({ probe, closeWatches }) {
+  return { probe, close() {
+    closeWatches();
+    probe.close();
+  } };
+}
+
 // Browser pages watch the projects and sessions they show over realtime
 // (projectWatch.js); the project update probe runs while a page watches the
 // project or an agent turn runs in it. Authenticated realtime may be composed
@@ -229,6 +285,13 @@ const Vibe64RepositoryUpdatesProvider = defineFeature({
   requires: { events: "runtime.events", realtime: "runtime.realtime", sessions: "vibe64.sessions" },
   provides: { repositoryUpdates: "vibe64.sessions.repository-updates" },
   actionDefaults: { channels: ["api"], surfaces: ["app"] },
+  /**
+   * @param {object} capabilities
+   * @param {RuntimeEvents} capabilities.events
+   * @param {RuntimeRealtime} capabilities.realtime
+   * @param {SessionsService} capabilities.sessions
+   * @param {{ actionCatalogue: ActionCatalogue }} context
+   */
   setup({ events, realtime, sessions }, { actionCatalogue }) {
     const probe = createRepositoryUpdateProbe({
       probe: (slug, state) => sessions.probeRepositoryUpdates(slug, state),
@@ -246,15 +309,16 @@ const Vibe64RepositoryUpdatesProvider = defineFeature({
       handle: (event) => probe.wake(event.realtime.payload.projectSlug)
     });
     const closeWatches = registerProjectWatch({ actions: actionCatalogue, realtime });
-    return { repositoryUpdates: { probe, close() {
-      closeWatches();
-      probe.close();
-    } } };
+    return { repositoryUpdates: createRepositoryUpdates({ probe, closeWatches }) };
   },
   actions: ({ repositoryUpdates }) => createProjectWatchActions({ probe: repositoryUpdates.probe }),
+  /**
+   * @param {object} _deps
+   * @param {{ outputs: { repositoryUpdates: SessionRepositoryUpdates } }} context
+   */
   shutdown(_deps, { outputs }) {
     outputs.repositoryUpdates.close();
   }
 });
 
-export { Vibe64RepositoryUpdatesProvider, Vibe64SessionsProvider };
+export { Vibe64RepositoryUpdatesProvider, Vibe64SessionsProvider, createRepositoryUpdates };

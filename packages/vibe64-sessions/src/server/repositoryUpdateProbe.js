@@ -8,6 +8,14 @@ const REPOSITORY_UPDATE_PROBE_RETRY_MS = 60_000;
 // `probe(slug, { memory, watched })` returns { inUse, failed }; `memory` lives
 // as long as the project's record. A probe never overlaps itself: ticks that
 // pass while one runs are skipped.
+/**
+ * @param {object} dependencies
+ * @param {typeof clearTimeout} [dependencies.clearTimer]
+ * @param {() => number} [dependencies.now]
+ * @param {(error: Error, projectSlug: string) => void} [dependencies.onError]
+ * @param {(slug: string, state: object) => Promise<object>} dependencies.probe
+ * @param {typeof setTimeout} [dependencies.setTimer]
+ */
 function createRepositoryUpdateProbe({
   clearTimer = clearTimeout,
   now = Date.now,

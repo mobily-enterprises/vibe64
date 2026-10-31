@@ -48,6 +48,9 @@ import {
   sessionUpdateInputValidator
 } from "./inputSchemas.js";
 
+/** @typedef {import("./types.js").SessionsService} SessionsService */
+/** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
+
 const ACTION_SKIP_INTEGRATION_SETUP = "vibe64.sessions.integration-setup.skip";
 const ACTION_RESUME_INTEGRATION_SETUP = "vibe64.sessions.integration-setup.resume";
 const ACTION_LIST_SESSIONS = "vibe64.sessions.list";
@@ -146,6 +149,10 @@ function conversationContextGrant(_input, context) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {SessionsService} dependencies.sessions
+ */
 function createSessionActions({ sessions } = {}) {
   if (!sessions) {
     throw new TypeError("createSessionActions requires sessions.");
@@ -580,6 +587,10 @@ function createSessionActions({ sessions } = {}) {
 // A browser page's watch of a project it has open, or of one session it shows.
 // Only its realtime connection (projectWatch.js) executes it, with the binding
 // that releases what the watch holds when the page leaves or disconnects.
+/**
+ * @param {object} dependencies
+ * @param {RepositoryUpdateProbe} dependencies.probe
+ */
 function createProjectWatchActions({ probe } = {}) {
   if (!probe) {
     throw new TypeError("createProjectWatchActions requires the update probe.");

@@ -12,6 +12,9 @@ import {
 import { agentMessageActionInputValidator, assistantSelectionUpdateActionInputValidator } from "./inputSchemas.js";
 import { mainConversationTarget, temporaryConversationTarget } from "../shared/conversationIdentity.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 function withoutFields(schema, excluded) {
   return Object.fromEntries(Object.entries(schema.getFieldDefinitions()).filter(([key]) => !excluded.includes(key)));
 }
@@ -41,6 +44,11 @@ function operationResult(result) {
       .map(([key]) => [key, result[key]])) };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {TerminalsService} dependencies.terminals
+ */
 function createMainBrowserConversations({ actions, terminals } = {}) {
   if (typeof actions?.execute !== "function" || typeof terminals?.openBrowserConversation !== "function") {
     throw new TypeError("Main browser conversations require the original action catalogue and terminal conversation owner.");

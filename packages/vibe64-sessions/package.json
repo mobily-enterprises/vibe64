@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     "./shared/conversation": "./src/shared/conversationIdentity.js",
-    "./shared/project-watch": "./src/shared/projectWatch.js"
+    "./shared/project-watch": "./src/shared/projectWatch.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",

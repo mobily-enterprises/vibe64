@@ -4,6 +4,8 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { BROWSER_KEY_PATTERN } from "./inputPatterns.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+
 const SESSION_PRESENCE_IDLE_MS = VIBE64_SESSION_PRESENCE_IDLE_MS;
 const SESSION_PRESENCE_MAX_ENTRIES = 2_048;
 
@@ -91,6 +93,7 @@ function presencePayload(input = {}, {
   });
 }
 
+/** @param {RuntimeEvents} events */
 function createSessionPresencePublisher(events) {
   if (!events || typeof events.publish !== "function") {
     throw new TypeError("Session presence publication requires runtime.events.");
@@ -120,6 +123,16 @@ function createSessionPresencePublisher(events) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {typeof clearTimeout} [dependencies.clearTimer]
+ * @param {number} [dependencies.idleMs]
+ * @param {number} [dependencies.maxEntries]
+ * @param {() => number} [dependencies.now]
+ * @param {(error: Error) => void} [dependencies.onPublishError]
+ * @param {ReturnType<typeof createSessionPresencePublisher>} dependencies.publishPresence
+ * @param {typeof setTimeout} [dependencies.setTimer]
+ */
 function createSessionPresenceService({
   clearTimer = clearTimeout,
   idleMs = SESSION_PRESENCE_IDLE_MS,

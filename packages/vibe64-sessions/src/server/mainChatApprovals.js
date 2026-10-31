@@ -4,6 +4,11 @@ import { readActiveSessionMetadataValues } from "@local/vibe64-runtime/server/se
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { currentProjectRequestContext, currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
 
+/** @typedef {ReturnType<typeof import("@local/vibe64-project/server/actions").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 // A team member's main-chat messages wait here, in the chat's own state, until
 // the workspace owner approves, edits or declines them. Main chat runs on the
 // owner's setup, so an approved message is sent as the owner's. A lesson is the
@@ -61,6 +66,14 @@ async function countWaitingMainChatApprovals({ projectRuntimeRoot = "" } = {}) {
   return waiting;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ * @param {TerminalsService} dependencies.terminals
+ * @param {(sessionId: string, input: object, options?: object) => Promise<object>} dependencies.deliver
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
+ */
 function createMainChatApprovals({
   project,
   terminals,

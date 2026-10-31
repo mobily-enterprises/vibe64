@@ -1,11 +1,19 @@
 import { attachDirectRequestActionExecutor } from "@jskit-ai/kernel/server/http";
 import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../shared/projectWatch.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
+
 const PROJECT_WATCH_ACTION = "vibe64.sessions.project.watch";
 
 // A watch belongs to one authenticated browser connection. The action checks
 // the person's access to the project and decides what the watch holds: realtime
 // rooms and the project's update probe. The socket supplies only its lifetime.
+/**
+ * @param {object} dependencies
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {RuntimeRealtime} dependencies.realtime
+ */
 function registerProjectWatch({ actions, realtime }) {
   return realtime.onConnection(({ socket, readRequest }) => {
     const watches = new Map();

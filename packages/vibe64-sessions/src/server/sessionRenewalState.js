@@ -15,6 +15,8 @@ import {
   normalizeSessionRenewalHandoverDraft
 } from "@local/vibe64-terminals/server/sessionRenewalHandover";
 
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 const SESSION_RENEWAL_KIND = "vibe64.session_renewal";
 const SESSION_RENEWAL_SCHEMA_VERSION = 1;
 
@@ -499,6 +501,10 @@ function assertSessionRenewalDraftVersion(state = {}, {
   return state.draft;
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} [sessionId]
+ */
 async function readSessionRenewalState(runtime, sessionId = "") {
   if (typeof runtime?.store?.readSessionRenewalStateRecord !== "function") {
     throw new TypeError("Session renewal state requires the project renewal-state reader.");
@@ -523,6 +529,11 @@ async function readSessionRenewalState(runtime, sessionId = "") {
   }
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} [sessionId]
+ * @param {object} [value]
+ */
 async function writeSessionRenewalState(runtime, sessionId = "", value = {}) {
   if (typeof runtime?.store?.writeSessionRenewalStateRecord !== "function") {
     throw new TypeError("Session renewal state requires the project renewal-state writer.");
@@ -534,6 +545,11 @@ async function writeSessionRenewalState(runtime, sessionId = "", value = {}) {
   return state;
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} [sessionId]
+ * @param {(state: object) => object | Promise<object>} operation
+ */
 async function mutateSessionRenewalState(runtime, sessionId = "", operation) {
   if (typeof operation !== "function") {
     throw new TypeError("Session renewal state mutation requires an operation.");

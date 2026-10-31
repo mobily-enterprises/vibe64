@@ -4,6 +4,10 @@ import { isTrustedStudioWebSocketRequest, requireLocalStudioRequest } from "@loc
 import { mainConversationTarget, temporaryConversationTarget } from "../shared/conversationIdentity.js";
 import { conversationTransportSchema } from "./conversationTransportSchema.js";
 
+/** @typedef {import("./types.js").SessionsService} SessionsService */
+/** @typedef {import("@local/vibe64-colleague/server/types").ColleagueService} ColleagueService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+
 // The original browser hosting owner is shared by Main and optional Colleague.
 // AssistantFeature still owns all routes, subscriptions and client contracts.
 const Vibe64ConversationsProvider = defineFeature({
@@ -11,6 +15,12 @@ const Vibe64ConversationsProvider = defineFeature({
   requires: { sessions: "vibe64.sessions", http: "runtime.http" },
   optional: { colleague: "vibe64.colleague" },
   provides: { conversations: "assistant.conversations", access: "assistant.conversation.access" },
+  /**
+   * @param {object} capabilities
+   * @param {SessionsService} capabilities.sessions
+   * @param {ColleagueService} [capabilities.colleague]
+   * @param {RuntimeHttp} capabilities.http
+   */
   setup({ sessions, colleague, http }) {
     const main = sessions.browserConversations;
     const product = colleague?.browserConversations;
