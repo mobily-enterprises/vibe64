@@ -42,22 +42,22 @@ function requireSuccess(result) {
   return result;
 }
 
-// Internal orchestration, supplied with the existing owners. Authenticated
-// actions admit actors and pins; neither model input nor HTTP selects paths,
-// initializers, session identities or shell commands here.
 /**
+ * Internal orchestration, supplied with the existing owners. Authenticated
+ * actions admit actors and pins; neither model input nor HTTP selects paths,
+ * initializers, session identities or shell commands here.
  * @param {object} dependencies
  * @param {InstalledTrainingCatalogue} dependencies.catalogue
  * @param {InstalledTrainingContent} dependencies.content
  * @param {TrainingLearnerState} dependencies.learners
- * @param {TrainingLearningSpace | null} [dependencies.learningSpace]
+ * @param {TrainingLearningSpace | null} dependencies.learningSpace
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {ManagedProjectRepositoryService} dependencies.projectRepositoryService
  * @param {ProjectService} dependencies.project
  * @param {SessionsService} dependencies.sessions
  * @param {TerminalsService} dependencies.terminals
  */
-function createTrainingService({ catalogue, content, learners, learningSpace = null, projectContext, projectRepositoryService, project, sessions, terminals } = {}) {
+function createTrainingService({ catalogue, content, learners, learningSpace, projectContext, projectRepositoryService, project, sessions, terminals }) {
   // A lesson starts only in the current lesson format and when this learner
   // can take every required step here (its places exist and are open to them).
   async function requireStartable(actor, pin) {
@@ -160,6 +160,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
   }
 
   function requireCloser() {
+    // readable-check: allow method-probe - optional operation: without a learning space closing a lesson answers that it is unavailable
     if (typeof learningSpace?.closeAttempt !== "function") {
       throw trainingError("VIBE64_TRAINING_PRACTICE_UNAVAILABLE", "Closing lessons is unavailable in this installation. Nothing was changed.");
     }
@@ -192,8 +193,8 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
       let saved = await learners.resumeAttempt({ actor, attemptId });
       const lesson = await content.readLesson(pinnedLessonKey(saved.attempt.pin));
       if (!lesson.lesson.exercise) return { ...saved, previewReady: false };
-      if (typeof projectRepositoryService?.createManagedGitProject !== "function" ||
-          typeof projectRepositoryService?.verifyTrainingProjectSource !== "function") {
+      // readable-check: allow method-probe - optional operation: an installation without exercise preparation answers EXERCISE_UNAVAILABLE
+      if (typeof projectRepositoryService?.createManagedGitProject !== "function" || typeof projectRepositoryService?.verifyTrainingProjectSource !== "function") {
         throw trainingError("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installation cannot prepare the lesson's practice project. Keep the saved attempt and ask the owner to provide exercise preparation.");
       }
       saved = await learners.beginPreparation({ actor, attemptId, expectedRevision: saved.revision });
@@ -258,6 +259,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
               throw trainingError("VIBE64_TRAINING_SETUP_CHANGED", "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created.");
             }
             // The setup runner is keyed in this Project context.
+            // readable-check: allow optional-call - optional operation: a terminal service without workspace setup has nothing to wait for
             setupRun = current.workspaceSetup?.status === "succeeded" ? null : terminals.waitForWorkspaceSetup?.(initialSessionId) || null;
             return current;
           });

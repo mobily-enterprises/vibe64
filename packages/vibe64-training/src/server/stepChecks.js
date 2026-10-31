@@ -35,6 +35,7 @@ function requireResult(result, failure) {
 // App interaction in the exact ready App run.
 async function runExerciseResponseCheck({ actions, checks, context, actor, target,
   attemptId, observationId, exercise, checkId, stepId }) {
+  // readable-check: allow method-probe - optional operation: an installation without exercise checks answers CHECK_UNDECLARED
   if (typeof checks?.runOrientationCheck !== "function") {
     throw stepFailure("The installed exercise response check is unavailable in this host.");
   }
@@ -55,6 +56,7 @@ async function runExerciseResponseCheck({ actions, checks, context, actor, targe
 // Invoke the step's declared code check and accept only its bounded
 // authorship-qualified result.
 async function runCodeCheckObservation({ checks, context, actor, attemptId, sessionId, observationId, checkId, stepId }) {
+  // readable-check: allow method-probe - optional operation: an installation without code checks answers CHECK_UNDECLARED
   if (typeof checks?.runCodeCheck !== "function") {
     throw stepFailure("The installed code check is unavailable in this host.");
   }
@@ -81,32 +83,27 @@ function requireLearnerChannel(context, what) {
   }
 }
 
-// Version 2 step results. Passes come only from: the automatic check runner
-// with learner-origin evidence (a browser-captured exercise interaction, or
-// learner-authored code per the authorship ledger) when the learner triggered
-// it, the choice comparator, a review check the learner pressed (their own AI
-// judging their practice work against the author's rubric), or the learner's
-// own Done on a self-check or reading step. Results belong to the attempt in
-// progress; a new attempt (Redo, Restart) starts with none. A check the
-// assistant triggers returns diagnostics only and records nothing, so
-// Colleague can never use up the attempt's result budget, and Colleague can
-// never run a review. Verdicts are final: a pass is never replaced.
 /**
+ * Version 2 step results. Passes come only from: the automatic check runner
+ * with learner-origin evidence (a browser-captured exercise interaction, or
+ * learner-authored code per the authorship ledger) when the learner triggered
+ * it, the choice comparator, a review check the learner pressed (their own AI
+ * judging their practice work against the author's rubric), or the learner's
+ * own Done on a self-check or reading step. Results belong to the attempt in
+ * progress; a new attempt (Redo, Restart) starts with none. A check the
+ * assistant triggers returns diagnostics only and records nothing, so
+ * Colleague can never use up the attempt's result budget, and Colleague can
+ * never run a review. Verdicts are final: a pass is never replaced.
  * @param {object} dependencies
  * @param {TrainingLearnerState} dependencies.learners
  * @param {InstalledTrainingContent} dependencies.content
  * @param {TrainingDeclaredCheckOwner} dependencies.checks
  * @param {TrainingCodeAuthorship} dependencies.authorship
  * @param {ActionCatalogue} dependencies.actions
- * @param {TrainingStepEvidence | null} [dependencies.evidence]
- * @param {TrainingStepReviewer | null} [dependencies.reviewer]
+ * @param {TrainingStepEvidence | null} dependencies.evidence
+ * @param {TrainingStepReviewer | null} dependencies.reviewer
  */
-function createTrainingStepChecks({ learners, content, checks, authorship, actions, evidence = null, reviewer = null } = {}) {
-  if (!learners?.readState || !learners?.readStepProgress || !learners?.updateStepProgress || !learners?.saveReader ||
-      !content?.readLesson) {
-    throw new TypeError("Step checks require the original learner state and installed content owners.");
-  }
-
+function createTrainingStepChecks({ learners, content, checks, authorship, actions, evidence, reviewer }) {
   async function openStep({ actor, attemptId, stepId, active = true }) {
     if (!uuidPattern.test(attemptId || "") || !idPattern.test(stepId || "")) {
       throw stepFailure("Use an exact saved attempt ID and a declared step ID.", "ACTION_VALIDATION_FAILED", 400);
@@ -289,6 +286,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
         selected.some(value => !Number.isSafeInteger(value) || value < 0 || value >= options)) {
       throw stepFailure("Choose one or more of this question's options.", "ACTION_VALIDATION_FAILED", 400);
     }
+    // readable-check: allow method-probe - optional operation: content without answer comparison answers CHECK_UNDECLARED, which tests assert
     if (typeof content.readChoiceAnswer !== "function") {
       throw stepFailure("This installation cannot compare the answer for this step.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
@@ -314,6 +312,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   }
 
   function requireEvidence() {
+    // readable-check: allow method-probe - optional operation: without step evidence reading practice work answers CHECK_UNDECLARED
     if (typeof evidence?.read !== "function") {
       throw stepFailure("Reading practice work is unavailable in this installation.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
@@ -333,6 +332,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     if (!requestPattern.test(requestId || "")) throw stepFailure("Ask for a review with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     if (step.check?.kind !== "review") throw stepFailure("This step has no review check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    // readable-check: allow method-probe - optional operation: without a reviewer review steps answer CHECK_UNDECLARED
     if (typeof reviewer?.review !== "function") throw stepFailure("Reviews are unavailable in this installation.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     const entry = await savedEntry(actor, attempt);
     const previous = entry.results.find(value => value.requestId === requestId);
@@ -393,6 +393,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   // Entering a code step records its authorship baseline once; every later
   // entry keeps it. Other steps, ended attempts and absent practice record none.
   async function enterStep({ actor, attemptId, stepId } = {}) {
+    // readable-check: allow method-probe - optional operation: without code authorship a step records no baseline
     if (typeof authorship?.recordStepBaseline !== "function") return { recorded: false };
     return authorship.recordStepBaseline({ actor, attemptId, stepId });
   }

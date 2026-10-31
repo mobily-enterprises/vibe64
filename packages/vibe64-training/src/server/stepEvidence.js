@@ -60,11 +60,7 @@ function fileSections(diff) {
  * @param {ActionCatalogue} dependencies.actions
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
-function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Command } = {}) {
-  if (!project?.runInProjectContext || !project?.createRuntime || typeof actions?.execute !== "function") {
-    throw new TypeError("Step evidence requires the original project and action owners.");
-  }
-
+function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Command }) {
   async function git(source, slug, args, { maxBuffer = GIT_MAX_BUFFER } = {}) {
     const result = await runCommand({ actor: "daemon", command: "git", args: ["-c", "core.quotePath=false", ...args],
       // Optional locks off: reading never refreshes the clone's index.

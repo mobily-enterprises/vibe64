@@ -16,6 +16,7 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 // passes `selectOwners({ actor, attemptId })`, which returns the store's
 // { authorship } holding that attempt, or null.
 function validOwners(owners) {
+  // readable-check: allow method-probe - test asserts error: an owner without the original authorship save is refused with a TypeError
   if (typeof owners?.authorship?.saveLearnerFile !== "function") {
     throw new TypeError("Lesson code saves require the original authorship owner.");
   }

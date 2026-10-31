@@ -1,6 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { MAX_NOTES_CHARS } from "./learnerState.js";
-import { requestId, text } from "./actions.js";
+import { requestId, text } from "./trainingActions.js";
 import { defineTrainingLearnerAction as definition } from "./stepActions.js";
 
 /** @typedef {import("./types.js").TrainingService} TrainingService */
@@ -30,19 +30,15 @@ const expectedRevision = { type: "integer", required: true, min: 0, max: Number.
 /**
  * @param {object} dependencies
  * @param {TrainingService["learners"]} dependencies.learners
- * @param {TrainingService["publishLearnerChanged"] | null} [dependencies.publishLearnerChanged]
+ * @param {TrainingService["publishLearnerChanged"]} dependencies.publishLearnerChanged
  */
-function createTrainingLearnerNotesActions({ learners, publishLearnerChanged = null } = {}) {
-  if (typeof learners?.readTeacherNotes !== "function" || typeof learners?.saveTeacherNotes !== "function") {
-    throw new TypeError("Learner notes actions require the original learner store.");
-  }
-
+function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) {
   async function save(actor, context, input) {
     // The learner's own browser channel is the learner; every other caller of
     // this action is Colleague acting for the same signed-in person.
     const updatedBy = context.channel === "api" ? "learner" : "colleague";
     const result = await learners.saveTeacherNotes({ actor, updatedBy, ...input });
-    if (result.changed && typeof publishLearnerChanged === "function") await publishLearnerChanged({ actor, reason: "notes" });
+    if (result.changed) await publishLearnerChanged({ actor, reason: "notes" });
     return { ok: true, notes: result.notes, replayed: result.replayed, changed: result.changed };
   }
 

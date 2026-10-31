@@ -60,13 +60,13 @@ function parseVerdict(text) {
  * @param {TrainingLearnerState} dependencies.learners
  * @param {TerminalsService} dependencies.terminals
  */
-function createTrainingStepReviewer({ learners, terminals } = {}) {
-  if (typeof learners?.runReviewExclusive !== "function") throw new TypeError("Step reviews require the original learner store.");
-
+function createTrainingStepReviewer({ learners, terminals }) {
   // One review at a time per learner; the learner store holds the lock, the
   // Helper's private root and its receipt.
   async function review({ actor, lesson, step, evidence, context = {} } = {}) {
+    // readable-check: allow method-probe - optional operation: an installation without an AI Helper answers CHECK_UNDECLARED
     if (["resolveAssistantPurpose", "resolveEphemeralAgentExecutionProfile", "runEphemeralAgentChatTurn", "deleteEphemeralAgentConversation"]
+      // readable-check: allow method-probe - optional operation: an installation without an AI Helper answers CHECK_UNDECLARED
       .some(name => typeof terminals?.[name] !== "function")) {
       throw reviewFailure("Reviews need an AI Helper, which this installation does not provide.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }

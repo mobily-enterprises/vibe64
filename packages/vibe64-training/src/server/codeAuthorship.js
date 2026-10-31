@@ -3,7 +3,7 @@ import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { declaredStepCheck, lessonHasSteps } from "./contentSchemas.js";
-import { trainingFailure } from "./errors.js";
+import { conflictFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
 /** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
@@ -16,26 +16,22 @@ const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_SEPARATE_ENTRIES = 255;
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
-function failure(code, message, statusCode = 409) {
-  return trainingFailure(code, message, { statusCode });
-}
-
 // Reads the bytes of declared exercise-relative files from the live session
 // source. Paths come from the pinned lesson, never from a request.
 async function readDeclaredFiles(source, files) {
   if (!path.isAbsolute(source || "") || await realpath(source) !== source) {
-    throw failure("VIBE64_TRAINING_CODE_SOURCE_UNSAFE", "The lesson session source is not its original canonical directory.");
+    throw conflictFailure("VIBE64_TRAINING_CODE_SOURCE_UNSAFE", "The lesson session source is not its original canonical directory.");
   }
   const result = [];
   for (const file of files) {
     const filename = path.join(source, ...file.split("/"));
     let stat;
     try { stat = await lstat(filename); } catch (error) {
-      if (error.code === "ENOENT") throw failure("VIBE64_TRAINING_CODE_FILE_MISSING", `The lesson file ${file} is missing from your practice project.`);
+      if (error.code === "ENOENT") throw conflictFailure("VIBE64_TRAINING_CODE_FILE_MISSING", `The lesson file ${file} is missing from your practice project.`);
       throw error;
     }
     if (!stat.isFile() || stat.isSymbolicLink() || await realpath(filename) !== filename || stat.size > MAX_FILE_BYTES) {
-      throw failure("VIBE64_TRAINING_CODE_FILE_UNSAFE", `The lesson file ${file} is not an ordinary file of at most 1 MiB.`);
+      throw conflictFailure("VIBE64_TRAINING_CODE_FILE_UNSAFE", `The lesson file ${file} is not an ordinary file of at most 1 MiB.`);
     }
     const bytes = await readFile(filename);
     result.push({ path: file, sha256: sha256(bytes), bytes });
@@ -90,28 +86,23 @@ function codeStepOf(lesson, stepId) {
   return { step, check, files: step.check.files };
 }
 
-// Training owns the authorship baseline and the save ledger for code steps.
-// The generic source editor still performs every save; this owner only
-// records it. The ledger belongs to the attempt in progress, whose practice
-// project is training-<attemptId>.
 /**
+ * Training owns the authorship baseline and the save ledger for code steps.
+ * The generic source editor still performs every save; this owner only
+ * records it. The ledger belongs to the attempt in progress, whose practice
+ * project is training-<attemptId>.
  * @param {object} dependencies
  * @param {TrainingLearnerState} dependencies.learners
  * @param {InstalledTrainingContent} dependencies.content
  * @param {ProjectService} dependencies.project
  */
-function createTrainingCodeAuthorship({ learners, content, project } = {}) {
-  if (!learners?.readState || !learners?.activeAttemptForProject || !learners?.updateCodeLedger || !content?.readLesson ||
-      !project?.runInProjectContext || !project?.createRuntime) {
-    throw new TypeError("Code authorship requires the original learner, installed content and Project owners.");
-  }
-
+function createTrainingCodeAuthorship({ learners, content, project }) {
   async function liveFiles(attempt, files) {
     return project.runInProjectContext(attempt.projectSlug, async () => {
       const runtime = await project.createRuntime({ inspectSource: false });
       const session = await runtime.getSession(attempt.preparation.initialSessionId, { inspectSource: false });
       if (!session || session.sessionId !== attempt.preparation.initialSessionId) {
-        throw failure("VIBE64_TRAINING_CODE_SESSION_STALE", "The prepared lesson session is unavailable.");
+        throw conflictFailure("VIBE64_TRAINING_CODE_SESSION_STALE", "The prepared lesson session is unavailable.");
       }
       return readDeclaredFiles(sessionSourcePath(session), files);
     });
@@ -153,7 +144,7 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
     const result = await learners.updateCodeLedger({ actor, attemptId }, async (current, { learnerId, attempt }) => {
       const tracking = Boolean(current && await openCodeStep(attempt, current.steps[0].stepId));
       if (tracking && current.entries.length >= MAX_SEPARATE_ENTRIES) {
-        throw failure("VIBE64_TRAINING_CODE_LEDGER_FULL", "This code step recorded too many separate edits. Ask the lesson owner to review it.");
+        throw conflictFailure("VIBE64_TRAINING_CODE_LEDGER_FULL", "This code step recorded too many separate edits. Ask the lesson owner to review it.");
       }
       const saved = await save();
       const savedPath = saved?.file?.path;

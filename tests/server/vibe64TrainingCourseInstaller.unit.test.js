@@ -8,7 +8,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
-import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
+import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { createTrainingCourseInstaller } from "../../packages/vibe64-training/src/server/courseInstaller.js";
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
@@ -244,7 +244,7 @@ test("catalogue actions require a signed-in user and report install results", as
   const auth = { user: null };
   const actions = createActionCatalogue();
   const missing = { readCatalogue: f.catalogue.readCatalogue };
-  const definitions = createTrainingActions({ catalogue: f.catalogue, learners: { readState() {} },
+  const definitions = createTrainingActions({ publishLearnerChanged: async () => {}, catalogue: f.catalogue, learners: { readState() {} },
     courseInstaller: f.make() });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user, authorizeProject() { throw new Error("No project."); } });
@@ -262,7 +262,7 @@ test("catalogue actions require a signed-in user and report install results", as
     course: { courseId: "first-course", release: "0.1.0", title: "First course", status: "released", enabled: true } });
   await assert.rejects(execute("course.install", { courseId: "first-course", release: "9.9.9" }), { code: "VIBE64_TRAINING_COURSE_NOT_AVAILABLE" });
   const unavailable = createActionCatalogue();
-  unavailable.register({ contributorId: "training", domain: "training", actions: createTrainingActions({ catalogue: missing,
+  unavailable.register({ contributorId: "training", domain: "training", actions: createTrainingActions({ publishLearnerChanged: async () => {}, catalogue: missing,
     learners: { readState() {} } }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(unavailable, { resolveUser: async () => auth.user, authorizeProject() { throw new Error("No project."); } });
   const result = await unavailable.execute({ actionId: "vibe64.training.course.install", input: { courseId: "first-course", release: "0.1.0" },

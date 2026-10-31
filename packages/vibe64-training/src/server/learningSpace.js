@@ -20,20 +20,20 @@ const ARCHIVE_REASONS = Object.freeze(["finished", "archived"]);
 const PRIVATE = Object.freeze({ directoryMode: 0o700, fileMode: 0o600 });
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 
-// The attempt lifecycle in the learning space (Learning v2 Rev 4 H4/H5).
-// An attempt is the parent of its practice project (training-<attemptId>,
-// when the lesson has one), its step results and its teacher conversation.
-// closeAttempt is the one implementation behind finish, restart,
-// start-with-archive and delete. Archiving keeps one bundle per attempt:
-//   <sys>/training/practice-archives/<learnerKey>/<attemptId>/
-//     attempt.json        the attempt record with its step results
-//     conversation.json   the teacher thread, moved out of Colleague's store
-//     project/            the shared project archive (only with a project)
-// Admission and paths are core's (runWithPracticeProjectScope); the project
-// archive lifecycle is the shared archive service, the host's
-// (trainingHost.projectArchive) or a standalone one. A host may keep a
-// different number of archived practice projects (keptArchivedProjects).
 /**
+ * The attempt lifecycle in the learning space (Learning v2 Rev 4 H4/H5).
+ * An attempt is the parent of its practice project (training-<attemptId>,
+ * when the lesson has one), its step results and its teacher conversation.
+ * closeAttempt is the one implementation behind finish, restart,
+ * start-with-archive and delete. Archiving keeps one bundle per attempt:
+ *   <sys>/training/practice-archives/<learnerKey>/<attemptId>/
+ *     attempt.json        the attempt record with its step results
+ *     conversation.json   the teacher thread, moved out of Colleague's store
+ *     project/            the shared project archive (only with a project)
+ * Admission and paths are core's (runWithPracticeProjectScope); the project
+ * archive lifecycle is the shared archive service, the host's
+ * (trainingHost.projectArchive) or a standalone one. A host may keep a
+ * different number of archived practice projects (keptArchivedProjects).
  * @param {object} dependencies
  * @param {TrainingLearnerState} dependencies.learners
  * @param {InstalledTrainingContent} dependencies.content
@@ -43,15 +43,9 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a
  * @param {number} [dependencies.keptArchivedProjects]
  * @param {typeof rm} [dependencies.removePath]
  */
-function createTrainingLearningSpace({ learners, content, projectContext, projectArchive, systemRoot = projectContext?.systemRoot,
-  keptArchivedProjects = KEPT_ARCHIVED_PROJECTS, removePath = rm } = {}) {
-  if (typeof learners?.readState !== "function" || typeof learners?.endAttempt !== "function" ||
-      typeof learners?.readAttemptRecord !== "function" || typeof learners?.runPreparationExclusive !== "function" ||
-      typeof content?.readLesson !== "function" || typeof projectContext?.runWithPracticeProjectScope !== "function" ||
-      typeof projectContext?.readLearningSpaceProject !== "function" ||
-      typeof projectArchive?.archiveProject !== "function" || typeof projectArchive?.removeProject !== "function" || !systemRoot) {
-    throw new TypeError("The learning space requires the learner, content, Project context and project archive owners.");
-  }
+function createTrainingLearningSpace({ learners, content, projectContext, projectArchive, systemRoot = projectContext.systemRoot,
+  keptArchivedProjects = KEPT_ARCHIVED_PROJECTS, removePath = rm }) {
+  if (!systemRoot) throw new TypeError("The learning space requires its system root.");
   if (!Number.isSafeInteger(keptArchivedProjects) || keptArchivedProjects < 0) {
     throw new TypeError("The learning space keeps a whole, non-negative number of archived practice projects.");
   }
@@ -253,6 +247,7 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
 // The title comes from the lesson's identity (its descriptor), so a lesson
 // this Vibe64 can no longer teach is still named by its title.
 async function lessonTitle(content, pin) {
+  // readable-check: allow method-probe - optional operation: content without admission reads is named by its whole lesson read
   const read = typeof content.readAdmissionIdentity === "function" ? content.readAdmissionIdentity : content.readLesson;
   try {
     return (await read(pinnedLessonKey(pin))).lesson.title;

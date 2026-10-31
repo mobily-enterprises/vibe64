@@ -11,7 +11,7 @@ import { currentOsUser } from "@local/vibe64-core/server/osUserIdentity";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { registerPracticeRequestActor } from "@local/vibe64-core/server/projectRequestContext";
 import { registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
-import { createTrainingActions } from "./actions.js";
+import { createTrainingActions } from "./trainingActions.js";
 import { createTrainingStepActions } from "./stepActions.js";
 import { createTrainingLearnerNotesActions } from "./learnerNotesActions.js";
 import { createTrainingLearnerChangedPublisher } from "./learnerEvents.js";
@@ -48,9 +48,9 @@ import { aiReadyFact, registerLearningFact } from "./learningFacts.js";
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").TrainingService} TrainingService */
 
-// The training capability: the learning owners, and the learner-changed
-// publisher.
 /**
+ * The training capability: the learning owners, and the learner-changed
+ * publisher.
  * @param {object} dependencies
  * @param {InstalledTrainingCatalogue} dependencies.catalogue
  * @param {TrainingCourseInstaller} dependencies.courseInstaller
@@ -83,9 +83,9 @@ const Vibe64TrainingProvider = defineFeature({
    * @param {ProjectService} capabilities.project
    * @param {SessionsService} capabilities.sessions
    * @param {TerminalsService} capabilities.terminals
-   * @param {TrainingService} [capabilities.trainingHost]
-   * @param {SourceEditorService} [capabilities.sourceEditor]
-   * @param {RuntimeEvents} [capabilities.events]
+   * @param {TrainingService | null} capabilities.trainingHost
+   * @param {SourceEditorService | null} capabilities.sourceEditor
+   * @param {RuntimeEvents | null} capabilities.events
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
   setup({ env, logger, http, project, sessions, terminals, trainingHost, sourceEditor, events }, { actionCatalogue }) {
@@ -130,7 +130,7 @@ const Vibe64TrainingProvider = defineFeature({
     registerPracticeRequestActor(({ request }) => localActor(request));
     // Learn mode: the local learner is this computer's user, whatever the request says.
     registerLearningModeReader(() => learners.readLearningMode({ actor: currentOsUser() }), {
-      onReadFailure: error => logger?.warn?.({ error: String(error?.message || error) }, "Learn mode could not be read; Develop applies.")
+      onReadFailure: error => logger.warn({ error: String(error?.message || error) }, "Learn mode could not be read; Develop applies.")
     });
     // The standalone project archive service; a host supplies its own through trainingHost.
     const projectArchive = createProjectArchiveService({ projectContext,

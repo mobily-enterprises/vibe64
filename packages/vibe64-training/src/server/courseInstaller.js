@@ -7,7 +7,7 @@ import { canonicalJson } from "./content.js";
 import { courseSchema, id, list, text, validateContent } from "./contentSchemas.js";
 import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingContent } from "./installedContent.js";
-import { trainingFailure } from "./errors.js";
+import { causedFailure } from "./errors.js";
 
 /** @typedef {ReturnType<typeof import("./installedCatalogue.js").createInstalledTrainingCatalogue>} InstalledTrainingCatalogue */
 
@@ -55,10 +55,6 @@ const lockSchema = createSchema({
   }), 32)
 });
 
-function failure(code, message, statusCode, cause) {
-  return trainingFailure(code, message, { statusCode, ...(cause ? { cause } : {}) });
-}
-
 function compareReleases(left, right) {
   const a = left.split(".").map(Number);
   const b = right.split(".").map(Number);
@@ -66,7 +62,7 @@ function compareReleases(left, right) {
 }
 
 function invalid(message) {
-  return failure("VIBE64_TRAINING_AVAILABLE_INVALID",
+  return causedFailure("VIBE64_TRAINING_AVAILABLE_INVALID",
     `The official course catalogue is invalid: ${message} Nothing was installed. Ask the catalogue maintainers to publish a corrected catalogue.`, 502);
 }
 
@@ -87,11 +83,11 @@ function validateLock(course, lock) {
   return value;
 }
 
-// Reads the official catalogue and installs one exact course release through
-// the original owners: readPinnedTopic/installTopic verify and publish each
-// topic snapshot, and the installed catalogue's enableCourse verifies the lock
-// against the installed inventory under its own lock and revision check.
 /**
+ * Reads the official catalogue and installs one exact course release through
+ * the original owners: readPinnedTopic/installTopic verify and publish each
+ * topic snapshot, and the installed catalogue's enableCourse verifies the lock
+ * against the installed inventory under its own lock and revision check.
  * @param {object} dependencies
  * @param {string} dependencies.systemRoot
  * @param {InstalledTrainingCatalogue} dependencies.catalogue
@@ -102,14 +98,10 @@ function validateLock(course, lock) {
  * @param {number} [dependencies.cacheMs]
  */
 function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "", runCommand = runVibe64Command,
-  remoteUrl = slug => `https://github.com/${slug}.git`, now = () => Date.now(), cacheMs = CACHE_MS } = {}) {
+  remoteUrl = slug => `https://github.com/${slug}.git`, now = () => Date.now(), cacheMs = CACHE_MS }) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) !== systemRoot ||
       systemRoot === path.parse(systemRoot).root) {
     throw new Error("Course installation needs a canonical absolute, non-root server-owned system root.");
-  }
-  if (typeof catalogue?.readCatalogue !== "function" || typeof catalogue.enableCourse !== "function" ||
-      typeof catalogue.removeCourse !== "function") {
-    throw new TypeError("Course installation requires the installed catalogue owner.");
   }
   const catalogueRepository = String(repository || "").trim() || DEFAULT_CATALOGUE_REPOSITORY;
   if (!CATALOGUE_REPOSITORY.test(catalogueRepository)) {
@@ -152,7 +144,7 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
       maxBuffer, mode: "capture", outputEncoding: "utf8", purpose: "source", runtimes: ["git"], timeout
     });
     if (result?.ok !== true) {
-      throw failure("VIBE64_TRAINING_SOURCE_FETCH_FAILED", String(result?.error || result?.stderr || "Git could not read the source.").slice(0, 300));
+      throw causedFailure("VIBE64_TRAINING_SOURCE_FETCH_FAILED", String(result?.error || result?.stderr || "Git could not read the source.").slice(0, 300));
     }
     return String(result.stdout || "");
   }
@@ -163,7 +155,7 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
         await git(root, ["init", "-q"]);
         await git(root, ["fetch", "-q", "--depth=1", "--no-tags", remoteUrl(catalogueRepository), "HEAD"]);
       } catch (cause) {
-        throw failure("VIBE64_TRAINING_AVAILABLE_UNREACHABLE",
+        throw causedFailure("VIBE64_TRAINING_AVAILABLE_UNREACHABLE",
           `The official course catalogue (${catalogueRepository}) could not be downloaded. Check this server's internet access to GitHub and retry. Installed courses are unchanged.`, 503, cause);
       }
       const commit = (await git(root, ["rev-parse", "FETCH_HEAD"])).trim();
@@ -306,7 +298,7 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
       const available = await readAvailable({ fresh: true });
       const selected = available.courses.find(entry => entry.course.courseId === courseId && entry.course.release === release);
       if (!selected) {
-        throw failure("VIBE64_TRAINING_COURSE_NOT_AVAILABLE",
+        throw causedFailure("VIBE64_TRAINING_COURSE_NOT_AVAILABLE",
           `Course ${key} is not in the official catalogue. Refresh the catalogue and choose a listed course.`, 404);
       }
       const { course, lock } = selected;
@@ -318,17 +310,17 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
         return { changed: retired.length > 0, course, retired, catalogueCommit: available.commit };
       }
       if (state === "conflict") {
-        throw failure("VIBE64_TRAINING_COURSE_RELEASE_CONFLICT",
+        throw causedFailure("VIBE64_TRAINING_COURSE_RELEASE_CONFLICT",
           `This server already has a different course ${key}. Installed releases are immutable; ask the owner to inspect it.`, 409);
       }
       // Installing never re-enables a disabled release, for anyone: that stays
       // the operator's deliberate `vibe64 training enable-course`.
       if (state === "disabled") {
-        throw failure("VIBE64_TRAINING_COURSE_DISABLED",
+        throw causedFailure("VIBE64_TRAINING_COURSE_DISABLED",
           `Course ${key} was disabled on this server, and installing does not enable it again. Only the server's operator can enable it again. Nothing was changed.`, 409);
       }
       if (state === "not-installed" && installed.courses.length >= MAX_INSTALLED_RELEASES) {
-        throw failure("VIBE64_TRAINING_COURSE_LIMIT",
+        throw causedFailure("VIBE64_TRAINING_COURSE_LIMIT",
           `This server already keeps ${MAX_INSTALLED_RELEASES} installed course releases, its limit, so ${key} cannot be added. The server's operator can free a place by removing a release; saved lessons keep their content. Nothing was changed.`, 409);
       }
       const total = lock.topics.length;
@@ -349,11 +341,11 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
             await git(sourceRoot, ["fetch", "-q", "--depth=1", "--no-tags", remoteUrl(topic.repository), topic.commit], { timeout: 300_000 });
             await git(sourceRoot, ["checkout", "-q", "--detach", topic.commit]);
           } catch (cause) {
-            throw failure("VIBE64_TRAINING_TOPIC_UNREACHABLE",
+            throw causedFailure("VIBE64_TRAINING_TOPIC_UNREACHABLE",
               `Topic ${topic.topicId} could not be downloaded from ${topic.repository} at its pinned commit. Check this server's internet access to GitHub and retry. Nothing was enabled.`, 503, cause);
           }
           if ((await git(sourceRoot, ["rev-parse", "HEAD"])).trim() !== topic.commit) {
-            throw failure("VIBE64_TRAINING_TOPIC_COMMIT_MISMATCH", `Topic ${topic.topicId} did not check out its exact pinned commit. Nothing was enabled.`, 502);
+            throw causedFailure("VIBE64_TRAINING_TOPIC_COMMIT_MISMATCH", `Topic ${topic.topicId} did not check out its exact pinned commit. Nothing was enabled.`, 502);
           }
           // The original owner re-verifies the clean commit, canonical source,
           // byte hashes and manifest hash against this exact pin.
@@ -372,7 +364,7 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
 
   function installCourse({ courseId, release } = {}) {
     if (typeof courseId !== "string" || !COURSE_ID.test(courseId) || typeof release !== "string" || !RELEASE.test(release)) {
-      return Promise.reject(failure("VIBE64_TRAINING_COURSE_INVALID", "Choose an exact course ID and three-part release.", 400));
+      return Promise.reject(causedFailure("VIBE64_TRAINING_COURSE_INVALID", "Choose an exact course ID and three-part release.", 400));
     }
     const key = `${courseId}@${release}`;
     if (pending.has(key)) return pending.get(key);

@@ -8,7 +8,7 @@ import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionCon
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
-import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
+import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-training/src/server/learnerEvents.js";
 
 // Learn mode (Rev 4 H1) over the real learner store: a saved per-learner flag,

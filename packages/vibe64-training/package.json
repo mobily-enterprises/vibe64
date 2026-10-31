@@ -6,7 +6,7 @@
   "description": "Vibe64 teaching content validation, deterministic bundles and verified pinned snapshot installation and reads.",
   "exports": {
     "./client/lesson-picker": "./src/client/TrainingLessonPicker.vue",
-    "./server/actions": "./src/server/actions.js",
+    "./server/actions": "./src/server/trainingActions.js",
     "./server/declared-check": "./src/server/declaredCheck.js",
     "./server/cli": "./src/server/cli.js",
     "./server/content": "./src/server/content.js",

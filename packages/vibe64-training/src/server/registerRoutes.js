@@ -6,9 +6,11 @@ import { requestBody, requestQuery, vibe64RouteHandler, vibe64RouteHttp } from "
 // LEARNER_NOTES_MAX_CHARS of Markdown may take up to 16 KiB of escaped JSON.
 const BODY_LIMITS = Object.freeze({ "learner-notes.update": 32 * 1024 });
 
-// HTTP only assembles canonical action inputs. Authentication, pins, revision
-// checks and effects belong to the existing Training actions and owners.
-/** @param {RuntimeHttp} http */
+/**
+ * HTTP only assembles canonical action inputs. Authentication, pins, revision
+ * checks and effects belong to the existing Training actions and owners.
+ * @param {RuntimeHttp} http
+ */
 function registerTrainingRoutes(http) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-training"] }), {
     relativePath: "vibe64/training", surface: "app", wrapHandler: vibe64RouteHandler({ projectScoped: false })

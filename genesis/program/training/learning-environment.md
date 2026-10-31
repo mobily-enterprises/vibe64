@@ -28,7 +28,7 @@ Training actions.
 - `packages/vibe64-training/src/server/learningSpace.js`
 - `packages/vibe64-training/src/server/stepActions.js`
 - `packages/vibe64-training/src/server/preparation.js`
-- `packages/vibe64-training/src/server/actions.js`
+- `packages/vibe64-training/src/server/trainingActions.js`
 
 ## Public contract
 

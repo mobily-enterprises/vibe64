@@ -68,9 +68,9 @@ function activeRun(status, session, input) {
     runRoot: metadata.runRoot, port: metadata.port };
 }
 
-// The authenticated native observation owner supplies these identities. This
-// facility confirms a server observation, never learner origin or assessment pass.
 /**
+ * The authenticated native observation owner supplies these identities. This
+ * facility confirms a server observation, never learner origin or assessment pass.
  * @param {object} dependencies
  * @param {TrainingLearnerState} dependencies.learners
  * @param {InstalledTrainingContent} dependencies.content
@@ -78,12 +78,7 @@ function activeRun(status, session, input) {
  * @param {TerminalsService} dependencies.terminals
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
-function createTrainingDeclaredCheckOwner({ learners, content, project, terminals, runCommand = runVibe64Command } = {}) {
-  if (!learners?.readState || !content?.readLesson || !content?.readCheck ||
-      !project?.runInProjectContext || !project?.createRuntime || !terminals?.outputTargetStatus) {
-    throw new TypeError("Declared checks require the original learner, installed content, project and App output facilities.");
-  }
-
+function createTrainingDeclaredCheckOwner({ learners, content, project, terminals, runCommand = runVibe64Command }) {
   async function readAttempt(actor, input) {
     const state = await learners.readState({ actor, includeCompletion: true });
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
@@ -214,6 +209,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     const pin = pinnedLessonKey(attempt.pin);
     const lesson = await content.readLesson(pin);
     const { check, files: declaredFiles } = openCodeStep(lesson, input.stepId);
+    // readable-check: allow method-probe - optional operation: an installation without code ledgers answers CHECK_UNDECLARED
     if (typeof learners.readCodeLedger !== "function" || typeof content.readExercise !== "function") {
       throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This installation cannot verify code steps.");
     }

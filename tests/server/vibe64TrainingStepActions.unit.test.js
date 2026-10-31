@@ -15,7 +15,7 @@ import { createTrainingStepActions } from "../../packages/vibe64-training/src/se
 import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-training/src/server/learnerEvents.js";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-training/src/shared/learnerEvents.js";
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
-import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
+import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { createTrainingService } from "../../packages/vibe64-training/src/server/preparation.js";
 import { registerLearningFact } from "../../packages/vibe64-training/src/server/learningFacts.js";
 import { registerLearningVocabulary } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
@@ -288,6 +288,7 @@ test("a practice presence check that fails keeps that project listed without fai
   const attempt = await f.start();
   const actions = createActionCatalogue();
   actions.register({ contributorId: "training", domain: "training", actions: createTrainingActions({
+    publishLearnerChanged: async () => {},
     catalogue: { async readCatalogue() { throw new Error("not read by learning.read"); } }, learners: f.learners, learningSpace
   }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,
@@ -408,8 +409,9 @@ test("a v2 lesson passes start, resume, learning.read, completion, finish and de
   const actions = createActionCatalogue();
   actions.register({ contributorId: "training", domain: "training", actions: [...createTrainingActions({
     catalogue: { async readCatalogue() { throw new Error("not read by these lifecycle actions"); } },
-    learners: f.learners, exercises
-  }), ...createTrainingStepActions({ learners: f.learners, content: f.content, steps: { read() {} }, exercises })]
+    learners: f.learners, exercises, publishLearnerChanged: async () => {}
+  }), ...createTrainingStepActions({ learners: f.learners, content: f.content, steps: { read() {} }, exercises,
+    publishLearnerChanged: async () => {} })]
     .filter(definition => definition.id !== "vibe64.training.lesson.read" && !/step\.|reader\./u.test(definition.id))
     .map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => f.auth.user,

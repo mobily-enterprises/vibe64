@@ -8,7 +8,7 @@ import { createCourseLock } from "./catalogue.js";
 import { canonicalJson } from "./content.js";
 import { courseSchema, list, validateContent } from "./contentSchemas.js";
 import { createInstalledTrainingContent, validateInstalledTopicPin } from "./installedContent.js";
-import { trainingFailure } from "./errors.js";
+import { causedFailure } from "./errors.js";
 
 const MAX_COURSES = 16;
 const MAX_BYTES = 1024 * 1024;
@@ -24,23 +24,19 @@ const catalogueSchema = createSchema({
   courses: list(entrySchema, MAX_COURSES)
 });
 
-function failure(code, message, statusCode, cause) {
-  return trainingFailure(code, message, { statusCode, ...(cause ? { cause } : {}) });
-}
-
 function requireRevision(value) {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error("Supply the expected revision from a fresh installed catalogue read.");
   }
 }
 
-// The admitted owner selects course/lock together. This internal facility does
-// not authenticate objects, fetch sources or expose a browser/assistant action.
 /**
+ * The admitted owner selects course/lock together. This internal facility does
+ * not authenticate objects, fetch sources or expose a browser/assistant action.
  * @param {object} dependencies
  * @param {string} dependencies.systemRoot
  */
-function createInstalledTrainingCatalogue({ systemRoot } = {}) {
+function createInstalledTrainingCatalogue({ systemRoot }) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) ||
       path.resolve(systemRoot) !== systemRoot || systemRoot === path.parse(systemRoot).root) {
     throw new Error("Installed catalogue needs a canonical absolute, non-root server-owned system root.");
@@ -167,7 +163,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
       }
       return catalogue;
     } catch (cause) {
-      throw failure("VIBE64_TRAINING_CATALOGUE_INVALID",
+      throw causedFailure("VIBE64_TRAINING_CATALOGUE_INVALID",
         `Installed catalogue is invalid: ${cause.message} Keep existing state and ask the owner to restore the exact approved catalogue or pinned content. No automatic repair was performed.`, null, cause);
     }
   }
@@ -187,14 +183,14 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     await inspectPaths();
     const release = await tryAcquireExclusiveFileLock(lockPath);
     if (!release) {
-      throw failure("VIBE64_TRAINING_CATALOGUE_BUSY", "Installed catalogue is being updated. Retry after the current owner operation finishes.", 409);
+      throw causedFailure("VIBE64_TRAINING_CATALOGUE_BUSY", "Installed catalogue is being updated. Retry after the current owner operation finishes.", 409);
     }
     return release;
   }
 
   function checkRevision(catalogue, expectedRevision) {
     if (catalogue.revision !== expectedRevision) {
-      throw failure("VIBE64_TRAINING_CATALOGUE_REVISION_CONFLICT", "Installed catalogue changed. Read its current revision before deliberately retrying this enablement change.", 409);
+      throw causedFailure("VIBE64_TRAINING_CATALOGUE_REVISION_CONFLICT", "Installed catalogue changed. Read its current revision before deliberately retrying this enablement change.", 409);
     }
   }
 
@@ -209,7 +205,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     try {
       await writeJsonFileAtomic(cataloguePath, next, { directoryMode: 0o700, fileMode: 0o600 });
     } catch (cause) {
-      throw failure("VIBE64_TRAINING_CATALOGUE_SAVE_UNCONFIRMED", "Catalogue save was not confirmed; atomic rename may already have succeeded. Read the current catalogue before deliberately retrying. Do not assume the course changed or remained unchanged.", null, cause);
+      throw causedFailure("VIBE64_TRAINING_CATALOGUE_SAVE_UNCONFIRMED", "Catalogue save was not confirmed; atomic rename may already have succeeded. Read the current catalogue before deliberately retrying. Do not assume the course changed or remained unchanged.", null, cause);
     }
     return { revision: next.revision, entry, changed: true };
   }
@@ -227,7 +223,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
       const current = catalogue.courses.find(value => value.course.courseId === entry.course.courseId && value.course.release === entry.course.release);
       if (current) {
         if (canonicalJson(current.course) !== canonicalJson(entry.course) || canonicalJson(current.lock) !== canonicalJson(entry.lock)) {
-          throw failure("VIBE64_TRAINING_COURSE_RELEASE_CONFLICT", "This installed course release is immutable. Resume its approved pin or publish and approve a different course release.", 409);
+          throw causedFailure("VIBE64_TRAINING_COURSE_RELEASE_CONFLICT", "This installed course release is immutable. Resume its approved pin or publish and approve a different course release.", 409);
         }
         if (current.enabled) {
           return { revision: catalogue.revision, entry: current, changed: false };
@@ -254,7 +250,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     }
     const before = await readCatalogue();
     if (!before.courses.some(entry => entry.course.courseId === courseId && entry.course.release === courseRelease)) {
-      throw failure("VIBE64_TRAINING_COURSE_MISSING", "This course release is not installed in the catalogue. Read the current catalogue before retrying.", 404);
+      throw causedFailure("VIBE64_TRAINING_COURSE_MISSING", "This course release is not installed in the catalogue. Read the current catalogue before retrying.", 404);
     }
     const unlock = await acquire();
     try {
@@ -262,7 +258,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
       checkRevision(catalogue, expectedRevision);
       const entry = catalogue.courses.find(value => value.course.courseId === courseId && value.course.release === courseRelease);
       if (!entry) {
-        throw failure("VIBE64_TRAINING_COURSE_MISSING", "This course release is no longer in the catalogue. Read the current catalogue before retrying.", 404);
+        throw causedFailure("VIBE64_TRAINING_COURSE_MISSING", "This course release is no longer in the catalogue. Read the current catalogue before retrying.", 404);
       }
       if (remove) {
         catalogue.courses = catalogue.courses.filter(value => value !== entry);
@@ -280,26 +276,26 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
   const disableCourse = selection => changeEntry(selection, false);
   const removeCourse = selection => changeEntry(selection, true);
 
-  // A custom course is an ordinary released catalogue entry: the owner names it
-  // and orders whole topics already pinned by enabled released courses. The
-  // original lock and enablement owners validate and save it; lessons, their
-  // content and saved progress are shared with every course containing them.
   /**
+   * A custom course is an ordinary released catalogue entry: the owner names it
+   * and orders whole topics already pinned by enabled released courses. The
+   * original lock and enablement owners validate and save it; lessons, their
+   * content and saved progress are shared with every course containing them.
    * @param {object} [course]
    * @param {string} [course.title]
    * @param {object[]} [course.topics]
    * @param {number} [course.expectedRevision]
    */
-  async function createCourse({ title, topics, expectedRevision } = {}) {
+  async function createCourse({ title, topics, expectedRevision }) {
     requireRevision(expectedRevision);
     const name = typeof title === "string" ? title.trim() : "";
     if (!name || name.length > 120) {
-      throw failure("VIBE64_TRAINING_COURSE_INVALID", "Name the course with 1 to 120 characters.", 400);
+      throw causedFailure("VIBE64_TRAINING_COURSE_INVALID", "Name the course with 1 to 120 characters.", 400);
     }
     if (!Array.isArray(topics) || !topics.length || topics.length > 32 ||
         new Set(topics.map(topic => `${topic?.topicId}@${topic?.release}`)).size !== topics.length ||
         new Set(topics.map(topic => topic?.topicId)).size !== topics.length) {
-      throw failure("VIBE64_TRAINING_COURSE_INVALID", "Choose 1 to 32 different whole topics for the course.", 400);
+      throw causedFailure("VIBE64_TRAINING_COURSE_INVALID", "Choose 1 to 32 different whole topics for the course.", 400);
     }
     const catalogue = await readCatalogue();
     const available = catalogue.courses.filter(entry => entry.enabled && entry.course.status === "released")
@@ -308,7 +304,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     for (const reference of topics) {
       const source = available.find(topic => topic.topicId === reference.topicId && topic.release === reference.release);
       if (!source) {
-        throw failure("VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE", `Topic ${reference.topicId}@${reference.release} is not part of an enabled released course. Refresh courses and choose an installed topic.`, 404);
+        throw causedFailure("VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE", `Topic ${reference.topicId}@${reference.release} is not part of an enabled released course. Refresh courses and choose an installed topic.`, 404);
       }
       const topic = await installed.readTopic(validateInstalledTopicPin({ schemaVersion: 1, topicId: source.topicId,
         release: source.release, repository: source.repository, commit: source.commit, topicHash: source.manifestHash }));
@@ -323,10 +319,10 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     const existing = catalogue.courses.find(entry => entry.course.courseId === course.courseId);
     // An identical retry reaches the original no-change/re-enable result.
     if (existing && canonicalJson(existing.course) !== canonicalJson(course)) {
-      throw failure("VIBE64_TRAINING_COURSE_EXISTS", "A course with this name already exists. Choose another name.", 409);
+      throw causedFailure("VIBE64_TRAINING_COURSE_EXISTS", "A course with this name already exists. Choose another name.", 409);
     }
     if (!existing && catalogue.courses.length >= MAX_COURSES) {
-      throw failure("VIBE64_TRAINING_COURSE_LIMIT", `This installation already has ${MAX_COURSES} course releases. No course was created.`, 409);
+      throw causedFailure("VIBE64_TRAINING_COURSE_LIMIT", `This installation already has ${MAX_COURSES} course releases. No course was created.`, 409);
     }
     return enableCourse({ course, lock: createCourseLock(course, resolved), expectedRevision });
   }

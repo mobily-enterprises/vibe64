@@ -726,7 +726,7 @@ test("conversation admission refuses changed pins, manifests, draft selection an
 // remain unchanged.
 import { createCourseLock } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
-import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
+import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
@@ -742,7 +742,7 @@ async function titleCatalogue(f, extra = {}) {
 }
 function titleActions(f, catalogue, content = null) {
   const actions = createActionCatalogue();
-  actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ catalogue, content,
+  actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ publishLearnerChanged: async () => {}, catalogue, content,
     learners: createTrainingLearnerState({ systemRoot: f.systemRoot })
   }).map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => ({ uid: 42, username: "reader", role: "member" }),

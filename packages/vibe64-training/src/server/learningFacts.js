@@ -12,6 +12,7 @@ import { learningVocabulary } from "../shared/learningVocabulary.js";
 // available here.
 const readers = new Map();
 
+// readable-check: allow module-registry - filled by a composing host repository; convert with its supplier
 function registerLearningFact({ id, read } = {}) {
   if (typeof read !== "function") throw new TypeError(`Fact ${id} needs its reader.`);
   // A provider set up again (one per server process; tests build several) replaces its reader.
@@ -32,9 +33,9 @@ async function readLearningFact(id, { actor, projectSlug = "", context = {} } = 
   }
 }
 
-// Built in: the learner has an AI Colleague can use for them (connected and
-// routed), as AI setup leaves it.
 /**
+ * Built in: the learner has an AI Colleague can use for them (connected and
+ * routed), as AI setup leaves it.
  * @param {object} dependencies
  * @param {TerminalsService} dependencies.terminals
  */
@@ -42,7 +43,6 @@ function aiReadyFact({ terminals }) {
   return {
     id: "ai-ready",
     async read({ actor }) {
-      if (typeof terminals?.resolveAssistantPurpose !== "function") return { holds: false, reason: "AI setup is unavailable here." };
       const decision = await terminals.resolveAssistantPurpose({ purpose: "colleague" }, { vibe64User: actor });
       return decision?.available === true ? { holds: true }
         : { holds: false, reason: "Your AI isn't set up yet. Finish AI setup, then check again." };

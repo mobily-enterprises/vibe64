@@ -7,7 +7,7 @@ import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
+import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createCourseLock } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
@@ -83,7 +83,7 @@ async function fixture(t, { presentation = false, released = false } = {}) {
   };
   function register(host = null, replacements = {}) {
     const actions = createActionCatalogue();
-    const definitions = createTrainingActions({ catalogue, learners, exercises: host, ...replacements });
+    const definitions = createTrainingActions({ catalogue, learners, exercises: host, publishLearnerChanged: async () => {}, ...replacements });
     actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
     registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,
       authorizeProject() { throw new Error("Learning actions must not require a selected project."); } });

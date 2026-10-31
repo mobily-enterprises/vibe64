@@ -6,7 +6,7 @@ workspace.
 ## Sources
 
 - Main: `packages/vibe64-project/src/server/service.js`
-- `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/projectActions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `tests/server/vibe64SettingsActionTools.unit.test.js`

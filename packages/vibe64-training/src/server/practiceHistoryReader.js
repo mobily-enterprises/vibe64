@@ -336,9 +336,6 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     throw new Error("Learning state needs a canonical absolute, non-root server-owned system root.");
   }
   const installed = content;
-  if (typeof installed?.readLesson !== "function") {
-    throw new TypeError("Learning state requires the configured installed-content reader.");
-  }
 
   function userPaths(actor) {
     const learner = learnerIdentity(actor);
@@ -460,6 +457,7 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
   }
 
   async function verifyInstalled(pin, { admissionOnly = false } = {}) {
+    // readable-check: allow method-probe - optional operation: content without admission reads is verified by its whole lesson read
     const read = admissionOnly && typeof installed.readAdmissionIdentity === "function"
       ? installed.readAdmissionIdentity : installed.readLesson;
     const lesson = await read.call(installed, { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
@@ -514,6 +512,7 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     const workInactive = (access === "write" || access === "create") && (!active || !state.activeSummaryCurrent);
     // Refusals retain the original installed-pin/no-exercise precedence. Admitted
     // reads use readExercise's existing lesson validation instead of repeating it.
+    // readable-check: allow method-probe - optional operation: content without exercise reads is verified by its whole lesson read
     if (workInactive || typeof installed.readExercise !== "function") {
       const lesson = await verifyInstalled(attempt.pin);
       if (!lesson.lesson.exercise) {
