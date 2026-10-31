@@ -36,6 +36,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexUnavailableWorktreeHandler>} CodexUnavailableWorktreeHandler */
 /** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_VISIBLE_TERMINAL_DETACHED_IDLE_TIMEOUT_MS = 5_000;
@@ -45,6 +46,10 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+/**
+ * @param {ProjectService} [projectService]
+ * @param {Vibe64SessionRuntime} [runtime]
+ */
 async function globalCodexRuntimeRoot(projectService = {}, runtime = null) {
   const serviceRoot = typeof projectService.currentProjectRuntimeRoot === "function"
     ? normalizeText(projectService.currentProjectRuntimeRoot())

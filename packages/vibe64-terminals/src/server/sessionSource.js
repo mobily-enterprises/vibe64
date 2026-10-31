@@ -36,7 +36,6 @@ import {
 } from "@local/vibe64-execution/server";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
-/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
 
@@ -534,6 +533,11 @@ async function removeClonedDefaultBranch({
   }
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [metadata]
+ */
 async function attachSessionSource(store, sessionId = "", metadata = {}) {
   const write = async () => {
     await Promise.all(Object.entries(metadata).map(([name, value]) => (
@@ -550,7 +554,7 @@ async function attachSessionSource(store, sessionId = "", metadata = {}) {
  * @param {RuntimeEnv} [dependencies.env]
  * @param {string} [dependencies.expectedCommit]
  * @param {string} [dependencies.expectedSourceRef]
- * @param {ProjectService} [dependencies.project]
+ * @param {object} [dependencies.project] the current project's record
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {Vibe64SessionRuntime} dependencies.runtime
  * @param {object} [dependencies.session]

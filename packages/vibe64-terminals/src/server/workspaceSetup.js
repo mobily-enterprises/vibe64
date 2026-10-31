@@ -45,6 +45,7 @@ import {
 import { startResourceWorkflow } from "./resourceWorkflow.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";
@@ -247,6 +248,12 @@ function createWorkspaceSetupRunner({
     return inputs.sourceRoots;
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {object} value
+   * @param {boolean} [renewal]
+   */
   async function persist(runtime, sessionId, value, renewal = false) {
     return writeWorkspaceSetupState(runtime.store, sessionId, {
       ...value,

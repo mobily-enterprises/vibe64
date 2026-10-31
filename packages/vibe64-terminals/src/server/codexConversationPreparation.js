@@ -25,6 +25,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexUnavailableWorktreeHandler>} CodexUnavailableWorktreeHandler */
 /** @typedef {ReturnType<typeof import("./sessionTurnCheckpoint.js").createCodexSessionTurnCheckpoint>} CodexSessionTurnCheckpoint */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -93,6 +94,11 @@ function createCodexConversationPreparation({
     };
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {object} session
+   * @param {(sessionId: string, store: object, session: object, readers: object) => Promise<unknown>} operation
+   */
   async function withCodexAppServerObservationRecovery(runtime, session, operation) {
     const sessionId = session.sessionId;
     const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true });

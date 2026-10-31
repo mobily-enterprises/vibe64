@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
 /** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
 /** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexStartupHealth>} CodexStartupHealth */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 export const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 
@@ -23,6 +24,19 @@ function createCodexAppServerHealthAttempt() {
 
 // Original application health-task projection; native readiness stays in JSKIT.
 export function createCodexStartupHealth(publishSessionChanged) {
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {object} [options]
+   * @param {string} [options.error]
+   * @param {object | null} [options.healthAttempt]
+   * @param {string} [options.kind]
+   * @param {string} [options.message]
+   * @param {string} [options.publishReason]
+   * @param {boolean} [options.retryable]
+   * @param {string} [options.status]
+   * @param {string} [options.terminalSessionId]
+   */
   async function writeCodexAppServerTaskEvent(runtime, sessionId, {
     error = "",
     healthAttempt = null,
@@ -94,6 +108,13 @@ export function createCodexStartupHealth(publishSessionChanged) {
     };
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {string} terminalSessionId
+   * @param {object} [options]
+   * @param {object | null} [options.healthAttempt]
+   */
   async function writeCodexAppServerReady(runtime, sessionId, terminalSessionId, {
     healthAttempt = null
   } = {}) {
@@ -173,6 +194,11 @@ export function createCodexUnavailableWorktreeHandler({ runOwner, sessionRuntime
     return runOwner.retireProviderForSession(sessionId, options);
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} sessionId
+   * @param {object} result
+   */
   async function blockCodexAppServerForUnavailableWorktree(runtime, sessionId, result) {
     // Detach the unavailable session's client from its shared app-server runtime.
     const session = await runtime.getSession(sessionId).catch(() => null);

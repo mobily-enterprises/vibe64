@@ -11,6 +11,7 @@ import {
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
 
 const CONTEXT_COMPACTION_REASON = "context_compacted";
 const CODEX_CONTEXT_REFRESH_PENDING_METADATA = Object.freeze([
@@ -69,6 +70,14 @@ function contextCompactionKey({
   return fields.slice(1).some(Boolean) ? fields.join(":") : "";
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [notification]
+ * @param {object} [options]
+ * @param {string} [options.at]
+ * @param {string} [options.expectedThreadId]
+ */
 async function recordCodexContextUsageSignal(store, sessionId = "", notification = {}, {
   at = new Date().toISOString(),
   expectedThreadId = ""
@@ -129,6 +138,16 @@ async function recordCodexContextUsageSignal(store, sessionId = "", notification
   });
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [options]
+ * @param {string} [options.at]
+ * @param {string} [options.eventId]
+ * @param {string} [options.reason]
+ * @param {string} [options.threadId]
+ * @param {string} [options.turnId]
+ */
 async function recordCodexContextRenewalSignal(store, sessionId = "", {
   at = new Date().toISOString(),
   eventId = "",
@@ -185,6 +204,14 @@ async function recordCodexContextRenewalSignal(store, sessionId = "", {
   });
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [options]
+ * @param {string} [options.reason]
+ * @param {string} [options.threadId]
+ * @param {string} [options.turnId]
+ */
 async function writeCodexAppServerContextRefreshPending(store, sessionId = "", {
   reason = "",
   threadId = "",
@@ -212,6 +239,16 @@ async function writeCodexAppServerContextRefreshPending(store, sessionId = "", {
   };
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [options]
+ * @param {string} [options.deliveredAt]
+ * @param {string} [options.delivery]
+ * @param {string} [options.reason]
+ * @param {string} [options.threadId]
+ * @param {string} [options.turnId]
+ */
 async function clearCodexAppServerContextRefreshPending(store, sessionId = "", {
   deliveredAt = new Date().toISOString(),
   delivery = "prompt",

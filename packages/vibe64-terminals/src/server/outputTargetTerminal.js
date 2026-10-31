@@ -133,6 +133,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
 
 const OUTPUT_METADATA = Object.freeze({
   agentHref: "output_target_agent_href",
@@ -514,6 +515,13 @@ function previewStopState(metadata = {}) {
   };
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {object} options
+ * @param {boolean} options.stopped
+ * @param {string} [options.error]
+ */
 async function writePreviewStopState(store, sessionId, { stopped, error = "" }) {
   await store.mutateSession(sessionId, async () => {
     await store.writeMetadataValue(sessionId, PREVIEW_STOPPED_METADATA, stopped ? "true" : "false");
@@ -521,6 +529,12 @@ async function writePreviewStopState(store, sessionId, { stopped, error = "" }) 
   });
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {object} [options]
+ * @param {boolean} [options.preserveSelection]
+ */
 async function clearLaunchMetadata(store, sessionId = "", { preserveSelection = false } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId || !store) {
@@ -538,6 +552,11 @@ async function clearLaunchMetadata(store, sessionId = "", { preserveSelection = 
   return false;
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} [sessionId]
+ * @param {string} [terminalSessionId]
+ */
 async function clearLaunchMetadataForTerminal(store, sessionId = "", terminalSessionId = "") {
   const normalizedTerminalSessionId = String(terminalSessionId || "").trim();
   if (
@@ -567,6 +586,11 @@ function launchAgentHref(metadata = {}) {
   ).trim();
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {object} [terminalSession]
+ */
 async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   const metadata = terminalSession.metadata || {};
   const openTarget = normalizeOpenTarget(metadata.openTarget || {});
@@ -596,6 +620,15 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   });
 }
 
+/**
+ * @param {ProjectService} projectService
+ * @param {string} sessionId
+ * @param {object} [options]
+ * @param {boolean} [options.awaitWorkspacePrepared]
+ * @param {((sessionId: string, context: object) => Promise<object>) | null} [options.ensureWorkspacePrepared]
+ * @param {boolean} [options.prepareEnvironment]
+ * @param {boolean} [options.rerunFailedSetup]
+ */
 async function createLaunchContext(projectService, sessionId, {
   awaitWorkspacePrepared = false,
   ensureWorkspacePrepared = null,
@@ -2071,7 +2104,7 @@ async function resolveLaunchPreviewStatus({
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof startResourceWorkflow} [dependencies.startWorkflow]
  * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
- * @param {(sessionId: string) => Promise<unknown>} [dependencies.stopPreviewBrowsers]
+ * @param {(sessionId: string) => Promise<object>} [dependencies.stopPreviewBrowsers]
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
  * @param {typeof setVibe64WorkflowPhase} [dependencies.setWorkflowPhase]
  * @param {(sessionId: string) => object | null} [dependencies.sessionAdmissionFailure]

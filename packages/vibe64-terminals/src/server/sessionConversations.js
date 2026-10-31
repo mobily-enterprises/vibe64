@@ -19,6 +19,8 @@ import { isNativeConversationBindingKey } from "./nativeConversationRetirement.j
 /** @typedef {ReturnType<typeof import("./sessionAttachments.js").createSessionAttachments>} SessionAttachments */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
 
 const textFields = [
   "title", "draft", "displayMessage", "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage",
@@ -27,6 +29,11 @@ const textFields = [
 ];
 const messageFields = Object.keys(temporaryConversationTurnActionInputValidator.schema.getFieldDefinitions())
   .filter(key => !["sessionId", "conversationId", "vibe64User", "message", "messageId", "attachmentIds", "submissionKind"].includes(key));
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} sessionId
+ * @param {string} conversationId
+ */
 const temporaryConversationNamespace = (runtime, sessionId, conversationId) =>
   `${runtime.stateRoot}\0${sessionId}\0temporary\0${conversationId}`;
 
@@ -92,6 +99,10 @@ function visibleContextText(message) {
 }
 
 // Capture only the canonical visible transcript, never native prompts or live reasoning.
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ */
 async function recentChatContext(store, sessionId) {
   const turns = await store.readConversationLog(sessionId, { presentation: true });
   const selected = turns.flatMap(turn => (turn.messages || []).filter(message =>

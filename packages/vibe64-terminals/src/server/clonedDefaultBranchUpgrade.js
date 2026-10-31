@@ -13,6 +13,8 @@ import {
 } from "@local/vibe64-runtime/server/sessionStore";
 import { clonedDefaultBranchProof, deleteClonedDefaultBranch, runGit } from "./sessionSource.js";
 
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+
 const OUTCOME_METADATA = "source_default_branch_local";
 // Renewal and archive states own their checkout until they finish.
 const UPGRADABLE_STATUSES = new Set([VIBE64_SESSION_STATUS.ACTIVE, VIBE64_SESSION_STATUS.BLOCKED]);
@@ -48,6 +50,10 @@ async function backUpClonedBranch(backupPath, label, record) {
 }
 
 // What the proof needs from a session clone's record, or why it is skipped.
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ */
 async function sessionCheckout(store, sessionId) {
   const status = await store.readStatusForRenewal(sessionId);
   if (!UPGRADABLE_STATUSES.has(status)) return { skip: `its status is ${status}` };

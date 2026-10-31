@@ -42,6 +42,8 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {ReturnType<typeof import("./openCodeConversationPresentation.js").createOpenCodeConversationPresentation>} OpenCodeConversationPresentation */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
 /** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
 
 export const MAIN_CONVERSATION_STATE_KEY = "assistant_changeover";
 const STATE_KEY = MAIN_CONVERSATION_STATE_KEY;
@@ -76,12 +78,23 @@ export function requireCompletedConversationRewind(session) {
   }
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} sessionId
+ * @param {object} current
+ */
 export async function requireMainConversationAdmission(runtime, sessionId, current) {
   requireCompletedConversationRewind(current.session || await runtime.getSession(sessionId, { inspectSource: false }));
 }
 
 // Only a server-constructed learning runtime can opt into a source-less cwd.
 // Its original store reader validates the exact active durable scope each time.
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} sessionId
+ * @param {object} [options]
+ * @param {boolean} [options.allowClosing]
+ */
 export async function learningSessionExecutionRoot(runtime, sessionId, { allowClosing = false } = {}) {
   if (!runtime?.learningScope) return "";
   if (typeof runtime.getNativeExecutionRoot !== "function") {
@@ -94,6 +107,13 @@ export async function learningSessionExecutionRoot(runtime, sessionId, { allowCl
 // Read application context without inspecting source or acquiring a native
 // conversation. Codex/OpenCode require matching snapshots; Claude retains its
 // captured/pinned snapshot.
+/**
+ * @param {string} engine
+ * @param {ProjectService} projectService
+ * @param {string} sessionId
+ * @param {object} [options]
+ * @param {object} codexHost the Codex tool home and unavailable-worktree handlers
+ */
 export async function readSessionConversationContext(engine, projectService, sessionId, options = {}, codexHost) {
   const id = engine === "codex" ? sessionId : engine === "opencode"
     ? openCodeSessionId(sessionId) : String(sessionId ?? "").trim();
@@ -150,6 +170,10 @@ export async function readSessionConversationContext(engine, projectService, ses
     key: claudeConversationKey(runtime, id) };
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} id
+ */
 function claudeConversationKey(runtime, id) {
   return `${path.resolve(runtime.stateRoot)}\0${id}`;
 }
@@ -164,6 +188,11 @@ function claudeConversationScope(id, options) {
 // Cleanup and activity reach what the Claude owner retains for a session by its
 // key alone. They need no workspace or Claude selection: a session whose source
 // was never created or was already removed can still be closed and inspected.
+/**
+ * @param {ProjectService} projectService
+ * @param {string} sessionId
+ * @param {object} [options]
+ */
 export async function readClaudeConversationOwnerContext(projectService, sessionId, options = {}) {
   const id = String(sessionId ?? "").trim();
   const scope = claudeConversationScope(id, options);
@@ -193,6 +222,13 @@ function scopedOpenCodeContext(id, assistantScope, options) {
     session: null, sessionId: id, selection, workdir: path.resolve(assistantScope.workdir) };
 }
 
+/**
+ * @param {string} sessionId
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {object} session
+ * @param {boolean} allowClosing
+ * @param {object} codexHost the Codex tool home and unavailable-worktree handlers
+ */
 async function prepareCodexConversationContext(sessionId, runtime, session, allowClosing, codexHost) {
   requireCompletedNativeConversationReplacement(session);
   if (sessionIsClosing(session) && !allowClosing) {
@@ -978,6 +1014,11 @@ export async function publishMainConversationEvent(namespaceForSession, publishA
 
 // The original files remain authoritative. This composition does not open a
 // provider, copy a native run, create a runtime record or subscribe to output.
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {object} context
+ */
 export function createMainConversationBinding(store, sessionId, context) {
   const binding = {
     state: {
@@ -1079,6 +1120,11 @@ export function createMainConversationBinding(store, sessionId, context) {
   return binding;
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {object} state
+ */
 function saveState(store, sessionId, state) {
   return store.writeMetadataValue(sessionId, STATE_KEY, JSON.stringify(state));
 }
@@ -1090,6 +1136,10 @@ function turnConversationKey(turn) {
 
 // The transcript remains authoritative. Delivery cursors and pending native
 // writes share one record so Send and AI changes use the same boundary.
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ */
 export async function readMainConversationHistory(store, sessionId) {
   const turns = await store.readConversationLog(sessionId);
   return turns.flatMap((turn) => (turn.messages || []).filter((message) => (

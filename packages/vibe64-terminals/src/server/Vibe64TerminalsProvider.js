@@ -23,8 +23,14 @@ import {
 } from "./service.js";
 
 /** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@jskit-ai/uploads-runtime/server/types").RuntimeUploads} RuntimeUploads */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 const LIVE_HOST_ENV_KEYS = Object.freeze([
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
@@ -81,7 +87,17 @@ function createVibe64TerminalsFeature({
       channels: ["api", "automation", "internal"],
       surfaces: ["app"]
     },
-    /** @param {{ fastify: RuntimeFastify, logger: RuntimeLogger }} capabilities */
+    /**
+     * @param {object} capabilities
+     * @param {RuntimeEnv} capabilities.env
+     * @param {RuntimeEvents} capabilities.events
+     * @param {RuntimeFastify} capabilities.fastify
+     * @param {RuntimeHttp} capabilities.http
+     * @param {RuntimeLogger} capabilities.logger
+     * @param {ProjectService} capabilities.project
+     * @param {RuntimeUploads} capabilities.uploads
+     * @param {{ actionCatalogue: ActionCatalogue }} context
+     */
     setup({ env, events, fastify, http, logger, project, uploads }, { actionCatalogue }) {
       const terminals = createService({
         actions: actionCatalogue,

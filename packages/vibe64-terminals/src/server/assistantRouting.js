@@ -16,6 +16,7 @@ import { assistantReplyAsksPerson, latestAssistantMessageAwaitingUserReply } fro
 
 /** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
 
 const STATE_KEY = "assistant_routing_request";
 // Messages the person cancelled in this chat, newest last and bounded. A send
@@ -54,6 +55,10 @@ export function assistantRoutingRequestForMessage(metadata = {}, isMessage) {
   const request = parseRequest(metadata?.[STATE_KEY]);
   return request && assistantWorkflowMessageIds(request).some(isMessage) ? request : null;
 }
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ */
 function read(store, sessionId) {
   return store.readMetadataValue(sessionId, STATE_KEY).then(parseRequest);
 }
@@ -63,6 +68,10 @@ function parseCancelled(value) {
     return Array.isArray(list) ? list.filter(entry => typeof entry?.messageId === "string" && entry.messageId) : [];
   } catch { return []; }
 }
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ */
 const readCancelled = async (store, sessionId) => parseCancelled(await store.readMetadataValue(sessionId, CANCELLED_KEY));
 /** The ids of the messages the person cancelled in this chat. */
 export function assistantCancelledMessageIds(metadata = {}) {
@@ -85,6 +94,11 @@ export function prepareCopiedAssistantRouting(metadata = {}) {
   if (goal?.status === "active") patch.assistant_routing_goal = JSON.stringify({ ...goal, status: "paused" });
   return patch;
 }
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {number} limit
+ */
 async function recentVisibleMessages(store, sessionId, limit) {
   const turns = await store.readConversationTail(sessionId, { userLimit: limit });
   return turns.flatMap((turn) => [
@@ -117,12 +131,12 @@ function withSelection(context, selection) {
  * @param {string} dependencies.systemRoot
  * @param {boolean} [dependencies.allowAuto]
  * @param {SessionAgentManager} dependencies.agent
- * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<unknown>} dependencies.exclusive
+ * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<object>} dependencies.exclusive
  * @param {(sessionId: string, input: object, context: object) => Promise<object>} dependencies.dispatch
  * @param {PublishSessionChanged} dependencies.publish
  * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} [dependencies.prepareSelection]
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
- * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.interrupt
+ * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
  * @param {typeof import("./assistantChangeover.js").discardAssistantChangeoverMessage} dependencies.discardPending
  * @param {(timing: object) => void} [dependencies.onTiming]
  * @param {((sessionId: string, details: object) => Promise<unknown>) | null} [dependencies.onPlanCompleted]

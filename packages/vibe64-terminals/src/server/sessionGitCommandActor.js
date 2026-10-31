@@ -16,6 +16,8 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 const NO_GITHUB_TERMINAL_USER_KEY = "runtime";
 
 function normalizeText(value = "") {
@@ -166,6 +168,13 @@ function sessionGitCommandActorFromMetadata(session = {}) {
   };
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} [sessionId]
+ * @param {object} [metadata]
+ * @param {object} [options]
+ * @param {string} [options.reason]
+ */
 async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", metadata = {}, {
   reason = ""
 } = {}) {

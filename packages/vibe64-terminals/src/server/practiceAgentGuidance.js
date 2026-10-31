@@ -3,6 +3,8 @@ import path from "node:path";
 
 import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 // Vibe64 writes Genesis agent guidance (skills and assistant hooks) into every
 // Genesis project before an assistant turn. An ordinary project commits it; a
 // practice project's history is the learner's own work, so the guidance stays
@@ -10,6 +12,7 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 const PRACTICE_AGENT_GUIDANCE_EXCLUDES = Object.freeze([".agents/", ".claude/", ".codex/", ".opencode/"]);
 const EXCLUDE_HEADER = "# Vibe64 agent guidance stays out of practice history.";
 
+/** @param {Vibe64SessionRuntime} [runtime] */
 function isPracticeProjectRuntime(runtime = null) {
   return Boolean(practiceIdFromSlug(path.basename(String(runtime?.projectContextRoot || ""))));
 }

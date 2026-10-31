@@ -3,6 +3,8 @@ import {
   currentActorUser
 } from "@local/vibe64-execution/server";
 
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+
 function cleanText(value = "") {
   return String(value || "").replace(/\s+/gu, " ").trim();
 }
@@ -34,6 +36,11 @@ function conversationReviewActorMetadata(turnMetadata) {
   return turnMetadata?.assistantRouting?.resolvedMode === "review" ? { actorId: "app", actorDisplayName: "Automatic review" } : {};
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {object} turnMetadata
+ */
 async function codexDeliveredConversationMetadata(store, sessionId, turnMetadata) {
   return {
     ...turnMetadata,
@@ -45,6 +52,10 @@ async function codexDeliveredConversationMetadata(store, sessionId, turnMetadata
   };
 }
 
+/**
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ */
 async function codexTerminalConversationMetadata(store, sessionId) {
   const turns = await store.readConversationLog(sessionId);
   const previousMetadata = turns.findLast((turn) => (

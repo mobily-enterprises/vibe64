@@ -54,6 +54,7 @@ import {
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
 
 const AGENT_SESSION_COMMAND_NAME = "vibe64-session-command";
 const AGENT_SESSION_COMMAND_RUNNER_NAME = "vibe64-session-command-runner";
@@ -437,7 +438,7 @@ const commandServers = createSessionCommandServers({
  * @param {((request: object) => Promise<object>) | null} [dependencies.sendProjectMessage]
  * @param {((request: object) => Promise<object>) | null} [dependencies.readProjectPreview]
  * @param {((sessionId: string, input: object, options: object) => Promise<object>) | null} [dependencies.reportWorkflowOutcome]
- * @param {((sessionId: string) => Promise<unknown>) | null} [dependencies.retryWorkspaceSetup]
+ * @param {((sessionId: string) => Promise<object>) | null} [dependencies.retryWorkspaceSetup]
  * @param {RuntimeLogger | null} [dependencies.logger]
  * @param {ProjectService} dependencies.projectService
  * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
@@ -535,6 +536,11 @@ function createAgentSessionCommandService({
   }
 
   // Cross-project commands act for the person who submitted the current request.
+  /**
+   * @param {Vibe64SessionStore} store
+   * @param {string} sessionId
+   * @param {object} binding
+   */
   async function requestActor(store, sessionId, binding) {
     const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
     return routing?.submittedBy || binding.actor;

@@ -23,6 +23,10 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
+/**
+ * @param {ProjectService} projectService
+ * @param {string} sessionId
+ */
 async function terminalSessionSourceRootForSession(projectService, sessionId) {
   try {
     const runtime = await projectService.createRuntime({

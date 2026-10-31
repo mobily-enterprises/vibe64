@@ -444,6 +444,10 @@ function gitCommandActorFromSession(session = {}, {
   };
 }
 
+/**
+ * @param {ProjectService} [projectService]
+ * @param {string} [sessionId]
+ */
 async function readGitCommandSession(projectService = {}, sessionId = "") {
   if (typeof projectService.createSessionStore !== "function") {
     throw new TypeError("Codex git commands require the project session-store boundary.");

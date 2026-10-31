@@ -138,6 +138,7 @@ import {
 /** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
 
@@ -459,6 +460,16 @@ function createCodexSessionRegistration({
     unavailableWorktree: blockCodexAppServerForUnavailableWorktree
   });
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} [sessionId]
+   * @param {string} [threadId]
+   * @param {string} [turnId]
+   * @param {string} [outcome]
+   * @param {string} [detail]
+   * @param {object} [options]
+   * @param {boolean} [options.usageLimitExceeded]
+   */
   async function writeCodexAppServerTurnOutcomeNotice(
     runtime,
     sessionId = "",

@@ -18,6 +18,8 @@ import {
   shellQuote
 } from "@local/vibe64-execution/server";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 
 const CODEX_TERMINAL_NAMESPACE = "vibe64-codex";
@@ -106,6 +108,7 @@ function vibe64Result(operation) {
 
 // The project whose runtime holds the work, read without listing projects.
 // Changes and executions name it because they can happen outside any request.
+/** @param {ProjectService} projectService */
 function currentProjectSlug(projectService) {
   return typeof projectService?.currentProjectSlug === "function"
     ? String(projectService.currentProjectSlug() || "").trim()

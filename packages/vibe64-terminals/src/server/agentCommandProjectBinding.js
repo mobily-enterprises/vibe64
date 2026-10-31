@@ -2,6 +2,8 @@ import path from "node:path";
 
 import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 function projectContextRoot(project = {}) {
   const root = normalizeText(project?.projectRoot || project?.path);
   return root ? path.resolve(root) : "";
@@ -11,6 +13,12 @@ function projectContextRoot(project = {}) {
 // later requests only inside that same project. `errors` gives each command
 // its own [message, code] for: sessionRequired, projectRequired, unbound and
 // changed. `capture()` adds command-specific fields to a new binding.
+/**
+ * @param {ProjectService} projectService
+ * @param {object} errors
+ * @param {object} [options]
+ * @param {() => object} [options.capture]
+ */
 function createAgentCommandProjectBinding(projectService, errors, { capture = () => ({}) } = {}) {
   const bindings = new Map();
   const fail = ([message, code]) => vibe64Error(message, code);

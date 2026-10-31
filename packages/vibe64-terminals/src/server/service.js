@@ -199,6 +199,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 /** @typedef {ReturnType<typeof import("./events.js").createTerminalSessionChangedPublishers>} TerminalSessionChangedPublishers */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 // The runtime proved this message never reached the assistant. Say so in the
 // response, so the browser shows the failure instead of an uncertain receipt.
@@ -1444,6 +1445,10 @@ function createService({
     return exclusive.value;
   }
 
+  /**
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {string} [sessionId]
+   */
   async function renewalSession(runtime, sessionId = "") {
     if (typeof runtime?.getSessionForRenewal === "function") {
       return runtime.getSessionForRenewal(sessionId, {

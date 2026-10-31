@@ -23,6 +23,8 @@ import { subscribeUnixCommandControlChanges } from "./unixJsonCommand.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -59,6 +61,10 @@ function codexAppServerAdmissionError(sessionId = "") {
   return error;
 }
 
+/**
+ * @param {object | null} [projectContext] the request's project context
+ * @param {() => Promise<unknown>} [operation]
+ */
 function runWithCodexAppServerProjectContext(projectContext = null, operation = async () => null) {
   if (projectContext?.targetRoot || projectContext?.learningScope) {
     return runWithProjectRequestContext(projectContext, operation);
@@ -80,6 +86,7 @@ function createCodexSessionProviderHost(host) {
     const { learningRuntime, ...nativeOptions } = options;
     const projectContext = captureProjectRequestContext();
     const runtimeRoot = codexAppServerRuntimeBaseDir({ env });
+    /** @param {Vibe64SessionRuntime} runtime */
     async function readProviderSession(runtime) {
       if (options.renewalId) {
         const session = await runtime.getSessionForRenewal(sessionId, { inspectSource: false });

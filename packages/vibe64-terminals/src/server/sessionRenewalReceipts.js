@@ -23,6 +23,8 @@ import {
 import { effectiveVibe64AgentSettings as codexEffectiveAgentSettings } from "@local/vibe64-runtime/shared";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 // Original application renewal receipt, error and completion policy. This module
 // consumes the existing session store and native result; it never invokes a provider.
 function normalizeText(value) {
@@ -61,6 +63,13 @@ function sessionRenewalErrorWithIdentity(error, identity = {}) {
   return source;
 }
 
+/**
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} [sessionId]
+ * @param {object} [values]
+ * @param {object} [options]
+ * @param {boolean} [options.renewalInternal]
+ */
 async function writeSessionRenewalMetadata(runtime, sessionId = "", values = {}, {
   renewalInternal = false
 } = {}) {
