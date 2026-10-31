@@ -48,6 +48,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-core/src/server/codexAuthState.js`
 
 - `packages/vibe64-core/src/server/assistantRoutingStore.js`
+- `packages/vibe64-accounts/src/server/modelRouting.js`
+- `packages/vibe64-accounts/src/server/codexProviderKeys.js`
 - `packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js`
 - `packages/vibe64-accounts/src/server/assistantRoleUpgrade.js`
 - `packages/vibe64-accounts/src/server/assistantHelperUpgrade.js`
@@ -98,6 +100,18 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/composables/useProviderAccountsSetup.js`
 
 - Main: `packages/vibe64-accounts/src/server/service.js`
+- `packages/vibe64-accounts/src/server/accountAccess.js`
+- `packages/vibe64-accounts/src/server/accountStatusReads.js`
+- `packages/vibe64-accounts/src/server/accountRecords.js`
+- `packages/vibe64-accounts/src/server/accountCredentials.js`
+- `packages/vibe64-accounts/src/server/accountFiles.js`
+- `packages/vibe64-accounts/src/server/accountHostCommands.js`
+- `packages/vibe64-accounts/src/server/accountsDebug.js`
+- `packages/vibe64-accounts/src/server/authCommands.js`
+- `packages/vibe64-accounts/src/server/authSessionViews.js`
+- `packages/vibe64-accounts/src/server/authTerminals.js`
+- `packages/vibe64-accounts/src/server/codexAccountStatus.js`
+- `packages/vibe64-accounts/src/server/githubAccountStatus.js`
 - `packages/vibe64-accounts/src/server/registerRoutes.js`
 - `packages/vibe64-core/src/server/terminalWebSocketRoutes.js`
 - `packages/vibe64-core/src/server/localStudioRequest.js`
@@ -579,7 +593,7 @@ no Claude process and wait on no turn: Claude Code reads its credentials for
 every request, so a running turn continues on the newly connected account, and
 after a logout its next request ends at once as signed out. The change only drops
 the account's cached model and usage reads (`prepareClaudeAuthChange` in
-`vibe64-accounts/src/server/service.js`); each conversation applies the new
+`vibe64-accounts/src/server/accountAccess.js`); each conversation applies the new
 account at its next idle admission. The browser shows the logout's returned
 account row at once (`showAccount` in `useVibe64Accounts.js`) and reloads the
 other rows in the background.
