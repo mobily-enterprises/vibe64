@@ -541,7 +541,7 @@ function logPreviewCommandResult(logger, result = {}, fields = {}) {
 
 /**
  * @param {object} dependencies
- * @param {OutputTargetTerminalController | null} [dependencies.launchTarget]
+ * @param {OutputTargetTerminalController} dependencies.launchTarget
  * @param {RuntimeLogger | null} [dependencies.logger]
  * @param {ProjectService} dependencies.projectService
  * @param {typeof readSessionUiSyncStateForSession} [dependencies.readSessionUiState]
@@ -549,10 +549,10 @@ function logPreviewCommandResult(logger, result = {}, fields = {}) {
  * @param {typeof stopVibe64Execution} [dependencies.stopManagedExecution]
  * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwnedExecutions]
  * @param {typeof vibe64ManagedExecutionProvider} [dependencies.resourceProvider]
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
  */
 function createAgentPreviewCommandService({
-  launchTarget = null,
+  launchTarget,
   logger = null,
   projectService,
   readSessionUiState = readSessionUiSyncStateForSession,
@@ -560,8 +560,8 @@ function createAgentPreviewCommandService({
   stopManagedExecution = stopVibe64Execution,
   stopOwnedExecutions = stopVibe64OwnedExecutions,
   resourceProvider = vibe64ManagedExecutionProvider,
-  publishSessionChanged = async () => {}
-} = {}) {
+  publishSessionChanged
+}) {
   const browserWorkers = new Map();
   const browserTestRuns = new Map();
 
@@ -716,6 +716,7 @@ function createAgentPreviewCommandService({
     if (options.signal?.aborted) abort();
     timer = setTimeout(() => pending.cancel("expired"), Math.max(0, Date.parse(wait.expiresAt) - Date.now()));
     try {
+      // readable-check: allow optional-call - input validation: a caller's optional output stream for progress text
       options.onOutput?.("Waiting for resources. Normal Preview has been restored. Retry or Cancel in Vibe64 within five minutes; tests have not run.\n");
       await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
       const authorizeStart = await decision;
@@ -753,12 +754,6 @@ function createAgentPreviewCommandService({
       return responseError(
         "Choose default, guest, or a configured managed app identity name.",
         "vibe64_agent_preview_identity_required"
-      );
-    }
-    if (!launchTarget || typeof launchTarget.selectPreviewIdentity !== "function") {
-      return responseError(
-        "Vibe64 preview identity control is not available.",
-        "vibe64_agent_preview_identity_unavailable"
       );
     }
     if (requested === "guest") {
@@ -941,9 +936,6 @@ function createAgentPreviewCommandService({
       return finish(responseError("Vibe64 preview command session id is required.", "vibe64_agent_preview_command_session_required"));
     }
     if (parsed.error) return finish(responseError(parsed.error, "vibe64_preview_target_invalid"));
-    if (!launchTarget || typeof launchTarget.launchStatus !== "function") {
-      return finish(responseError("Vibe64 preview control is not available.", "vibe64_agent_preview_command_unavailable"));
-    }
     if (!parsed.command || parsed.command === "help" || parsed.command === "--help" || parsed.command === "-h") {
       return finish({
         exitCode: 0,
@@ -1033,9 +1025,6 @@ function createAgentPreviewCommandService({
       });
     }
     if (parsed.command === "stop") {
-      if (typeof launchTarget.stopTerminal !== "function") {
-        return finish(responseError("Vibe64 preview stop is unavailable.", "vibe64_agent_preview_command_stop_unavailable"));
-      }
       const current = await launchTarget.launchStatus(sessionId);
       if (current?.ok === false) return finish({ ...current, exitCode: 1, stderr: `${current.error}\n` });
       const stopped = await launchTarget.stopTerminal(sessionId, current.activeTerminal?.id || "");
@@ -1060,12 +1049,6 @@ function createAgentPreviewCommandService({
       }));
     }
     const ensuring = parsed.command === "ensure";
-    if (ensuring && typeof launchTarget.ensurePreview !== "function") {
-      return finish(responseError("Vibe64 managed preview startup is not available.", "vibe64_agent_preview_command_ensure_unavailable"));
-    }
-    if (!ensuring && typeof launchTarget.restartPreview !== "function") {
-      return finish(responseError("Vibe64 preview restart is not available.", "vibe64_agent_preview_command_restart_unavailable"));
-    }
 
     let started;
     if (ensuring) {
@@ -1995,7 +1978,7 @@ async function prepareAgentPreviewCommand({
     workerScriptPath,
     worktreePath: normalizedWorktreePath
   };
-  commandService.registerBrowserWorker?.(normalizedSessionId, workerDescriptor);
+  commandService.registerBrowserWorker(normalizedSessionId, workerDescriptor);
   return {
     controlGenerationId: server.generationId,
     env: {

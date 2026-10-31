@@ -841,6 +841,7 @@ test("Codex controller renews accepted attachments in the selected session sourc
       const old = new Date(Date.now() - 20 * 60 * 1000);
       await utimes(result.path, old, old);
       const { attachments: controller } = createCodexSessionRegistration({
+        listConnections: async () => [], codexAppServerProviderOptions: {}, publishSessionChanged: async () => null,
         env: {
           VIBE64_RUNTIME_NAMESPACE: "test",
           VIBE64_WORKSPACE: "test"
@@ -895,7 +896,8 @@ test("shared upload, Codex renewal, and cleanup use the configured attachment ro
   const runtime = { store, getSession: (id) => store.readSession(id) };
   const projectService = { createRuntime: () => runtime };
   const attachments = createSessionAttachments({ env, projectService });
-  const { attachments: controller } = createCodexSessionRegistration({ env, projectService });
+  const { attachments: controller } = createCodexSessionRegistration({ listConnections: async () => [], codexAppServerProviderOptions: {},
+    publishSessionChanged: async () => null, env, projectService });
   try {
     await store.createSession({
       metadata: {

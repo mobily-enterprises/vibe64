@@ -38,7 +38,6 @@ import {
 import {
   genesisParserEnvironment,
   genesisProjectContractNeedsAttention,
-  inspectVibe64WorkspaceSetup,
   withGenesisCommandShim
 } from "@local/vibe64-genesis/server";
 import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
@@ -435,37 +434,29 @@ const commandServers = createSessionCommandServers({
 
 /**
  * @param {object} dependencies
- * @param {((request: object) => Promise<object>) | null} [dependencies.sendProjectMessage]
- * @param {((request: object) => Promise<object>) | null} [dependencies.readProjectPreview]
- * @param {((sessionId: string, input: object, options: object) => Promise<object>) | null} [dependencies.reportWorkflowOutcome]
- * @param {((sessionId: string) => Promise<object>) | null} [dependencies.retryWorkspaceSetup]
+ * @param {(request: object) => Promise<object>} dependencies.sendProjectMessage
+ * @param {(request: object) => Promise<object>} dependencies.readProjectPreview
+ * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.reportWorkflowOutcome
+ * @param {(sessionId: string) => Promise<object>} dependencies.retryWorkspaceSetup
  * @param {RuntimeLogger | null} [dependencies.logger]
  * @param {ProjectService} dependencies.projectService
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
  * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwnedExecutions]
  */
 function createAgentSessionCommandService({
-  sendProjectMessage = null,
-  readProjectPreview = null,
-  reportWorkflowOutcome = null,
-  retryWorkspaceSetup = null,
+  sendProjectMessage,
+  readProjectPreview,
+  reportWorkflowOutcome,
+  retryWorkspaceSetup,
   logger = null,
   projectService,
-  publishSessionChanged = () => {},
+  publishSessionChanged,
   runCommand = runVibe64Command,
   stopExecution = stopVibe64Execution,
   stopOwnedExecutions = stopVibe64OwnedExecutions
-} = {}) {
-  if (
-    !projectService ||
-    typeof projectService.createSessionStore !== "function" ||
-    typeof projectService.readCurrentProject !== "function" ||
-    typeof projectService.runInProjectContext !== "function"
-  ) {
-    throw new TypeError("createAgentSessionCommandService requires the Vibe64 project and session-store APIs.");
-  }
+}) {
   const projectBinding = createAgentCommandProjectBinding(projectService, {
     sessionRequired: ["Vibe64 session command binding is incomplete.", "vibe64_agent_session_command_binding_required"],
     projectRequired: ["Vibe64 session commands require a project.", "vibe64_agent_session_command_project_required"],
@@ -509,9 +500,6 @@ function createAgentSessionCommandService({
       const store = await projectService.createSessionStore({
         sessionId: normalizedSessionId
       });
-      if (typeof store?.readSessionSourceDescriptor !== "function") {
-        throw new TypeError("Vibe64 session commands require bounded session source reads.");
-      }
       const descriptor = await store.readSessionSourceDescriptor(normalizedSessionId);
       const sourceRoot = sessionSourcePath({
         ...descriptor,
@@ -548,9 +536,6 @@ function createAgentSessionCommandService({
 
   async function messageProject(sessionId, input) {
     return runInSessionProject(sessionId, async ({ binding, store }) => {
-      if (typeof sendProjectMessage !== "function") {
-        throw vibe64Error("Project messaging is unavailable in this session.", "vibe64_project_message_unavailable");
-      }
       return sendProjectMessage({
         projectSlug: normalizeText(input.projectSlug), message: normalizeText(input.message),
         ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
@@ -563,9 +548,6 @@ function createAgentSessionCommandService({
 
   async function projectPreview(sessionId, input) {
     return runInSessionProject(sessionId, async ({ binding, store }) => {
-      if (typeof readProjectPreview !== "function") {
-        throw vibe64Error("Project Previews are unavailable in this session.", "vibe64_project_preview_unavailable");
-      }
       return readProjectPreview({
         projectSlug: normalizeText(input.projectSlug),
         ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
@@ -590,10 +572,8 @@ function createAgentSessionCommandService({
       });
       let setup;
       try {
-        setup = typeof projectService.inspectWorkspaceSetup === "function"
-          ? await projectService.inspectWorkspaceSetup({ projectRoot: sourceRoot,
-            session: await (await projectService.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false }) })
-          : await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
+        setup = await projectService.inspectWorkspaceSetup({ projectRoot: sourceRoot,
+          session: await (await projectService.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false }) });
       } catch (error) {
         // The agent repairing or deciding a project contract still needs status;
         // report Genesis's actionable message instead of failing the command.
@@ -651,9 +631,6 @@ function createAgentSessionCommandService({
   // It returns once preparation starts; session status reports the result.
   async function retrySetup(sessionId) {
     return runInSessionProject(sessionId, async () => {
-      if (typeof retryWorkspaceSetup !== "function") {
-        throw vibe64Error("Workspace setup retry is unavailable in this session.", "vibe64_workspace_setup_retry_unavailable");
-      }
       const setup = await retryWorkspaceSetup(sessionId);
       if (setup?.ok === false) return setup;
       const state = workspaceSetupState(setup?.state);
@@ -672,7 +649,6 @@ function createAgentSessionCommandService({
     return runInSessionProject(sessionId, async ({ store }) => {
       const request = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
       if (input.operation === "outcome") {
-        if (typeof reportWorkflowOutcome !== "function") throw new Error("Workflow controls are unavailable.");
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
       }
       let role = "";
@@ -806,7 +782,7 @@ function createAgentSessionCommandService({
     runs.add(abortController);
     sessionRuns.set(sessionId, runs);
     const abort = () => abortController.abort(input.signal?.reason);
-    input.signal?.addEventListener?.("abort", abort, { once: true });
+    input.signal?.addEventListener("abort", abort, { once: true });
     if (input.signal?.aborted) abort();
     let result;
     try {
@@ -827,7 +803,7 @@ function createAgentSessionCommandService({
       });
       result = responseError(payload.error, payload.code);
     } finally {
-      input.signal?.removeEventListener?.("abort", abort);
+      input.signal?.removeEventListener("abort", abort);
       runs.delete(abortController);
       if (sessionRuns.get(sessionId) === runs && runs.size === 0) {
         sessionRuns.delete(sessionId);

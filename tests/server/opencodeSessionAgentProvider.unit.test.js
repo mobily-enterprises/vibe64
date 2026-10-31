@@ -86,7 +86,7 @@ test("OpenCode refuses helper profiles without its durable provider and model se
 // This adapter case preserves its original mocked creation boundary; runtime
 // dispatch is exercised by the actual scoped and service owner fixtures.
 function creationRequestFixture(options) {
-  const provider = createOpenCodeSessionAgentProvider({ accounts: {} });
+  const provider = createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} });
   return { ...provider, createConversation(context, input = {}) {
     const request = provider.prepareConversationRequest("createConversation", context, input);
     return options.controller.createConversation(context.sessionId, request.input, request.context);
@@ -156,7 +156,7 @@ test("OpenCode provider routes the complete interactive terminal lifecycle", asy
     calls.push({ args, name });
     return { name, ok: true };
   }]));
-  const provider = createOpenCodeSessionAgentProvider({ accounts: {}, terminals: controller });
+  const provider = createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, accounts: {}, terminals: controller });
   const context = {
     runtime: { stateRoot: "/runtime" },
     session: { sessionId: "session-1" },
@@ -208,7 +208,7 @@ function detachedOpenCodeFixture({ controller }) {
     host: { conversation: ({ id, context, input, options }) =>
       prepareSessionDetachedConversationRun(provider, id, context, input, options) }
   });
-  provider = createOpenCodeSessionAgentProvider({ accounts: {},
+  provider = createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {},
     runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
     sharedRuntime: { runPreparedConversationTurn: prepared =>
       controller.runDetachedChatTurn(prepared.sessionId, prepared.input, prepared.options) },

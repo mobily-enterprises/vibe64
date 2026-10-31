@@ -80,9 +80,7 @@ async function prepareOpenCodeSessionCommandEnvironment(context = {}, {
   if (!codexGitCommand) {
     return { env: {}, shimDirs: [] };
   }
-  const project = typeof projectService?.readCurrentProject === "function"
-    ? await projectService.readCurrentProject()
-    : projectService?.selectedProject || {};
+  const project = await projectService.readCurrentProject();
   const prepared = await prepareCommandEnvironment({
     agentDatabaseCommand,
     agentEnvCommand,
@@ -227,7 +225,7 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   if (helper?.ok !== true) {
     throw commandBoundaryError("helper");
   }
-  const filePaths = runtime?.store?.paths?.(normalizedSessionId);
+  const filePaths = runtime ? runtime.store.paths(normalizedSessionId) : null;
   const dropZoneRoot = text(filePaths?.dropZoneRoot);
   const projectBackupsRoot = text(filePaths?.projectBackupsRoot);
   const projectDropZoneRoot = text(filePaths?.projectDropZoneRoot);

@@ -386,6 +386,8 @@ async function controllerHarness({
   }
 
   const controllerOptions = {
+    getAssistantManager: () => null,
+    listConnections: async () => [],
     env: {
       ...process.env,
       VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-providers")

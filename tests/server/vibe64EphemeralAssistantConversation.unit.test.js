@@ -60,7 +60,7 @@ for (const engineId of ["codex", "opencode"]) {
     const conversationRuntime = scopedConversationRuntime(controller, engineId);
     const provider = engineId === "codex"
       ? createCodexSessionAgentProvider({ controller, conversationRuntime })
-      : createOpenCodeSessionAgentProvider({ accounts: {} });
+      : createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} });
     const manager = createSessionAgentManager({
       conversationRuntime,
       providers: [provider],
@@ -178,7 +178,7 @@ test("a foreign scoped helper retains its exact model, profile provenance and in
   let identity = "shared-key-1";
   const controller = conversationController(calls);
   const conversationRuntime = scopedConversationRuntime(controller, "opencode");
-  const provider = createOpenCodeSessionAgentProvider({ accounts: {} });
+  const provider = createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} });
   const manager = createSessionAgentManager({
     conversationRuntime,
     providers: [provider, { id: "codex", transportId: "codex_app_server" }],
@@ -266,7 +266,7 @@ test("Codex scoped profile discovery and every lifecycle operation keep the sele
 // descriptor contracts; every original provider call and context is retained.
 function scopedConversationRuntime(controller, engine = "codex") {
   const provider = engine === "codex" ? createCodexSessionAgentProvider({ controller })
-    : createOpenCodeSessionAgentProvider({ accounts: {} });
+    : createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} });
   return createConversationRuntime({
     authorize: ({ context, conversationId }) => context.sessionId === conversationId,
     host: { conversation: ({ id, context, input, operation }) => {
@@ -331,7 +331,7 @@ test("a bounded helper turn awaits parent ownership and leaves the working chat 
     return { ok: true, status: "completed", rawText: '{"subject":"Improve search"}' };
   };
   const conversationRuntime = scopedConversationRuntime(controller, "opencode");
-  const manager = createSessionAgentManager({ conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ accounts: {} }),
+  const manager = createSessionAgentManager({ conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} }),
     { id: "codex", transportId: "codex_app_server" }],
     readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "shared" }) });
   const scope = { id: "naming_job", environment: {}, workdir: "/tmp/naming-work", runtimeRoot: "/tmp/naming-runtime",
@@ -388,7 +388,7 @@ for (const phase of ["starting", "waiting"]) {
       return { ok: true };
     };
     const conversationRuntime = scopedConversationRuntime(controller, "opencode");
-    const manager = createSessionAgentManager({ conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ accounts: {} })] });
+    const manager = createSessionAgentManager({ conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} })] });
     const scope = { id: "cancel_helper", environment: {}, workdir: "/tmp/cancel-work", runtimeRoot: "/tmp/cancel-runtime",
       stableContext: "Supplied text only." };
     const options = { signal: abort.signal, assistantSelection: { engineId: "opencode", agentId: "build", modelProviderId: "opencode",

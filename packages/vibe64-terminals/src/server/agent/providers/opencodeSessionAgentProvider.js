@@ -56,11 +56,11 @@ function resolveOpenCodeHelperExecutionProfile(context = {}, request = {}) {
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
  * @param {OpenCodeHostPreparation} [dependencies.hostPreparation]
  * @param {OpenCodeConversationAccounts} dependencies.accounts
- * @param {OpenCodeMainMessagePreparation} [dependencies.mainMessagePreparation]
+ * @param {OpenCodeMainMessagePreparation} dependencies.mainMessagePreparation
  * @param {OpenCodeScopedPreparation} [dependencies.scopedPreparation]
  * @param {OpenCodeLifecyclePreparation} [dependencies.lifecyclePreparation]
  * @param {OpenCodeSessionRenewalPreparation} [dependencies.renewalPreparation]
- * @param {OpenCodeInteractiveTerminals} [dependencies.terminals]
+ * @param {OpenCodeInteractiveTerminals} dependencies.terminals
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareSessionCleanup
  */
@@ -69,14 +69,14 @@ function createOpenCodeSessionAgentProvider({
   runNativeDetachedConversation,
   hostPreparation = {},
   accounts,
-  mainMessagePreparation = {},
+  mainMessagePreparation,
   scopedPreparation = {},
   lifecyclePreparation = {},
   renewalPreparation = {},
-  terminals = {},
+  terminals,
   publishSessionChanged,
   prepareSessionCleanup
-} = {}) {
+}) {
   if (!accounts) {
     throw new TypeError("OpenCode session agent providers require their account facility.");
   }

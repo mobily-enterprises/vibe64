@@ -89,9 +89,7 @@ function createCodexSessionEnvironment({
     if (!codexGitCommand || !normalizeText(sessionId)) {
       return {};
     }
-    const project = typeof projectService?.readCurrentProject === "function"
-      ? await projectService.readCurrentProject()
-      : projectService?.selectedProject || {};
+    const project = await projectService.readCurrentProject();
     const prepared = await prepareAgentSessionCommandEnvironment({
       agentDatabaseCommand,
       agentEnvCommand,
@@ -131,11 +129,7 @@ function createCodexSessionEnvironment({
       return operation(currentSession);
     };
 
-    if (
-      !normalizedSessionId ||
-      typeof runtime?.store?.mutateSession !== "function" ||
-      typeof runtime?.getSession !== "function"
-    ) {
+    if (!normalizedSessionId) {
       return runOperation(session);
     }
 
@@ -208,9 +202,7 @@ function createCodexSessionEnvironment({
     if (normalizeText(error?.code) !== CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE) {
       return null;
     }
-    const session = typeof runtime?.getSession === "function"
-      ? await runtime.getSession(sessionId).catch(() => null)
-      : null;
+    const session = await runtime.getSession(sessionId).catch(() => null);
     const failure = codexSessionWorktreeUnavailableFailure({
       session: session || {},
       workdir: normalizeText(error?.workdir)

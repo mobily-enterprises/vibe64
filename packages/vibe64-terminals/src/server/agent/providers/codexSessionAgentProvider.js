@@ -248,13 +248,6 @@ async function validateCodexAttachmentsBeforeDelivery(attachments, sessionId = "
   if (attachmentIds.length < 1) {
     return null;
   }
-  if (typeof attachments.renewAttachments !== "function") {
-    return codexAttachmentDeliveryFailure(
-      "vibe64_agent_attachment_unavailable",
-      "Attachments are temporarily unavailable. Try sending again.",
-      true
-    );
-  }
   let renewal;
   try {
     renewal = await attachments.renewAttachments(sessionId, attachmentIds);
@@ -314,7 +307,7 @@ async function validateCodexAttachmentsBeforeDelivery(attachments, sessionId = "
 
 async function renewAcceptedCodexAttachments(attachments, sessionId = "", input = {}, accepted = false) {
   const attachmentIds = codexAttachmentIds(input);
-  if (!accepted || attachmentIds.length < 1 || typeof attachments.renewAttachments !== "function") {
+  if (!accepted || attachmentIds.length < 1) {
     return;
   }
   // Delivery cannot be rolled back after the provider or PTY has accepted it.
@@ -425,7 +418,7 @@ function scheduleAcceptedCodexAttachmentRenewal(
       scheduleAcceptedCodexAttachmentRenewal(attachments, sessionId, pendingIds, attempt + 1);
     });
   }, CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS[attempt]);
-  timer.unref?.();
+  timer.unref();
   timers.set(timerKey, timer);
 }
 
@@ -445,11 +438,11 @@ function codexAttachmentLimitResult(input = {}) {
  * @param {object} dependencies
  * @param {(context: object) => Promise<boolean>} [dependencies.connectionStatus]
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
- * @param {(request: object) => Promise<object[]>} [dependencies.listConnections]
+ * @param {(request: object) => Promise<object[]>} dependencies.listConnections
  * @param {CodexAppServerRunOwner} dependencies.runOwner
  * @param {CodexAppServerProviderOwner} dependencies.providerOwner
  * @param {CodexConversationPreparation} dependencies.conversationPreparation
- * @param {CodexLifecyclePreparation} [dependencies.lifecyclePreparation]
+ * @param {CodexLifecyclePreparation} dependencies.lifecyclePreparation
  * @param {CodexSessionRenewalPreparation} [dependencies.renewalPreparation]
  * @param {CodexConversationStorage} dependencies.storage
  * @param {CodexAssistantCatalog} dependencies.catalog
@@ -462,11 +455,11 @@ function codexAttachmentLimitResult(input = {}) {
 function createCodexSessionAgentProvider({
   connectionStatus = async () => true,
   runNativeDetachedConversation,
-  listConnections = async () => [],
+  listConnections,
   runOwner: codexAppServerRunOwner,
   providerOwner: codexAppServerProviderOwner,
   conversationPreparation: codexConversationPreparation,
-  lifecyclePreparation: codexLifecyclePreparation = {},
+  lifecyclePreparation: codexLifecyclePreparation,
   renewalPreparation = {},
   storage: codexConversationStorage,
   catalog: codexAssistantCatalog,
@@ -475,7 +468,7 @@ function createCodexSessionAgentProvider({
   env = process.env,
   publishSessionChanged,
   checkpoint: checkpointCodexAppServerTurn
-} = {}) {
+}) {
   if (!codexAssistantCatalog) {
     throw new TypeError("Codex session agent provider requires its catalogue facility.");
   }
@@ -698,6 +691,7 @@ function createCodexSessionAgentProvider({
       }));
     },
     runDetachedChatTurn(context, input = {}) {
+      // readable-check: allow method-probe - input validation: a caller's optional event stream
       return runDetachedTurn(context, input, typeof context.onEvent === "function" ? { onEvent: context.onEvent } : {});
     },
     streamDetachedChatTurn(context, input = {}) {
@@ -725,9 +719,6 @@ function createCodexSessionAgentProvider({
       return terminals.closeTerminal(context.sessionId, input.terminalSessionId);
     },
     async describeProvider(context) {
-      if (typeof codexAssistantCatalog.describeProvider !== "function") {
-        throw new TypeError("Codex provider account description is unavailable.");
-      }
       return codexAssistantCatalog.describeProvider(context.sessionId, {
         runtime: context.runtime,
         session: context.session
@@ -737,6 +728,7 @@ function createCodexSessionAgentProvider({
       return codexAssistantCatalog.readPlanUsage(context.sessionId, { runtime: context.runtime, session: context.session });
     },
     async resolveExecutionProfile(context, input = {}) {
+      // readable-check: allow method-probe - optional operation: a catalogue without helper model discovery cannot enforce an execution profile
       if (typeof codexAssistantCatalog.executionProfileModelCatalog !== "function") {
         throw codexExecutionProfileError(
           VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE,

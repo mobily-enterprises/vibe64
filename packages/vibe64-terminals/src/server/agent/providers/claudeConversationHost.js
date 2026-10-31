@@ -54,7 +54,7 @@ const now = () => new Date().toISOString();
  * @param {RuntimeEnv} [dependencies.env]
  * @param {ProjectService} dependencies.projectService
  * @param {RuntimeLogger | null} dependencies.logger
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(event: object) => unknown} dependencies.publishConversation
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
  * @param {() => string} [dependencies.command]
@@ -74,7 +74,7 @@ const now = () => new Date().toISOString();
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  */
 function createClaudeConversationHost({
-  env = process.env, projectService, logger, publishSessionChanged: publishApplicationSessionChanged = async () => {},
+  env = process.env, projectService, logger, publishSessionChanged: publishApplicationSessionChanged,
   publishConversation,
   runNativeDetachedConversation,
   // Found again at each start, so a Claude Code installed after Vibe64 started is used.
@@ -88,7 +88,7 @@ function createClaudeConversationHost({
   prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
   recordGitActor = recordSessionGitCommandActor,
   codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand
-} = {}) {
+}) {
   // A fixed command, or one looked up at each use.
   const claudeCommand = typeof command === "function" ? command : () => command;
   const publishSessionChanged = publishMainConversationEvent.bind(
@@ -354,6 +354,7 @@ function createClaudeConversationHost({
             completeResult(current) {
               if (!current?.canonicalGoal) return;
               if (current.goalOperation === "read") return current.onGoalResult;
+              // readable-check: allow optional-call - input validation: a canonical goal update's optional result observer
               if (current.goalOperation === "update") return result => current.onGoalResult?.(result);
             }
           }

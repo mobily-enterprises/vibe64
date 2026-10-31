@@ -284,25 +284,25 @@ function untrustedExecutionProfileResolutionError(provider = {}, sessionId = "",
 
 /**
  * @param {object} dependencies
- * @param {SessionAttachments | null} [dependencies.attachments]
+ * @param {SessionAttachments} [dependencies.attachments] the session's attachments; without them messages carry none
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {string} [dependencies.defaultProviderId]
  * @param {(context: object) => Promise<object>} [dependencies.readAssistantAccess]
- * @param {((selection: object) => Promise<object | null>) | null} [dependencies.readProviderUsage]
+ * @param {(selection: object) => Promise<object | null>} [dependencies.readProviderUsage] without it plan usage reads none
  * @param {(user: object | null) => Promise<object | null>} [dependencies.resolveAssistantUser]
- * @param {(() => Promise<object>) | null} [dependencies.readRoutingConfiguration]
+ * @param {() => Promise<object>} [dependencies.readRoutingConfiguration] without it routing uses the configuration it is given
  * @param {object[]} [dependencies.providers] the session agent providers, one per engine
  */
 function createSessionAgentManager({
-  attachments = null,
+  attachments,
   conversationRuntime,
   defaultProviderId = "codex",
   readAssistantAccess = async () => ({ ownerOnly: false }),
-  readProviderUsage = null,
+  readProviderUsage,
   resolveAssistantUser = async (user) => user || currentProjectVibe64User() || null,
-  readRoutingConfiguration = null,
+  readRoutingConfiguration,
   providers = []
-} = {}) {
+}) {
   const providerById = new Map();
   const bindings = new Map();
   const bindingTokens = new Map();
@@ -553,7 +553,9 @@ function createSessionAgentManager({
         : conversationRuntime.seedNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input }));
     };
     const command = CONVERSATION_COMMANDS[method];
+    // readable-check: allow method-probe - optional operation: a provider without conversation adapters has no conversation commands
     if (!command || typeof provider.prepareConversationRequest !== "function" ||
+        // readable-check: allow method-probe - optional operation: a provider without conversation adapters has no conversation commands
         typeof provider.projectConversationResult !== "function") {
       throw new TypeError("Conversation operations require their request and result adapters.");
     }
@@ -585,6 +587,7 @@ function createSessionAgentManager({
           return command(conversation, request);
         });
       };
+      // readable-check: allow method-probe - data: a request adapter answers with its request or a promise of it
       return prepared && typeof prepared.then === "function" ? prepared.then(dispatch) : dispatch(prepared);
     };
   }
@@ -661,6 +664,7 @@ function createSessionAgentManager({
       assistantAccess: authorization?.access || null,
       assistantSelection: sessionAssistantSelection(operationOptions),
       assistantScope: operationOptions.assistantScope || null,
+      // readable-check: allow method-probe - input validation: a caller's optional event stream
       onEvent: typeof operationOptions.onEvent === "function" ? operationOptions.onEvent : null,
       providerId: provider.id,
       runtime: operationOptions.runtime || null,
@@ -693,6 +697,7 @@ function createSessionAgentManager({
               )
             };
           } else {
+            // readable-check: allow method-probe - test asserts error: a provider without execution profiles is refused
             if (typeof provider.resolveExecutionProfile !== "function") {
               throw new TypeError(
                 `Assistant provider ${provider.id} does not implement resolveExecutionProfile().`
@@ -822,6 +827,7 @@ function createSessionAgentManager({
   }
 
   async function providerCapabilities(provider = {}, input = {}, options = {}) {
+    // readable-check: allow method-probe - input validation: every assistant provider declares its capabilities
     if (typeof provider.capabilities !== "function") {
       throw new TypeError(`Assistant provider ${provider.id} does not implement capabilities().`);
     }
@@ -1088,9 +1094,6 @@ function createSessionAgentManager({
     const executionProfile = input.executionProfile;
     if (!executionProfile) throw new TypeError("A bounded assistant turn requires an execution profile.");
     const profileSnapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-    if (typeof conversationRuntime?.runScopedTurn !== "function") {
-      throw new TypeError("A bounded assistant turn requires the supplied conversation runtime.");
-    }
     return conversationRuntime.runScopedTurn({ operations: manager, scope, input, context: options,
       executionProfile: profileSnapshot });
   }
@@ -1148,6 +1151,7 @@ function createSessionAgentManager({
       const usage = await readProviderUsage?.(sessionAssistantSelection(options));
       if (usage) return usage;
       const planUsage = findVibe64AgentProvider(provider.id)?.planUsage;
+      // readable-check: allow method-probe - optional operation: a provider without plan usage reads it as unsupported
       if (typeof provider.readPlanUsage !== "function" || !access.ownerOnly || !planUsage) {
         return { status: "unsupported", windows: [] };
       }
@@ -1161,6 +1165,7 @@ function createSessionAgentManager({
       if (typeof operation !== "function") {
         const result = { status: "unsupported", goal: null };
         if (!options.canonicalGoal) return result;
+        // readable-check: allow optional-call - input validation: a canonical goal read's optional result observer
         await options.onGoalResult?.(result, {
           segmentId: null, capabilities: { goals: false, goalBudgets: false, goalCommands: {} }
         });
@@ -1266,6 +1271,7 @@ function createSessionAgentManager({
         providerId: provider.id,
         transportId: provider.transportId
       };
+      // readable-check: allow method-probe - optional operation: a provider without a description is described by its catalogue entry
       if (typeof provider.describeProvider !== "function") {
         return Object.freeze(fallback);
       }
@@ -1310,6 +1316,7 @@ function createSessionAgentManager({
     interruptTurn: sessionMethod("interruptTurn"),
     async invalidateRuntimes(input = {}, options = {}) {
       const engineId = input.provider;
+      // readable-check: allow method-probe - input validation: a credential change's optional publication of the reconnected sessions
       const credentialChange = typeof input.publish === "function" &&
         (engineId === "opencode" || engineId === "claude" && input.reason === "provider-key-change");
       if (!credentialChange) return callAllProviders("invalidateRuntimes", input, options);
@@ -1383,6 +1390,7 @@ function createSessionAgentManager({
     },
     prepareSelection(sessionId, selection, context) {
       const provider = providerFor({ engineId: selection.engineId });
+      // readable-check: allow optional-call - optional operation: a provider without selection preparation prepares nothing
       return provider.prepareSelection?.(sessionId, selection, context) ?? null;
     },
     async resolveSelection(input = {}, options = {}) {

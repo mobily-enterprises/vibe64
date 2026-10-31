@@ -16,7 +16,8 @@ import { codexTerminalNamespace, vibe64Result } from "../../packages/vibe64-term
 // and service cases in the same file. These aliases use the same native owners.
 export function createCodexTerminalController(options = {}) {
   const { nativeTestContext, ...controllerOptions } = options;
-  const registration = createCodexSessionRegistration(controllerOptions);
+  const registration = createCodexSessionRegistration({ listConnections: async () => [], codexAppServerProviderOptions: {},
+    publishSessionChanged: async () => null, ...controllerOptions });
   const { provider } = registration;
   // Preserve only the test's original low-level view over actual named owners.
   const controller = {

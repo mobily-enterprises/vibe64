@@ -150,54 +150,54 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 /**
  * @param {object} dependencies
  * @param {(context: object) => Promise<boolean>} [dependencies.connectionStatus]
- * @param {CodexProviderConnectionStore["list"]} [dependencies.listConnections]
- * @param {AgentDatabaseCommandService | null} [dependencies.agentDatabaseCommand]
- * @param {AgentEnvCommandService | null} [dependencies.agentEnvCommand]
- * @param {AgentPreviewCommandService | null} [dependencies.agentPreviewCommand]
- * @param {AgentSessionCommandService | null} [dependencies.agentSessionCommand]
+ * @param {CodexProviderConnectionStore["list"]} dependencies.listConnections
+ * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
+ * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
+ * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  * @param {typeof assertCodexAuthPreflightReady} [dependencies.codexAuthPreflight]
  * @param {number} [dependencies.codexAppServerActiveReconcileMs]
  * @param {number} [dependencies.codexAppServerDaemonWellbeingMs]
- * @param {object} [dependencies.codexAppServerProviderOptions]
+ * @param {object} dependencies.codexAppServerProviderOptions
  * @param {typeof createCodexAppServerAgentProvider} [dependencies.codexAppServerProviderFactory]
  * @param {typeof createCodexHelperThreadLedger} [dependencies.codexHelperThreadLedgerFactory]
  * @param {boolean} [dependencies.codexToolHomeRequired]
  * @param {string} [dependencies.codexToolHomeSource]
  * @param {RuntimeEnv} [dependencies.env]
- * @param {CodexGitCommandService | null} [dependencies.codexGitCommand]
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {CodexGitCommandService} dependencies.codexGitCommand
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {((event: object) => unknown) | null} [dependencies.publishConversation]
- * @param {((sessionId: string, options: object) => Promise<unknown>) | null} [dependencies.continueGoalAfterAccountChange]
+ * @param {(sessionId: string, options: object) => Promise<unknown>} dependencies.continueGoalAfterAccountChange
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
 function createCodexSessionRegistration({
   connectionStatus = async () => true,
-  listConnections = async () => [],
-  agentDatabaseCommand = null,
-  agentEnvCommand = null,
-  agentPreviewCommand = null,
-  agentSessionCommand = null,
+  listConnections,
+  agentDatabaseCommand,
+  agentEnvCommand,
+  agentPreviewCommand,
+  agentSessionCommand,
   codexAuthPreflight = assertCodexAuthPreflightReady,
   codexAppServerActiveReconcileMs = CODEX_APP_SERVER_ACTIVE_RECONCILE_MS,
   codexAppServerDaemonWellbeingMs = CODEX_APP_SERVER_DAEMON_WELLBEING_MS,
-  codexAppServerProviderOptions = {},
+  codexAppServerProviderOptions,
   codexAppServerProviderFactory = createCodexAppServerAgentProvider,
   codexHelperThreadLedgerFactory = createCodexHelperThreadLedger,
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
   env = process.env,
-  codexGitCommand = null,
-  logger = null,
+  codexGitCommand,
+  logger,
   projectService,
   publishConversation = null,
-  continueGoalAfterAccountChange = null,
+  continueGoalAfterAccountChange,
   runNativeDetachedConversation,
-  publishSessionChanged = async () => null,
+  publishSessionChanged,
   runCommand = runVibe64Command
-} = {}) {
+}) {
   const initialCodexRuntime = codexRuntimeContext({
     env,
     providerOptions: codexAppServerProviderOptions,

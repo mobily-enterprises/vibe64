@@ -66,54 +66,51 @@ import {
 
 /**
  * @param {object} dependencies
- * @param {AgentDatabaseCommandService | null} [dependencies.agentDatabaseCommand]
- * @param {AgentEnvCommandService | null} [dependencies.agentEnvCommand]
- * @param {AgentPreviewCommandService | null} [dependencies.agentPreviewCommand]
- * @param {AgentSessionCommandService | null} [dependencies.agentSessionCommand]
- * @param {CodexGitCommandService | null} [dependencies.codexGitCommand]
+ * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
+ * @param {AgentEnvCommandService} dependencies.agentEnvCommand
+ * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
+ * @param {AgentSessionCommandService} dependencies.agentSessionCommand
+ * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {string} [dependencies.command]
  * @param {typeof createOpenCodeServerProcess} [dependencies.createServerProcess]
  * @param {RuntimeEnv} [dependencies.env]
- * @param {() => SessionAgentManager | null} [dependencies.getAssistantManager]
- * @param {(request: object) => Promise<object[]>} [dependencies.listConnections]
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {() => SessionAgentManager} dependencies.getAssistantManager
+ * @param {(request: object) => Promise<object[]>} dependencies.listConnections
+ * @param {RuntimeLogger} dependencies.logger
  * @param {typeof prepareAgentSessionCommandEnvironment} [dependencies.prepareCommandEnvironment]
  * @param {ProjectService} dependencies.projectService
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(event: object) => unknown} dependencies.publishConversation
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
  * @param {typeof readOpenCodeCatalog} [dependencies.readCatalogCommand]
  * @param {typeof readOpenCodeZenModelIds} [dependencies.readZenModelsCommand]
  * @param {typeof writeSessionGitCommandActor} [dependencies.recordGitActor]
- * @param {(selection: object) => Promise<object | null>} [dependencies.resolveConnection]
+ * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
  * @param {typeof verifyOpenCodeApiKey} [dependencies.verifyConnectionCommand]
  */
 function createOpenCodeSessionRegistration({
-  agentDatabaseCommand = null,
-  agentEnvCommand = null,
-  agentPreviewCommand = null,
-  agentSessionCommand = null,
-  codexGitCommand = null,
+  agentDatabaseCommand,
+  agentEnvCommand,
+  agentPreviewCommand,
+  agentSessionCommand,
+  codexGitCommand,
   command = "",
   createServerProcess = createOpenCodeServerProcess,
   env = process.env,
-  getAssistantManager = () => null,
-  listConnections = async () => [],
-  logger = null,
+  getAssistantManager,
+  listConnections,
+  logger,
   prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
   projectService,
-  publishSessionChanged: publishApplicationSessionChanged = async () => null,
+  publishSessionChanged: publishApplicationSessionChanged,
   publishConversation,
   runNativeDetachedConversation,
   readCatalogCommand = readOpenCodeCatalog,
   readZenModelsCommand = readOpenCodeZenModelIds,
   recordGitActor = writeSessionGitCommandActor,
-  resolveConnection = async () => null,
+  resolveConnection,
   verifyConnectionCommand = verifyOpenCodeApiKey
-} = {}) {
-  if (!projectService) {
-    throw new TypeError("OpenCode terminal controllers require vibe64.project.");
-  }
+}) {
   const publishSessionChanged = publishMainConversationEvent.bind(
     null, opencodeTerminalNamespace, publishApplicationSessionChanged, publishConversation
   );

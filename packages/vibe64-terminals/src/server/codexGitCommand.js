@@ -445,22 +445,13 @@ function gitCommandActorFromSession(session = {}, {
 }
 
 /**
- * @param {ProjectService} [projectService]
+ * @param {ProjectService} projectService
  * @param {string} [sessionId]
  */
-async function readGitCommandSession(projectService = {}, sessionId = "") {
-  if (typeof projectService.createSessionStore !== "function") {
-    throw new TypeError("Codex git commands require the project session-store boundary.");
-  }
+async function readGitCommandSession(projectService, sessionId = "") {
   const store = await projectService.createSessionStore({
     sessionId
   });
-  if (
-    typeof store?.readSessionSourceDescriptor !== "function" ||
-    typeof store?.readMetadataValue !== "function"
-  ) {
-    throw new TypeError("Codex git commands require bounded session source and metadata reads.");
-  }
   const [
     sourceDescriptor,
     metadataEntries
@@ -826,7 +817,7 @@ function createCodexGitCommandService({
   now = Date.now,
   projectService,
   runGatewayCommand = runVibe64Command
-} = {}) {
+}) {
   const gatewayCommandRunner = typeof runGatewayCommand === "function" ? runGatewayCommand : runVibe64Command;
   const actorCredentials = createActorCredentialCache({ now });
   // Each person's last answered Git identity read, used only when a read fails.
@@ -851,7 +842,8 @@ function createCodexGitCommandService({
     if (typeof authorizeActorAccess === "function") {
       return authorizeActorAccess;
     }
-    return typeof projectService?.authorizeCodexGitActorAccess === "function"
+    // readable-check: allow method-probe - optional operation: a project service without Git actor authorization admits every actor
+    return typeof projectService.authorizeCodexGitActorAccess === "function"
       ? projectService.authorizeCodexGitActorAccess.bind(projectService)
       : null;
   }
