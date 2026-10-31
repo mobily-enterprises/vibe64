@@ -9,10 +9,10 @@ function guidedPlaceMatches(command, focus) {
   return focus?.pane === command.pane &&
     (!command.databaseView || focus.databaseScreen === "workspace" && focus.databaseView === command.databaseView);
 }
-// One pending browser navigation per connection: begin waits for the browser's
-// acknowledgement (or times out), and acknowledge accepts only a receipt that
-// matches the command's Learning state, guided place and guide highlight.
 /**
+ * One pending browser navigation per connection: begin waits for the browser's
+ * acknowledgement (or times out), and acknowledge accepts only a receipt that
+ * matches the command's Learning state, guided place and guide highlight.
  * @param {object} dependencies
  * @param {() => void} dependencies.changed
  */

@@ -3,15 +3,11 @@ import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
+import { parseConversationState } from "./parseConversationState.js";
 
-const object = value => value && typeof value === "object" && !Array.isArray(value);
 const retiredModel = selection => selection?.engineId === "opencode" &&
   selection.modelProviderId === "opencode" && selection.modelId === "big-pickle";
 
-function parse(source) {
-  try { const value = JSON.parse(source); if (object(value)) return value; } catch { /* Never report private contents. */ }
-  throw new Error("Colleague conversation state is invalid. Inspect it before upgrading.");
-}
 
 /**
  * 20261022: Vibe64 no longer offers OpenCode Zen's free Big Pickle model.
@@ -36,7 +32,7 @@ export async function retireColleagueFreeModel({ systemRoot, apply, backupRoot, 
       await verifyUpgradeParents(systemRoot, filePath);
       const original = await readUpgradeFile(filePath);
       if (original === null) continue;
-      const saved = parse(original);
+      const saved = parseConversationState(original);
       validateColleagueConversationRecord(saved, entry.name);
       if (!retiredModel(saved.assistantSelection)) continue;
       if (saved.schemaVersion !== 3) {

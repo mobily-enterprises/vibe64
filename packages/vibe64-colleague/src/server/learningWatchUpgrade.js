@@ -2,14 +2,10 @@ import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
+import { parseConversationState } from "./parseConversationState.js";
 
 const LEARNING_WATCH_SOURCE = "learning-task";
-const object = value => value && typeof value === "object" && !Array.isArray(value);
 
-function parse(source) {
-  try { const value = JSON.parse(source); if (object(value)) return value; } catch { /* Never report private contents. */ }
-  throw new Error("Colleague conversation state is invalid. Inspect it before upgrading.");
-}
 
 /**
  * Learning v2 (20261022): Colleague no longer watches learning tasks. Retire
@@ -32,7 +28,7 @@ export async function retireColleagueLearningWatches({ systemRoot, apply, backup
       await verifyUpgradeParents(systemRoot, filePath);
       const original = await readUpgradeFile(filePath);
       if (original === null) continue;
-      const saved = parse(original);
+      const saved = parseConversationState(original);
       validateColleagueConversationRecord(saved, entry.name);
       const retired = new Set((saved.watches || []).filter(watch => watch?.source === LEARNING_WATCH_SOURCE).map(watch => watch.watchId));
       if (!retired.size) continue;

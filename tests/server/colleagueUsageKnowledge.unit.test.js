@@ -6,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
+import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
 import { createColleagueUsageKnowledge, maxGuideCharacters } from "../../packages/vibe64-colleague/src/server/usageKnowledge.js";
 
 async function fixture(t) {
@@ -106,7 +106,7 @@ test("usage actions share native authentication, require no project and validate
   let user = { uid: "member-1", username: "member", role: "member" };
   registerVibe64ActionContext(actions, { resolveUser: async () => user,
     authorizeProject: () => { assert.fail("Usage lookup must not open or authorize a project."); } });
-  const definitions = createColleagueActions({}, { usage }).filter(definition => definition.id.includes(".usage."));
+  const definitions = createColleagueActions({ colleague: {}, usage }).filter(definition => definition.id.includes(".usage."));
   assert.equal(definitions.length, 2);
   assert.ok(definitions.every(definition => definition.kind === "query"));
   actions.register({ contributorId: "usage-proof", domain: "vibe64", actions: definitions.map(definition => ({

@@ -36,7 +36,7 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - `packages/vibe64-training/src/server/visualResourceActions.js`
 - `packages/vibe64-training/src/server/visualResourceRoutes.js`
 - `packages/vibe64-training/src/server/registerRoutes.js`
-- `packages/vibe64-training/src/server/actions.js`
+- `packages/vibe64-training/src/server/trainingActions.js`
 - `packages/vibe64-training/src/server/learningSpace.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `packages/vibe64-colleague/src/client/colleagueNavigation.js`

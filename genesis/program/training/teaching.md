@@ -7,7 +7,7 @@ teacher conversation.
 
 ## Sources
 
-- Main: `packages/vibe64-training/src/server/actions.js`
+- Main: `packages/vibe64-training/src/server/trainingActions.js`
 - `packages/vibe64-training/src/server/stepActions.js`
 - `packages/vibe64-training/src/server/errors.js`
 - `packages/vibe64-training/src/server/stepChecks.js`
@@ -30,7 +30,7 @@ teacher conversation.
 
 ### Shared lesson operations
 
-`actions.js` provides the shared-catalogue operations courses list and create,
+`trainingActions.js` provides the shared-catalogue operations courses list and create,
 available list, course install, learning read, lesson start, lesson resume,
 lesson end and retained-pin lesson continuation. They use Core's fresh actor
 context and expose bounded saved facts without source paths, executable

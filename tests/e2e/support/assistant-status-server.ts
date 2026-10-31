@@ -34,7 +34,7 @@ import { createSessionAttachments } from "../../../packages/vibe64-terminals/src
 import { createSessionAgentManager } from "../../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { registerRoutes as registerTerminalRoutes } from "../../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { createColleagueService } from "../../../packages/vibe64-colleague/src/server/service.js";
-import { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "../../../packages/vibe64-colleague/src/server/actions.js";
+import { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "../../../packages/vibe64-colleague/src/server/colleagueActions.js";
 import { sourceMetadata } from "../../server/vibe64TestHelpers.js";
 import {
   bootstrapPayload, currentAppPayload, directChatSessionPayload,
@@ -225,7 +225,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     setup({ events }) {
       const selection = { engineId: "codex", modelProviderId: "openai", modelId: "test-model" };
       const service = createColleagueService({ actions, events, systemRoot: colleagueRoot,
-        accounts: {},
+        accounts: { async initializeModelRouting() {} },
         terminals: {
           async requireAssistantSelectionAccess(_selection, { vibe64User }) {
             if (vibe64User?.uid !== owner.uid) throw Object.assign(new Error("Model access denied."), { statusCode: 403 });

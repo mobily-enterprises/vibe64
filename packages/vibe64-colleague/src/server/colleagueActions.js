@@ -104,15 +104,18 @@ const assignmentOutput = { mode: "replace", schema: createSchema({ ok: { type: "
   assignment: { type: "object", schema: assignmentSchema, required: false },
   assignments: { type: "array", items: assignmentSchema, required: false } }) };
 
-// navigationPanes are the project views a composed host adds to navigation.open,
-// each { pane, meaning } (the vibe64.colleague.navigation-panes capability).
+// A composition without the navigation-panes capability adds no views.
+const NO_HOST_PANES = Object.freeze([]);
+
 /**
- * @param {ColleagueService} colleague
- * @param {object} [options]
- * @param {ReturnType<typeof createColleagueUsageKnowledge>} [options.usage]
- * @param {Array<{ pane: string, meaning: string }>} [options.navigationPanes]
+ * navigationPanes are the project views a composed host adds to navigation.open,
+ * each { pane, meaning } (the vibe64.colleague.navigation-panes capability).
+ * @param {object} dependencies
+ * @param {ColleagueService} dependencies.colleague
+ * @param {ReturnType<typeof createColleagueUsageKnowledge>} [dependencies.usage]
+ * @param {Array<{ pane: string, meaning: string }>} [dependencies.navigationPanes]
  */
-function createColleagueActions(colleague, { usage = createColleagueUsageKnowledge(), navigationPanes = [] } = {}) {
+function createColleagueActions({ colleague, usage = createColleagueUsageKnowledge(), navigationPanes = NO_HOST_PANES }) {
   for (const { pane, meaning } of navigationPanes) {
     if (!/^[a-z][a-z0-9-]{0,63}$/u.test(pane || "") || VIBE64_COLLEAGUE_PANES.includes(pane) || !meaning) {
       throw new TypeError(`Colleague navigation pane "${pane}" must be a new lowercase view name with a meaning.`);
@@ -129,7 +132,7 @@ function createColleagueActions(colleague, { usage = createColleagueUsageKnowled
     extensions: { assistant: assistant ?? { exclude: true } },
     execute
   }, { projectScoped });
-  return [
+  return Object.freeze([
     definition("usage.topics.read", {
       query: { ...text, maxLength: 200 },
       offset: { type: "integer", min: 0, required: false },
@@ -279,7 +282,7 @@ function createColleagueActions(colleague, { usage = createColleagueUsageKnowled
       description: "Read the project, session, conversation and displayed view targeted by this Colleague request. pane=chat means the project view is hidden behind compact chat; no Preview or integration detail is claimed in that state. An empty pane for a selected project means its layout is not ready. previewScreen identifies what the Preview pane actually shows: existing-project-setup asks what the project does, with Set up project and Inspect it for me choices; new-project-setup offers starters or starting through conversation; checking-project-setup is still loading; outputs-with-setup-warning includes a setup problem. outputs is the output controls, not proof an app is running. Read project onboarding for current setup details and available actions. integrationEnvironment describes the loaded visible Integrations panel, including an empty configuration; integrationId is present only for an existing selected slot. integrationDirty means the displayed draft is unsaved, so this is not proof of saved configuration or a working connection. These fields are absent when the panel is unavailable. Production selection does not require a development session. databaseScreen reports whether the visible Database is loading, unavailable or a workspace; databaseView identifies overview, erd or data only when loaded; databaseTable is the exact selected table in Data, without SQL, columns or rows. These are UI selections, not live database health or query results, and are omitted when the panel is hidden or belongs to another session. An empty focus means the project chooser. learningOpen reports whether the Courses catalogue is open above the app; learningSurface is courses, progress (the lesson in progress) or archived while it is open. pane=lesson means the Lesson toggle is on and its sheet is shown, covering the practice project's Preview or Dash (or a screen outside any project). route is the page shown outside a project (for example the Learning page or one of this installation's own pages). learningAttemptId and learningStepId identify the person's current lesson step even while it is not shown. Read that step with lesson.read before teaching it. learningBeat is the 0-based index into that step's beats that the lesson step bar shows, present only on a step with beats. planView is present only while the matching native Plan and history dialog is open; current or history identifies its displayed tab, not approval or agent activity. Navigation does not silently retarget a pending request.",
       output: { schema: createSchema({ ok: { type: "boolean", required: true }, focus: { ...focusField, required: true } }), mode: "replace" }
     })
-  ];
+  ]);
 }
 
 const colleagueConversationDataSchema = createSchema({ clientId, focus: focusField });

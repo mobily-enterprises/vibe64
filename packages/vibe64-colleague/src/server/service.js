@@ -37,6 +37,14 @@ const LEARN_WATCH_REFUSAL = "In Learn mode Colleague watches only this lesson's 
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
   return Object.assign(new Error(message), { code, statusCode });
 }
+// A browser observer has release() once its conversation subscription is attached.
+function releaseObserver(observer) {
+  if (observer.release) observer.release();
+}
+// A browser connection has acknowledge() only while a navigation waits for it.
+function answerPendingNavigation(connection, result) {
+  if (connection.acknowledge) connection.acknowledge(result);
+}
 function requireResult(result) {
   if (result?.ok === false) throw failure(result.error || "The assistant operation failed.", result.code);
   return result;
@@ -328,7 +336,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     await state.admission;
     while (state.running || state.transfer) await (state.running || state.transfer);
     if (closed || state.released || state.opening || visible.get(state.userKey) === state) return;
-    for (const observer of state.browserObservers) observer.release?.();
+    for (const observer of state.browserObservers) releaseObserver(observer);
     state.browserObservers.clear();
     const conversation = state.conversation;
     if (!conversation) return;
@@ -357,7 +365,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     clearTimeout(state.watchTimer);
     clearTimeout(state.replyTimer);
     if (visible.get(state.userKey) === state) visible.delete(state.userKey);
-    for (const observer of state.browserObservers) observer.release?.();
+    for (const observer of state.browserObservers) releaseObserver(observer);
     state.browserObservers.clear();
     await state.saving;
     void (async () => {
@@ -470,11 +478,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           catch { /* A presentation failure does not own the conversation. */ }
           if (observer.context.colleague?.conversationId !== state.record.scopeId) {
             state.browserObservers.delete(observer);
-            observer.release?.();
+            releaseObserver(observer);
           }
         }, () => {
           state.browserObservers.delete(observer);
-          observer.release?.();
+          releaseObserver(observer);
         });
     }
   }
@@ -494,6 +502,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         // subscriptions reauthorize independently, so their callback order is
         // deliberately not an application presentation guarantee.
         if (observer.context.colleague?.conversationId !== state.record.scopeId) return;
+        // readable-check: allow optional-call - data: a reply projection exists only while a worker runs
         const projected = state.projectReply?.(event);
         const interimReply = state.interimReply;
         if (event.completedEnvelope === true) {
@@ -590,7 +599,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   // does, so an AI connected outside the in-app sign-in is usable without a
   // manual Save; a team member's send never writes a setup.
   async function routedColleague(user) {
-    await accounts.initializeModelRouting?.({ vibe64User: user });
+    await accounts.initializeModelRouting({ vibe64User: user });
     return terminals.resolveAssistantPurpose({ purpose: "colleague" }, { vibe64User: user });
   }
 
@@ -659,7 +668,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     state.transfer = gate.promise;
     try {
       for (const observer of state.browserObservers) {
-        observer.release?.();
+        releaseObserver(observer);
         observer.release = null;
       }
       // Never open the destination unless the exact previous owner confirmed
@@ -1113,7 +1122,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.watchTimer = null;
       void pollWatches(state).catch(() => {});
     }, delay);
-    state.watchTimer.unref?.();
+    state.watchTimer.unref();
   }
 
   // A watch without a source is a project's own coding conversation.
@@ -1330,8 +1339,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             const observer = { context: requestContext, listener, release: null };
             state.browserObservers.add(observer);
             try { await preparedConversation(); await attachBrowserObserver(state, observer); }
-            catch (error) { state.browserObservers.delete(observer); observer.release?.(); throw error; }
-            return () => { state.browserObservers.delete(observer); observer.release?.(); };
+            catch (error) { state.browserObservers.delete(observer); releaseObserver(observer); throw error; }
+            return () => { state.browserObservers.delete(observer); releaseObserver(observer); };
           }
         };
       }
@@ -1433,7 +1442,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           state.streamRevision = 0;
           state.requestContext = context;
           for (const connection of state.connections.values()) {
-            connection.acknowledge?.({ ok: false,
+            answerPendingNavigation(connection, { ok: false,
               error: "The previous Colleague conversation was retained as history before navigation completed." });
           }
           publishReply(state);
@@ -1661,7 +1670,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             const current = state.connections.get(input.clientId);
             if (current?.browserBinding?.owner !== owner) return;
             state.connections.delete(input.clientId);
-            current.acknowledge?.({ ok: false, error: "The initiating browser disconnected." });
+            answerPendingNavigation(current, { ok: false, error: "The initiating browser disconnected." });
             current.focus = null;
           } };
         }
@@ -1808,7 +1817,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.interimReply = null;
       publishReply(state);
       state.summaryAbort?.abort();
-      for (const connection of state.connections.values()) connection.acknowledge?.({ ok: false, error: "Navigation was cancelled when Colleague stopped." });
+      for (const connection of state.connections.values()) answerPendingNavigation(connection, { ok: false, error: "Navigation was cancelled when Colleague stopped." });
       state.record.status = "interrupted";
       for (const assignment of state.record.assignments || []) {
         suspendAssignment(state.record, assignment.assignmentId, "Colleague was stopped. Ask to resume this assignment when ready.", { pauseWatches: true });
@@ -1845,7 +1854,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         try {
           clearTimeout(state.watchTimer);
           clearTimeout(state.replyTimer);
-          for (const observer of state.browserObservers) observer.release?.();
+          for (const observer of state.browserObservers) releaseObserver(observer);
           state.browserObservers.clear();
           await state.watchAdmission;
           await state.polling;

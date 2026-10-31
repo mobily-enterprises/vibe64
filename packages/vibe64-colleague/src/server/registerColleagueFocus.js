@@ -4,9 +4,9 @@ import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../shared/focus
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
 
-// Focus belongs to one existing authenticated browser connection. The action
-// retains access/input checks; the socket supplies only its cleanup lifetime.
 /**
+ * Focus belongs to one existing authenticated browser connection. The action
+ * retains access/input checks; the socket supplies only its cleanup lifetime.
  * @param {object} dependencies
  * @param {RuntimeRealtime} dependencies.realtime
  * @param {ActionCatalogue} dependencies.actions

@@ -4,7 +4,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { conversationTransportSchema } from "../../packages/vibe64-sessions/src/server/conversationTransportSchema.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { temporaryConversationUpdateInputValidator } from "../../packages/vibe64-terminals/src/server/inputSchemas.js";
-import { colleagueConversationSelectionSchema } from "../../packages/vibe64-colleague/src/server/actions.js";
+import { colleagueConversationSelectionSchema } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
 
 const selectBody = (schema) => createSchema({ selection: { type: "object", required: true, schema } });
 

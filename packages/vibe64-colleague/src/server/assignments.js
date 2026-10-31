@@ -35,9 +35,9 @@ function assignmentSummary(assignment, detail = false) {
   };
 }
 
-// Assignments retain intent and account for sends. Native turns, product actions,
-// watches and Colleague's existing worker still own execution and wakeups.
 /**
+ * Assignments retain intent and account for sends. Native turns, product actions,
+ * watches and Colleague's existing worker still own execution and wakeups.
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
  * @param {(state: object) => Promise<unknown>} dependencies.persist
