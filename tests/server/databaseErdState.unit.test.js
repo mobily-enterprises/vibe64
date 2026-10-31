@@ -73,6 +73,9 @@ test("agent ERD moves retain exact routed paths, reject stale batches and preser
   store.readSession = async (sessionId) => ({ sessionId });
   const published = [];
   const service = createService({
+    logger: { info() {}, warn() {} },
+    sourceEditor: {},
+    terminalService: {},
     projectService: {
       createSessionStore: async () => store,
       localDatabaseServers: async () => ({ managed: true, databases: [] }),
@@ -145,6 +148,9 @@ test("service publishes a scoped hint only after a successful shared save, witho
   store.readSession = async (sessionId) => ({ sessionId, projectSlug: "ignored-session-slug" });
   const events = [];
   const service = createService({
+    logger: { info() {}, warn() {} },
+    sourceEditor: {},
+    terminalService: {},
     projectService: {
       createSessionStore: async () => store,
       localDatabaseServers: async () => ({ managed: true, databases: [] }),

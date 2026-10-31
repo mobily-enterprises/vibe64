@@ -4,7 +4,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { createDatabaseActions } from "../../packages/vibe64-database-tools/src/server/actions.js";
+import { createDatabaseActions } from "../../packages/vibe64-database-tools/src/server/databaseActions.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 async function withDatabaseTools(run) {

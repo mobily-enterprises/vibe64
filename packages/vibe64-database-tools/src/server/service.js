@@ -6,28 +6,17 @@ import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
-import {
-  DATABASE_TOOL_ENVIRONMENT_CONTRACT
-} from "@local/vibe64-project/server/resourceEnvironment";
+import { databaseError } from "./databaseError.js";
 import {
   databaseAssistantAvailability,
   DATABASE_ASSISTANT_EXECUTION_PROFILE,
   runDatabaseAssistant
 } from "./assistant.js";
-import {
-  resolveDatabaseConnection,
-  withSessionKnex
-} from "./connection.js";
-import {
-  inspectDatabaseSchema
-} from "./databaseDialect.js";
+import { withSessionKnex } from "./connection.js";
 import {
   searchDatabaseLookup
 } from "./lookup.js";
@@ -40,18 +29,14 @@ import {
 } from "./queryExecutor.js";
 import {
   deleteSnippet as deleteStoredSnippet,
-  actorIdentity,
   actorKey,
   readErdLayout,
-  readSchemaSnapshot,
   readWorkspace,
   recordQueryHistory,
   saveErdLayout,
-  saveSnippet as saveStoredSnippet,
-  writeSchemaSnapshot
+  saveSnippet as saveStoredSnippet
 } from "./sessionState.js";
-import { checkDatabaseServer } from "./serverCheck.js";
-import { thisComputerToolFamily } from "@local/vibe64-execution/server";
+import { createSessionDatabase } from "./sessionDatabase.js";
 import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "./dataOverview.js";
 import { inspectErdLayout, moveErdTables } from "./erdLayout.js";
 import { defaultTableQuery } from "../shared/sqlQuoting.js";
@@ -69,12 +54,6 @@ function databaseResult(operation) {
     fallbackCode: "vibe64_database_operation_failed",
     fallbackMessage: "The session database operation failed."
   });
-}
-
-function databaseError(message, code, details = {}) {
-  const error = vibe64Error(message, code);
-  error.details = details;
-  return error;
 }
 
 function safeConnectionDescriptor(connection = {}, context = {}) {
@@ -106,33 +85,22 @@ function auditSql(sql = "") {
 
 /**
  * @param {object} dependencies
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
- * @param {PublishLayoutChanged} [dependencies.publishLayoutChanged]
- * @param {SourceEditorService | null} [dependencies.sourceEditor]
- * @param {TerminalsService | null} [dependencies.terminalService]
+ * @param {PublishLayoutChanged} dependencies.publishLayoutChanged
+ * @param {SourceEditorService} dependencies.sourceEditor
+ * @param {TerminalsService} dependencies.terminalService
  * @param {typeof withSessionKnex} [dependencies.withKnex]
  */
 function createService({
-  logger = null,
+  logger,
   projectService,
-  publishLayoutChanged = async () => {},
-  sourceEditor = null,
-  terminalService = null,
+  publishLayoutChanged,
+  sourceEditor,
+  terminalService,
   withKnex = withSessionKnex
-} = {}) {
-  if (
-    !projectService ||
-    typeof projectService.createSessionStore !== "function" ||
-    typeof projectService.localDatabaseServers !== "function" ||
-    typeof projectService.sessionDatabaseEnvironment !== "function"
-  ) {
-    throw new TypeError("createService requires the Vibe64 Project API with session database resolution.");
-  }
-  if (typeof withKnex !== "function") {
-    throw new TypeError("createService requires a Knex session operation boundary.");
-  }
-
+}) {
+  const sessionDatabase = createSessionDatabase({ logger, projectService, withKnex });
   const activeQueries = new Map();
   const activeAssistants = new Set();
 
@@ -146,9 +114,9 @@ function createService({
     });
   }
 
-  // A receipt whose helper close is unconfirmed is kept and retried; its error
-  // names the copilot helper and keeps the native owner's reason and code.
   /**
+   * A receipt whose helper close is unconfirmed is kept and retried; its error
+   * names the copilot helper and keeps the native owner's reason and code.
    * @param {Vibe64SessionRuntime} runtime
    * @param {string} sessionId
    * @param {string} artifact
@@ -255,176 +223,15 @@ function createService({
     });
   }
 
-  async function sessionContext(input = {}) {
-    const sessionId = normalizeText(input.sessionId);
-    if (!sessionId) {
-      throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
-    }
-    const store = await projectService.createSessionStore();
-    const session = await store.readSession(sessionId);
-    const database = await projectService.sessionDatabaseEnvironment({
-      session,
-      sessionId
-    });
-    const toolEnvironment = database.databaseToolEnvironment;
-    if (toolEnvironment?.contract !== DATABASE_TOOL_ENVIRONMENT_CONTRACT) {
-      throw databaseError(
-        "The selected session has no canonical database-tool connection.",
-        "vibe64_session_database_unavailable"
-      );
-    }
-    const readEndpoint = {
-      kind: toolEnvironment.kind,
-      ...toolEnvironment.read
-    };
-    const writeEndpoint = {
-      kind: toolEnvironment.kind,
-      ...toolEnvironment.write
-    };
-    const readConnection = resolveDatabaseConnection(readEndpoint);
-    const writeConnection = resolveDatabaseConnection(writeEndpoint);
-    return {
-      ...database,
-      actor: actorIdentity(input.vibe64User),
-      readConnection,
-      readEndpoint,
-      session,
-      sessionId,
-      store,
-      vibe64User: input.vibe64User || null,
-      writeEndpoint,
-      writeConnection
-    };
-  }
-
-  function logOperation(context = {}, fields = {}, level = "info") {
-    logOperationalEvent(logger, level, {
-      actor: context.actor,
-      component: "vibe64-database-tools",
-      database: context.writeConnection?.database,
-      engine: context.writeConnection?.engine,
-      event: "vibe64.database.operation",
-      sessionId: context.sessionId,
-      ...fields
-    }, "Vibe64 session database operation");
-  }
-
-  async function refreshSchema(context, source = "user") {
-    const startedAt = Date.now();
-    try {
-      const schema = await withKnex(context.readEndpoint, ({ connection, knex }) => (
-        inspectDatabaseSchema({ connection, knex })
-      ));
-      await writeSchemaSnapshot(context.store, context.sessionId, schema);
-      logOperation(context, {
-        durationMs: Date.now() - startedAt,
-        operation: "schema.refresh",
-        source,
-        status: "succeeded",
-        tableCount: schema.tables.length
-      });
-      return schema;
-    } catch (error) {
-      logOperation(context, {
-        code: error?.code,
-        durationMs: Date.now() - startedAt,
-        operation: "schema.refresh",
-        source,
-        status: "failed"
-      }, "warn");
-      throw error;
-    }
-  }
-
-  async function currentSchema(context, { initialize = true } = {}) {
-    const schema = await readSchemaSnapshot(context.store, context.sessionId);
-    const matchesConnection = schema &&
-      schema.engine === context.readConnection.engine &&
-      schema.database === context.readConnection.database;
-    if (matchesConnection || !initialize) {
-      return schema;
-    }
-    return refreshSchema(
-      context,
-      schema ? "database-identity-changed" : "initial-missing-snapshot"
-    );
-  }
-
-  function assertWriteQueryConfirmed(context, input = {}) {
-    if (input.writeUnlocked !== true || input.confirmed !== true) {
-      throw databaseError(
-        "Unlock writes and confirm this statement before running it.",
-        "vibe64_database_write_confirmation_required"
-      );
-    }
-    if (normalizeText(input.confirmationDatabase) !== context.writeConnection.database) {
-      throw databaseError(
-        "The write confirmation does not match the selected session database.",
-        "vibe64_database_write_target_mismatch",
-        {
-          database: context.writeConnection.database
-        }
-      );
-    }
-  }
-
-  async function runMutation(input, operation, audit = {}) {
-    const context = await sessionContext(input);
-    const schema = await currentSchema(context);
-    const startedAt = Date.now();
-    try {
-      const result = await withKnex(context.writeEndpoint, ({ knex }) => operation({
-        context,
-        knex,
-        schema
-      }));
-      logOperation(context, {
-        affectedRows: Number(result.affectedRows || 0),
-        durationMs: Date.now() - startedAt,
-        status: "succeeded",
-        ...audit
-      });
-      return result;
-    } catch (error) {
-      logOperation(context, {
-        code: error?.code,
-        durationMs: Date.now() - startedAt,
-        status: "failed",
-        ...audit
-      }, "warn");
-      throw error;
-    }
-  }
-
-  // The database server this session's project needs and the person runs:
-  // its Env names, current values, a real sign-in check and the commands for
-  // this computer. Nothing when the Stack declares none or the host supplies it.
-  async function checkServer(input = {}) {
-    const sessionId = normalizeText(input.sessionId);
-    if (!sessionId) {
-      throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
-    }
-    const store = await projectService.createSessionStore();
-    const session = await store.readSession(sessionId);
-    const servers = await projectService.localDatabaseServers({ session, sessionId });
-    if (servers.managed) return { ok: true, managed: true, databases: [] };
-    const family = thisComputerToolFamily();
-    const databases = await Promise.all(servers.databases.map(async ({ endpoint, ...database }) => ({
-      ...database,
-      check: await checkDatabaseServer({ endpoint, kind: database.kind })
-    })));
-    return { ok: true, managed: false, family, databases };
-  }
-
   return Object.freeze({
-    checkServer(input = {}) {
-      return databaseResult(() => checkServer(input));
+    checkServer(input) {
+      return databaseResult(() => sessionDatabase.checkServer(input));
     },
 
-    async readOverview(input = {}) {
+    async readOverview(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
-        const schema = await currentSchema(context);
+        const context = await sessionDatabase.sessionContext(input);
+        const schema = await sessionDatabase.currentSchema(context);
         const overview = await readDataOverview(context.session);
         const reference = (value) => dataOverviewReference(schema, value);
         const relationships = schema.relationships.map((relationship) => ({ ...relationship, reference: reference(relationship.id) }));
@@ -447,10 +254,10 @@ function createService({
         };
       });
     },
-    async readState(input = {}) {
+    async readState(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
-        const schema = await currentSchema(context);
+        const context = await sessionDatabase.sessionContext(input);
+        const schema = await sessionDatabase.currentSchema(context);
         const [layout, workspace, overview] = await Promise.all([
           readErdLayout(context.store, context.sessionId),
           readWorkspace(context.store, context.sessionId, context.vibe64User),
@@ -478,10 +285,10 @@ function createService({
       });
     },
 
-    async refreshSchema(input = {}) {
+    async refreshSchema(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
-        const schema = await refreshSchema(context, normalizeText(input.source) || "user");
+        const context = await sessionDatabase.sessionContext(input);
+        const schema = await sessionDatabase.refreshSchema(context, normalizeText(input.source) || "user");
         await publishLayoutChanged(context.sessionId, context.session);
         return {
           ok: true,
@@ -490,10 +297,10 @@ function createService({
       });
     },
 
-    async saveOverview(input = {}) {
+    async saveOverview(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
-        const schema = await currentSchema(context);
+        const context = await sessionDatabase.sessionContext(input);
+        const schema = await sessionDatabase.currentSchema(context);
         const definition = validateDataOverview(dataOverviewDefinition(schema, validateDataOverview(input.definition)));
         const resolvedDefinition = dataOverviewDefinition(schema, definition, { qualified: true });
         const text = `${JSON.stringify(definition, null, 2)}\n`;
@@ -515,16 +322,16 @@ function createService({
       });
     },
 
-    async runQuery(input = {}) {
+    async runQuery(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
-        const schema = await currentSchema(context);
+        const context = await sessionDatabase.sessionContext(input);
+        const schema = await sessionDatabase.currentSchema(context);
         const readOnly = input.readOnly !== false;
         const automaticDefault = input.automatic === true && schema.tables.some((table) => (
           String(input.sql || "").trim() === defaultTableQuery(table, schema.engine)
         ));
         if (!readOnly) {
-          assertWriteQueryConfirmed(context, input);
+          sessionDatabase.assertWriteQueryConfirmed(context, input);
         }
         const startedAt = Date.now();
         try {
@@ -541,7 +348,7 @@ function createService({
               context.vibe64User,
               historyEntry(input.sql, result, readOnly)
             );
-            logOperation(context, {
+            sessionDatabase.logOperation(context, {
               affectedRows: Number(result.affectedRows || 0),
               durationMs: result.durationMs,
               operation: "query.run",
@@ -566,7 +373,7 @@ function createService({
             ).catch(() => null);
           }
           // Failures are logged even for the automatic default-table load.
-          logOperation(context, {
+          sessionDatabase.logOperation(context, {
             code: error?.code,
             durationMs: Date.now() - startedAt,
             operation: "query.run",
@@ -580,13 +387,13 @@ function createService({
       });
     },
 
-    async cancelQuery(input = {}) {
+    async cancelQuery(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
+        const context = await sessionDatabase.sessionContext(input);
         const queries = sessionQueries(context.sessionId);
         const result = await cancelDatabaseQuery(queries, input.queryId);
         releaseSessionQueries(context.sessionId, queries);
-        logOperation(context, {
+        sessionDatabase.logOperation(context, {
           cancelled: result.cancelled,
           operation: "query.cancel",
           queryId: result.queryId,
@@ -596,8 +403,8 @@ function createService({
       });
     },
 
-    async updateCell(input = {}) {
-      return databaseResult(() => runMutation(input, ({ knex, schema }) => updateDatabaseCell({
+    async updateCell(input) {
+      return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => updateDatabaseCell({
         edit: input.edit,
         knex,
         schema,
@@ -608,8 +415,8 @@ function createService({
       }));
     },
 
-    async insertRow(input = {}) {
-      return databaseResult(() => runMutation(input, ({ knex, schema }) => insertDatabaseRow({
+    async insertRow(input) {
+      return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => insertDatabaseRow({
         knex,
         schema,
         table: input.table,
@@ -620,8 +427,8 @@ function createService({
       }));
     },
 
-    async deleteRow(input = {}) {
-      return databaseResult(() => runMutation(input, ({ knex, schema }) => deleteDatabaseRow({
+    async deleteRow(input) {
+      return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => deleteDatabaseRow({
         confirmed: input.confirmed,
         key: input.key,
         knex,
@@ -633,10 +440,10 @@ function createService({
       }));
     },
 
-    async searchLookup(input = {}) {
+    async searchLookup(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
-        const schema = await currentSchema(context);
+        const context = await sessionDatabase.sessionContext(input);
+        const schema = await sessionDatabase.currentSchema(context);
         return withKnex(context.readEndpoint, ({ connection, knex }) => (
           searchDatabaseLookup({
             engine: connection.engine,
@@ -649,20 +456,20 @@ function createService({
       });
     },
 
-    async readErd(input = {}) {
+    async readErd(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
-        const schema = await currentSchema(context);
+        const context = await sessionDatabase.sessionContext(input);
+        const schema = await sessionDatabase.currentSchema(context);
         const layout = await readErdLayout(context.store, context.sessionId);
         const { inspection } = inspectErdLayout(schema, layout);
         return { ok: true, ...inspection };
       });
     },
 
-    async moveErdTables(input = {}) {
+    async moveErdTables(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
-        const schema = await currentSchema(context);
+        const context = await sessionDatabase.sessionContext(input);
+        const schema = await sessionDatabase.currentSchema(context);
         const current = await readErdLayout(context.store, context.sessionId);
         const moved = moveErdTables(schema, current, input.changes);
         const { routes, inspection } = inspectErdLayout(schema, moved.layout);
@@ -674,9 +481,9 @@ function createService({
       });
     },
 
-    async saveLayout(input = {}) {
+    async saveLayout(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
+        const context = await sessionDatabase.sessionContext(input);
         const layout = await saveErdLayout(context.store, context.sessionId, input.layout);
         await publishLayoutChanged(context.sessionId, context.session);
         return {
@@ -686,9 +493,9 @@ function createService({
       });
     },
 
-    async saveSnippet(input = {}) {
+    async saveSnippet(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
+        const context = await sessionDatabase.sessionContext(input);
         return {
           ok: true,
           workspace: await saveStoredSnippet(
@@ -701,9 +508,9 @@ function createService({
       });
     },
 
-    async deleteSnippet(input = {}) {
+    async deleteSnippet(input) {
       return databaseResult(async () => {
-        const context = await sessionContext(input);
+        const context = await sessionDatabase.sessionContext(input);
         return {
           ok: true,
           workspace: await deleteStoredSnippet(
@@ -716,31 +523,21 @@ function createService({
       });
     },
 
-    askAssistant(input = {}) {
+    askAssistant(input) {
       const task = { sessionId: normalizeText(input.sessionId), projectScope: currentProjectScopeKey(),
         actor: actorKey(input.vibe64User), controller: new AbortController() };
       task.promise = databaseResult(async () => {
-        if (
-          typeof terminalService?.deleteEphemeralAgentConversation !== "function" ||
-          typeof terminalService?.resolveAssistantPurpose !== "function" ||
-          typeof terminalService?.runEphemeralAgentChatTurn !== "function"
-        ) {
-          throw databaseError(
-            "The selected session assistant is not available for the database copilot.",
-            "vibe64_database_assistant_unavailable"
-          );
-        }
         if ([...activeAssistants].some((other) => other !== task && other.sessionId === task.sessionId &&
             other.projectScope === task.projectScope && other.actor === task.actor)) {
           throw databaseError("Wait for your current database question to finish.", "vibe64_database_assistant_busy");
         }
-        const context = await sessionContext(input);
+        const context = await sessionDatabase.sessionContext(input);
         task.controller.signal.throwIfAborted();
         const decision = await assistantDecision(context);
         if (!decision.available) throw databaseError(decision.message, decision.reasonCode);
         const runtime = await projectService.createRuntime({ inspectSource: false });
         const admitted = await runtime.store.runSessionExclusive(context.sessionId, `database-assistant-${task.actor}`, async () => {
-          const schema = await currentSchema(context);
+          const schema = await sessionDatabase.currentSchema(context);
           const artifact = `database/assistant-tasks/${task.actor}.json`;
           await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
           task.controller.signal.throwIfAborted();
@@ -797,7 +594,7 @@ function createService({
             if (failure) failure.cause ??= cleanupError;
             else failure = cleanupError;
           }
-          logOperation(context, failure ? {
+          sessionDatabase.logOperation(context, failure ? {
             code: failure.code,
             durationMs: Date.now() - startedAt,
             operation: "assistant.ask",

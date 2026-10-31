@@ -6,7 +6,7 @@ connection and share one query-ownership boundary.
 ## Sources
 
 - `packages/vibe64-core/src/server/actionContext.js`
-- `packages/vibe64-database-tools/src/server/actions.js`
+- `packages/vibe64-database-tools/src/server/databaseActions.js`
 - `packages/vibe64-database-tools/src/server/assistantContracts.js`
 - `tests/server/vibe64DatabaseActionTools.unit.test.js`
 - `tests/server/databaseTools.unit.test.js`

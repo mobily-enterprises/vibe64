@@ -3,7 +3,7 @@ export {
 } from "./Vibe64DatabaseToolsProvider.js";
 export {
   createDatabaseActions
-} from "./actions.js";
+} from "./databaseActions.js";
 export {
   createService
 } from "./service.js";

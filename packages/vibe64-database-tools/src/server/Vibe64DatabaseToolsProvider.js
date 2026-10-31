@@ -3,7 +3,7 @@ import { createDatabaseLayoutChangedPublisher } from "./events.js";
 
 import {
   createDatabaseActions
-} from "./actions.js";
+} from "./databaseActions.js";
 import {
   registerRoutes
 } from "./registerRoutes.js";
@@ -56,6 +56,7 @@ const Vibe64DatabaseToolsProvider = defineFeature({
       terminalService: terminals
     });
     registerRoutes(http);
+    // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     terminals.setDatabaseToolsProvider(databaseTools);
     return { databaseTools };
   },
@@ -64,6 +65,7 @@ const Vibe64DatabaseToolsProvider = defineFeature({
    * @param {{ outputs: { databaseTools: DatabaseToolsService } }} context
    */
   shutdown({ terminals }, { outputs }) {
+    // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     terminals.setDatabaseToolsProvider(null);
     return outputs.databaseTools.close();
   }

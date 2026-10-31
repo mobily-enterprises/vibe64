@@ -71,6 +71,7 @@ function defineDatabaseDialect(definition = {}) {
     definition.urlProtocols.length < 1 ||
     !definition.queryOptions ||
     typeof definition.queryOptions !== "object" ||
+    // readable-check: allow method-probe - input validation: a database dialect definition implements every adapter function
     DATABASE_DIALECT_FUNCTIONS.some((name) => typeof definition[name] !== "function")
   ) {
     throw new TypeError("A database dialect must implement the complete server adapter contract.");

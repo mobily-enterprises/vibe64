@@ -7,7 +7,7 @@
   "exports": {
     ".": "./src/index.js",
     "./client": "./src/client/index.js",
-    "./server/actions": "./src/server/actions.js",
+    "./server/actions": "./src/server/databaseActions.js",
     "./server/connection": "./src/server/connection.js",
     "./server/service": "./src/server/service.js",
     "./server/sqlite-worker": "./src/server/sqliteWorker.js",

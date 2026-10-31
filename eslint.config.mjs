@@ -40,6 +40,7 @@ export default [
     "packages/studio-terminal-core/src/server/**",
     "packages/vibe64-accounts/src/server/**",
     "packages/vibe64-core/src/server/**",
+    "packages/vibe64-database-tools/src/server/**",
     "packages/vibe64-execution/src/server/**",
     "packages/vibe64-genesis/src/server/**",
     "packages/vibe64-project/src/server/**",

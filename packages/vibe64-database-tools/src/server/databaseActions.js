@@ -51,10 +51,7 @@ function action({ execute, id, input, kind = "command", assistant }) {
  * @param {object} dependencies
  * @param {DatabaseToolsService} dependencies.databaseTools
  */
-function createDatabaseActions({ databaseTools } = {}) {
-  if (!databaseTools) {
-    throw new TypeError("createDatabaseActions requires databaseTools.");
-  }
+function createDatabaseActions({ databaseTools }) {
   return Object.freeze([
     action({
       execute: (input) => databaseTools.saveOverview(input),

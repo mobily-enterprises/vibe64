@@ -46,7 +46,7 @@ for (const kind of ["hints", "database"]) {
       const service = kind === "hints"
         ? createSessionPromptHintsService({ projectService, agent: { deleteEphemeralConversation: remove,
           resolveAssistantPurpose: () => assert.fail("Cleanup must not resolve a new helper") } })
-        : createDatabaseService({ projectService, terminalService: { deleteEphemeralAgentConversation: remove } });
+        : createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, projectService, terminalService: { deleteEphemeralAgentConversation: remove } });
       const close = kind === "hints" ? service.cancelSessionPromptHintsForSession : service.closeAssistantsForSession;
       const context = { runtime, session: await store.readSessionForRenewal(sessionId),
         renewalCleanup: { kind: "successor", renewalId: "exact-renewal", sourceSessionId: "predecessor" } };

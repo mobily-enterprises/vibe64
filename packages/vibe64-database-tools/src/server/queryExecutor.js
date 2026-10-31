@@ -15,6 +15,7 @@ import {
   queryId as normalizeQueryId,
   statementCommand
 } from "./sqlPolicy.js";
+import { tableQuery } from "./tableQuery.js";
 
 const QUERY_TIMEOUT_MS = 20_000;
 const QUERY_ROW_LIMIT = 500;
@@ -466,10 +467,6 @@ function validatedKey(table = {}, input = {}) {
       value: databaseValue(entry.value, column)
     };
   });
-}
-
-function tableQuery(knex, table = {}) {
-  return knex(table.name).withSchema(table.schema);
 }
 
 function applyWhere(query, values = []) {

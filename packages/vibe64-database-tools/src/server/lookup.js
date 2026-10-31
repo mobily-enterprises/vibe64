@@ -9,6 +9,7 @@ import {
 import {
   jsonSafeValue
 } from "./queryExecutor.js";
+import { tableQuery } from "./tableQuery.js";
 
 const LOOKUP_LIMIT = 25;
 const DISPLAY_COLUMN_NAMES = Object.freeze(["name", "title", "label", "code"]);
@@ -48,10 +49,6 @@ function displayColumn(table = {}) {
     }
   }
   return columns[0]?.name || "";
-}
-
-function tableQuery(knex, table = {}) {
-  return knex(table.name).withSchema(table.schema);
 }
 
 function searchableColumns(table = {}, keyColumns = [], selectedDisplayColumn = "") {

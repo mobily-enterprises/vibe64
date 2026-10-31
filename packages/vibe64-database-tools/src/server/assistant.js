@@ -200,12 +200,7 @@ async function runDatabaseAssistant({
   runAgentTurn,
   schema = {}
 } = {}) {
-  if (typeof executeReadQuery !== "function") {
-    throw new TypeError("runDatabaseAssistant requires a read-query executor.");
-  }
-  if (typeof runAgentTurn !== "function") {
-    throw new TypeError("runDatabaseAssistant requires the session's ephemeral assistant turn runner.");
-  }
+  const { onEvent: forwardEvent = async () => {} } = agentContext;
   const queries = [];
   const schemaLookups = [];
   let response = null;
@@ -292,7 +287,7 @@ async function runDatabaseAssistant({
               threadId = normalizeText(event.threadId) || threadId;
             }
             observedExecutionProfile ||= executionProfileSnapshot(event.executionProfile);
-            await agentContext.onEvent?.(event);
+            await forwardEvent(event);
           }
         });
         threadId = normalizeText(result?.threadId || result?.conversationId) || threadId;
