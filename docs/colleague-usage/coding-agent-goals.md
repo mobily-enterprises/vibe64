@@ -21,9 +21,16 @@ with **Cancel**.
 In the standalone local editor, open a session, choose a connected assistant,
 and use **Send message** and **Set goal** in the same chat. These controls use
 the selected local project's access checks and do not require a hosted login.
-After **Start goal** is accepted, the goal menu closes. A failed or uncertain
-request leaves the menu and objective available for recovery; switching sessions
-keeps the new session's draft independent.
+After **Start goal**, both that button and **Set goal** show **Starting…** until
+the goal shows as running, including while it waits for the current turn to end;
+the goal menu then closes. Until then **Start goal** cannot be chosen again, so
+one click starts one goal. If the turn ends without the goal starting, the menu
+says so and keeps your objective. **Resume goal** likewise shows **Resuming…**
+until the goal runs again; **Pause goal** and **Cancel goal** stay available
+during that wait. **Pausing…** and **Cancelling…** last until the updated goal
+is shown. A failed or uncertain request leaves the menu
+and objective available for recovery; switching sessions keeps the new session's
+draft independent.
 Long objectives scroll inside the input instead of pushing **Start goal** out of
 the panel. On short screens, scroll the goal panel to reach remaining controls.
 

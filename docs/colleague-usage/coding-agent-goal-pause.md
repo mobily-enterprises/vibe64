@@ -40,7 +40,7 @@ the paused or blocked goal remains saved. **Pause goal** and **Stop** remain
 available during that wait. Use **Resume goal** when you want work to continue.
 You can choose **Set goal** and **Start goal** while Claude is working. The goal
 uses the same conversation's steering path, and **Goal** shows it after Claude
-acknowledges the command. You do not need to stop the current work first.
+acknowledges the command; until then the control shows **Starting…**. You do not need to stop the current work first.
 Setting or resuming a goal while Claude works never interrupts that work: a
 running command (for example a long deploy), background agents and background
 tasks all continue. Claude moves a running command to the background, where it
