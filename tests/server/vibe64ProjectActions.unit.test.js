@@ -14,7 +14,7 @@ import {
   ACTION_SELECT_PROJECT,
   createVibe64ProjectChangedPublisher,
   createProjectActions
-} from "../../packages/vibe64-project/src/server/actions.js";
+} from "../../packages/vibe64-project/src/server/projectActions.js";
 import { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 
 const localUser = { username: "local", role: "owner" };

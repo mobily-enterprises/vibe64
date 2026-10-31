@@ -42,12 +42,14 @@ export default [
     "packages/vibe64-core/src/server/**",
     "packages/vibe64-execution/src/server/**",
     "packages/vibe64-genesis/src/server/**",
+    "packages/vibe64-project/src/server/**",
     "packages/vibe64-runtime/src/server/**"
   ]),
   {
     // Over 750 lines, with a factory over 600 whose concerns share mutable state.
     files: [
       "packages/vibe64-accounts/src/server/service.js",
+      "packages/vibe64-project/src/server/service.js",
       "packages/vibe64-runtime/src/server/sessionStore.js"
     ],
     rules: {

@@ -19,6 +19,7 @@ function assertSavedEnvValueProvider(provider = null) {
   if (
     !provider || typeof provider !== "object" ||
     typeof provider.label !== "string" || !provider.label.trim() ||
+    // readable-check: allow method-probe - input validation: a host's saved Env value provider is checked when it is set
     ["valuesForProject", "list", "link", "unlink"].some((method) => typeof provider[method] !== "function")
   ) {
     throw new TypeError("A saved Env value provider must have a label and expose valuesForProject(), list(), link() and unlink(), or be null.");

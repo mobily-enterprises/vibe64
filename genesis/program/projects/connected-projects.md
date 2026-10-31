@@ -11,7 +11,7 @@ source editing.
 - `packages/vibe64-genesis/src/shared/connectedPackageTypes.js`
 - `packages/vibe64-project/src/server/connectedDevelopment.js`
 - `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
-- `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/projectActions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`

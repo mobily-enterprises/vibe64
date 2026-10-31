@@ -9,23 +9,14 @@ import { localRepositoryRemote } from "./localRepositoryRemote.js";
 import { repositoryBranches } from "./repositoryBranches.js";
 import { readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
 import { readTeamAiStatus } from "@local/vibe64-core/server/teamAiGate";
-
-import {
-  Vibe64SessionRuntime
-} from "@local/vibe64-runtime/server/runtime";
-import {
-  createVibe64SessionStore
-} from "@local/vibe64-runtime/server/sessionStore";
+import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import {
   agentWriteBusyError,
   runVibe64AgentWriteExclusive
 } from "@local/vibe64-runtime/server/agentWriteLock";
-import {
-  workspaceSetupStateFromMetadata
-} from "@local/vibe64-runtime/server/workspaceSetupState";
-import {
-  vibe64Result
-} from "@local/vibe64-core/server/serverResponses";
+import { workspaceSetupStateFromMetadata } from "@local/vibe64-runtime/server/workspaceSetupState";
+import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
 import {
   RUNTIME_CONFIG_OWNERS,
   RUNTIME_CONFIG_PHASES,
@@ -43,9 +34,7 @@ import {
   readEnvUserValues,
   saveEnvUserValues
 } from "@local/vibe64-core/server/envUserValues";
-import {
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   assertProjectDirectoryUsable,
   createStudioProjectContext,
@@ -64,16 +53,12 @@ import {
   runWithProjectRequestContext,
   runWithResolvedProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
-import {
-  resolveSourceConfigRoot
-} from "@local/vibe64-core/server/projectState";
+import { resolveSourceConfigRoot } from "@local/vibe64-core/server/projectState";
 import {
   readProjectPromptHints,
   saveProjectPromptHints
 } from "@local/vibe64-core/server/projectPromptHints";
-import {
-  sessionSourcePath
-} from "@local/vibe64-core/server/sessionSourcePath";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   inspectVibe64ConnectedDevelopment,
   inspectVibe64WorkspaceSetup,
@@ -116,11 +101,12 @@ import {
   runProjectSessionPolicyExclusive as runProjectSessionPolicyMutationExclusive,
   runProjectSourceExclusive as runProjectSourceMutationExclusive
 } from "./projectSourceMutationLock.js";
+import { announceNoProjectChange } from "./projectActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
-/** @typedef {ReturnType<typeof import("./actions.js").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/** @typedef {ReturnType<typeof import("./projectActions.js").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
 
 function envScope(input = {}) {
   return input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
@@ -274,7 +260,7 @@ function projectEnvironmentResult(resolved, input, userRecords) {
 /**
  * @param {object} dependencies
  * @param {RuntimeEnv} [dependencies.env]
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  * @param {(fullName: string, input: object) => Promise<object>} [dependencies.inspectConnectedRepository]
  * @param {(fullName: string, branch: string, input: object) => Promise<object>} [dependencies.inspectConnectedBranch]
  * @param {typeof inspectGenesisCollaboration} [dependencies.inspectCollaboration]
@@ -291,7 +277,7 @@ function projectEnvironmentResult(resolved, input, userRecords) {
  */
 function createService({
   env = process.env,
-  logger = null,
+  logger,
   inspectConnectedRepository = (fullName, input) => githubApi(input, {
     env, feature: "Connected projects", failureCode: "vibe64_connections_access_failed"
   })(`repos/${fullName}`, undefined, "GET"),
@@ -305,11 +291,11 @@ function createService({
   listTemplates = listGenesisTemplates,
   applyTemplate = applyGenesisTemplate,
   projectContext = null,
-  publishProjectChanged = async () => null,
+  publishProjectChanged = announceNoProjectChange,
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile,
   targetRoot = ""
-} = {}) {
+}) {
   let resourceEnvironmentProvider = null;
   let savedEnvValueProvider = null;
   let templateApplicationObserver = null;
@@ -350,6 +336,7 @@ function createService({
     if (!target) {
       return "";
     }
+    // readable-check: allow method-probe - optional operation: a project context without per-target sources has no selected source
     return typeof studioProjectContext.sourceRootForTarget === "function"
       ? studioProjectContext.sourceRootForTarget(target)
       : "";
@@ -378,6 +365,7 @@ function createService({
     if (!target) {
       return "";
     }
+    // readable-check: allow method-probe - optional operation: a project context without per-target runtimes has no selected runtime
     if (typeof studioProjectContext.projectRuntimeRootForTarget === "function") {
       return studioProjectContext.projectRuntimeRootForTarget(target);
     }
@@ -390,6 +378,7 @@ function createService({
       return requestRoot;
     }
     const target = selectedTargetRoot();
+    // readable-check: allow method-probe - optional operation: a project context without per-target session sources has none selected
     return target && typeof studioProjectContext.projectSessionSourceRootForTarget === "function"
       ? studioProjectContext.projectSessionSourceRootForTarget(target)
       : "";
@@ -804,7 +793,7 @@ function createService({
       await publishProjectChanged({ ...payload, projectSlug: project.slug }, { reason });
     } catch (error) {
       // Publication is already confirmed; a notification failure must not invite a duplicate write.
-      logger?.warn?.({ error: String(error?.message || error) }, "GitHub change notification could not be published.");
+      logger.warn({ error: String(error?.message || error) }, "GitHub change notification could not be published.");
     }
   }
 
@@ -974,6 +963,7 @@ function createService({
   }
 
   async function managedProjectDatabaseName({ projectContextRoot, slug }) {
+    // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
     if (typeof resourceEnvironmentProvider?.developmentDatabaseNameForProject !== "function") {
       throw vibe64Error(
         "This Vibe64 installation cannot name a managed project database.",
@@ -1307,18 +1297,18 @@ function createService({
   }
 
   const service = Object.freeze({
-    readOnboarding(input = {}) {
+    readOnboarding(input) {
       return projectResult(() => projectOnboardingState(input));
     },
 
-    async applyTemplate(input = {}) {
+    async applyTemplate(input) {
       const result = await projectResult(() => applyProjectTemplateState(input));
       // The starter changed the Stack after the source locks were released; the
       // session owner prepares its workspace (dependencies, managed resources).
       if (result?.ok === true && templateApplicationObserver) {
         void Promise.resolve()
           .then(() => templateApplicationObserver({ sessionId: String(input.sessionId || "").trim() }))
-          .catch((error) => logger?.warn?.({ error: error?.message }, "Workspace preparation after a starter could not start."));
+          .catch((error) => logger.warn({ error: error?.message }, "Workspace preparation after a starter could not start."));
       }
       return result;
     },
@@ -1330,7 +1320,7 @@ function createService({
       return selectedTargetRoot();
     },
 
-    async createProject(input = {}) {
+    async createProject(input) {
       if (studioProjectContext.runtimeProfile?.projectCatalogEnabled === false) {
         return catalogUnavailable();
       }
@@ -1385,6 +1375,7 @@ function createService({
     // Every learner's practice project slug. Practice projects live in the
     // learning space, outside the catalogue that listProjects reads.
     async listPracticeProjectSlugs() {
+      // readable-check: allow method-probe - optional operation: a project context without a learning space lists no practice projects
       if (typeof studioProjectContext.listLearningSpaceProjects !== "function") return [];
       return (await studioProjectContext.listLearningSpaceProjects()).map(project => project.slug);
     },
@@ -1508,7 +1499,7 @@ function createService({
       };
     },
 
-    async repositoryRemote(input = {}) {
+    async repositoryRemote(input) {
       return projectResult(async () => localRepositoryRemote(await currentProjectState(), input, { logger }));
     },
     async repositoryBranches(input = {}) {
@@ -1572,7 +1563,7 @@ function createService({
     async readRepositoryWorkflow() {
       return readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());
     },
-    async saveRepositoryWorkflow(input = {}) {
+    async saveRepositoryWorkflow(input) {
       return projectResult(async () => {
         if (!canEditProjectSettings(input)) throw vibe64Error("Only the project owner can change the repository workflow.", "vibe64_owner_required");
         requireGithubRepository(await currentProjectState(), "Pull request workflow");
@@ -1611,7 +1602,7 @@ function createService({
       return { project, actions };
     },
 
-    async githubIssues(input = {}) {
+    async githubIssues(input) {
       return projectResult(async () => {
         const project = await currentProjectState();
         const result = await githubIssues(project, input, { env });
@@ -1627,7 +1618,7 @@ function createService({
       });
     },
 
-    async githubPullRequests(input = {}) {
+    async githubPullRequests(input) {
       return projectResult(async () => {
         const project = await currentProjectState();
         const result = await githubPullRequests(project, input, { env });
@@ -1672,11 +1663,11 @@ function createService({
       }));
     },
 
-    async revealEnvSecret(input = {}) {
+    async revealEnvSecret(input) {
       return projectResult(() => revealEnvSecretState(input));
     },
 
-    async downloadEnv(input = {}) {
+    async downloadEnv(input) {
       return projectResult(() => downloadEnvState(input));
     },
 
@@ -1696,7 +1687,7 @@ function createService({
       });
     },
 
-    async saveConnectedProjects(input = {}) {
+    async saveConnectedProjects(input) {
       return projectResult(() => saveConnectedProjectsState(input));
     },
 
@@ -1730,6 +1721,7 @@ function createService({
 
     async releaseSessionResources(input = {}) {
       const sessionId = String(input.sessionId || "").trim();
+      // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
       if (!sessionId || typeof resourceEnvironmentProvider?.removeSessionResources !== "function") {
         return { ok: true };
       }
@@ -1766,6 +1758,7 @@ function createService({
       );
     },
 
+    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
     setTemplateApplicationObserver(observer = null) {
       if (observer !== null && typeof observer !== "function") {
         throw new TypeError("Vibe64 template application observer must be a function or null.");
@@ -1775,13 +1768,16 @@ function createService({
 
     // vibe64.saved-env-values.v1: a host may fill Development Env variables
     // the person explicitly linked to one of its saved values.
+    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setSavedEnvValueProvider(provider = null) {
       savedEnvValueProvider = assertSavedEnvValueProvider(provider);
     },
 
+    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setResourceEnvironmentProvider(provider = null) {
       if (
         provider !== null &&
+        // readable-check: allow method-probe - input validation: a host's resource environment provider is checked when it is set
         (!provider || typeof provider !== "object" || typeof provider.environmentForResources !== "function")
       ) {
         throw new TypeError("Vibe64 resource environment provider must expose environmentForResources() or be null.");
@@ -1797,19 +1793,19 @@ function createService({
       ));
     },
 
-    async saveDevelopmentDatabaseScope(input = {}) {
+    async saveDevelopmentDatabaseScope(input) {
       return projectResult(() => saveDevelopmentDatabaseScopeState(input));
     },
 
-    async saveEngineeringProfile(input = {}) {
+    async saveEngineeringProfile(input) {
       return projectResult(() => saveEngineeringProfileState(input));
     },
 
-    async saveCollaborationSettings(input = {}) {
+    async saveCollaborationSettings(input) {
       return projectResult(() => saveCollaborationSettingsState(input));
     },
 
-    async savePromptHints(input = {}) {
+    async savePromptHints(input) {
       return projectResult(() => savePromptHintsState(input));
     },
 
@@ -1835,7 +1831,7 @@ function createService({
       }, "save-preview-application-identities"));
     },
 
-    async selectProject(input = {}) {
+    async selectProject(input) {
       if (studioProjectContext.runtimeProfile?.projectCatalogEnabled === false) {
         return catalogUnavailable();
       }

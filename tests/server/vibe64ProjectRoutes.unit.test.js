@@ -11,10 +11,10 @@ import {
   ACTION_SAVE_ENGINEERING_PROFILE,
   ACTION_SAVE_PROJECT_PROMPT_HINTS,
   ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES
-} from "../../packages/vibe64-project/src/server/actions.js";
+} from "../../packages/vibe64-project/src/server/projectActions.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { createProjectActions } from "../../packages/vibe64-project/src/server/actions.js";
+import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { registerRoutes as registerProjectRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,

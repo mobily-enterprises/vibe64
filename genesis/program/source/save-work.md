@@ -67,7 +67,7 @@ Git commands.
 
 - `packages/vibe64-core/src/server/projectRepository.js`
 - `packages/vibe64-project/src/server/repositoryBranches.js`
-- `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/projectActions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-terminals/src/server/sessionTurnCheckpoint.js`

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import test from "node:test";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
-import { createVibe64ProjectChangedPublisher } from "../../packages/vibe64-project/src/server/actions.js";
+import { createVibe64ProjectChangedPublisher } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 
 test("confirmed GitHub mutations refresh their captured project without making notification failure retryable", async (t) => {

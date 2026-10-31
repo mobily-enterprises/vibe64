@@ -7,7 +7,7 @@
   "exports": {
     "./shared/contracts": "./src/shared/contracts.js",
     "./shared/onboardingRequest": "./src/shared/onboardingRequest.js",
-    "./server/actions": "./src/server/actions.js",
+    "./server/actions": "./src/server/projectActions.js",
     "./server/managedProject": "./src/server/managedProject.js",
     "./server/resourceEnvironment": "./src/server/resourceEnvironment.js",
     "./server/savedEnvValues": "./src/server/savedEnvValues.js",

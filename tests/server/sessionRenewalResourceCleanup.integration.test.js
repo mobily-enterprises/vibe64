@@ -385,7 +385,7 @@ async function renewalHarness(targetRoot, {
     },
     sessionId: PREDECESSOR_ID
   });
-  const projectService = createProjectService({
+  const projectService = createProjectService({ logger: console,
     env: {},
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),

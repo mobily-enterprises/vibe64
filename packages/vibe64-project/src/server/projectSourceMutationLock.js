@@ -9,14 +9,11 @@ import {
   stat
 } from "node:fs/promises";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { text } from "./trimmedText.js";
 
 const DEFAULT_LOCK_TIMEOUT_MS = 30_000;
 const SESSION_POLICY_LOCK_TIMEOUT_MS = 300_000;
 const LOCK_POLL_MS = 40;
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 function lockError(message, code) {
   const error = new Error(message);

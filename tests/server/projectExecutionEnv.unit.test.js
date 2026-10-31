@@ -76,7 +76,7 @@ test("Codex message preparation reuses only current resources and Env files", as
     let password = "first-secret";
     const resourcePreparation = { identity: "a".repeat(64), preserved: true };
     let failure;
-    const service = createService({
+    const service = createService({ logger: console,
       env: {},
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
@@ -138,7 +138,7 @@ test("Codex message preparation reuses only current resources and Env files", as
 
 test("Codex context avoids source inspection while retaining workspace and account checks", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = createService({ env: {},
+    const service = createService({ logger: console, env: {},
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }) });
     const runtime = await service.createRuntime({ inspectSource: true });
     const sessionId = "codex-context";
@@ -215,7 +215,7 @@ test("resource configuration follows resolved application settings without secre
     await mkdir(path.join(targetRoot, ".git", "info"), { recursive: true });
     let failure = null;
     let defaults = [{ name: "WORKERS", value: "2" }, { name: "AUTH_SECRET", value: "default-secret" }];
-    const service = createService({
+    const service = createService({ logger: console,
       env: { UNRELATED_HOST_SETTING: "not-project-configuration" },
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment() {
@@ -277,7 +277,7 @@ test("managed session credentials preserve resource configuration identity, but 
     let databaseBinding = "DB_DATABASE";
     let inspections = 0;
     let provisions = 0;
-    const service = createService({
+    const service = createService({ logger: console,
       env: {},
       projectContext: createStudioProjectContext({
         explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),

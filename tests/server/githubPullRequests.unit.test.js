@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { createProjectActions } from "../../packages/vibe64-project/src/server/actions.js";
+import { createProjectActions } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "../../packages/vibe64-project/src/server/githubPullRequests.js";
 import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRepositoryProject, sessionConnectedContribution, readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
@@ -104,7 +104,7 @@ test("branch listing and session selection honor the host's per-user credential 
     if (previousMode === undefined) delete process.env.VIBE64_GITHUB_ACCOUNT_MODE;
     else process.env.VIBE64_GITHUB_ACCOUNT_MODE = previousMode;
   });
-  const service = createProjectService({
+  const service = createProjectService({ logger: console,
     env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" },
     projectContext: { async listProjects() { return { currentProject: branchProject, projects: [branchProject] }; } }
   });

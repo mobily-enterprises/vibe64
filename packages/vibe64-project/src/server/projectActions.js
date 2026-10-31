@@ -125,16 +125,18 @@ function projectRealtimePayload(value = {}) {
   };
 }
 
+// Without runtime events a project change goes unannounced; readers see it
+// on their next read.
+async function announceNoProjectChange() {
+  return null;
+}
+
 /**
  * @param {object} dependencies
- * @param {RuntimeEvents | null} [dependencies.events]
+ * @param {RuntimeEvents | null} dependencies.events
  */
-function createVibe64ProjectChangedPublisher({ events = null } = {}) {
-  if (!events || typeof events.publish !== "function") {
-    return async function publishNoop() {
-      return null;
-    };
-  }
+function createVibe64ProjectChangedPublisher({ events }) {
+  if (!events) return announceNoProjectChange;
 
   return async function publishVibe64ProjectChanged(value = {}, {
     actorId = null,
@@ -182,14 +184,34 @@ function action({ assistant, events = [], execute, id, input, kind, ownerRequire
 }
 
 /**
+ * Learn mode has only the learner's practice projects; new projects belong to Develop.
+ * @param {ProjectService} project
+ * @param {object} input
+ * @param {object} context
+ */
+async function createDevelopProject(project, input, context) {
+  const mode = await readLearningModeFor(authenticatedVibe64User(context));
+  if (mode?.on) throw learningModeProjectError(mode);
+  return project.createProject(input);
+}
+
+/**
+ * A project selection the person's mode allows: practice projects in Learn
+ * mode, their own projects in Develop mode.
+ * @param {ProjectService} project
+ * @param {object} input
+ * @param {object} context
+ */
+async function selectProjectInMode(project, input, context) {
+  await assertLearningModeAllowsProject({ actor: authenticatedVibe64User(context), slug: input.slug });
+  return project.selectProject(input);
+}
+
+/**
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  */
-function createProjectActions({ project } = {}) {
-  if (!project) {
-    throw new TypeError("createProjectActions requires project.");
-  }
-
+function createProjectActions({ project }) {
   return Object.freeze([
     action({ id: "vibe64.project.repository.remote.read", kind: "query", input: emptyProjectInputValidator,
       execute: () => project.repositoryRemote() }),
@@ -270,22 +292,14 @@ function createProjectActions({ project } = {}) {
       ownerRequired: true,
       input: projectCreateInputValidator,
       events: [projectChangedEvent({ operation: "created" })],
-      async execute(input, context) {
-        // Learn mode has only the learner's practice projects; new projects belong to Develop.
-        const mode = await readLearningModeFor(authenticatedVibe64User(context));
-        if (mode?.on) throw learningModeProjectError(mode);
-        return project.createProject(input);
-      }
+      execute: (input, context) => createDevelopProject(project, input, context)
     }),
     action({
       id: ACTION_SELECT_PROJECT,
       kind: "command",
       input: projectSelectInputValidator,
       events: [projectChangedEvent()],
-      async execute(input, context) {
-        await assertLearningModeAllowsProject({ actor: authenticatedVibe64User(context), slug: input.slug });
-        return project.selectProject(input);
-      }
+      execute: (input, context) => selectProjectInMode(project, input, context)
     }),
     action({
       id: ACTION_READ_ENV,
@@ -378,6 +392,7 @@ function createProjectActions({ project } = {}) {
 }
 
 export {
+  announceNoProjectChange,
   ACTION_REPOSITORY_REMOTE,
   ACTION_READ_ONBOARDING,
   ACTION_APPLY_TEMPLATE,

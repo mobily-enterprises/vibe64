@@ -9,7 +9,7 @@ import { runtimeConfigViewRecord } from "../../packages/vibe64-core/src/server/r
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function projectService(targetRoot, options = {}) {
-  return createService({
+  return createService({ logger: console,
     env: {},
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),

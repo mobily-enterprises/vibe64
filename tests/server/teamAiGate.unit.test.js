@@ -173,7 +173,7 @@ test("a practice project follows the same rule", async (t) => {
 test("the owner's project list says whether team members can open projects", async (t) => {
   const ready = { value: false };
   const { context } = await withWorkspace(t, ready);
-  const project = createProjectService({ projectContext: context });
+  const project = createProjectService({ logger: console, projectContext: context });
   const listed = await project.listProjects({ actor: OWNER });
   assert.deepEqual(listed.teamAi, { available: true, ownerName: "Tony", memberCount: 2, ready: false });
   ready.value = true;

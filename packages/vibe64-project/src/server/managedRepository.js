@@ -16,16 +16,17 @@ const DEFAULT_MANAGED_GIT_BRANCH = "main";
  * @param {object} dependencies
  * @param {typeof initializePublicManagedProject} [dependencies.initializeManagedProject]
  * @param {StudioProjectContext} dependencies.projectContext
- * @param {ProjectService | null} [dependencies.projectService]
- * @param {((request: { projectContextRoot: string, projectService: ProjectService | null, slug: string }) => Promise<object>) | null} [dependencies.configureProject]
+ * @param {ProjectService | null} dependencies.projectService
+ * @param {((request: { projectContextRoot: string, projectService: ProjectService | null, slug: string }) => Promise<object>) | null} dependencies.configureProject
  *   the defaults a host adds to each new project record
  */
 function createManagedProjectRepositoryService({ initializeManagedProject = initializePublicManagedProject,
-  projectContext, projectService = null, configureProject = null } = {}) {
+  projectContext, projectService, configureProject }) {
   // Internal preparation options are separate from action and HTTP input.
   async function createManagedGitProject(input = {}, { initializeProject } = {}) {
     assertProjectEffectAdmission();
     const slug = normalizeProjectSlug(input?.slug || projectSlugFromName(input?.name || "New Project"));
+    // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
     const scope = projectContext.currentPracticeProjectScope?.();
     const projectContextRoot = scope
       ? (await projectContext.readWorkspaceProjectState({ slug })).projectContextRoot
@@ -67,6 +68,7 @@ function createManagedProjectRepositoryService({ initializeManagedProject = init
         }
       };
     } catch (error) {
+      // readable-check: allow method-probe - optional operation: a project context without record discarding keeps the record
       if (created && typeof projectContext.discardWorkspaceProjectRecord === "function") {
         await projectContext.discardWorkspaceProjectRecord({
           slug
@@ -120,6 +122,7 @@ async function cleanupPreparedProjectDirectory(projectsRoot = "", projectContext
  * @param {object} [input]
  */
 async function readProjectForService(projectContext = {}, input = {}) {
+  // readable-check: allow method-probe - optional operation: a project context without project reads answers context_unavailable
   if (typeof projectContext?.readWorkspaceProject !== "function") {
     throw repositoryServiceError(
       "vibe64_project_context_unavailable",
@@ -151,9 +154,9 @@ function assertProjectRepositoryMode(project = {}, mode = "", message = "Project
 function assertProjectSessionAuthority(projectService = null, {
   requireSourceLock = false
 } = {}) {
-  if (
-    typeof projectService?.runInProjectContext !== "function" ||
-    typeof projectService?.createRuntime !== "function" ||
+  // readable-check: allow method-probe - optional operation: without the project service repository changes answer session_authority_unavailable
+  if (typeof projectService?.runInProjectContext !== "function" || typeof projectService?.createRuntime !== "function" ||
+    // readable-check: allow method-probe - optional operation: without the project service repository changes answer session_authority_unavailable
     (requireSourceLock && typeof projectService?.runProjectSourceExclusive !== "function")
   ) {
     throw repositoryServiceError(

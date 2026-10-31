@@ -13,7 +13,7 @@ const library = { name: "Example library", repository: "https://github.com/examp
 const composition = { name: "Editor", repository: "https://github.com/example/editor", relationship: "composition" };
 const customLibrary = { ...library, type: "custom", script: "tooling/prepare-native-worker.mjs" };
 function service(root, options = {}) {
-  return createService({ env: {}, projectContext: createStudioProjectContext({
+  return createService({ logger: console, env: {}, projectContext: createStudioProjectContext({
     explicitManagedSourceRoot: path.join(path.dirname(root), "managed-source"),
     explicitSystemRoot: path.join(path.dirname(root), "system"), explicitTargetRoot: root, home: path.dirname(root)
   }), inspectCollaboration: async () => ({ choices: {}, status: "defaulted" }),
@@ -66,7 +66,7 @@ test("Incoming integration checks fresh receiving write access and the existing 
     let permissions = { push: true };
     let archived = false;
     let checks = 0;
-    const project = createService({ env: {}, publishProjectChanged: async () => {}, projectContext: { ...context,
+    const project = createService({ logger: console, env: {}, publishProjectChanged: async () => {}, projectContext: { ...context,
       listProjects: async () => ({ currentProject: current, projects: [current] }) },
       inspectConnectedRepository: async (name, input) => {
         assert.equal(name, "example/library");
@@ -97,7 +97,7 @@ test("a contribution source reads only the receiving integration branch", async 
       repository: { mode: "github", defaultBranch: "release/main" }, githubRepository: { fullName: "Example/Library" } };
     const reads = [];
     let branch = { name: "release/main", commit: { sha: "a".repeat(40) } };
-    const project = createService({ env: {}, projectContext: { ...context,
+    const project = createService({ logger: console, env: {}, projectContext: { ...context,
       listProjects: async () => ({ currentProject: current, projects: [current] }) },
       inspectConnectedRepository: async () => ({ permissions: { push: true } }),
       inspectConnectedBranch: async (name, branchName) => { reads.push([name, branchName]); return branch; } });
@@ -212,7 +212,7 @@ test("hosted settings change only the exact session source, preserving the other
       explicitManagedSourceRoot: path.join(root, "sources"), explicitProjectsRoot: path.join(root, "projects"),
       explicitSystemRoot: path.join(root, "system"), home: root
     });
-    const project = createService({ env: {}, projectContext,
+    const project = createService({ logger: console, env: {}, projectContext,
       inspectCollaboration: async () => ({ choices: {}, status: "defaulted" }),
       inspectConnectedRepository: async () => ({ permissions: { push: true } }) });
     await project.createProject({ name: "Connections" });

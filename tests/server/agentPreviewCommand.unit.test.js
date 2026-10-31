@@ -1195,7 +1195,7 @@ test("managed browser and Playwright receive saved project secrets and reload th
     const sessionId = "browser-project-env";
     const runtimeRoot = path.join(root, "runtime-packs");
     const worktreePath = sourcePath(root, sessionId);
-    const projectService = createProjectService({
+    const projectService = createProjectService({ logger: console,
       env: {},
       projectContext: createStudioProjectContext({
         explicitTargetRoot: root,

@@ -838,7 +838,7 @@ for (const selectionSource of ["workspace", "explicit"]) {
         env: {},
         home: root
       });
-      const service = createProjectService({ env: {}, projectContext: context });
+      const service = createProjectService({ logger: console, env: {}, projectContext: context });
       await context.createWorkspaceProjectRecord({ slug });
       const selected = selectionSource === "workspace"
         ? await service.selectProject({ slug })
@@ -932,7 +932,7 @@ test("an older catalog listing cannot retire a newly created and selected projec
       assert.equal(context.hasSelection(), true);
       assert.equal(context.selectedProject.slug, "newly-selected-project");
       assert.equal(await readFile(currentRecordPath, "utf8"), currentMetadata);
-      const service = createProjectService({ env: {}, projectContext: context });
+      const service = createProjectService({ logger: console, env: {}, projectContext: context });
       const publicList = await service.listProjects();
       assert.equal(publicList.hasSelection, true);
       assert.equal(publicList.currentProject.path, currentTarget);
@@ -965,7 +965,7 @@ test("Studio project context accepts explicit targets without treating them as w
     await context.createWorkspaceProjectRecord({ slug: "removed-other-project" });
     await rm(path.join(projectsRoot, "removed-other-project"), { recursive: true });
     const listed = await context.listProjects();
-    const service = createProjectService({ env: {}, projectContext: context });
+    const service = createProjectService({ logger: console, env: {}, projectContext: context });
     const publicList = await service.listProjects();
 
     assert.equal(context.targetRoot, externalTarget);
@@ -1646,7 +1646,7 @@ test("local practice callback uses the same real record and Project ALS without 
     const { currentProjectRequestContext, runWithProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
     const context = await localPracticeContext(root);
     const working = context.targetRoot;
-    const project = createProjectService({ projectContext: context });
+    const project = createProjectService({ logger: console, projectContext: context });
     const training = trainingProvenance();
     const slug = practiceSlugOf(training);
     const workingBefore = await context.listProjects();
@@ -1864,7 +1864,7 @@ test("admitted practice capture retains only same-owner control after the fresh 
     const context = await localPracticeContext(root);
     const foreign = await localPracticeContext(root);
     const working = context.targetRoot;
-    const project = createProjectService({ projectContext: context });
+    const project = createProjectService({ logger: console, projectContext: context });
     const training = trainingProvenance();
     const slug = practiceSlugOf(training);
     let captured;
@@ -1919,7 +1919,7 @@ test("admitted practice capture retains only same-owner control after the fresh 
 test("hosted practice uses the same learning-space scope, outside the catalogue", async () => {
   await withTemporaryRoot(async root => {
     const context = hostedPracticeContext(root);
-    const project = createProjectService({ projectContext: context });
+    const project = createProjectService({ logger: console, projectContext: context });
     const training = trainingProvenance();
     const slug = practiceSlugOf(training);
     const practice = await createPracticeProject(context, training);
@@ -1979,7 +1979,7 @@ test("practice admission opens only the learner's own project on both hosts, for
       await assert.rejects(resolveProjectRequestContext({ projectContext: context,
         request: { params: { slug: "training-00000000000040008000000000000000" }, vibe64User: learner } }), deleted,
       "a practice slug outside the space is not found");
-      const project = createProjectService({ projectContext: context });
+      const project = createProjectService({ logger: console, projectContext: context });
       assert.equal((await project.runInProjectContext(slug, () => project.readCurrentProject(), { vibe64User: learner })).projectRoot,
         practice.projectRoot);
     });

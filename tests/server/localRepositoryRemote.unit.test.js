@@ -145,7 +145,7 @@ test("terminal configuration changes invalidate review; offline failures do not 
 test("hosted GitHub and managed repositories never invoke standalone Git controls", async () => {
   for (const mode of ["github", "managed_git"]) {
     const project = { repositoryMode: mode, sourceRoot: "/must-not-run" };
-    const options = { runCommand: () => { throw new Error("Unexpected Git execution"); } };
+    const options = { runCommand: () => { throw new Error("Unexpected Git execution"); }, logger: console };
     assert.deepEqual(await localRepositoryRemote(project, {}, options), { ok: true, supported: false });
     for (const action of ["fetch", "pull", "push", "configure"]) {
       await assert.rejects(localRepositoryRemote(project, { action }, options), { code: "vibe64_remote_local_only" });
@@ -302,7 +302,7 @@ test("a folder without Git is a calm state; version control starts only on reque
   const source = path.join(root, "project");
   await exec("mkdir", [source]);
   const project = { sourceRoot: source, projectRuntimeRoot: path.join(root, "runtime"), repositoryMode: "local_source", slug: "plain" };
-  const call = (input = {}) => localRepositoryRemote(project, input, { runCommand: plainRun });
+  const call = (input = {}) => localRepositoryRemote(project, input, { runCommand: plainRun, logger: console });
   assert.deepEqual(await call({ action: "fetch", background: true }), { ok: true, supported: true, repository: false });
   await assert.rejects(call({ action: "push", review: {} }), { code: "vibe64_remote_not_repository" });
   const started = await call({ action: "init" });
@@ -316,7 +316,7 @@ test("missing Git and failed commit signing read as plain sentences", async (t) 
   const f = await fixture(t);
   const missing = (request) => runCaptureCommand(`missing-${request.command}`, request.args, { cwd: request.cwd, env, timeout: 10_000 })
     .then((result) => ({ ...result, error: String(result.error || "").replace(/missing-git/gu, "git") }));
-  await assert.rejects(localRepositoryRemote(f.project, { action: "fetch" }, { runCommand: missing }),
+  await assert.rejects(localRepositoryRemote(f.project, { action: "fetch" }, { runCommand: missing, logger: console }),
     (error) => error.code === "vibe64_git_missing" && /^Git isn't installed on this computer\./u.test(error.message));
 
   await f.commit(f.peer, "incoming.txt", "remote\n"); await git(f.peer, "push");
@@ -325,7 +325,7 @@ test("missing Git and failed commit signing read as plain sentences", async (t) 
   const signing = (request) => runCommand({ ...request, env: { ...(request.env || {}),
     GIT_CONFIG_COUNT: "2", GIT_CONFIG_KEY_0: "commit.gpgsign", GIT_CONFIG_VALUE_0: "true",
     GIT_CONFIG_KEY_1: "gpg.program", GIT_CONFIG_VALUE_1: "false" } });
-  await assert.rejects(localRepositoryRemote(f.project, { action: "pull", merge: true, review: state.review }, { runCommand: signing }),
+  await assert.rejects(localRepositoryRemote(f.project, { action: "pull", merge: true, review: state.review }, { runCommand: signing, logger: console }),
     (error) => error.code === "vibe64_git_signing_failed" && /sign every commit/u.test(error.message));
   assert.equal(await git(f.source, "status", "--porcelain"), "");
 });

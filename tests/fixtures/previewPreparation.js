@@ -71,7 +71,7 @@ require("node:http").createServer((_request, response) => {
   response.end("<h1>Preview works: " + process.env.PREVIEW_VALUE + "</h1>");
 }).listen(Number(process.argv[3]), process.argv[2]);
 `);
-  const project = createProjectService({
+  const project = createProjectService({ logger: console,
     env: {},
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(root, "managed"),

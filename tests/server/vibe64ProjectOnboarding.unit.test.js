@@ -27,7 +27,7 @@ async function fixture(targetRoot, options = {}) {
   await exec("git", ["-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--quiet", "-m", "Starter"], { cwd: templateRoot });
   const catalog = { schemaVersion: 1, templates: [{ id: "nodejs/public", technology: "nodejs", name: "Test", repository: templateRoot, branch: "public" }] };
   const templateSources = [{ namespace: "test", catalog }];
-  const service = createService({
+  const service = createService({ logger: console,
     env: {},
     ...options,
     projectContext: createStudioProjectContext({

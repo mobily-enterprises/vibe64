@@ -14,7 +14,7 @@ import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/s
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 import { initializeGenesisProject } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
-import { createVibe64ProjectChangedPublisher } from "../../packages/vibe64-project/src/server/actions.js";
+import { createVibe64ProjectChangedPublisher } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
@@ -161,7 +161,7 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     const events = [];
     const projects = ["first", "second"].map((slug) => ({ slug, path: path.join(root, slug),
       githubRepository: { fullName: `owner/${slug}` }, repositoryMode: "local_source" }));
-    const projectService = createProjectService({
+    const projectService = createProjectService({ logger: console,
       projectContext: {
         targetRoot: projects[0].path,
         requestContextMatchesSelectedProject: () => false,

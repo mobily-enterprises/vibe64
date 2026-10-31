@@ -4,6 +4,8 @@ import { access } from "node:fs/promises";
 import { gitFailureError, runVibe64Command } from "@local/vibe64-execution/server";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
 // Freshness is only a transport observation. Git owns the configuration and refs.
 const observations = new Map();
 
@@ -19,9 +21,17 @@ function configurationId(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
 
+/**
+ * @param {object} project
+ * @param {object} [input]
+ * @param {object} options
+ * @param {typeof runVibe64Command} [options.runCommand]
+ * @param {RuntimeLogger} options.logger
+ * @param {typeof runProjectSourceExclusive} [options.runExclusive]
+ */
 async function localRepositoryRemote(project, input = {}, {
   runCommand = runVibe64Command,
-  logger = null,
+  logger,
   runExclusive = runProjectSourceExclusive
 } = {}) {
   const action = input.action || "status";
@@ -218,13 +228,13 @@ async function localRepositoryRemote(project, input = {}, {
       // Only on the person's click: Vibe64 never starts version control by itself.
       await git(["init", "--initial-branch=main"]);
       observations.delete(root);
-      logger?.info?.({ event: "vibe64.remote.initialized", operationId, project: project.slug }, "Version control started in the opened folder.");
+      logger.info({ event: "vibe64.remote.initialized", operationId, project: project.slug }, "Version control started in the opened folder.");
       return { ...await publicState(await readRepository()), operationId, remoteChanged: true };
     }
     if (action === "init") throw failure("This folder already uses Git.", "vibe64_remote_already_repository");
     const state = await readRepository();
     if (action === "status") return publicState(state);
-    logger?.info?.({ event: "vibe64.remote.started", operationId, action, project: project.slug, branch: state.branch }, "Git remote operation started.");
+    logger.info({ event: "vibe64.remote.started", operationId, action, project: project.slug, branch: state.branch }, "Git remote operation started.");
     try {
       if (action === "fetch") {
         const prior = observations.get(root);
@@ -289,13 +299,13 @@ async function localRepositoryRemote(project, input = {}, {
       }
       const result = await publicState(await readRepository());
       if (result.error) {
-        logger?.warn?.({ event: "vibe64.remote.failed", operationId, action, code: "vibe64_remote_fetch_failed" }, "Git remote refresh failed.");
+        logger.warn({ event: "vibe64.remote.failed", operationId, action, code: "vibe64_remote_fetch_failed" }, "Git remote refresh failed.");
       } else {
-        logger?.info?.({ event: "vibe64.remote.completed", operationId, action, branch: result.branch, head: result.head }, "Git remote operation completed.");
+        logger.info({ event: "vibe64.remote.completed", operationId, action, branch: result.branch, head: result.head }, "Git remote operation completed.");
       }
       return { ...result, operationId, remoteChanged: ["pull", "push", "configure", "switch", "create"].includes(action) };
     } catch (error) {
-      logger?.warn?.({ event: "vibe64.remote.failed", operationId, action, code: error.code }, "Git remote operation failed.");
+      logger.warn({ event: "vibe64.remote.failed", operationId, action, code: error.code }, "Git remote operation failed.");
       throw error;
     }
   }, { operation: `remote:${action}` });

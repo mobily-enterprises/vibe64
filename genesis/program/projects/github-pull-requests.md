@@ -9,7 +9,7 @@ work as a new PR. GitHub remains the PR store.
 - Main: `packages/vibe64-project/src/server/githubPullRequests.js`
 - `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/registerRoutes.js`
-- `packages/vibe64-project/src/server/actions.js`
+- `packages/vibe64-project/src/server/projectActions.js`
 - `packages/vibe64-project/src/server/assistantContracts.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-core/src/server/projectRepository.js`

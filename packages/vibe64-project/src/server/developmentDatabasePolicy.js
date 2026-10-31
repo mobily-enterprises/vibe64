@@ -1,12 +1,9 @@
 import {
   normalizeDevelopmentDatabaseScope
 } from "@local/vibe64-core/server/studioProjectContext";
+import { text } from "./trimmedText.js";
 
 const DEFAULT_MAX_OPEN_SESSIONS = 3;
-
-function text(value = "") {
-  return String(value || "").trim();
-}
 
 function normalizedOpenSessions(value = []) {
   return (Array.isArray(value) ? value : []).map((session = {}) => ({
