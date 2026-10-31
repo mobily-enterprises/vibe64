@@ -259,7 +259,25 @@ async function inspectSessionSource(runtime, session = {}) {
   }
 }
 
+/** @typedef {ReturnType<typeof createVibe64SessionStore>} Vibe64SessionStore */
+
 class Vibe64SessionRuntime {
+  /**
+   * @param {object} options
+   * @param {() => Date | string | number} [options.clock]
+   * @param {(context: object) => Promise<unknown>} [options.createSessionSource]
+   *   attaches a source directory to each new session
+   * @param {boolean} [options.inspectSourceByDefault]
+   * @param {object | null} [options.learningScope] the admitted learning session scope
+   * @param {string} [options.projectContextRoot]
+   * @param {string} [options.projectRuntimeRoot]
+   * @param {string} [options.projectSessionSourceRoot]
+   * @param {object} [options.promptEnvironment]
+   * @param {typeof renderGenesisPrompt} [options.promptRenderer]
+   * @param {boolean} [options.sourceInspectionAvailable]
+   * @param {object | null} [options.sourceInspectionError]
+   * @param {Vibe64SessionStore} [options.store]
+   */
   constructor({
     clock = undefined,
     createSessionSource = null,
@@ -311,6 +329,13 @@ class Vibe64SessionRuntime {
     });
   }
 
+  /**
+   * @param {object} request
+   * @param {object} [request.metadata]
+   * @param {string} [request.sessionId]
+   * @param {object} [request.sourceContext] what createSessionSource receives besides the session
+   * @param {string} [request.status]
+   */
   async createSession({
     metadata = {},
     sessionId = "",
@@ -363,6 +388,18 @@ class Vibe64SessionRuntime {
     return this.sessionView(session);
   }
 
+  /**
+   * @param {object} request
+   * @param {string} [request.actorDisplayName]
+   * @param {string} [request.actorId]
+   * @param {string} [request.confirmedAt]
+   * @param {object} [request.metadata]
+   * @param {string} [request.renewalId]
+   * @param {string} [request.renewedFrom]
+   * @param {string} [request.sessionId]
+   * @param {object} [request.sourceContext]
+   * @param {string} [request.startedAt]
+   */
   async createRenewalSession({
     actorDisplayName = "",
     actorId = "",

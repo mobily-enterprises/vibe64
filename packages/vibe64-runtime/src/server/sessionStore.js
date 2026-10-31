@@ -919,6 +919,18 @@ function genuineLearningBinding(raw, sessionId) {
   } catch { return false; }
 }
 
+/**
+ * @param {object} options
+ * @param {() => Date | string | number} [options.clock]
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger | null} [options.logger]
+ * @param {object | null} [options.learningScope] the admitted learning session scope
+ * @param {(step: object) => Promise<unknown>} [options.onRenewalArchiveCommitStep]
+ * @param {(step: object) => Promise<unknown>} [options.onRenewalQuiesceStep]
+ * @param {string} [options.projectContextRoot]
+ * @param {string} [options.projectRuntimeRoot]
+ * @param {string} [options.projectSessionSourceRoot]
+ * @param {string} [options.sessionLockProcessPlatform]
+ */
 function createVibe64SessionStore({
   clock = undefined,
   logger = null,
@@ -4243,6 +4255,18 @@ function createVibe64SessionStore({
     });
   }
 
+  /**
+   * @param {object} request
+   * @param {string} [request.actorDisplayName]
+   * @param {string} [request.actorId]
+   * @param {string} [request.confirmedAt]
+   * @param {object} [request.metadata]
+   * @param {string} [request.renewalId]
+   * @param {string} [request.renewedFrom]
+   * @param {string} [request.runtimeKind]
+   * @param {string} [request.sessionId]
+   * @param {string} [request.startedAt]
+   */
   async function createRenewalPendingSession({
     actorDisplayName = "",
     actorId = "",
