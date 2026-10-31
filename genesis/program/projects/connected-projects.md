@@ -6,7 +6,9 @@ source editing.
 
 ## Sources
 
-- Main: `packages/vibe64-project/src/server/service.js`
+- Main: `packages/vibe64-project/src/server/projectSettings.js`
+- `packages/vibe64-project/src/server/projectRepositories.js`
+- `packages/vibe64-project/src/server/service.js`
 - `packages/vibe64-project/src/server/connectedProjects.js`
 - `packages/vibe64-genesis/src/shared/connectedPackageTypes.js`
 - `packages/vibe64-project/src/server/connectedDevelopment.js`

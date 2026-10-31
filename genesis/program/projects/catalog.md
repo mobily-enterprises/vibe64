@@ -6,6 +6,9 @@ workspace.
 ## Sources
 
 - Main: `packages/vibe64-project/src/server/service.js`
+- `packages/vibe64-project/src/server/projectSelection.js`
+- `packages/vibe64-project/src/server/projectOnboarding.js`
+- `packages/vibe64-project/src/server/projectDevelopmentDatabase.js`
 - `packages/vibe64-project/src/server/projectActions.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`

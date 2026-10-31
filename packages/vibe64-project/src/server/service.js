@@ -1,65 +1,11 @@
-import { githubRepositoryFullName, normalizeConnectedProjects, readConnectedProjects, saveConnectedProjects } from "./connectedProjects.js";
-import { inspectConnectedDevelopmentInputs, inspectConnectedWorkspaceSetup, materializeConnectedDevelopmentInputs } from "./connectedDevelopment.js";
-import path from "node:path";
-import { createHash } from "node:crypto";
-import { githubApi, projectGithubFullName, requireGithubRepository } from "./githubApi.js";
-import { githubIssues } from "./githubIssues.js";
-import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "./githubPullRequests.js";
-import { localRepositoryRemote } from "./localRepositoryRemote.js";
-import { repositoryBranches } from "./repositoryBranches.js";
-import { readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
+import { githubApi, projectGithubFullName } from "./githubApi.js";
+import { readProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
 import { readTeamAiStatus } from "@local/vibe64-core/server/teamAiGate";
-import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import {
-  agentWriteBusyError,
-  runVibe64AgentWriteExclusive
-} from "@local/vibe64-runtime/server/agentWriteLock";
-import { workspaceSetupStateFromMetadata } from "@local/vibe64-runtime/server/workspaceSetupState";
-import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
-import {
-  RUNTIME_CONFIG_OWNERS,
-  RUNTIME_CONFIG_PHASES,
-  RUNTIME_CONFIG_SCOPES,
-  normalizeRuntimeConfigKey,
-  normalizeRuntimeConfigRecord,
-  resolveRuntimeConfig,
-  runtimeConfigDotenvFile,
-  runtimeConfigEnv,
-  runtimeConfigEnvViewModel,
-  runtimeConfigKeyIsVibe64Reserved,
-  runtimeConfigRecordsForScope
-} from "@local/vibe64-core/server/runtimeConfig";
-import {
-  readEnvUserValues,
-  saveEnvUserValues
-} from "@local/vibe64-core/server/envUserValues";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import {
-  assertProjectDirectoryUsable,
-  normalizeDevelopmentDatabaseName,
-  normalizeDevelopmentDatabaseScope
-} from "@local/vibe64-core/server/studioProjectContext";
-import {
-  captureProjectRequestContext,
-  currentProjectRequestContext,
-  currentProjectRuntimeRoot,
-  currentProjectSessionSourceRoot,
-  currentProjectSourceConfigRoot,
-  currentProjectSourceRoot,
-  currentProjectTargetRoot,
-  runWithProjectRequestContext,
-  runWithResolvedProjectRequestContext
-} from "@local/vibe64-core/server/projectRequestContext";
-import { resolveSourceConfigRoot } from "@local/vibe64-core/server/projectState";
-import {
-  readProjectPromptHints,
-  saveProjectPromptHints
-} from "@local/vibe64-core/server/projectPromptHints";
+import { readProjectPromptHints } from "@local/vibe64-core/server/projectPromptHints";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  inspectVibe64ConnectedDevelopment,
-  inspectVibe64WorkspaceSetup,
   inspectGenesisCollaboration,
   inspectGenesisEngineering,
   inspectGenesisEnvironment,
@@ -70,52 +16,29 @@ import {
   setGenesisEngineeringProfile
 } from "@local/vibe64-genesis/server";
 import {
-  readPreviewApplicationIdentities as readStoredPreviewApplicationIdentities,
   savePreviewApplicationIdentities as saveStoredPreviewApplicationIdentities
 } from "./previewApplicationIdentities.js";
-import {
-  materializeProjectEnvironmentFiles,
-  projectEnvironmentFilesAreCurrent
-} from "./projectEnvironmentFiles.js";
-import {
-  applicationDatabaseToolEnvironment,
-  bindingValuePresent,
-  localDatabaseServerDeclarations,
-  normalizeResourceEnvironment,
-  requiredAlternative,
-  resourceKindIsDatabase,
-  resourceSemanticIsSecret,
-  satisfiedAlternative
-} from "./resourceEnvironment.js";
-import {
-  SAVED_ENV_VALUE_SOURCE,
-  assertSavedEnvValueProvider,
-  savedEnvValueRecords
-} from "./savedEnvValues.js";
-import {
-  developmentDatabasePolicy as resolveDevelopmentDatabasePolicy
-} from "./developmentDatabasePolicy.js";
+import { assertSavedEnvValueProvider } from "./savedEnvValues.js";
 import {
   runProjectSessionPolicyExclusive as runProjectSessionPolicyMutationExclusive,
   runProjectSourceExclusive as runProjectSourceMutationExclusive
 } from "./projectSourceMutationLock.js";
 import { announceNoProjectChange } from "./projectActions.js";
+import { createProjectDevelopmentDatabase } from "./projectDevelopmentDatabase.js";
+import { createProjectEnvironment } from "./projectEnvironment.js";
+import { createProjectOnboarding } from "./projectOnboarding.js";
+import { createProjectRepositories } from "./projectRepositories.js";
+import { projectResult } from "./projectResult.js";
+import { createProjectSelection } from "./projectSelection.js";
+import { createProjectServiceSlots } from "./projectServiceSlots.js";
+import { createProjectSessionEnvironment } from "./projectSessionEnvironment.js";
+import { createProjectSessionWork } from "./projectSessionWork.js";
+import { createProjectSettings } from "./projectSettings.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
 /** @typedef {ReturnType<typeof import("./projectActions.js").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
-
-function envScope(input = {}) {
-  return input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
-}
-
-function projectResult(operation) {
-  return vibe64Result(operation, {
-    fallbackCode: "vibe64_project_request_failed",
-    fallbackMessage: "Vibe64 project request failed."
-  });
-}
 
 function catalogUnavailable() {
   return {
@@ -124,134 +47,6 @@ function catalogUnavailable() {
       message: "Project catalog operations are not available in local editor mode."
     }],
     ok: false
-  };
-}
-
-function publicProject(project = {}, {
-  context = null,
-  selected = false
-} = {}) {
-  const projectRoot = context?.targetRoot || project.projectRoot || project.path || "";
-  const slug = context?.slug || project.slug || project.name || path.basename(projectRoot);
-  return {
-    canonicalRepositoryPath: project.canonicalRepositoryPath || "",
-    allowSharedDatabaseSessions: project.allowSharedDatabaseSessions === true,
-    developmentDatabaseScope: normalizeDevelopmentDatabaseScope(
-      project.developmentDatabaseScope
-    ),
-    developmentDatabaseName: normalizeDevelopmentDatabaseName(
-      project.developmentDatabaseName
-    ),
-    githubMirrorPath: project.githubMirrorPath || "",
-    ...(project.githubRepository ? { githubRepository: project.githubRepository } : {}),
-    name: slug,
-    path: projectRoot,
-    projectRecordPath: context?.projectRecordPath || project.projectRecordPath || "",
-    projectRoot,
-    projectRuntimeRoot: context?.projectRuntimeRoot || project.projectRuntimeRoot || "",
-    projectSessionSourceRoot: context?.projectSessionSourceRoot || project.projectSessionSourceRoot || "",
-    ...(project.repository ? { repository: project.repository } : {}),
-    repositoryMode: project.repositoryMode || project.repository?.mode || "",
-    runtime: project.runtime || null,
-    selected: Boolean(selected),
-    slug,
-    source: project.source || "workspace",
-    sourceConfigRoot: context?.sourceConfigRoot || project.sourceConfigRoot || "",
-    sourceRoot: context?.sourceRoot || project.sourceRoot || ""
-  };
-}
-
-function stackResourceRecords(resources = [], environment = {}, defaults = {}) {
-  const records = new Map();
-  for (const declaration of resources) {
-    const alternative = requiredAlternative(declaration.resource, environment);
-    for (const [semantic, key] of Object.entries(alternative?.bindings || {})) {
-      // A Stack default already supplies this binding; its editable default
-      // record stays visible instead of an empty required one shadowing it.
-      if (records.has(key) || Object.hasOwn(defaults, key)) {
-        continue;
-      }
-      records.set(key, {
-        editable: true,
-        key,
-        materialize: false,
-        owner: "user",
-        requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
-        scope: RUNTIME_CONFIG_SCOPES.DEV,
-        secret: resourceSemanticIsSecret(semantic) ? true : undefined,
-        source: `genesis-stack:${declaration.component}:${declaration.resource.id}`,
-        value: ""
-      });
-    }
-  }
-  return [...records.values()];
-}
-
-function environmentRecord(value = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-  return Object.fromEntries(Object.entries(value)
-    .map(([key, entry]) => [String(key || "").trim(), String(entry ?? "")])
-    .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/u.test(key)));
-}
-
-function environmentRecords(environment = {}, {
-  editable = false,
-  owner = RUNTIME_CONFIG_OWNERS.SYSTEM,
-  secretKeys = new Set(),
-  source = "system",
-  sources = {}
-} = {}) {
-  return Object.entries(environmentRecord(environment)).map(([key, value]) => ({
-    editable,
-    key,
-    owner,
-    requiredFor: [],
-    scope: RUNTIME_CONFIG_SCOPES.DEV,
-    secret: secretKeys.has(key) ? true : undefined,
-    source: sources[key] || source,
-    value,
-    valuePresent: true
-  }));
-}
-
-function declaredEnvironmentDefaults(defaults = []) {
-  if (!Array.isArray(defaults)) {
-    return {};
-  }
-  return environmentRecord(Object.fromEntries(defaults
-    .filter((entry) => entry && typeof entry.name === "string" && typeof entry.value === "string")
-    .map((entry) => [entry.name, entry.value])));
-}
-
-function genesisEnvironmentIsUnconfigured(error) {
-  return error?.code === "STACK_REQUIRED";
-}
-
-function projectEnvironmentResult(resolved, input, userRecords) {
-  if (input.includeResourceConfiguration !== true) return resolved.projectEnvironment;
-  const values = [];
-  const userByKey = new Map(runtimeConfigRecordsForScope([...(resolved.savedRecords || []), ...userRecords],
-    envScope(input),
-    { target: input.target }).map((record) => [record.key, record]));
-  for (const [key, value] of Object.entries(resolved.projectEnvironment)) {
-    // Managed resource addresses/credentials vary by session, not app size.
-    if (Object.hasOwn(resolved.platformEnvironment || {}, key)) continue;
-    const record = userByKey.get(key) || normalizeRuntimeConfigRecord({ key, value });
-    if (!record.secret) values.push([key, value]);
-  }
-  const resources = resolved.resources.map(({ component, resource }) => [
-    component, resource.id, resource.kind,
-    Object.entries(satisfiedAlternative(resource, resolved.effectiveEnvironment)?.bindings || {}).sort(),
-    Object.entries(resource.optionalBindings || {}).sort()
-  ]).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
-  return {
-    environment: resolved.projectEnvironment,
-    ...(Object.hasOwn(resolved, "resourcePreparation") ? { resourcePreparation: resolved.resourcePreparation } : {}),
-    resourceConfigurationFingerprint: resolved.environmentInspectionFailed ? null : createHash("sha256")
-      .update(JSON.stringify({ values: values.sort(([left], [right]) => left.localeCompare(right)), resources }))
-      .digest("hex")
   };
 }
 
@@ -292,1006 +87,32 @@ function createService({
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile
 }) {
-  let resourceEnvironmentProvider = null;
-  let savedEnvValueProvider = null;
-  let templateApplicationObserver = null;
+  const slots = createProjectServiceSlots();
+  const selection = createProjectSelection({ logger, projectContext });
+  const environment = createProjectEnvironment({ env, inspectEnvironment, selection, slots });
+  const sessionWork = createProjectSessionWork({ environment, selection });
+  const developmentDatabase = createProjectDevelopmentDatabase({ projectContext, selection, sessionWork, slots });
+  const projectSettings = createProjectSettings({
+    inspectCollaboration, inspectConnectedRepository, inspectEngineering, selection, sessionWork, setCollaboration, setEngineeringProfile
+  });
+  const onboarding = createProjectOnboarding({ applyTemplate, environment, inspectProject, listTemplates, selection, sessionWork });
+  const sessionEnvironment = createProjectSessionEnvironment({ environment, selection, sessionWork, slots });
+  const repositories = createProjectRepositories({
+    env, inspectConnectedBranch, inspectConnectedRepository, logger, publishProjectChanged, projectSettings, selection
+  });
 
-  function selectedTargetRoot() {
-    return String(currentProjectTargetRoot() || projectContext.targetRoot || "").trim();
-  }
-
-  function requireSelectedTargetRoot() {
-    const target = selectedTargetRoot();
-    if (target) {
-      return target;
-    }
-    return projectContext.requireSelectedTargetRoot();
-  }
-
-  // The project's address: the request's slug, else the selected project's
-  // (a local directory's name normalized, never the raw directory name).
-  function currentProjectSlug() {
-    return String(currentProjectRequestContext()?.slug || projectContext.selectedProject?.slug || "").trim();
-  }
-
-  function serviceDataRoot() {
-    return String(projectContext.serviceDataRoot || "").trim();
-  }
-
-  function selectedSourceRoot() {
-    const requestSource = currentProjectSourceRoot();
-    if (requestSource) {
-      return requestSource;
-    }
-    const target = selectedTargetRoot();
-    if (!target) {
-      return "";
-    }
-    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
-    return typeof projectContext.sourceRootForTarget === "function"
-      ? projectContext.sourceRootForTarget(target)
-      : "";
-  }
-
-  function selectedSourceConfigRoot() {
-    const requestRoot = currentProjectSourceConfigRoot();
-    if (requestRoot) {
-      return requestRoot;
-    }
-    const sourceRoot = selectedSourceRoot();
-    if (!sourceRoot) {
-      return "";
-    }
-    return resolveSourceConfigRoot({
-      sourceRoot
-    });
-  }
-
-  function selectedProjectRuntimeRoot() {
-    const requestRoot = currentProjectRuntimeRoot();
-    if (requestRoot) {
-      return requestRoot;
-    }
-    const target = selectedTargetRoot();
-    if (!target) {
-      return "";
-    }
-    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
-    if (typeof projectContext.projectRuntimeRootForTarget === "function") {
-      return projectContext.projectRuntimeRootForTarget(target);
-    }
-    return "";
-  }
-
-  function selectedSessionSourceRoot() {
-    const requestRoot = currentProjectSessionSourceRoot();
-    if (requestRoot) {
-      return requestRoot;
-    }
-    const target = selectedTargetRoot();
-    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
-    return target && typeof projectContext.projectSessionSourceRootForTarget === "function"
-      ? projectContext.projectSessionSourceRootForTarget(target)
-      : "";
-  }
-
-  function sessionStore() {
-    const target = requireSelectedTargetRoot();
-    return createVibe64SessionStore({
-      logger,
-      projectContextRoot: target,
-      projectRuntimeRoot: selectedProjectRuntimeRoot(),
-      projectSessionSourceRoot: selectedSessionSourceRoot()
-    });
-  }
-
-  async function sourceForInput(input = {}) {
-    const sessionId = String(input.sessionId || "").trim();
-    if (!sessionId) {
-      const sourceRoot = selectedSourceRoot();
-      return {
-        label: sourceRoot ? "Standalone source" : "Project metadata",
-        rootKind: sourceRoot ? "standalone-source" : "metadata-only",
-        sessionId: "",
-        sourceRoot
-      };
-    }
-    return {
-      label: "Session source",
-      rootKind: "session-source",
-      sessionId,
-      sourceRoot: sessionSourcePath(await sessionForInput(input, sessionId))
-    };
-  }
-
-  // Internal orchestration may already hold a session record obtained
-  // through a narrower capability than the public store reader (for
-  // example, a renewal successor before it becomes visible). Reuse only an
-  // exact-id record; ordinary callers still cross the public read boundary.
-  async function sessionForInput(input = {}, sessionId = "") {
-    const providedSessionId = String(input.session?.sessionId || input.session?.id || "").trim();
-    return providedSessionId === sessionId
-      ? input.session
-      : sessionStore().readSession(sessionId);
-  }
-
-  async function runSessionSourceWorkExclusive(input = {}, operation, operationName = "project-source-write", {
-    waitMs = 0
-  } = {}) {
-    if (typeof operation !== "function") {
-      throw new TypeError("Session source work requires an operation.");
-    }
-    const sessionId = String(input.sessionId || "").trim();
-    if (!sessionId) {
-      return operation();
-    }
-    const runtime = await createRuntime({
-      inspectSource: false
-    });
-    const exclusive = await runVibe64AgentWriteExclusive(
-      runtime,
-      sessionId,
-      operation,
-      { operation: operationName, waitMs }
-    );
-    if (!exclusive.acquired) throw agentWriteBusyError(exclusive.value || undefined);
-    return exclusive.value;
-  }
-
-  async function userEnvRecords() {
-    return (await readEnvUserValues({
-      projectRuntimeRoot: selectedProjectRuntimeRoot()
-    })).records;
-  }
-
-  // Values the host supplies because the person linked a saved value to a
-  // Development Env variable. A failing provider fails the read instead of
-  // silently dropping values.
-  async function savedEnvRecords(input = {}) {
-    const scope = envScope(input);
-    if (!savedEnvValueProvider || scope !== RUNTIME_CONFIG_SCOPES.DEV) return [];
-    return savedEnvValueRecords(savedEnvValueProvider, {
-      projectContextRoot: selectedTargetRoot(),
-      projectRuntimeRoot: selectedProjectRuntimeRoot(),
-      projectSlug: currentProjectSlug()
-    });
-  }
-
-  async function resolvedProjectEnvironment(input = {}, userRecords = [], {
-    provisionResources = false
-  } = {}) {
-    const source = await sourceForInput(input);
-    const sourceRoot = source.sourceRoot;
-    const savedRecords = await savedEnvRecords(input);
-    const envOptions = { scope: envScope(input), target: input.target };
-    // Typed values, then linked saved values over them.
-    const personEnvironment = {
-      ...runtimeConfigEnv(userRecords, envOptions),
-      ...runtimeConfigEnv(savedRecords, envOptions)
-    };
-    if (!sourceRoot) {
-      return {
-        databaseToolEnvironment: null,
-        effectiveEnvironment: {
-          ...env,
-          ...personEnvironment
-        },
-        environmentFiles: [],
-        projectEnvironment: personEnvironment,
-        platformEnvironmentSecrets: new Set(),
-        platformEnvironmentSources: {},
-        resources: [],
-        resourcesPrepared: true,
-        savedRecords,
-        source,
-        warning: ""
-      };
-    }
-    let declaration;
-    try {
-      declaration = await inspectEnvironment({
-        environment: {
-          ...env,
-          ...personEnvironment
-        },
-        projectRoot: sourceRoot
-      });
-    } catch (error) {
-      return {
-        databaseToolEnvironment: null,
-        environmentInspectionFailed: !genesisEnvironmentIsUnconfigured(error),
-        effectiveEnvironment: {
-          ...env,
-          ...personEnvironment
-        },
-        environmentFiles: [],
-        projectEnvironment: personEnvironment,
-        platformEnvironmentSecrets: new Set(),
-        platformEnvironmentSources: {},
-        resources: [],
-        resourcesPrepared: true,
-        savedRecords,
-        source,
-        warning: genesisEnvironmentIsUnconfigured(error)
-          ? ""
-          : String(error?.message || "")
-      };
-    }
-    const developmentDatabase = resourceEnvironmentProvider && source.sessionId
-      ? await currentDevelopmentDatabaseConfiguration()
-      : null;
-    const environmentForResources = provisionResources
-      ? resourceEnvironmentProvider?.environmentForResources
-      : resourceEnvironmentProvider?.environmentForProvisionedResources;
-    if (developmentDatabase && typeof environmentForResources !== "function") {
-      throw new TypeError(
-        provisionResources
-          ? "Vibe64 resource environment provider must expose environmentForResources()."
-          : "Vibe64 resource environment provider must expose environmentForProvisionedResources()."
-      );
-    }
-    const provided = developmentDatabase
-      ? await environmentForResources.call(resourceEnvironmentProvider, {
-          components: declaration.components,
-          ...developmentDatabase,
-          projectRuntimeRoot: selectedProjectRuntimeRoot(),
-          resources: declaration.resources,
-          serviceDataRoot: serviceDataRoot(),
-          sessionId: source.sessionId,
-          projectContextRoot: selectedTargetRoot(),
-          sourceRoot
-        })
-      : {};
-    const contribution = developmentDatabase
-      ? normalizeResourceEnvironment(declaration.resources, provided, {
-          allowUnprepared: !provisionResources
-        })
-      : {
-          databaseToolEnvironment: null,
-          environment: {},
-          secretKeys: new Set(),
-          sources: {}
-        };
-    const platformEnvironment = contribution.environment;
-    const defaultEnvironment = declaredEnvironmentDefaults(declaration.environmentDefaults);
-    // A managed resource binding always wins over a linked saved value.
-    const projectEnvironment = {
-      ...defaultEnvironment,
-      ...personEnvironment,
-      ...platformEnvironment
-    };
-    return {
-      defaultEnvironment,
-      databaseToolEnvironment: contribution.databaseToolEnvironment,
-      ...(Object.hasOwn(contribution, "resourcePreparation") ? { resourcePreparation: contribution.resourcePreparation } : {}),
-      effectiveEnvironment: {
-        ...env,
-        ...projectEnvironment
-      },
-      environmentFiles: declaration.files,
-      platformEnvironment,
-      platformEnvironmentSecrets: contribution.secretKeys,
-      platformEnvironmentSources: contribution.sources,
-      projectEnvironment,
-      resources: declaration.resources,
-      resourcesPrepared: !developmentDatabase || provided.prepared === true,
-      savedRecords,
-      source,
-      warning: ""
-    };
-  }
-
-  async function stackEnvRecords(input = {}, userRecords = []) {
-    const resolved = await resolvedProjectEnvironment(input, userRecords);
-    return {
-      // Saved values come first: by the record merge rule they replace Stack
-      // defaults and stale user values, and a managed resource replaces them.
-      records: [
-        ...resolved.savedRecords,
-        ...environmentRecords(resolved.defaultEnvironment, {
-          editable: true,
-          owner: RUNTIME_CONFIG_OWNERS.USER,
-          source: "genesis-stack:default"
-        }),
-        ...environmentRecords(resolved.platformEnvironment, {
-          secretKeys: resolved.platformEnvironmentSecrets,
-          source: "vibe64-host:managed-resource",
-          sources: resolved.platformEnvironmentSources
-        }),
-        ...stackResourceRecords(resolved.resources, resolved.effectiveEnvironment, resolved.defaultEnvironment)
-      ],
-      source: resolved.source,
-      warning: resolved.warning
-    };
-  }
-
-  async function envConfig(input = {}) {
-    const userRecords = await userEnvRecords();
-    const stack = await stackEnvRecords(input, userRecords);
-    const config = await resolveRuntimeConfig([
-      ...stack.records,
-      ...userRecords
-    ], {
-      scope: envScope(input),
-      target: input.target
-    });
-    return {
-      config,
-      stack
-    };
-  }
-
-  async function readEnvState(input = {}) {
-    const { config, stack } = await envConfig(input);
-    return {
-      env: {
-        ...runtimeConfigEnvViewModel(config),
-        configSource: {
-          label: stack.source.label,
-          rootKind: stack.source.rootKind,
-          sessionId: stack.source.sessionId,
-          sourceRoot: stack.source.sourceRoot
-        },
-        ...(stack.warning ? { stackWarning: stack.warning } : {})
-      },
-      ok: true
-    };
-  }
-
-  function assertEnvOwner(input = {}, message = "") {
-    if (input.vibe64User && input.vibe64User.role !== "owner") {
-      throw vibe64Error(message, "vibe64_owner_required");
-    }
-  }
-
-  async function revealEnvSecretState(input = {}) {
-    const key = normalizeRuntimeConfigKey(input.key);
-    const { config } = await envConfig(input);
-    const record = config.view?.records?.find((candidate) => candidate?.key === key);
-    if (!record) {
-      throw vibe64Error(
-        "That development secret is not available.",
-        "vibe64_env_variable_not_found"
-      );
-    }
-    if (record.secret !== true) {
-      throw vibe64Error(
-        `${key} is not a secret value.`,
-        "vibe64_env_variable_not_secret"
-      );
-    }
-    const value = String(config.values?.[key] ?? "");
-    if (record.valuePresent !== true || !value) {
-      throw vibe64Error(
-        `${key} has no value to reveal.`,
-        "vibe64_env_secret_value_missing"
-      );
-    }
-    return {
-      key,
-      ok: true,
-      value
-    };
-  }
-
-  // Every record Env shows, secrets included, as one .env file for the owner.
-  async function downloadEnvState(input = {}) {
-    assertEnvOwner(input, "Only the Vibe64 owner can download development Env.");
-    const { config } = await envConfig(input);
-    return {
-      content: runtimeConfigDotenvFile({
-        environment: config.scope === RUNTIME_CONFIG_SCOPES.PROD ? "production" : "development",
-        isUserRecord: (record) => record.editable === true || record.source === SAVED_ENV_VALUE_SOURCE,
-        project: currentProjectSlug(),
-        records: config.view.records,
-        values: config.values
-      }),
-      ok: true
-    };
-  }
-
-  async function saveEnvState(input = {}) {
-    const values = input.values && typeof input.values === "object" && !Array.isArray(input.values)
-      ? input.values
-      : {};
-    const { config, stack } = await envConfig(input);
-    const stackKeys = new Set(stack.records.map((record) => record.key));
-    const currentRecords = new Map(config.view.records.map((record) => [record.key, record]));
-    for (const key of Object.keys(values)) {
-      const normalizedKey = normalizeRuntimeConfigKey(key);
-      const record = currentRecords.get(normalizedKey);
-      if (record?.source === SAVED_ENV_VALUE_SOURCE) {
-        throw vibe64Error(
-          `${normalizedKey} is linked to a saved value. Unlink it before entering a value here.`,
-          "vibe64_env_value_linked"
-        );
-      }
-      if (record && (record.owner !== RUNTIME_CONFIG_OWNERS.USER || record.editable !== true)) {
-        throw vibe64Error(
-          `${normalizedKey} is not editable as a user Env value.`,
-          "vibe64_env_value_not_editable"
-        );
-      }
-      if (runtimeConfigKeyIsVibe64Reserved(normalizedKey) && !stackKeys.has(normalizedKey)) {
-        const error = new Error(`${normalizedKey} is reserved for Vibe64 and is not declared by the Genesis Stack.`);
-        error.code = "vibe64_env_reserved_key";
-        throw error;
-      }
-    }
-    await saveEnvUserValues({
-      environment: envScope(input),
-      projectRuntimeRoot: selectedProjectRuntimeRoot(),
-      values
-    });
-    const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
-    await materializeProjectEnvironmentFiles({
-      environment: resolved.projectEnvironment,
-      files: resolved.environmentFiles,
-      sourceRoot: resolved.source.sourceRoot
-    });
-    return readEnvState(input);
-  }
-
-  async function listProjectsState() {
-    const requestContext = currentProjectRequestContext();
-    if (!requestContext?.targetRoot || projectContext.requestContextMatchesSelectedProject(requestContext)) {
-      const listed = await projectContext.listProjects();
-      const currentProject = listed.currentProject
-        ? publicProject(listed.currentProject, {
-            selected: true
-          })
-        : null;
-      const projects = listed.projects.map((project) => publicProject(project, {
-        selected: project.selected
-      }));
-      if (currentProject && !projects.some((project) => project.slug === currentProject.slug)) {
-        projects.push(currentProject);
-        projects.sort((left, right) => left.slug.localeCompare(right.slug));
-      }
-      return {
-        ...listed,
-        currentProject,
-        projects
-      };
-    }
-    const listed = await projectContext.listWorkspaceProjects();
-    const current = listed.projects.find((project) => project.slug === requestContext.slug) || {};
-    const projects = listed.projects.map((project) => publicProject(project, {
-      context: project.slug === requestContext.slug ? requestContext : null,
-      selected: project.slug === requestContext.slug
-    }));
-    return {
-      currentProject: publicProject(current, {
-        context: requestContext,
-        selected: true
-      }),
-      hasSelection: true,
-      ok: true,
-      projects,
-      projectsRoot: requestContext.projectsRoot || listed.projectsRoot,
-      targetRoot: requestContext.targetRoot
-    };
-  }
-
-  async function currentProjectState() {
-    const listed = await listProjectsState();
-    return listed.currentProject;
-  }
-
-  async function notifyGithubChanged(project, payload = { githubRefresh: true }, reason = "github-refreshed") {
-    try {
-      await publishProjectChanged({ ...payload, projectSlug: project.slug }, { reason });
-    } catch (error) {
-      // Publication is already confirmed; a notification failure must not invite a duplicate write.
-      logger.warn({ error: String(error?.message || error) }, "GitHub change notification could not be published.");
-    }
-  }
-
-  async function currentDevelopmentDatabaseScope() {
-    return (await currentDevelopmentDatabaseConfiguration()).developmentDatabaseScope;
-  }
-
-  function canEditProjectSettings(input = {}) {
-    return !input.vibe64User || input.vibe64User.role === "owner";
-  }
-
-  async function connectedProjectsState(input = {}) {
-    const source = await genesisSettingsSourceForInput(input);
-    const scope = { rootKind: source.rootKind, sessionId: source.sessionId };
-    if (!source.sourceRoot) return { available: false, canEdit: false, source: scope,
-      unavailableReason: "Create or select a session to configure connected projects." };
-    await assertProjectDirectoryUsable(source.sourceRoot);
-    try {
-      return { ...(await readConnectedProjects(source.sourceRoot)), available: true,
-        canEdit: canEditProjectSettings(input), source: scope };
-    } catch (error) {
-      if (error.code !== "vibe64_connections_invalid") throw error;
-      return { available: false, canEdit: false, source: scope, unavailableReason: error.message };
-    }
-  }
-
-  async function saveConnectedProjectsState(input = {}) {
-    if (!canEditProjectSettings(input)) throw vibe64Error("Only the project owner can change connected projects.", "vibe64_owner_required");
-    const selected = await genesisSettingsSourceForInput(input);
-    const sourceInput = { ...input, sessionId: selected.sessionId };
-    const write = async () => {
-      const source = await genesisSettingsSourceForInput(sourceInput);
-      if (!source.sourceRoot) throw vibe64Error("Create or select a session before configuring connected projects.", "vibe64_connections_source_required");
-      await assertProjectDirectoryUsable(source.sourceRoot);
-      return runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(), async () => {
-        const normalized = normalizeConnectedProjects({ projects: input.projects });
-        // Configuration declares intent; actual write access comes from the actor's account.
-        if (normalized.projects.length) {
-          for (const entry of normalized.projects) {
-            const fullName = githubRepositoryFullName(entry.repository);
-            const repository = await inspectConnectedRepository(fullName, input);
-            if (!repository.permissions?.push || repository.archived || repository.disabled) {
-              throw vibe64Error(`Write access to ${fullName} is required to connect it. Check your GitHub account and repository permissions.`, "vibe64_connections_access_required");
-            }
-          }
-        }
-        await saveConnectedProjects(source.sourceRoot, normalized, input.revision);
-        return { ok: true, connectedProjects: await connectedProjectsState(sourceInput) };
-      }, { operation: "save-connected-projects" });
-    };
-    return runSessionSourceWorkExclusive(sourceInput, write, "save-connected-projects");
-  }
-
-  async function collaborationSettingsState(input = {}) {
-    const source = await genesisSettingsSourceForInput(input);
-    const publicSource = {
-      rootKind: source.rootKind,
-      sessionId: source.sessionId
-    };
-    if (!source.sourceRoot) {
-      return {
-        available: false,
-        canEdit: false,
-        choices: {},
-        experience: "",
-        explanationStyle: "",
-        requirements: "",
-        responseLength: "",
-        source: publicSource,
-        status: "unavailable",
-        tone: "",
-        unavailableReason: source.sessionId
-          ? "This session does not have an available project source yet."
-          : "Create or select an AI session to set collaboration guidance."
-      };
-    }
-    await assertProjectDirectoryUsable(source.sourceRoot);
-    const collaboration = await inspectCollaboration({
-      projectRoot: source.sourceRoot
-    });
-    return {
-      available: true,
-      canEdit: canEditProjectSettings(input),
-      choices: collaboration.choices,
-      experience: collaboration.experience,
-      explanationStyle: collaboration.explanationStyle,
-      requirements: collaboration.requirements,
-      responseLength: collaboration.responseLength,
-      source: publicSource,
-      status: collaboration.status,
-      tone: collaboration.tone,
-      unavailableReason: ""
-    };
-  }
-
-  async function saveCollaborationSettingsState(input = {}) {
-    if (!canEditProjectSettings(input)) {
-      throw vibe64Error(
-        "Only the Vibe64 project owner can change collaboration through Project settings.",
-        "vibe64_owner_required"
-      );
-    }
-    const sourceInput = await settingsSourceInput(input);
-    return runSessionSourceWorkExclusive(sourceInput, async () => {
-      const source = await genesisSettingsSourceForInput(sourceInput);
-      if (!source.sourceRoot) {
-        throw vibe64Error(
-          "Collaboration guidance requires an available project source. Create or select an AI session first.",
-          "vibe64_collaboration_source_required"
-        );
-      }
-      await assertProjectDirectoryUsable(source.sourceRoot);
-      return runProjectSourceMutationExclusive(
-        selectedProjectRuntimeRoot(),
-        async () => {
-          await setCollaboration({
-            experience: input.experience,
-            explanationStyle: input.explanationStyle,
-            projectRoot: source.sourceRoot,
-            requirements: input.requirements,
-            responseLength: input.responseLength,
-            tone: input.tone
-          });
-          const collaboration = await collaborationSettingsState(sourceInput);
-          return {
-            collaboration,
-            ok: true,
-            projectSlug: currentProjectSlug()
-          };
-        },
-        { operation: "save-collaboration-guidance" }
-      );
-    }, "save-collaboration-guidance");
-  }
-
-  async function savePromptHintsState(input = {}) {
-    const { settings } = await saveProjectPromptHints({
-      projectRuntimeRoot: selectedProjectRuntimeRoot(),
-      settings: { promptHints: input.promptHints }
-    });
-    return {
-      ok: true,
-      projectSlug: currentProjectSlug(),
-      promptHints: {
-        canEdit: true,
-        enabled: settings.promptHints
-      }
-    };
-  }
-
-  async function currentDevelopmentDatabaseConfiguration() {
-    const project = await currentProjectState();
-    return {
-      developmentDatabaseName: normalizeDevelopmentDatabaseName(project?.developmentDatabaseName),
-      developmentDatabaseScope: normalizeDevelopmentDatabaseScope(project?.developmentDatabaseScope)
-    };
-  }
-
-  function managedDevelopmentDatabaseAvailable() {
-    return resourceEnvironmentProvider?.managedDevelopmentDatabase === true;
-  }
-
-  async function managedProjectDatabaseName({ projectContextRoot, slug }) {
-    // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
-    if (typeof resourceEnvironmentProvider?.developmentDatabaseNameForProject !== "function") {
-      throw vibe64Error(
-        "This Vibe64 installation cannot name a managed project database.",
-        "vibe64_managed_development_database_name_unavailable"
-      );
-    }
-    const developmentDatabaseName = normalizeDevelopmentDatabaseName(
-      await resourceEnvironmentProvider.developmentDatabaseNameForProject({
-        projectContextRoot,
-        serviceDataRoot: serviceDataRoot(),
-        slug
-      })
-    );
-    if (!developmentDatabaseName) {
-      throw vibe64Error(
-        "The managed project database name is empty.",
-        "vibe64_managed_development_database_name_unavailable"
-      );
-    }
-    return developmentDatabaseName;
-  }
-
-  async function managedDevelopmentDatabaseDefaults(input = {}) {
-    if (!managedDevelopmentDatabaseAvailable()) {
-      return {};
-    }
-    const projectContextRoot = String(input.projectContextRoot || "").trim();
-    if (!path.isAbsolute(projectContextRoot)) {
-      throw vibe64Error(
-        "Managed project database defaults require an absolute project context root.",
-        "vibe64_managed_development_database_project_root_invalid"
-      );
-    }
-    return {
-      developmentDatabaseName: await managedProjectDatabaseName({
-        projectContextRoot,
-        slug: String(input.slug || path.basename(projectContextRoot)).trim()
-      }),
-      developmentDatabaseScope: "project"
-    };
-  }
-
-  async function currentDevelopmentDatabasePolicy(input = {}) {
-    const openSessions = Array.isArray(input.openSessions)
-      ? input.openSessions
-      : await (await createRuntime({
-          inspectSource: false
-        })).listSessionSummaries({
-          statusGroup: "open"
-        });
-    return resolveDevelopmentDatabasePolicy({
-      managed: managedDevelopmentDatabaseAvailable(),
-      openSessions,
-      scope: await currentDevelopmentDatabaseScope(),
-      allowSharedDatabaseSessions: (await currentProjectState())?.allowSharedDatabaseSessions === true
-    });
-  }
-
-  async function developmentDatabaseState() {
-    return (await currentDevelopmentDatabasePolicy()).developmentDatabase;
-  }
-
-  async function saveDevelopmentDatabaseScopeState(input = {}) {
-    if (!managedDevelopmentDatabaseAvailable()) {
-      throw vibe64Error(
-        "This Vibe64 installation does not manage development databases.",
-        "vibe64_managed_development_database_unavailable"
-      );
-    }
-    return runProjectSessionPolicyMutationExclusive(
-      selectedProjectRuntimeRoot(),
-      async () => {
-        const policy = await currentDevelopmentDatabasePolicy();
-        const scope = normalizeDevelopmentDatabaseScope(input.scope);
-        if (scope !== policy.developmentDatabase.scope && !policy.developmentDatabase.canChange) {
-          throw vibe64Error(
-            policy.developmentDatabase.disabledReason,
-            "vibe64_development_database_scope_busy"
-          );
-        }
-        const slug = currentProjectSlug();
-        const currentProject = await currentProjectState();
-        let developmentDatabaseName = normalizeDevelopmentDatabaseName(
-          currentProject?.developmentDatabaseName
-        );
-        if (scope === "project" && !developmentDatabaseName) {
-          developmentDatabaseName = await managedProjectDatabaseName({
-            projectContextRoot: requireSelectedTargetRoot(),
-            slug
-          });
-        }
-        await projectContext.updateWorkspaceProjectMetadata({
-          ...(developmentDatabaseName ? { developmentDatabaseName } : {}),
-          developmentDatabaseScope: scope,
-          ...(Object.hasOwn(input, "allowSharedDatabaseSessions")
-            ? { allowSharedDatabaseSessions: input.allowSharedDatabaseSessions } : {}),
-          slug
-        });
-        return {
-          ...(await currentDevelopmentDatabasePolicy()).developmentDatabase,
-          ok: true
-        };
-      },
-      {
-        operation: "save-development-database-scope"
-      }
-    );
-  }
-
-  async function promptEnvironment() {
-    return (await resolvedProjectEnvironment({}, await userEnvRecords())).effectiveEnvironment;
-  }
-
-  // A settings write without a session or standalone source targets the
-  // current session's source.
-  async function settingsSourceInput(input = {}) {
-    if (String(input.sessionId || "").trim() || selectedSourceRoot()) {
-      return input;
-    }
-    const session = await sessionStore().readCurrentSession();
-    return session?.sessionId
-      ? { ...input, sessionId: session.sessionId }
-      : input;
-  }
-
-  async function genesisSettingsSourceForInput(input = {}) {
-    const source = await sourceForInput(input);
-    if (source.sourceRoot || source.sessionId) {
-      return source;
-    }
-    const session = await sessionStore().readCurrentSession();
-    return session
-      ? sourceForInput({
-          ...input,
-          session,
-          sessionId: session.sessionId
-        })
-      : source;
-  }
-
-  async function engineeringProfileState(input = {}) {
-    const source = await genesisSettingsSourceForInput(input);
-    const publicSource = {
-      rootKind: source.rootKind,
-      sessionId: source.sessionId
-    };
-    if (!source.sourceRoot) {
-      return {
-        available: false,
-        profile: null,
-        profiles: [],
-        source: publicSource,
-        unavailableReason: source.sessionId
-          ? "This session does not have an available project source yet."
-          : "Create or select an AI session to choose an engineering profile."
-      };
-    }
-    await assertProjectDirectoryUsable(source.sourceRoot);
-    const inspection = await inspectEngineering({
-      projectRoot: source.sourceRoot
-    });
-    return {
-      available: true,
-      profile: {
-        description: inspection.profile.description,
-        id: inspection.profile.id,
-        name: inspection.profile.name
-      },
-      profiles: inspection.profiles.map((profile) => ({
-        description: profile.description,
-        id: profile.id,
-        name: profile.name
-      })),
-      source: publicSource,
-      status: inspection.status,
-      unavailableReason: ""
-    };
-  }
-
-  async function projectOnboardingState(input = {}) {
-    const source = await genesisSettingsSourceForInput(input);
-    if (!source.sourceRoot) {
-      return { ok: true, available: false, templates: [], source: { sessionId: source.sessionId } };
-    }
-    await assertProjectDirectoryUsable(source.sourceRoot);
-    const inspection = await inspectProject({ projectRoot: source.sourceRoot });
-    const catalogue = inspection.templateEligible
-      ? await listTemplates({ projectRoot: source.sourceRoot })
-      : { templates: [] };
-    const templates = input.templateId
-      ? catalogue.templates.filter((template) => template.id === input.templateId)
-      : catalogue.templates;
-    const pageTemplates = input.templateOffset !== undefined || Boolean(input.templateId);
-    const templateOffset = input.templateOffset || 0;
-    let environmentSetup = null;
-    if (inspection.state === "ready") {
-      const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
-      const missingKeys = new Set();
-      const resourcesToCheck = resolved.resourcesPrepared ? resolved.resources : [];
-      for (const { resource } of resourcesToCheck) {
-        const alternative = requiredAlternative(resource, resolved.effectiveEnvironment);
-        for (const [semantic, name] of Object.entries(alternative?.bindings || {})) {
-          if (!bindingValuePresent(resolved.effectiveEnvironment, semantic, name, alternative.allowEmpty || [])) {
-            missingKeys.add(name);
-          }
-        }
-      }
-      environmentSetup = { missingKeys: [...missingKeys], warning: resolved.warning };
-    }
-    return {
-      ok: true,
-      available: true,
-      inspection,
-      environmentSetup,
-      templates: pageTemplates ? templates.slice(templateOffset, templateOffset + 10) : templates,
-      ...(pageTemplates ? { templateOffset, templateTotal: templates.length } : {}),
-      source: { rootKind: source.rootKind, sessionId: source.sessionId }
-    };
-  }
-
-  async function applyProjectTemplateState(input = {}) {
-    const sessionId = String(input.sessionId || "").trim();
-    const templateId = String(input.templateId || "").trim();
-    if (!sessionId || !templateId) {
-      throw vibe64Error("Choose a template in an open session first.", "vibe64_template_selection_required");
-    }
-    return runSessionSourceWorkExclusive({ sessionId }, async () => {
-      const session = await sessionStore().readSession(sessionId);
-      if (session.status !== "active" || session.agentRuns.some((run) => run.active)) {
-        throw vibe64Error("Wait for the active work to finish before adding a starter.", "vibe64_template_session_busy");
-      }
-      const source = await sourceForInput({ sessionId });
-      if (!source.sourceRoot) {
-        throw vibe64Error("This session has no available source.", "vibe64_template_source_required");
-      }
-      await assertProjectDirectoryUsable(source.sourceRoot);
-      return runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(), async () => {
-        // The browser selects a configured identity; it cannot supply a repository or ref.
-        const application = await applyTemplate({ projectRoot: source.sourceRoot, templateId });
-        return {
-          ok: true,
-          application,
-          projectSlug: currentProjectSlug()
-        };
-      }, { operation: "apply-project-template" });
-    }, "apply-project-template", { waitMs: 10_000 });
-  }
-
-  async function saveEngineeringProfileState(input = {}) {
-    const sourceInput = await settingsSourceInput(input);
-    return runSessionSourceWorkExclusive(sourceInput, async () => {
-      const source = await genesisSettingsSourceForInput(sourceInput);
-      if (!source.sourceRoot) {
-        throw vibe64Error(
-          "Engineering profiles require an available project source. Create or select an AI session first.",
-          "vibe64_engineering_source_required"
-        );
-      }
-      await assertProjectDirectoryUsable(source.sourceRoot);
-      return runProjectSourceMutationExclusive(
-        selectedProjectRuntimeRoot(),
-        async () => {
-          await setEngineeringProfile({
-            profile: input.profile,
-            projectRoot: source.sourceRoot
-          });
-          return {
-            engineering: await engineeringProfileState(sourceInput),
-            ok: true,
-            projectSlug: currentProjectSlug()
-          };
-        },
-        {
-          operation: "save-engineering-profile"
-        }
-      );
-    }, "save-engineering-profile");
-  }
-
-  async function previewApplicationIdentitySource(input = {}) {
-    const source = await sourceForInput(input);
-    if (!source.sourceRoot) {
-      throw vibe64Error(
-        "Preview identities require an available project source. Create or select a session first.",
-        "vibe64_preview_application_identities_source_required"
-      );
-    }
-    await assertProjectDirectoryUsable(source.sourceRoot);
-    return source;
-  }
-
-  async function previewApplicationIdentitiesState(input = {}) {
-    const source = await previewApplicationIdentitySource(input);
-    const { identities } = await readStoredPreviewApplicationIdentities({
-      sourceRoot: source.sourceRoot
-    });
-    return {
-      identities,
-      ok: true
-    };
-  }
-
-  async function createRuntime(options = {}) {
-    const requestContext = captureProjectRequestContext() || {};
-    const target = requireSelectedTargetRoot();
-    return new Vibe64SessionRuntime({
-      createSessionSource: options.createSessionSource,
-      inspectSourceByDefault: options.inspectSource !== false,
-      projectContextRoot: target,
-      projectRuntimeRoot: selectedProjectRuntimeRoot(),
-      projectSessionSourceRoot: selectedSessionSourceRoot(),
-      promptEnvironment: () => runWithProjectRequestContext(requestContext, promptEnvironment),
-      store: sessionStore()
-    });
-  }
-
-  async function runInProjectContext(slug = "", operation, {
-    allowDeleting = false,
-    vibe64User = null
-  } = {}) {
-    return runWithResolvedProjectRequestContext({
-      projectContext,
-      request: {
-        allowDeleting,
-        vibe64User,
-        params: {
-          slug
-        }
-      }
-    }, operation);
-  }
-
-  const service = Object.freeze({
+  return Object.freeze({
     readOnboarding(input) {
-      return projectResult(() => projectOnboardingState(input));
+      return projectResult(() => onboarding.projectOnboardingState(input));
     },
 
     async applyTemplate(input) {
-      const result = await projectResult(() => applyProjectTemplateState(input));
+      const result = await projectResult(() => onboarding.applyProjectTemplateState(input));
       // The starter changed the Stack after the source locks were released; the
       // session owner prepares its workspace (dependencies, managed resources).
-      if (result?.ok === true && templateApplicationObserver) {
+      if (result?.ok === true && slots.templateApplicationObserver) {
         void Promise.resolve()
-          .then(() => templateApplicationObserver({ sessionId: String(input.sessionId || "").trim() }))
+          .then(() => slots.templateApplicationObserver({ sessionId: String(input.sessionId || "").trim() }))
           .catch((error) => logger.warn({ error: error?.message }, "Workspace preparation after a starter could not start."));
       }
       return result;
@@ -1301,7 +122,7 @@ function createService({
     },
 
     get targetRoot() {
-      return selectedTargetRoot();
+      return selection.selectedTargetRoot();
     },
 
     async createProject(input) {
@@ -1312,11 +133,11 @@ function createService({
     },
 
     async createRuntime(options = {}) {
-      return createRuntime(options);
+      return sessionWork.createRuntime(options);
     },
 
     async createSessionStore() {
-      return sessionStore();
+      return selection.sessionStore();
     },
 
     async readSelectedSessionSource(input = {}) {
@@ -1327,7 +148,7 @@ function createService({
             projectRuntimeRoot: String(input.projectRuntimeRoot || "").trim(),
             projectSessionSourceRoot: String(input.projectSessionSourceRoot || "").trim()
           })
-        : sessionStore();
+        : selection.sessionStore();
       const session = await store.readCurrentSession();
       if (!session) {
         return null;
@@ -1345,15 +166,15 @@ function createService({
       };
     },
 
-    currentProjectRuntimeRoot: selectedProjectRuntimeRoot,
-    currentProjectSessionSourceRoot: selectedSessionSourceRoot,
-    currentProjectSourceConfigRoot: selectedSourceConfigRoot,
-    currentProjectSourceRoot: selectedSourceRoot,
-    currentServiceDataRoot: serviceDataRoot,
-    currentTargetRoot: selectedTargetRoot,
+    currentProjectRuntimeRoot: selection.selectedProjectRuntimeRoot,
+    currentProjectSessionSourceRoot: selection.selectedSessionSourceRoot,
+    currentProjectSourceConfigRoot: selection.selectedSourceConfigRoot,
+    currentProjectSourceRoot: selection.selectedSourceRoot,
+    currentServiceDataRoot: selection.serviceDataRoot,
+    currentTargetRoot: selection.selectedTargetRoot,
 
     async developmentDatabasePolicy(input = {}) {
-      return currentDevelopmentDatabasePolicy(input);
+      return developmentDatabase.currentDevelopmentDatabasePolicy(input);
     },
 
     // Every learner's practice project slug. Practice projects live in the
@@ -1366,7 +187,7 @@ function createService({
 
     async listProjects({ actor = null } = {}) {
       return projectResult(async () => {
-        const listed = await listProjectsState();
+        const listed = await selection.listProjectsState();
         // The owner's list says when team members are waiting for team AI.
         const teamAi = await readTeamAiStatus({ actor });
         return teamAi ? { ...listed, teamAi } : listed;
@@ -1374,294 +195,68 @@ function createService({
     },
 
     async managedDevelopmentDatabaseDefaults(input = {}) {
-      return managedDevelopmentDatabaseDefaults(input);
+      return developmentDatabase.managedDevelopmentDatabaseDefaults(input);
     },
 
-    async projectExecutionEnvironment(input = {}) {
-      if (input.reusePrepared === true) {
-        // A failed read is not evidence of readiness. The ordinary preparation
-        // path below remains responsible for provisioning and its diagnostics.
-        const records = await userEnvRecords();
-        const resolved = await resolvedProjectEnvironment(input, records).catch(() => null);
-        if (resolved?.resourcesPrepared && await projectEnvironmentFilesAreCurrent({
-          environment: resolved.projectEnvironment,
-          files: resolved.environmentFiles,
-          sourceRoot: resolved.source.sourceRoot
-        })) {
-          return projectEnvironmentResult(resolved, input, records);
-        }
-      }
-      return runSessionSourceWorkExclusive(input, async () => {
-        const records = await userEnvRecords();
-        const resolved = await resolvedProjectEnvironment(
-          input,
-          records,
-          { provisionResources: true }
-        );
-        await materializeProjectEnvironmentFiles({
-          environment: resolved.projectEnvironment,
-          files: resolved.environmentFiles,
-          sourceRoot: resolved.source.sourceRoot
-        });
-        return projectEnvironmentResult(resolved, input, records);
-        // Background workspace setup can arrive while the request that started it
-        // is still releasing this lock; wait for it instead of failing setup.
-      }, "prepare-project-environment", { waitMs: 10_000 });
-    },
-
-    async projectInspectionEnvironment(input = {}) {
-      const records = await userEnvRecords();
-      const resolved = await resolvedProjectEnvironment(input, records);
-      return projectEnvironmentResult(resolved, input, records);
-    },
-
-    async projectEnvironmentStatus(input = {}) {
-      const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
-      const resources = resolved.resources.map(({ resource }) => ({
-        id: resource.id,
-        kind: resource.kind,
-        // Only the values processes really get count: an exported shell
-        // variable never reaches Workspace setup, so it cannot make this ready.
-        configured: Boolean(satisfiedAlternative(resource, resolved.projectEnvironment))
-      }));
-      return {
-        ...(Object.hasOwn(resolved, "resourcePreparation") ? { resourcePreparation: resolved.resourcePreparation } : {}),
-        status: resolved.environmentInspectionFailed ? "unavailable"
-          : !resolved.resourcesPrepared ? "not-prepared"
-          : resources.some(({ configured }) => !configured) ? "missing-configuration"
-          : "ready",
-        keys: Object.keys(resolved.projectEnvironment).sort(),
-        resources,
-        ...(resolved.warning ? { diagnostic: "Project environment declarations could not be read. Correct their configuration and retry." } : {})
-      };
-    },
-
-    // The MySQL/MariaDB or PostgreSQL servers this project's Stack declares
-    // and the person runs themselves: the exact Env names, the values that
-    // apply now (Env over Stack defaults; never the shell), and the endpoint
-    // the connection check uses. Secrets leave only as "set or not". A host
-    // that supplies its own databases answers `managed` with nothing to do.
-    async localDatabaseServers(input = {}) {
-      if (resourceEnvironmentProvider) return { managed: true, databases: [] };
-      const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
-      return {
-        managed: false,
-        databases: localDatabaseServerDeclarations(resolved.resources, {
-          environment: resolved.projectEnvironment
-        })
-      };
-    },
-
-    async sessionDatabaseEnvironment(input = {}) {
-      const resolve = async () => resolvedProjectEnvironment(input, await userEnvRecords(), { provisionResources: false });
-      const notPrepared = (resolved) => !resolved.resourcesPrepared && !resolved.databaseToolEnvironment &&
-        resolved.resources.some(({ resource }) => resourceKindIsDatabase(resource.kind));
-      let resolved = await resolve();
-      if (notPrepared(resolved) && resolved.source.sessionId) {
-        // A host stops a managed database service nothing uses, and a restart
-        // forgets what it prepared. Workspace setup's own rule restores a
-        // session prepared with these exact resources, as Preview does.
-        const setup = workspaceSetupStateFromMetadata((await sessionForInput(input, resolved.source.sessionId))?.metadata);
-        if (setup.status === "succeeded" && setup.resourceIdentity &&
-            setup.resourceIdentity === resolved.resourcePreparation?.identity) {
-          await service.projectExecutionEnvironment({ ...input, reusePrepared: true });
-          resolved = await resolve();
-        }
-      }
-      if (notPrepared(resolved)) {
-        throw vibe64Error(
-          "Database not prepared. Let the assistant finish, then choose Prepare workspace in the session chat, or Retry on its failed preparation. Vibe64 prepares the managed database and credentials; the application runs its declared migrations.",
-          "vibe64_session_database_not_prepared"
-        );
-      }
-      const databaseToolEnvironment = resolved.databaseToolEnvironment ||
-        applicationDatabaseToolEnvironment(resolved.resources, resolved.projectEnvironment, resolved.source.sourceRoot);
-      return {
-        ...(await currentDevelopmentDatabaseConfiguration()),
-        databaseToolEnvironment,
-        source: resolved.source,
-      };
-    },
-
-    async repositoryRemote(input) {
-      return projectResult(async () => localRepositoryRemote(await currentProjectState(), input, { logger }));
-    },
-    async repositoryBranches(input) {
-      return projectResult(async () => repositoryBranches(await currentProjectState(), input, { env }));
-    },
-    async resolveSessionBranch(input = {}) {
-      return repositoryBranches(await currentProjectState(), input, { env });
-    },
-    async connectedProjectTargets(input = {}) {
-      const connections = await connectedProjectsState(input);
-      if (!connections.available) throw vibe64Error(connections.unavailableReason, "vibe64_connections_source_required");
-      const listed = await listProjectsState();
-      return connections.projects.map(connection => {
-        const fullName = githubRepositoryFullName(connection.repository);
-        const matches = listed.projects.filter(candidate => candidate.repositoryMode === "github" &&
-          projectGithubFullName(candidate).toLowerCase() === fullName);
-        if (matches.length !== 1) throw vibe64Error(
-          `Register one accessible GitHub project for ${fullName} before preparing this connection. Existing source and access are unchanged.`,
-          "vibe64_connected_project_registration_required");
-        return { ...connection, fullName, projectSlug: matches[0].slug };
-      });
-    },
-    async inspectWorkspaceSetup({ session, projectRoot = sessionSourcePath(session), environment = env } = {}) {
-      const [setup, inspection] = await Promise.all([
-        inspectVibe64WorkspaceSetup({ projectRoot, environment }),
-        inspectVibe64ConnectedDevelopment({ projectRoot, environment })
-      ]);
-      return inspectConnectedWorkspaceSetup({ session, setup, inspection, env: environment });
-    },
-    async inspectConnectedDevelopmentInputs({ session, projects, environment = env } = {}) {
-      const inspection = await inspectVibe64ConnectedDevelopment({
-        projectRoot: sessionSourcePath(session), environment
-      });
-      if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
-      return inspectConnectedDevelopmentInputs({ session, projects, inspection, env: environment });
-    },
-    async prepareConnectedDevelopmentInputs({ session, projects, environment = env } = {}) {
-      const inspection = await inspectVibe64ConnectedDevelopment({
-        projectRoot: sessionSourcePath(session), environment
-      });
-      if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
-      return runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(),
-        () => materializeConnectedDevelopmentInputs({ session, projects, inspection, env: environment }),
-        { operation: "prepare-connected-development-inputs" });
-    },
-    async connectedContributionSource(input = {}) {
-      const current = await currentProjectState();
-      const repository = requireGithubRepository(current, "Connected contribution");
-      if (current.repositoryMode !== "github") throw vibe64Error(
-        "Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_authority_changed");
-      const access = await inspectConnectedRepository(repository, input);
-      if (access.permissions?.push !== true || access.archived || access.disabled) throw vibe64Error(
-        `Write access to ${repository} is required to prepare its contribution.`, "vibe64_connections_access_required");
-      const integrationBranch = current.repository.defaultBranch;
-      // Read only the integration branch; listing every branch made each
-      // connected session start page through the whole repository.
-      const branch = await inspectConnectedBranch(repository, integrationBranch, input);
-      if (!branch?.commit?.sha) throw vibe64Error("The receiving integration branch is unavailable.", "vibe64_incoming_target_missing");
-      return { repository: repository.toLowerCase(), integrationBranch, baseCommit: branch.commit.sha };
-    },
-    async readRepositoryWorkflow() {
-      return readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());
-    },
-    async saveRepositoryWorkflow(input) {
-      return projectResult(async () => {
-        requireGithubRepository(await currentProjectState(), "Pull request workflow");
-        const workflow = await runProjectSourceMutationExclusive(selectedProjectRuntimeRoot(),
-          () => saveProjectRepositoryWorkflow(selectedProjectRuntimeRoot(), input.requirePullRequest),
-          { operation: "repository-workflow-settings" });
-        await publishProjectChanged({ projectSlug: (await currentProjectState()).slug, repositoryWorkflow: workflow }, { reason: "repository-workflow-settings" });
-        return { ok: true, workflow };
-      });
-    },
-
-    async refreshGithub() {
-      const project = await currentProjectState();
-      requireGithubRepository(project);
-      await publishProjectChanged({ projectSlug: project.slug, githubRefresh: true }, { reason: "github-refreshed" });
-      return { ok: true };
-    },
-
-    async incomingRepository(input = {}) {
-      const project = await currentProjectState();
-      const fullName = requireGithubRepository(project, "Incoming changes");
-      if (project.repositoryMode !== "github") {
-        throw vibe64Error("Incoming changes need a configured GitHub integration target.", "vibe64_incoming_repository_required");
-      }
-      const repository = await inspectConnectedRepository(fullName, input);
-      const writeReason = repository.archived || repository.disabled
-        ? "This repository is archived or disabled."
-        : repository.permissions?.push !== true ? "Your GitHub account needs write access to this receiving repository." : "";
-      const workflow = await readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());
-      const mergeReason = writeReason || (workflow.requirePullRequest
-        ? "This project requires pull requests for integration. Its current Save policy prevents direct Incoming merges." : "");
-      const actions = { merge: mergeReason, discard: writeReason };
-      if (input.action && actions[input.action]) {
-        throw vibe64Error(actions[input.action], "vibe64_incoming_integration_forbidden");
-      }
-      return { project, actions };
-    },
-
-    async githubIssues(input) {
-      return projectResult(async () => {
-        const project = await currentProjectState();
-        const result = await githubIssues(project, input, { env });
-        if (input.operation === "comment") {
-          await notifyGithubChanged(project, {
-            originId: input.originId,
-            issueComment: { number: Number(input.number), id: result.comment.id, author: result.comment.author.login }
-          }, "github-issue-commented");
-        } else if (["create", "edit", "edit-comment", "state", "create-label", "set-labels"].includes(input.operation)) {
-          await notifyGithubChanged(project);
-        }
-        return result;
-      });
-    },
-
-    async githubPullRequests(input) {
-      return projectResult(async () => {
-        const project = await currentProjectState();
-        const result = await githubPullRequests(project, input, { env });
-        if (["ready", "update-branch", "merge"].includes(input.operation)) await notifyGithubChanged(project);
-        return result;
-      });
-    },
-
-    async resolvePullRequestSource(input = {}) {
-      const result = await githubPullRequests(await currentProjectState(), { ...input, operation: "read" }, { env });
-      return pullRequestSessionSource(result.pullRequest);
-    },
-
-    async preparePullRequestSource(session, input = {}) {
-      return preparePullRequestSource(await currentProjectState(), session, input, { env });
-    },
-
-    async publishSessionPullRequest(source, input = {}) {
-      const project = await currentProjectState();
-      const result = await publishSessionPullRequest(source, input, { env });
-      await notifyGithubChanged(project);
-      return result;
-    },
+    projectExecutionEnvironment: sessionEnvironment.projectExecutionEnvironment,
+    projectInspectionEnvironment: sessionEnvironment.projectInspectionEnvironment,
+    projectEnvironmentStatus: sessionEnvironment.projectEnvironmentStatus,
+    localDatabaseServers: sessionEnvironment.localDatabaseServers,
+    sessionDatabaseEnvironment: sessionEnvironment.sessionDatabaseEnvironment,
+    repositoryRemote: repositories.repositoryRemote,
+    repositoryBranches: repositories.repositoryBranches,
+    resolveSessionBranch: repositories.resolveSessionBranch,
+    connectedProjectTargets: repositories.connectedProjectTargets,
+    inspectWorkspaceSetup: repositories.inspectWorkspaceSetup,
+    inspectConnectedDevelopmentInputs: repositories.inspectConnectedDevelopmentInputs,
+    prepareConnectedDevelopmentInputs: repositories.prepareConnectedDevelopmentInputs,
+    connectedContributionSource: repositories.connectedContributionSource,
+    readRepositoryWorkflow: repositories.readRepositoryWorkflow,
+    saveRepositoryWorkflow: repositories.saveRepositoryWorkflow,
+    refreshGithub: repositories.refreshGithub,
+    incomingRepository: repositories.incomingRepository,
+    githubIssues: repositories.githubIssues,
+    githubPullRequests: repositories.githubPullRequests,
+    resolvePullRequestSource: repositories.resolvePullRequestSource,
+    preparePullRequestSource: repositories.preparePullRequestSource,
+    publishSessionPullRequest: repositories.publishSessionPullRequest,
 
     async readCurrentProject() {
-      return currentProjectState();
+      return selection.currentProjectState();
     },
 
     // The current project's slug without listing projects, for hot paths.
     currentProjectSlug() {
-      return currentProjectSlug();
+      return selection.currentProjectSlug();
     },
 
     async readEnv(input = {}) {
-      return projectResult(() => readEnvState(input));
+      return projectResult(() => environment.readEnvState(input));
     },
 
     async readEngineeringSettings(input) {
       return projectResult(async () => ({
-        engineering: await engineeringProfileState(input),
+        engineering: await projectSettings.engineeringProfileState(input),
         ok: true
       }));
     },
 
     async revealEnvSecret(input) {
-      return projectResult(() => revealEnvSecretState(input));
+      return projectResult(() => environment.revealEnvSecretState(input));
     },
 
     async downloadEnv(input) {
-      return projectResult(() => downloadEnvState(input));
+      return projectResult(() => environment.downloadEnvState(input));
     },
 
     async readPreviewApplicationIdentities(input = {}) {
-      return projectResult(() => previewApplicationIdentitiesState(input));
+      return projectResult(() => projectSettings.previewApplicationIdentitiesState(input));
     },
 
     async readPromptHints() {
       return projectResult(async () => {
         const { settings } = await readProjectPromptHints({
-          projectRuntimeRoot: selectedProjectRuntimeRoot()
+          projectRuntimeRoot: selection.selectedProjectRuntimeRoot()
         });
         return {
           ok: true,
@@ -1671,63 +266,45 @@ function createService({
     },
 
     async saveConnectedProjects(input) {
-      return projectResult(() => saveConnectedProjectsState(input));
+      return projectResult(() => projectSettings.saveConnectedProjectsState(input));
     },
 
     async readSettings(input) {
       return projectResult(async () => {
         const [collaboration, connectedProjects, { settings }, currentProject] = await Promise.all([
-          collaborationSettingsState(input),
-          connectedProjectsState(input),
+          projectSettings.collaborationSettingsState(input),
+          projectSettings.connectedProjectsState(input),
           readProjectPromptHints({
-            projectRuntimeRoot: selectedProjectRuntimeRoot()
+            projectRuntimeRoot: selection.selectedProjectRuntimeRoot()
           }),
-          currentProjectState()
+          selection.currentProjectState()
         ]);
         return {
           collaboration,
           connectedProjects,
           repositoryWorkflow: {
-            ...(await readProjectRepositoryWorkflow(selectedProjectRuntimeRoot())),
-            canEdit: canEditProjectSettings(input),
+            ...(await readProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot())),
+            canEdit: projectSettings.canEditProjectSettings(input),
             available: Boolean(projectGithubFullName(currentProject))
           },
-          developmentDatabase: await developmentDatabaseState(),
+          developmentDatabase: await developmentDatabase.developmentDatabaseState(),
           ok: true,
           promptHints: {
-            canEdit: canEditProjectSettings(input),
+            canEdit: projectSettings.canEditProjectSettings(input),
             enabled: settings.promptHints
           }
         };
       });
     },
 
-    async releaseSessionResources(input = {}) {
-      const sessionId = String(input.sessionId || "").trim();
-      // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
-      if (!sessionId || typeof resourceEnvironmentProvider?.removeSessionResources !== "function") {
-        return { ok: true };
-      }
-      const source = await sourceForInput({
-        session: input.session,
-        sessionId
-      });
-      return resourceEnvironmentProvider.removeSessionResources({
-        ...(await currentDevelopmentDatabaseConfiguration()),
-        projectRuntimeRoot: selectedProjectRuntimeRoot(),
-        projectContextRoot: selectedTargetRoot(),
-        sessionId,
-        serviceDataRoot: serviceDataRoot(),
-        sourceRoot: source.sourceRoot
-      });
-    },
+    releaseSessionResources: sessionEnvironment.releaseSessionResources,
 
-    requireSelectedTargetRoot,
-    runInProjectContext,
+    requireSelectedTargetRoot: selection.requireSelectedTargetRoot,
+    runInProjectContext: selection.runInProjectContext,
 
     runProjectSourceExclusive(operation, options = {}) {
       return runProjectSourceMutationExclusive(
-        selectedProjectRuntimeRoot(),
+        selection.selectedProjectRuntimeRoot(),
         operation,
         options
       );
@@ -1735,7 +312,7 @@ function createService({
 
     runProjectSessionPolicyExclusive(operation, options = {}) {
       return runProjectSessionPolicyMutationExclusive(
-        selectedProjectRuntimeRoot(),
+        selection.selectedProjectRuntimeRoot(),
         operation,
         options
       );
@@ -1746,14 +323,14 @@ function createService({
       if (observer !== null && typeof observer !== "function") {
         throw new TypeError("Vibe64 template application observer must be a function or null.");
       }
-      templateApplicationObserver = observer;
+      slots.templateApplicationObserver = observer;
     },
 
     // vibe64.saved-env-values.v1: a host may fill Development Env variables
     // the person explicitly linked to one of its saved values.
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setSavedEnvValueProvider(provider = null) {
-      savedEnvValueProvider = assertSavedEnvValueProvider(provider);
+      slots.savedEnvValueProvider = assertSavedEnvValueProvider(provider);
     },
 
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
@@ -1765,38 +342,38 @@ function createService({
       ) {
         throw new TypeError("Vibe64 resource environment provider must expose environmentForResources() or be null.");
       }
-      resourceEnvironmentProvider = provider;
+      slots.resourceEnvironmentProvider = provider;
     },
 
     async saveEnvUserValues(input = {}) {
-      return projectResult(() => runSessionSourceWorkExclusive(
+      return projectResult(() => sessionWork.runSessionSourceWorkExclusive(
         input,
-        () => saveEnvState(input),
+        () => environment.saveEnvState(input),
         "save-project-environment"
       ));
     },
 
     async saveDevelopmentDatabaseScope(input) {
-      return projectResult(() => saveDevelopmentDatabaseScopeState(input));
+      return projectResult(() => developmentDatabase.saveDevelopmentDatabaseScopeState(input));
     },
 
     async saveEngineeringProfile(input) {
-      return projectResult(() => saveEngineeringProfileState(input));
+      return projectResult(() => projectSettings.saveEngineeringProfileState(input));
     },
 
     async saveCollaborationSettings(input) {
-      return projectResult(() => saveCollaborationSettingsState(input));
+      return projectResult(() => projectSettings.saveCollaborationSettingsState(input));
     },
 
     async savePromptHints(input) {
-      return projectResult(() => savePromptHintsState(input));
+      return projectResult(() => projectSettings.savePromptHintsState(input));
     },
 
     async savePreviewApplicationIdentities(input = {}) {
-      return projectResult(() => runSessionSourceWorkExclusive(input, async () => {
-        const source = await previewApplicationIdentitySource(input);
+      return projectResult(() => sessionWork.runSessionSourceWorkExclusive(input, async () => {
+        const source = await projectSettings.previewApplicationIdentitySource(input);
         return runProjectSourceMutationExclusive(
-          selectedProjectRuntimeRoot(),
+          selection.selectedProjectRuntimeRoot(),
           async () => {
             const { identities } = await saveStoredPreviewApplicationIdentities({
               identities: input.identities,
@@ -1821,7 +398,6 @@ function createService({
       return projectResult(() => projectContext.selectWorkspaceProject(input));
     }
   });
-  return service;
 }
 
 export {
