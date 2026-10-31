@@ -3,6 +3,8 @@ import {
   resolveVibe64LogLevel
 } from "../shared/logging.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
 const VIBE64_LOG_REDACT_PATHS = Object.freeze([
   "req.headers.authorization",
   "req.headers.cookie",
@@ -210,6 +212,12 @@ function operationalLogFields(fields = {}) {
   });
 }
 
+/**
+ * @param {RuntimeLogger | null} logger
+ * @param {string} [level]
+ * @param {object} [fields]
+ * @param {string} [message]
+ */
 function logOperationalEvent(logger, level = "info", fields = {}, message = "") {
   const log = logger?.[level];
   if (typeof log !== "function") {

@@ -6,6 +6,9 @@ import {
   runWithProjectRequestContext
 } from "./projectRequestContext.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
+/** @typedef {ReturnType<typeof import("./studioProjectContext.js").createStudioProjectContext>} StudioProjectContext */
+
 function sendSocketJson(socket, payload) {
   if (socket.readyState !== 1) {
     return;
@@ -22,6 +25,18 @@ function publicTerminalSnapshot(session = {}) {
   return publicSession;
 }
 
+/**
+ * @param {RuntimeFastify} fastify
+ * @param {object} [options]
+ * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {boolean} [options.projectScoped]
+ * @param {string} options.routePath
+ * @param {(service: object, input: object) => Promise<object>} options.resize
+ * @param {object} options.service the service the route's handlers receive
+ * @param {string} [options.serviceUnavailableMessage]
+ * @param {(service: object, input: object) => object} options.subscribe
+ * @param {(service: object, input: object) => Promise<object>} options.write
+ */
 function registerTerminalWebSocketRoute(
   fastify,
   {

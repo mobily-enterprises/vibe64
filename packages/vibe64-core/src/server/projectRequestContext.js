@@ -28,6 +28,8 @@ import {
   runWithPracticeProjectContext
 } from "./practiceContext.js";
 
+/** @typedef {ReturnType<typeof import("./studioProjectContext.js").createStudioProjectContext>} StudioProjectContext */
+
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 let practiceRequestActor = null;
 
@@ -164,6 +166,11 @@ async function admitPracticeRequest({ projectContext, request, slug, vibe64User 
     ...(request.allowDeleting === true ? { allowDeleting: true } : {}) }, async () => retainPracticeContext("write"));
 }
 
+/**
+ * @param {StudioProjectContext} [projectContext]
+ * @param {string} [slug]
+ * @param {string} [projectsRoot]
+ */
 function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", projectsRoot = "") {
   const selectedProject = projectContext?.selectedProject || null;
   const targetRoot = String(projectContext?.targetRoot || "").trim();
