@@ -136,7 +136,7 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
     }
   }
 
-  return { readAttemptSteps, readStepProgress, updateStepProgress, readReader, saveReader };
+  return { readAttemptSteps, readStepProgress, readStepProgressRecord, updateStepProgress, readReader, saveReader };
 }
 
 export { createLearnerSteps };

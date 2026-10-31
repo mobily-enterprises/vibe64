@@ -40,6 +40,10 @@ const PROJECT_API_BASE = resolveScopedApiBasePath({ routeBase: VIBE64_PROJECT_RO
  * @param {string[]} [options.tags]
  */
 function vibe64RouteHttp(http, { tags = [] } = {}) {
+  // readable-check: allow method-probe - test asserts error: an HTTP runtime without router.register() is refused
+  if (!http?.router || typeof http.router.register !== "function") {
+    throw new Error("vibe64RouteHttp requires runtime.http with router.register().");
+  }
   return {
     router: {
       register(method, path, options, handler) {

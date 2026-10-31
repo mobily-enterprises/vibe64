@@ -68,6 +68,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
   // Offline restore reads staged state against the live exact-pin installation.
   // An isolated author-preview store uses the same writer and its exact reader.
   const installed = content === undefined ? createInstalledTrainingContent({ systemRoot: contentSystemRoot }) : content;
+  // readable-check: allow method-probe - test asserts error: content without readLesson() is refused at construction
+  if (typeof installed?.readLesson !== "function") {
+    throw new TypeError("Learning state requires the configured installed-content reader.");
+  }
 
   const notes = createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, userPaths });
   const learningMode = createLearnerMode({ createNamespace, loadState, userPaths, verifyInstalled });

@@ -69,7 +69,7 @@ function createLearnerCodeLedgers({ activeAttemptForProject, createNamespace, lo
     });
   }
 
-  return { readCodeLedger, updateCodeLedger };
+  return { ledgerPath, readCodeLedger, updateCodeLedger, withLedgerLock };
 }
 
 export { createLearnerCodeLedgers };

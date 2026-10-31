@@ -336,6 +336,10 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     throw new Error("Learning state needs a canonical absolute, non-root server-owned system root.");
   }
   const installed = content;
+  // readable-check: allow method-probe - test asserts error: content without readLesson() is refused at construction
+  if (typeof installed?.readLesson !== "function") {
+    throw new TypeError("Learning state requires the configured installed-content reader.");
+  }
 
   function userPaths(actor) {
     const learner = learnerIdentity(actor);

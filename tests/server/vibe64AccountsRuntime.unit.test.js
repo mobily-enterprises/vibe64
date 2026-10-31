@@ -250,7 +250,7 @@ function withEnv(values, callback) {
 async function startAccountsFeature({
   accountRuntime = null,
   env = {},
-  logger = null,
+  logger = { debug() {}, info() {}, warn() {}, error() {} },
   project = null,
   terminals = null
 } = {}) {
@@ -305,7 +305,7 @@ async function startAccountsFeature({
         }
       },
       ...(accountRuntime ? { "vibe64.accounts.runtime": accountRuntime } : {}),
-      ...(logger ? { "runtime.logger": logger } : {}),
+      "runtime.logger": logger,
       ...(terminals ? { "vibe64.terminals": terminals } : {})
     }
   });
