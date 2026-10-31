@@ -10,7 +10,7 @@ follows it on every pane.
 
 - Main: `packages/vibe64-usage-recording/src/server/service.js`
 - `packages/vibe64-usage-recording/src/server/Vibe64UsageRecordingProvider.js`
-- `packages/vibe64-usage-recording/src/server/actions.js`
+- `packages/vibe64-usage-recording/src/server/usageRecordingActions.js`
 - `packages/vibe64-usage-recording/src/server/registerRoutes.js`
 - `packages/vibe64-usage-recording/src/server/traceStore.js`
 - `packages/vibe64-usage-recording/src/server/activeRecordings.js`

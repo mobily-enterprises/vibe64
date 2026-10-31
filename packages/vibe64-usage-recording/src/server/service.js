@@ -3,21 +3,22 @@ import { constants } from "node:fs";
 import { chmod, mkdir, open, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { AppError } from "@jskit-ai/kernel/server/runtime";
 import {
   captureProjectRequestContext,
   currentProjectRequestContext,
   currentProjectScopeKey,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
-import { vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { GENESIS_MACHINE_CITY_PATH, resolveVibe64OutputParameters } from "@local/vibe64-genesis/server";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 
 import { registerActiveUsageRecording, activeUsageRecording } from "./activeRecordings.js";
 import { admitUsageRecording } from "./admission.js";
+import { recordingError } from "./recordingError.js";
 import { usageRecordingPath, usageRecordingsPath } from "./recordingFiles.js";
+import { createRecordingRecords, isoNow, publicRecording } from "./recordingRecords.js";
+import { createRecordingTargets } from "./recordingTargets.js";
 import {
   appendJsonLine,
   createTraceReader,
@@ -30,14 +31,12 @@ import {
 } from "./traceStore.js";
 import {
   mergePrependEnvironment,
-  recordingUnavailableReason,
   usageRecordingEnvironment,
   usageTracersForRuntimes
 } from "./tracers/index.js";
 import {
   USAGE_INTERACTION_ID_PATTERN,
   USAGE_INTERACTION_KINDS,
-  USAGE_RECORDING_CHANGED_EVENT,
   USAGE_RECORDING_ID_PATTERN,
   USAGE_RECORDING_LIMITS,
   USAGE_RECORDING_RETENTION,
@@ -54,15 +53,6 @@ const ACTIVE_STATES = new Set(["starting", "recording", "stopping"]);
 const CURRENT_WINDOW_MS = 10 * 60 * 1000;
 const NOT_LOADED_REASON = "The application did not load the recorder. This Output target may not run a supported runtime directly.";
 // What a tracer that never became ready said about itself.
-const DIAGNOSTIC_REASONS = Object.freeze({
-  CONFIGURATION_INVALID: "The recorder was started with an invalid recording configuration.",
-  NODE_TOO_OLD: "Recording needs Node.js 22.15 or later.",
-  NO_FREE_MONITORING_TOOL: "Another tool is already monitoring this Python program.",
-  PARSER_UNAVAILABLE: "The Node.js recorder could not load its source parser.",
-  PYTHON_TOO_OLD: "Recording needs Python 3.12 or later.",
-  READ_FAILED: "The recorder could not read its recording files.",
-  RECORDER_FAILED: "The recorder stopped after an internal error."
-});
 const DEFAULT_TIMING = Object.freeze({
   durationMs: USAGE_RECORDING_LIMITS.durationMs,
   eventMs: 2000,
@@ -78,9 +68,7 @@ const ASSET_FETCH_DESTINATIONS = new Set(["script", "style", "image", "font"]);
 const DEV_SERVER_PATH = /^\/(?:@vite\/|@fs\/|@id\/|node_modules\/\.vite\/)/u;
 const ASSET_PATH = /\.(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|map|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|eot)$/u;
 
-const recordingError = (status, message, code, details) => new AppError(status, message, { code, details });
 const newRecordingId = () => `rec_${[...randomBytes(20)].map((byte) => BASE32[byte & 31]).join("")}`;
-const isoNow = (now) => new Date(now()).toISOString();
 
 // Without Fetch Metadata, a source module or asset is known by its extension.
 function isAssetLoad(requestPath = "", fetchDest = "") {
@@ -93,14 +81,6 @@ function isAssetLoad(requestPath = "", fetchDest = "") {
 // (i_0007 → 7, 0 before the first): a Preview page continues after it.
 // requestLog counts the asset loads not listed, and says when the Preview
 // request log reached its limit and later requests were not recorded.
-function publicRecording(record) {
-  const { id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt, sourceIdentity, highestInteraction, requestLog } = record;
-  return structuredClone({
-    id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt,
-    sourceIdentity: sourceIdentity ?? null, highestInteraction: highestInteraction ?? 0, requestLog: requestLog ?? { assets: 0, full: false }
-  });
-}
-
 function storedRecording(value) {
   return value?.schema === USAGE_RECORDING_SCHEMA && USAGE_RECORDING_ID_PATTERN.test(String(value.id || "")) ? value : null;
 }
@@ -186,8 +166,8 @@ async function directorySize(directory) {
  * @param {object} dependencies
  * @param {ProjectService} dependencies.projectService
  * @param {TerminalsService} dependencies.terminals
- * @param {RuntimeEvents | null} [dependencies.events]
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeEvents} dependencies.events
+ * @param {RuntimeLogger} dependencies.logger
  * @param {typeof admitUsageRecording} [dependencies.admission]
  * @param {() => number} [dependencies.now]
  * @param {object} [dependencies.timing]
@@ -195,13 +175,15 @@ async function directorySize(directory) {
 function createService({
   projectService,
   terminals,
-  events = null,
-  logger = null,
+  events,
+  logger,
   admission = admitUsageRecording,
   now = () => Date.now(),
   timing = {}
 }) {
   const times = { ...DEFAULT_TIMING, ...timing };
+  const records = createRecordingRecords({ events, logger, now });
+  const recordingTargets = createRecordingTargets({ terminals });
   // Recordings this process is running or finishing, by id.
   const live = new Map();
   // Sessions whose start is between its checks and its registration.
@@ -224,84 +206,8 @@ function createService({
     };
   }
 
-  async function publish(entry) {
-    entry.lastEventAt = now();
-    if (!events || !entry.projectSlug) return;
-    const { record } = entry;
-    try {
-      await events.publish({
-        type: "entity.changed",
-        source: "vibe64",
-        entity: "usage-recording",
-        operation: "updated",
-        entityId: record.id,
-        scope: { kind: "global", id: null },
-        occurredAt: isoNow(now),
-        realtime: {
-          audience: { room: vibe64SessionViewersRoom(entry.projectSlug, record.sessionId) },
-          event: USAGE_RECORDING_CHANGED_EVENT,
-          payload: {
-            projectSlug: entry.projectSlug,
-            sessionId: record.sessionId,
-            recordingId: record.id,
-            state: record.state,
-            counts: { ...record.counts },
-            startedAt: record.startedAt,
-            stoppedAt: record.stoppedAt,
-            stopReason: record.stopReason
-          }
-        }
-      });
-    } catch (error) {
-      logger?.warn?.({ error, recordingId: record.id }, "Usage recording change could not be published.");
-    }
-  }
-
-  async function writeRecord(entry) {
-    await writeJsonFile(path.join(entry.directory, "recording.json"), {
-      schema: USAGE_RECORDING_SCHEMA,
-      ...publicRecording(entry.record),
-      limits: {
-        durationMs: USAGE_RECORDING_LIMITS.durationMs,
-        capturedRequests: USAGE_RECORDING_LIMITS.capturedRequests,
-        hitsBytesPerProcess: USAGE_RECORDING_LIMITS.hitsBytesPerProcess,
-        hitsBytesPerRecording: USAGE_RECORDING_LIMITS.hitsBytesPerRecording,
-        proxyRequestLines: USAGE_RECORDING_LIMITS.proxyRequestLines,
-        interactions: USAGE_RECORDING_LIMITS.interactions
-      }
-    });
-  }
-
-  async function changeState(entry, state, fields = {}) {
-    Object.assign(entry.record, { state, ...fields });
-    await writeRecord(entry);
-    await publish(entry);
-  }
-
   function clearTimers(entry) {
     for (const timer of Object.values(entry.timers)) clearTimeout(timer);
-  }
-
-  // A tracer that never became ready explains itself through its diagnostics.
-  function unreadyTracers(entry, fallback) {
-    const states = entry.reader.tracerStates();
-    return entry.record.tracers.map((tracer) => {
-      if (tracer.state === "unavailable" || states.get(tracer.runtime)?.ready) return tracer;
-      const code = [...(states.get(tracer.runtime)?.diagnostics || [])].find((name) => DIAGNOSTIC_REASONS[name]);
-      return { ...tracer, state: "unavailable", reason: code ? DIAGNOSTIC_REASONS[code] : fallback };
-    });
-  }
-
-  function refreshFromReader(entry) {
-    const states = entry.reader.tracerStates();
-    entry.record.counts = entry.reader.counts();
-    entry.record.truncated = entry.reader.truncated() || entry.record.requestLog.full;
-    entry.record.tracers = entry.record.tracers.map((tracer) => {
-      const state = states.get(tracer.runtime);
-      if (!state?.ready || tracer.state === "unavailable") return tracer;
-      return { ...tracer, state: state.active === 0 && state.idle > 0 ? "idle" : "ready" };
-    });
-    return [...states.values()].some((state) => state.ready);
   }
 
   async function poll(entry) {
@@ -310,29 +216,21 @@ function createService({
     try {
       const before = JSON.stringify(entry.record.counts);
       await entry.reader.poll();
-      const ready = refreshFromReader(entry);
+      const ready = records.refreshFromReader(entry);
       if (entry.stopRequested) return;
       if (entry.record.state === "starting" && ready) {
         clearTimeout(entry.timers.ready);
-        await changeState(entry, "recording");
+        await records.changeState(entry, "recording");
       } else if (JSON.stringify(entry.record.counts) !== before && now() - entry.lastEventAt >= times.eventMs) {
-        await publish(entry);
+        await records.publish(entry);
       }
       if (entry.record.counts.requests >= USAGE_RECORDING_LIMITS.capturedRequests) await stopEntry(entry, "request-limit");
       else if (entry.reader.hitsBytes() >= USAGE_RECORDING_LIMITS.hitsBytesPerRecording) await stopEntry(entry, "size-limit");
     } catch (error) {
-      logger?.warn?.({ error, recordingId: entry.record.id }, "Usage recording could not read its trace.");
+      logger.warn({ error, recordingId: entry.record.id }, "Usage recording could not read its trace.");
       await stopEntry(entry, "error");
     } finally {
       entry.polling = false;
-    }
-  }
-
-  async function writeIndex(entry) {
-    const requests = await recordingRequestRows(entry.directory, entry.reader, { runLabel: entry.record.target.label });
-    const index = { schema: USAGE_RECORDING_SCHEMA, counts: entry.record.counts, requests };
-    if (Buffer.byteLength(JSON.stringify(index)) <= USAGE_RECORDING_LIMITS.indexBytes) {
-      await writeJsonFile(path.join(entry.directory, "index.json"), index);
     }
   }
 
@@ -348,19 +246,19 @@ function createService({
         if (states.every((state) => state.active === 0)) break;
         await new Promise((resolve) => setTimeout(resolve, Math.min(250, times.stopIdleMs)));
       } while (now() < deadline);
-      const ready = refreshFromReader(entry);
+      const ready = records.refreshFromReader(entry);
       if (!ready && reason === "target-exited") {
-        entry.record.tracers = unreadyTracers(entry, NOT_LOADED_REASON);
-        await changeState(entry, "unavailable");
+        entry.record.tracers = records.unreadyTracers(entry, NOT_LOADED_REASON);
+        await records.changeState(entry, "unavailable");
       } else {
-        entry.record.tracers = unreadyTracers(entry, NOT_LOADED_REASON)
+        entry.record.tracers = records.unreadyTracers(entry, NOT_LOADED_REASON)
           .map((tracer) => (tracer.state === "ready" ? { ...tracer, state: "idle" } : tracer));
-        await writeIndex(entry);
-        await changeState(entry, "stopped");
+        await records.writeIndex(entry);
+        await records.changeState(entry, "stopped");
       }
     } catch (error) {
-      logger?.warn?.({ error, recordingId: entry.record.id }, "Usage recording could not finish cleanly.");
-      await changeState(entry, "stopped", { stopReason: "error" }).catch(() => {});
+      logger.warn({ error, recordingId: entry.record.id }, "Usage recording could not finish cleanly.");
+      await records.changeState(entry, "stopped", { stopReason: "error" }).catch(() => {});
     } finally {
       live.delete(entry.record.id);
       rememberReader(entry.directory, entry.reader);
@@ -375,7 +273,7 @@ function createService({
       entry.unregister();
       clearTimers(entry);
       await writeJsonFile(path.join(entry.directory, "control.json"), { state: "stopping" });
-      await changeState(entry, "stopping", { stopReason: reason, stoppedAt: isoNow(now) });
+      await records.changeState(entry, "stopping", { stopReason: reason, stoppedAt: isoNow(now) });
       entry.finished = finish(entry, reason);
     }
     return entry.record;
@@ -392,8 +290,8 @@ function createService({
     await entry.reader.poll().catch(() => {});
     entry.record.tracers = state === "failed"
       ? entry.record.tracers.map((tracer) => ({ ...tracer, state: tracer.state === "unavailable" ? tracer.state : "failed", reason }))
-      : unreadyTracers(entry, reason);
-    await changeState(entry, state, { stoppedAt: isoNow(now) });
+      : records.unreadyTracers(entry, reason);
+    await records.changeState(entry, state, { stoppedAt: isoNow(now) });
     live.delete(entry.record.id);
     entry.finished = Promise.resolve();
   }
@@ -434,7 +332,7 @@ function createService({
     };
     const append = (name, row) => {
       entry.writes = entry.writes.then(() => appendJsonLine(path.join(directory, name), row))
-        .catch((error) => logger?.warn?.({ error, recordingId: record.id }, "Usage recording could not append a line."));
+        .catch((error) => logger.warn({ error, recordingId: record.id }, "Usage recording could not append a line."));
       return entry.writes;
     };
     // A launched target inherits this server's environment beneath the
@@ -523,7 +421,7 @@ function createService({
         entry.timers.ready = setTimeout(() => {
           void endWithoutResults(entry, "unavailable", NOT_LOADED_REASON);
         }, times.readyMs);
-        entry.timers.ready.unref?.();
+        entry.timers.ready.unref();
       }
     };
     return entry;
@@ -583,45 +481,6 @@ function createService({
     return { directory, entry: live.get(recordingId) || null, record };
   }
 
-  async function targetsFor(context) {
-    const result = await terminals.usageRecordingTargets(context.sessionId);
-    if (result?.ok === false) {
-      throw recordingError(422, result.error || "This session's Output targets cannot be read.", result.code || "vibe64_usage_recording_targets_unavailable");
-    }
-    const describe = (outputTarget, { id, kind, label }) => {
-      const runtimes = [...outputTarget.runtimes];
-      const tracers = usageTracersForRuntimes(runtimes).map((tracer) => ({
-        tracer,
-        prepared: tracer.prepare({ recordingDirectory: "", sourceRoot: context.sourceRoot, recordingId: "", targetKind: kind })
-      }));
-      const ready = tracers.filter(({ prepared }) => prepared.available);
-      const reason = !outputTarget.available
-        ? outputTarget.disabledReason || "This Output target is unavailable."
-        : tracers.length === 0
-          ? recordingUnavailableReason(runtimes)
-          : ready.length === 0 ? tracers.map(({ prepared }) => prepared.reason).join(" ") : "";
-      return {
-        id,
-        kind,
-        label,
-        runtimes,
-        available: !reason,
-        reason,
-        parameters: kind === "web" ? [] : outputTarget.parameters.map(({ id: parameterId, label: parameterLabel, required }) => ({
-          id: parameterId, label: parameterLabel, required: required === true
-        })),
-        outputTarget
-      };
-    };
-    const outputTargets = Array.isArray(result?.targets) ? result.targets : [];
-    const preview = outputTargets.find((target) => target.web && target.id === result.previewTargetId);
-    return [
-      ...(preview ? [describe(preview, { id: "preview", kind: "web", label: "Preview" })] : []),
-      ...outputTargets.filter((target) => !target.web)
-        .map((target) => describe(target, { id: `output:${target.id}`, kind: "terminal", label: target.label }))
-    ];
-  }
-
   function assertActiveSession(context) {
     if (String(context.session?.status || "active") !== "active" || sessionClosingReason(context.session)) {
       throw recordingError(409, "Recording needs an active session.", "vibe64_usage_recording_session_inactive");
@@ -639,19 +498,19 @@ function createService({
   }
 
   return Object.freeze({
-    async readTargets({ sessionId } = {}) {
+    async readTargets({ sessionId }) {
       const context = await sessionContext(sessionId);
-      return { targets: (await targetsFor(context)).map(({ outputTarget: _outputTarget, ...target }) => target) };
+      return { targets: (await recordingTargets.targetsFor(context)).map(({ outputTarget: _outputTarget, ...target }) => target) };
     },
 
-    async start({ sessionId, targetId = "", parameters } = {}) {
+    async start({ sessionId, targetId = "", parameters }) {
       const context = await sessionContext(sessionId);
       assertActiveSession(context);
       assertNoActiveRecording(context);
       const sessionKey = `${context.projectScope}\n${context.sessionId}`;
       startingSessions.add(sessionKey);
       try {
-        const target = (await targetsFor(context)).find((candidate) => candidate.id === String(targetId || ""));
+        const target = (await recordingTargets.targetsFor(context)).find((candidate) => candidate.id === String(targetId || ""));
         if (!target) throw recordingError(422, "This target cannot be recorded.", "vibe64_usage_recording_target_unknown");
         if (!target.available) throw recordingError(422, target.reason, "vibe64_usage_recording_target_unavailable");
         let outputParameters;
@@ -713,7 +572,7 @@ function createService({
         live.set(id, entry);
         try {
           await writeJsonFile(path.join(directory, "control.json"), { state: "recording" });
-          await writeRecord(entry);
+          await records.writeRecord(entry);
         } catch (error) {
           live.delete(id);
           await rm(directory, { force: true, recursive: true });
@@ -722,10 +581,10 @@ function createService({
         entry.unregister = registerActiveUsageRecording(context.projectScope, context.sessionId, entry.active);
         entry.timers.poll = setInterval(() => void poll(entry), times.pollMs);
         entry.timers.limit = setTimeout(() => void stopEntry(entry, "time-limit"), times.durationMs);
-        entry.timers.poll.unref?.();
-        entry.timers.limit.unref?.();
+        entry.timers.poll.unref();
+        entry.timers.limit.unref();
         await applyRetention(context.directory);
-        await publish(entry);
+        await records.publish(entry);
         // The target's start can take a while; the recording reports it.
         const requestContext = captureProjectRequestContext();
         void runWithProjectRequestContext(requestContext || {}, () => entry.launchTarget());
@@ -735,7 +594,7 @@ function createService({
       }
     },
 
-    async readCurrent({ sessionId } = {}) {
+    async readCurrent({ sessionId }) {
       const context = await sessionContext(sessionId);
       await applyRetention(context.directory);
       const recordings = await storedRecordings(context);
@@ -744,7 +603,7 @@ function createService({
       return { recording: current ? publicRecording(current) : null, serverTime: isoNow(now) };
     },
 
-    async stop({ sessionId, recordingId } = {}) {
+    async stop({ sessionId, recordingId }) {
       const context = await sessionContext(sessionId);
       const { entry, record } = await recordingFor(context, recordingId);
       if (entry) return { recording: publicRecording(await stopEntry(entry, "person")) };
@@ -752,23 +611,23 @@ function createService({
       return { recording: publicRecording(stored || record) };
     },
 
-    async dismiss({ sessionId, recordingId } = {}) {
+    async dismiss({ sessionId, recordingId }) {
       const context = await sessionContext(sessionId);
       const { directory, entry, record } = await recordingFor(context, recordingId);
       record.dismissedAt ||= isoNow(now);
-      if (entry) await writeRecord(entry);
+      if (entry) await records.writeRecord(entry);
       else await writeJsonFile(path.join(directory, "recording.json"), record);
       return { recording: publicRecording(record) };
     },
 
-    async list({ sessionId } = {}) {
+    async list({ sessionId }) {
       const context = await sessionContext(sessionId);
       return { recordings: (await storedRecordings(context)).slice(0, USAGE_RECORDING_RETENTION.maxRecordings).map(publicRecording) };
     },
 
     // Oldest first unless order is "newest"; total counts every matching row.
     // A requestId reads that one row, whatever the other filters say.
-    async readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false, order = "oldest", requestId = "" } = {}) {
+    async readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false, order = "oldest", requestId = "" }) {
       const context = await sessionContext(sessionId);
       const { directory, entry, record } = await recordingFor(context, recordingId);
       const index = entry ? null : await readJsonFile(path.join(directory, "index.json"), USAGE_RECORDING_LIMITS.indexBytes);
@@ -785,7 +644,7 @@ function createService({
       return { requests: page.items, interactions, nextCursor: page.more ? page.next : null, total: matching.length };
     },
 
-    async readRequestFunctions({ sessionId, recordingId, requestId, cursor, limit } = {}) {
+    async readRequestFunctions({ sessionId, recordingId, requestId, cursor, limit }) {
       const context = await sessionContext(sessionId);
       const { directory } = await recordingFor(context, recordingId);
       if (!usageScopeKind(requestId)) {
@@ -796,7 +655,7 @@ function createService({
       return { functions: page.items, total: functions.length, truncated: page.more };
     },
 
-    async recordInteraction({ sessionId, recordingId, id, at, label, kind = "click", componentFile = null } = {}) {
+    async recordInteraction({ sessionId, recordingId, id, at, label, kind = "click", componentFile = null }) {
       const context = await sessionContext(sessionId);
       const { entry } = await recordingFor(context, recordingId);
       if (!entry || entry.stopRequested || entry.record.target.kind !== "web") {
@@ -822,7 +681,7 @@ function createService({
       return { ok: true };
     },
 
-    async delete({ sessionId, recordingId } = {}) {
+    async delete({ sessionId, recordingId }) {
       const context = await sessionContext(sessionId);
       const { directory, entry } = await recordingFor(context, recordingId);
       if (entry) {

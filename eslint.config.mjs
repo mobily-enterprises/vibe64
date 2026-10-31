@@ -50,7 +50,8 @@ export default [
     "packages/vibe64-runtime/src/server/**",
     "packages/vibe64-source-editor/src/server/**",
     "packages/vibe64-system-graph/src/server/**",
-    "packages/vibe64-training/src/server/**"
+    "packages/vibe64-training/src/server/**",
+    "packages/vibe64-usage-recording/src/server/**"
   ]),
   {
     // Over 750 lines, with a factory over 600 whose concerns share mutable state.

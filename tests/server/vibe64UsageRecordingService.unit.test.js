@@ -52,6 +52,7 @@ async function recorder(t, { status = "active", startResult = null, admission, t
   const service = createService({
     admission,
     events: { publish: async (event) => published.push(event) },
+    logger: { warn() {} },
     projectService: { createRuntime: async () => ({ getSession: async () => session }) },
     terminals: {
       usageRecordingTargets: async () => ({ ok: true, previewTargetId: "web", targets }),

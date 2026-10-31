@@ -15,6 +15,7 @@ const active = new Map();
 
 const entryKey = (projectScope = "", sessionId = "") => `${String(projectScope)}\n${String(sessionId)}`;
 
+// readable-check: allow module-registry - cycle: vibe64.usage-recording requires vibe64.terminals, whose launcher and Preview proxy read these recordings
 function registerActiveUsageRecording(projectScope, sessionId, entry) {
   const key = entryKey(projectScope, sessionId);
   active.set(key, entry);

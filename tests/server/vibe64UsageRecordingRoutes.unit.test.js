@@ -5,7 +5,7 @@ import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
-import { createUsageRecordingActions } from "../../packages/vibe64-usage-recording/src/server/actions.js";
+import { createUsageRecordingActions } from "../../packages/vibe64-usage-recording/src/server/usageRecordingActions.js";
 import { registerRoutes } from "../../packages/vibe64-usage-recording/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,
