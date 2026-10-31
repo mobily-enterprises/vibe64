@@ -4,6 +4,17 @@ import { assistantProviderPolicy } from "./assistantProviderPolicy.js";
 import { readAllOpenCodeCapabilityRows } from "./opencodeCatalogPages.js";
 import { runLoggedAccountChange } from "./accountChangeLog.js";
 
+/** @typedef {ReturnType<typeof import("./aiConnectionStore.js").createAiConnectionStore>} AiConnectionStore */
+/** @typedef {import("./types.js").AccountsService} AccountsService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
+/**
+ * @param {object} dependencies
+ * @param {AiConnectionStore} dependencies.aiConnections
+ * @param {(query: object, vibe64User: object | null) => Promise<object>} dependencies.readAssistantCapabilities
+ * @param {AccountsService["initializeModelRouting"]} dependencies.initializeModelRouting
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ */
 function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting, logger = null } = {}) {
   // OpenCode connection changes are account changes too: one line each.
   function connectionChange(operation, { modelProviderId, vibe64User } = {}, work) {

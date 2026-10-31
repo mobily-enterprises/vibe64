@@ -19,6 +19,10 @@ import {
   vibe64ConnectionsChangedActionEvent
 } from "./accountRealtimeEvents.js";
 
+/** @typedef {import("./types.js").AccountsService} AccountsService */
+/** @typedef {ReturnType<typeof import("./service.js").createAccountsRuntime>} AccountsRuntime */
+/** @typedef {ReturnType<typeof import("./aiConnectionService.js").createAiConnectionService>} AiConnectionService */
+
 const ACTION_READ_CODEX_PROVIDERS = "vibe64.accounts.codex-providers.read";
 const ACTION_READ_MODEL_ROUTING = "vibe64.accounts.model-routing.read";
 const ACTION_SAVE_MODEL_ROUTING = "vibe64.accounts.model-routing.save";
@@ -52,6 +56,10 @@ const gitIdentityTool = Object.freeze({
   }
 });
 
+/**
+ * @param {object} dependencies
+ * @param {AccountsService} dependencies.accounts
+ */
 function createActions({ accounts } = {}) {
   if (!accounts || typeof accounts.getStatus !== "function") {
     throw new TypeError("createActions requires the Vibe64 Accounts API.");
@@ -205,6 +213,11 @@ function createActions({ accounts } = {}) {
   }, { projectScoped: false })));
 }
 
+/**
+ * @param {object} dependencies
+ * @param {AiConnectionService} dependencies.aiConnectionService
+ * @param {AccountsRuntime["requireAiManagement"]} dependencies.requireAiManagement
+ */
 function createAiConnectionActions({ aiConnectionService, requireAiManagement } = {}) {
   if (!aiConnectionService || typeof requireAiManagement !== "function") {
     throw new TypeError("AI connection actions require the connection service and host management policy.");

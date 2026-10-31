@@ -19,7 +19,8 @@
     "./server/assistantHelperUpgrade": "./src/server/assistantHelperUpgrade.js",
     "./server/providerCredentialsUpgrade": "./src/server/providerCredentialsUpgrade.js",
     "./server/freeModelRetirementUpgrade": "./src/server/freeModelRetirementUpgrade.js",
-    "./server/teamSetupRoutingUpgrade": "./src/server/teamSetupRoutingUpgrade.js"
+    "./server/teamSetupRoutingUpgrade": "./src/server/teamSetupRoutingUpgrade.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",

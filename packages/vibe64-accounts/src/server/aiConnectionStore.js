@@ -337,6 +337,15 @@ async function verifyOpenCodeConnection({
   }
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string} [dependencies.filePath]
+ * @param {(change: object) => unknown} [dependencies.onConnectionChanged]
+ * @param {(change: object, publish: () => Promise<unknown>) => Promise<unknown>} [dependencies.withConnectionChange]
+ * @param {(() => Promise<string[]>) | null} [dependencies.readModelIds]
+ * @param {((input: object) => Promise<object>) | null} [dependencies.verifyConnection]
+ * @param {number} [dependencies.zenModelCheckDelayMs]
+ */
 function createAiConnectionStore({
   filePath = "",
   onConnectionChanged = () => null,

@@ -5,6 +5,8 @@ import {
   VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
   VIBE64_CONNECTIONS_CHANGED_EVENT
 } from "../shared/accountEvents.js";
+
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 const VIBE64_ACCOUNT_EVENT_ENTITY = "account";
 const VIBE64_ACCOUNT_EVENT_SOURCE = "vibe64";
 const VIBE64_ACCOUNT_REALTIME_AUDIENCE = "all_clients";
@@ -153,6 +155,10 @@ function vibe64ConnectionsChangedActionEvent({ operation = "updated" } = {}) {
   });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEvents | null} [dependencies.events]
+ */
 function createVibe64AccountsChangedPublisher({ events = null } = {}) {
   if (!events || typeof events.publish !== "function") {
     return async function publishNoop() {
@@ -212,6 +218,10 @@ function createVibe64AccountsChangedPublisher({ events = null } = {}) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEvents | null} [dependencies.events]
+ */
 function createVibe64ConnectionsChangedPublisher({ events = null } = {}) {
   if (!events || typeof events.publish !== "function") {
     return async function publishNoop() {
@@ -244,6 +254,10 @@ function createVibe64ConnectionsChangedPublisher({ events = null } = {}) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEvents | null} [dependencies.events]
+ */
 function createVibe64AccountAuthSessionChangedPublisher({ events = null } = {}) {
   if (!events || typeof events.publish !== "function") {
     return async function publishNoop() {

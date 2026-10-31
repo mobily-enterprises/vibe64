@@ -38,6 +38,19 @@ import {
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("./types.js").AccountsService} AccountsService */
+/** @typedef {ReturnType<typeof import("./service.js").createAccountsRuntime>} AccountsRuntime */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
+/**
+ * @param {object} dependencies
+ * @param {AccountsRuntime | null} [dependencies.accountRuntime]
+ * @param {ProjectService | null} [dependencies.project]
+ * @param {string} [dependencies.systemRoot]
+ * @param {string} [dependencies.targetRoot]
+ */
 function createDefaultAccountRuntime({
   accountRuntime = null,
   project = null,
@@ -66,6 +79,12 @@ async function connectionAccountStatusInput(input = {}, project) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {AccountsService} dependencies.accounts
+ * @param {ProjectService} dependencies.project
+ * @param {((input: object) => Promise<object>) | null} [dependencies.listAssistantCapabilities]
+ */
 function createConnections({ accounts, project, listAssistantCapabilities = null } = {}) {
   if (!accounts || typeof accounts.getStatus !== "function") {
     throw new TypeError("createConnections requires the Vibe64 Accounts API.");
@@ -141,6 +160,7 @@ const Vibe64AccountsFeature = defineFeature({
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
+  /** @param {{ events: RuntimeEvents, terminals?: TerminalsService }} capabilities */
   setup({ accountRuntime, env, events, fastify, http, logger, project, terminals }, { actionCatalogue }) {
     warnMissingOperatorClis();
     const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");

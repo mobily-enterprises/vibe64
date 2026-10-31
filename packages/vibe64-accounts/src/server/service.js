@@ -81,6 +81,13 @@ import { claudeStatusStartFailed, readClaudeCodeAuthStatus } from "@local/studio
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { logAccountChange, runLoggedAccountChange } from "./accountChangeLog.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/personalAiProfile").createPersonalAiProfileStore>} PersonalAiProfileStore */
+/** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64AccountsChangedPublisher>} PublishAccountChanged */
+/** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64AccountAuthSessionChangedPublisher>} PublishAuthSessionChanged */
+
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
 const DEVICE_AUTH_MODE = "device";
@@ -1268,6 +1275,24 @@ function normalizeCodexAuthModes(modes = ALL_CODEX_AUTH_MODES) {
   );
 }
 
+/**
+ * @param {object} dependencies
+ * @param {string[]} [dependencies.allowedCodexAuthModes]
+ * @param {string} [dependencies.daemonHome]
+ * @param {number | null} [dependencies.daemonGid]
+ * @param {number | null} [dependencies.daemonUid]
+ * @param {string} [dependencies.daemonUsername]
+ * @param {((input: object) => object) | null} [dependencies.debugInput]
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {string} [dependencies.githubAccountMode]
+ * @param {object | null} [dependencies.previousGithub]
+ * @param {ProjectService | null} [dependencies.projectService]
+ * @param {((input: object) => Promise<object | null>) | null} [dependencies.requireAiManagement]
+ * @param {boolean} [dependencies.requireExplicitRoots]
+ * @param {string} [dependencies.systemRoot]
+ * @param {string} [dependencies.targetRoot]
+ * @param {((mode: string) => string) | null} [dependencies.unsupportedCodexAuthModeMessage]
+ */
 function createAccountsRuntime({
   allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
   daemonHome = "",
@@ -1353,6 +1378,20 @@ function createAccountsRuntime({
 
 // accountRuntime (from createAccountsRuntime) owns roots, credential homes
 // and the AI management policy; the service owns login sessions and status reads.
+/**
+ * @param {object} dependencies
+ * @param {ReturnType<typeof createAccountsRuntime>} dependencies.accountRuntime
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {(input?: object) => Promise<unknown>} [dependencies.invalidateAgentRuntimes]
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {PersonalAiProfileStore | null} [dependencies.personalProfileStore]
+ * @param {((configuration: object, options: object) => Promise<object>) | null} [dependencies.inspectRoutingConfiguration]
+ * @param {PublishAccountChanged} [dependencies.publishAccountChanged]
+ * @param {PublishAuthSessionChanged} [dependencies.publishAuthSessionChanged]
+ * @param {(() => Promise<object>) | null} [dependencies.readClaudeAccountStatus]
+ * @param {typeof runDefaultHostCommand} [dependencies.runHostToolCommand]
+ * @param {typeof runVibe64Command} [dependencies.runAuthTerminalCommand]
+ */
 function createService({
   accountRuntime,
   env = process.env,
