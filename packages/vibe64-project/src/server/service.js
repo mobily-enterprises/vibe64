@@ -117,6 +117,11 @@ import {
   runProjectSourceExclusive as runProjectSourceMutationExclusive
 } from "./projectSourceMutationLock.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {ReturnType<typeof import("./actions.js").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+
 function envScope(input = {}) {
   return input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
 }
@@ -266,6 +271,24 @@ function projectEnvironmentResult(resolved, input, userRecords) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {(fullName: string, input: object) => Promise<unknown>} [dependencies.inspectConnectedRepository]
+ * @param {(fullName: string, branch: string, input: object) => Promise<unknown>} [dependencies.inspectConnectedBranch]
+ * @param {typeof inspectGenesisCollaboration} [dependencies.inspectCollaboration]
+ * @param {typeof inspectGenesisEngineering} [dependencies.inspectEngineering]
+ * @param {typeof inspectGenesisEnvironment} [dependencies.inspectEnvironment]
+ * @param {typeof inspectGenesisProject} [dependencies.inspectProject]
+ * @param {typeof listGenesisTemplates} [dependencies.listTemplates]
+ * @param {typeof applyGenesisTemplate} [dependencies.applyTemplate]
+ * @param {StudioProjectContext | null} [dependencies.projectContext]
+ * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
+ * @param {typeof setGenesisCollaboration} [dependencies.setCollaboration]
+ * @param {typeof setGenesisEngineeringProfile} [dependencies.setEngineeringProfile]
+ * @param {string} [dependencies.targetRoot]
+ */
 function createService({
   env = process.env,
   logger = null,

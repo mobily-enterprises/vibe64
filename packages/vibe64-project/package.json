@@ -14,7 +14,8 @@
     "./server/managedRepository": "./src/server/managedRepository.js",
     "./server/project-archive": "./src/server/projectArchive.js",
     "./server/projectSourceMutationLock": "./src/server/projectSourceMutationLock.js",
-    "./server/projectEnvironmentFiles": "./src/server/projectEnvironmentFiles.js"
+    "./server/projectEnvironmentFiles": "./src/server/projectEnvironmentFiles.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",

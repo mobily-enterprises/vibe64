@@ -7,8 +7,19 @@ import { normalizeProjectSlug, resolveProjectContextRoot, projectSlugFromName } 
 import { assertProjectEffectAdmission } from "@local/vibe64-core/server/projectRequestContext";
 import { initializeManagedProject as initializePublicManagedProject, verifyManagedProjectSource } from "./managedProject.js";
 
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("./types.js").ProjectService} ProjectService */
+
 const DEFAULT_MANAGED_GIT_BRANCH = "main";
 
+/**
+ * @param {object} dependencies
+ * @param {typeof initializePublicManagedProject} [dependencies.initializeManagedProject]
+ * @param {StudioProjectContext} dependencies.projectContext
+ * @param {ProjectService | null} [dependencies.projectService]
+ * @param {((request: { projectContextRoot: string, projectService: ProjectService | null, slug: string }) => Promise<object>) | null} [dependencies.configureProject]
+ *   the defaults a host adds to each new project record
+ */
 function createManagedProjectRepositoryService({ initializeManagedProject = initializePublicManagedProject,
   projectContext, projectService = null, configureProject = null } = {}) {
   // Internal preparation options are separate from action and HTTP input.

@@ -34,6 +34,9 @@ import {
   previewApplicationIdentitiesReadInputValidator
 } from "./inputSchemas.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("./types.js").ProjectService} ProjectService */
+
 const ACTION_REPOSITORY_REMOTE = "vibe64.project.repository.remote";
 const ACTION_CREATE_PROJECT = "vibe64.project.projects.create";
 const ACTION_READ_ONBOARDING = "vibe64.project.onboarding.read";
@@ -122,6 +125,10 @@ function projectRealtimePayload(value = {}) {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEvents | null} [dependencies.events]
+ */
 function createVibe64ProjectChangedPublisher({ events = null } = {}) {
   if (!events || typeof events.publish !== "function") {
     return async function publishNoop() {
@@ -174,6 +181,10 @@ function action({ assistant, events = [], execute, id, input, kind, ownerRequire
   }, { ownerRequired });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ */
 function createProjectActions({ project } = {}) {
   if (!project) {
     throw new TypeError("createProjectActions requires project.");

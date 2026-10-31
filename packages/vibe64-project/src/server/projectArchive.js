@@ -25,6 +25,8 @@ import { pathExists, pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { PRACTICE_SLUG_PATTERN } from "@local/vibe64-core/server/learningSpace";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+
 const ARCHIVE_TIMEOUT_MS = 120_000;
 const COMMAND_BUFFER_BYTES = 50 * 1024 * 1024;
 const PROJECT_ARCHIVE_ROOT = "project-archives";
@@ -69,6 +71,16 @@ const NO_HOST_RESOURCES = Object.freeze({
 //   remove(ctx) after the bundle is validated (ctx.manifest is null for removeProject),
 //   forget(ctx) after the project's runtime state is gone,
 //   artifactKinds[kind] = { evidence(artifact, file), validate(artifact, file) }.
+/**
+ * @param {object} dependencies
+ * @param {((request: { archiveRoot: string, projectContextRoot: string, projectRuntimeRoot: string, slug: string }) => Promise<unknown>) | null} [dependencies.assertArchiveHeadroom]
+ * @param {(request: { slug: string, reason: string }) => Promise<unknown>} dependencies.closeProjectRuntime
+ * @param {() => Date} [dependencies.clock]
+ * @param {typeof NO_HOST_RESOURCES} [dependencies.hostResources]
+ * @param {StudioProjectContext} dependencies.projectContext
+ * @param {typeof rm} [dependencies.removePath]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ */
 function createProjectArchiveService({
   assertArchiveHeadroom = null,
   closeProjectRuntime,
@@ -654,6 +666,15 @@ function assertProjectRuntimeRoot({
   return resolvedProjectRuntimeRoot;
 }
 
+/**
+ * @param {object} request
+ * @param {string[]} [request.excludePatterns]
+ * @param {string} [request.archivePath]
+ * @param {string[]} [request.disposablePaths]
+ * @param {typeof runVibe64Command} [request.runCommand]
+ * @param {string} [request.sourceName]
+ * @param {string} [request.sourceParent]
+ */
 async function createTarArchive({
   excludePatterns = [],
   archivePath = "",
