@@ -68,10 +68,7 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
  * @param {TerminalsService} dependencies.terminals
  * @param {AccountsRuntime["requireAiManagement"]} dependencies.requireAiManagement
  */
-function configureAiConnectionRuntime({ aiConnections, terminals, requireAiManagement } = {}) {
-  if (typeof requireAiManagement !== "function") {
-    throw new TypeError("AI connection runtime requires the host AI management policy.");
-  }
+function configureAiConnectionRuntime({ aiConnections, terminals, requireAiManagement }) {
   terminals.configureAssistantRuntime({
     listConnections: () => aiConnections.listConnections(),
     readAssistantAccess: ({ assistantSelection, modelProviderId = "" } = {}) => aiConnections.assistantAccess(modelProviderId, {

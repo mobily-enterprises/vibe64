@@ -555,7 +555,7 @@ function accountConnected({
   };
 }
 
-async function readCodexUsername(codexContext = null) {
+async function readCodexUsername(codexContext) {
   if (!codexContext?.toolHomeSource) return "";
   try {
     const auth = await readOptionalJson(path.join(codexContext.toolHomeSource, ".codex", "auth.json"));
@@ -674,9 +674,9 @@ function githubPreviouslyLinkedMessage(login) {
 
 async function readGithubStoredStatus({
   githubContext,
-  previousGithub = null,
-  systemRoot = ""
-} = {}) {
+  previousGithub,
+  systemRoot
+}) {
   const authStatus = await readGithubAuthStatus({
     githubContext,
     systemRoot
@@ -806,10 +806,10 @@ async function readPersonGitIdentity(runHostToolCommand, githubContext) {
 
 async function readGithubStatus({
   githubContext,
-  previousGithub = null,
-  runHostToolCommand = runDefaultHostCommand,
-  systemRoot = ""
-} = {}) {
+  previousGithub,
+  runHostToolCommand,
+  systemRoot
+}) {
   await ensureToolHomeSource(githubContext);
   const hostCommandOptions = hostCommandOptionsForCredentialContext(githubContext);
   const [statusResult, userResult, gitCredentialResult, gitNameResult, gitEmailResult] = await Promise.all([
@@ -922,11 +922,11 @@ async function readGithubStatus({
 
 async function readGithubAccountStatus({
   githubContext,
-  previousGithub = null,
-  readGitIdentity = true,
-  runHostToolCommand = runDefaultHostCommand,
-  systemRoot = ""
-} = {}) {
+  previousGithub,
+  readGitIdentity,
+  runHostToolCommand,
+  systemRoot
+}) {
   const stored = await readGithubStoredStatus({
     githubContext,
     previousGithub,
@@ -1003,13 +1003,21 @@ async function markGithubReconnectRequired(input = {}, {
   });
 }
 
+/**
+ * @param {object} dependencies
+ * @param {object} dependencies.githubContext
+ * @param {object | null} dependencies.previousGithub
+ * @param {PublishAccountChanged} dependencies.publishAccountChanged
+ * @param {string} dependencies.reason
+ * @param {string} dependencies.systemRoot
+ */
 async function recordGithubAuthInvalidState({
-  githubContext = null,
-  previousGithub = null,
-  publishAccountChanged = async () => null,
-  reason = "github-command",
-  systemRoot = ""
-} = {}) {
+  githubContext,
+  previousGithub,
+  publishAccountChanged,
+  reason,
+  systemRoot
+}) {
   if (!githubContext?.ok) {
     return githubContext || authError("vibe64_user_required", "A logged-in Vibe64 user is required for GitHub account operations.");
   }
@@ -1050,7 +1058,7 @@ function rememberedGithubIdentity(value = {}) {
 }
 
 // A CLI that is missing or did not start is not a signed-out account.
-function accountReadFailed(id, error = null) {
+function accountReadFailed(id, error) {
   const definition = ACCOUNT_DEFINITIONS[id] || { id, label: id };
   return { ...accountDisconnected({ ...definition,
     code: String(error?.code || "") || "vibe64_account_status_failed",
@@ -1065,10 +1073,10 @@ function operatorCliAccount(id, { installed = false, observed = "" } = {}) {
 }
 
 async function readCodexStatus({
-  codexContext = null,
-  env = process.env,
-  runHostToolCommand = runDefaultHostCommand
-} = {}) {
+  codexContext,
+  env,
+  runHostToolCommand
+}) {
   const cli = resolveOperatorCli("codex", { env });
   if (!cli.installed) return operatorCliAccount("codex");
   await ensureToolHomeSource(codexContext);
@@ -1167,9 +1175,9 @@ function authTerminalPurpose(accountId = "") {
 }
 
 function authSessionStatus({
-  account = null,
-  terminal = null
-} = {}) {
+  account,
+  terminal
+}) {
   if (account?.connected) {
     return "connected";
   }
@@ -1227,7 +1235,7 @@ function authenticatingAccount(accountId = "") {
  * @param {RuntimeEnv} [dependencies.env]
  * @param {TerminalsService["invalidateAgentRuntimes"]} dependencies.invalidateAgentRuntimes
  * @param {RuntimeLogger} dependencies.logger
- * @param {PersonalAiProfileStore | null} [dependencies.personalProfileStore]
+ * @param {PersonalAiProfileStore | null} dependencies.personalProfileStore
  * @param {TerminalsService["inspectAssistantRoutingConfiguration"] | null} dependencies.inspectRoutingConfiguration
  * @param {PublishAccountChanged} dependencies.publishAccountChanged
  * @param {PublishAuthSessionChanged} dependencies.publishAuthSessionChanged
@@ -1240,8 +1248,7 @@ function createService({
   env = process.env,
   invalidateAgentRuntimes,
   logger,
-  // readable-check: allow dependency-default - data: a personal AI profile is kept only by a local runtime with a system folder
-  personalProfileStore = null,
+  personalProfileStore,
   inspectRoutingConfiguration,
   publishAccountChanged,
   publishAuthSessionChanged,
@@ -1257,7 +1264,7 @@ function createService({
   const routingStore = () => createAssistantRoutingStore({ systemRoot: resolvedSystemRoot });
   const cancelledAuthSessions = new Set();
   const finalizedCodexAuthSessions = new Set();
-  // readable-check: allow method-probe - input validation: a host's account runtime may run host tool commands itself; the service's runner applies otherwise
+  // readable-check: allow method-probe - cross-repository slot vibe64.accounts.runtime: a host's account runtime may run host tool commands itself; the service's runner applies otherwise
   const accountRunHostCommand = typeof accountRuntime.runHostToolCommand === "function"
     ? (commandArgs, options = {}) => accountRuntime.runHostToolCommand(commandArgs, options, {
         fallback: runHostToolCommand
@@ -1738,7 +1745,7 @@ function createService({
     return githubContext.ok && metadata.userKey === githubContext.userKey;
   }
 
-  function rotateCodexMarkerForFinalizedAuthSession(sessionId = "", metadata = {}, exitCode = null) {
+  function rotateCodexMarkerForFinalizedAuthSession(sessionId, metadata, exitCode) {
     if (metadata.accountId !== "codex" || exitCode !== 0) {
       return false;
     }
@@ -1806,7 +1813,7 @@ function createService({
     const account = terminal.status === "exited"
       ? metadata.account || await accountStatus(metadata.accountId, {
           codexMarkerReason: finalizedCodexAuthSession ? "auth-session-exited" : "auth-session-status",
-          githubContext: metadata.githubContext || null,
+          githubContext: metadata.githubContext,
           previousGithub: previousGithubForInput(input),
           rotateCodexMarker: finalizedCodexAuthSession
         })
@@ -1840,10 +1847,10 @@ function createService({
   }
 
   async function authSessionSnapshot({
-    account = null,
-    metadata = {},
-    terminal = {}
-  } = {}) {
+    account,
+    metadata,
+    terminal
+  }) {
     const parsed = await authSessionHandoff({
       sessionId: terminal.id,
       accountId: metadata.accountId,
@@ -1910,10 +1917,10 @@ function createService({
 
   function createAuthTerminalCloseHandler({
     accountId,
-    githubContext = null,
-    previousGithub = null,
-    vibe64User = null
-  } = {}) {
+    githubContext,
+    previousGithub,
+    vibe64User
+  }) {
     return async function handleAuthTerminalClose({
       exitCode = null,
       id = "",
@@ -2000,7 +2007,7 @@ function createService({
     };
   }
 
-  async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}, authSecrets = {}, options = {}) {
+  async function startAuthTerminal(accountId, mode, githubContext, gitIdentity, authSecrets, options) {
     const reuseRunning = canReuseAuthTerminal(accountId, mode, githubContext);
     for (const sessionId of authSessions.keys()) {
       const session = readTerminalSession(sessionId, { namespace: ACCOUNT_AUTH_NAMESPACE });
@@ -2079,7 +2086,7 @@ function createService({
           onClose: async (event) => {
             try {
               await createAuthTerminalCloseHandler({ accountId, githubContext,
-                previousGithub: options.previousGithub || null, vibe64User: options.vibe64User || null })(event);
+                previousGithub: options.previousGithub, vibe64User: options.vibe64User })(event);
             } finally {
               claudeBrowserFiles.delete(event.id);
               await cleanupBrowser();
@@ -2140,7 +2147,7 @@ function createService({
     return terminal;
   }
 
-  async function readModelRouting(input = {}) {
+  async function readModelRouting(input) {
     return accountsResult(async () => {
       if ((input.choiceSearch !== undefined || input.choiceOffset !== undefined || input.choiceRole) &&
           !ASSISTANT_SETUP_ROLES[input.setup]?.includes(input.choiceRole)) {

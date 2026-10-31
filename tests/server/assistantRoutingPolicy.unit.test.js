@@ -340,7 +340,7 @@ test("Accounts reads and saves both setups for the owner only and refuses person
     inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options) });
   assert.equal(service.readModelRoutingWorkflows, undefined, "the per-tool workflow read is gone");
   const owner = { role: "owner" };
-  const data = await service.readModelRouting();
+  const data = await service.readModelRouting({});
   assert.equal(data.ok, true, JSON.stringify(data));
   assert.deepEqual(data.team, { available: false, ownerName: "", memberCount: 0 });
   assert.deepEqual([data.setups.owner.roles.senior.value, data.setups.owner.roles.senior.configured], [null, false]);
