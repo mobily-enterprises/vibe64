@@ -21,6 +21,17 @@ function plainObject(value) {
 
 // Every account, connection and auth-session change is a global
 // entity.changed event; only the actor, entity and realtime parts differ.
+/**
+ * @param {RuntimeEvents} events
+ * @param {object} change
+ * @param {string | null} [change.actorId]
+ * @param {string} [change.audience]
+ * @param {string} change.entity
+ * @param {string} change.entityId
+ * @param {string} change.event
+ * @param {string} change.operation
+ * @param {(execution: object) => object} change.payload
+ */
 function publishGlobalEntityChanged(events, {
   actorId,
   audience = VIBE64_ACCOUNT_REALTIME_AUDIENCE,

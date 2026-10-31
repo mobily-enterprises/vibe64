@@ -87,6 +87,7 @@ import { logAccountChange, runLoggedAccountChange } from "./accountChangeLog.js"
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/personalAiProfile").createPersonalAiProfileStore>} PersonalAiProfileStore */
 /** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64AccountsChangedPublisher>} PublishAccountChanged */
 /** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64AccountAuthSessionChangedPublisher>} PublishAuthSessionChanged */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
@@ -1382,13 +1383,13 @@ function createAccountsRuntime({
  * @param {object} dependencies
  * @param {ReturnType<typeof createAccountsRuntime>} dependencies.accountRuntime
  * @param {RuntimeEnv} [dependencies.env]
- * @param {(input?: object) => Promise<unknown>} [dependencies.invalidateAgentRuntimes]
+ * @param {TerminalsService["invalidateAgentRuntimes"]} [dependencies.invalidateAgentRuntimes]
  * @param {RuntimeLogger | null} [dependencies.logger]
  * @param {PersonalAiProfileStore | null} [dependencies.personalProfileStore]
- * @param {((configuration: object, options: object) => Promise<object>) | null} [dependencies.inspectRoutingConfiguration]
+ * @param {TerminalsService["inspectAssistantRoutingConfiguration"] | null} [dependencies.inspectRoutingConfiguration]
  * @param {PublishAccountChanged} [dependencies.publishAccountChanged]
  * @param {PublishAuthSessionChanged} [dependencies.publishAuthSessionChanged]
- * @param {(() => Promise<object>) | null} [dependencies.readClaudeAccountStatus]
+ * @param {TerminalsService["readClaudeAccountStatus"] | null} [dependencies.readClaudeAccountStatus]
  * @param {typeof runDefaultHostCommand} [dependencies.runHostToolCommand]
  * @param {typeof runVibe64Command} [dependencies.runAuthTerminalCommand]
  */

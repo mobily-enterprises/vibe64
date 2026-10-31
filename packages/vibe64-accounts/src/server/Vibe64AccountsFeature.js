@@ -41,7 +41,12 @@ import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").AccountsService} AccountsService */
 /** @typedef {ReturnType<typeof import("./service.js").createAccountsRuntime>} AccountsRuntime */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 /**
@@ -66,6 +71,10 @@ function createDefaultAccountRuntime({
   });
 }
 
+/**
+ * @param {object} [input]
+ * @param {ProjectService} project
+ */
 async function connectionAccountStatusInput(input = {}, project) {
   if (hasAccountSelection(input)) {
     return input;
@@ -83,7 +92,7 @@ async function connectionAccountStatusInput(input = {}, project) {
  * @param {object} dependencies
  * @param {AccountsService} dependencies.accounts
  * @param {ProjectService} dependencies.project
- * @param {((input: object) => Promise<object>) | null} [dependencies.listAssistantCapabilities]
+ * @param {((input: object) => ReturnType<TerminalsService["listAssistantCapabilities"]>) | null} [dependencies.listAssistantCapabilities]
  */
 function createConnections({ accounts, project, listAssistantCapabilities = null } = {}) {
   if (!accounts || typeof accounts.getStatus !== "function") {
@@ -160,7 +169,18 @@ const Vibe64AccountsFeature = defineFeature({
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
-  /** @param {{ events: RuntimeEvents, terminals?: TerminalsService }} capabilities */
+  /**
+   * @param {object} capabilities
+   * @param {AccountsRuntime} [capabilities.accountRuntime]
+   * @param {RuntimeEnv} capabilities.env
+   * @param {RuntimeEvents} capabilities.events
+   * @param {RuntimeFastify} capabilities.fastify
+   * @param {RuntimeHttp} capabilities.http
+   * @param {RuntimeLogger} [capabilities.logger]
+   * @param {ProjectService} capabilities.project
+   * @param {TerminalsService} [capabilities.terminals]
+   * @param {{ actionCatalogue: ActionCatalogue }} context
+   */
   setup({ accountRuntime, env, events, fastify, http, logger, project, terminals }, { actionCatalogue }) {
     warnMissingOperatorClis();
     const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
