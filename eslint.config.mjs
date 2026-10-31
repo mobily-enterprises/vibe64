@@ -37,6 +37,7 @@ export default [
   ...typedFeaturesConfig([
     "packages/studio-terminal-core/src/server/**",
     "packages/vibe64-core/src/server/**",
-    "packages/vibe64-execution/src/server/**"
+    "packages/vibe64-execution/src/server/**",
+    "packages/vibe64-genesis/src/server/**"
   ])
 ];
