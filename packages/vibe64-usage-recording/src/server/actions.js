@@ -2,6 +2,8 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { USAGE_INTERACTION_KINDS } from "../shared/contract.js";
 
+/** @typedef {import("./types.js").UsageRecordingService} UsageRecordingService */
+
 const text = (maxLength, extra = {}) => ({ type: "string", minLength: 1, maxLength, required: true, ...extra });
 const optionalText = (maxLength) => ({ type: "string", maxLength, required: false });
 const sessionId = text(256);
@@ -36,6 +38,10 @@ const OPERATIONS = [
   ["delete", "delete", "command", { recordingId }]
 ];
 
+/**
+ * @param {object} dependencies
+ * @param {UsageRecordingService} dependencies.usageRecording
+ */
 function createUsageRecordingActions({ usageRecording }) {
   return OPERATIONS.map(([operation, method, kind, fields]) => withVibe64ActionContext({
     id: `vibe64.usage-recording.${operation}`, version: 1, kind,

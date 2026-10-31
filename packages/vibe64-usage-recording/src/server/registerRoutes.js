@@ -7,12 +7,20 @@ import {
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+
 const sessionRoute = "/usage-recordings/sessions/:sessionId";
 const pageQuery = (query = {}) => ({
   ...(query.cursor !== undefined ? { cursor: String(query.cursor) } : {}),
   ...(query.limit !== undefined ? { limit: Number(query.limit) } : {})
 });
 
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} [options]
+ * @param {StudioProjectContext | null} [options.projectContext]
+ */
 function registerRoutes(http, { projectContext = null } = {}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-usage-recording"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,

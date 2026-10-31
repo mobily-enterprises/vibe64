@@ -12,6 +12,7 @@
     "./server/admission": "./src/server/admission.js",
     "./server/recordingFiles": "./src/server/recordingFiles.js",
     "./server/tracers": "./src/server/tracers/index.js",
+    "./server/types": "./src/server/types.js",
     "./shared/contract": "./src/shared/contract.js"
   },
   "jskit": {
