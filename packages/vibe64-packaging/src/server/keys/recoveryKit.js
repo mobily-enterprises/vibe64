@@ -9,10 +9,19 @@ import { ageDecrypt, ageEncrypt } from "./age.js";
 
 const KIT_CONTRACT = "vibe64.publishing-recovery-kit.v1";
 
+/** @typedef {ReturnType<typeof import("./ageStore.js").createAgeStore>} AgeStore */
+
 function kitError(message, code = "vibe64_publishing_recovery_kit_invalid") {
   return Object.assign(new Error(message), { code });
 }
 
+/**
+ * @param {object} request
+ * @param {AgeStore} request.store
+ * @param {string | Buffer} request.passphrase
+ * @param {() => string} [request.now]
+ * @param {number} [request.workFactor]
+ */
 async function createRecoveryKit({ store, passphrase, now = () => new Date().toISOString(), workFactor } = {}) {
   const index = await store.index();
   const entries = store.snapshot();
@@ -41,6 +50,12 @@ async function createRecoveryKit({ store, passphrase, now = () => new Date().toI
 
 // Restores every key from a kit into the (unlocked) store; existing keys with
 // the same name are replaced by the kit's.
+/**
+ * @param {object} request
+ * @param {AgeStore} request.store
+ * @param {Buffer} request.bytes
+ * @param {string | Buffer} request.passphrase
+ */
 async function restoreRecoveryKit({ store, bytes, passphrase } = {}) {
   const plaintext = await ageDecrypt(bytes, passphrase);
   let kit;

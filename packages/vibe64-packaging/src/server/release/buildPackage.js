@@ -29,6 +29,25 @@ function buildOnlyKey({ commit, packagingHash, packageId, version, versionCode =
   }));
 }
 
+/**
+ * @param {object} request
+ * @param {string} request.projectRoot
+ * @param {string} request.commit
+ * @param {object} request.packaging the project's parsed Packaging
+ * @param {string} request.packageId
+ * @param {string | null} [request.version]
+ * @param {string | null} [request.planHash]
+ * @param {string} request.resultStore
+ * @param {string} [request.workRoot]
+ * @param {Record<string, string | undefined>} [request.baseEnvironment]
+ * @param {string} [request.cacheDirectory]
+ * @param {number | null} [request.versionCode]
+ * @param {object} [request.toolchains] the local toolchains the packer's recipe uses
+ * @param {object[] | null} [request.contentArtifacts]
+ * @param {string} [request.projectSlug]
+ * @param {AbortSignal} [request.signal]
+ * @param {object} [dependencies] what the build stage runs commands with
+ */
 async function buildPackage({
   projectRoot,
   commit,

@@ -44,6 +44,13 @@ function serialized() {
   };
 }
 
+/**
+ * @param {object} options
+ * @param {string} options.directory the private folder that holds the key file
+ * @param {() => number} [options.now]
+ * @param {number} [options.workFactor]
+ * @param {number} [options.defaultWindowMs]
+ */
 function createAgeStore({
   directory,
   now = () => Date.now(),
