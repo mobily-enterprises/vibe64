@@ -408,7 +408,7 @@ function createReadyPreviewCommandService({
   stopOwnedExecutions,
   terminalId = () => "launch-terminal"
 } = {}) {
-  return createAgentPreviewCommandService({
+  return createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     projectService,
     launchTarget: {
       previewTestRunAdmission() { return null; },
@@ -453,7 +453,7 @@ function createReadyPreviewCommandService({
 }
 
 test("agent preview help distinguishes duplicate previews from explicit reference apps", async () => {
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus() {
         return {};
@@ -502,7 +502,7 @@ test("agent preview help works without the control socket and documents every br
     await rm(root, { force: true, recursive: true });
   }
 
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus() {
         return {};
@@ -520,7 +520,7 @@ test("agent preview identities read and save only the session's bound project th
   const calls = [];
   let context = "";
   let identityTypes = ["email"];
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     projectService: {
       async runInProjectContext(slug, operation) {
         context = slug;
@@ -595,7 +595,7 @@ test("agent preview identities read and save only the session's bound project th
 
 test("agent preview stop uses the session lifecycle and reports saved intent", async () => {
   let stopped = false;
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus() { return {
         ok: true,
@@ -693,7 +693,7 @@ test("managed preview browser eval validates stdin before starting browser contr
 test("agent preview identity authorization uses configured names without Vibe64 viewer data", async () => {
   const sessionId = "preview-identity-session";
   const selections = [];
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus() {
         return {};
@@ -792,7 +792,7 @@ test("agent preview command ensures the managed preview and waits for readiness"
     }
   ];
   let statusIndex = 0;
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async ensurePreview(receivedSessionId) {
         ensureCalls.push(receivedSessionId);
@@ -916,7 +916,7 @@ test("agent preview command delegates restart to the managed launch controller",
     }
   ];
   let statusIndex = 0;
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus(receivedSessionId) {
         assert.equal(receivedSessionId, sessionId);
@@ -1010,7 +1010,7 @@ test("agent preview status exposes the managed endpoint, current page, and serve
       targetHref: "http://127.0.0.1:4103/"
     }
   };
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus(receivedSessionId) {
         assert.equal(receivedSessionId, sessionId);
@@ -1090,7 +1090,7 @@ test("agent preview status exposes the managed endpoint, current page, and serve
 });
 
 test("agent preview inspection refuses a missing proxy instead of offering the raw application", async () => {
-  const command = createAgentPreviewCommandService({
+  const command = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus() {
         return {
@@ -1128,6 +1128,7 @@ test("agent preview wrapper forwards command input over the private session sock
     let receivedInput = null;
     const prepared = await prepareAgentPreviewCommand({
       commandService: {
+        registerBrowserWorker() {},
         async run(input) {
           receivedInput = input;
           return {
@@ -2439,6 +2440,7 @@ test("agent preview command preparation does not rewrite an unchanged wrapper fi
   try {
     const options = {
       commandService: {
+        registerBrowserWorker() {},
         async run() {
           return {
             exitCode: 0,

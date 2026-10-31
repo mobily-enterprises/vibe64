@@ -486,7 +486,8 @@ test(`${withPullRequest ? "PR" : "Named branch"} sessions clone the head and kee
     await createSessionSource({ project, session, expectedCommit: head, runCommand,
       env: { VIBE64_GITHUB_ACCOUNT_MODE: "local" },
       runtime: { projectContextRoot: root, projectSessionSourceRoot: path.join(root, "sessions") },
-      store: { async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } });
+      store: { async mutateSession(_id, write) { return write(); },
+        async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } });
     session.sourcePath = session.metadata.source_path;
     assert.equal(await git(session.sourcePath, ["rev-parse", "HEAD"]), head);
     // Only the session branch exists locally; the cloned head stays a remote-tracking ref.

@@ -210,7 +210,7 @@ async function createLiveResourceSet({
   const envCommands = createAgentEnvCommandService({
     projectService: commandProject
   });
-  const previewCommands = createAgentPreviewCommandService({
+  const previewCommands = createAgentPreviewCommandService({ publishSessionChanged: async () => null,
     launchTarget: {
       async launchStatus() {
         return { ok: true, previewTarget: { available: false, href: "" } };

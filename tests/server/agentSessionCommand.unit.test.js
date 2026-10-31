@@ -59,6 +59,8 @@ test("agent shell commands run as session-owned managed executions and drain on 
       return { state: { status: "running", currentLabel: "Install dependencies" } };
     },
     projectService: {
+      async createRuntime() { return { async getSession() { return descriptor; } }; },
+      async inspectWorkspaceSetup() { return { status: "ready", steps: [], diagnostics: [] }; },
       async createSessionStore() {
         return {
           async readSessionSourceDescriptor() {

@@ -14,7 +14,7 @@ test("checkpoint confirmation projects the original outcome after failure cleanu
     async writeBackgroundTaskEvent(_id, _taskId, value) { task = value.patch; return task; }
   } };
   const result = await checkpointSessionTurn({ runtime, session, sessionId: session.sessionId,
-    outerTurnId: "failed-claude-turn", outcome: "interrupted", projectService: { selectedProject: {} },
+    outerTurnId: "failed-claude-turn", outcome: "interrupted", projectService: { async readCurrentProject() { return {}; } },
     createCheckpoint: async () => ({ ok: true, created: false, commit: "a".repeat(40), outcome: "failed" }) });
   assert.equal(result.ok, true);
   assert.equal(task.status, "ready");

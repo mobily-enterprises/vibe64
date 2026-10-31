@@ -134,7 +134,7 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
   withPreviewTarget = null,
   launchStatus,
   resourceProvider,
-  publishSessionChanged,
+  publishSessionChanged = async () => null,
   browserFailure
 } = {}) {
   const runtimeRoot = path.join(root, "runtime-packs");

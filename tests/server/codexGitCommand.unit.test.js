@@ -114,7 +114,7 @@ function serviceForSession(session = {}, {
   logger = null,
   metadataReads = null,
   now,
-  currentProjectSlug,
+  currentProjectSlug = () => "",
   readCurrentProject,
   refreshGithub,
   runGatewayCommand

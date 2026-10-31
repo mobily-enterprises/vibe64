@@ -13092,6 +13092,7 @@ test("Codex real provider refreshes Public commands and current instructions wit
       sessionId: session.sessionId
     });
     projectService.createSessionStore = () => store;
+    projectService.readCurrentProject = async () => ({});
     const { native } = await controller.prepareConversationHost("session-1", {}, "create");
     const context = await native.runOwner.conversationContext("session-1", { conversationId: threadId }, {});
     assert.equal(context.provider, provider);

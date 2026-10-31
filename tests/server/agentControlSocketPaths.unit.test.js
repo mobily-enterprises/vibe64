@@ -55,6 +55,7 @@ test("all assistant controls connect with long workspace paths and stay isolated
   const sessionId = "2026-09-20_11-19-52";
   const commandService = {
     async bindSession() {},
+    registerBrowserWorker() {},
     async run(input) { return { ok: true, sessionId: input.sessionId }; }
   };
   try {
