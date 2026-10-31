@@ -24,6 +24,7 @@ function normalizeAbsolutePath(value = "") {
 }
 
 function currentProcessId(methodName = "") {
+  // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
   return typeof process[methodName] === "function" ? process[methodName]() : null;
 }
 
