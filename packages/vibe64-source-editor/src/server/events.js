@@ -3,6 +3,9 @@ import {
   sourceEditorFileRealtimePayload
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+
+/** @param {RuntimeEvents} events */
 function createSourceEditorFileChangedPublisher(events) {
   if (!events || typeof events.publish !== "function") {
     throw new TypeError("Source editor event publication requires runtime.events.");

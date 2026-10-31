@@ -29,6 +29,12 @@ import {
   sourceEditorFileChange
 } from "./sourceFiles.js";
 
+/** @typedef {ReturnType<typeof import("./fileIndex.js").createSourceEditorFileIndex>} SourceEditorFileIndex */
+/** @typedef {ReturnType<typeof import("./searchIndex.js").createSourceEditorSearchIndex>} SourceEditorSearchIndex */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+
 // Project integrations: configuration save and merge-patch, OAuth client
 // registration, and the development setup command with its request ledger.
 const INTEGRATION_PROVIDERS = Object.freeze([googleCalendarDefinition, ...connectorDefinitions]);
@@ -129,6 +135,17 @@ async function runApplicationIntegrationSetup({
   return { ok: true, ...result };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {SourceEditorFileIndex} dependencies.fileIndex
+ * @param {RunVibe64Command} dependencies.integrationCommandRunner
+ * @param {typeof fetch} dependencies.integrationDiscoveryFetch
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {(input: object, operation: (context: object) => Promise<unknown>, options?: object) => Promise<unknown>} dependencies.runSourceEditorWriteExclusive
+ * @param {SourceEditorSearchIndex} dependencies.searchIndex
+ * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.sourceEditorContext
+ */
 function createIntegrationOperations({
   fileIndex,
   integrationCommandRunner,

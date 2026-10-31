@@ -30,6 +30,8 @@ import {
   sourceEditorResultOffset
 } from "./sourceFiles.js";
 
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 // Files areas: authorization, area-to-root resolution, locking, the
 // per-operation file actions and server-side move and copy between areas.
 // Repo's own browsing and editing belong to the source editor; Files reaches
@@ -60,6 +62,11 @@ const TRANSFER_MAX_BYTES = 2 * 1024 ** 3;
 const TRANSFER_MAX_LABEL = "2 GiB";
 const CONFLICT_NAMES_MAX = 500;
 
+/**
+ * @param {ProjectService} projectService
+ * @param {object} [options]
+ * @param {(sourceRoot: string) => void} [options.repoChanged]
+ */
 function createFileArea(projectService, { repoChanged = () => {} } = {}) {
 
   // Opens one area for this request: checks the caller and operation, resolves

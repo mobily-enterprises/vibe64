@@ -15,6 +15,10 @@ import {
 import { explanationFollowupStreamSchema, explanationStreamSchema } from "./actions.js";
 import { filePreviewImageType } from "../shared/fileTypes.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("./types.js").SourceEditorService} SourceEditorService */
+
 function writeSourceEditorStreamEvent(rawReply, payload = {}) {
   rawReply.write(`${JSON.stringify({
     ...payload,
@@ -98,6 +102,12 @@ function sourceInput(request, input = {}) {
   return { ...data, sessionId: request.params.sessionId };
 }
 
+/**
+ * @param {RuntimeHttp} http
+ * @param {object} options
+ * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {SourceEditorService} options.sourceEditor
+ */
 function registerRoutes(http, {
   projectContext = null, sourceEditor
 } = {}) {

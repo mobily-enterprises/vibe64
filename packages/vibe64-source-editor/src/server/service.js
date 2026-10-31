@@ -52,6 +52,23 @@ import {
   sourceEditorVibe64UserIdentity
 } from "./explanations.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+
+/**
+ * @param {object} dependencies
+ * @param {typeof runVibe64Command} [dependencies.integrationCommandRunner]
+ * @param {typeof fetch} [dependencies.integrationDiscoveryFetch]
+ * @param {() => number} [dependencies.explanationCacheNow]
+ * @param {RuntimeLogger} [dependencies.logger]
+ * @param {ProjectService} dependencies.projectService
+ * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {ReturnType<typeof createSourceEditorFileObserver> | null} [dependencies.sourceFileObserver]
+ * @param {TerminalsService | null} [dependencies.terminalService]
+ * @param {string} [dependencies.temporaryRoot]
+ */
 function createService({
   integrationCommandRunner = runVibe64Command,
   integrationDiscoveryFetch = globalThis.fetch,

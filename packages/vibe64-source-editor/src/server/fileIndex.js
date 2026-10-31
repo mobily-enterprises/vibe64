@@ -4,6 +4,12 @@ import path from "node:path";
 
 // Keep filename discovery out of the typing loop. Root-tree refreshes and editor
 // creates invalidate immediately; the age limit also picks up external writers.
+/**
+ * @param {object} dependencies
+ * @param {typeof import("./sourceFiles.js").sourceEditorFilePaths} dependencies.load
+ * @param {((context: object) => string) | null} [dependencies.snapshotPath]
+ * @param {() => number} [dependencies.now]
+ */
 function createSourceEditorFileIndex({ load, snapshotPath = null, now = Date.now } = {}) {
   const entries = new Map();
   const maxAgeMs = 30_000;

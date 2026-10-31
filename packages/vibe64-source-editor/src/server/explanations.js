@@ -21,6 +21,10 @@ import {
   streamSourceEditorOperation
 } from "./sourceFiles.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 // Source explanations: helper agent routing, cache, cleanup ledger, prompts
 // and streamed turns.
 const SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES = 6;
@@ -178,6 +182,10 @@ function sourceEditorAgentOperationOptions(context = {}, options = {}, {
   };
 }
 
+/**
+ * @param {TerminalsService | null} [terminalService]
+ * @param {object} [context]
+ */
 async function describeSourceEditorAgentProvider(terminalService = null, context = {}) {
   if (typeof terminalService?.resolveAssistantPurpose !== "function") {
     throw sourceEditorError("Assistant routing is unavailable for source explanations.", "vibe64_source_explanation_authorization_unavailable", {}, 503);
@@ -189,6 +197,10 @@ async function describeSourceEditorAgentProvider(terminalService = null, context
   return { providerId: decision.effectiveSelection.engineId, accountIdentitySignature: decision.connectionIdentity, decision };
 }
 
+/**
+ * @param {TerminalsService | null} [terminalService]
+ * @param {object} [context]
+ */
 async function resolveSourceEditorAgentExecutionProfile(terminalService = null, context = {}) {
   if (typeof terminalService?.resolveEphemeralAgentExecutionProfile !== "function") {
     throw sourceEditorError(
@@ -216,6 +228,12 @@ async function resolveSourceEditorAgentExecutionProfile(terminalService = null, 
   return resolved;
 }
 
+/**
+ * @param {TerminalsService} terminalService
+ * @param {object} context
+ * @param {object} input
+ * @param {object} [options]
+ */
 async function runSourceEditorHelperTurn(terminalService, context, input, options = {}) {
   const helper = context.assistantHelper;
   const result = await terminalService.runEphemeralAgentChatTurn(helper.scope, {
@@ -336,6 +354,12 @@ function sourceEditorStructuredAnswer(value = "", {
 }
 
 
+/**
+ * @param {object} context
+ * @param {object} input
+ * @param {string} cacheKey
+ * @param {RuntimeLogger} logger
+ */
 function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger) {
   // Reuse the existing private cache for on-demand file overviews and exact
   // function pseudocode. Neither interpretation changes the authored Program.
@@ -564,6 +588,15 @@ function createSourceEditorExplanationCache({
 }
 
 // Source explanations own their helper turns, conversation memory and cache.
+/**
+ * @param {object} dependencies
+ * @param {() => number} dependencies.explanationCacheNow
+ * @param {RuntimeLogger} dependencies.logger
+ * @param {ProjectService} dependencies.projectService
+ * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.sourceEditorContext
+ * @param {string} dependencies.temporaryRoot
+ * @param {TerminalsService | null} dependencies.terminalService
+ */
 function createExplanationOperations({
   explanationCacheNow,
   logger,
@@ -1506,6 +1539,12 @@ async function withSourceEditorExplanationFreshness(context = {}, explanation = 
   }
 }
 
+/**
+ * @param {object} [context]
+ * @param {string} [threadId]
+ * @param {TerminalsService | null} [terminalService]
+ * @param {object | null} [executionProfile]
+ */
 async function cleanupRejectedSourceEditorExplanationThread(
   context = {},
   threadId = "",

@@ -8,6 +8,13 @@ import { createService } from "./service.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createSourceEditorActions } from "./actions.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").SourceEditorService} SourceEditorService */
+
 const Vibe64SourceEditorProvider = defineFeature({
   id: "vibe64.source-editor",
   domain: "vibe64-source-editor",
@@ -22,6 +29,14 @@ const Vibe64SourceEditorProvider = defineFeature({
     sourceEditor: "vibe64.source-editor"
   },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
+  /**
+   * @param {object} capabilities
+   * @param {RuntimeEvents} capabilities.events
+   * @param {RuntimeHttp} capabilities.http
+   * @param {RuntimeLogger} capabilities.logger
+   * @param {ProjectService} capabilities.project
+   * @param {TerminalsService} capabilities.terminals
+   */
   setup({ events, http, logger, project, terminals }) {
     const sourceEditor = createService({
       logger,
@@ -38,6 +53,10 @@ const Vibe64SourceEditorProvider = defineFeature({
   actions({ sourceEditor, events }) {
     return createSourceEditorActions({ sourceEditor, publishFileChanged: createSourceEditorFileChangedPublisher(events) });
   },
+  /**
+   * @param {{ terminals: TerminalsService }} capabilities
+   * @param {{ outputs: { sourceEditor: SourceEditorService } }} context
+   */
   shutdown({ terminals }, { outputs }) {
     terminals.setSourceEditorProvider(null);
     return outputs.sourceEditor.close();

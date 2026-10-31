@@ -1,6 +1,8 @@
 import { watch as watchDirectory } from "node:fs";
 import path from "node:path";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
 const DEFAULT_SOURCE_CHANGE_DEBOUNCE_MS = 60;
 
 function resolveObservedFile(sourceRoot = "", relativePath = "") {
@@ -30,6 +32,12 @@ function resolveObservedFile(sourceRoot = "", relativePath = "") {
   };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {typeof watchDirectory} [dependencies.createWatcher]
+ * @param {number} [dependencies.debounceMs]
+ * @param {RuntimeLogger} [dependencies.logger]
+ */
 function createSourceEditorFileObserver({
   createWatcher = watchDirectory,
   debounceMs = DEFAULT_SOURCE_CHANGE_DEBOUNCE_MS,

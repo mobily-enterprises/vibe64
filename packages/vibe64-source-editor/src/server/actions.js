@@ -5,6 +5,9 @@ import { integrationReadTool, integrationSetupTool } from "./integrationAssistan
 import { integrationSetupInputSchema } from "./integrationSetupInput.js";
 import { integrationConfigurationChangesSchema } from "./integrationConfigurationInput.js";
 
+/** @typedef {import("./types.js").SourceEditorService} SourceEditorService */
+/** @typedef {ReturnType<typeof import("./events.js").createSourceEditorFileChangedPublisher>} PublishFileChanged */
+
 const text = { type: "string", noTrim: true, required: false };
 const requiredText = { ...text, minLength: 1, required: true };
 const identity = { ...requiredText, maxLength: 256 };
@@ -40,6 +43,11 @@ const explanationFollowupStreamSchema = createSchema({
   assistantMessageId: messageId, userMessageId: messageId
 });
 
+/**
+ * @param {object} dependencies
+ * @param {SourceEditorService} dependencies.sourceEditor
+ * @param {PublishFileChanged} [dependencies.publishFileChanged]
+ */
 function createSourceEditorActions({ sourceEditor, publishFileChanged = async () => {} }) {
   const action = (name, fields, execute, { kind = "command", changed = null, assistant = { exclude: true } } = {}) => withVibe64ActionContext({
     id: `vibe64.source-editor.${name}`, version: 1, kind,
