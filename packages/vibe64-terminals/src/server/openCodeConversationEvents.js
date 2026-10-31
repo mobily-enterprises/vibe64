@@ -138,9 +138,6 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
     message = "",
     reason = "opencode-provider-failure"
   } = {}) {
-    if (typeof context.runtime.store?.writeConversationSystemMessage !== "function") {
-      return null;
-    }
     const written = await context.runtime.store.writeConversationSystemMessage(context.sessionId, {
       messageId: `${reason}-${fingerprint(
         context.sessionId,
@@ -155,9 +152,6 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
   }
 
   async function writeRun(context = {}, turn = {}, state = VIBE64_AGENT_RUN_STATE.ACTIVE, error = "") {
-    if (typeof context.runtime.store?.writeAgentRunEvent !== "function") {
-      return null;
-    }
     if (!vibe64AgentRunStateIsActive(state) && turn.id && !context.assistantScope) {
       await checkpointSessionTurn({
         projectService, runtime: context.runtime, session: context.session, sessionId: context.sessionId,
@@ -197,15 +191,10 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
       written = run;
       return run;
     });
-    const updatedSession = (
-      typeof context.runtime.store.mutateSession === "function" &&
-      typeof context.runtime.getSession === "function"
-    )
-      ? await context.runtime.store.mutateSession(context.sessionId, async () => {
-          await write();
-          return context.runtime.getSession(context.sessionId, { inspectSource: false });
-        })
-      : (await write(), context.session);
+    const updatedSession = await context.runtime.store.mutateSession(context.sessionId, async () => {
+      await write();
+      return context.runtime.getSession(context.sessionId, { inspectSource: false });
+    });
     await publishSessionChanged(context.sessionId, {
       payload: {
         ...(!vibe64AgentRunStateIsActive(state)

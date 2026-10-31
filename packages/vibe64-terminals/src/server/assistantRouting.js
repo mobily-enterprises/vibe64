@@ -134,15 +134,19 @@ function withSelection(context, selection) {
  * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<object>} dependencies.exclusive
  * @param {(sessionId: string, input: object, context: object) => Promise<object>} dependencies.dispatch
  * @param {PublishSessionChanged} dependencies.publish
- * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} [dependencies.prepareSelection]
+ * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.open
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.interrupt
  * @param {typeof import("./assistantChangeover.js").discardAssistantChangeoverMessage} dependencies.discardPending
  * @param {(timing: object) => void} [dependencies.onTiming]
  * @param {((sessionId: string, details: object) => Promise<unknown>) | null} [dependencies.onPlanCompleted]
  */
-function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection = async () => {},
-  open, interrupt, discardPending, onTiming = () => {}, onPlanCompleted = null }) {
+function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection,
+  open, interrupt, discardPending,
+  // readable-check: allow dependency-default - optional operation: Main routing reports send timing; sibling chats report none
+  onTiming = () => {},
+  // readable-check: allow dependency-default - optional operation: Main routing follows a completed plan; sibling chats have none
+  onPlanCompleted = null }) {
   const running = new Map();
   // Sub-phase times of each send before native delivery, reported once.
   const timings = new Map();
@@ -450,6 +454,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       ...(state.task === "deslop" ? { genesisTask: "deslop" } : {}),
       turnMetadata: { ...(!followup ? state.input.turnMetadata : {}), assistantRouting: attribution(state, followup), ...(followup ? { actor: "app", actorLabel: followupLabel } : {}) },
       onPromptSending: async ({ threadId }) => {
+        // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
         if (!followup) await context.onPromptSending?.({ threadId, assistantSelection: selection });
         state.threadId = threadId; state.attemptedMessageId = messageId;
         // Persist the attempt before dispatch, but keep a live send in progress.
@@ -891,6 +896,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const task = running.get(key);
     if (task?.messageId === messageId) {
       task.cancelled = true;
+      // readable-check: allow optional-call - data: a routing task has a stop once its helper has started
       void Promise.resolve(task.stop?.()).catch(() => {});
     }
     // The running turn may be this message's when its routed delivery was

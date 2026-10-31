@@ -42,7 +42,7 @@ function claudeCodeArguments(options = {}) {
  */
 async function createClaudeCodeProcess({
   commandRunner, stopExecution, credentialHome, execution, shimDirs, onStarted, logger, accountQuery, ...options
-} = {}) {
+}) {
   const host = createVibe64ConversationExecution({ commandRunner, stopExecution, credentialHome,
     execution, shimDirs, onStarted, purpose: options.toolFree ? "account" : "assistant",
     operationId: "claude-code", label: "Claude Code assistant" });

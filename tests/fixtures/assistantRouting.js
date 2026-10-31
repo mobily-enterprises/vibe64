@@ -148,7 +148,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const interrupts = [];
   const discards = [];
   let dispatchGate = null;
-  const routingOptions = { systemRoot: root, agent, exclusive, onPlanCompleted,
+  const routingOptions = { systemRoot: root, agent, exclusive, onPlanCompleted, prepareSelection: async () => {},
     open: async (_id, options) => ({ ...context, ...options }),
     interrupt: async () => { interrupts.push(Date.now()); return { ok: true, interrupted: true }; },
     discardPending: async (_id, messageId) => { discards.push(messageId); },

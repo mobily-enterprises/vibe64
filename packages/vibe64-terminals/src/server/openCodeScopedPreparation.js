@@ -202,7 +202,9 @@ export function createOpenCodeScopedPreparation({
             "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504
           ) }; },
           async beforeDispatch() {
+            // readable-check: allow optional-call - input validation: a caller's optional event stream
             await options.onEvent?.({ threadId: conversationId, type: "thread" });
+            // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
             await input.onPromptSending?.({ threadId: conversationId });
           },
           get completion() {
@@ -213,6 +215,7 @@ export function createOpenCodeScopedPreparation({
                 messageId: conversationMessageId,
                 async onMessages(messages, admittedInputId) {
                   for (const message of messages) {
+                    // readable-check: allow optional-call - input validation: a caller's optional event stream
                     await options.onEvent?.({ type: "message", message, threadId: conversationId, turnId: admittedInputId });
                   }
                 }

@@ -203,7 +203,7 @@ process.stdout.write(JSON.stringify({
       captureExecutionIds.delete(id);
     }
   };
-  const controller = createOutputTargetTerminalController({
+  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     env: { TMPDIR: socketRoot },
     projectService,
     runCommand,
@@ -441,7 +441,7 @@ test("explicitly stopped Preview stays stopped after test success, failure and c
     assert.equal((await f.controller.startTerminal(f.sessionId, { automatic: true })).code, "vibe64_preview_stopped");
     assert.equal(await readFile(path.join(f.sourceRoot, "working.json"), "utf8"), originalData);
   }
-  const reopened = createOutputTargetTerminalController({ env: { TMPDIR: f.socketRoot }, projectService: f.projectService });
+  const reopened = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null, env: { TMPDIR: f.socketRoot }, projectService: f.projectService });
   t.after(() => reopened.close());
   const afterReopen = await reopened.launchStatus(f.sessionId);
   assert.equal(afterReopen.preview.state, "stopped");

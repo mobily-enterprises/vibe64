@@ -90,7 +90,7 @@ async function recordCodexContextUsageSignal(store, sessionId = "", notification
     !usage ||
     !threadId ||
     usage.threadId !== threadId ||
-    typeof store?.mutateSession !== "function"
+    !store
   ) {
     return null;
   }
@@ -160,7 +160,7 @@ async function recordCodexContextRenewalSignal(store, sessionId = "", {
   if (
     !id ||
     normalizedReason !== CONTEXT_COMPACTION_REASON ||
-    typeof store?.mutateSession !== "function"
+    !store
   ) {
     return null;
   }
@@ -218,7 +218,7 @@ async function writeCodexAppServerContextRefreshPending(store, sessionId = "", {
   turnId = ""
 } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
-  if (!normalizedSessionId || typeof store?.writeMetadataValue !== "function") {
+  if (!normalizedSessionId || !store) {
     return null;
   }
   const at = new Date().toISOString();
@@ -262,9 +262,7 @@ async function clearCodexAppServerContextRefreshPending(store, sessionId = "", {
   }
   await store.mutateSession(normalizedSessionId, async () => {
     await Promise.all([
-      ...(typeof store.deleteMetadataValues === "function"
-        ? [store.deleteMetadataValues(normalizedSessionId, CODEX_CONTEXT_REFRESH_PENDING_METADATA)]
-        : CODEX_CONTEXT_REFRESH_PENDING_METADATA.map((name) => store.deleteMetadataValue?.(normalizedSessionId, name))),
+      store.deleteMetadataValues(normalizedSessionId, CODEX_CONTEXT_REFRESH_PENDING_METADATA),
       store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_at", deliveredAt),
       store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivery", delivery),
       store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_reason", reason),

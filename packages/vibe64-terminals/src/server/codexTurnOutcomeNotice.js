@@ -86,7 +86,7 @@ async function writeCodexTurnOutcomeNotice({
   if (
     !normalizedSessionId ||
     !messageId ||
-    typeof store?.writeConversationSystemMessage !== "function"
+    !store
   ) {
     return {
       reason: "unavailable",

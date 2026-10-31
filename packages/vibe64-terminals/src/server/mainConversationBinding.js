@@ -98,9 +98,6 @@ export async function requireMainConversationAdmission(runtime, sessionId, curre
  */
 export async function learningSessionExecutionRoot(runtime, sessionId, { allowClosing = false } = {}) {
   if (!runtime?.learningScope) return "";
-  if (typeof runtime.getNativeExecutionRoot !== "function") {
-    throw new TypeError("Learning sessions require the trusted native execution root reader.");
-  }
   const executionRoot = await runtime.getNativeExecutionRoot(sessionId, { allowClosing });
   return runtime.learningScope.noExercise === true ? executionRoot : "";
 }
@@ -324,6 +321,7 @@ function openCodeSelection(session = {}) {
 
 function synchronousConversationHost(provider, sessionId, context, purpose, label) {
   const host = provider.prepareConversationHost(sessionId, context, purpose);
+  // readable-check: allow method-probe - data: a conversation host is prepared synchronously, never as a promise
   if (!host || typeof host.then === "function") {
     throw new TypeError(`${label} requires synchronous native host facilities.`);
   }
@@ -712,9 +710,9 @@ export const CLAUDE_PREPARATION_DELIVERY_STAGES = Object.freeze(["git-actor", "g
  * @param {RuntimeEnv} dependencies.env
  * @param {RecordSessionGitCommandActor} dependencies.recordGitActor
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {(timing: object) => void} [dependencies.onTiming]
+ * @param {(timing: object) => void} dependencies.onTiming
  */
-export function createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged, onTiming = () => {} }) {
+export function createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged, onTiming }) {
   const error = claudeConversationError;
   const ENGINE = "claude";
   const text = value => String(value ?? "").trim();
@@ -818,6 +816,7 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
       get id() { return upstreamMessageId(messageId); },
       get threadId() { return storedUpstreamSessionId(context); },
       get workdir() { return context.workdir; },
+      // readable-check: allow optional-call - input validation: a caller's optional prompt-rejection observer
       onPromptRejected: () => input.onPromptRejected?.()
     }, application: {
       writeRun: (turn, state, error) => writeRun(context, turn, state, error),
@@ -897,8 +896,7 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
       const prepared = await prepareMessage(sessionId, input, options);
       if (Object.hasOwn(prepared, "value")) return prepared;
       const { context, message, messageId } = prepared;
-      const duplicate = typeof context.runtime.store?.conversationMessageIdExists === "function" &&
-        await context.runtime.store.conversationMessageIdExists(context.sessionId, messageId);
+      const duplicate = await context.runtime.store.conversationMessageIdExists(context.sessionId, messageId);
       let actorFailure = null;
       let actorMetadata = null;
       prepared.input.duplicate = duplicate;
@@ -958,6 +956,7 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
             get model() { return openCodeModel(context.selection); },
             get prompt() { return { text: renderedPrompt }; },
             get attachments() { return input.attachments; },
+            // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
             beforeDispatch: threadId => input.onPromptSending?.({
               threadId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata
             })

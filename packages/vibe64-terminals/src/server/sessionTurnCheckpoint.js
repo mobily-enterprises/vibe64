@@ -30,8 +30,7 @@ async function checkpointSessionTurn({
   try {
     checkpoint = await createCheckpoint({
       outerTurnId, outcome, timestamp, sessionId,
-      project: typeof projectService.readCurrentProject === "function"
-        ? await projectService.readCurrentProject() : projectService.selectedProject || {},
+      project: await projectService.readCurrentProject(),
       worktreePath: sessionSourcePath(session)
     });
   } catch (error) {

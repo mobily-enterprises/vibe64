@@ -4484,7 +4484,7 @@ test("a routed send reports its sub-phase timing once", async () => {
   const session = { sessionId: "session-1", status: "active", metadata: {} };
   const runtime = { stateRoot: "/unused-timing-fixture", store: { async readMetadataValue(_id, name) { return session.metadata[name]; } } };
   const events = [];
-  const routing = createAssistantRouting({ agent: {},
+  const routing = createAssistantRouting({ agent: {}, prepareSelection: async () => {},
     exclusive: async (_id, options, operation) => operation({ ...options, runtime, session }),
     publish: async () => {}, onTiming: event => events.push(event),
     dispatch: async () => ({ ok: true, delivered: true, messageId: "timed" }) });
@@ -4514,7 +4514,7 @@ test("credit exhaustion permits an authorized assistant change without replaying
       const runtime = { stateRoot: "/unused-selection-fixture", async getSession() { return session; }, store: { ...lock.store,
         async readMetadataValue(_id, name) { return session.metadata[name]; },
         async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
-      const routing = createAssistantRouting({ agent: { async deleteEphemeralConversation() { return { ok: false }; } },
+      const routing = createAssistantRouting({ agent: { async deleteEphemeralConversation() { return { ok: false }; } }, prepareSelection: async () => {},
         exclusive: async (_id, options, operation) => {
           const result = await runtime.store.runSessionExclusive(session.sessionId, "routing", () => operation({ ...options, runtime, session }));
           assert.equal(result.acquired, true, "routing cancellation cannot nest the selection lock");

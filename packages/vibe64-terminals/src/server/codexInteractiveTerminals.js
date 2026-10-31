@@ -44,13 +44,11 @@ const CODEX_VISIBLE_TERMINAL_DETACHED_IDLE_TIMEOUT_MS = 5_000;
 const CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 4 * 1024 * 1024;
 
 /**
- * @param {ProjectService} [projectService]
+ * @param {ProjectService} projectService
  * @param {Vibe64SessionRuntime} [runtime]
  */
-async function globalCodexRuntimeRoot(projectService = {}, runtime = null) {
-  const serviceRoot = typeof projectService.currentProjectRuntimeRoot === "function"
-    ? normalizeText(projectService.currentProjectRuntimeRoot())
-    : "";
+async function globalCodexRuntimeRoot(projectService, runtime = null) {
+  const serviceRoot = normalizeText(projectService.currentProjectRuntimeRoot());
   if (serviceRoot) {
     return serviceRoot;
   }

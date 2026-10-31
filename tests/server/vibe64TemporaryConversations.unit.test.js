@@ -229,6 +229,8 @@ async function conversationFixture(root, engineId = "codex") {
         return result.value;
       },
       publishSessionChanged: async (...args) => { events.push(args); },
+      prepareSelection: async () => {},
+      publishConversation: async () => {},
       ...overrides
     });
     return service;

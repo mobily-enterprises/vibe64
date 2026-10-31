@@ -111,12 +111,14 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
     }
     if (event.type === "execution") {
       const ctx = event.context;
+      // readable-check: allow optional-call - input validation: a caller's optional event stream
       if (ctx.assistantScope) await ctx.onEvent?.({ type: "helper-execution", conversationId: entry.id, executionId: event.executionId });
       return;
     }
     if (event.type === "message-metadata") return messagePolicy.messageMetadata(entry, event);
     if (event.type === "admit-message") return messagePolicy.admitMessage(entry, event);
     if (event.type === "provider-event") {
+      // readable-check: allow optional-call - input validation: a caller's optional event stream
       await entry.onEvent?.({ ...event, providerId: ENGINE, threadId: entry.id, turnId: entry.turn?.id || "" });
     } else if (event.type === "provider-update") {
       if (entry.main) {
@@ -129,12 +131,14 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
       if (entry.main && event.userEcho) await publishSessionChanged(entry.context.sessionId, { reason: "claude-goal" });
     } else if (event.type === "message") {
       if (entry.persistent && !entry.main && !entry.profile && !entry.renewal && entry.context.routingConversationId) {
+        // readable-check: allow optional-call - input validation: a caller's optional event stream
         await entry.onEvent?.({ ...event, threadId: entry.id, turnId: entry.turn?.id || "" });
       }
       return publishMessage(entry, event.message);
     } else if (event.type === "message-complete") {
       if (entry.main && !entry.renewal) entry.context.runtime.store.completeConversationStreamMessage(entry.context.sessionId, event.messageId);
     } else if (event.type === "text" || event.type === "thinking") {
+      // readable-check: allow optional-call - input validation: a caller's optional event stream
       await entry.onEvent?.({ ...event, threadId: entry.id });
     }
   }

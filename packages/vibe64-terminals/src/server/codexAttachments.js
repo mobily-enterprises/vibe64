@@ -615,7 +615,7 @@ function scheduleAttachmentCleanup(directory, delayMs = ATTACHMENT_TTL_MS) {
       scheduleAttachmentCleanup(timerKey, ATTACHMENT_EXPIRY_ERROR_RETRY_MS);
     });
   }, Math.max(1, delayMs));
-  timer.unref?.();
+  timer.unref();
   attachmentCleanupTimers.set(timerKey, timer);
 }
 
@@ -659,7 +659,7 @@ function scheduleAttachmentForcedCleanup(
       );
     });
   }, Math.max(1, delayMs));
-  timer.unref?.();
+  timer.unref();
   attachmentForcedCleanupTimers.set(timerKey, timer);
 }
 
@@ -688,7 +688,7 @@ function scheduleRetiredDirectoryRemoval(directory, delayMs = ATTACHMENT_EXPIRY_
       scheduleRetiredDirectoryRemoval(timerKey, ATTACHMENT_EXPIRY_ERROR_RETRY_MS);
     });
   }, Math.max(1, delayMs));
-  timer.unref?.();
+  timer.unref();
   attachmentRetiredDirectoryTimers.set(timerKey, timer);
 }
 
@@ -719,7 +719,7 @@ function scheduleAttachmentSessionCleanup(
       );
     });
   }, Math.max(1, delayMs));
-  timer.unref?.();
+  timer.unref();
   attachmentSessionCleanupTimers.set(timerKey, timer);
 }
 
@@ -818,7 +818,7 @@ function scheduleAttachmentSessionScan(
       );
     });
   }, Math.max(1, delayMs));
-  timer.unref?.();
+  timer.unref();
   attachmentSessionScanTimers.set(timerKey, timer);
 }
 
@@ -974,6 +974,7 @@ async function storeCodexAttachment({
   executionRoot = ""
 } = {}) {
   const fileName = sanitizeAttachmentFileName(input?.fileName);
+  // readable-check: allow method-probe - input validation: an upload carries a readable file stream
   if (!input?.stream || typeof input.stream.pipe !== "function") {
     return {
       ok: false,

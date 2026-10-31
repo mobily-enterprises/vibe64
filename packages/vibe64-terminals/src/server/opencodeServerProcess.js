@@ -629,10 +629,11 @@ async function createOpenCodeServerProcess({
   readinessTimeoutMs = OPENCODE_READY_TIMEOUT_MS,
   seededPrivateRoot = false,
   sessionEnvironmentRegistry = "",
+  // readable-check: allow dependency-default - data: the command shim directories put first on PATH
   shimDirs = [],
   stopExecution = stopVibe64Execution,
   workdir = ""
-} = {}) {
+}) {
   const startupScript = seededPrivateRoot ? OPENCODE_SEEDED_STARTUP_SCRIPT : OPENCODE_MANAGED_STARTUP_SCRIPT;
   const normalizedDbPath = path.resolve(text(dbPath));
   const normalizedPrivateRoot = path.resolve(text(privateRoot));

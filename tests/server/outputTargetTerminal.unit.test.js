@@ -66,7 +66,7 @@ test("preview status, open, and identity selection reject frozen sessions before
     error: "Session renewal has frozen preview access.",
     ok: false
   };
-  const controller = createOutputTargetTerminalController({
+  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null,
     projectService: {
       async createRuntime() {
         projectReads += 1;
@@ -103,7 +103,7 @@ test("explicit Preview Stop persists and refuses incidental startup before prepa
     async mutateSession(_id, update) { return update(); },
     async writeMetadataValue(_id, key, value) { metadata[key] = value; }
   };
-  const controller = createOutputTargetTerminalController({
+  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { prepared += 1; throw new Error("Stop must not prepare a workspace."); },
     projectService: { async createRuntime() { return {
       store,
@@ -130,7 +130,7 @@ test("Preview Stop drains before queued recovery and isolates other session clea
   const entered = Promise.withResolvers();
   const drain = Promise.withResolvers();
   const cleaned = [];
-  const controller = createOutputTargetTerminalController({
+  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { assert.fail("Queued automatic recovery must not prepare after Stop."); },
     projectService: { async createRuntime() { return {
       store: {
@@ -168,7 +168,7 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
     let prepared = 0;
     let writes = 0;
     const metadata = { output_target_preview_stopped: value };
-    const controller = createOutputTargetTerminalController({
+    const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
       ensureWorkspacePrepared() { prepared += 1; },
       projectService: { async createRuntime() { return {
         store: { async mutateSession() { writes += 1; } },
@@ -186,7 +186,7 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
 
 test("an explicit Preview start reruns a failed setup; an automatic one does not", async (t) => {
   const requests = [];
-  const controller = createOutputTargetTerminalController({
+  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared(_sessionId, context) {
       requests.push(context.rerunFailedSetup);
       return { ok: false, error: "Workspace preparation failed." };
@@ -211,7 +211,7 @@ test("failed Preview browser cleanup retains Stop across controllers and retries
   const metadata = {};
   let failCleanup = true;
   let attempts = 0;
-  const options = {
+  const options = { ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { assert.fail("Stopped Preview must not prepare a workspace."); },
     projectService: { async createRuntime() { return {
       store: {
@@ -562,7 +562,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       selectedProject: {},
       targetRoot: projectContextRoot
     };
-    controller = createOutputTargetTerminalController({
+    controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, sessionAdmissionFailure: () => null,
       async startWorkflow(input) {
         workflowStarts.push(input);
         await changeStackDuringAdmission?.();

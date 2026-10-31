@@ -112,9 +112,7 @@ function vibe64Result(operation) {
  * @param {ProjectService} projectService
  */
 function currentProjectSlug(projectService) {
-  return typeof projectService?.currentProjectSlug === "function"
-    ? String(projectService.currentProjectSlug() || "").trim()
-    : "";
+  return String(projectService.currentProjectSlug() || "").trim();
 }
 
 function terminalNamespace(base = "", ...parts) {

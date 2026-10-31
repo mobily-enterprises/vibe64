@@ -54,7 +54,7 @@ function parseSessionName(value) {
  * @param {RuntimeLogger} dependencies.logger
  * @param {AbortSignal | null} [dependencies.signal]
  */
-function createSessionNaming({ agent, publishSessionChanged, logger, signal = null } = {}) {
+function createSessionNaming({ agent, publishSessionChanged, logger, signal = null }) {
   const active = new Map();
   const sessionKey = ({ runtime, session }) => `${runtime.stateRoot}/${session.sessionId || session.id}`;
 

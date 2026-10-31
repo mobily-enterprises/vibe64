@@ -162,9 +162,9 @@ const teamTemporaryModesRefusal = () => Object.assign(new Error("Senior and Juni
  * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.readSessionContext
  * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareAgentSkills
  * @param {string} dependencies.systemRoot
- * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} [dependencies.prepareSelection]
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
- * @param {(event: object) => unknown} [dependencies.publishConversation]
+ * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {(event: object) => unknown} dependencies.publishConversation
  * @param {number} [dependencies.temporarySaveDelayMs]
  * @param {number} [dependencies.temporaryCompletionAttempts]
  * @param {number} [dependencies.temporaryCompletionRetryMs]
@@ -179,9 +179,9 @@ function createSessionConversations({
   readSessionContext,
   prepareAgentSkills,
   systemRoot,
-  prepareSelection = async () => {},
-  publishSessionChanged = async () => {},
-  publishConversation = async () => {},
+  prepareSelection,
+  publishSessionChanged,
+  publishConversation,
   temporarySaveDelayMs = 1_000,
   temporaryCompletionAttempts = 6,
   temporaryCompletionRetryMs = 500
@@ -489,7 +489,7 @@ function createSessionConversations({
   }
   function armTemporarySave(sessionId, pending) {
     pending.timer = setTimeout(() => void saveTemporaryOutput(sessionId, pending), temporarySaveDelayMs);
-    pending.timer.unref?.();
+    pending.timer.unref();
   }
   async function saveTemporaryOutput(sessionId, pending) {
     pending.timer = null;

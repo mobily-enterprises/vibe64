@@ -115,7 +115,7 @@ export function createCodexStartupHealth(publishSessionChanged) {
   async function writeCodexAppServerReady(runtime, sessionId, terminalSessionId, {
     healthAttempt = null
   } = {}) {
-    if (!healthAttempt && typeof runtime?.getSession === "function") {
+    if (!healthAttempt && runtime) {
       const currentSession = await runtime.getSession(sessionId).catch(() => null);
       const currentTask = (Array.isArray(currentSession?.backgroundTasks)
         ? currentSession.backgroundTasks

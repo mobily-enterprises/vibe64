@@ -59,7 +59,7 @@ function normalizeUsage(providerId, value) {
  * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
  * @param {typeof fetch} [dependencies.fetchImpl]
  */
-function createProviderUsage({ resolveConnection, fetchImpl = fetch } = {}) {
+function createProviderUsage({ resolveConnection, fetchImpl = fetch }) {
   const accounts = new Map();
   const turns = new Map();
 

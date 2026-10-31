@@ -477,6 +477,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
       cwd: context.standaloneSourceRoot
     });
     await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots || [], options);
+    // readable-check: allow optional-call - input validation: a caller's optional publication-attempt observer
     options.onPublicationAttempt?.();
     await git(runCommand, context, ["merge", "--ff-only", saveCommit], {
       ...options,
@@ -514,6 +515,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
   // This is a final read, not a lock on receiving repositories. It catches
   // changes during preparation without claiming exclusion after this check.
   await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots || [], options);
+  // readable-check: allow optional-call - input validation: a caller's optional publication-attempt observer
   options.onPublicationAttempt?.();
   try {
     pushed = await git(runCommand, context, pushArgs, { ...options, required: false });

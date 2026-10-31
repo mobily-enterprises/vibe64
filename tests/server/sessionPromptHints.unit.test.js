@@ -246,6 +246,7 @@ function createFixture({
         await writeFile(file, JSON.stringify(value));
       },
       mutateSession: (sessionId, operation) => operation(pathsFor(sessionId)),
+      readBackgroundTask: async () => null,
       withReadableSessionPaths: (sessionId, operation) => operation(pathsFor(sessionId))
     },
     async getSession(sessionId) {

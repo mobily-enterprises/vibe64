@@ -449,6 +449,7 @@ async function closeTerminalControllerForSession({
   label = "",
   sessionId = ""
 } = {}) {
+  // readable-check: allow method-probe - optional operation: an engine without session terminals has none to close
   if (typeof controller?.closeAllForSession !== "function") {
     return {
       closed: 0,
@@ -539,7 +540,6 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
 /**
  * @param {object} dependencies
  * @param {ActionCatalogue | null} [dependencies.actions]
- * @param {((actor: object, request: object) => Promise<unknown>) | null} [dependencies.authorizeCodexGitActorAccess]
  * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
  * @param {RuntimeEnv} [dependencies.env]
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
@@ -552,19 +552,25 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
  */
 function createService({
+  // readable-check: allow dependency-default - optional operation: without an action catalogue the assistant has no Vibe64 tools
   actions = null,
-  authorizeCodexGitActorAccess = null,
+  // readable-check: allow dependency-default - data: a host's Codex terminal settings, none by default
   codexTerminalController = {},
   env = process.env,
   inspectAgentSkills = inspectGenesisSkills,
+  // readable-check: allow dependency-default - optional operation: without a logger the service's operational warnings are dropped
   logger = null,
+  // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
   opencodeTerminalController = {},
+  // readable-check: allow dependency-default - optional operation: without supplied project services the service creates its own
   projectServices: suppliedProjectServices = null,
   projectService,
+  // readable-check: allow dependency-default - optional operation: without a project runtime publisher runtime changes are not announced
   publishProjectRuntimeChanged = async () => null,
+  // readable-check: allow dependency-default - optional operation: without session publishers session changes are not announced
   publishSessionChanged = {},
   runCodexGitGatewayCommand
-} = {}) {
+}) {
   if (!projectService) {
     throw new TypeError("createService requires vibe64.project.");
   }
@@ -614,6 +620,7 @@ function createService({
   const publishAgentSessionChanged = async (sessionId, payload = {}) => {
     if (!closing) {
       providerUsage.observe(currentProjectScopeKey(), sessionId, payload, () => {
+        // readable-check: allow optional-call - optional operation: a service without session publishers announces no plan usage
         if (!closing) return publishSessionChanged.agentTerminal?.(sessionId, { reason: "agent-plan-usage" });
       });
     }
@@ -660,7 +667,6 @@ function createService({
   };
 
   const codexGitCommand = createCodexGitCommandService({
-    authorizeActorAccess: authorizeCodexGitActorAccess,
     env,
     logger,
     projectService,
@@ -1116,6 +1122,7 @@ function createService({
             sessionId, messageId: options.deliveryMessageId, operation: lockOptions.operation, durationMs
           }, "Assistant message acquired its application write lock.");
         }
+        // readable-check: allow method-probe - optional operation: a write without a session reader runs on the session it was given
         const session = typeof runtime.getSession === "function"
           ? await runtime.getSession(sessionId, {
               inspectSource: false
@@ -1452,6 +1459,7 @@ function createService({
    * @param {string} [sessionId]
    */
   async function renewalSession(runtime, sessionId = "") {
+    // readable-check: allow method-probe - optional operation: a runtime without an internal renewal reader cannot renew
     if (typeof runtime?.getSessionForRenewal === "function") {
       return runtime.getSessionForRenewal(sessionId, {
         inspectSource: false
@@ -1469,6 +1477,7 @@ function createService({
     operation,
     readSession
   ) {
+    // readable-check: allow method-probe - input validation: a caller's optional step before the turn starts
     const beforeStart = typeof options.beforeStart === "function"
       ? await options.beforeStart({
           ...context,
@@ -1487,6 +1496,7 @@ function createService({
     // beforeStart is deliberately inside the agent-write lock and may
     // persist the exact basis used by orchestration. Rehydrate before the
     // provider operation so it observes that durable state.
+    // readable-check: allow method-probe - input validation: a caller's optional step before the turn starts
     const session = typeof options.beforeStart === "function"
       ? await readSession()
       : context.session;
@@ -1548,6 +1558,7 @@ function createService({
       }
     };
     await assertWorkflow();
+    // readable-check: allow optional-call - input validation: a caller's optional check that connected work is saved
     const connectedWorkSnapshots = await input.assertConnectedWorkSaved?.();
     const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
       commandOptions: execution.commandOptions,
@@ -1559,6 +1570,7 @@ function createService({
       runCommand: execution.runCommand,
       session
     });
+    // readable-check: allow optional-call - input validation: a caller's optional progress stream
     await input.onProgress?.({
       checkpointCommit: saveMessageInput.checkpoint.checkpointCommit,
       checkpointTree: saveMessageInput.checkpoint.checkpointTree,
@@ -1590,6 +1602,7 @@ function createService({
         operationId: input.operationId,
         sessionId: normalizedSessionId
       }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
+      // readable-check: allow optional-call - input validation: a caller's optional progress stream
       await input.onProgress?.({
         code: error.code || "vibe64_session_save_message_failed",
         kind: "message",
@@ -1597,6 +1610,7 @@ function createService({
         stage: "message-fallback"
       });
     }
+    // readable-check: allow optional-call - input validation: a caller's optional progress stream
     await input.onProgress?.({
       executionProfile: commitTitle.executionProfile,
       kind: "message",
@@ -1660,6 +1674,7 @@ function createService({
           throw error;
         }
       }
+      // readable-check: allow optional-call - input validation: a caller's optional observer of the repository write lock
       await options.onRepositoryWriteAcquired?.();
       return operation(context);
     }, { operation: operationName, waitMs: 10_000 });
@@ -1706,6 +1721,7 @@ function createService({
     });
     const setupChanged = String(setup.state?.updatedAt || "") !==
       String(session.workspaceSetup?.updatedAt || "");
+    // readable-check: allow method-probe - optional operation: a service without session publishers announces no setup change
     if (publish && setupChanged && typeof publishSessionChanged.agentTerminal === "function") {
       await publishSessionChanged.agentTerminal(sessionId, {
         reason: "workspace-setup-updated",
@@ -1741,6 +1757,7 @@ function createService({
       projectServiceNamespaceRoot(projectService) ||
       "";
     const projectRuntimeRoot = requestContext?.projectRuntimeRoot ||
+      // readable-check: allow method-probe - optional operation: a project service without a runtime root uses the request's
       (typeof projectService.currentProjectRuntimeRoot === "function"
         ? projectService.currentProjectRuntimeRoot()
         : "");
@@ -1775,8 +1792,10 @@ function createService({
         const listOptions = {
           statusGroup: "all"
         };
+        // readable-check: allow method-probe - optional operation: a runtime lists summaries, full sessions or none
         const sessions = typeof runtime?.listSessionSummaries === "function"
           ? await runtime.listSessionSummaries(listOptions)
+          // readable-check: allow method-probe - optional operation: a runtime lists summaries, full sessions or none
           : typeof runtime?.listSessions === "function"
             ? await runtime.listSessions(listOptions)
             : [];
@@ -1816,12 +1835,14 @@ function createService({
       return session;
     }
     const sessionId = sessionRecordId(session);
+    // readable-check: allow method-probe - optional operation: a project service without runtimes keeps the session it was given
     if (!sessionId || typeof projectService.createRuntime !== "function") {
       return session;
     }
     const runtime = await projectService.createRuntime({
       inspectSource: false
     });
+    // readable-check: allow method-probe - optional operation: a runtime without a session reader keeps the session it was given
     if (typeof runtime?.getSession !== "function") {
       return session;
     }
@@ -2232,9 +2253,11 @@ function createService({
     const listOptions = {
       statusGroup: "open"
     };
+    // readable-check: allow method-probe - optional operation: a runtime lists full sessions, summaries or none
     if (typeof runtime?.listSessions === "function") {
       return runtime.listSessions(listOptions);
     }
+    // readable-check: allow method-probe - optional operation: a runtime lists full sessions, summaries or none
     if (typeof runtime?.listSessionSummaries === "function") {
       return runtime.listSessionSummaries(listOptions);
     }
@@ -2378,6 +2401,7 @@ function createService({
   }
 
   async function closeDormantListedProjectRuntime(project = {}, input = {}) {
+    // readable-check: allow method-probe - optional operation: a project service without request contexts cannot close a listed project's runtime
     if (typeof projectService.runInProjectContext !== "function") {
       throw new TypeError("Vibe64 project service must own project request-context resolution.");
     }
@@ -2499,6 +2523,7 @@ function createService({
         "updateModelAccess"
       ]) {
         if (Object.hasOwn(input, name)) {
+          // readable-check: allow method-probe - input validation: a host's assistant runtime configuration names functions
           if (typeof input[name] !== "function") {
             throw new TypeError(`Assistant runtime ${name} must be a function.`);
           }
@@ -2509,6 +2534,7 @@ function createService({
     },
 
     async createSessionSource(input = {}) {
+      // readable-check: allow method-probe - test asserts error: a project service without the source mutation lock is refused
       if (typeof projectService.runProjectSourceExclusive !== "function") {
         const error = new Error("Session source creation requires the project source mutation lock.");
         error.code = "vibe64_project_source_lock_unavailable";
@@ -2677,6 +2703,7 @@ function createService({
     },
 
     async closeDormantProjectRuntimes(input = {}) {
+      // readable-check: allow method-probe - optional operation: a project service without a project list closes only the current project
       if (typeof projectService.listProjects !== "function") {
         const result = await closeDormantCurrentProjectRuntime(input);
         return {
@@ -2704,6 +2731,7 @@ function createService({
       const results = [];
       const listedSlugs = new Set(projects.map((project) => project.slug));
       try {
+        // readable-check: allow optional-call - optional operation: a project service without practice projects lists none
         for (const slug of await projectService.listPracticeProjectSlugs?.() || []) {
           if (!listedSlugs.has(slug)) projects.push({ slug });
         }
@@ -2866,6 +2894,7 @@ function createService({
       if (typeof operation !== "function") {
         throw new TypeError("Exclusive session source reads require an internal operation.");
       }
+      // readable-check: allow method-probe - test asserts error: a project service without the source mutation lock is refused
       if (typeof projectService.runProjectSourceExclusive !== "function") {
         throw Object.assign(new Error("Session source reads require the project source mutation lock."), {
           code: "vibe64_project_source_lock_unavailable"
@@ -2947,6 +2976,7 @@ function createService({
         session = recorded?.session || await runtime.getSession(sessionId, { inspectSource: false });
         const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "create-pull-request");
         await prepareSessionPullRequestBranch({
+          // readable-check: allow optional-call - input validation: a caller's optional check that connected work is saved
           connectedWorkSnapshots: await input.assertConnectedWorkSaved?.(),
           project: await projectService.readCurrentProject(),
           session,
@@ -3411,6 +3441,7 @@ function createService({
     },
 
     async retireAgentConversationHistory(sessionId, input = {}, options = {}) {
+      // readable-check: allow method-probe - input validation: retirement requires the caller's preservation callback
       if (typeof options.beforeDelete !== "function") throw new TypeError("Native retirement requires a host preservation callback.");
       const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
       const retire = async (session, archived, publishArtifacts) => {
@@ -3653,6 +3684,7 @@ function createService({
         error.statusCode = 400;
         throw error;
       }
+      // readable-check: allow method-probe - optional operation: a host without model access changes refuses them
       if (typeof assistantRuntime.updateModelAccess !== "function") {
         const error = new Error("This Vibe64 host does not support changing provider model access.");
         error.code = "vibe64_assistant_model_access_unavailable";
@@ -3747,6 +3779,7 @@ function createService({
 
     async resumeIntegrationContinuation(sessionId, input = {}, options = {}) {
       const inspectConfiguration = async (saved) => {
+        // readable-check: allow method-probe - test asserts error: a goal without an integration configuration reader is refused
         if (typeof options.readIntegrationConfiguration !== "function") {
           return { ok: false, code: "vibe64_integration_configuration_unavailable",
             error: "Integration configuration cannot be checked before continuing.", integrationSetup: saved };
@@ -4252,6 +4285,7 @@ function createService({
             }
           }
         };
+        // readable-check: allow method-probe - optional operation: a project service without a project list recovers only the current project
         if (typeof projectService.listProjects === "function") {
           const listed = await projectService.listProjects();
           if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
@@ -4578,13 +4612,10 @@ function startProjectRuntimeDormancyCleanupSchedule({
   clearIntervalImpl = clearInterval,
   idleAfterMs = PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS,
   intervalMs = PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS,
-  logger = null,
-  serviceFactory = null,
+  logger,
+  serviceFactory,
   setIntervalImpl = setInterval
-} = {}) {
-  if (typeof serviceFactory !== "function") {
-    throw new TypeError("startProjectRuntimeDormancyCleanupSchedule requires serviceFactory().");
-  }
+}) {
   const normalizedIdleAfterMs = normalizePositiveDurationMs(idleAfterMs, PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS);
   const normalizedIntervalMs = normalizePositiveDurationMs(intervalMs, PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS);
   let running = false;
@@ -4597,7 +4628,7 @@ function startProjectRuntimeDormancyCleanupSchedule({
     running = true;
     try {
       const service = serviceFactory();
-      if (typeof service?.closeDormantProjectRuntimes !== "function") {
+      if (!service) {
         return null;
       }
       const result = await service.closeDormantProjectRuntimes({
@@ -4606,7 +4637,7 @@ function startProjectRuntimeDormancyCleanupSchedule({
       for (const failure of Array.isArray(result?.failed) ? result.failed : []) {
         const failed = Array.isArray(failure?.failed) ? failure.failed
           : Array.isArray(failure?.closeResult?.failed) ? failure.closeResult.failed : [];
-        logger?.warn?.({
+        logger.warn({
           component: "vibe64-project-runtime-cleanup",
           error: String(failure?.error || failed[0]?.error || "Dormant project runtime cleanup failed."),
           event: "vibe64.project_runtime.dormant_close_failed",
@@ -4623,7 +4654,7 @@ function startProjectRuntimeDormancyCleanupSchedule({
       });
       return result;
     } catch (error) {
-      logger?.warn?.({
+      logger.warn({
         component: "vibe64-project-runtime-cleanup",
         error: error instanceof Error ? error.message : String(error || "Dormant project runtime cleanup failed."),
         event: "vibe64.project_runtime.dormant_cleanup_failed"
@@ -4644,7 +4675,7 @@ function startProjectRuntimeDormancyCleanupSchedule({
   const interval = setIntervalImpl(() => {
     void runNow();
   }, normalizedIntervalMs);
-  interval?.unref?.();
+  interval?.unref();
 
   return {
     idleAfterMs: normalizedIdleAfterMs,

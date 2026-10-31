@@ -540,13 +540,10 @@ async function clearLaunchMetadata(store, sessionId = "", { preserveSelection = 
   const names = preserveSelection
     ? OUTPUT_METADATA_NAMES.filter((name) => ![OUTPUT_METADATA.id, OUTPUT_METADATA.label, OUTPUT_METADATA.parameters].includes(name))
     : OUTPUT_METADATA_NAMES;
-  if (typeof store.mutateSession === "function" && typeof store.deleteMetadataValue === "function") {
-    await store.mutateSession(normalizedSessionId, async () => {
-      await Promise.all(names.map((name) => store.deleteMetadataValue(normalizedSessionId, name)));
-    });
-    return true;
-  }
-  return false;
+  await store.mutateSession(normalizedSessionId, async () => {
+    await Promise.all(names.map((name) => store.deleteMetadataValue(normalizedSessionId, name)));
+  });
+  return true;
 }
 
 /**
@@ -558,8 +555,7 @@ async function clearLaunchMetadataForTerminal(store, sessionId = "", terminalSes
   const normalizedTerminalSessionId = String(terminalSessionId || "").trim();
   if (
     !normalizedTerminalSessionId ||
-    !store ||
-    typeof store.readMetadataValue !== "function"
+    !store
   ) {
     return false;
   }
@@ -657,9 +653,11 @@ async function createLaunchContext(projectService, sessionId, {
     session,
     target: "output-target"
   });
+  // readable-check: allow method-probe - optional operation: a project service without a target root reads the session source only
   const projectContextRoot = typeof projectService?.currentTargetRoot === "function"
     ? String(projectService.currentTargetRoot() || "").trim()
     : "";
+  // readable-check: allow method-probe - optional operation: a project service without managed app identities offers none
   const previewIdentitySettings = typeof projectService?.readPreviewApplicationIdentities === "function"
     ? await projectService.readPreviewApplicationIdentities({
         sessionId: session.sessionId
@@ -686,6 +684,7 @@ async function createLaunchContext(projectService, sessionId, {
     projectContextRoot,
     projectSlug: currentProjectSlug(projectService),
     runtime,
+    // readable-check: allow method-probe - optional operation: a project service without service data keeps none
     serviceDataRoot: typeof projectService?.currentServiceDataRoot === "function"
       ? projectService.currentServiceDataRoot()
       : "",
@@ -1408,6 +1407,7 @@ function readinessMarkerFromSpec(spec = {}) {
 }
 
 function releaseLaunchSpecReservation(spec = {}) {
+  // readable-check: allow method-probe - data: only a spec that reserved a port carries its release
   if (typeof spec.releasePortReservation !== "function") {
     return;
   }
@@ -1524,7 +1524,7 @@ async function cleanupSupersededLaunchTerminals({
     }
   }
   if (!preservedTerminalIds.length) {
-    await launchPreviewProxies?.close?.({
+    await launchPreviewProxies?.close({
       sessionId
     });
   }
@@ -2093,33 +2093,33 @@ async function resolveLaunchPreviewStatus({
 
 /**
  * @param {object} dependencies
- * @param {((sessionId: string, context: object) => Promise<object>) | null} [dependencies.ensureWorkspacePrepared]
- * @param {ProjectServices["ensure"]} [dependencies.ensureProjectServices]
+ * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
+ * @param {ProjectServices["ensure"]} dependencies.ensureProjectServices
  * @param {RuntimeEnv} [dependencies.env]
  * @param {ProjectService} dependencies.projectService
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof startResourceWorkflow} [dependencies.startWorkflow]
  * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
  * @param {(sessionId: string) => Promise<object>} [dependencies.stopPreviewBrowsers]
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
  * @param {typeof setVibe64WorkflowPhase} [dependencies.setWorkflowPhase]
- * @param {(sessionId: string) => object | null} [dependencies.sessionAdmissionFailure]
+ * @param {(sessionId: string) => object | null} dependencies.sessionAdmissionFailure
  */
 function createOutputTargetTerminalController({
-  ensureWorkspacePrepared = null,
-  ensureProjectServices = async () => {},
+  ensureWorkspacePrepared,
+  ensureProjectServices,
   env = process.env,
   projectService,
-  publishSessionChanged = async () => null,
+  publishSessionChanged,
   runCommand = runVibe64Command,
   startWorkflow = startResourceWorkflow,
   stopExecution = stopVibe64Execution,
   stopPreviewBrowsers = async () => ({ ok: true }),
   finishWorkflow = finishVibe64Workflow,
   setWorkflowPhase = setVibe64WorkflowPhase,
-  sessionAdmissionFailure = () => null
-} = {}) {
+  sessionAdmissionFailure
+}) {
   const launchPreviewProxies = createLaunchPreviewProxyRegistry({
     env
   });
@@ -3059,6 +3059,7 @@ function createOutputTargetTerminalController({
                       if (metadataCleared) {
                         publishLaunchCleanup(sessionId, context.projectSlug);
                       }
+                      // readable-check: allow method-probe - data: a terminal spec may carry a close callback
                       if (typeof spec.onClose === "function") {
                         await spec.onClose(event);
                       }
@@ -3089,6 +3090,7 @@ function createOutputTargetTerminalController({
                     if (metadataCleared) {
                       publishLaunchCleanup(sessionId, context.projectSlug);
                     }
+                    // readable-check: allow method-probe - data: a terminal spec may carry a stop callback
                     if (typeof spec.onStop === "function") {
                       await spec.onStop(event);
                     }

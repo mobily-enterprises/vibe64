@@ -544,9 +544,7 @@ async function attachSessionSource(store, sessionId = "", metadata = {}) {
       store.writeMetadataValue(sessionId, name, value)
     )));
   };
-  return typeof store.mutateSession === "function"
-    ? store.mutateSession(sessionId, write)
-    : write();
+  return store.mutateSession(sessionId, write);
 }
 
 /**
@@ -571,7 +569,7 @@ async function createSessionSource({
   session = {},
   store,
   vibe64User = null
-} = {}) {
+}) {
   const contribution = sessionConnectedContribution(session);
   if (contribution && !session.metadata?.renewed_from) {
     if (expectedCommit && normalizeText(expectedCommit).toLowerCase() !== contribution.baseCommit) {

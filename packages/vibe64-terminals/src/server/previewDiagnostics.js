@@ -9,10 +9,10 @@ const PREVIEW_DIAGNOSTIC_EVENTS = new Set([
 
 /**
  * @param {object} dependencies
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {() => number} [dependencies.now]
  */
-function createPreviewDiagnosticRecorder({ logger, now = Date.now } = {}) {
+function createPreviewDiagnosticRecorder({ logger, now = Date.now }) {
   let windowStartedAt = 0;
   let recorded = 0;
   return function recordPreviewDiagnostic(input, { projectSlug, sessionId }) {
@@ -35,9 +35,9 @@ function createPreviewDiagnosticRecorder({ logger, now = Date.now } = {}) {
     };
     try {
       // An explicitly enabled diagnostic must survive the normal warning log level.
-      logger?.warn?.(fields, "Preview browser diagnostic.");
+      logger.warn(fields, "Preview browser diagnostic.");
       recorded += 1;
-      return { ok: true, recorded: typeof logger?.warn === "function" };
+      return { ok: true, recorded: true };
     } catch { return { ok: true, recorded: false }; }
   };
 }

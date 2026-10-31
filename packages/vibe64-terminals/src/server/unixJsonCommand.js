@@ -48,6 +48,7 @@ function shortCommandHash(value = "") {
 }
 
 function unixCommandSocketPath(identity, { env = process.env } = {}) {
+  // readable-check: allow method-probe - platform object: process.getuid() exists only on POSIX
   const owner = typeof process.getuid === "function" ? process.getuid() : "user";
   const root = path.resolve(String(env.TMPDIR || "").trim() || tmpdir());
   const socketPath = path.join(root, `v64-${owner}-${shortCommandHash(identity)}.sock`);
@@ -158,7 +159,7 @@ async function listenUnixJsonCommandServer(server, socketPath = "") {
       resolve();
     });
   });
-  server.unref?.();
+  server.unref();
 }
 
 /**
@@ -200,7 +201,7 @@ function createSessionCommandServers({
   errorBody = (payload) => payload,
   directoryMode,
   healthTimeoutMs = 2000
-} = {}) {
+}) {
   const healthPath = `${routePrefix}/health`;
   const servers = new Map();
   const preparations = new Map();

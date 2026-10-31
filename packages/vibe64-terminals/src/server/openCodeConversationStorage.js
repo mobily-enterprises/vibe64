@@ -27,27 +27,19 @@ async function writeOpenCodeSessionMetadata(context = {}, values = {}) {
   if (!entries.length) {
     return;
   }
-  const internal = renewalSession(context) &&
-    typeof store?.writeMetadataValueForRenewal === "function";
+  const internal = renewalSession(context);
   const write = internal
     ? store.writeMetadataValueForRenewal.bind(store)
-    : store?.writeMetadataValue?.bind(store);
+    : store.writeMetadataValue.bind(store);
   const mutate = internal
-    ? store?.mutateSessionForRenewal?.bind(store)
-    : store?.mutateSession?.bind(store);
-  if (typeof write !== "function") {
-    throw new TypeError("OpenCode requires writable Vibe64 session metadata.");
-  }
+    ? store.mutateSessionForRenewal.bind(store)
+    : store.mutateSession.bind(store);
   const operation = async () => {
     await Promise.all(entries.map(([name, value]) => (
       write(context.sessionId, name, String(value))
     )));
   };
-  if (typeof mutate === "function") {
-    await mutate(context.sessionId, operation);
-  } else {
-    await operation();
-  }
+  await mutate(context.sessionId, operation);
 }
 
 async function recordOpenCodeSessionIdentity(context, nativeId) {

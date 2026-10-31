@@ -175,7 +175,7 @@ function sessionGitCommandActorFromMetadata(session = {}) {
 async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", metadata = {}, {
   reason = ""
 } = {}) {
-  if (typeof runtime?.store?.writeMetadataValue !== "function") {
+  if (!runtime) {
     return false;
   }
   const normalizedSessionId = normalizeText(sessionId);
@@ -189,11 +189,7 @@ async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", meta
       runtime.store.writeMetadataValue(normalizedSessionId, name, String(value || ""))
     )));
   };
-  if (typeof runtime.store.mutateSession === "function") {
-    await runtime.store.mutateSession(normalizedSessionId, writeEntries);
-  } else {
-    await writeEntries();
-  }
+  await runtime.store.mutateSession(normalizedSessionId, writeEntries);
   vibe64SessionDebugLog("server.sessionGitCommandActor.recorded", {
     actorScope: normalizeText(metadata.session_git_command_actor_scope),
     actorUserKey: normalizeText(metadata.session_git_command_actor_user_key),

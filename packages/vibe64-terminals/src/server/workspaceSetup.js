@@ -215,7 +215,7 @@ function workspaceSetupRunKey(sessionId = "") {
  * @param {() => Date} [dependencies.clock]
  * @param {null} [dependencies.inspect]
  * @param {typeof inspectGenesisProjectFormat} [dependencies.inspectProjectFormat]
- * @param {((request: object) => Promise<object>) | null} [dependencies.connectedPreparation]
+ * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
  * @param {ProjectService} dependencies.projectService
  * @param {(request: object) => Promise<object>} [dependencies.startWorkflow]
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
@@ -225,21 +225,17 @@ function createWorkspaceSetupRunner({
   clock = () => new Date(),
   inspect: suppliedInspect = null,
   inspectProjectFormat = inspectGenesisProjectFormat,
-  connectedPreparation = null,
+  connectedPreparation,
   projectService,
   startWorkflow = startResourceWorkflow,
   finishWorkflow = finishVibe64Workflow,
   runCommand = runVibe64Command
-} = {}) {
-  if (!projectService) {
-    throw new TypeError("createWorkspaceSetupRunner requires the Vibe64 project service.");
-  }
+}) {
   const inspect = suppliedInspect || projectService.inspectWorkspaceSetup?.bind(projectService) || inspectVibe64WorkspaceSetup;
   const activeRuns = new Map();
 
   async function connectedSourceRoots(setup, runtime, session) {
     if (!setup.connectedDevelopment) return [];
-    if (typeof connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
     const inputs = await connectedPreparation({ mode: "inspect", runtime, session });
     if (inputs?.ok === false) throw Object.assign(new Error(inputs.error), { code: inputs.code });
     if (inputs?.inputsHash !== setup.connectedDevelopment.inputsHash || !Array.isArray(inputs.sourceRoots)) {
@@ -713,8 +709,7 @@ function createWorkspaceSetupRunner({
     let connectedUpdates = [];
     if (!runtime.learningScope && setup?.connectedDevelopment) {
       try {
-        if (typeof connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
-        const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
+            const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
         if (prepared?.ok === false) throw Object.assign(new Error(prepared.error), { code: prepared.code });
         connectedUpdates = (prepared?.prepared || []).map(connectedUpdateLine).filter(Boolean);
         await onProgress?.("Checking connected sources");
@@ -777,6 +772,7 @@ function createWorkspaceSetupRunner({
       stateBase.recipeHash === recipe.recipeHash &&
       (stateBase.status === "succeeded" || (stateBase.status === "failed" && rerunFailed !== true))
     ) {
+      // readable-check: allow method-probe - optional operation: a project service without environment status has no prepared resources to compare
       if (stateBase.status === "failed" || typeof projectService.projectEnvironmentStatus !== "function") {
         return { completion: null, state: stateBase };
       }
@@ -909,6 +905,7 @@ function createWorkspaceSetupRunner({
       } catch {
         return false;
       }
+      // readable-check: allow method-probe - optional operation: a project service without environment status reports its resources ready
       const environmentStatus = typeof projectService.projectEnvironmentStatus === "function"
         ? await projectService.projectEnvironmentStatus({ sessionId: session.sessionId, session }) : { status: "ready" };
       return setup.status === "ready" &&

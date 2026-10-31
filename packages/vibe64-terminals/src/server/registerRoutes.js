@@ -54,11 +54,12 @@ function attachmentMultipartError(message) {
 
 function normalizeMultipartFilePart(part = {}) {
   const fieldName = String(part.fieldname || "").trim();
+  // readable-check: allow method-probe - input validation: only a file part carries a readable file stream
   if (part.type !== "file" || !part.file || typeof part.file.pipe !== "function") {
     throw attachmentMultipartError("Attachment upload accepts exactly one file and no other fields.");
   }
   if (fieldName !== "file") {
-    part.file.resume?.();
+    part.file.resume();
     throw attachmentMultipartError(`Attachment field "${fieldName}" is not allowed.`);
   }
   return Object.freeze({
@@ -69,6 +70,7 @@ function normalizeMultipartFilePart(part = {}) {
 }
 
 function multipartIterator(request) {
+  // readable-check: allow method-probe - test asserts error: a request without multipart iteration is refused
   if (typeof request?.parts !== "function") {
     throw new TypeError("Attachment uploads require strict multipart iteration support.");
   }
@@ -202,9 +204,6 @@ function registerRoutes(
 ) {
   if (!terminals || typeof terminals !== "object") {
     throw new TypeError(VIBE64_TERMINALS_UNAVAILABLE);
-  }
-  if (!uploads || typeof uploads.readSingleMultipartFile !== "function") {
-    throw new TypeError("Vibe64 terminal routes require runtime.uploads.");
   }
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-terminals"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,

@@ -407,10 +407,10 @@ async function readPromptHintGenesisFile(sourceRoot = "", relativePath = "", max
  * @param {number} [dependencies.cacheMaxEntries]
  * @param {number} [dependencies.cacheTtlMs]
  * @param {SessionAgentManager} dependencies.agent
- * @param {((event: object) => void) | null} [dependencies.diagnostic]
+ * @param {(event: object) => void} dependencies.diagnostic
  * @param {() => number} [dependencies.now]
  * @param {ProjectService} dependencies.projectService
- * @param {PublishSessionChanged} [dependencies.publishSessionChanged]
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof readPromptHintBlueprint} [dependencies.readBlueprintText]
  * @param {typeof readPromptHintSubsystems} [dependencies.readSubsystemsText]
  * @param {typeof savedSessionSourcePath} [dependencies.sessionSourcePath]
@@ -419,21 +419,14 @@ function createSessionPromptHintsService({
   cacheMaxEntries = PROMPT_HINT_CACHE_MAX_ENTRIES,
   cacheTtlMs = PROMPT_HINT_CACHE_TTL_MS,
   agent,
-  diagnostic = null,
+  diagnostic,
   now = () => Date.now(),
   projectService,
-  publishSessionChanged = async () => {},
+  publishSessionChanged,
   readBlueprintText = readPromptHintBlueprint,
   readSubsystemsText = readPromptHintSubsystems,
   sessionSourcePath = savedSessionSourcePath
-} = {}) {
-  if (!projectService || typeof projectService.createRuntime !== "function") {
-    throw new TypeError("Prompt hints require the Vibe64 project service.");
-  }
-  if (!agent || typeof agent.resolveAssistantPurpose !== "function") {
-    throw new TypeError("Prompt hints require the session assistant manager.");
-  }
-
+}) {
   const completedCache = new Map();
   const jobsByKey = new Map();
   const jobsByOwner = new Map();
@@ -441,9 +434,6 @@ function createSessionPromptHintsService({
   const requestsBySubscriber = new Map();
 
   function reportDiagnostic(code = "vibe64_prompt_hints_unavailable", error = null, details = {}) {
-    if (typeof diagnostic !== "function") {
-      return;
-    }
     try {
       diagnostic({
         code,
@@ -452,7 +442,7 @@ function createSessionPromptHintsService({
         event: "vibe64.prompt_hints.failed"
       });
     } catch {
-      // Optional diagnostics must not make prompt hints user-visible.
+      // A failing diagnostic must not make prompt hints user-visible.
     }
   }
 
@@ -494,9 +484,6 @@ function createSessionPromptHintsService({
   }
 
   async function readContext(sessionId = "") {
-    if (typeof projectService.readPromptHints !== "function") {
-      throw new TypeError("Prompt hints require the project prompt-hints setting.");
-    }
     const runtime = await projectService.createRuntime({ inspectSource: false });
     const session = await runtime.getSession(sessionId, { inspectSource: false });
     const sourceRoot = normalizeText(sessionSourcePath(session));
@@ -505,11 +492,9 @@ function createSessionPromptHintsService({
       runtime.readConversationLogPage(sessionId, {
         limit: PROMPT_HINT_RECENT_TURN_LIMIT
       }),
-      typeof runtime.store?.readBackgroundTask === "function"
-        ? Promise.all(PROMPT_HINT_ACTIVE_TASK_IDS.map((taskId) => (
-            runtime.store.readBackgroundTask(sessionId, taskId)
-          )))
-        : [],
+      Promise.all(PROMPT_HINT_ACTIVE_TASK_IDS.map((taskId) => (
+        runtime.store.readBackgroundTask(sessionId, taskId)
+      ))),
       sourceRoot ? readGenesisText(readBlueprintText, sourceRoot) : "",
       sourceRoot ? readGenesisText(readSubsystemsText, sourceRoot) : ""
     ]);

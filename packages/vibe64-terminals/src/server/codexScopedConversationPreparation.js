@@ -314,6 +314,7 @@ function createCodexScopedConversationPreparation({
         if (["live_progress", "thinking"].includes(classification.kind)) {
           appendCodexAppServerEphemeralProgress(current, classification);
         }
+        // readable-check: allow optional-call - input validation: a caller's optional event stream
         options.onEvent?.({ type: "notification", classification, threadId: conversationId,
           turnId: classification.turnId, scopeId: context.assistantScope?.id || "" });
       },

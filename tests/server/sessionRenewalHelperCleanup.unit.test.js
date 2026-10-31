@@ -44,7 +44,7 @@ for (const kind of ["hints", "database"]) {
         localDatabaseServers: async () => ({ managed: true, databases: [] }),
         sessionDatabaseEnvironment: () => assert.fail("Cleanup must not connect to a database") };
       const service = kind === "hints"
-        ? createSessionPromptHintsService({ projectService, agent: { deleteEphemeralConversation: remove,
+        ? createSessionPromptHintsService({ projectService, diagnostic: () => {}, publishSessionChanged: async () => {}, agent: { deleteEphemeralConversation: remove,
           resolveAssistantPurpose: () => assert.fail("Cleanup must not resolve a new helper") } })
         : createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, projectService, terminalService: { deleteEphemeralAgentConversation: remove } });
       const close = kind === "hints" ? service.cancelSessionPromptHintsForSession : service.closeAssistantsForSession;

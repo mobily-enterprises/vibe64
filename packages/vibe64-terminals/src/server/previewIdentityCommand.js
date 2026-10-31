@@ -203,7 +203,7 @@ function createPreviewIdentityCommandRunner({
   session = {},
   sourceRoot = "",
   targetHref = ""
-} = {}) {
+}) {
   if (typeof runCommand !== "function") {
     throw new TypeError("Preview identity command runner requires runCommand.");
   }

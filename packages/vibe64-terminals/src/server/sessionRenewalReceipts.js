@@ -261,12 +261,6 @@ async function completeSessionRenewalSeed({
     });
   }
   const acknowledgedAt = new Date().toISOString();
-  if (
-    typeof runtime.store.mutateSessionForRenewal !== "function" ||
-    typeof runtime.store.writeMetadataValueForRenewal !== "function"
-  ) {
-    throw new TypeError("Renewed assistant acknowledgement requires explicit internal renewal metadata access.");
-  }
   await runtime.store.mutateSessionForRenewal(sessionId, async () => {
     const writeMetadataValue = runtime.store.writeMetadataValueForRenewal.bind(runtime.store);
     await Promise.all([

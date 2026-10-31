@@ -19,9 +19,8 @@ const DEFAULT_HELPER_TIMEOUT_MS = 120000;
  * @param {string} [dependencies.scopePrefix]
  */
 function createRetainedConversationHelper({ terminals, root, receipt, scopePrefix = "summary" }) {
-  if (!path.isAbsolute(root || "") || typeof receipt?.read !== "function" ||
-      typeof receipt?.write !== "function" || !/^[a-z][a-z0-9]{0,31}$/u.test(scopePrefix)) {
-    throw new TypeError("A retained Helper requires its original parent root, receipt and scope prefix.");
+  if (!path.isAbsolute(root || "") || !/^[a-z][a-z0-9]{0,31}$/u.test(scopePrefix)) {
+    throw new TypeError("A retained Helper requires its original parent root and scope prefix.");
   }
   const scopePattern = new RegExp(`^${scopePrefix}_[a-f0-9-]+$`, "u");
   // The receipt keeps a Helper whose close is unconfirmed, so it is retried

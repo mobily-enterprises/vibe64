@@ -64,8 +64,11 @@ function terminalsProviderEnv(runtimeEnv = {}, liveEnv = process.env) {
  * @param {ProjectServices | null} [dependencies.projectServices]
  */
 function createVibe64TerminalsFeature({
+  // readable-check: allow dependency-default - data: a host's Codex terminal settings, none by default
   codexTerminalController = {},
+  // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
   opencodeTerminalController = {},
+  // readable-check: allow dependency-default - optional operation: without supplied project services the terminals service creates its own
   projectServices = null
 } = {}) {
   const cleanupSchedules = new WeakMap();

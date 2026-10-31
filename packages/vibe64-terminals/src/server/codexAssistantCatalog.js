@@ -30,7 +30,7 @@ async function withCodexAppServerModelCatalogDeadline(operation, {
   if (signal?.aborted === true) {
     abortFromCaller();
   } else {
-    signal?.addEventListener?.("abort", abortFromCaller, { once: true });
+    signal?.addEventListener("abort", abortFromCaller, { once: true });
   }
   const timeout = setTimeout(() => {
     timedOut = true;
@@ -56,7 +56,7 @@ async function withCodexAppServerModelCatalogDeadline(operation, {
     ]);
   } finally {
     clearTimeout(timeout);
-    signal?.removeEventListener?.("abort", abortFromCaller);
+    signal?.removeEventListener("abort", abortFromCaller);
   }
 }
 

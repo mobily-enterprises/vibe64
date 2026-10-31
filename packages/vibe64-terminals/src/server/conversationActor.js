@@ -17,7 +17,7 @@ async function conversationActorMetadata({
   const authenticated = vibe64User && typeof vibe64User === "object" && !Array.isArray(vibe64User)
     ? vibe64User
     : null;
-  const localProfile = !authenticated && typeof personalProfileStore?.read === "function"
+  const localProfile = !authenticated && personalProfileStore
     ? await personalProfileStore.read()
     : {};
   const source = authenticated || actorUser();
