@@ -6,6 +6,8 @@ import { boundedTrainingResult, trainingFailure } from "./errors.js";
 import { availableStepIds } from "./lessonAvailability.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
+/** @typedef {import("./types.js").TrainingService} TrainingService */
+
 // Learning v2 (Rev 4 C2): the lesson reader, step results, reader position,
 // the lesson in progress and the archived lessons. Admission is the existing
 // action context; decisions stay with their owners: the step owner
@@ -154,6 +156,16 @@ const definition = (name, fields, { description = "", browser = false, kind = "c
   }
 }, { projectScoped: false });
 
+/**
+ * @param {object} dependencies
+ * @param {TrainingService["learners"]} dependencies.learners
+ * @param {TrainingService["learners"]} [dependencies.attemptLearners]
+ * @param {TrainingService["content"]} dependencies.content
+ * @param {TrainingService["steps"]} dependencies.steps
+ * @param {TrainingService["exercises"] | null} [dependencies.exercises]
+ * @param {TrainingService["learningSpace"] | null} [dependencies.learningSpace]
+ * @param {TrainingService["publishLearnerChanged"] | null} [dependencies.publishLearnerChanged]
+ */
 function createTrainingStepActions({ learners, attemptLearners = learners, content, steps, exercises = null,
   learningSpace = null, publishLearnerChanged = null } = {}) {
   if (typeof learners?.readState !== "function" || typeof attemptLearners?.readState !== "function" ||

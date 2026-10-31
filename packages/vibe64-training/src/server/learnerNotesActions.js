@@ -3,6 +3,8 @@ import { MAX_NOTES_CHARS } from "./learnerState.js";
 import { requestId, text } from "./actions.js";
 import { defineTrainingLearnerAction as definition } from "./stepActions.js";
 
+/** @typedef {import("./types.js").TrainingService} TrainingService */
+
 // Learning v2 learner notes (contract C7): Colleague's private summary of the
 // person it teaches. The learner store keeps them in that learner's own
 // Learning state; the authenticated actor alone selects them, so another
@@ -25,6 +27,11 @@ const notesOutput = {
 // that arrives later, but the revision it replaces always refuses older text.
 const expectedRevision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
 
+/**
+ * @param {object} dependencies
+ * @param {TrainingService["learners"]} dependencies.learners
+ * @param {TrainingService["publishLearnerChanged"] | null} [dependencies.publishLearnerChanged]
+ */
 function createTrainingLearnerNotesActions({ learners, publishLearnerChanged = null } = {}) {
   if (typeof learners?.readTeacherNotes !== "function" || typeof learners?.saveTeacherNotes !== "function") {
     throw new TypeError("Learner notes actions require the original learner store.");

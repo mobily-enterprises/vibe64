@@ -3,6 +3,8 @@ import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-
 import { boundedTrainingResult } from "./errors.js";
 import { lessonAvailableTo } from "./lessonAvailability.js";
 
+/** @typedef {import("./types.js").TrainingService} TrainingService */
+
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
 const revision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
 const id = { ...text, maxLength: 64, pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" };
@@ -139,6 +141,16 @@ const prepared = result => {
 };
 
 // Composition supplies the original readers and one exercise preparation owner.
+/**
+ * @param {object} dependencies
+ * @param {TrainingService["catalogue"]} dependencies.catalogue
+ * @param {TrainingService["learners"]} dependencies.learners
+ * @param {TrainingService["content"] | null} [dependencies.content]
+ * @param {TrainingService["exercises"] | null} [dependencies.exercises]
+ * @param {TrainingService["courseInstaller"] | null} [dependencies.courseInstaller]
+ * @param {TrainingService["learningSpace"] | null} [dependencies.learningSpace]
+ * @param {TrainingService["publishLearnerChanged"] | null} [dependencies.publishLearnerChanged]
+ */
 function createTrainingActions({ catalogue, learners, content = null, exercises = null, courseInstaller = null, learningSpace = null,
   publishLearnerChanged = null } = {}) {
   if (typeof catalogue?.readCatalogue !== "function" || typeof learners?.readState !== "function") {

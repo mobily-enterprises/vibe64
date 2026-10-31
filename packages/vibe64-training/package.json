@@ -35,6 +35,7 @@
     "./shared/practical-schemas": "./src/shared/practicalSchemas.js",
     "./server/visual-resource-actions": "./src/server/visualResourceActions.js",
     "./server/visual-resource-routes": "./src/server/visualResourceRoutes.js",
+    "./server/types": "./src/server/types.js",
     "./shared/presentation-schemas": "./src/shared/presentationSchemas.js",
     "./shared/learning-guidance": "./src/shared/learningGuidance.js",
     "./shared/learning-vocabulary": "./src/shared/learningVocabulary.js",

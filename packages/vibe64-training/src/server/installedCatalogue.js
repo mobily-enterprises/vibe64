@@ -36,6 +36,10 @@ function requireRevision(value) {
 
 // The admitted owner selects course/lock together. This internal facility does
 // not authenticate objects, fetch sources or expose a browser/assistant action.
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.systemRoot
+ */
 function createInstalledTrainingCatalogue({ systemRoot } = {}) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) ||
       path.resolve(systemRoot) !== systemRoot || systemRoot === path.parse(systemRoot).root) {
@@ -280,6 +284,12 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
   // and orders whole topics already pinned by enabled released courses. The
   // original lock and enablement owners validate and save it; lessons, their
   // content and saved progress are shared with every course containing them.
+  /**
+   * @param {object} [course]
+   * @param {string} [course.title]
+   * @param {object[]} [course.topics]
+   * @param {number} [course.expectedRevision]
+   */
   async function createCourse({ title, topics, expectedRevision } = {}) {
     requireRevision(expectedRevision);
     const name = typeof title === "string" ? title.trim() : "";

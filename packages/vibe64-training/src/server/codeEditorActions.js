@@ -1,6 +1,8 @@
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 
+/** @typedef {ReturnType<typeof import("./codeAuthorship.js").createTrainingCodeAuthorship>} TrainingCodeAuthorship */
+
 // Practice projects are ordinary projects (Learning v2), so the learner edits
 // their code in the ordinary Files editor through the project-scoped
 // vibe64.source-editor.file.save. This owner, installed on the source editor,
@@ -20,6 +22,11 @@ function validOwners(owners) {
   return owners;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {TrainingCodeAuthorship} [dependencies.authorship]
+ * @param {(request: { actor: object, attemptId: string }) => Promise<object | null>} [dependencies.selectOwners]
+ */
 function createTrainingCodeSaveOwner({ authorship, selectOwners } = {}) {
   if (selectOwners !== undefined && typeof selectOwners !== "function") throw new TypeError("Lesson code save selection must be a function.");
   const fixed = selectOwners ? null : validOwners({ authorship });

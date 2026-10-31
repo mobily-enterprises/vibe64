@@ -28,12 +28,66 @@ import { createTrainingVisualResourceActions } from "./visualResourceActions.js"
 import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js";
 import { aiReadyFact, registerLearningFact } from "./learningFacts.js";
 
+/** @typedef {ReturnType<typeof import("./installedCatalogue.js").createInstalledTrainingCatalogue>} InstalledTrainingCatalogue */
+/** @typedef {ReturnType<typeof import("./courseInstaller.js").createTrainingCourseInstaller>} TrainingCourseInstaller */
+/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {ReturnType<typeof import("./preparation.js").createTrainingService>} TrainingExercises */
+/** @typedef {ReturnType<typeof import("./declaredCheck.js").createTrainingDeclaredCheckOwner>} TrainingDeclaredCheckOwner */
+/** @typedef {ReturnType<typeof import("./codeAuthorship.js").createTrainingCodeAuthorship>} TrainingCodeAuthorship */
+/** @typedef {ReturnType<typeof import("./stepChecks.js").createTrainingStepChecks>} TrainingStepChecks */
+/** @typedef {ReturnType<typeof import("./learningSpace.js").createTrainingLearningSpace>} TrainingLearningSpace */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
+/** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").TrainingService} TrainingService */
+
+// The training capability: the learning owners, and the learner-changed
+// publisher.
+/**
+ * @param {object} dependencies
+ * @param {InstalledTrainingCatalogue} dependencies.catalogue
+ * @param {TrainingCourseInstaller} dependencies.courseInstaller
+ * @param {InstalledTrainingContent} dependencies.content
+ * @param {TrainingLearnerState} dependencies.learners
+ * @param {TrainingExercises} dependencies.exercises
+ * @param {TrainingDeclaredCheckOwner} dependencies.checks
+ * @param {TrainingCodeAuthorship} dependencies.codeAuthorship
+ * @param {TrainingStepChecks} dependencies.steps
+ * @param {TrainingLearningSpace} dependencies.learningSpace
+ * @param {RuntimeEvents | null} [dependencies.events]
+ */
+function createTraining({ catalogue, courseInstaller, content, learners, exercises, checks, codeAuthorship, steps,
+  learningSpace, events }) {
+  return Object.freeze({ catalogue, courseInstaller, content, learners, exercises, checks, codeAuthorship, steps,
+    learningSpace, publishLearnerChanged: createTrainingLearnerChangedPublisher(events) });
+}
+
 const Vibe64TrainingProvider = defineFeature({
   id: "vibe64.training", domain: "vibe64-training",
   requires: { env: "runtime.env", logger: "runtime.logger", http: "runtime.http", project: "vibe64.project", sessions: "vibe64.sessions", terminals: "vibe64.terminals" },
   optional: { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" },
   provides: { training: "vibe64.training" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
+  /**
+   * @param {object} capabilities
+   * @param {RuntimeEnv} capabilities.env
+   * @param {RuntimeLogger} capabilities.logger
+   * @param {RuntimeHttp} capabilities.http
+   * @param {ProjectService} capabilities.project
+   * @param {SessionsService} capabilities.sessions
+   * @param {TerminalsService} capabilities.terminals
+   * @param {TrainingService} [capabilities.trainingHost]
+   * @param {SourceEditorService} [capabilities.sourceEditor]
+   * @param {RuntimeEvents} [capabilities.events]
+   * @param {{ actionCatalogue: ActionCatalogue }} context
+   */
   setup({ env, logger, http, project, sessions, terminals, trainingHost, sourceEditor, events }, { actionCatalogue }) {
     registerTrainingRoutes(http);
     registerTrainingVisualResourceRoutes(http);
@@ -87,8 +141,8 @@ const Vibe64TrainingProvider = defineFeature({
     // The learner's ordinary Files editor saves in a practice project record
     // code authorship through the original ledger owner.
     sourceEditor?.setFileSaveOwner(createTrainingCodeSaveOwner({ authorship: codeAuthorship }));
-    return { training: Object.freeze({ catalogue, courseInstaller, content, learners, exercises, checks, codeAuthorship, steps,
-      learningSpace, publishLearnerChanged: createTrainingLearnerChangedPublisher(events) }) };
+    return { training: createTraining({ catalogue, courseInstaller, content, learners, exercises, checks, codeAuthorship, steps,
+      learningSpace, events }) };
   },
   actions({ training, trainingHost }) {
     if (trainingHost) return [];
@@ -102,4 +156,4 @@ const Vibe64TrainingProvider = defineFeature({
   }
 });
 
-export { Vibe64TrainingProvider };
+export { Vibe64TrainingProvider, createTraining };

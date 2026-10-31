@@ -9,6 +9,14 @@ import { readLearningFact } from "./learningFacts.js";
 import { availableStepIds } from "./lessonAvailability.js";
 import { trainingFailure } from "./errors.js";
 
+/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {ReturnType<typeof import("./declaredCheck.js").createTrainingDeclaredCheckOwner>} TrainingDeclaredCheckOwner */
+/** @typedef {ReturnType<typeof import("./codeAuthorship.js").createTrainingCodeAuthorship>} TrainingCodeAuthorship */
+/** @typedef {ReturnType<typeof import("./stepEvidence.js").createTrainingStepEvidence>} TrainingStepEvidence */
+/** @typedef {ReturnType<typeof import("./stepReview.js").createTrainingStepReviewer>} TrainingStepReviewer */
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const requestPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u;
@@ -83,6 +91,16 @@ function requireLearnerChannel(context, what) {
 // assistant triggers returns diagnostics only and records nothing, so
 // Colleague can never use up the attempt's result budget, and Colleague can
 // never run a review. Verdicts are final: a pass is never replaced.
+/**
+ * @param {object} dependencies
+ * @param {TrainingLearnerState} dependencies.learners
+ * @param {InstalledTrainingContent} dependencies.content
+ * @param {TrainingDeclaredCheckOwner} dependencies.checks
+ * @param {TrainingCodeAuthorship} dependencies.authorship
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {TrainingStepEvidence | null} [dependencies.evidence]
+ * @param {TrainingStepReviewer | null} [dependencies.reviewer]
+ */
 function createTrainingStepChecks({ learners, content, checks, authorship, actions, evidence = null, reviewer = null } = {}) {
   if (!learners?.readState || !learners?.readStepProgress || !learners?.updateStepProgress || !learners?.saveReader ||
       !content?.readLesson) {

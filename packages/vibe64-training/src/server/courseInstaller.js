@@ -9,6 +9,8 @@ import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingContent } from "./installedContent.js";
 import { trainingFailure } from "./errors.js";
 
+/** @typedef {ReturnType<typeof import("./installedCatalogue.js").createInstalledTrainingCatalogue>} InstalledTrainingCatalogue */
+
 // The official catalogue is the only source this facility reads. Arbitrary
 // repositories, local directories and author snapshots stay with the operator
 // CLI and the low-level content installer.
@@ -89,6 +91,16 @@ function validateLock(course, lock) {
 // the original owners: readPinnedTopic/installTopic verify and publish each
 // topic snapshot, and the installed catalogue's enableCourse verifies the lock
 // against the installed inventory under its own lock and revision check.
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.systemRoot
+ * @param {InstalledTrainingCatalogue} dependencies.catalogue
+ * @param {string} [dependencies.repository]
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ * @param {(slug: string) => string} [dependencies.remoteUrl]
+ * @param {() => number} [dependencies.now]
+ * @param {number} [dependencies.cacheMs]
+ */
 function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "", runCommand = runVibe64Command,
   remoteUrl = slug => `https://github.com/${slug}.git`, now = () => Date.now(), cacheMs = CACHE_MS } = {}) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) !== systemRoot ||

@@ -7,6 +7,9 @@ import { PRACTICE_AGENT_GUIDANCE_EXCLUDES } from "@local/vibe64-terminals/server
 import { trainingFailure } from "./errors.js";
 import { pathInside } from "@local/vibe64-core/server/core";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 // The bounded evidence of one learner's practice work that a review check
 // (and Colleague's "I'm stuck" help) reads: the practice session's changes
 // against the attempt's start commit, uncommitted work included, and, only
@@ -51,6 +54,12 @@ function fileSections(diff) {
   return sections;
 }
 
+/**
+ * @param {object} dependencies
+ * @param {ProjectService} dependencies.project
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ */
 function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Command } = {}) {
   if (!project?.runInProjectContext || !project?.createRuntime || typeof actions?.execute !== "function") {
     throw new TypeError("Step evidence requires the original project and action owners.");

@@ -2,6 +2,9 @@ import { createRetainedConversationHelper } from "@local/vibe64-terminals/server
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
 import { trainingFailure } from "./errors.js";
 
+/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 // A review check's verdict: the learner's own AI (their Helper route for the
 // lesson_review workload, never a Vibe64 account) reads the step's bounded
 // evidence against the author's rubric, through the retained Helper lifetime
@@ -52,6 +55,11 @@ function parseVerdict(text) {
     ...(value.points.length ? { points: value.points.map(point => ({ text: oneLine(point.text), met: point.met })) } : {}) };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {TrainingLearnerState} dependencies.learners
+ * @param {TerminalsService} dependencies.terminals
+ */
 function createTrainingStepReviewer({ learners, terminals } = {}) {
   if (typeof learners?.runReviewExclusive !== "function") throw new TypeError("Step reviews require the original learner store.");
 

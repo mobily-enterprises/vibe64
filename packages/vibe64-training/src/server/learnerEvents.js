@@ -1,6 +1,8 @@
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../shared/learnerEvents.js";
 import { learnerIdentity } from "./learnerState.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+
 // Publishes vibe64.training.learner.changed with its reason (see
 // shared/learnerEvents.js): "learning-mode" after a switch between Learn and
 // Develop, "lesson" after a lesson starts, restarts, resumes, finishes or is
@@ -10,6 +12,7 @@ import { learnerIdentity } from "./learnerState.js";
 // client like the session notices; each host's realtime authorization admits
 // it only for the learner it names. A notification failure never changes or
 // repeats the saved operation.
+/** @param {RuntimeEvents | null} [events] */
 function createTrainingLearnerChangedPublisher(events) {
   if (typeof events?.publish !== "function") return null;
   return async function publishLearnerChanged({ actor, attemptId, reason = "" } = {}) {

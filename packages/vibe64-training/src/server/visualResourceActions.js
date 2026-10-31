@@ -2,11 +2,18 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { pinnedLessonKey } from "./installedContent.js";
 
+/** @typedef {import("./types.js").TrainingService} TrainingService */
+
 const TRAINING_VISUAL_RESOURCE_ACTION = "vibe64.training.visual-resource.read";
 // The original lesson bundle permits 32 MiB; base64 expansion and metadata
 // remain bounded without reducing that original file contract.
 const MAX_RESOURCE_BYTES = 48 * 1024 * 1024;
 
+/**
+ * @param {object} dependencies
+ * @param {TrainingService["learners"]} dependencies.learners
+ * @param {TrainingService["content"]} dependencies.content
+ */
 function createTrainingVisualResourceActions({ learners, content } = {}) {
   if (typeof learners?.readState !== "function" || typeof content?.readVisual !== "function") {
     throw new TypeError("Visual resource reads require the original learner and installed content owners.");

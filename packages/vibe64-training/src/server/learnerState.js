@@ -13,6 +13,8 @@ import { createInstalledTrainingContent, pinnedLessonKey, validateInstalledTopic
 import { availableStepIds } from "./lessonAvailability.js";
 import { trainingFailure } from "./errors.js";
 
+/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+
 // One learner's Learning state (Rev 4 contract C1). An attempt is one run of a
 // lesson; at most one is in progress (the last one, named by activeAttemptId).
 // Its step results, code ledger and practice project belong to it alone.
@@ -466,6 +468,12 @@ function lessonCompletion(lesson, entry, available) {
 // Callers derive actor from fresh authentication and admit a new start against
 // the course lock. This internal store neither authenticates objects nor owns
 // release enablement, project effects, grading or arbitrary state patches.
+/**
+ * @param {object} dependencies
+ * @param {string} dependencies.systemRoot
+ * @param {string} [dependencies.contentSystemRoot]
+ * @param {InstalledTrainingContent} dependencies.content
+ */
 function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot, content } = {}) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) !== systemRoot || systemRoot === path.parse(systemRoot).root) {
     throw new Error("Learning state needs a canonical absolute, non-root server-owned system root.");

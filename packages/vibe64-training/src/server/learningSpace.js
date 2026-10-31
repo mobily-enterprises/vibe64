@@ -6,6 +6,11 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { learnerIdentity } from "./learnerState.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
+/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {ReturnType<typeof import("@local/vibe64-project/server/project-archive").createProjectArchiveService>} ProjectArchiveService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+
 const MAX_ARCHIVES = 20;
 // Archives keep their record and conversation; only the newest few keep their
 // practice project, the one part that grows with the learner's work.
@@ -28,6 +33,16 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a
 // archive lifecycle is the shared archive service, the host's
 // (trainingHost.projectArchive) or a standalone one. A host may keep a
 // different number of archived practice projects (keptArchivedProjects).
+/**
+ * @param {object} dependencies
+ * @param {TrainingLearnerState} dependencies.learners
+ * @param {InstalledTrainingContent} dependencies.content
+ * @param {StudioProjectContext} dependencies.projectContext
+ * @param {ProjectArchiveService} dependencies.projectArchive
+ * @param {string} [dependencies.systemRoot]
+ * @param {number} [dependencies.keptArchivedProjects]
+ * @param {typeof rm} [dependencies.removePath]
+ */
 function createTrainingLearningSpace({ learners, content, projectContext, projectArchive, systemRoot = projectContext?.systemRoot,
   keptArchivedProjects = KEPT_ARCHIVED_PROJECTS, removePath = rm } = {}) {
   if (typeof learners?.readState !== "function" || typeof learners?.endAttempt !== "function" ||

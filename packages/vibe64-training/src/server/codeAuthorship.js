@@ -6,6 +6,10 @@ import { declaredStepCheck, lessonHasSteps } from "./contentSchemas.js";
 import { trainingFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
+/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+
 const MAX_FILE_BYTES = 1024 * 1024;
 // Code steps share one save log per attempt (the ledger holds 256);
 // one slot stays free so a save that cannot extend the previous entry fits.
@@ -90,6 +94,12 @@ function codeStepOf(lesson, stepId) {
 // The generic source editor still performs every save; this owner only
 // records it. The ledger belongs to the attempt in progress, whose practice
 // project is training-<attemptId>.
+/**
+ * @param {object} dependencies
+ * @param {TrainingLearnerState} dependencies.learners
+ * @param {InstalledTrainingContent} dependencies.content
+ * @param {ProjectService} dependencies.project
+ */
 function createTrainingCodeAuthorship({ learners, content, project } = {}) {
   if (!learners?.readState || !learners?.activeAttemptForProject || !learners?.updateCodeLedger || !content?.readLesson ||
       !project?.runInProjectContext || !project?.createRuntime) {

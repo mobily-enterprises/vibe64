@@ -10,6 +10,11 @@ import { codeStepOf, readDeclaredFiles, verifyStepAuthorship } from "./codeAutho
 import { trainingFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
+/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128,
   pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$" };
 const uuid = { ...identity, maxLength: 36,
@@ -65,6 +70,14 @@ function activeRun(status, session, input) {
 
 // The authenticated native observation owner supplies these identities. This
 // facility confirms a server observation, never learner origin or assessment pass.
+/**
+ * @param {object} dependencies
+ * @param {TrainingLearnerState} dependencies.learners
+ * @param {InstalledTrainingContent} dependencies.content
+ * @param {ProjectService} dependencies.project
+ * @param {TerminalsService} dependencies.terminals
+ * @param {typeof runVibe64Command} [dependencies.runCommand]
+ */
 function createTrainingDeclaredCheckOwner({ learners, content, project, terminals, runCommand = runVibe64Command } = {}) {
   if (!learners?.readState || !content?.readLesson || !content?.readCheck ||
       !project?.runInProjectContext || !project?.createRuntime || !terminals?.outputTargetStatus) {

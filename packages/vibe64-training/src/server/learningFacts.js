@@ -1,5 +1,7 @@
 import { learningVocabulary } from "../shared/learningVocabulary.js";
 
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 // Fact readers: what a `fact` check asks. Each answers for one learner (and
 // the attempt's practice project slug, when it has one) with
 // { holds, reason? }; its owner decides how, reading through ordinary actions
@@ -32,6 +34,10 @@ async function readLearningFact(id, { actor, projectSlug = "", context = {} } = 
 
 // Built in: the learner has an AI Colleague can use for them (connected and
 // routed), as AI setup leaves it.
+/**
+ * @param {object} dependencies
+ * @param {TerminalsService} dependencies.terminals
+ */
 function aiReadyFact({ terminals }) {
   return {
     id: "ai-ready",

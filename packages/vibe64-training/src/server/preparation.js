@@ -9,6 +9,16 @@ import { lessonAvailableTo } from "./lessonAvailability.js";
 import { trainingFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
+/** @typedef {ReturnType<typeof import("./installedCatalogue.js").createInstalledTrainingCatalogue>} InstalledTrainingCatalogue */
+/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {ReturnType<typeof import("./learningSpace.js").createTrainingLearningSpace>} TrainingLearningSpace */
+/** @typedef {ReturnType<typeof import("@local/vibe64-project/server/managedRepository").createManagedProjectRepositoryService>} ManagedProjectRepositoryService */
+/** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 function trainingError(code, message) {
   return trainingFailure(code, message, { statusCode: 409 });
 }
@@ -35,6 +45,18 @@ function requireSuccess(result) {
 // Internal orchestration, supplied with the existing owners. Authenticated
 // actions admit actors and pins; neither model input nor HTTP selects paths,
 // initializers, session identities or shell commands here.
+/**
+ * @param {object} dependencies
+ * @param {InstalledTrainingCatalogue} dependencies.catalogue
+ * @param {InstalledTrainingContent} dependencies.content
+ * @param {TrainingLearnerState} dependencies.learners
+ * @param {TrainingLearningSpace | null} [dependencies.learningSpace]
+ * @param {StudioProjectContext} dependencies.projectContext
+ * @param {ManagedProjectRepositoryService} dependencies.projectRepositoryService
+ * @param {ProjectService} dependencies.project
+ * @param {SessionsService} dependencies.sessions
+ * @param {TerminalsService} dependencies.terminals
+ */
 function createTrainingService({ catalogue, content, learners, learningSpace = null, projectContext, projectRepositoryService, project, sessions, terminals } = {}) {
   // A lesson starts only in the current lesson format and when this learner
   // can take every required step here (its places exist and are open to them).
