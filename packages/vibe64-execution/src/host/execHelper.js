@@ -2019,6 +2019,7 @@ function loginUidRange(loginDefs = "") {
 function personAccountProblem(user = {}, {
   groups = [],
   loginUids = loginUidRange(),
+  resolveProgram = (program) => program,
   sudoCommands = [],
   sudoListing = ""
 } = {}) {
@@ -2030,41 +2031,35 @@ function personAccountProblem(user = {}, {
   if (group) {
     return `${username} is in the administrators' group ${group}.`;
   }
-  return sudoRulesProblem(username, sudoListing, sudoCommands);
+  return sudoRulesProblem(username, sudoListing, sudoCommands, resolveProgram);
 }
 
 // No sudo rules, or only rules running exactly the host's declared commands
 // as root without a password. Anything else, or an answer sudo never gives,
-// is administration.
-function sudoRulesProblem(username = "", sudoListing = "", sudoCommands = []) {
+// is administration. Programs compare as the files they resolve to: classic
+// sudo prints a rule's program as written, sudo-rs with some links resolved.
+function sudoRulesProblem(username = "", sudoListing = "", sudoCommands = [], resolveProgram = (program) => program) {
   if (sudoListing.includes(`User ${username} is not allowed to run sudo on `)) {
     return "";
   }
   const lines = sudoListing.split("\n");
   const start = lines.findIndex((line) => line.startsWith(`User ${username} may run the following commands on `));
   const rules = start < 0 ? [] : lines.slice(start + 1).filter((line) => line.trim());
-  const allowed = new Set(sudoCommands);
+  const resolved = (command) => {
+    const [program, ...args] = command.split(" ");
+    try {
+      return [resolveProgram(program), ...args].join(" ");
+    } catch {
+      // A program that does not exist compares as written.
+      return command;
+    }
+  };
+  const allowed = new Set(sudoCommands.map(resolved));
   const narrow = rules.length > 0 && rules.every((line) => {
     const match = /^ {4}\(root\) NOPASSWD: (.+)$/u.exec(line);
-    return Boolean(match) && match[1].split(", ").every((command) => allowed.has(command));
+    return Boolean(match) && match[1].split(", ").every((command) => allowed.has(resolved(command)));
   });
   return narrow ? "" : `${username} has sudo rules.`;
-}
-
-// Classic sudo prints a rule's program as written; sudo-rs prints it with its
-// symbolic links resolved. Each declared command is accepted in both forms, the
-// resolved one naming the same root-owned file.
-function withResolvedPrograms(commands = [], resolve = realpathSync) {
-  return commands.flatMap((command) => {
-    const [program, ...args] = command.split(" ");
-    let resolved = program;
-    try {
-      resolved = resolve(program);
-    } catch {
-      // A program that does not exist keeps only its written form.
-    }
-    return resolved === program ? [command] : [command, [resolved, ...args].join(" ")];
-  });
 }
 
 // A missing list allows no sudo rule at all.
@@ -2111,7 +2106,8 @@ function hostPersonFacts(username = "") {
   return {
     groups: osGroupNames(username),
     loginUids,
-    sudoCommands: withResolvedPrograms(personSudoCommands()),
+    resolveProgram: realpathSync,
+    sudoCommands: personSudoCommands(),
     sudoListing: sudo.error ? "" : String(sudo.stdout || "")
   };
 }
@@ -4005,7 +4001,7 @@ export { APPLICATION_LIMIT_PER_WORKSPACE, APPLICATION_USERNAME_PREFIX, DAEMON_US
   resolveApplicationCwd, retireApplicationAccount,
   assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
   ensureWorkspaceRuntimeBase, managedExecutionControllerLeaseName, managedExecutionRuntimeBase,
-  enablePerson, loginUidRange, personAccountProblem, personSudoCommands, withResolvedPrograms, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
+  enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
   parseEnvironmentFile,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionSliceCgroup, managedExecutionTargetUser,

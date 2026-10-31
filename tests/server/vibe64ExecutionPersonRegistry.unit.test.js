@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import {
   DAEMON_USERNAME_PREFIX, assertActablePerson, enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration,
-  registerPerson, upgradePersonRegistry, withResolvedPrograms
+  registerPerson, upgradePersonRegistry
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
 
 const UID = process.getuid();
@@ -174,24 +174,32 @@ test("only the host's exact narrow sudo commands leave an account a person", () 
 test("a narrow command is recognised when sudo prints its program with links resolved", () => {
   const person = { uid: 1001, username: "merc" };
   const ownerCli = "/opt/tool/node26/bin/node /srv/tool/owner-cli.mjs --read-connections";
-  const resolve = (program) => {
-    if (program === "/opt/tool/node26/bin/node") return "/nix/store/abc-node-26/bin/node";
-    if (program === "/srv/tool/local") return program;
-    throw Object.assign(new Error("missing"), { code: "ENOENT" });
+  // node26 links to a wrapper whose bin/node links to the runtime itself.
+  const files = new Map([
+    ["/opt/tool/node26/bin/node", "/nix/store/slim-node-26/bin/node"],
+    ["/nix/store/wrapper-node-26/bin/node", "/nix/store/slim-node-26/bin/node"],
+    ["/nix/store/slim-node-26/bin/node", "/nix/store/slim-node-26/bin/node"],
+    ["/nix/store/other-node/bin/node", "/nix/store/other-node/bin/node"]
+  ]);
+  const resolveProgram = (program) => {
+    if (!files.has(program)) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+    return files.get(program);
   };
-  const sudoCommands = withResolvedPrograms([ownerCli, "/srv/tool/local update", "/gone/tool run"], resolve);
-  assert.deepEqual(sudoCommands, [ownerCli, "/nix/store/abc-node-26/bin/node /srv/tool/owner-cli.mjs --read-connections",
-    "/srv/tool/local update", "/gone/tool run"]);
-  const facts = { groups: ["merc", "vibe64"], loginUids: LOGIN_UIDS, sudoCommands };
+  const facts = { groups: ["merc", "vibe64"], loginUids: LOGIN_UIDS, resolveProgram, sudoCommands: [ownerCli] };
   const listing = (command) => `User merc may run the following commands on host:\n    (root) NOPASSWD: ${command}\n`;
-  // As sudo-rs 0.2 lists the owner CLI rule on Ubuntu 26.04.
-  assert.equal(personAccountProblem(person, { ...facts,
-    sudoListing: listing("/nix/store/abc-node-26/bin/node /srv/tool/owner-cli.mjs --read-connections") }), "");
-  assert.equal(personAccountProblem(person, { ...facts, sudoListing: listing(ownerCli) }), "");
+  for (const command of [
+    ownerCli,
+    // As sudo-rs 0.2 lists the owner CLI rule on Ubuntu 26.04.
+    "/nix/store/wrapper-node-26/bin/node /srv/tool/owner-cli.mjs --read-connections",
+    "/nix/store/slim-node-26/bin/node /srv/tool/owner-cli.mjs --read-connections"
+  ]) {
+    assert.equal(personAccountProblem(person, { ...facts, sudoListing: listing(command) }), "", command);
+  }
   for (const command of [
     "/nix/store/other-node/bin/node /srv/tool/owner-cli.mjs --read-connections",
-    "/nix/store/abc-node-26/bin/node /srv/tool/owner-cli.mjs",
-    "/nix/store/abc-node-26/bin/node /srv/tool/other.mjs --read-connections"
+    "/nix/store/missing/bin/node /srv/tool/owner-cli.mjs --read-connections",
+    "/nix/store/wrapper-node-26/bin/node /srv/tool/owner-cli.mjs",
+    "/nix/store/wrapper-node-26/bin/node /srv/tool/other.mjs --read-connections"
   ]) {
     assert.match(personAccountProblem(person, { ...facts, sudoListing: listing(command) }), /has sudo rules/u, command);
   }
