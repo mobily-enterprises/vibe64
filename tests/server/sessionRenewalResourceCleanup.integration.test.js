@@ -69,7 +69,6 @@ import {
   sourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
-import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const execFileAsync = promisify(execFile);
 const PREDECESSOR_ID = "renewal-resource-predecessor";
