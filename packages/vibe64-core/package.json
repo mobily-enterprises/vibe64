@@ -49,6 +49,7 @@
     "./server/runtimeConfig": "./src/server/runtimeConfig.js",
     "./server/envUserValues": "./src/server/envUserValues.js",
     "./shared": "./src/shared/index.js",
+    "./shared/actionFields": "./src/shared/actionFields.js",
     "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",
     "./server/workspaceTeam": "./src/server/workspaceTeam.js",
     "./server/teamAiGate": "./src/server/teamAiGate.js",

@@ -18,6 +18,7 @@ import {
   vibe64AccountsChangedActionEvent,
   vibe64ConnectionsChangedActionEvent
 } from "./accountRealtimeEvents.js";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").AccountsService} AccountsService */
 /** @typedef {import("./types.js").AiConnectionService} AiConnectionService */
@@ -122,152 +123,115 @@ const aiConnectionsListTool = Object.freeze({
 function createAccountsActions({ accounts }) {
   return Object.freeze([
     Object.freeze({
-      extensions: { assistant: modelRoutingTool("read"), vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_QUERY,
       id: ACTION_READ_MODEL_ROUTING,
-      version: 1,
-      kind: "query",
       input: modelRoutingReadInputValidator,
-      output: null,
-      idempotency: "none",
+      extensions: { assistant: modelRoutingTool("read"), vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.readModelRouting(input)
     }),
     Object.freeze({
-      extensions: { assistant: modelRoutingTool("preview"), vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_QUERY,
       id: ACTION_PREVIEW_MODEL_ROUTING,
-      version: 1,
-      kind: "query",
       input: modelRoutingInputValidator,
-      output: null,
-      idempotency: "none",
+      extensions: { assistant: modelRoutingTool("preview"), vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.previewModelRouting(input)
     }),
     Object.freeze({
-      extensions: { assistant: modelRoutingTool("save"), vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_COMMAND,
       id: ACTION_SAVE_MODEL_ROUTING,
-      version: 1,
-      kind: "command",
       input: modelRoutingInputValidator,
-      output: null,
-      idempotency: "optional",
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
+      extensions: { assistant: modelRoutingTool("save"), vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.saveModelRouting(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_QUERY,
       id: ACTION_READ_CODEX_PROVIDERS,
-      version: 1,
-      kind: "query",
       input: accountsReadInputValidator,
-      output: null,
-      idempotency: "none",
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.readCodexProviders(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_COMMAND,
       id: ACTION_SAVE_CODEX_PROVIDER,
-      version: 1,
-      kind: "command",
       input: codexProviderInputValidator,
-      output: null,
       idempotency: "none",
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.saveCodexProvider(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_COMMAND,
       id: ACTION_REMOVE_CODEX_PROVIDER,
-      version: 1,
-      kind: "command",
       input: codexProviderInputValidator,
-      output: null,
       idempotency: "none",
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.removeCodexProvider(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_QUERY,
       id: ACTION_READ_ACCOUNTS,
-      version: 1,
-      kind: "query",
       input: accountsReadInputValidator,
-      output: null,
-      idempotency: "none",
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.getStatus(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_COMMAND,
       id: ACTION_LOGOUT_ACCOUNT,
-      version: 1,
-      kind: "command",
       input: accountIdInputValidator,
-      output: null,
-      idempotency: "optional",
       events: [
         vibe64AccountsChangedActionEvent(),
         vibe64ConnectionsChangedActionEvent()
       ],
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.logout(input)
     }),
     Object.freeze({
-      extensions: { assistant: gitIdentityTool, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_COMMAND,
       id: ACTION_SAVE_GIT_IDENTITY,
-      version: 1,
-      kind: "command",
       input: gitIdentityInputValidator,
-      output: null,
-      idempotency: "optional",
       events: [
         vibe64AccountsChangedActionEvent(),
         vibe64ConnectionsChangedActionEvent()
       ],
+      extensions: { assistant: gitIdentityTool, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.saveGitIdentity(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_COMMAND,
       id: ACTION_SAVE_PERSONAL_AI_PROFILE,
-      version: 1,
-      kind: "command",
       input: personalAiProfileInputValidator,
-      output: null,
-      idempotency: "optional",
       events: [
         vibe64AccountsChangedActionEvent()
       ],
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.savePersonalAiProfile(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_COMMAND,
       id: ACTION_START_ACCOUNT_AUTH,
-      version: 1,
-      kind: "command",
       input: accountAuthStartInputValidator,
-      output: null,
-      idempotency: "optional",
       events: [
         vibe64AccountsChangedActionEvent(),
         vibe64ConnectionsChangedActionEvent(),
         vibe64AccountAuthSessionChangedActionEvent()
       ],
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.startAuth(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_QUERY,
       id: ACTION_READ_ACCOUNT_AUTH_SESSION,
-      version: 1,
-      kind: "query",
       input: accountAuthSessionInputValidator,
-      output: null,
-      idempotency: "none",
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.readAuthSession(input)
     }),
     Object.freeze({
-      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      ...VIBE64_COMMAND,
       id: ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
-      version: 1,
-      kind: "command",
       input: accountAuthSessionInputValidator,
-      output: null,
-      idempotency: "optional",
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => accounts.cancelAuthSession(input)
     })
   ]);
@@ -290,51 +254,39 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement })
 
   return Object.freeze([
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.accounts.ai-connections.list",
-      version: 1,
-      kind: "query",
       input: aiConnectionInputValidators.list,
-      output: null,
-      idempotency: "none",
       extensions: { assistant: aiConnectionsListTool, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("list", input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.accounts.ai-connections.catalog",
-      version: 1,
-      kind: "query",
       input: aiConnectionInputValidators.catalog,
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("catalog", input)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.accounts.ai-connections.save",
-      version: 1,
-      kind: "command",
       input: aiConnectionInputValidators.save,
-      output: null,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("save", input)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.accounts.ai-connections.remove",
-      version: 1,
-      kind: "command",
       input: aiConnectionInputValidators.remove,
-      output: null,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("remove", input)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.accounts.ai-connections.modelAccess",
-      version: 1,
-      kind: "command",
       input: aiConnectionInputValidators.modelAccess,
-      output: null,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("modelAccess", input)

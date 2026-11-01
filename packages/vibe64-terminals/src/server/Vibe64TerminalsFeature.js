@@ -100,10 +100,6 @@ function createVibe64TerminalsFeature({
     provides: {
       terminals: "vibe64.terminals"
     },
-    actionDefaults: {
-      channels: ["api", "automation", "internal"],
-      surfaces: ["app"]
-    },
     /**
      * @param {object} capabilities
      * @param {RuntimeEnv} capabilities.env

@@ -28,10 +28,6 @@ const Vibe64SourceEditorFeature = defineFeature({
   provides: {
     sourceEditor: "vibe64.source-editor"
   },
-  actionDefaults: {
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"]
-  },
   /**
    * @param {object} capabilities
    * @param {RuntimeEvents} capabilities.events

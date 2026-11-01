@@ -1,5 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").VoiceService} VoiceService */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
@@ -59,13 +60,11 @@ function createVoiceActions({ actions, voice }) {
   }
 
   return Object.freeze([Object.freeze({
+    ...VIBE64_QUERY,
     id: ACTION_READ_VOICE_CATALOGUE,
-    version: 1,
-    kind: "query",
     input: emptyInput,
-    output: null,
+    channels: ["api", "internal"],
     extensions: { assistant: voiceCatalogueTool, vibe64: WORKSPACE_OPERATION },
-    idempotency: "none",
     execute: (_input, context) => readCatalogueForColleague(context)
   })]);
 }

@@ -20,10 +20,6 @@ const StudioHealthFeature = defineFeature({
   provides: {
     studioHealth: "vibe64.studio-health"
   },
-  actionDefaults: {
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"]
-  },
   /**
    * @param {object} capabilities
    * @param {ConnectionsService} capabilities.connections

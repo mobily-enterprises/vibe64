@@ -2,6 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { boundedTrainingResult } from "./errors.js";
 import { lessonAvailableTo } from "./lessonAvailability.js";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").TrainingService} TrainingService */
 /** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
@@ -535,12 +536,9 @@ function createTrainingActions({
 
   return Object.freeze([
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.training.courses.list",
-      version: 1,
-      kind: "query",
       input: { mode: "create", schema: createSchema({}) },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -552,12 +550,9 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("courses.list", operations.listCourses, input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.training.available.list",
-      version: 1,
-      kind: "query",
       input: { mode: "create", schema: createSchema({}) },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -569,9 +564,8 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("available.list", operations.listAvailableCourses, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.course.install",
-      version: 1,
-      kind: "command",
       input: {
         mode: "create",
         schema: createSchema({
@@ -579,7 +573,6 @@ function createTrainingActions({
           release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
         })
       },
-      output: null,
       idempotency: "domain_native",
       extensions: {
         assistant: {
@@ -592,12 +585,9 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("course.install", operations.installCourse, input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.training.learning.read",
-      version: 1,
-      kind: "query",
       input: { mode: "create", schema: createSchema({}) },
-      output: null,
-      idempotency: "none",
       extensions: { assistant: { alwaysAvailable: true, output: resultOutput,
         description: "Read this signed-in learner's saved lessons and verified progress: the active attempt, ended attempts in history, every retained attempt in attempts (with practiceSlug when it has a practice project) and per-lesson completion in lessonProgress. This is read-only: no reservation, practice project or repair is performed. A saved preparation phase is an earlier checkpoint, not proof that setup is still running or that Preview is ready; use lesson.resume with the same attemptId to recheck an exercise lesson's setup. Read lesson.read for the active lesson's steps and step results before teaching it.",
         transformResult(result) {
@@ -609,12 +599,9 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("learning.read", operations.readLearning, input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.training.learning-mode.read",
-      version: 1,
-      kind: "query",
       input: { mode: "create", schema: createSchema({}) },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -626,14 +613,12 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("learning-mode.read", operations.readLearningMode, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.learning-mode.set",
-      version: 1,
-      kind: "command",
       input: {
         mode: "create",
         schema: createSchema({ on: { type: "boolean", required: true } })
       },
-      output: null,
       idempotency: "domain_native",
       extensions: {
         assistant: {
@@ -646,9 +631,8 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("learning-mode.set", operations.setLearningMode, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.courses.create",
-      version: 1,
-      kind: "command",
       input: {
         mode: "create",
         schema: createSchema({
@@ -669,7 +653,6 @@ function createTrainingActions({
           expectedRevision: revision
         })
       },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -682,9 +665,8 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("courses.create", operations.createCourse, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.lesson.start",
-      version: 1,
-      kind: "command",
       input: {
         mode: "create",
         schema: createSchema({
@@ -696,7 +678,6 @@ function createTrainingActions({
           archiveCurrent: { type: "boolean", required: false }
         })
       },
-      output: null,
       idempotency: "domain_native",
       extensions: {
         assistant: {
@@ -709,11 +690,9 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("lesson.start", operations.startLesson, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.lesson.resume",
-      version: 1,
-      kind: "command",
       input: { mode: "create", schema: createSchema({ attemptId }) },
-      output: null,
       idempotency: "domain_native",
       extensions: {
         assistant: {
@@ -726,9 +705,8 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("lesson.resume", operations.resumeLesson, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.lesson.restart",
-      version: 1,
-      kind: "command",
       input: {
         mode: "create",
         schema: createSchema({
@@ -738,7 +716,6 @@ function createTrainingActions({
           confirmed: { type: "boolean", required: false }
         })
       },
-      output: null,
       idempotency: "domain_native",
       extensions: {
         assistant: {
@@ -751,14 +728,12 @@ function createTrainingActions({
       execute: (input, context) => runTrainingOperation("lesson.restart", operations.restartLesson, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.lesson.finish",
-      version: 1,
-      kind: "command",
       input: {
         mode: "create",
         schema: createSchema({ attemptId, expectedRevision: revision })
       },
-      output: null,
       idempotency: "domain_native",
       extensions: {
         assistant: {

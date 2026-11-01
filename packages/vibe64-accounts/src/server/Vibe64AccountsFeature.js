@@ -167,10 +167,6 @@ const Vibe64AccountsFeature = defineFeature({
     accounts: "vibe64.accounts",
     connections: "vibe64.connections"
   },
-  actionDefaults: {
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"]
-  },
   /**
    * @param {object} capabilities
    * @param {AccountsRuntime | null} capabilities.accountRuntime

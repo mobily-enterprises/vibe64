@@ -19,6 +19,7 @@ import {
   publishingTargetInput,
   publishingTargetUpdateInput
 } from "./inputSchemas.js";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").PublishingService} PublishingService */
 
@@ -61,22 +62,6 @@ const ACTIONS = Object.freeze({
 // live here.
 const PERSON_ONLY = Object.freeze(["api"]);
 
-// Every publication operation runs in its project.
-const PUBLISHING_QUERY = Object.freeze({
-  version: 1,
-  kind: "query",
-  output: null,
-  idempotency: "none",
-  events: []
-});
-const PUBLISHING_COMMAND = Object.freeze({
-  version: 1,
-  kind: "command",
-  output: null,
-  idempotency: "optional",
-  events: []
-});
-
 /**
  * @param {object} dependencies
  * @param {PublishingService} dependencies.publishing
@@ -84,28 +69,28 @@ const PUBLISHING_COMMAND = Object.freeze({
 function createPublishingActions({ publishing }) {
   return Object.freeze([
     Object.freeze({
-      ...PUBLISHING_QUERY,
+      ...VIBE64_QUERY,
       id: ACTIONS.STATE_READ,
       input: publishingStateInput,
       extensions: { assistant: publishingTool("state.read"), vibe64: PROJECT_OPERATION },
       execute: () => publishing.readState()
     }),
     Object.freeze({
-      ...PUBLISHING_QUERY,
+      ...VIBE64_QUERY,
       id: ACTIONS.RELEASE_SUGGEST,
       input: publishingStateInput,
       extensions: { vibe64: PROJECT_OPERATION },
       execute: () => publishing.suggestRelease()
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.RELEASE_PREPARE,
       input: publishingPrepareInput,
       extensions: { assistant: publishingTool("release.prepare"), vibe64: PROJECT_OPERATION },
       execute: (input) => publishing.prepareRelease(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.TARGET_ADD,
       input: publishingTargetAddInput,
       channels: PERSON_ONLY,
@@ -113,7 +98,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.addTarget(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.TARGET_UPDATE,
       input: publishingTargetUpdateInput,
       channels: PERSON_ONLY,
@@ -121,7 +106,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.updateTarget(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.TARGET_REMOVE,
       input: publishingTargetInput,
       channels: PERSON_ONLY,
@@ -129,21 +114,21 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.removeTarget(input)
     }),
     Object.freeze({
-      ...PUBLISHING_QUERY,
+      ...VIBE64_QUERY,
       id: ACTIONS.PLAN_READ,
       input: publishingPlanInput,
       extensions: { assistant: publishingTool("plan.read"), vibe64: PROJECT_OPERATION },
       execute: (input) => publishing.plan(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.CHECKS_RUN,
       input: publishingStateInput,
       extensions: { vibe64: PROJECT_OPERATION },
       execute: () => publishing.runChecks()
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.BASELINE_PUSH,
       input: publishingStateInput,
       channels: PERSON_ONLY,
@@ -151,21 +136,21 @@ function createPublishingActions({ publishing }) {
       execute: () => publishing.pushSavedWork()
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.DRYRUN_RUN,
       input: publishingPlanHashInput,
       extensions: { assistant: publishingTool("dryrun.run"), vibe64: PROJECT_OPERATION },
       execute: (input) => publishing.dryRun(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.PUBLISH_RUN,
       input: publishingPlanHashInput,
       extensions: { assistant: publishingTool("publish.run"), vibe64: PROJECT_OPERATION },
       execute: (input) => publishing.requestPublish(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.CONFIRMATION_DISMISS,
       input: publishingStateInput,
       channels: PERSON_ONLY,
@@ -173,7 +158,7 @@ function createPublishingActions({ publishing }) {
       execute: () => publishing.dismissRequest()
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.CONFIRMATION_OPEN,
       input: publishingPlanHashInput,
       channels: PERSON_ONLY,
@@ -181,7 +166,7 @@ function createPublishingActions({ publishing }) {
       execute: (input, context) => publishing.openConfirmation(input, context)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.RELEASE_CONFIRM,
       input: publishingConfirmInput,
       channels: PERSON_ONLY,
@@ -189,28 +174,28 @@ function createPublishingActions({ publishing }) {
       execute: (input, context) => publishing.confirmRelease(input, context)
     }),
     Object.freeze({
-      ...PUBLISHING_QUERY,
+      ...VIBE64_QUERY,
       id: ACTIONS.HISTORY_LIST,
       input: publishingHistoryInput,
       extensions: { assistant: publishingTool("history.list"), vibe64: PROJECT_OPERATION },
       execute: (input) => publishing.listHistory(input)
     }),
     Object.freeze({
-      ...PUBLISHING_QUERY,
+      ...VIBE64_QUERY,
       id: ACTIONS.RELEASE_READ,
       input: publishingReleaseInput,
       extensions: { vibe64: PROJECT_OPERATION },
       execute: (input) => publishing.readRelease(input)
     }),
     Object.freeze({
-      ...PUBLISHING_QUERY,
+      ...VIBE64_QUERY,
       id: ACTIONS.LOGS_READ,
       input: publishingReleaseInput,
       extensions: { assistant: publishingTool("logs.read"), vibe64: PROJECT_OPERATION },
       execute: (input) => publishing.readLogs(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.KEYS_CREATE,
       input: publishingPassphraseInput,
       channels: PERSON_ONLY,
@@ -218,7 +203,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.createKeys(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.KEYS_UNLOCK,
       input: publishingPassphraseInput,
       channels: PERSON_ONLY,
@@ -226,14 +211,14 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.unlockKeys(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.KEYS_LOCK,
       input: publishingStateInput,
       extensions: { vibe64: PROJECT_OPERATION },
       execute: () => publishing.lockKeys()
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.ACCOUNT_ADD,
       input: publishingAccountAddInput,
       channels: PERSON_ONLY,
@@ -241,7 +226,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.addAccount(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.ACCOUNT_REMOVE,
       input: publishingAccountInput,
       channels: PERSON_ONLY,
@@ -249,7 +234,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.removeAccount(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.RECOVERY_KIT_CREATE,
       input: publishingPassphraseInput,
       channels: PERSON_ONLY,
@@ -257,7 +242,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.recoveryKit(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.RECOVERY_KIT_RESTORE,
       input: publishingRecoveryRestoreInput,
       channels: PERSON_ONLY,
@@ -265,7 +250,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.restoreRecoveryKit(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.INSTALL_KEY_CREATE,
       input: publishingTargetInput,
       channels: PERSON_ONLY,
@@ -273,14 +258,14 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.createInstallKey(input)
     }),
     Object.freeze({
-      ...PUBLISHING_QUERY,
+      ...VIBE64_QUERY,
       id: ACTIONS.LICENCE_READ,
       input: publishingStateInput,
       extensions: { vibe64: PROJECT_OPERATION },
       execute: () => publishing.toolchainLicence()
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.LICENCE_ACCEPT,
       input: publishingLicenceAcceptInput,
       channels: PERSON_ONLY,
@@ -288,7 +273,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.acceptToolchainLicence(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.ANDROID_INSTALL,
       input: publishingStateInput,
       channels: PERSON_ONLY,
@@ -296,7 +281,7 @@ function createPublishingActions({ publishing }) {
       execute: () => publishing.installAndroidToolchain()
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.PYTHON_INSTALL,
       input: publishingStateInput,
       channels: PERSON_ONLY,
@@ -304,7 +289,7 @@ function createPublishingActions({ publishing }) {
       execute: () => publishing.installPythonTools()
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.SHARE_START,
       input: publishingShareInput,
       channels: PERSON_ONLY,
@@ -312,7 +297,7 @@ function createPublishingActions({ publishing }) {
       execute: (input) => publishing.shareInstall(input)
     }),
     Object.freeze({
-      ...PUBLISHING_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTIONS.SHARE_STOP,
       input: publishingStateInput,
       extensions: { vibe64: PROJECT_OPERATION },

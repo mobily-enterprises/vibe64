@@ -15,10 +15,6 @@ import { createPublishingService } from "./service.js";
 // The local publishing experience: release orchestration, targets, history,
 // keys and confirmation on this computer, built from @local/vibe64-packaging.
 const Vibe64PublishingFeature = defineFeature({
-  actionDefaults: {
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"]
-  },
   actions({ publishing }) {
     return createPublishingActions({ publishing });
   },

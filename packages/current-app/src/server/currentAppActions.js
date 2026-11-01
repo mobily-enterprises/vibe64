@@ -2,6 +2,7 @@ import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionC
 import {
   currentAppQueryInputValidator
 } from "./inputSchemas.js";
+import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").CurrentAppService} CurrentAppService */
 
@@ -13,13 +14,10 @@ const ACTION_READ_CURRENT_APP = "vibe64.current-app.read";
  */
 function createCurrentAppActions({ currentApp }) {
   return Object.freeze([Object.freeze({
+    ...VIBE64_QUERY,
     id: ACTION_READ_CURRENT_APP,
-    version: 1,
-    kind: "query",
     input: currentAppQueryInputValidator,
-    output: null,
     extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-    idempotency: "none",
     execute: (input) => currentApp.inspectCurrentApp(input)
   })]);
 }

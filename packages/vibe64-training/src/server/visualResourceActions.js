@@ -1,6 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { pinnedLessonKey } from "./installedContent.js";
+import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
 /** @typedef {import("./types.js").TrainingContent} TrainingContent */
@@ -69,12 +70,8 @@ async function readLessonVisual({ learners, content }, context, { attemptId, vis
  */
 function createTrainingVisualResourceActions({ learners, content }) {
   return Object.freeze([Object.freeze({
+    ...VIBE64_QUERY,
     id: TRAINING_VISUAL_RESOURCE_ACTION,
-    version: 1,
-    kind: "query",
-    idempotency: "none",
-    channels: ["api"],
-    surfaces: ["app"],
     input: {
       mode: "create",
       schema: createSchema({
@@ -94,7 +91,7 @@ function createTrainingVisualResourceActions({ learners, content }) {
         }
       })
     },
-    output: null,
+    channels: ["api"],
     extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
     execute: (input, context) => readLessonVisual({ learners, content }, context, input)
   })]);

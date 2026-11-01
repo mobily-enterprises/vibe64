@@ -20,10 +20,6 @@ import {
 /** @typedef {import("./types.js").DatabaseToolsService} DatabaseToolsService */
 
 const Vibe64DatabaseToolsFeature = defineFeature({
-  actionDefaults: {
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"]
-  },
   actions({ databaseTools }) {
     return createDatabaseActions({ databaseTools });
   },

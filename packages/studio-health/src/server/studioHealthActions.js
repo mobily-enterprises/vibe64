@@ -1,6 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { studioHealthQueryInputValidator, studioToolsQueryInputValidator } from "./inputSchemas.js";
+import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").StudioHealthService} StudioHealthService */
 
@@ -13,11 +14,9 @@ const ACTION_CHECK_STUDIO_TOOLS = "vibe64.studio-health.tools";
  */
 function createStudioHealthActions({ studioHealth }) {
   return Object.freeze([Object.freeze({
+    ...VIBE64_QUERY,
     id: ACTION_READ_STUDIO_HEALTH,
-    version: 1,
-    kind: "query",
     input: studioHealthQueryInputValidator,
-    output: null,
     extensions: { assistant: {
       description: "Read this installation's Health checks: workspace services, AI and GitHub sign-in, and the tools Vibe64 uses (Node.js, Git, an AI tool, GitHub CLI, ripgrep, Genesis, Playwright). Each check says pass, warn or fail, whether it is needed or optional, what was expected and what was found. On the person's own computer only Node.js, Git, Genesis and one AI tool are needed; GitHub CLI, ripgrep, the other AI tools and Playwright are optional extras and never block work. Use it to tell the person which setup step is missing and the one command that installs it; it changes nothing and repairs nothing. Never run installers with sudo for the person. Dashboard → Health shows the same checks.",
       output: {
@@ -62,21 +61,17 @@ function createStudioHealthActions({ studioHealth }) {
         }))
       }
     }, vibe64: WORKSPACE_OPERATION },
-    idempotency: "none",
     execute: (input) => studioHealth.inspect(input)
   }), Object.freeze({
+    ...VIBE64_QUERY,
     id: ACTION_CHECK_STUDIO_TOOLS,
-    version: 1,
-    kind: "query",
     input: studioToolsQueryInputValidator,
-    output: null,
     extensions: {
       assistant: {
         description: "Check now whether named tools run on the person's own computer, for example ids \"ruby,cpp\" (Stack runtime ids such as python, ruby, java, php, go, rust, cpp, or node, git, gh, ripgrep, claude, codex, opencode). A tool counts only when it starts and reports its version through the same PATH projects use. Each result says ready, missing or broken, the version and folder found, and for a missing tool the one install command for this computer with any password note. Use it when the person asks whether something is installed, or after they ran an install command, instead of guessing. It only reads: never run the install command for them, and never use sudo. A host that supplies its own tools answers managed with no rows."
       },
       vibe64: WORKSPACE_OPERATION
     },
-    idempotency: "none",
     execute: (input) => studioHealth.checkTools(input)
   })]);
 }

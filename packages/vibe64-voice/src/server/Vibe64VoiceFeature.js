@@ -37,10 +37,6 @@ function createVoice(proxyConfig) {
 
 const Vibe64VoiceFeature = defineFeature({
   id: "vibe64.voice",
-  actionDefaults: {
-    channels: ["api", "internal"],
-    surfaces: ["app"]
-  },
   requires: {
     colleague: "vibe64.colleague",
     env: "runtime.env",

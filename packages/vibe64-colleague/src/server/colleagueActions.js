@@ -4,6 +4,7 @@ import { createColleagueUsageKnowledge, maxGuideCharacters } from "./usageKnowle
 import { guideReceipt, presentationClientId } from "@local/vibe64-training/shared/presentation-schemas";
 import { TRAINING_GUIDE_CAPTION_LIMIT } from "@local/vibe64-training/shared/learning-vocabulary";
 import { VIBE64_COLLEAGUE_PANES, VIBE64_COLLEAGUE_SESSION_PANES } from "../shared/navigationPanes.js";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").ColleagueService} ColleagueService */
 
@@ -194,9 +195,8 @@ function createColleagueActions({
     }) => [pane, meaning])].map(([pane, meaning]) => `${pane} means ${meaning}`).join(", ");
   return Object.freeze([
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.usage.topics.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({
           query: { ...text, maxLength: 200 },
@@ -205,8 +205,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -247,15 +245,12 @@ function createColleagueActions({
       execute: input => usage.topics(input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.usage.guide.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({ topicId: { ...text, minLength: 1, maxLength: 64, required: true } }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -288,19 +283,15 @@ function createColleagueActions({
       execute: input => usage.guide(input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.state.read",
-      version: 1,
-      kind: "query",
       input: { schema: createSchema({ clientId: { ...clientId, required: false } }), mode: "create" },
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.read(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.conversation.start-fresh",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           operationId: clientId,
@@ -319,15 +310,13 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.startFresh(input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.conversation.history.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({
           offset: { type: "integer", min: 0, required: false },
@@ -335,15 +324,12 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.readHistory(input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.conversation.history-page.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({
           conversationId: clientId,
@@ -352,28 +338,23 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.readHistoryPage(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.focus.update",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({ clientId, focus: { ...focusField, required: true } }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context, deps) => colleague.focus(input, context, deps)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.message.send",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           clientId,
@@ -385,44 +366,36 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "domain_native",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context, deps) => colleague.send(input, context, { receiptOnly: deps?.receiptOnly === true })
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.turn.stop",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({ expectedConversationId: { ...clientId, required: false } }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.stop(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.model.select",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({ ...modelSelectionFields, expectedConversationId: { ...clientId, required: false } }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.selectModel(input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.watches.read",
-      version: 1,
-      kind: "query",
       input: { schema: createSchema({}), mode: "create" },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "List your watches with their exact target, condition and active/paused state. Paused reads need attention; silence does not prove an agent is blocked.",
@@ -433,12 +406,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.listWatches(input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.watch.sources.read",
-      version: 1,
-      kind: "query",
       input: { schema: createSchema({}), mode: "create" },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "List what this installation lets you watch besides coding conversations (for example a project's publication): each source's input fields and conditions. Use watch.source.create with one of them.",
@@ -477,15 +447,12 @@ function createColleagueActions({
       execute: () => colleague.listWatchSources()
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.assignments.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({ assignmentId: { ...clientId, required: false } }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -497,9 +464,8 @@ function createColleagueActions({
       execute: (input, context) => colleague.assignment("read", input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.assignment.create",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           assignmentId: clientId,
@@ -522,7 +488,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -534,9 +499,8 @@ function createColleagueActions({
       execute: (input, context) => colleague.assignment("create", input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.assignment.link",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           assignmentId: clientId,
@@ -546,7 +510,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -558,9 +521,8 @@ function createColleagueActions({
       execute: (input, context) => colleague.assignment("link", input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.assignment.relay",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           assignmentId: clientId,
@@ -571,7 +533,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -583,9 +544,8 @@ function createColleagueActions({
       execute: (input, context) => colleague.assignment("relay", input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.assignment.message.send",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           assignmentId: clientId,
@@ -596,7 +556,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -608,11 +567,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.assignment("send", input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.assignment.review.create",
-      version: 1,
-      kind: "command",
       input: { schema: createSchema({ assignmentId: clientId }), mode: "create" },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -624,9 +581,8 @@ function createColleagueActions({
       execute: (input, context) => colleague.assignment("review", input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.assignment.update",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           assignmentId: clientId,
@@ -638,7 +594,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -650,9 +605,8 @@ function createColleagueActions({
       execute: (input, context) => colleague.assignment("update", input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.conversation-summary.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({
           projectSlug: { ...text, required: true },
@@ -664,8 +618,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           description: "Answer a specific question from a larger authorized conversation range. Reads up to 20 Main messages (requests and answers counted separately, excluding reasoning) or 12 temporary messages; nextBefore is the corresponding beforeTurnId or beforeMessageId for the next older page. Small ranges return text directly. Large ranges use the configured inexpensive, tool-free Helper and return a summary with real message citations. Failures fall back to bounded excerpts, explicitly marked. Never infer an answer from text outside the returned range.",
@@ -698,11 +650,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.summarize(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.watch.create",
-      version: 1,
-      kind: "command",
       input: { schema: createSchema(watchFields), mode: "create" },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -714,11 +664,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.watch(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.watch.source.create",
-      version: 1,
-      kind: "command",
       input: { schema: createSchema(sourceWatchFields), mode: "create" },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -730,11 +678,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.watchState(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.watch.cancel",
-      version: 1,
-      kind: "command",
       input: { schema: createSchema({ watchId: clientId }), mode: "create" },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -746,11 +692,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.cancelWatch(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.watch.pause",
-      version: 1,
-      kind: "command",
       input: { schema: createSchema({ watchId: clientId }), mode: "create" },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -762,11 +706,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.pauseWatch(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.watch.resume",
-      version: 1,
-      kind: "command",
       input: { schema: createSchema({ watchId: clientId }), mode: "create" },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -778,9 +720,8 @@ function createColleagueActions({
       execute: (input, context) => colleague.resumeWatch(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.navigation.acknowledge",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           clientId,
@@ -792,15 +733,13 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.acknowledgeNavigation(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.navigation.open",
-      version: 1,
-      kind: "command",
       input: {
         schema: createSchema({
           projectSlug: text,
@@ -815,7 +754,6 @@ function createColleagueActions({
         }),
         mode: "create"
       },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -828,11 +766,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.navigate(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.navigation.guide",
-      version: 1,
-      kind: "command",
       input: { schema: createSchema(guideFields), mode: "create" },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -844,11 +780,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.guide(input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.colleague.navigation.open-learning",
-      version: 1,
-      kind: "command",
       input: { schema: createSchema({ learning: learningPanel }), mode: "create" },
-      output: null,
       idempotency: "none",
       extensions: {
         assistant: {
@@ -860,12 +794,9 @@ function createColleagueActions({
       execute: (input, context) => colleague.navigate(input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.colleague.context.read",
-      version: 1,
-      kind: "query",
       input: { schema: createSchema({}), mode: "create" },
-      output: null,
-      idempotency: "none",
       extensions: {
         assistant: {
           alwaysAvailable: true,

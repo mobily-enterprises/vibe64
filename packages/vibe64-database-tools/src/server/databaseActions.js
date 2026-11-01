@@ -15,6 +15,7 @@ import {
   databaseSnippetSaveInputValidator,
   databaseStateInputValidator
 } from "./inputSchemas.js";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").DatabaseToolsService} DatabaseToolsService */
 
@@ -33,22 +34,6 @@ const ACTION_DATABASE_SNIPPET_DELETE = "vibe64.database.snippet.delete";
 const ACTION_DATABASE_ASSISTANT_ASK = "vibe64.database.assistant.ask";
 const ACTION_DATABASE_SERVER_CHECK = "vibe64.database.server.check";
 
-// Every database operation runs in its session's project.
-const DATABASE_QUERY = Object.freeze({
-  version: 1,
-  kind: "query",
-  output: null,
-  idempotency: "none",
-  events: []
-});
-const DATABASE_COMMAND = Object.freeze({
-  version: 1,
-  kind: "command",
-  output: null,
-  idempotency: "optional",
-  events: []
-});
-
 /**
  * @param {object} dependencies
  * @param {DatabaseToolsService} dependencies.databaseTools
@@ -56,14 +41,14 @@ const DATABASE_COMMAND = Object.freeze({
 function createDatabaseActions({ databaseTools }) {
   return Object.freeze([
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_OVERVIEW_SAVE,
       input: databaseOverviewInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.saveOverview(input)
     }),
     Object.freeze({
-      ...DATABASE_QUERY,
+      ...VIBE64_QUERY,
       id: ACTION_DATABASE_SERVER_CHECK,
       input: databaseStateInputValidator,
       extensions: {
@@ -75,84 +60,84 @@ function createDatabaseActions({ databaseTools }) {
       execute: (input) => databaseTools.checkServer(input)
     }),
     Object.freeze({
-      ...DATABASE_QUERY,
+      ...VIBE64_QUERY,
       id: ACTION_DATABASE_STATE_READ,
       input: databaseStateInputValidator,
       extensions: { assistant: databaseControlTool("state.read"), vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.readState(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_SCHEMA_REFRESH,
       input: databaseRefreshInputValidator,
       extensions: { assistant: databaseControlTool("schema.refresh"), vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.refreshSchema(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_QUERY_RUN,
       input: databaseQueryInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.runQuery(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_QUERY_CANCEL,
       input: databaseCancelInputValidator,
       extensions: { assistant: databaseControlTool("query.cancel"), vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.cancelQuery(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_CELL_UPDATE,
       input: databaseCellUpdateInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.updateCell(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_ROW_INSERT,
       input: databaseRowInsertInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.insertRow(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_ROW_DELETE,
       input: databaseRowDeleteInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.deleteRow(input)
     }),
     Object.freeze({
-      ...DATABASE_QUERY,
+      ...VIBE64_QUERY,
       id: ACTION_DATABASE_LOOKUP_SEARCH,
       input: databaseLookupInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.searchLookup(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_LAYOUT_SAVE,
       input: databaseLayoutInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.saveLayout(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_SNIPPET_SAVE,
       input: databaseSnippetSaveInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.saveSnippet(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_SNIPPET_DELETE,
       input: databaseSnippetDeleteInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => databaseTools.deleteSnippet(input)
     }),
     Object.freeze({
-      ...DATABASE_COMMAND,
+      ...VIBE64_COMMAND,
       id: ACTION_DATABASE_ASSISTANT_ASK,
       input: databaseAssistantInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },

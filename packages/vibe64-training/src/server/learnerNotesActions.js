@@ -3,6 +3,7 @@ import { MAX_NOTES_CHARS } from "./learnerState.js";
 import { NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { requestId, text } from "./trainingActions.js";
 import { runLearnerAction } from "./stepActions.js";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
 /** @typedef {import("./types.js").TrainingPublishLearnerChanged} TrainingPublishLearnerChanged */
@@ -60,12 +61,9 @@ function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) 
 
   return Object.freeze([
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.training.learner-notes.read",
-      version: 1,
-      kind: "query",
-      idempotency: "none",
       input: { mode: "create", schema: createSchema({}) },
-      output: null,
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -77,10 +75,8 @@ function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) 
       execute: (input, context) => runLearnerAction(readNotes, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.learner-notes.update",
-      version: 1,
-      kind: "command",
-      idempotency: "domain_native",
       input: {
         mode: "create",
         schema: createSchema({
@@ -89,7 +85,7 @@ function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) 
           expectedRevision
         })
       },
-      output: null,
+      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -102,14 +98,11 @@ function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) 
     }),
     // The learner's own Clear in Learning; it is not one of Colleague's tools.
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.learner-notes.clear",
-      version: 1,
-      kind: "command",
+      input: { mode: "create", schema: createSchema({ requestId, expectedRevision }) },
       idempotency: "domain_native",
       channels: ["api"],
-      surfaces: ["app"],
-      input: { mode: "create", schema: createSchema({ requestId, expectedRevision }) },
-      output: null,
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => runLearnerAction(clearNotes, input, context)
     })

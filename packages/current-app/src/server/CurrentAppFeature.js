@@ -19,10 +19,6 @@ const CurrentAppFeature = defineFeature({
   provides: {
     currentApp: "vibe64.current-app"
   },
-  actionDefaults: {
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"]
-  },
   /**
    * @param {object} capabilities
    * @param {RuntimeEnv} capabilities.env

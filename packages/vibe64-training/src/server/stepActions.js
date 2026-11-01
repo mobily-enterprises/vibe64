@@ -5,6 +5,7 @@ import { attemptId, attemptSummary, id, operationError, pick, practiceSlug, requ
 import { boundedTrainingResult, conflictFailure } from "./errors.js";
 import { availableStepIds } from "./lessonAvailability.js";
 import { pinnedLessonKey } from "./installedContent.js";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").TrainingService} TrainingService */
 /** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
@@ -442,10 +443,8 @@ function createTrainingStepActions({
 
   return Object.freeze([
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.training.lesson.read",
-      version: 1,
-      kind: "query",
-      idempotency: "none",
       input: {
         mode: "create",
         schema: createSchema({
@@ -453,7 +452,6 @@ function createTrainingStepActions({
           page: { type: "integer", required: false, min: 0, max: 31 }
         })
       },
-      output: null,
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -484,10 +482,8 @@ function createTrainingStepActions({
       execute: (input, context) => runLearnerAction(operations.observeStep, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.step.check.run",
-      version: 1,
-      kind: "command",
-      idempotency: "domain_native",
       input: {
         mode: "create",
         schema: createSchema({
@@ -496,7 +492,7 @@ function createTrainingStepActions({
           requestId
         })
       },
-      output: null,
+      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -570,12 +566,9 @@ function createTrainingStepActions({
       execute: (input, context) => runLearnerAction(operations.runStepReview, input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.training.step.evidence.read",
-      version: 1,
-      kind: "query",
-      idempotency: "none",
       input: { mode: "create", schema: createSchema({ attemptId, stepId: id }) },
-      output: null,
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -605,12 +598,9 @@ function createTrainingStepActions({
       execute: (input, context) => runLearnerAction(operations.saveReader, input, context)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.training.practice.list",
-      version: 1,
-      kind: "query",
-      idempotency: "none",
       input: { mode: "create", schema: createSchema({}) },
-      output: null,
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -622,12 +612,10 @@ function createTrainingStepActions({
       execute: (input, context) => runLearnerAction(operations.listPractice, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.lesson.delete",
-      version: 1,
-      kind: "command",
-      idempotency: "domain_native",
       input: { mode: "create", schema: createSchema({ attemptId, confirmed: { type: "boolean", required: false } }) },
-      output: null,
+      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,
@@ -639,12 +627,10 @@ function createTrainingStepActions({
       execute: (input, context) => runLearnerAction(removeLesson, input, context)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.training.practice.archived.delete",
-      version: 1,
-      kind: "command",
-      idempotency: "domain_native",
       input: { mode: "create", schema: createSchema({ attemptId, confirmed: { type: "boolean", required: false } }) },
-      output: null,
+      idempotency: "domain_native",
       extensions: {
         assistant: {
           alwaysAvailable: true,

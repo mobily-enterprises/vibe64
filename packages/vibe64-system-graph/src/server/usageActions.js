@@ -2,6 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 
 import { USAGE_ENTRY_KINDS } from "./usageWeb.js";
+import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").SystemGraphService} SystemGraphService */
 
@@ -28,9 +29,8 @@ const recordedFunction = createSchema({
 function createUsageActions({ systemGraph }) {
   return Object.freeze([
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.system-graph.usage.entries.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({
           sessionId,
@@ -41,15 +41,12 @@ function createUsageActions({ systemGraph }) {
         }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readUsageEntries(input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.system-graph.usage.web.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({
           sessionId,
@@ -61,15 +58,12 @@ function createUsageActions({ systemGraph }) {
         }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readUsageWeb(input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.system-graph.usage.function.read",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({
           sessionId,
@@ -77,15 +71,12 @@ function createUsageActions({ systemGraph }) {
         }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readUsageFunction(input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.system-graph.usage.join",
-      version: 1,
-      kind: "query",
       input: {
         schema: createSchema({
           sessionId,
@@ -93,8 +84,6 @@ function createUsageActions({ systemGraph }) {
         }),
         mode: "create"
       },
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.joinUsage(input)
     })

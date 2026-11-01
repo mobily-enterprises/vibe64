@@ -2,6 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 
 import { createUsageActions } from "./usageActions.js";
+import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").SystemGraphService} SystemGraphService */
 
@@ -18,52 +19,37 @@ const SESSION_INPUT = Object.freeze({
 function createSystemGraphActions({ systemGraph }) {
   return Object.freeze([
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.system-graph.status.read",
-      version: 1,
-      kind: "query",
       input: SESSION_INPUT,
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readStatus(input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.system-graph.architecture.read",
-      version: 1,
-      kind: "query",
       input: SESSION_INPUT,
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readArchitecture(input)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.system-graph.refresh.cancel",
-      version: 1,
-      kind: "command",
       input: SESSION_INPUT,
-      output: null,
-      idempotency: "optional",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.cancelRefresh(input)
     }),
     Object.freeze({
+      ...VIBE64_QUERY,
       id: "vibe64.system-graph.refresh.status",
-      version: 1,
-      kind: "query",
       input: SESSION_INPUT,
-      output: null,
-      idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readRefreshStatus(input)
     }),
     Object.freeze({
+      ...VIBE64_COMMAND,
       id: "vibe64.system-graph.refresh",
-      version: 1,
-      kind: "command",
       input: SESSION_INPUT,
-      output: null,
-      idempotency: "optional",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.refresh(input)
     }),

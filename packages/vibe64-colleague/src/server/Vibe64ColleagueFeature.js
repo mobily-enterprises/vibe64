@@ -134,10 +134,6 @@ const Vibe64ColleagueFeature = defineFeature({
     resolveName: COLLEAGUE_NAME_RESOLVER_TOKEN
   },
   provides: { colleague: "vibe64.colleague" },
-  actionDefaults: {
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"]
-  },
   /**
    * @param {object} capabilities
    * @param {AccountsService} capabilities.accounts
