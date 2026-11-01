@@ -97,34 +97,38 @@ export function modelRoutingTool(operation) {
       })
     },
     transformResult(result) {
-      if (result.ok !== true) return {
-        ok: false,
-        code: String(result.code || "").slice(0, 512),
-        error: "The AI setup could not be applied or read. Reread its current revision and inspect invalidRoles; open Models for details.",
-        invalidRoles: Object.keys(result.fieldErrors || {}).filter(key => /^(owner|nonOwner)\.[a-zA-Z]+$/u.test(key))
-      };
+      if (result.ok !== true) {
+        return {
+          ok: false,
+          code: String(result.code || "").slice(0, 512),
+          error: "The AI setup could not be applied or read. Reread its current revision and inspect invalidRoles; open Models for details.",
+          invalidRoles: Object.keys(result.fieldErrors || {}).filter(key => /^(owner|nonOwner)\.[a-zA-Z]+$/u.test(key))
+        };
+      }
       const output = { ok: true, revision: result.revision, canConfigure: result.canConfigure };
-      if (result.choices) return {
-        ...output,
-        setup: result.setup,
-        choiceRole: result.choiceRole,
-        choiceCount: result.choiceCount,
-        nextOffset: result.nextOffset,
-        choices: result.choices.map(choice => ({
-          selection: routingSelection({ ...choice, schema: "vibe64.assistant-selection.v1", selectionSource: "explicit" }),
-          ...Object.fromEntries(
-            ["label", "providerLabel", "engineLabel", "accessLabel"].map(key => [key, String(choice[key] || "").slice(0, 512)])
-          ),
-          available: choice.available === true,
-          ownerOnly: choice.ownerOnly !== false,
-          compatible: !choice.compatibilityError,
-          variantCount: choice.variants.length,
-          variants: choice.variants.slice(0, 100).map(variant => ({
-            id: String(variant.id).slice(0, 512),
-            label: String(variant.label || "").slice(0, 512)
+      if (result.choices) {
+        return {
+          ...output,
+          setup: result.setup,
+          choiceRole: result.choiceRole,
+          choiceCount: result.choiceCount,
+          nextOffset: result.nextOffset,
+          choices: result.choices.map(choice => ({
+            selection: routingSelection({ ...choice, schema: "vibe64.assistant-selection.v1", selectionSource: "explicit" }),
+            ...Object.fromEntries(
+              ["label", "providerLabel", "engineLabel", "accessLabel"].map(key => [key, String(choice[key] || "").slice(0, 512)])
+            ),
+            available: choice.available === true,
+            ownerOnly: choice.ownerOnly !== false,
+            compatible: !choice.compatibilityError,
+            variantCount: choice.variants.length,
+            variants: choice.variants.slice(0, 100).map(variant => ({
+              id: String(variant.id).slice(0, 512),
+              label: String(variant.label || "").slice(0, 512)
+            }))
           }))
-        }))
-      };
+        };
+      }
       return {
         ...output,
         engines: result.engines.map(engine => ({

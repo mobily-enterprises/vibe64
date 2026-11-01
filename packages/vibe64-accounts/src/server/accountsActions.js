@@ -98,12 +98,14 @@ const aiConnectionsListTool = Object.freeze({
    * Only facts about each connection: never its key, key hint or fingerprint.
    */
   transformResult(result) {
-    if (result.ok !== true) return {
-      ok: false,
-      unavailable: false,
-      connections: [],
-      error: "Saved AI connection status could not be read. Go to AI Accounts for details."
-    };
+    if (result.ok !== true) {
+      return {
+        ok: false,
+        unavailable: false,
+        connections: [],
+        error: "Saved AI connection status could not be read. Go to AI Accounts for details."
+      };
+    }
     return {
       ok: true,
       unavailable: result.unavailable === true,

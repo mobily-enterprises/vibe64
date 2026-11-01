@@ -150,10 +150,12 @@ function upgradeAssistantRoutingConfiguration({
     const originalEconomy = profile.economy;
     if (!profile.economy && unique.length === 1) {
       const admitted = candidates.get(routeKey(unique[0]))?.selection;
-      if (admitted) profile.economy = {
-        ...admitted,
-        selectionSource: unique[0].selectionSource === "explicit" ? "explicit" : "recommended"
-      };
+      if (admitted) {
+        profile.economy = {
+          ...admitted,
+          selectionSource: unique[0].selectionSource === "explicit" ? "explicit" : "recommended"
+        };
+      }
     }
     if (!Object.hasOwn(profile, "router")) profile.router = originalEconomy ? { ...originalEconomy } : null;
     if (!Object.hasOwn(profile, "sharedBackup")) {
@@ -261,11 +263,13 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
   if (connectionState) {
     const next = structuredClone(connectionState);
     for (const connection of Object.values(next.connections)) delete connection.helperModelId;
-    if (JSON.stringify(next) !== JSON.stringify(connectionState)) retired.unshift({
-      filePath: connectionsPath,
-      original: connectionsSource,
-      contents: upgradeFileText(next)
-    });
+    if (JSON.stringify(next) !== JSON.stringify(connectionState)) {
+      retired.unshift({
+        filePath: connectionsPath,
+        original: connectionsSource,
+        contents: upgradeFileText(next)
+      });
+    }
   }
   return { updates, retired, configuration };
 }
@@ -321,8 +325,10 @@ async function upgradeAssistantRouting(context) {
             if (session.metadata.assistant_selection) {
               historicalSelections.push(defineVibe64AssistantSelection(JSON.parse(session.metadata.assistant_selection)));
             }
-            for (const conversation of session.conversations) if (conversation.assistantSelection) {
-              historicalSelections.push(defineVibe64AssistantSelection(conversation.assistantSelection));
+            for (const conversation of session.conversations) {
+              if (conversation.assistantSelection) {
+                historicalSelections.push(defineVibe64AssistantSelection(conversation.assistantSelection));
+              }
             }
             return result;
           }

@@ -283,8 +283,9 @@ function createAuthTerminals({
     }
 
     if (browserFile) {
-      if (state.authSessions.has(terminal.id)) await cleanupBrowser();
-      else {
+      if (state.authSessions.has(terminal.id)) {
+        await cleanupBrowser();
+      } else {
         state.claudeBrowserFiles.set(terminal.id, browserFile);
         browserSessionId = terminal.id;
       }

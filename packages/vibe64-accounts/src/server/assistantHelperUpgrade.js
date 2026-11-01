@@ -67,11 +67,13 @@ function routingRecord(value, options = {}) {
   if (value.schemaVersion === 4 || value.schemaVersion === undefined && !previousConfiguration && (currentRole || currentPreferences)) {
     return upgradeHelperProfiles(validateAssistantRoutingUpgradeRecord(value, { preferences, request: value.schemaVersion === 4 }));
   }
-  if (value.mode === "custom") validateAssistantRoutingUpgradeRecord(value, {
-    schemaVersion: 3,
-    preferences,
-    request: value.schemaVersion === 3
-  });
+  if (value.mode === "custom") {
+    validateAssistantRoutingUpgradeRecord(value, {
+      schemaVersion: 3,
+      preferences,
+      request: value.schemaVersion === 3
+    });
+  }
   const previousChat = value.mode === "intern";
   const next = upgradeHelperProfiles(value);
   for (const key of ["mode", "requestedMode", "resolvedMode", "role", "purpose", "instructionPurpose"]) {

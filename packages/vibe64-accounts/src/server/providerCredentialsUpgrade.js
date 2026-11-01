@@ -31,10 +31,12 @@ export async function upgradeIndependentProviderCredentials({
 }) {
   const storePath = path.join(systemRoot, "ai-connections", "connections.json");
   const exactPaths = new Set([storePath]);
-  for (const engineId of ["codex", "claude"]) for (const providerId of providers) {
-    const locations = codexProviderPaths(systemRoot, providerId, engineId);
-    for (const file of [locations.connectionPath, path.join(locations.codexHome, "config.toml"),
-      codexAuthMarkerPath(locations.systemRoot), codexAuthStatusPath(locations.systemRoot)]) exactPaths.add(file);
+  for (const engineId of ["codex", "claude"]) {
+    for (const providerId of providers) {
+      const locations = codexProviderPaths(systemRoot, providerId, engineId);
+      for (const file of [locations.connectionPath, path.join(locations.codexHome, "config.toml"),
+        codexAuthMarkerPath(locations.systemRoot), codexAuthStatusPath(locations.systemRoot)]) exactPaths.add(file);
+    }
   }
   // Both the configured runtime and the ordinary persistent default can contain
   // managed native auth left by a prior stopped process. These are editor-owned

@@ -158,9 +158,11 @@ async function upgradeAssistantRoles(context) {
           );
         }
         if (!isRecord(parsed)) throw new Error("Model routing must be an object. Repair it before upgrading roles.");
-        if (parsed.schemaVersion === 4) validateV4(parsed);
-        else if (parsed.schemaVersion === 3) validateAssistantRoutingConfiguration(parsed);
-        else {
+        if (parsed.schemaVersion === 4) {
+          validateV4(parsed);
+        } else if (parsed.schemaVersion === 3) {
+          validateAssistantRoutingConfiguration(parsed);
+        } else {
           validateV2(parsed, { legacy: true });
           if (parsed.schemaVersion === 1) {
             if (context.apply) throw new Error("Run the preceding routing V2 upgrade before renaming roles.");
