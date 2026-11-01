@@ -15,6 +15,7 @@ import {
   databaseSchemaSummary,
   searchDatabaseSchema
 } from "./schemaAccess.js";
+import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 const MAX_ASSISTANT_SCHEMA_PROMPT_BYTES = 16 * 1024;
@@ -30,14 +31,13 @@ const DATABASE_ASSISTANT_EXECUTION_PROFILE = defineVibe64AgentExecutionProfileRe
   workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.DATABASE_ASSISTANT
 });
 
-// The fields both in-process database assistant actions share.
+// The query fields both in-process database assistant actions share: automation
+// only, on any surface and without a permission check.
 const DATABASE_ASSISTANT_ACTION_FIELDS = Object.freeze({
-  version: 1,
-  kind: "query",
+  ...VIBE64_QUERY,
   channels: Object.freeze(["automation"]),
   surfaces: Object.freeze(["*"]),
-  permission: Object.freeze({ require: "none" }),
-  idempotency: "none"
+  permission: Object.freeze({ require: "none" })
 });
 
 const DATABASE_ASSISTANT_OUTPUT_SCHEMA = Object.freeze({
@@ -256,11 +256,6 @@ async function runDatabaseAssistant({
       Object.freeze({
         ...DATABASE_ASSISTANT_ACTION_FIELDS,
         id: "vibe64.database.assistant.schema.search",
-        extensions: {
-          assistant: {
-            description: "Search the refreshed schema for complete SQL-relevant definitions. Use * to list object names and kinds; otherwise use business terms, column names or exact qualified object names. Results explicitly report truncation."
-          }
-        },
         input: {
           schema: createSchema({
             search: {
@@ -280,16 +275,16 @@ async function runDatabaseAssistant({
           }),
           mode: "replace"
         },
+        extensions: {
+          assistant: {
+            description: "Search the refreshed schema for complete SQL-relevant definitions. Use * to list object names and kinds; otherwise use business terms, column names or exact qualified object names. Results explicitly report truncation."
+          }
+        },
         execute: (input) => searchSchema(input)
       }),
       Object.freeze({
         ...DATABASE_ASSISTANT_ACTION_FIELDS,
         id: "vibe64.database.assistant.query.read",
-        extensions: {
-          assistant: {
-            description: "Execute one read-only SQL statement through the selected session's reader identity when real row data is necessary. Returned rows are bounded; writes and schema changes must instead be proposed for human review."
-          }
-        },
         input: {
           schema: createSchema({
             sql: {
@@ -308,6 +303,11 @@ async function runDatabaseAssistant({
             result: { type: "object", required: true, additionalProperties: true }
           }),
           mode: "replace"
+        },
+        extensions: {
+          assistant: {
+            description: "Execute one read-only SQL statement through the selected session's reader identity when real row data is necessary. Returned rows are bounded; writes and schema changes must instead be proposed for human review."
+          }
         },
         execute: (input) => readQuery(input)
       })
