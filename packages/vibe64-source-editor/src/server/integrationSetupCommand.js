@@ -88,7 +88,9 @@ function parseIntegrationSetupResponse(stdout, request) {
   if (result.status === "pending") {
     if (!["connect", "status"].includes(request.operation) || !result.authorizationUrl || !result.expiresAt ||
         typeof result.attemptId !== "string" || !/^[A-Za-z0-9_-]{1,256}$/u.test(result.attemptId)) invalid();
-  } else if (["authorizationUrl", "attemptId", "expiresAt"].some((key) => result[key] !== undefined)) invalid();
+  } else if (["authorizationUrl", "attemptId", "expiresAt"].some((key) => result[key] !== undefined)) {
+    invalid();
+  }
   if (request.operation === "disconnect" && result.status !== "disconnected") invalid();
   if (request.operation === "cancel" && result.status !== "cancelled") invalid();
   return result;
@@ -142,7 +144,9 @@ function parseAdsResponse(result, request) {
         if (!fields.has(key)) invalid();
         check(item, depth + 1);
       }
-    } else if (!["string", "number", "boolean"].includes(typeof value) && value !== null) invalid();
+    } else if (!["string", "number", "boolean"].includes(typeof value) && value !== null) {
+      invalid();
+    }
   }
   check(result.data);
   if (["ads-preview", "ads-campaign"].includes(request.operation) && !/^[a-f0-9]{64}$/.test(result.data.reviewId || "")) invalid();
@@ -216,7 +220,9 @@ function parsePaymentManagementResponse(result, request) {
       if (request.collection === "subscriptions") {
         if (item.kind !== "subscription" || ["currency", "totalMinor", "paidMinor"].some((key) => key in item)) invalid();
       } else if (!["invoice", "transaction"].includes(item.kind) || !/^[A-Z]{3}$/.test(item.currency || "") ||
-          !minor(item.totalMinor) || !minor(item.paidMinor)) invalid();
+          !minor(item.totalMinor) || !minor(item.paidMinor)) {
+        invalid();
+      }
     }
     return result;
   }
@@ -248,7 +254,9 @@ function parsePaymentManagementResponse(result, request) {
     } else if (change.action === "create-price") {
       if ("name" in change || !Number.isSafeInteger(change.amount) || change.amount < 1 || change.amount > 1000000000 ||
           !/^[A-Z]{3}$/u.test(change.currency || "") || !["month", "year"].includes(change.interval)) invalid();
-    } else invalid();
+    } else {
+      invalid();
+    }
   }
   if (review.removed.some((id) => !planId(id)) || review.drift.some((item) =>
     !record(item, ["planId", "reason"]) || !planId(item.planId) || !text(item.reason, 500))) invalid();

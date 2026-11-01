@@ -574,10 +574,12 @@ async function runTrackedSourceEditorAgentTurn(context, {
     }
     const profile = sourceEditorExecutionProfileSnapshot(executionProfile) || stopped.executionProfile;
     const message = stopped.messages.findLast((entry) => entry.role === "assistant");
-    if (message) stopped = sourceEditorExplanationWithMessage(stopped, message.id, {
-      status: "stopped",
-      text: message.text || "Stopped."
-    });
+    if (message) {
+      stopped = sourceEditorExplanationWithMessage(stopped, message.id, {
+        status: "stopped",
+        text: message.text || "Stopped."
+      });
+    }
     stopped = await writeSourceEditorExplanation(context, {
       ...stopped,
       ...(profile ? { executionProfile: profile, model: profile.model } : {}),

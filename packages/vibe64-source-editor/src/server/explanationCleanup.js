@@ -72,10 +72,12 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
       cleanupExecutionId: helper.executionId,
       executionProfile: helper.executionProfile
     }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
-    if (stopped?.ok !== true) throw sourceEditorError(
-      stopped?.error || "The source explanation could not be stopped.",
-      stopped?.code || "vibe64_source_explanation_agent_interrupt_unconfirmed"
-    );
+    if (stopped?.ok !== true) {
+      throw sourceEditorError(
+        stopped?.error || "The source explanation could not be stopped.",
+        stopped?.code || "vibe64_source_explanation_agent_interrupt_unconfirmed"
+      );
+    }
   } else if (!pendingTurn && threadId && turnId) {
     const result = await terminals.interruptDetachedAgentChatTurn(context.sessionId, {
       executionProfile: sourceEditorExecutionProfileSnapshot(explanation.executionProfile) ||

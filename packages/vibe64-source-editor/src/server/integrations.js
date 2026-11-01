@@ -442,11 +442,13 @@ function createIntegrationOperations({
           });
           if (!savedEnv?.ok) throw new Error("Env save failed.");
           registration.clientId = client.clientId;
-          if (integration.provider === "n8n") integration.settings = {
-            ...integration.settings,
-            serverUrl: client.resource,
-            oauthDiscovery: { resource: client.resource, oauth: client.oauth, scopes: client.scopes }
-          };
+          if (integration.provider === "n8n") {
+            integration.settings = {
+              ...integration.settings,
+              serverUrl: client.resource,
+              oauthDiscovery: { resource: client.resource, oauth: client.oauth, scopes: client.scopes }
+            };
+          }
           const change = { ...input, path: "integrations.json", text: `${JSON.stringify(configuration, null, 2)}\n` };
           const file = input.baseHash === null
             ? await createSourceEditorFile(context, change)

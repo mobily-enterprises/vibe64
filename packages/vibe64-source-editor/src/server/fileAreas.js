@@ -409,11 +409,13 @@ async function areaOperation(operation, context, input, readUpload) {
   const { sourceRoot } = context;
   const relativePath = normalizeSourceEditorRelativePath(input.path);
   if (context.missing) {
-    if (operation === "tree" && !relativePath) return {
-      ok: true,
-      location: context.location,
-      tree: directoryNode("", [], { loaded: true })
-    };
+    if (operation === "tree" && !relativePath) {
+      return {
+        ok: true,
+        location: context.location,
+        tree: directoryNode("", [], { loaded: true })
+      };
+    }
     if (operation === "conflicts" && !relativePath) return { ok: true, existing: [] };
   }
   await sourceEditorPathStats(sourceRoot);
