@@ -32,7 +32,8 @@ const voiceCatalogueTool = Object.freeze({
     return {
       ...(typeof result.defaultVoice === "string" ? { defaultVoice: result.defaultVoice.slice(0, 256) } : {}),
       voices: (Array.isArray(result.voices) ? result.voices : []).slice(0, 100).map((voice) => Object.fromEntries(
-        ["id", "label", "language"].flatMap((key) => typeof voice?.[key] === "string" ? [[key, voice[key].slice(0, 256)]] : [])))
+        ["id", "label", "language"].flatMap((key) => typeof voice?.[key] === "string" ? [[key, voice[key].slice(0, 256)]] : [])
+      ))
     };
   }
 });
