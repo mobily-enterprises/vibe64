@@ -8,7 +8,8 @@
     ".": "./src/server/index.js",
     "./server": "./src/server/index.js",
     "./server/hostProfile": "./src/server/hostProfile.js",
-    "./server/terminalSessions": "./src/server/engines/terminalSessions.js"
+    "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
+    "./server/types": "./src/server/types.js"
   },
   "jskit": {
     "kind": "runtime",
