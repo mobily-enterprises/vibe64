@@ -4350,7 +4350,8 @@ test("Colleague native Codex model-only selection carries exact history once and
 });
 
 test("R11 original scoped Claude receipt survives stopped product upgrade and current Colleague admission", { timeout: 30_000 }, async t => {
-  const { createClaudeConversationHost, nativeMessageId } = await import("../../packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js");
+  const { createClaudeConversationHost } = await import("../../packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js");
+  const { claudeNativeMessageId } = await import("@jskit-ai/assistant-core/server/claude-turn");
   const { createClaudeCodeProcess } = await import("@jskit-ai/assistant-core/server/claude-process");
   const { createConversationTranscript, createMemoryConversationStorage } = await import("@jskit-ai/assistant-core/server/conversation");
   const { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory } =
@@ -4399,7 +4400,7 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   assert.match(receipt.accountIdentity, /^sha256:[a-f0-9]{64}$/u);
   assert.equal(receipt.accountIdentities.anthropic, receipt.accountIdentity);
   assert.ok(receipt.executionId, "The original producer saves its actual process identity");
-  assert.equal(receipt.lastMessageId, nativeMessageId(messageId));
+  assert.equal(receipt.lastMessageId, claudeNativeMessageId(messageId));
   assert.ok(receipt.turnId);
   const historyFile = path.join(host.env.CLAUDE_CONFIG_DIR, "projects", receipt.nativeWorkdir.replace(/[^a-zA-Z0-9]/gu, "-"), `${created.conversationId}.jsonl`);
   const historyBytes = await readFile(historyFile, "utf8");

@@ -10,8 +10,8 @@ import {
   emitVibe64AgentExecutionProfile,
   vibe64HelperExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
-import { OPENCODE_EXPECTED_VERSION, throwVibe64OpenCodeError as runtimeFailure } from "../../opencodeServerProcess.js";
-import { openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "../../terminalShared.js";
+import { OPENCODE_EXPECTED_VERSION, throwVibe64OpenCodeError } from "../../opencodeServerProcess.js";
+import { openCodeSessionId, opencodeTerminalNamespace } from "../../terminalShared.js";
 
 /** @typedef {import("../../types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("../../types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
@@ -88,14 +88,14 @@ function createOpenCodeSessionAgentProvider({
   const { terminalHost } = terminals;
 
   function prepareConversationHost(sessionId, openingContext = {}, mode = "main") {
-    if (mode === "activity") return { native: { owner: sharedRuntime, sessionId: safeSessionId(sessionId) } };
+    if (mode === "activity") return { native: { owner: sharedRuntime, sessionId: openCodeSessionId(sessionId) } };
     if (mode === "storage") return {
       native: {
         owner: sharedRuntime,
         preparation: {
           storage(options) {
             const context = { sessionId, runtime: options.runtime, session: options.session };
-            return { process: () => prepareSharedProcess(context, options), failure: runtimeFailure };
+            return { process: () => prepareSharedProcess(context, options), failure: throwVibe64OpenCodeError };
           }
         }
       }
@@ -110,7 +110,7 @@ function createOpenCodeSessionAgentProvider({
               session: openingContext.session
             });
           },
-          get sessionId() { return safeSessionId(openingContext.sessionId); }
+          get sessionId() { return openCodeSessionId(openingContext.sessionId); }
         }
       }
     };

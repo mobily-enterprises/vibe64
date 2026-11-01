@@ -2,7 +2,7 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { createClaudeConversationStorage } from "../../claudeConversationStorage.js";
 import { createClaudeConversationEnvironment } from "../../claudeConversationEnvironment.js";
 import { createClaudeConversationEvents } from "../../claudeConversationEvents.js";
-import { claudeCapabilities, createClaudeConversationAccounts } from "../../claudeConversationAccounts.js";
+import { createClaudeConversationAccounts } from "../../claudeConversationAccounts.js";
 import { requireCompletedNativeConversationReplacement } from "../../assistantChangeover.js";
 import { createClaudeConversationMessagePolicy, publishMainConversationEvent, readClaudeConversationOwnerContext,
   readSessionConversationContext } from "../../mainConversationBinding.js";
@@ -21,7 +21,7 @@ import { closeTerminalSessionsForNamespace, listTerminalSessions } from "@local/
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { claudeConfigRoot, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
-import { createClaudeConversationOwner, claudeNativeMessageId as nativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
+import { createClaudeConversationOwner } from "@jskit-ai/assistant-core/server/claude-turn";
 import { prepareAgentSessionCommandEnvironment } from "../../agentCommandEnvironment.js";
 import { recordSessionGitCommandActor } from "../../sessionGitCommandActor.js";
 import {
@@ -32,7 +32,7 @@ import {
 import {
   completeClaudeSessionRenewalHandover, completeClaudeSessionRenewalSeed
 } from "../../sessionRenewalReceipts.js";
-import { claudeConversationError as error, claudeTerminalNamespace } from "../../terminalShared.js";
+import { claudeConversationError, claudeTerminalNamespace } from "../../terminalShared.js";
 import { isoNow } from "../../isoNow.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
@@ -103,7 +103,7 @@ function createClaudeConversationHost({
   );
   const providerConnections = createCodexProviderConnectionStore({ systemRoot });
   const configRoot = claudeConfigRoot({ env, credentialHome });
-  const conversationStorage = createClaudeConversationStorage({ createError: error });
+  const conversationStorage = createClaudeConversationStorage({ createError: claudeConversationError });
   const { metadata, ...nativeStorage } = conversationStorage;
   const messagePolicy = createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged,
     onTiming(event) {
@@ -135,7 +135,7 @@ function createClaudeConversationHost({
       agentPreviewCommand,
       agentSessionCommand
     });
-  const conversations = createClaudeConversationOwner({ configRoot, createError: error,
+  const conversations = createClaudeConversationOwner({ configRoot, createError: claudeConversationError,
     disconnectedMessage: "Claude was interrupted when Vibe64 disconnected.",
     store: nativeStorage,
     preparation: {
@@ -217,9 +217,9 @@ function createClaudeConversationHost({
       check(entry) {
         if (operation === "start" && context.assistantScope && JSON.stringify(entry.profile || null) !==
             JSON.stringify(input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null)) {
-          throw error("The scoped helper profile changed. Start a new helper.");
+          throw claudeConversationError("The scoped helper profile changed. Start a new helper.");
         }
-        if (operation === "delete" && entry.main) throw error("The main Claude conversation cannot be deleted as a temporary chat.");
+        if (operation === "delete" && entry.main) throw claudeConversationError("The main Claude conversation cannot be deleted as a temporary chat.");
       }
     };
   }
@@ -227,7 +227,7 @@ function createClaudeConversationHost({
   function checkConfiguration(entry) {
     requireCompletedNativeConversationReplacement(entry.context.session);
     if (listTerminalSessions({ namespace: claudeTerminalNamespace(entry.context.sessionId), runningOnly: true }).length) {
-      throw error("Close the Claude Code terminal before sending in chat.", "vibe64_claude_terminal_active");
+      throw claudeConversationError("Close the Claude Code terminal before sending in chat.", "vibe64_claude_terminal_active");
     }
     return { get sessionClosing() { return sessionIsClosing(entry.context.session); } };
   }
@@ -268,7 +268,7 @@ function createClaudeConversationHost({
         timeoutMs: 180_000
       }; },
       options: {
-        createError: error,
+        createError: claudeConversationError,
         unreadableCode: "vibe64_session_renewal_turn_unreadable",
         failedCode: "vibe64_session_renewal_turn_failed",
         acceptedField: "handoverPromptAccepted"
@@ -542,4 +542,4 @@ function createClaudeConversationHost({
   });
 }
 
-export { claudeCapabilities, createClaudeConversationHost, nativeMessageId };
+export { createClaudeConversationHost };

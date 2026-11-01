@@ -210,7 +210,7 @@ async function storeCodexAttachment({
   executionRoot = ""
 } = {}) {
   const fileName = sanitizeAttachmentFileName(input.fileName);
-  // readable-check: allow method-probe - input validation: an upload carries a readable file stream
+  // readable-check: allow method-probe - platform object: an upload stream is a Node readable stream
   if (!input.stream || typeof input.stream.pipe !== "function") {
     return {
       ok: false,

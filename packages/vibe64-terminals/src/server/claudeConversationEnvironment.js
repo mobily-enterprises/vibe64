@@ -11,7 +11,7 @@ import {
 } from "@local/vibe64-genesis/server";
 import { claudeFlagSettings } from "./claudeCodeProcess.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
-import { claudeConversationError as error, claudeTerminalNamespace } from "./terminalShared.js";
+import { claudeConversationError, claudeTerminalNamespace } from "./terminalShared.js";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import {
@@ -131,7 +131,7 @@ function createClaudeConversationEnvironment({
       sessionId: context.sessionId,
       worktreePath: context.workdir
     });
-    if (prepared.ok !== true) throw error("Claude's session command environment could not be prepared.");
+    if (prepared.ok !== true) throw claudeConversationError("Claude's session command environment could not be prepared.");
     return {
       ...prepared,
       env: {
@@ -275,7 +275,7 @@ function createClaudeConversationEnvironment({
         vibe64User: ctx.vibe64User,
         workdir: ctx.workdir
       });
-      if (actor?.ok === false) throw error(actor.error, actor.code);
+      if (actor?.ok === false) throw claudeConversationError(actor.error, actor.code);
       const terminal = await conversations.prepareTerminal(entry, ctx);
       await markClaudeTerminalReady(env, credentialHome, ctx.workdir);
       return commandRunner({

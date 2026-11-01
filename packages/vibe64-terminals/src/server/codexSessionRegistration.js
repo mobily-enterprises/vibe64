@@ -12,8 +12,8 @@ import {
 } from "./codexTurnOutcomeNotice.js";
 import {
   conversationActorMetadata,
-  codexDeliveredConversationMetadata as deliveredConversationMetadata,
-  codexTerminalConversationMetadata as terminalConversationMetadata
+  codexDeliveredConversationMetadata,
+  codexTerminalConversationMetadata
 } from "./conversationActor.js";
 import {
   createCodexConversationStorage
@@ -361,8 +361,8 @@ function createCodexSessionRegistration({
     checkpoint: checkpointCodexAppServerTurn,
     messageMetadata: {
       actor: currentConversationActorMetadata,
-      delivered: deliveredConversationMetadata,
-      terminal: terminalConversationMetadata
+      delivered: codexDeliveredConversationMetadata,
+      terminal: codexTerminalConversationMetadata
     },
     deliveryStateMetadataKey: "assistant_changeover",
     hasRuntime: sessionHasCodexAppServerRuntime,

@@ -6,7 +6,7 @@ import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 import {
   claudeCodeArguments as nativeClaudeArguments,
   claudeFlagSettings as nativeClaudeFlagSettings,
-  createClaudeCodeProcess as startClaude
+  createClaudeCodeProcess as nativeCreateClaudeCodeProcess
 } from "@jskit-ai/assistant-core/server/claude-process";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -108,7 +108,7 @@ async function createClaudeCodeProcess({
   }
   diagnostic("starting");
   try {
-    const process = await startClaude({
+    const process = await nativeCreateClaudeCodeProcess({
       ...options, onStarted, permissionMode: "bypassPermissions", settings: claudeFlagSettings(),
       // Cold startup includes managed Git probes; ordinary controls keep their 30-second deadline.
       initializationTimeoutMs: 90_000,

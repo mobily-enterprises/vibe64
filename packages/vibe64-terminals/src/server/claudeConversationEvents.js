@@ -1,8 +1,8 @@
-import { VIBE64_AGENT_RUN_STATE as RUN } from "@local/vibe64-runtime/server";
+import { VIBE64_AGENT_RUN_STATE } from "@local/vibe64-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@local/vibe64-runtime/shared";
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { isoNow } from "./isoNow.js";
-import { claudeConversationError as error } from "./terminalShared.js";
+import { claudeConversationError } from "./terminalShared.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { toText } from "@local/vibe64-core/shared/toText";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
@@ -163,7 +163,7 @@ function createClaudeConversationEvents({
     if (event.type === "goal-updated") return publishSessionChanged(entry.context.sessionId, { reason: "claude-goal" });
     if (event.type === "stop-unconfirmed") {
       if (entry.turn) await publishRun(entry, { state: entry.turn.state, active: entry.turn.active, message: entry.observationError });
-      throw error(entry.observationError, "vibe64_claude_stop_unconfirmed");
+      throw claudeConversationError(entry.observationError, "vibe64_claude_stop_unconfirmed");
     }
     if (event.type === "execution") {
       const ctx = event.context;
@@ -212,7 +212,7 @@ function createClaudeConversationEvents({
         session: entry.context.session,
         sessionId: entry.context.sessionId,
         outerTurnId: `claude:${entry.id}:${entry.turn.id}`,
-        outcome: [RUN.COMPLETED, RUN.INTERRUPTED, RUN.CANCELLED].includes(event.state) ? event.state : "failed",
+        outcome: [VIBE64_AGENT_RUN_STATE.COMPLETED, VIBE64_AGENT_RUN_STATE.INTERRUPTED, VIBE64_AGENT_RUN_STATE.CANCELLED].includes(event.state) ? event.state : "failed",
         publishSessionChanged
       });
     }

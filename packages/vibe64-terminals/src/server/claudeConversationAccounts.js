@@ -9,7 +9,7 @@ import {
   findVibe64AgentProvider
 } from "@local/vibe64-runtime/shared";
 import { CLAUDE_CODE_VERSION } from "./claudeCodeProcess.js";
-import { claudeConversationError as error } from "./terminalShared.js";
+import { claudeConversationError } from "./terminalShared.js";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { toText } from "@local/vibe64-core/shared/toText";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
@@ -109,7 +109,7 @@ function createClaudeConversationAccounts({
     })
   });
   function accountQueryFailure(failure) {
-    if (failure.code === "claude_account_query_failed") throw error(failure.message);
+    if (failure.code === "claude_account_query_failed") throw claudeConversationError(failure.message);
     throw failure;
   }
 
@@ -121,12 +121,12 @@ function createClaudeConversationAccounts({
     }
     const account = await accountStatus(context);
     if (account.error) {
-      throw error(`Claude Code account status could not be checked: ${sanitizeOperationText(account.error).slice(0, 1000)}`,
+      throw claudeConversationError(`Claude Code account status could not be checked: ${sanitizeOperationText(account.error).slice(0, 1000)}`,
         "vibe64_claude_account_status_failed");
     }
     const email = toText(account.email).toLowerCase();
     if (!account.loggedIn || !email) {
-      throw error("Sign in to Claude Code with your Claude account before continuing.", "vibe64_claude_account_required");
+      throw claudeConversationError("Sign in to Claude Code with your Claude account before continuing.", "vibe64_claude_account_required");
     }
     return `sha256:${sha256Hex(JSON.stringify([configRoot, account.authMethod, email]))}`;
   }
@@ -195,7 +195,7 @@ function createClaudeConversationAccounts({
   async function resolveExecutionProfile(context, request) {
     const limits = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[request.workloadId];
     if (request.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER || !limits) {
-      throw error("Unsupported Claude helper execution profile.");
+      throw claudeConversationError("Unsupported Claude helper execution profile.");
     }
     const modelId = context.assistantSelection?.modelId;
     const modelProviderId = context.assistantSelection?.modelProviderId;
@@ -204,7 +204,7 @@ function createClaudeConversationAccounts({
       .flatMap((provider) => provider.models).find((candidate) => candidate.id === modelId);
     const thinking = context.assistantSelection?.variantId || "";
     if (!model || (thinking && !model.variants.some((variant) => variant.id === thinking))) {
-      throw error("The selected Claude helper model is unavailable. Choose another in AI Accounts.");
+      throw claudeConversationError("The selected Claude helper model is unavailable. Choose another in AI Accounts.");
     }
     return defineVibe64HelperExecutionProfileResolution({
       executionProfile: request,
