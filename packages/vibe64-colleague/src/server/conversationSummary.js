@@ -9,10 +9,15 @@ const summarySchema = createSchema({
   summary: { type: "string", required: true, minLength: 1, maxLength: 1600 },
   citations: { type: "array", required: true, maxLength: 6, items: { type: "string", maxLength: 128 } }
 });
-const outputSchema = { type: "object", additionalProperties: false, required: ["summary", "citations"], properties: {
+const outputSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "citations"],
+  properties: {
   // The native profile counts worst-case JSON escapes against its 16k limit.
-  summary: { type: "string", maxLength: 1600 }, citations: { type: "array", maxItems: 6, items: { type: "string", maxLength: 128 } }
-} };
+    summary: { type: "string", maxLength: 1600 }, citations: { type: "array", maxItems: 6, items: { type: "string", maxLength: 128 } }
+  }
+};
 
 /**
  * @param {object} dependencies
@@ -39,7 +44,9 @@ function createConversationSummary({
     });
   }
 
-  function cleanup(state, context) { return helperFor(state).cleanup(context); }
+  function cleanup(state, context) {
+    return helperFor(state).cleanup(context);
+  }
   function runHelper(state, context, input) {
     return helperFor(state).runHelper(context, { ...input, signal: state.summaryAbort.signal });
   }
@@ -67,9 +74,9 @@ function createConversationSummary({
       reference: message.id || message.messageId
     }))
       : (result.conversationLog || []).flatMap((turn) => (turn.messages || []).map((message, index) => ({
-        ...message,
-        reference: message.messageId || `${turn.turnId}:${message.role}:${index}`
-      })));
+          ...message,
+          reference: message.messageId || `${turn.turnId}:${message.role}:${index}`
+        })));
     const eligible = source.filter((message) => ["user", "assistant", "commentary"].includes(message.role) && message.complete !== false);
     let remaining = 120000;
     const messages = [];
@@ -100,8 +107,11 @@ function createConversationSummary({
         truncated: message.truncated || message.text.length > 1600
       }))
     });
-    try { await cleanup(state, context); }
-    catch (error) { return { ok: false, ...excerpts(), error: error.message.slice(0, 512) }; }
+    try {
+      await cleanup(state, context);
+    } catch (error) {
+      return { ok: false, ...excerpts(), error: error.message.slice(0, 512) };
+    }
     if (messages.reduce((size, message) => size + message.text.length, 0) <= 8000) return {
       ok: true,
       ...range,
@@ -125,7 +135,9 @@ function createConversationSummary({
       if (!answer.citations.length || answer.citations.some((id) => !ids.has(id))) {
         throw new Error("The summary Helper did not cite messages in the supplied range.");
       }
-    } catch (error) { failure = error; }
+    } catch (error) {
+      failure = error;
+    }
     if (failure) return {
       ok: true,
       ...excerpts(),

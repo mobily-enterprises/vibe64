@@ -115,7 +115,9 @@ function createColleagueTurns({
         if (conversation) await conversation.configure(settings.configuration);
         const previous = state.record.assistantSelection;
         state.record.assistantSelection = selected;
-        try { await records.persist(state); } catch (error) {
+        try {
+          await records.persist(state);
+        } catch (error) {
           state.record.assistantSelection = previous;
           throw error;
         }
@@ -136,7 +138,9 @@ function createColleagueTurns({
           if (Object.hasOwn(pendingRequest, "retireNative")) request.retireNative = pendingRequest.retireNative;
         } else request.retireNative = true;
         await conversation.select(request);
-      } finally { state.selecting = null; }
+      } finally {
+        state.selecting = null;
+      }
       state.conversation = conversation;
       if (settings.engine !== "api" && state.runtimeOwner === conversations.runtime) {
         await conversations.transferConversation(state, scoped, conversations.nativeRuntime);
@@ -209,8 +213,10 @@ function createColleagueTurns({
         state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId });
         state.nextConnection = { ...connection, focus: structuredClone(connection.focus) };
         if (!state.running) {
-          void worker.startWorker(state, state.nextConnection, null, true).catch(error => logger.warn({ error },
-            "Colleague's worker did not start; the message stays queued."));
+          void worker.startWorker(state, state.nextConnection, null, true).catch(error => logger.warn(
+            { error },
+            "Colleague's worker did not start; the message stays queued."
+          ));
         }
         return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user" };
       }
@@ -235,7 +241,9 @@ function createColleagueTurns({
     state.stopping = true;
     state.workerAbort?.abort();
     await state.admission;
-    try { threads.assertCurrentConversation(state, expected); } catch (error) {
+    try {
+      threads.assertCurrentConversation(state, expected);
+    } catch (error) {
       state.stopping = false;
       throw error;
     }
@@ -260,12 +268,16 @@ function createColleagueTurns({
     }
     state.requestContext = context;
     try {
-      if (!state.conversation && state.record.conversationMetadata?.runtime) await conversations.openConversation(state,
-        threads.actionContext(state,
-        {
-        clientId: "",
-        focus: null
-      }));
+      if (!state.conversation && state.record.conversationMetadata?.runtime) await conversations.openConversation(
+        state,
+        threads.actionContext(
+          state,
+          {
+            clientId: "",
+            focus: null
+          }
+        )
+      );
       await state.conversation?.cancel();
       await state.running;
       await state.summaryRunning;
@@ -273,7 +285,9 @@ function createColleagueTurns({
       // its receipt for a retry when its close cannot be confirmed.
       await records.persist(state);
       await records.summaries.cleanup(state, context);
-    } finally { state.stopping = false; }
+    } finally {
+      state.stopping = false;
+    }
     return records.snapshot(state);
   }
 
@@ -310,8 +324,10 @@ function createColleagueTurns({
         await state.running;
         await state.saving;
       } catch (error) {
-        throw Object.assign(new Error(`Colleague thread ${state.key} did not stop cleanly: ${error?.message || error}`, { cause: error }),
-          { threadKey: state.key });
+        throw Object.assign(
+          new Error(`Colleague thread ${state.key} did not stop cleanly: ${error?.message || error}`, { cause: error }),
+          { threadKey: state.key }
+        );
       }
     }));
     const runtimes = await Promise.allSettled([conversations.runtime.close(), conversations.nativeRuntime.close()]);

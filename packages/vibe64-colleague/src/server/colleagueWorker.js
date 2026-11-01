@@ -70,8 +70,9 @@ function createColleagueWorker({
     const { context, observations } = currentContext;
     const hadRuntime = Boolean(state.record.conversationMetadata?.runtime);
     let conversation;
-    try { conversation = await conversations.prepare(state, context, connection.assistantSelection); }
-    catch (error) {
+    try {
+      conversation = await conversations.prepare(state, context, connection.assistantSelection);
+    } catch (error) {
       // Before the first runtime exists, setup cannot have reserved or sent this
       // message. Existing runtimes may retain an earlier unknown native receipt.
       if (!hadRuntime && !state.record.conversationMetadata?.runtime) admission.resolve({ ok: false, error: error.message });
@@ -275,13 +276,18 @@ function createColleagueWorker({
     };
     state.projectReply = projectReply;
     try {
-      await runBoundedAssistantToolLoop({ prompt: "", signal: controller.signal,
-        policy: { maximumResponses: 24 }, completedEnvelope: true,
+      await runBoundedAssistantToolLoop({
+        prompt: "",
+        signal: controller.signal,
+        policy: { maximumResponses: 24 },
+        completedEnvelope: true,
         limitError: failure("Colleague reached this turn's operation limit. The completed results are kept; send a follow-up to continue."),
-        invalidResponseError: ({ nativeToolAttempt }) => failure(nativeToolAttempt
-          ? "The model could not send its tool request through Colleague. No application action ran in that response. Your message is kept; retry or choose another model."
-          : "The model did not return a valid Colleague response. Your message is kept; try another model or retry.",
-          "vibe64_colleague_response_invalid"),
+        invalidResponseError: ({ nativeToolAttempt }) => failure(
+          nativeToolAttempt
+            ? "The model could not send its tool request through Colleague. No application action ran in that response. Your message is kept; retry or choose another model."
+            : "The model did not return a valid Colleague response. Your message is kept; try another model or retry.",
+          "vibe64_colleague_response_invalid"
+        ),
         async complete(_prompt, { outputSchema, previousResponse }) {
           release?.();
           release = null;
@@ -353,16 +359,18 @@ function createColleagueWorker({
           state.streamingReply = progress;
           state.interimReply = progress;
           release = await conversation.subscribe(projectReply);
-          try { receipt = await conversation.wake({ messageId: internalMessageId, text }, { excludedMessageIds: [...userMessageIds] }); }
-          catch (error) {
+          try {
+            receipt = await conversation.wake({ messageId: internalMessageId, text }, { excludedMessageIds: [...userMessageIds] });
+          } catch (error) {
             if (!isCurrent()) throw error;
             const observed = await conversation.inspectDelivery({ messageId: internalMessageId }).catch(() => null);
             if (observed?.status !== "accepted" || observed.recoveryLimitation) throw error;
             receipt = observed;
           }
           let result;
-          try { result = await conversation.wait(); }
-          catch (error) {
+          try {
+            result = await conversation.wait();
+          } catch (error) {
             if (!isCurrent()) throw error;
             const observed = await conversation.inspectDelivery({ messageId: internalMessageId }).catch(() => null);
             if (observed?.status !== "accepted" || observed.turnId !== receipt.turnId || observed.recoveryLimitation) throw error;
@@ -382,8 +390,10 @@ function createColleagueWorker({
             if (turn?.metadata?.runtime?.status !== "complete") throw failure(turn?.metadata?.runtime?.error || result?.error ||
               "Colleague's response did not complete. Your message is kept.");
           }
-          prepared = await conversation.prepareCompletedResponse({ messageId: internalMessageId, turnId: receipt.turnId },
-            { signal: controller.signal, toolSet });
+          prepared = await conversation.prepareCompletedResponse(
+            { messageId: internalMessageId, turnId: receipt.turnId },
+            { signal: controller.signal, toolSet }
+          );
           return prepared;
         },
         async settle({ phase, response }) {
@@ -452,8 +462,11 @@ function createColleagueWorker({
       if (native === null) {
         const context = threads.actionContext(state, connection);
         const selected = state.record.assistantSelection || await conversations.chooseSelection(context, connection.assistantSelection);
-        const settings = await terminals.resolveConversationConfiguration(selected, conversations.promptFor(state),
-          { vibe64User: authenticatedVibe64User(context) });
+        const settings = await terminals.resolveConversationConfiguration(
+          selected,
+          conversations.promptFor(state),
+          { vibe64User: authenticatedVibe64User(context) }
+        );
         native = settings.engine !== "api";
       }
       return native ? runNative(state, connection, generation, controller)
@@ -485,10 +498,11 @@ function createColleagueWorker({
         if (!serviceState.lifecycle.closed && !state.stopping && state.record.status === "ready") {
           if ((native || state.runtimeOwner === conversations.nativeRuntime) &&
               state.pendingMessages.length) {
-            void startWorker(state, state.nextConnection, null, true).catch(error => logger.warn({ error },
-              "Colleague's worker did not restart; the queued messages stay queued."));
-          }
-          else wakeForObservations(state);
+            void startWorker(state, state.nextConnection, null, true).catch(error => logger.warn(
+              { error },
+              "Colleague's worker did not restart; the queued messages stay queued."
+            ));
+          } else wakeForObservations(state);
         }
       });
     void state.running.catch(() => {}); // The run records its own failure; this only marks the rejection handled.
@@ -506,9 +520,15 @@ function createColleagueWorker({
     const observation = state.record.observations[0];
     // Reserve the worker synchronously; its preparation resolves the actual
     // backend before the first wake, without an untracked parallel preparation.
-    void startWorker(state, { clientId: "", focus: observation.focus }, null,
-      state.runtimeOwner ? state.runtimeOwner === conversations.nativeRuntime : null).catch(error => logger.warn({ error },
-      "Colleague's worker did not start for an observation; it stays queued."));
+    void startWorker(
+      state,
+      { clientId: "", focus: observation.focus },
+      null,
+      state.runtimeOwner ? state.runtimeOwner === conversations.nativeRuntime : null
+    ).catch(error => logger.warn(
+      { error },
+      "Colleague's worker did not start for an observation; it stays queued."
+    ));
   }
 
   function scheduleWatches(state, delay = watchPollMs) {
@@ -583,8 +603,7 @@ function createColleagueWorker({
         if (watch.status !== "active") continue;
         try {
           await observeWatch(state, watch);
-        }
-        catch (error) {
+        } catch (error) {
           if (watch.status !== "active") continue;
           watch.status = "paused";
           watch.error = `Watching paused: ${error.message}`.slice(0, 512);

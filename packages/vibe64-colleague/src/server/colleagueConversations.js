@@ -34,7 +34,10 @@ function createColleagueConversations({
   records,
   threads
 }) {
-  const runtimeOptions = { storage: records.storage, toolCatalog: records.catalog, persistCommentary: false,
+  const runtimeOptions = {
+    storage: records.storage,
+    toolCatalog: records.catalog,
+    persistCommentary: false,
     limits: {
       ...COLLEAGUE_TOOL_LIMITS,
       maxToolCalls: 24,
@@ -99,8 +102,11 @@ function createColleagueConversations({
     observer.attaching = (async () => {
       state.opening += 1;
       let conversation;
-      try { conversation = await state.runtimeOwner.open({ id: state.record.runtimeId, context: observer.context, host: state.host }); }
-      finally { state.opening -= 1; }
+      try {
+        conversation = await state.runtimeOwner.open({ id: state.record.runtimeId, context: observer.context, host: state.host });
+      } finally {
+        state.opening -= 1;
+      }
       const release = await conversation.subscribe(event => {
         // Both readers apply the same synchronous product projection. Runtime
         // subscriptions reauthorize independently, so their callback order is
@@ -143,8 +149,11 @@ function createColleagueConversations({
       if (!state.browserObservers.has(observer)) release();
       else observer.release = release;
     })();
-    try { await observer.attaching; }
-    finally { observer.attaching = null; }
+    try {
+      await observer.attaching;
+    } finally {
+      observer.attaching = null;
+    }
   }
 
   /**
@@ -217,7 +226,9 @@ function createColleagueConversations({
       conversation = await state.runtimeOwner.open({ id: runtimeId, context, host, ...settings });
       threads.assertCurrentConversation(state, scopeId);
       state.conversation = conversation;
-    } finally { state.opening -= 1; }
+    } finally {
+      state.opening -= 1;
+    }
     await Promise.all([...state.browserObservers].map(observer => attachBrowserObserver(state, observer, transferring)));
     threads.assertCurrentConversation(state, scopeId);
     return conversation;
@@ -242,8 +253,9 @@ function createColleagueConversations({
       state.runtimeOwner = owner;
       return await openConversation(state, context, {}, true);
     } finally {
-      try { await Promise.all([...state.browserObservers].map(observer => attachBrowserObserver(state, observer, true))); }
-      finally {
+      try {
+        await Promise.all([...state.browserObservers].map(observer => attachBrowserObserver(state, observer, true)));
+      } finally {
         state.transfer = null;
         gate.resolve();
       }
@@ -255,8 +267,11 @@ function createColleagueConversations({
   async function prepare(state, context, selection, systemPrompt = promptFor(state)) {
     if (!state.record.assistantSelection) state.record.assistantSelection = await chooseSelection(context, selection);
     context.assistantSelection = state.record.assistantSelection;
-    const settings = await terminals.resolveConversationConfiguration(context.assistantSelection, systemPrompt,
-      { vibe64User: authenticatedVibe64User(context) });
+    const settings = await terminals.resolveConversationConfiguration(
+      context.assistantSelection,
+      systemPrompt,
+      { vibe64User: authenticatedVibe64User(context) }
+    );
     const conversation = await openConversation(state, context, !state.record.conversationMetadata?.runtime ? settings : {});
     await conversation.retrySave();
     const current = await conversation.read();

@@ -71,7 +71,9 @@ function registerColleagueFocus({
         });
       }
     }
-    function leave(input) { release(input?.clientId); }
+    function leave(input) {
+      release(input?.clientId);
+    }
     socket.on(COLLEAGUE_FOCUS_UPDATE, update);
     socket.on(COLLEAGUE_FOCUS_RELEASE, leave);
     return () => {

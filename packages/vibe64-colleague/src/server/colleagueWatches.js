@@ -74,10 +74,11 @@ function createColleagueWatches({
     await records.persist(state);
     records.publishReply(state);
     if (state.pendingMessages.length) {
-      void worker.startWorker(state, state.nextConnection, null, true).catch(error => logger.warn({ error },
-        "Colleague's worker did not start; the queued messages stay queued."));
-    }
-    else worker.wakeForObservations(state);
+      void worker.startWorker(state, state.nextConnection, null, true).catch(error => logger.warn(
+        { error },
+        "Colleague's worker did not start; the queued messages stay queued."
+      ));
+    } else worker.wakeForObservations(state);
   }
 
   events?.register({
@@ -116,11 +117,17 @@ function createColleagueWatches({
   /**
    * Owners extend what Colleague can watch (watchSources.js).
    */
-  function registerConversationSource(name, read) { watchSources.registerConversation(name, read); }
+  function registerConversationSource(name, read) {
+    watchSources.registerConversation(name, read);
+  }
 
-  function registerWatchSource(source) { watchSources.register(source); }
+  function registerWatchSource(source) {
+    watchSources.register(source);
+  }
 
-  function listWatchSources() { return { ok: true, sources: watchSources.list() }; }
+  function listWatchSources() {
+    return { ok: true, sources: watchSources.list() };
+  }
 
   /**
    * The assistant's watch.source.create: registered state sources only.
@@ -182,19 +189,19 @@ function createColleagueWatches({
       }
       const target = watchedInput ? { source: input.source, input: watchedInput, projectSlug: watchedInput.projectSlug || "" }
         : {
-          ...(input.source ? { source: input.source } : {}),
-          projectSlug: input.projectSlug,
-          sessionId: input.sessionId,
-          conversationId: input.conversationId || ""
-        };
+            ...(input.source ? { source: input.source } : {}),
+            projectSlug: input.projectSlug,
+            sessionId: input.sessionId,
+            conversationId: input.conversationId || ""
+          };
       const existing = state.record.watches.find((watch) => watch.watchId === input.watchId);
       if (existing) {
         if (["source", "projectSlug", "sessionId", "conversationId"].some(key => (existing[key] || "") !== (target[key] || "")) ||
             !isDeepStrictEqual(existing.input || null, target.input || null) ||
             ["condition", "question"].some(key => (existing[key] || "") !== (input[key] || "")) ||
             (existing.once !== false) !== (input.once !== false)) throw failure(
-              "This watch ID belongs to a different request. Use a new watch ID."
-            );
+          "This watch ID belongs to a different request. Use a new watch ID."
+        );
         return { ok: true, watch: publicWatch(existing) };
       }
       if (input.source && !source) throw failure("Colleague cannot watch that here.", "vibe64_colleague_failed", 422);
@@ -260,8 +267,9 @@ function createColleagueWatches({
       if (watch.assignmentId) throw failure("Resume the assignment through assignment.update after a new user instruction.");
       state.requestContext = context;
       watch.status = "active";
-      try { await worker.observeWatch(state, watch); }
-      catch (error) {
+      try {
+        await worker.observeWatch(state, watch);
+      } catch (error) {
         watch.status = "paused";
         watch.error = error.message;
         throw error;

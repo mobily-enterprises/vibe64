@@ -160,8 +160,8 @@ function createAssignmentOperations({
     if (existing) {
       if (existing.requestMessageId !== input.requestMessageId || existing.projectSlug !== input.projectSlug ||
           existing.sessionId !== input.sessionId || existing.conversationId !== (input.conversationId || "")) throw fail(
-            "That assignment ID already belongs to another request or target."
-          );
+        "That assignment ID already belongs to another request or target."
+      );
       return { ok: true, assignment: assignmentDetail(existing) };
     }
     const retained = state.record.assignments || [];
@@ -363,17 +363,19 @@ function createAssignmentOperations({
     state.record.watches = state.record.watches.filter((item) => !["delivered", "cancelled"].includes(item.status)).concat(watch);
     await persist(state);
     try {
-      const result = await execute(context,
+      const result = await execute(
+        context,
         assignment,
         conversationId ? "vibe64.terminals.temporary-conversation.turn.start" : "vibe64.sessions.agent-message.send",
         {
-        sessionId: assignment.sessionId,
-        ...(conversationId ? { conversationId } : {}),
-        messageId: input.messageId,
-        message: input.message,
-        submissionKind: "send",
-        ...(input.planRevision ? { planRevision: input.planRevision } : {})
-      });
+          sessionId: assignment.sessionId,
+          ...(conversationId ? { conversationId } : {}),
+          messageId: input.messageId,
+          message: input.message,
+          submissionKind: "send",
+          ...(input.planRevision ? { planRevision: input.planRevision } : {})
+        }
+      );
       turn.status = "sent";
       watch.expectedRunId = String(result.runId || "");
       watch.status = "active";

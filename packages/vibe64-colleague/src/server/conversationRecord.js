@@ -4,11 +4,13 @@ import { createConversationStorage, prepareConversationRuntimeCopy } from "@jski
  * The product record owns chat identities; JSKIT still owns every canonical turn.
  */
 export function validateColleagueConversationRecord(record, ownerKey) {
-  const invalid = () => { throw new Error("Colleague history has an unsupported shape. Inspect it before upgrading."); };
+  const invalid = () => {
+    throw new Error("Colleague history has an unsupported shape. Inspect it before upgrading.");
+  };
   const chat = value => {
     if (!value || typeof value.scopeId !== "string" || !/^colleague_[\w-]+$/u.test(value.scopeId) ||
         !Array.isArray(value.conversationLog) || value.conversationLog.some(turn =>
-          !turn || typeof turn.turnId !== "string" || !Array.isArray(turn.messages) ||
+      !turn || typeof turn.turnId !== "string" || !Array.isArray(turn.messages) ||
           turn.messages.some(message => !message || typeof message.text !== "string" || typeof message.role !== "string"))) invalid();
   };
   if (![1, 2, 3].includes(record?.schemaVersion)) invalid();

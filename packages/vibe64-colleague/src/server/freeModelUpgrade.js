@@ -28,7 +28,9 @@ export async function retireColleagueFreeModel({
   try {
     if (!(await lstat(root)).isDirectory()) throw new Error("Colleague state must be a regular directory.");
     entries = await readdir(root, { withFileTypes: true });
-  } catch (error) { if (error.code === "ENOENT") entries = []; else throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") entries = []; else throw error;
+  }
   await publishStateUpgradeFiles({
     systemRoot,
     apply,

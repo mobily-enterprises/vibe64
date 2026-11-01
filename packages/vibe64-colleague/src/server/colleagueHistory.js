@@ -88,8 +88,11 @@ function createColleagueHistory({
         retiredConversation: undefined,
         previousConversations: [...state.record.previousConversations, old]
       };
-      try { validateColleagueConversationRecord({ ...state.record, ...patch }, state.key); }
-      catch (error) { throw failure(`Cannot start fresh: ${error.message}`, "ACTION_VALIDATION_FAILED", 400); }
+      try {
+        validateColleagueConversationRecord({ ...state.record, ...patch }, state.key);
+      } catch (error) {
+        throw failure(`Cannot start fresh: ${error.message}`, "ACTION_VALIDATION_FAILED", 400);
+      }
       // A summary receipt left after its run is retried before the next
       // summary; it belongs to this thread, not to the conversation rotated here.
       if (serviceState.lifecycle.closed || state.stopping || state.running || state.opening || state.transfer || state.summaryRunning) {

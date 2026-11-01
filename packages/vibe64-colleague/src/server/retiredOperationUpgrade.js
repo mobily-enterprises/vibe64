@@ -16,7 +16,11 @@ function parse(source) {
 function completedAction(operation) {
   if (typeof operation.arguments !== "string") return false;
   let args;
-  try { args = JSON.parse(operation.arguments); } catch { return false; }
+  try {
+    args = JSON.parse(operation.arguments);
+  } catch {
+    return false;
+  }
   const receipt = operation.result;
   return object(args) && typeof args.actionId === "string" && /^vibe64\.[\w.-]{1,128}$/u.test(args.actionId) &&
     args.version === 1 && object(args.input) && object(receipt) && receipt.ok === true &&
@@ -54,9 +58,11 @@ export async function repairColleagueRetiredOperation({
     const retired = saved.retiredConversation;
     if (!retired?.operation || retired.assistantSelection?.engineId !== "codex" ||
         saved.conversationMetadata?.runtime || saved.previousConversations?.length || saved.freshOperation) return null;
-    const refuse = () => { throw new Error(
-      `${ownerKey}: the retired operation is not an unchanged completed legacy receipt. Inspect original completion and native receipts; no work was replayed.`
-    ); };
+    const refuse = () => {
+      throw new Error(
+        `${ownerKey}: the retired operation is not an unchanged completed legacy receipt. Inspect original completion and native receipts; no work was replayed.`
+      );
+    };
     const operation = retired.operation;
     if (saved.schemaVersion !== 3 || saved.status !== "ready" || saved.operation ||
         !isDeepStrictEqual(saved.assistantSelection, retired.assistantSelection) ||

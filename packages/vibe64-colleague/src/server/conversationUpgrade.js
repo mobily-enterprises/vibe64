@@ -44,7 +44,11 @@ export async function upgradeColleagueConversations({
       throw error;
     }
     let saved;
-    try { saved = JSON.parse(original); } catch { throw new Error("Colleague history is invalid JSON. Restore it before upgrading."); }
+    try {
+      saved = JSON.parse(original);
+    } catch {
+      throw new Error("Colleague history is invalid JSON. Restore it before upgrading.");
+    }
     if (saved?.schemaVersion === 3) {
       validateColleagueConversationRecord(saved, entry.name);
       validateCurrentRuntimeHistories(saved);
@@ -87,8 +91,9 @@ export async function upgradeColleagueConversations({
   // Secure every original before changing any conversation.
   for (const update of updates) {
     await mkdir(path.dirname(update.backup), { recursive: true, mode: 0o700 });
-    try { await writeFile(update.backup, update.original, { flag: "wx", mode: 0o600 }); }
-    catch (error) {
+    try {
+      await writeFile(update.backup, update.original, { flag: "wx", mode: 0o600 });
+    } catch (error) {
       if (error.code !== "EEXIST") throw error;
       if (!(await lstat(update.backup)).isFile() || await readFile(update.backup, "utf8") !== update.original) {
         throw new Error("Colleague history differs from its upgrade backup. Inspect both before retrying.");
@@ -103,7 +108,9 @@ export async function upgradeColleagueConversations({
     try {
       await writeFile(temporary, JSON.stringify(update.next), { flag: "wx", mode: 0o600 });
       await rename(temporary, update.file);
-    } finally { await rm(temporary, { force: true }); }
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
 }
 
@@ -138,7 +145,11 @@ export async function upgradeColleagueConversationRuntime({
       throw error;
     }
     let saved;
-    try { saved = JSON.parse(original); } catch { throw new Error("Colleague history is invalid JSON. Restore it before upgrading."); }
+    try {
+      saved = JSON.parse(original);
+    } catch {
+      throw new Error("Colleague history is invalid JSON. Restore it before upgrading.");
+    }
     if (saved?.schemaVersion === 3) {
       validateColleagueConversationRecord(saved, entry.name);
       validateCurrentRuntimeHistories(saved);
@@ -162,11 +173,14 @@ export async function upgradeColleagueConversationRuntime({
       continue;
     }
     let result;
-    try { result = upgradeConversationRuntimeState({
-      metadata: saved.conversationMetadata || {},
-      conversationLog: saved.conversationLog
-    }); }
-    catch (error) { throw new Error(`${entry.name}: ${error.message}`, { cause: error }); }
+    try {
+      result = upgradeConversationRuntimeState({
+        metadata: saved.conversationMetadata || {},
+        conversationLog: saved.conversationLog
+      });
+    } catch (error) {
+      throw new Error(`${entry.name}: ${error.message}`, { cause: error });
+    }
     if (!result.changed) continue;
     for (const warning of result.warnings) report("warning", `${entry.name}: ${warning}`);
     report(
@@ -184,8 +198,9 @@ export async function upgradeColleagueConversationRuntime({
   // Back up every original before replacing the first record.
   for (const update of updates) {
     await mkdir(path.dirname(update.backup), { recursive: true, mode: 0o700 });
-    try { await writeFile(update.backup, update.original, { flag: "wx", mode: 0o600 }); }
-    catch (error) {
+    try {
+      await writeFile(update.backup, update.original, { flag: "wx", mode: 0o600 });
+    } catch (error) {
       if (error.code !== "EEXIST") throw error;
       if (!(await lstat(update.backup)).isFile() || await readFile(update.backup, "utf8") !== update.original) {
         throw new Error("Colleague history differs from its runtime upgrade backup. Inspect both before retrying.");
@@ -200,7 +215,9 @@ export async function upgradeColleagueConversationRuntime({
     try {
       await writeFile(temporary, JSON.stringify(update.next), { flag: "wx", mode: 0o600 });
       await rename(temporary, update.file);
-    } finally { await rm(temporary, { force: true }); }
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
 }
 
@@ -244,7 +261,11 @@ export async function upgradeColleagueConversationHistory({
       throw error;
     }
     let saved;
-    try { saved = JSON.parse(original); } catch { throw new Error("Colleague history is invalid JSON. Restore it before upgrading."); }
+    try {
+      saved = JSON.parse(original);
+    } catch {
+      throw new Error("Colleague history is invalid JSON. Restore it before upgrading.");
+    }
     validateColleagueConversationRecord(saved, entry.name);
     if (saved.schemaVersion === 3) {
       validateCurrentRuntimeHistories(saved);
@@ -272,8 +293,9 @@ export async function upgradeColleagueConversationHistory({
   // Same original backup and atomic-publication contract as the older owners.
   for (const update of updates) {
     await mkdir(path.dirname(update.backup), { recursive: true, mode: 0o700 });
-    try { await writeFile(update.backup, update.original, { flag: "wx", mode: 0o600 }); }
-    catch (error) {
+    try {
+      await writeFile(update.backup, update.original, { flag: "wx", mode: 0o600 });
+    } catch (error) {
       if (error.code !== "EEXIST") throw error;
       if (!(await lstat(update.backup)).isFile() || await readFile(update.backup, "utf8") !== update.original) {
         throw new Error("Colleague history differs from its fresh-conversation upgrade backup. Inspect both before retrying.");
@@ -288,6 +310,8 @@ export async function upgradeColleagueConversationHistory({
     try {
       await writeFile(temporary, JSON.stringify(update.next), { flag: "wx", mode: 0o600 });
       await rename(temporary, update.file);
-    } finally { await rm(temporary, { force: true }); }
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
 }

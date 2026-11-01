@@ -29,7 +29,9 @@ function readToolArguments(value) {
   try {
     const parsed = JSON.parse(value || "{}");
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch { return {}; }
+  } catch {
+    return {};
+  }
 }
 function receiptText(value, maximum = 256) {
   const text = typeof value === "string" ? value.trim() : "";
@@ -193,7 +195,9 @@ function createColleagueRecords({
           Object.assign(state.record, conversation);
           if (conversation.runtimeId) serviceState.conversationOwners.set(conversation.runtimeId, state);
         }
-      } finally { await rm(temporary, { force: true }); }
+      } finally {
+        await rm(temporary, { force: true });
+      }
     });
     state.saving = operation.catch(() => {}); // Waiters only wait; the save's failure reaches its caller.
     // The save's own failure reaches its caller; a failed announcement is logged.
@@ -217,8 +221,7 @@ function createColleagueRecords({
           try {
             Promise.resolve(observer.listener({ type: "application", interimReply: state.interimReply }))
               .catch(error => logger.warn({ error }, "A Colleague browser observer failed to show a change."));
-          }
-          catch { /* A presentation failure does not own the conversation. */ }
+          } catch { /* A presentation failure does not own the conversation. */ }
           if (observer.context.colleague?.conversationId !== state.record.scopeId) {
             state.browserObservers.delete(observer);
             releaseObserver(observer);

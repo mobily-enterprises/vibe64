@@ -149,7 +149,9 @@ function createColleagueBrowserConversations({
       return conversation ? conversation.cancelDelivery(input) : { ok: true, cancelled: true, messageId: input.messageId };
     }
 
-    async function readGoal() { return null; }
+    async function readGoal() {
+      return null;
+    }
 
     async function updateGoal() {
       throw failure("Colleague does not support native goals.", "conversation_unsupported", 400);
@@ -162,8 +164,7 @@ function createColleagueBrowserConversations({
       try {
         await preparedConversation();
         await conversations.attachBrowserObserver(state, observer);
-      }
-      catch (error) {
+      } catch (error) {
         state.browserObservers.delete(observer);
         releaseObserver(observer);
         throw error;

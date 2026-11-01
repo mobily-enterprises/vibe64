@@ -39,8 +39,9 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
 
   async function listTopics({ query = "", offset = 0, limit = 20 } = {}) {
     let entries;
-    try { entries = await readdir(directory, { withFileTypes: true }); }
-    catch (error) {
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
       if (error.code === "ENOENT") return {
         ok: false,
         error: "Usage guides are unavailable in this application release.",
@@ -81,8 +82,9 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
   }
 
   async function readTopicGuide({ topicId }) {
-    try { return { ok: true, ...await readGuide(topicId) }; }
-    catch (error) {
+    try {
+      return { ok: true, ...await readGuide(topicId) };
+    } catch (error) {
       if (["ENOENT", "ELOOP"].includes(error.code)) return {
         ok: false,
         topicId,

@@ -68,7 +68,7 @@ function createColleagueTurnInputs({
     const observedAssignmentIds = observations.flatMap(observation => observation.assignmentId ? [observation.assignmentId] : []);
     const canRelay = (state.record.assignments || []).some(assignment => observedAssignmentIds.includes(assignment.assignmentId) &&
       assignment.status !== "cancelled" && assignment.links?.some(link => state.record.assignments.some(target =>
-        target.assignmentId === link.assignmentId && ["active", "waiting"].includes(target.status))));
+      target.assignmentId === link.assignmentId && ["active", "waiting"].includes(target.status))));
     const readOnly = autonomous && !assignmentIds.length && !canRelay;
     context = {
       ...context,

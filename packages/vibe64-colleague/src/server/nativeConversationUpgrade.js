@@ -63,8 +63,11 @@ const originalOpenCodePromptSuffix = openCodeDetachedPrompt({ outputSchema: orig
 function originalOpenCodeInput(message) {
   const text = message.content.filter(part => part.type === "text").map(part => part.text).join("\n");
   if (!text.endsWith(originalOpenCodePromptSuffix)) return null;
-  try { return JSON.parse(text.slice(0, -originalOpenCodePromptSuffix.length)); }
-  catch { return null; }
+  try {
+    return JSON.parse(text.slice(0, -originalOpenCodePromptSuffix.length));
+  } catch {
+    return null;
+  }
 }
 function parseUpgradeJson(source, label) {
   try {
@@ -154,7 +157,9 @@ async function restoreColleagueNativeContinuity({
     const label = engine === "claude" ? "Claude" : engine === "codex" ? "Codex" : "OpenCode";
     // Current common owners and explicit fresh-chat transitions are not legacy imports.
     if (saved.conversationMetadata?.runtime || saved.previousConversations?.length || saved.freshOperation) return null;
-    const refuse = message => { throw new Error(`${ownerKey}: ${message} No native work or history was changed.`); };
+    const refuse = message => {
+      throw new Error(`${ownerKey}: ${message} No native work or history was changed.`);
+    };
     if (!(engine !== "opencode" ? uuid : /^ses_[a-zA-Z0-9_]{1,256}$/u).test(retired.conversationId || "") || !retired.runId ||
         !isDeepStrictEqual(saved.assistantSelection, retired.assistantSelection) ||
         saved.status === "working" || saved.operation || retired.operation ||
@@ -259,8 +264,8 @@ async function restoreColleagueNativeContinuity({
                 value.history_mode !== undefined && !["legacy", "paginated"].includes(value.history_mode) ||
                 value.dynamic_tools !== undefined &&
                   (!Array.isArray(value.dynamic_tools) || value.dynamic_tools.length)) refuse(
-                    "The original Codex rollout does not prove this exact private native scope and provider."
-                  );
+              "The original Codex rollout does not prove this exact private native scope and provider."
+            );
           }
           // Qualified original0.151/0.156 and current0.159 formats retain the
           // raw rollout across compaction. Inspect actual rows, not replacement
@@ -281,7 +286,11 @@ async function restoreColleagueNativeContinuity({
           if (row.type === "response_item" && value?.type === "message" && value.role === "user") {
             if (!activeRun) refuse("The original Codex rollout has a newer or unattributed native input.");
             const text = (value.content || []).filter(part => ["input_text", "text"].includes(part.type)).map(part => part.text).join("\n");
-            try { lastInput = JSON.parse(text); } catch { lastInput = null; }
+            try {
+              lastInput = JSON.parse(text);
+            } catch {
+              lastInput = null;
+            }
             // Original31d4c318^ service prompt: every interactive exchange has
             // this exact shape, no autonomous field, no observed watch update.
             if (historicalInteractive) {
@@ -334,7 +343,9 @@ async function restoreColleagueNativeContinuity({
           refuse("The original Codex rollout contains an unreadable native record. Inspect it privately before retrying.");
         }
         throw error;
-      } finally { await file.close(); }
+      } finally {
+        await file.close();
+      }
       // Current explicit-mode inputs belong to the original strict upgrade.
       // This historical correction must not claim or reject their binding.
       if (historicalInteractive && typeof lastInput?.autonomous === "boolean") return null;
@@ -350,7 +361,7 @@ async function restoreColleagueNativeContinuity({
           (autonomous ? lastInput?.autonomous !== true || typeof lastInput.readOnly !== "boolean" ||
             !Array.isArray(lastInput.userMessages) || lastInput.userMessages.length ||
             !Array.isArray(lastInput.observations) || !lastInput.observations.length :
-            (lastInput?.autonomous !== false && !(historicalInteractive && originalInteractiveInputs && lastAuthoredInput)) ||
+              (lastInput?.autonomous !== false && !(historicalInteractive && originalInteractiveInputs && lastAuthoredInput)) ||
               typeof lastInput.readOnly !== "boolean" ||
               !Array.isArray(lastInput.userMessages) ||
             lastAuthoredInput?.userMessages?.at(-1)?.messageId !== authored.messageId ||
@@ -358,8 +369,11 @@ async function restoreColleagueNativeContinuity({
         refuse("The original Codex history does not prove the exact final admitted product request with no newer native work.");
       }
       let envelope;
-      try { envelope = readAssistantResponseEnvelope(finalText); }
-      catch { refuse("The original native Codex final answer is not a complete Colleague response."); }
+      try {
+        envelope = readAssistantResponseEnvelope(finalText);
+      } catch {
+        refuse("The original native Codex final answer is not a complete Colleague response.");
+      }
       if (envelope.kind !== "reply" || envelope.text !== answer) {
         refuse("The original native Codex answer differs from its written product reply.");
       }
@@ -429,8 +443,11 @@ async function restoreColleagueNativeContinuity({
         refuse("Native OpenCode history has newer or unconfirmed work, or no final answer for the original request.");
       }
       let envelope;
-      try { envelope = readAssistantResponseEnvelope(openCodeStructuredOutput(final.text)); }
-      catch { refuse("The original native OpenCode answer is not a complete Colleague response."); }
+      try {
+        envelope = readAssistantResponseEnvelope(openCodeStructuredOutput(final.text));
+      } catch {
+        refuse("The original native OpenCode answer is not a complete Colleague response.");
+      }
       if (envelope.kind !== "reply" || envelope.text !== answer) {
         refuse("The original native OpenCode answer differs from its written product reply.");
       }
@@ -491,8 +508,11 @@ async function restoreColleagueNativeContinuity({
           refuse("A retained Claude provider is unsupported. Keep its original state until it can be verified.");
         }
         let settings;
-        try { settings = await connections.claudeProviderSettings(providerId); }
-        catch { refuse("Reconnect the exact original Claude provider key in AI Accounts before converting this history."); }
+        try {
+          settings = await connections.claudeProviderSettings(providerId);
+        } catch {
+          refuse("Reconnect the exact original Claude provider key in AI Accounts before converting this history.");
+        }
         if (!settings || claudeProviderAccountIdentity(configRoot, settings.providerId, settings.apiKey) !== identity) {
           refuse("A retained Claude provider key has changed. Restore the original connection before converting this history.");
         }
@@ -528,7 +548,9 @@ async function restoreColleagueNativeContinuity({
     let latestInput = null, lastAuthoredInput = null;
     for (const message of history.userMessages) {
       let input;
-      try { input = JSON.parse(message.text); } catch { /* Native meta input is not authored work. */ }
+      try {
+        input = JSON.parse(message.text);
+      } catch { /* Native meta input is not authored work. */ }
       if (Array.isArray(input?.userMessages) && input.userMessages.length) lastAuthoredInput = input;
       if (message.id === receipt.lastMessageId) latestInput = input;
     }
@@ -555,8 +577,11 @@ async function restoreColleagueNativeContinuity({
     if (!finals.length) refuse("The original native Claude history has no final carrier for its stopped completed receipt.");
     for (const final of finals) {
       let envelope;
-      try { envelope = readAssistantResponseEnvelope(final.text); }
-      catch { refuse("The original native Claude answer is not a complete Colleague response."); }
+      try {
+        envelope = readAssistantResponseEnvelope(final.text);
+      } catch {
+        refuse("The original native Claude answer is not a complete Colleague response.");
+      }
       if (envelope.kind !== "reply" || envelope.text !== answer) {
         refuse("The original native Claude answer differs from its written product reply.");
       }
@@ -568,8 +593,8 @@ async function restoreColleagueNativeContinuity({
       const after = await lstat(nativeFile.path);
       if (!after.isFile() || ["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => before[key] !== after[key]) ||
           await readUpgradeFile(receiptPath) !== receiptBytes) refuse(
-            "Native history or its receipt changed during inspection. Stop all writers before retrying."
-          );
+        "Native history or its receipt changed during inspection. Stop all writers before retrying."
+      );
     });
   };
 

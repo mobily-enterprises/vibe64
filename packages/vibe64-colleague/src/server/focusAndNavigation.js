@@ -121,8 +121,11 @@ function createColleagueFocusAndNavigation({ threads }) {
   async function guide(input, context) {
     const state = await threads.stateFor(context);
     let guided;
-    try { guided = trainingGuideRequest(input); }
-    catch (error) { return { ok: false, error: error.message }; }
+    try {
+      guided = trainingGuideRequest(input);
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
     const place = learningVocabulary.place(guided.target);
     const user = authenticatedVibe64User(context);
     if (!learningPlaceOpenTo(place, { owner: !user || user.role === "owner" })) {

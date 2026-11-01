@@ -42,7 +42,9 @@ export async function upgradeColleagueCodexCompletedPolicy({
     const checked = upgradeConversationRuntimeState({ metadata: saved.conversationMetadata || {}, conversationLog: saved.conversationLog });
     const runtime = checked.metadata.runtime;
     if (runtime?.engine !== "codex" || !runtime.binding.threadId) return null;
-    const refuse = message => { throw new Error(`${ownerKey}: ${message} No native work or history was changed.`); };
+    const refuse = message => {
+      throw new Error(`${ownerKey}: ${message} No native work or history was changed.`);
+    };
     const binding = runtime.binding;
     if (binding.toolSchemaIdentity === emptyCodexToolSchema) return null;
     if (binding.toolSchemaIdentity !== oldCodexToolSchema) {
@@ -187,7 +189,9 @@ export async function upgradeColleagueNativeInstructions({
   const inspect = ({ ownerKey, filePath, original, saved }) => {
     const runtime = saved.conversationMetadata?.runtime;
     if (runtime?.configuration?.systemPrompt !== "") return null;
-    const refuse = message => { throw new Error(`${ownerKey}: ${message} No request, binding or history was changed.`); };
+    const refuse = message => {
+      throw new Error(`${ownerKey}: ${message} No request, binding or history was changed.`);
+    };
     const retired = saved.retiredConversation;
     const binding = runtime.binding;
     const nativeId = runtime.engine === "codex" ? binding?.threadId

@@ -71,8 +71,9 @@ function createColleagueThreads({
     if (!serviceState.users.has(key)) serviceState.users.set(key, loadState(key, owner, thread));
     const loading = serviceState.users.get(key);
     let state;
-    try { state = await loading; }
-    catch (error) {
+    try {
+      state = await loading;
+    } catch (error) {
       if (serviceState.users.get(key) === loading) serviceState.users.delete(key);
       throw error;
     }
@@ -123,8 +124,10 @@ function createColleagueThreads({
     state.released = true;
     state.generation += 1;
     state.workerAbort?.abort();
-    void Promise.resolve(state.conversation?.cancel()).catch(error => logger.warn({ error },
-      "A released Learn thread's conversation did not cancel; its thread is still released."));
+    void Promise.resolve(state.conversation?.cancel()).catch(error => logger.warn(
+      { error },
+      "A released Learn thread's conversation did not cancel; its thread is still released."
+    ));
     state.pendingMessages = [];
     clearTimeout(state.watchTimer);
     clearTimeout(state.replyTimer);
@@ -134,8 +137,9 @@ function createColleagueThreads({
     await state.saving;
     void (async () => {
       await state.running;
-      try { if (state.conversation) await state.conversation.dispose(); }
-      finally {
+      try {
+        if (state.conversation) await state.conversation.dispose();
+      } finally {
         state.conversation = null;
         for (const chat of [state.record, ...state.record.previousConversations]) serviceState.conversationOwners.delete(chat.runtimeId);
         await rm(state.root, { recursive: true, force: true });
@@ -150,8 +154,9 @@ function createColleagueThreads({
     // A Learn thread keeps its runtime work beside its file, released with it.
     const root = develop ? path.dirname(file) : file.slice(0, -".json".length);
     let saved;
-    try { saved = JSON.parse(await readFile(file, "utf8")); }
-    catch (error) {
+    try {
+      saved = JSON.parse(await readFile(file, "utf8"));
+    } catch (error) {
       if (error.code === "ENOENT") saved = undefined;
       else if (error instanceof SyntaxError) throw invalidHistory();
       else throw error;
@@ -171,8 +176,9 @@ function createColleagueThreads({
       error: "",
       conversationLog: []
     };
-    try { validateColleagueConversationRecord(record, key); }
-    catch {
+    try {
+      validateColleagueConversationRecord(record, key);
+    } catch {
       throw invalidHistory();
     }
     record.watches ||= [];
