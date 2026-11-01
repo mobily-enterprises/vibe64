@@ -47,9 +47,9 @@ function createDatabaseAssistantTasks({
    */
   function sessionStorage(runtime) {
     return Object.freeze({
-      readArtifact: (sessionId, artifact) => runtime.store.readArtifact(sessionId, artifact),
-      mutateSession: (sessionId, mutation) => runtime.store.mutateSession(sessionId, mutation),
-      withReadableSessionPaths: (sessionId, read) => runtime.store.withReadableSessionPaths(sessionId, read)
+      readHelperArtifact: (sessionId, artifact) => runtime.store.readArtifact(sessionId, artifact),
+      mutateHelperSession: (sessionId, mutation) => runtime.store.mutateSession(sessionId, mutation),
+      readHelperSessionPaths: (sessionId, read) => runtime.store.withReadableSessionPaths(sessionId, read)
     });
   }
 
@@ -59,9 +59,9 @@ function createDatabaseAssistantTasks({
    */
   function renewalStorage(runtime) {
     return Object.freeze({
-      readArtifact: (sessionId, artifact) => runtime.store.readArtifactForRenewal(sessionId, artifact),
-      mutateSession: (sessionId, mutation) => runtime.store.mutateSessionForRenewal(sessionId, mutation),
-      withReadableSessionPaths: (sessionId, read) => runtime.store.withReadableSessionPathsForRenewal(sessionId, read)
+      readHelperArtifact: (sessionId, artifact) => runtime.store.readArtifactForRenewal(sessionId, artifact),
+      mutateHelperSession: (sessionId, mutation) => runtime.store.mutateSessionForRenewal(sessionId, mutation),
+      readHelperSessionPaths: (sessionId, read) => runtime.store.withReadableSessionPathsForRenewal(sessionId, read)
     });
   }
 
@@ -82,7 +82,7 @@ function createDatabaseAssistantTasks({
    * @param {ReturnType<typeof sessionStorage>} storage
    */
   async function cleanupAssistant(runtime, sessionId, artifact, vibe64User, storage) {
-    const saved = await storage.readArtifact(sessionId, artifact);
+    const saved = await storage.readHelperArtifact(sessionId, artifact);
     let helper = null;
     try {
       helper = saved ? JSON.parse(saved) : null;
@@ -114,7 +114,7 @@ function createDatabaseAssistantTasks({
       );
     }
     const retire = (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true });
-    await storage.mutateSession(sessionId, retire);
+    await storage.mutateHelperSession(sessionId, retire);
     await rm(root, { recursive: true, force: true });
   }
 
@@ -161,7 +161,7 @@ function createDatabaseAssistantTasks({
    * @param {ReturnType<typeof sessionStorage>} storage
    */
   async function closeSessionAssistants(sessionId, runtime, storage) {
-    const files = await storage.withReadableSessionPaths(sessionId, async (paths) => {
+    const files = await storage.readHelperSessionPaths(sessionId, async (paths) => {
       try {
         return await readdir(path.join(paths.artifactsRoot, "database/assistant-tasks"));
       } catch (error) {
