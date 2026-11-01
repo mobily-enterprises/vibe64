@@ -23,7 +23,18 @@ function qualifiedDataOverviewReference(schema, reference) {
   return schema.engine === "mysql" ? `${schema.database}.${reference}` : reference;
 }
 
-function mapDataOverviewReferences(definition, reference, tableReference) {
+/**
+ * The definition's references converted one way: to their persisted form, or
+ * qualified for the refreshed schema.
+ */
+function convertedDataOverview(schema, definition, qualified) {
+  const reference = (value) => (qualified ? qualifiedDataOverviewReference(schema, value) : dataOverviewReference(schema, value));
+  const tableReference = (value) => {
+    if (qualified && schema.engine === "mysql" && value.includes(".")) {
+      throw new Error("Data overview: MySQL table references must omit the database name.");
+    }
+    return reference(value);
+  };
   return {
     ...definition,
     actors: definition.actors.map((actor) => ({ ...actor, table: tableReference(actor.table), tables: actor.tables.map(tableReference) })),
@@ -41,22 +52,14 @@ function mapDataOverviewReferences(definition, reference, tableReference) {
  * The definition with its references in persisted form.
  */
 export function dataOverviewDefinition(schema, definition) {
-  const reference = (value) => dataOverviewReference(schema, value);
-  return mapDataOverviewReferences(definition, reference, reference);
+  return convertedDataOverview(schema, definition, false);
 }
 
 /**
  * A persisted definition with its references qualified for the refreshed schema.
  */
 export function qualifiedDataOverviewDefinition(schema, definition) {
-  const reference = (value) => qualifiedDataOverviewReference(schema, value);
-  const tableReference = (value) => {
-    if (schema.engine === "mysql" && value.includes(".")) {
-      throw new Error("Data overview: MySQL table references must omit the database name.");
-    }
-    return reference(value);
-  };
-  return mapDataOverviewReferences(definition, reference, tableReference);
+  return convertedDataOverview(schema, definition, true);
 }
 
 export async function readDataOverview(session, schema) {
