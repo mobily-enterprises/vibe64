@@ -187,7 +187,7 @@ function normalizeAttachmentMultipartError(error) {
  * @param {RuntimeHttp} http
  * @param {object} options
  * @param {RuntimeFastify} options.fastify
- * @param {StudioProjectContext | null} [options.projectContext]
+ * @param {StudioProjectContext} [options.projectContext]
  * @param {TerminalsService} options.terminals
  * @param {RuntimeUploads} options.uploads
  */
@@ -195,7 +195,7 @@ function registerRoutes(
   http,
   {
     fastify,
-    projectContext = null,
+    projectContext,
     terminals,
     uploads
   } = {}
@@ -601,7 +601,7 @@ function terminalInputFor(prefix) {
     : terminalRouteInput;
 }
 
-function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext = null } = {}) {
+function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext } = {}) {
   registerTerminalWebSocketRoute(fastify, {
     projectContext,
     routePath: `${routes.routeBase}/codex-terminal/:terminalSessionId/ws`,
