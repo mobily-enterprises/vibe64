@@ -13,6 +13,7 @@ import { claudeConversationError as error } from "./terminalShared.js";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { toText } from "@local/vibe64-core/shared/toText";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("./types.js").ClaudeConversationOwner} ClaudeConversationOwner */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
@@ -24,7 +25,7 @@ const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 // The person's Claude plan, named as AI Accounts names it.
 const PLAN_LABEL = findVibe64AgentProvider(ENGINE).accountLabel;
-/** Original provider-key pin, retained for stopped historical conversion. */
+/** The account identity a provider-key connection pins: a fingerprint of its config root, provider and key. */
 function claudeProviderAccountIdentity(configRoot, providerId, apiKey) {
   return `sha256:${sha256Hex(JSON.stringify([configRoot, providerId, apiKey]))}`;
 }
@@ -72,7 +73,7 @@ function claudeCapabilities(initialization, connected, connections = []) {
  * @param {CodexProviderConnectionStore} dependencies.providerConnections
  * @param {(context?: object) => Promise<object>} dependencies.accountStatus
  * @param {(context: object) => Promise<boolean>} dependencies.connectionStatus
- * @param {(options: object) => ReturnType<typeof import("./claudeCodeProcess.js").createClaudeCodeProcess>} dependencies.createProcess
+ * @param {typeof import("./claudeCodeProcess.js").createClaudeCodeProcess} dependencies.createProcess
  * @param {() => string} dependencies.command
  * @param {RunVibe64Command} dependencies.commandRunner
  * @param {StopVibe64RestoredService} dependencies.stopExecution
@@ -104,7 +105,7 @@ function createClaudeConversationAccounts({
       accountQuery: purpose,
       workdir: credentialHome.home,
       toolFree: true,
-      onEvent: async () => {}
+      onEvent: doNothing
     })
   });
   function accountQueryFailure(failure) {
@@ -143,79 +144,87 @@ function createClaudeConversationAccounts({
     };
   }
 
-  const accounts = {
+  async function assistantAccess(context) {
+    const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
+    if (external) {
+      const connection = (await providerConnections.list()).find(({ id }) => id === external.id);
+      const available = connection?.claudeReady === true;
+      return {
+        available,
+        missingAccountLabel: available ? "" : external.label,
+        connectionIdentity: connection?.claudeConnectionIdentity || "",
+        endpointCode: external.id,
+        ownerOnly: external.ownerOnly
+      };
+    }
+    const available = await connectionStatus(context);
+    return {
+      available,
+      missingAccountLabel: available ? "" : PLAN_LABEL,
+      ownerOnly: true,
+      endpointCode: "claude_subscription",
+      connectionIdentity: available ? await accountIdentity(context) : ""
+    };
+  }
+
+  async function capabilities(context, input = {}) {
+    const connected = await connectionStatus(context);
+    const connections = await providerConnections.list();
+    if (input.configuredOnly === true || input.configuredOnly === "true") {
+      return claudeCapabilities({ models: [{ value: "sonnet", displayName: "Sonnet" }] }, connected, connections);
+    }
+    if (input.modelProviderId && input.modelProviderId !== "anthropic") return claudeCapabilities({}, connected, connections);
+    if (!connected) return claudeCapabilities({}, false, connections);
+    const nativeContext = { ...context, assistantSelection: null, selection: null };
+    const catalog = await accountQueries.readCatalogue(nativeContext).catch(accountQueryFailure);
+    return claudeCapabilities(catalog, true, connections);
+  }
+
+  async function describeProvider(context) {
+    return {
+      providerId: ENGINE,
+      transportId: TRANSPORT,
+      accountIdentitySignature: await accountIdentity(context)
+    };
+  }
+
+  async function readPlanUsage(context) {
+    return accountQueries.readPlanUsage(context).catch(accountQueryFailure);
+  }
+
+  async function resolveExecutionProfile(context, request) {
+    const limits = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[request.workloadId];
+    if (request.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER || !limits) {
+      throw error("Unsupported Claude helper execution profile.");
+    }
+    const modelId = context.assistantSelection?.modelId;
+    const modelProviderId = context.assistantSelection?.modelProviderId;
+    const catalog = await capabilities(context, { modelProviderId });
+    const model = catalog.modelProviders.filter((provider) => provider.connected && (!modelProviderId || provider.id === modelProviderId))
+      .flatMap((provider) => provider.models).find((candidate) => candidate.id === modelId);
+    const thinking = context.assistantSelection?.variantId || "";
+    if (!model || (thinking && !model.variants.some((variant) => variant.id === thinking))) {
+      throw error("The selected Claude helper model is unavailable. Choose another in AI Accounts.");
+    }
+    return defineVibe64HelperExecutionProfileResolution({
+      executionProfile: request,
+      limits,
+      model: modelId,
+      providerId: ENGINE,
+      revision: `claude-${CLAUDE_CODE_VERSION}-${modelId}-tool-free-v1`,
+      thinking
+    });
+  }
+  return Object.freeze({
     prepareAccount,
     queries: accountQueries,
     queryFailure: accountQueryFailure,
-    async assistantAccess(context) {
-      const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
-      if (external) {
-        const connection = (await providerConnections.list()).find(({ id }) => id === external.id);
-        const available = connection?.claudeReady === true;
-        return {
-          available,
-          missingAccountLabel: available ? "" : external.label,
-          connectionIdentity: connection?.claudeConnectionIdentity || "",
-          endpointCode: external.id,
-          ownerOnly: external.ownerOnly
-        };
-      }
-      const available = await connectionStatus(context);
-      return {
-        available,
-        missingAccountLabel: available ? "" : PLAN_LABEL,
-        ownerOnly: true,
-        endpointCode: "claude_subscription",
-        connectionIdentity: available ? await accountIdentity(context) : ""
-      };
-    },
-    async capabilities(context, input = {}) {
-      const connected = await connectionStatus(context);
-      const connections = await providerConnections.list();
-      if (input.configuredOnly === true || input.configuredOnly === "true") {
-        return claudeCapabilities({ models: [{ value: "sonnet", displayName: "Sonnet" }] }, connected, connections);
-      }
-      if (input.modelProviderId && input.modelProviderId !== "anthropic") return claudeCapabilities({}, connected, connections);
-      if (!connected) return claudeCapabilities({}, false, connections);
-      const nativeContext = { ...context, assistantSelection: null, selection: null };
-      const catalog = await accountQueries.readCatalogue(nativeContext).catch(accountQueryFailure);
-      return claudeCapabilities(catalog, true, connections);
-    },
-    async describeProvider(context) {
-      return {
-        providerId: ENGINE,
-        transportId: TRANSPORT,
-        accountIdentitySignature: await accountIdentity(context)
-      };
-    },
-    async readPlanUsage(context) {
-      return accountQueries.readPlanUsage(context).catch(accountQueryFailure);
-    },
-    async resolveExecutionProfile(context, request) {
-      const limits = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[request.workloadId];
-      if (request.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER || !limits) {
-        throw error("Unsupported Claude helper execution profile.");
-      }
-      const modelId = context.assistantSelection?.modelId;
-      const modelProviderId = context.assistantSelection?.modelProviderId;
-      const catalog = await accounts.capabilities(context, { modelProviderId });
-      const model = catalog.modelProviders.filter((provider) => provider.connected && (!modelProviderId || provider.id === modelProviderId))
-        .flatMap((provider) => provider.models).find((candidate) => candidate.id === modelId);
-      const thinking = context.assistantSelection?.variantId || "";
-      if (!model || (thinking && !model.variants.some((variant) => variant.id === thinking))) {
-        throw error("The selected Claude helper model is unavailable. Choose another in AI Accounts.");
-      }
-      return defineVibe64HelperExecutionProfileResolution({
-        executionProfile: request,
-        limits,
-        model: modelId,
-        providerId: ENGINE,
-        revision: `claude-${CLAUDE_CODE_VERSION}-${modelId}-tool-free-v1`,
-        thinking
-      });
-    }
-  };
-  return Object.freeze(accounts);
+    assistantAccess,
+    capabilities,
+    describeProvider,
+    readPlanUsage,
+    resolveExecutionProfile
+  });
 }
 
 export { claudeCapabilities, claudeProviderAccountIdentity, createClaudeConversationAccounts };

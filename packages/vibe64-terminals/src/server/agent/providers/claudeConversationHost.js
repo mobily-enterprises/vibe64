@@ -98,8 +98,6 @@ function createClaudeConversationHost({
   agentPreviewCommand,
   agentSessionCommand
 }) {
-  // A fixed command, or one looked up at each use.
-  const claudeCommand = typeof command === "function" ? command : () => command;
   const publishSessionChanged = publishMainConversationEvent.bind(
     null, claudeTerminalNamespace, publishApplicationSessionChanged, publishConversation
   );
@@ -125,7 +123,7 @@ function createClaudeConversationHost({
     createClaudeConversationEnvironment({
       env,
       project,
-      command: claudeCommand,
+      command,
       credentialHome,
       commandRunner,
       stopExecution,
@@ -152,7 +150,7 @@ function createClaudeConversationHost({
     process: { prepare: prepareProcess, configure: configureProcess, configureTerminal, stopExecution,
       create(options) {
         // The accepted native stream outlives its finite practice admission.
-        // Keep only the original CONTROL projection; tool effects still use
+        // Keep only the CONTROL projection captured at creation; tool effects still use
         // the saved-attempt action contributor's fresh admission.
         const projectContext = captureProjectRequestContext();
         return createProcess({
@@ -178,7 +176,7 @@ function createClaudeConversationHost({
     accountStatus,
     connectionStatus,
     createProcess: options => createProcess({ ...options, logger }),
-    command: claudeCommand,
+    command,
     commandRunner,
     stopExecution,
     credentialHome,
@@ -317,7 +315,180 @@ function createClaudeConversationHost({
     return runNativeDetachedConversation({ id: context.sessionId, context, input, options: context });
   }
 
-  const provider = {
+  function prepareConversationRequest(method, context, input) {
+    if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") {
+      return { input: input === undefined ? {} : input, context };
+    }
+    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return { input, context };
+    if (method === "ensureSession") return { context };
+    if (method === "createConversation") {
+      if (input === undefined) input = {};
+      return {
+        context,
+        input: {
+          get executionProfile() {
+            return context.assistantScope && input.executionProfile
+              ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : undefined;
+          },
+          get persistent() { return input.persistent; },
+          get ephemeral() { return input.ephemeral; }
+        }
+      };
+    }
+    if (method === "closeSession") return {
+      namespace: claudeTerminalNamespace(context.sessionId),
+      sessionId: context.sessionId,
+      context,
+      options: context
+    };
+    if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(
+      method
+    )) {
+      if (input === undefined && !["stopConversation", "deleteConversation"].includes(method)) input = {};
+      const conversationId = toText(input.conversationId || input.threadId);
+      return { scopedConversationId: conversationId || undefined, input };
+    }
+    if (method === "sessionState" || method === "readGoal" || method === "interruptTurn") return {};
+    if (method !== "sendMessage") return { input: method === "updateGoal" && input === undefined ? {} : input };
+    const message = { ...input, message: input.message || input.prompt, messageId: toText(input.messageId) || randomUUID() };
+    return {
+      input: message,
+      async prepareInput(prepared) {
+        const current = { ...message, ...prepared };
+        return context.prepareMessage ? context.prepareMessage(current) : current;
+      }
+    };
+  }
+
+  async function projectConversationResult(method, perform) {
+    if (method === "hasActiveTemporaryConversation") return { ok: true, active: await perform() };
+    return method === "sendMessage" || method === "interruptTurn" ? (await perform()).value : perform();
+  }
+
+  function prepareConversationHost(sessionId, openingContext = {}, mode = "main", input = {}) {
+    if (mode === "detached") return {
+      native: {
+        owner: conversations,
+        get executionProfile() {
+          return input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
+        }
+      }
+    };
+    if (mode === "activity") return ownerContextFor({ ...openingContext, sessionId }).then(context => ({
+      context,
+      native: { owner: conversations }
+    }));
+    if (mode === "detachedCleanup") return {
+      native: { owner: conversations }
+    };
+    if (mode === "storage") return {
+      native: {
+        owner: conversations,
+        configRoot,
+        preparation: {
+          retirement(binding, context) {
+            return {
+              configRoot,
+              binding,
+              beforeDelete: context.beforeDelete,
+              signal: context.signal,
+              application: {
+                get saved() { return JSON.parse(context.session.metadata[`claude_conversation_${binding.conversationId}`] || "null"); },
+                get terminalRunning() { return listTerminalSessions({
+                  namespace: claudeTerminalNamespace(context.sessionId),
+                  runningOnly: true
+                }).length; }
+              }
+            };
+          }
+        }
+      }
+    };
+    if (mode === "renewalProof") return {
+      native: { owner: conversations, application: cleanupApplication }
+    };
+    if (mode === "renewal") return {
+      native: {
+        owner: conversations,
+        preparation: {
+          handover: (handoverInput, context) => prepareRenewalHandover(context, handoverInput),
+          seed: (seedInput, context) => prepareRenewalSeed(context, seedInput)
+        }
+      }
+    };
+    if (mode === "reconciliation") return {
+      native: { owner: conversations, application: cleanupApplication }
+    };
+    if (mode === "projectCleanup" || mode === "invalidation") return {
+      native: {
+        owner: conversations,
+        application: cleanupApplication,
+        account: { queries: accountQueries, failure: accountQueryFailure }
+      }
+    };
+    return (async () => {
+      if (mode === "readiness" || mode === "settings") return {
+        native: { owner: conversations }
+      };
+      if (mode === "scoped" || mode === "create" || mode === "dispose") return {
+        namespace: claudeTerminalNamespace(sessionId),
+        native: {
+          owner: conversations,
+          preparation: { cleanup: prepareSessionCleanup }
+        }
+      };
+      const context = await contextFor({ ...openingContext, sessionId });
+      const { runtime } = context;
+      return {
+        context, namespace: claudeTerminalNamespace(sessionId), publish: publishSessionChanged,
+        async readContextUsage({ context: current, input: usageInput, signal }) {
+          signal?.throwIfAborted();
+          const entry = await conversations.acquire({ ...current, sessionId });
+          return conversations.readContextUsage(entry, { ...usageInput, signal });
+        },
+        async compactContext({ context: current, input: compactInput, signal }) {
+          signal?.throwIfAborted();
+          const entry = await conversations.acquire({ ...current, sessionId });
+          // False: Claude is working, and summarises itself as it goes.
+          if (conversations.snapshot(entry)?.active) return false;
+          return conversations.compactContext(entry, { ...compactInput, signal });
+        },
+        state: {
+          async read(current, representation, nativeState) {
+            if (representation === "native") return { nativeResult: await sessionState(current, nativeState) };
+            const nativeResult = current ? await sessionState(current, nativeState) : null;
+            const session = await runtime.getSession(sessionId, { inspectSource: false });
+            const id = nativeResult?.thread.id || toText(session.metadata.claude_conversation_id);
+            const turn = conversations.readRetainedTurn(context.key, id, {
+              nativeResult,
+              get saved() { return JSON.parse(session.metadata[`claude_conversation_${id}`] || "null"); }
+            });
+            return { session, threadId: id, turn, nativeResult };
+          }
+        },
+        native: {
+          owner: conversations,
+          preparation: { cleanup: current => prepareSessionCleanup(current ? { ...context, ...current } : context) },
+          /** A canonical goal operation's result observer; a canonical read or update always carries one. */
+          completeResult(current) {
+            if (!current?.canonicalGoal) return;
+            if (current.goalOperation === "read") return current.onGoalResult;
+            if (current.goalOperation === "update") return result => current.onGoalResult(result);
+          }
+        }
+      };
+    })();
+  }
+
+  async function unsubscribeSessions() {
+    return { ok: true };
+  }
+
+  async function releaseRenewalPredecessorAttachments() {
+    return { ok: true, released: 0 };
+  }
+
+  return Object.freeze({
     conversationOperations: Object.freeze([
       "createConversation",
       "ensureSession",
@@ -347,171 +518,14 @@ function createClaudeConversationHost({
       "releaseRenewalPredecessorProcessExitProof",
       "releaseRenewalSuccessorProcessExitProof"
     ]),
-    prepareConversationRequest(method, context, input) {
-      if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") {
-        return { input: input === undefined ? {} : input, context };
-      }
-      if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return { input, context };
-      if (method === "ensureSession") return { context };
-      if (method === "createConversation") {
-        if (input === undefined) input = {};
-        return {
-          context,
-          input: {
-            get executionProfile() {
-              return context.assistantScope && input.executionProfile
-                ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : undefined;
-            },
-            get persistent() { return input.persistent; },
-            get ephemeral() { return input.ephemeral; }
-          }
-        };
-      }
-      if (method === "closeSession") return {
-        namespace: claudeTerminalNamespace(context.sessionId),
-        sessionId: context.sessionId,
-        context,
-        options: context
-      };
-      if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(
-        method
-      )) {
-        if (input === undefined && !["stopConversation", "deleteConversation"].includes(method)) input = {};
-        const conversationId = toText(input.conversationId || input.threadId);
-        return { scopedConversationId: conversationId || undefined, input };
-      }
-      if (method === "sessionState" || method === "readGoal" || method === "interruptTurn") return {};
-      if (method !== "sendMessage") return { input: method === "updateGoal" && input === undefined ? {} : input };
-      const message = { ...input, message: input.message || input.prompt, messageId: toText(input.messageId) || randomUUID() };
-      return {
-        input: message,
-        async prepareInput(prepared) {
-          const current = { ...message, ...prepared };
-          return context.prepareMessage ? context.prepareMessage(current) : current;
-        }
-      };
-    },
-    async projectConversationResult(method, perform) {
-      if (method === "hasActiveTemporaryConversation") return { ok: true, active: await perform() };
-      return method === "sendMessage" || method === "interruptTurn" ? (await perform()).value : perform();
-    },
+    prepareConversationRequest,
+    projectConversationResult,
     runDetachedChatTurn,
     streamDetachedChatTurn: runDetachedChatTurn,
-    prepareConversationHost(sessionId, openingContext = {}, mode = "main", input = {}) {
-      if (mode === "detached") return {
-        native: {
-          owner: conversations,
-          get executionProfile() {
-            return input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
-          }
-        }
-      };
-      if (mode === "activity") return ownerContextFor({ ...openingContext, sessionId }).then(context => ({
-        context,
-        native: { owner: conversations }
-      }));
-      if (mode === "detachedCleanup") return {
-        native: { owner: conversations }
-      };
-      if (mode === "storage") return {
-        native: {
-          owner: conversations,
-          configRoot,
-          preparation: {
-            retirement(binding, context) {
-              return {
-                configRoot,
-                binding,
-                beforeDelete: context.beforeDelete,
-                signal: context.signal,
-                application: {
-                  get saved() { return JSON.parse(context.session.metadata[`claude_conversation_${binding.conversationId}`] || "null"); },
-                  get terminalRunning() { return listTerminalSessions({
-                    namespace: claudeTerminalNamespace(context.sessionId),
-                    runningOnly: true
-                  }).length; }
-                }
-              };
-            }
-          }
-        }
-      };
-      if (mode === "renewalProof") return {
-        native: { owner: conversations, application: cleanupApplication }
-      };
-      if (mode === "renewal") return {
-        native: {
-          owner: conversations,
-          preparation: {
-            handover: (handoverInput, context) => prepareRenewalHandover(context, handoverInput),
-            seed: (seedInput, context) => prepareRenewalSeed(context, seedInput)
-          }
-        }
-      };
-      if (mode === "reconciliation") return {
-        native: { owner: conversations, application: cleanupApplication }
-      };
-      if (mode === "projectCleanup" || mode === "invalidation") return {
-        native: {
-          owner: conversations,
-          application: cleanupApplication,
-          account: { queries: accountQueries, failure: accountQueryFailure }
-        }
-      };
-      return (async () => {
-        if (mode === "readiness" || mode === "settings") return {
-          native: { owner: conversations }
-        };
-        if (mode === "scoped" || mode === "create" || mode === "dispose") return {
-          namespace: claudeTerminalNamespace(sessionId),
-          native: {
-            owner: conversations,
-            preparation: { cleanup: prepareSessionCleanup }
-          }
-        };
-        const context = await contextFor({ ...openingContext, sessionId });
-        const { runtime } = context;
-        return {
-          context, namespace: claudeTerminalNamespace(sessionId), publish: publishSessionChanged,
-          async readContextUsage({ context: current, input: usageInput, signal }) {
-            signal?.throwIfAborted();
-            const entry = await conversations.acquire({ ...current, sessionId });
-            return conversations.readContextUsage(entry, { ...usageInput, signal });
-          },
-          async compactContext({ context: current, input: compactInput, signal }) {
-            signal?.throwIfAborted();
-            const entry = await conversations.acquire({ ...current, sessionId });
-            // False: Claude is working, and summarises itself as it goes.
-            if (conversations.snapshot(entry)?.active) return false;
-            return conversations.compactContext(entry, { ...compactInput, signal });
-          },
-          state: {
-            async read(current, representation, nativeState) {
-              if (representation === "native") return { nativeResult: await sessionState(current, nativeState) };
-              const nativeResult = current ? await sessionState(current, nativeState) : null;
-              const session = await runtime.getSession(sessionId, { inspectSource: false });
-              const id = nativeResult?.thread.id || toText(session.metadata.claude_conversation_id);
-              const turn = conversations.readRetainedTurn(context.key, id, {
-                nativeResult,
-                get saved() { return JSON.parse(session.metadata[`claude_conversation_${id}`] || "null"); }
-              });
-              return { session, threadId: id, turn, nativeResult };
-            }
-          },
-          native: {
-            owner: conversations,
-            preparation: { cleanup: current => prepareSessionCleanup(current ? { ...context, ...current } : context) },
-            completeResult(current) {
-              if (!current?.canonicalGoal) return;
-              if (current.goalOperation === "read") return current.onGoalResult;
-              // readable-check: allow optional-call - input validation: a canonical goal update's optional result observer
-              if (current.goalOperation === "update") return result => current.onGoalResult?.(result);
-            }
-          }
-        };
-      })();
-    },
-    id: ENGINE, transportId: TRANSPORT, executionProfiles: [VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER],
+    prepareConversationHost,
+    id: ENGINE,
+    transportId: TRANSPORT,
+    executionProfiles: [VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER],
     assistantAccess: accounts.assistantAccess,
     capabilities: accounts.capabilities,
     describeProvider: accounts.describeProvider,
@@ -523,10 +537,9 @@ function createClaudeConversationHost({
     resizeTerminal: terminalAccess.resizeTerminal,
     subscribeTerminal: terminalAccess.subscribeTerminal,
     writeTerminal: terminalAccess.writeTerminal,
-    async unsubscribeSessions() { return { ok: true }; },
-    async releaseRenewalPredecessorAttachments() { return { ok: true, released: 0 }; }
-  };
-  return Object.freeze(provider);
+    unsubscribeSessions,
+    releaseRenewalPredecessorAttachments
+  });
 }
 
 export { claudeCapabilities, createClaudeConversationHost, nativeMessageId };

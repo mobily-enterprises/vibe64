@@ -125,7 +125,7 @@ async function createClaudeCodeProcess({
         },
         async stop(id, ...args) {
           if (starting && native?.id === id) {
-            // The original confirmed stop removes its temporary stderr file.
+            // The confirmed stop removes the process's temporary stderr file.
             // Reading diagnostics must never prevent that cleanup.
             try {
               const logs = native.readLogs();
@@ -135,7 +135,7 @@ async function createClaudeCodeProcess({
                 : logs.stderr;
               stderr = sanitizeOperationText(tail, secrets).slice(-64 * 1024);
             }
-            catch { /* Preserve the original startup error and stop proof. */ }
+            catch { /* Keep the startup error and the stop proof. */ }
           }
           return host.stop(id, ...args);
         }

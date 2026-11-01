@@ -5,6 +5,7 @@ import { isoNow } from "./isoNow.js";
 import { claudeConversationError as error } from "./terminalShared.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("./claudeConversationStorage.js").createClaudeConversationStorage>} ClaudeConversationStorage */
@@ -166,15 +167,17 @@ function createClaudeConversationEvents({
     }
     if (event.type === "execution") {
       const ctx = event.context;
-      // readable-check: allow optional-call - input validation: a caller's optional event stream
-      if (ctx.assistantScope) await ctx.onEvent?.({ type: "helper-execution", conversationId: entry.id, executionId: event.executionId });
+      // A caller without an event subscriber passes none (null or absent).
+      const forwardExecution = ctx.onEvent ?? doNothing;
+      if (ctx.assistantScope) await forwardExecution({ type: "helper-execution", conversationId: entry.id, executionId: event.executionId });
       return;
     }
+    // The turn's event subscriber: null when its caller passed none.
+    const forward = entry.onEvent ?? doNothing;
     if (event.type === "message-metadata") return messagePolicy.messageMetadata(entry, event);
     if (event.type === "admit-message") return messagePolicy.admitMessage(entry, event);
     if (event.type === "provider-event") {
-      // readable-check: allow optional-call - input validation: a caller's optional event stream
-      await entry.onEvent?.({ ...event, providerId: ENGINE, threadId: entry.id, turnId: entry.turn?.id || "" });
+      await forward({ ...event, providerId: ENGINE, threadId: entry.id, turnId: entry.turn?.id || "" });
     } else if (event.type === "provider-update") {
       if (entry.main) {
         if (event.change === "usage") accountQueries.invalidateUsage();
@@ -186,8 +189,7 @@ function createClaudeConversationEvents({
       if (entry.main && event.userEcho) await publishSessionChanged(entry.context.sessionId, { reason: "claude-goal" });
     } else if (event.type === "message") {
       if (entry.persistent && !entry.main && !entry.profile && !entry.renewal && entry.context.routingConversationId) {
-        // readable-check: allow optional-call - input validation: a caller's optional event stream
-        await entry.onEvent?.({ ...event, threadId: entry.id, turnId: entry.turn?.id || "" });
+        await forward({ ...event, threadId: entry.id, turnId: entry.turn?.id || "" });
       }
       return publishMessage(entry, event.message);
     } else if (event.type === "message-complete") {
@@ -195,8 +197,7 @@ function createClaudeConversationEvents({
         entry.context.runtime.store.completeConversationStreamMessage(entry.context.sessionId, event.messageId);
       }
     } else if (event.type === "text" || event.type === "thinking") {
-      // readable-check: allow optional-call - input validation: a caller's optional event stream
-      await entry.onEvent?.({ ...event, threadId: entry.id });
+      await forward({ ...event, threadId: entry.id });
     }
   }
 
