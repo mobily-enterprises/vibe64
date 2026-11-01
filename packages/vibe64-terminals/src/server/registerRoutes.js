@@ -10,7 +10,7 @@ import {
   CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES
 } from "./codexAttachments.js";
 import {
-  createUploadFieldError
+  buildUploadFieldError
 } from "@jskit-ai/uploads-runtime/server/policy/uploadPolicy";
 import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import {
@@ -48,7 +48,7 @@ function isMultipartError(error, code) {
 }
 
 function attachmentMultipartError(message) {
-  return createUploadFieldError("file", message);
+  return buildUploadFieldError("file", message);
 }
 
 function normalizeMultipartFilePart(part = {}) {
