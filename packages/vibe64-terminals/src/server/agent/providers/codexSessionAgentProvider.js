@@ -273,7 +273,7 @@ function createCodexSessionAgentProvider({
     ? withCodexState(result.value, result.session) : result.value;
 
   /**
-   * A streamed turn always carries its onEvent option; a plain run carries it only when it is callable.
+   * A streamed turn always carries its onEvent option; a plain run carries it only when the caller subscribed.
    */
   async function runDetachedTurn(context, input, eventOptions) {
     const executionProfile = emitVibe64AgentExecutionProfile(context, input.executionProfile);
@@ -370,8 +370,10 @@ function createCodexSessionAgentProvider({
         state: codexConversationStorage.state(sessionId),
         async readContextUsage({ input, signal }) {
           signal?.throwIfAborted();
-          const ready = await codexConversationPreparation.threadReadiness(sessionId,
-            { agentSettings: input.agentSettings, recordBriefing: false }, codexAppServerRunOwner.ensureThreadReady);
+          const ready = await codexConversationPreparation.threadReadiness(sessionId, codexAppServerRunOwner.ensureThreadReady, {
+            agentSettings: input.agentSettings,
+            recordBriefing: false
+          });
           if (ready.ok === false) throw new Error(ready.error || "Codex context could not be prepared.");
           signal?.throwIfAborted();
           const current = await codexAppServerRunOwner.conversationContext(sessionId, input, {});
@@ -405,7 +407,7 @@ function createCodexSessionAgentProvider({
           controlPreparation: (options, input) => codexConversationPreparation.control(sessionId, options, input),
           readGoalContext: options => codexConversationPreparation.readGoal(sessionId, options),
           goalPreparation: {
-            readiness: operation => codexConversationPreparation.threadReadiness(sessionId, {}, operation),
+            readiness: operation => codexConversationPreparation.threadReadiness(sessionId, operation, {}),
             project: (goalRequest, options) => codexConversationPreparation.goalContext(sessionId, goalRequest, options)
           },
           inspectionPreparation: (input, options) => codexConversationPreparation.inspection(sessionId, input, options),
@@ -512,8 +514,7 @@ function createCodexSessionAgentProvider({
   }
 
   function runDetachedChatTurn(context, input = {}) {
-    // readable-check: allow method-probe - input validation: a caller's optional event stream
-    return runDetachedTurn(context, input, typeof context.onEvent === "function" ? { onEvent: context.onEvent } : {});
+    return runDetachedTurn(context, input, context.onEvent ? { onEvent: context.onEvent } : {});
   }
 
   function streamDetachedChatTurn(context, input = {}) {
@@ -556,13 +557,6 @@ function createCodexSessionAgentProvider({
   }
 
   async function resolveExecutionProfile(context, input = {}) {
-    // readable-check: allow method-probe - optional operation: a catalogue without helper model discovery cannot enforce an execution profile
-    if (typeof codexAssistantCatalog.executionProfileModelCatalog !== "function") {
-      throw codexExecutionProfileError(
-        VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE,
-        "Codex helper model discovery is unavailable."
-      );
-    }
     const {
       executionProfile,
       limits

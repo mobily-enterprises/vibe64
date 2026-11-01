@@ -1233,15 +1233,20 @@ test("Codex adapter rejects consumer-supplied model knobs", async () => {
   });
 });
 
-test("Codex adapter fails closed when live model discovery is not wired", async () => {
+test("Codex adapter fails closed when live model discovery fails", async () => {
+  const discoveryFailure = new Error("Codex model discovery timed out.");
   const provider = createCodexSessionAgentProvider({
-    controller: {}
+    controller: {
+      async executionProfileModelCatalog() {
+        throw discoveryFailure;
+      }
+    }
   });
 
   await assert.rejects(provider.resolveExecutionProfile({
     sessionId: "session-a"
   }, helperRequest()), (error) => {
-    assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE);
+    assert.equal(error, discoveryFailure);
     return true;
   });
 });
@@ -1565,7 +1570,7 @@ test("Main Codex history budget uses the selected normal limit and exact thread 
   const provider = createCodexSessionAgentProvider({ controller: {}, runOwner,
     storage: { state: () => ({}) }, conversationPreparation: {
       message: () => ({}),
-      async threadReadiness(id, options, operation) {
+      async threadReadiness(id, operation, options) {
         readiness++; assert.equal(id, "session"); assert.deepEqual(options.agentSettings, { model: "chosen" });
         assert.equal(operation, runOwner.ensureThreadReady); return { ok: true };
       },

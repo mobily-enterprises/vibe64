@@ -141,6 +141,8 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
 
@@ -150,7 +152,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 
 /**
  * @param {object} dependencies
- * @param {(context: object) => Promise<boolean>} [dependencies.connectionStatus]
+ * @param {(context: object) => Promise<boolean>} dependencies.connectionStatus
  * @param {CodexProviderConnectionStore["list"]} dependencies.listConnections
  * @param {AgentDatabaseCommandService} dependencies.agentDatabaseCommand
  * @param {AgentEnvCommandService} dependencies.agentEnvCommand
@@ -168,14 +170,14 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
- * @param {((event: object) => unknown) | null} [dependencies.publishConversation]
- * @param {(sessionId: string, options: object) => Promise<unknown>} dependencies.continueGoalAfterAccountChange
- * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
+ * @param {ConversationRuntime["publishNative"]} dependencies.publishConversation
+ * @param {ServiceGoals["continueGoalAfterAccountChange"]} dependencies.continueGoalAfterAccountChange
+ * @param {ConversationRuntime["runNativeDetachedConversation"]} dependencies.runNativeDetachedConversation
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
 function createCodexSessionRegistration({
-  connectionStatus = async () => true,
+  connectionStatus,
   listConnections,
   agentDatabaseCommand,
   agentEnvCommand,
@@ -193,7 +195,7 @@ function createCodexSessionRegistration({
   codexGitCommand,
   logger,
   project,
-  publishConversation = null,
+  publishConversation,
   continueGoalAfterAccountChange,
   runNativeDetachedConversation,
   publishSessionChanged,
@@ -499,11 +501,11 @@ function createCodexSessionRegistration({
     });
   }
 
-  function codexAppServerEphemeralScopePreparation(sessionId = "", input = {}, scope = {}) {
+  function codexAppServerEphemeralScopePreparation(sessionId, input, scope) {
     return codexScopedConversationPreparation.scope(sessionId, input, scope);
   }
 
-  function codexAppServerConversationPreparation(sessionId = "", input = {}, options) {
+  function codexAppServerConversationPreparation(sessionId, input, options) {
     return codexScopedConversationPreparation.context(sessionId, input, options);
   }
 

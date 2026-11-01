@@ -169,7 +169,7 @@ function createCodexLifecyclePreparation({
             });
           },
           ready: () => writeCodexAppServerReady(runtime, normalizedSessionId, ""),
-          readiness: operation => codexConversationPreparation.threadReadiness(normalizedSessionId, { agentSettings }, operation)
+          readiness: operation => codexConversationPreparation.threadReadiness(normalizedSessionId, operation, { agentSettings })
         };
       }
     };

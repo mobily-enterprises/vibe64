@@ -58,6 +58,8 @@ const CODEX_GIT_COMMAND_METADATA_NAMES = Object.freeze([
   "source_remote_url"
 ]);
 
+// One control server per session for the whole process (Q6): each owns its session's Unix socket, so every service
+// instance shares the same servers.
 const commandServers = createSessionCommandServers({
   routePrefix: "/codex-git-command",
   routes: {
@@ -447,11 +449,11 @@ function createCodexGitCommandService({
       return finish(responseError("Codex git command session id is required.", "vibe64_codex_git_command_session_required"));
     }
     // Codex probes Git frequently while its TUI is active. Git authorization
-    // owns only source and actor metadata; constructing a complete session runtime here
-    // previously reread complete conversation history for every
-    // `git status` subcommand (hundreds of MB every few seconds on long-lived
-    // sessions). Keep this hot path structurally bounded—never hide a full
-    // session read here behind caching or throttling.
+    // owns only source and actor metadata; a complete session runtime here would
+    // reread complete conversation history for every `git status` subcommand
+    // (hundreds of MB every few seconds on long-lived sessions). Keep this hot
+    // path structurally bounded: never hide a full session read here behind
+    // caching or throttling.
     const session = await readGitCommandSession(project, sessionId);
     if (phaseElapsedMs) phaseElapsedMs.session = Math.round(performance.now() - startedAt);
     const actor = gitCommandActorFromSession(session, {

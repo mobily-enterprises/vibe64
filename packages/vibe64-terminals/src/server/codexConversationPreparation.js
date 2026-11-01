@@ -164,19 +164,20 @@ function createCodexConversationPreparation({
       },
       async prepare(operation) {
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, () => (
-          withCodexAppServerThreadReadiness(sessionId, options, operation)
+          withCodexAppServerThreadReadiness(sessionId, operation, options)
         ), { operation: "prepare-agent-session", waitMs: 10_000 });
         return exclusive.value;
       }
     };
   }
 
-  async function withCodexAppServerThreadReadiness(sessionId, {
-    agentSettings = {},
-    // A context-usage probe prepares the thread before the first message; only
-    // the message's own preparation records its opening briefing.
-    recordBriefing = true
-  } = {}, operation) {
+  async function withCodexAppServerThreadReadiness(sessionId, operation, options) {
+    const {
+      agentSettings = {},
+      // A context-usage probe prepares the thread before the first message; only
+      // the message's own preparation records its opening briefing.
+      recordBriefing = true
+    } = options;
     const context = await codexAppServerSessionContext(sessionId);
     if (context.ok === false) {
       return context;

@@ -126,9 +126,6 @@ function createCodexAccountPreparation({
     terminalEnv = {},
     toolHomeSource = ""
   } = {}) {
-    if (typeof codexAuthPreflight !== "function") {
-      return null;
-    }
     try {
       const runtimeContext = codexRuntimeForTerminalEnv({ terminalEnv, toolHomeSource });
       if (runtimeContext.providerOptions.modelProviderId) return null;

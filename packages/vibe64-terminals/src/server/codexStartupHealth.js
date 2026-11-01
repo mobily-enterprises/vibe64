@@ -5,6 +5,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").CodexSessionRuntimeHost} CodexSessionRuntimeHost */
 /** @typedef {import("./types.js").CodexStartupHealth} CodexStartupHealth */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 export const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 
@@ -20,7 +21,8 @@ function createCodexAppServerHealthAttempt() {
 }
 
 /**
- * Original application health-task projection; native readiness stays in JSKIT.
+ * The Codex app-server health task a session shows; native readiness stays in JSKIT.
+ * @param {PublishSessionChanged} publishSessionChanged
  */
 export function createCodexStartupHealth(publishSessionChanged) {
   /**
@@ -187,8 +189,8 @@ export function createCodexStartupHealth(publishSessionChanged) {
 }
 
 /**
- * Application workspace policy uses the existing native retirement API before
- * publishing its original blocked-health result. The writer keeps its original contract.
+ * A session whose worktree is unavailable: its native run is retired through the run owner, then the
+ * blocked health result is written and published.
  * @param {object} dependencies
  * @param {CodexAppServerRunOwner} dependencies.runOwner
  * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
@@ -237,7 +239,7 @@ function codexAppServerBackgroundTasks(session = {}) {
   return Array.isArray(session.backgroundTasks) ? session.backgroundTasks : [];
 }
 
-export function codexAppServerTaskFinishedAfterRun(session = {}, run) {
+export function codexAppServerTaskFinishedAfterRun(session, run) {
   const runUpdatedMs = dateValueMs(run?.updatedAt || run?.startedAt || run?.at);
   if (!runUpdatedMs) {
     return false;

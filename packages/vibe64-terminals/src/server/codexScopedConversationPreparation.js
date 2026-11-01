@@ -24,6 +24,7 @@ import {
 } from "./codexSessionProviderHost.js";
 import { hasOwn } from "./hasOwn.js";
 import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("./types.js").CodexConversationPreparation} CodexConversationPreparation */
 /** @typedef {import("./types.js").CodexHelperPreparation} CodexHelperPreparation */
@@ -307,6 +308,8 @@ function createCodexScopedConversationPreparation({
         JSON.stringify(input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null)) {
       throw new Error("The scoped helper execution profile changed. Start a new helper.");
     }
+    // A caller without an event subscriber passes none (null or absent).
+    const forwardEvent = options.onEvent ?? doNothing;
     return {
       executionProfile,
       get threadPreparation() {
@@ -329,12 +332,11 @@ function createCodexScopedConversationPreparation({
       },
       readOnly: Boolean(context.assistantScope),
       actorMetadata: context.actorMetadata,
-      onEvent: input.persistent ? options.onEvent : (classification = {}, current) => {
+      onEvent: input.persistent ? options.onEvent : (classification, current) => {
         if (["live_progress", "thinking"].includes(classification.kind)) {
           appendCodexAppServerEphemeralProgress(current, classification);
         }
-        // readable-check: allow optional-call - input validation: a caller's optional event stream
-        options.onEvent?.({ type: "notification", classification, threadId: conversationId,
+        forwardEvent({ type: "notification", classification, threadId: conversationId,
           turnId: classification.turnId, scopeId: context.assistantScope?.id || "" });
       },
       projectResult(result) {

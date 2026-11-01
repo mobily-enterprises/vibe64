@@ -13,6 +13,7 @@ import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSes
 import { codexTerminalNamespace, globalCodexTerminalNamespace } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 const MAX_OPEN_CODEX_TERMINALS = 3;
 
@@ -100,7 +101,7 @@ function createCodexGatewayTerminal(runCommand) {
     maxRunning = MAX_OPEN_CODEX_TERMINALS,
     metadata = {},
     namespace = "",
-    onClose = async () => null,
+    onClose = doNothing,
     reuseRunning = false,
     session = {},
     executionRoot = "",

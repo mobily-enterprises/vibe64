@@ -355,7 +355,7 @@ function createCodexInteractiveTerminals({
   }
 
   async function ensureCodexAppServerThreadReady(sessionId, options = {}) {
-    return withCodexAppServerThreadReadiness(sessionId, options, codexAppServerRunOwner.ensureThreadReady);
+    return withCodexAppServerThreadReadiness(sessionId, codexAppServerRunOwner.ensureThreadReady, options);
   }
 
   async function startCodexAppServerTerminal(sessionId, input = {}) {

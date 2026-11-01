@@ -75,9 +75,9 @@ function codexTurnOutcomeNoticeMessageId(threadId = "", turnId = "") {
 async function writeCodexTurnOutcomeNotice({
   detail = "",
   outcome = CODEX_TURN_OUTCOME.PROVIDER_FAILURE,
-  publishSessionChanged = async () => null,
+  publishSessionChanged,
   sessionId = "",
-  store = null,
+  store,
   threadId = "",
   turnId = "",
   usageLimitExceeded = false

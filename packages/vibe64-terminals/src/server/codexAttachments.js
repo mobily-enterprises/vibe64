@@ -44,6 +44,7 @@ import {
   scheduleAttachmentCleanup,
   scheduleRetiredDirectoryRemoval
 } from "./codexAttachmentExpiry.js";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 const CODEX_ATTACHMENT_MAX_BYTES = VIBE64_UPLOAD_MAX_BYTES;
 const CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES = VIBE64_UPLOAD_BODY_LIMIT_BYTES;
@@ -200,7 +201,7 @@ async function withUploadedAgentAttachment(executionRoot, sessionId, attachmentI
 }
 
 async function storeCodexAttachment({
-  beforeCreate = null,
+  beforeCreate = doNothing,
   env = process.env,
   input = {},
   lockWaitMs = undefined,
@@ -238,9 +239,7 @@ async function storeCodexAttachment({
   }
   let attachmentLock = null;
   try {
-    if (typeof beforeCreate === "function") {
-      await beforeCreate();
-    }
+    await beforeCreate();
     clearAttachmentSessionCleanupTimer(executionRoot, sessionId, { env });
     await mkdir(sessionDirectory, { mode: vibe64SharedModes().directory, recursive: true });
     await mkdir(hostDirectory, {
