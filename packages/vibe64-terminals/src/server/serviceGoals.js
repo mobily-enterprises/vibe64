@@ -49,6 +49,14 @@ const goalStopRequestFor = session => {
   try { return JSON.parse(session.metadata?.[GOAL_STOP_REQUEST] || "null")?.intentId || ""; } catch { return ""; }
 };
 
+const logIntentClearFailure = (logger, sessionId, error) => logOperationalEvent(logger, "warn", {
+  component: "vibe64.agent_goal",
+  event: "vibe64.agent_goal.intent_clear_failed",
+  sessionId,
+  code: error?.code,
+  error: error?.message
+}, "A stopped goal's intent could not be cleared; its stop request stays recorded.");
+
 /**
  * A session's goal: reading and updating it under the agent write, the goal intents this process
  * admitted, stopping and completing them, cancelling a goal when the main AI changed, and recovering
@@ -114,13 +122,7 @@ function createServiceGoals({
     goalAdmissions.get(intent.id)?.abort(new Error("Goal continuation was stopped before dispatch."));
     await context.runtime.store.writeMetadataValue(sessionId, GOAL_STOP_REQUEST,
       JSON.stringify({ intentId: intent.id, requestedAt: new Date().toISOString() }));
-    void changeGoalIntent(sessionId, context, () => null).catch((error) => logOperationalEvent(logger, "warn", {
-      component: "vibe64.agent_goal",
-      event: "vibe64.agent_goal.intent_clear_failed",
-      sessionId: sessionId,
-      code: error?.code,
-      error: error?.message
-    }, "A stopped goal's intent could not be cleared; its stop request stays recorded."));
+    void changeGoalIntent(sessionId, context, () => null).catch(error => logIntentClearFailure(logger, sessionId, error));
   }
 
   async function stopGoalIntent(sessionId, context, expectedId) {
