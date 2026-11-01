@@ -1,6 +1,3 @@
-import {
-  isPlainObject
-} from "@local/vibe64-core/server/core";
 import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import {
   VIBE64_PROJECT_ROUTE_BASE,
@@ -9,18 +6,65 @@ import {
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
+import {
+  ACTION_DATABASE_ASSISTANT_ASK,
+  ACTION_DATABASE_CELL_UPDATE,
+  ACTION_DATABASE_LAYOUT_SAVE,
+  ACTION_DATABASE_LOOKUP_SEARCH,
+  ACTION_DATABASE_OVERVIEW_SAVE,
+  ACTION_DATABASE_QUERY_CANCEL,
+  ACTION_DATABASE_QUERY_RUN,
+  ACTION_DATABASE_ROW_DELETE,
+  ACTION_DATABASE_ROW_INSERT,
+  ACTION_DATABASE_SCHEMA_REFRESH,
+  ACTION_DATABASE_SERVER_CHECK,
+  ACTION_DATABASE_SNIPPET_DELETE,
+  ACTION_DATABASE_SNIPPET_SAVE,
+  ACTION_DATABASE_STATE_READ
+} from "./databaseActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
 
-function withSession(request, input = {}) {
+function sessionInput(request) {
+  return {
+    sessionId: request.params.sessionId
+  };
+}
+
+/**
+ * The body for the URL's session. A body vibe64User is dropped: the action
+ * policy sets the trusted user, and its schema has no vibe64User field.
+ */
+function sessionBodyInput(request) {
   const {
     vibe64User: _ignoredUser,
-    ...safeInput
-  } = isPlainObject(input) ? input : {};
+    ...body
+  } = requestBody(request);
   void _ignoredUser;
   return {
-    ...safeInput,
+    ...body,
+    sessionId: request.params.sessionId
+  };
+}
+
+function schemaRefreshInput(request) {
+  return {
+    ...sessionBodyInput(request),
+    source: "user"
+  };
+}
+
+function queryCancelInput(request) {
+  return {
+    queryId: request.params.queryId,
+    sessionId: request.params.sessionId
+  };
+}
+
+function snippetDeleteInput(request) {
+  return {
+    snippetId: request.params.snippetId,
     sessionId: request.params.sessionId
   };
 }
@@ -64,128 +108,118 @@ function registerRoutes(http, {
       projectContext
     })
   });
-  const options = { statusCode: databaseStatusCode };
 
   routes.actionRoute("GET", "/database/sessions/:sessionId", {
-    ...options,
-    actionId: "vibe64.database.state.read",
+    actionId: ACTION_DATABASE_STATE_READ,
     summary: "Read the selected session database workspace and current refreshed schema.",
-    buildInput: (request) => withSession(request)
+    buildInput: sessionInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("GET", "/database/sessions/:sessionId/server", {
-    ...options,
-    actionId: "vibe64.database.server.check",
+    actionId: ACTION_DATABASE_SERVER_CHECK,
     summary: "Sign in to the database server the session's project needs, with the values from its Env.",
-    buildInput: (request) => withSession(request)
+    buildInput: sessionInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("POST", "/database/sessions/:sessionId/schema/refresh", {
-    ...options,
-    actionId: "vibe64.database.schema.refresh",
+    actionId: ACTION_DATABASE_SCHEMA_REFRESH,
     bodyLimit: 16 * 1024,
     summary: "Explicitly refresh the selected session database schema.",
-    buildInput: (request) => withSession(request, {
-      ...requestBody(request),
-      source: "user"
-    })
+    buildInput: schemaRefreshInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("POST", "/database/sessions/:sessionId/queries", {
-    ...options,
-    actionId: "vibe64.database.query.run",
+    actionId: ACTION_DATABASE_QUERY_RUN,
     bodyLimit: 768 * 1024,
     summary: "Run one SQL statement against the selected session database.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("POST", "/database/sessions/:sessionId/queries/:queryId/cancel", {
-    ...options,
-    actionId: "vibe64.database.query.cancel",
+    actionId: ACTION_DATABASE_QUERY_CANCEL,
     bodyLimit: 16 * 1024,
     summary: "Cancel an active selected-session database query.",
-    buildInput: (request) => withSession(request, {
-      queryId: request.params.queryId
-    })
+    buildInput: queryCancelInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("PATCH", "/database/sessions/:sessionId/cells", {
-    ...options,
-    actionId: "vibe64.database.cell.update",
+    actionId: ACTION_DATABASE_CELL_UPDATE,
     bodyLimit: 256 * 1024,
     summary: "Update one editable physical cell identified by query provenance.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("POST", "/database/sessions/:sessionId/rows", {
-    ...options,
-    actionId: "vibe64.database.row.insert",
+    actionId: ACTION_DATABASE_ROW_INSERT,
     bodyLimit: 512 * 1024,
     summary: "Insert one row into a selected physical table.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("POST", "/database/sessions/:sessionId/rows/delete", {
-    ...options,
-    actionId: "vibe64.database.row.delete",
+    actionId: ACTION_DATABASE_ROW_DELETE,
     bodyLimit: 256 * 1024,
     summary: "Delete one confirmed physical source row.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("POST", "/database/sessions/:sessionId/lookups/search", {
-    ...options,
-    actionId: "vibe64.database.lookup.search",
+    actionId: ACTION_DATABASE_LOOKUP_SEARCH,
     bodyLimit: 64 * 1024,
     summary: "Search a real foreign-key target table for inline autocomplete.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("PUT", "/database/sessions/:sessionId/layout", {
-    ...options,
-    actionId: "vibe64.database.layout.save",
+    actionId: ACTION_DATABASE_LAYOUT_SAVE,
     bodyLimit: ERD_LAYOUT_MAX_BYTES + 16 * 1024,
     summary: "Persist the shared selected-session ERD layout and notify its viewers.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("PUT", "/database/sessions/:sessionId/overview", {
-    ...options,
-    actionId: "vibe64.database.overview.save",
+    actionId: ACTION_DATABASE_OVERVIEW_SAVE,
     bodyLimit: 512 * 1024,
     summary: "Save main actors and their explicit table memberships in project source.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("PUT", "/database/sessions/:sessionId/snippets", {
-    ...options,
-    actionId: "vibe64.database.snippet.save",
+    actionId: ACTION_DATABASE_SNIPPET_SAVE,
     bodyLimit: 768 * 1024,
     summary: "Save a selected-session SQL snippet.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("DELETE", "/database/sessions/:sessionId/snippets/:snippetId", {
-    ...options,
-    actionId: "vibe64.database.snippet.delete",
+    actionId: ACTION_DATABASE_SNIPPET_DELETE,
     bodyLimit: 16 * 1024,
     summary: "Delete a selected-session SQL snippet.",
-    buildInput: (request) => withSession(request, {
-      snippetId: request.params.snippetId
-    })
+    buildInput: snippetDeleteInput,
+    statusCode: databaseStatusCode
   });
 
   routes.actionRoute("POST", "/database/sessions/:sessionId/assistant", {
-    ...options,
-    actionId: "vibe64.database.assistant.ask",
+    actionId: ACTION_DATABASE_ASSISTANT_ASK,
     bodyLimit: 2 * 1024 * 1024,
     summary: "Ask the focused database copilot with bounded on-demand access to the refreshed schema.",
-    buildInput: (request) => withSession(request, requestBody(request))
+    buildInput: sessionBodyInput,
+    statusCode: databaseStatusCode
   });
 }
 
 export {
-  databaseStatusCode,
-  registerRoutes,
-  withSession
+  registerRoutes
 };
