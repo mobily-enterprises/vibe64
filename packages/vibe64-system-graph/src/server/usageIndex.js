@@ -253,9 +253,11 @@ function followSteps(index, callIndex, allowed) {
 function breadthFirst(starts, follow) {
   const depth = new Map();
   const queue = [];
-  for (const start of starts) if (!depth.has(start)) {
-    depth.set(start, 0);
-    queue.push(start);
+  for (const start of starts) {
+    if (!depth.has(start)) {
+      depth.set(start, 0);
+      queue.push(start);
+    }
   }
   for (let head = 0; head < queue.length; head += 1) {
     const current = queue[head];

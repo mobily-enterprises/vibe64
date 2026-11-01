@@ -230,16 +230,18 @@ async function runArchitectureInspector({ inspector, request, current, signal, p
     signal
   });
   if (signal.aborted) throw architectureCancelled();
-  if (!execution?.ok) throw systemError(
-    execution?.timedOut
-      ? `${inspector.title} timed out.`
-      : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ""}.`,
-    "vibe64_architecture_inspector_failed",
-    {
-      inspectorId: inspector.id,
-      commandOutput: String(execution?.stderr || execution?.error || "").slice(-2000)
-    }
-  );
+  if (!execution?.ok) {
+    throw systemError(
+      execution?.timedOut
+        ? `${inspector.title} timed out.`
+        : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ""}.`,
+      "vibe64_architecture_inspector_failed",
+      {
+        inspectorId: inspector.id,
+        commandOutput: String(execution?.stderr || execution?.error || "").slice(-2000)
+      }
+    );
+  }
   if (typeof execution.stdout !== "string" || Buffer.byteLength(execution.stdout) > inspector.maxBuffer) {
     throw systemError(`${inspector.title} returned oversized output.`, "vibe64_architecture_output_too_large");
   }

@@ -356,14 +356,19 @@ function readFunction(index, callIndex, input) {
   const unresolved = [];
   for (const callPosition of callIndex.outCalls[position]) {
     const call = callIndex.calls[callPosition];
-    if (call.certainty === "unresolved") unresolved.push({ callee: call.callee, start: call.site.start });
-    else for (const target of call.targets) calls.push({
-      target: functionView(callIndex, target),
-      certainty: call.certainty,
-      method: call.method,
-      callee: call.callee,
-      start: call.site.start
-    });
+    if (call.certainty === "unresolved") {
+      unresolved.push({ callee: call.callee, start: call.site.start });
+    } else {
+      for (const target of call.targets) {
+        calls.push({
+          target: functionView(callIndex, target),
+          certainty: call.certainty,
+          method: call.method,
+          callee: call.callee,
+          start: call.site.start
+        });
+      }
+    }
   }
   for (const bridgePosition of callIndex.outBridges[position]) {
     const bridge = callIndex.bridges[bridgePosition];
@@ -457,13 +462,15 @@ function joinFunctions(index, callIndex, input) {
       };
     }
     if (file.hash !== candidate.hash) return { index: position, functionId: null, subsystemId: file.subsystemId ?? null, join: "stale" };
-    if (file.coverage === "none") return {
-      index: position,
-      functionId: null,
-      subsystemId: file.subsystemId ?? null,
-      join: "none",
-      reason: "language"
-    };
+    if (file.coverage === "none") {
+      return {
+        index: position,
+        functionId: null,
+        subsystemId: file.subsystemId ?? null,
+        join: "none",
+        reason: "language"
+      };
+    }
     const inFile = callIndex.byPath.get(filePath) || [];
     const start = candidate.start || {};
     const atStart = inFile.filter((fnPosition) => {
@@ -476,24 +483,28 @@ function joinFunctions(index, callIndex, input) {
       ? atStart.find((fnPosition) => callIndex.functions[fnPosition].name === (candidate.name || ""))
         ?? atStart.find((fnPosition) => callIndex.functions[fnPosition].kind === "module")
       : atStart[0];
-    if (exact !== undefined) return {
-      index: position,
-      functionId: callIndex.functions[exact].id,
-      subsystemId: file.subsystemId ?? null,
-      join: "exact",
-      position: exact
-    };
+    if (exact !== undefined) {
+      return {
+        index: position,
+        functionId: callIndex.functions[exact].id,
+        subsystemId: file.subsystemId ?? null,
+        join: "exact",
+        position: exact
+      };
+    }
     const near = candidate.name ? inFile.filter((fnPosition) => {
       const fn = callIndex.functions[fnPosition];
       return fn.name === candidate.name && Math.abs(fn.start.line - start.line) <= NEAR_LINES;
     }) : [];
-    if (near.length === 1) return {
-      index: position,
-      functionId: callIndex.functions[near[0]].id,
-      subsystemId: file.subsystemId ?? null,
-      join: "name-line",
-      position: near[0]
-    };
+    if (near.length === 1) {
+      return {
+        index: position,
+        functionId: callIndex.functions[near[0]].id,
+        subsystemId: file.subsystemId ?? null,
+        join: "name-line",
+        position: near[0]
+      };
+    }
     return { index: position, functionId: null, subsystemId: file.subsystemId ?? null, join: "none" };
   });
   const byFunction = new Map();
