@@ -6,15 +6,19 @@ import { test } from "node:test";
 
 import {
   USAGE_RECORDING_ADMISSION_TOKEN,
+  admitUsageRecording
+} from "@local/vibe64-usage-recording/server/admission";
+import {
+  usageRecordingPath,
+  usageRecordingsPath
+} from "@local/vibe64-usage-recording/server/recordingFiles";
+import {
   USAGE_TRACERS,
-  Vibe64UsageRecordingFeature,
-  admitUsageRecording,
   recordingUnavailableReason,
   usageRecordingEnvironment,
-  usageRecordingPath,
-  usageRecordingsPath,
   usageTracersForRuntimes
-} from "@local/vibe64-usage-recording/server";
+} from "@local/vibe64-usage-recording/server/tracers";
+import { Vibe64UsageRecordingFeature } from "../../packages/vibe64-usage-recording/src/server/Vibe64UsageRecordingFeature.js";
 import {
   USAGE_INTERACTION_ID_PATTERN,
   USAGE_RECORDING_ID_PATTERN,
