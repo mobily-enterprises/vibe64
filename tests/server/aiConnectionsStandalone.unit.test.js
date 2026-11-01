@@ -5,29 +5,31 @@ import path from "node:path";
 import test from "node:test";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createAiConnectionRuntime, configureAiConnectionRuntime } from "../../packages/vibe64-accounts/src/server/aiConnectionRuntime.js";
-import { createAiConnectionService } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
-import { createConnections } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js";
-import { registerRoutes as registerAccountRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
+import { createAiConnectionService, createManagedAiConnections } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
+import { createConnections } from "../../packages/vibe64-accounts/src/server/connections.js";
+import { registerLocalAiConnectionRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { testRouteApp, findRegisteredRoute, testReply } from "./vibe64RouteTestHelpers.js";
 
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 
-function registerRoutes(http, options) {
+function registerRoutes(http, { aiConnectionService, requireAiManagement }) {
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions(options).map((action) => ({
+  const managedAiConnections = createManagedAiConnections({ aiConnectionService, requireAiManagement });
+  actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({ managedAiConnections }).map((action) => ({
     channels: ["api", "automation"], surfaces: ["app"], ...action
   })) });
   registerVibe64ActionContext(actions, { resolveUser: async ({ request }) => request?.vibe64User || { role: "owner", username: "local" },
     authorizeProject() { throw new Error("Account operations do not require a project."); } });
-  registerAccountRoutes({ router: { register(method, path, routeOptions, handler) {
+  registerLocalAiConnectionRoutes({ router: { register(method, path, routeOptions, handler) {
     http.router.register(method, path, routeOptions, (request, reply) => {
       request.executeAction = ({ actionId, input }) => actions.execute({ actionId, input,
         context: { channel: "api", surface: "app", requestMeta: { request } } });
       return handler(request, reply);
     });
-  } } }, options);
+  } } }, { projectContext: getStudioProjectContext() });
 }
 
 const revision = `sha256:${"a".repeat(64)}`;
@@ -63,10 +65,10 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
   // Vibe64 includes no AI of its own: nothing is connected until the person adds a provider.
   assert.deepEqual(await configured.listConnections(), []);
 
-  const service = createAiConnectionService({ aiConnections, logger: silentLogger, readAssistantCapabilities: terminals.listAssistantCapabilities });
+  const service = createAiConnectionService({ aiConnections, logger: silentLogger, readAssistantCapabilities: terminals.listAssistantCapabilities,
+    initializeModelRouting: async () => ({ ok: true }) });
   const app = testRouteApp();
-  registerRoutes(app.http, { accounts: { subscribeAuthTerminal() {} }, fastify: app.fastify, requireAiManagement: () => null,
-    aiConnectionService: service, projectScoped: false, routeSurface: "app", routeRelativePath: "vibe64/accounts" });
+  registerRoutes(app.http, { requireAiManagement: () => null, aiConnectionService: service });
   const save = findRegisteredRoute(app, { method: "PATCH", path: "/api/vibe64/accounts/ai-connections/:providerId" });
   const reply = testReply();
   await save.handler({ hostname: "localhost", ip: "127.0.0.1", params: { providerId: "deepseek" },
@@ -92,12 +94,12 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
 test("provider management rejects a forged owner in the request body before touching connections", async () => {
   const app = testRouteApp();
   let called = false;
-  registerRoutes(app.http, { accounts: { subscribeAuthTerminal() {} }, fastify: app.fastify,
+  registerRoutes(app.http, {
     aiConnectionService: { save() { called = true; } },
     requireAiManagement({ vibe64User }) {
       return vibe64User?.role === "owner" ? null : { ok: false, code: "owner_required", error: "Owner required." };
-    },
-    projectScoped: false, routeSurface: "app", routeRelativePath: "vibe64/accounts" });
+    }
+  });
   const route = findRegisteredRoute(app, { method: "PATCH", path: "/api/vibe64/accounts/ai-connections/:providerId" });
   const reply = testReply();
   await route.handler({ hostname: "localhost", params: { providerId: "deepseek" },
@@ -136,12 +138,14 @@ test("project AI readiness accepts Claude or OpenCode without requiring Codex", 
     const connections = createConnections({
       accounts: { async getStatus() { return { ok: true, accounts: [{ id: "codex", connected: false, required: true }] }; } },
       project: { async readCurrentProject() { return { repository: { mode: "local_source" } }; } },
-      async listAssistantCapabilities(input) {
-        assert.equal(input.configuredOnly, "true");
-        return { ok: true, engines: [{ engineId, modelProviders: [{ connected: true }] }] };
+      terminals: {
+        async listAssistantCapabilities(input) {
+          assert.equal(input.configuredOnly, "true");
+          return { ok: true, engines: [{ engineId, modelProviders: [{ connected: true }] }] };
+        }
       }
     });
-    const status = await connections.getStatus();
+    const status = await connections.getStatus({});
     assert.equal(status.ready, true);
     assert.deepEqual(status.connections.map(({ id, connected }) => ({ id, connected })), [{ id: "ai", connected: true }]);
   }

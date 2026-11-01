@@ -23,6 +23,10 @@ function resolveVibe64AccountsRoot(targetRoot) {
   });
 }
 
+// The optional capability a composing host supplies its own account runtime under; without one, Accounts uses
+// createAccountsRuntime's local runtime.
+const ACCOUNTS_RUNTIME_TOKEN = "vibe64.accounts.runtime";
+
 function authError(code, message, extra = {}) {
   return {
     ...extra,
@@ -104,7 +108,7 @@ function createAccountsRuntime({
   env = process.env,
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   previousGithub = noPreviousGithub,
-  // readable-check: allow dependency-default - input validation: only a runtime without its target root reads the project's namespace root
+  // readable-check: allow dependency-default - cross-repository slot vibe64.accounts.runtime: a composing host builds its runtime with no project, so its target root is empty
   project = null,
   requireAiManagement = ownerManagesAi,
   requireExplicitRoots = true,
@@ -191,6 +195,7 @@ function createAccountsRuntime({
 }
 
 export {
+  ACCOUNTS_RUNTIME_TOKEN,
   ALL_CODEX_AUTH_MODES,
   API_KEY_AUTH_MODE,
   authError,

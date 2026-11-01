@@ -289,7 +289,7 @@ test("a read that never finished is not remembered", async (t) => {
 });
 
 test("connecting GitHub keeps the person's Git identity and never writes empty values", async (t) => {
-  const { ghLoginCommandArgs } = await import("../../packages/vibe64-accounts/src/server/service.js");
+  const { ghLoginCommandArgs } = await import("../../packages/vibe64-accounts/src/server/authCommands.js");
   const { env, gitConfig, root } = await freshHome(t);
   // A signed-in gh whose setup-git is a no-op, so only the identity lines matter.
   await writeFile(path.join(root, "bin", "gh"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });

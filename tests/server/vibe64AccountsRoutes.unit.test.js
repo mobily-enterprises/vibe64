@@ -11,7 +11,9 @@ import {
   ACTION_SAVE_PERSONAL_AI_PROFILE
 } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
 import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
+import { registerAuthTerminalRoutes } from "../../packages/vibe64-accounts/src/server/authTerminalRoutes.js";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import {
   findRegisteredRoute,
   routeProjectParams,
@@ -71,12 +73,9 @@ test("workspace account terminal accepts authorization input without a selected 
       return { ok: true };
     }
   };
-  registerRoutes(runtime.http, {
+  registerAuthTerminalRoutes(runtime.fastify, {
     accounts: runtime.accounts,
-    fastify: runtime.fastify,
-    projectScoped: false,
-    routeRelativePath: "vibe64/accounts",
-    routeSurface: "app"
+    projectContext: getStudioProjectContext()
   });
   const route = findRegisteredRoute(runtime, {
     method: "GET",
@@ -119,13 +118,7 @@ test("accounts read route omits signed-in user in local editor mode", async () =
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const runtime = testAccountRouteRuntime();
-      registerRoutes(runtime.http, {
-        accounts: runtime.accounts,
-        fastify: runtime.fastify,
-        projectContext,
-        routeRelativePath: "vibe64/accounts",
-        routeSurface: "app"
-      });
+      registerRoutes(runtime.http, { projectContext });
 
       const route = findRegisteredRoute(runtime, {
         method: "GET",
@@ -162,13 +155,7 @@ test("accounts auth-session route preserves scoped slug params", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const runtime = testAccountRouteRuntime();
-      registerRoutes(runtime.http, {
-        accounts: runtime.accounts,
-        fastify: runtime.fastify,
-        projectContext,
-        routeRelativePath: "vibe64/accounts",
-        routeSurface: "app"
-      });
+      registerRoutes(runtime.http, { projectContext });
 
       const route = findRegisteredRoute(runtime, {
         method: "GET",
@@ -217,13 +204,7 @@ test("accounts git identity route preserves scoped user input", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const runtime = testAccountRouteRuntime();
-      registerRoutes(runtime.http, {
-        accounts: runtime.accounts,
-        fastify: runtime.fastify,
-        projectContext,
-        routeRelativePath: "vibe64/accounts",
-        routeSurface: "app"
-      });
+      registerRoutes(runtime.http, { projectContext });
 
       const route = findRegisteredRoute(runtime, {
         method: "POST",
@@ -263,13 +244,7 @@ test("accounts personal profile route accepts a standalone preferred name", asyn
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const runtime = testAccountRouteRuntime();
-      registerRoutes(runtime.http, {
-        accounts: runtime.accounts,
-        fastify: runtime.fastify,
-        projectContext,
-        routeRelativePath: "vibe64/accounts",
-        routeSurface: "app"
-      });
+      registerRoutes(runtime.http, { projectContext });
 
       const route = findRegisteredRoute(runtime, {
         method: "PATCH",
@@ -312,22 +287,23 @@ test("accounts personal profile route accepts a standalone preferred name", asyn
 test("curated Codex routes use trusted request identity and accept only curated provider ids", async () => {
   await withLocalRequestBypass(async () => {
     const runtime = testAccountRouteRuntime();
-    registerRoutes(runtime.http, { accounts: runtime.accounts, fastify: runtime.fastify,
-      projectScoped: false, routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+    registerRoutes(runtime.http, { projectContext: getStudioProjectContext() });
     for (const [method, suffix] of [["GET", ""], ["PATCH", ""], ["POST", "/remove"]]) {
       const route = findRegisteredRoute(runtime, { method, path: `/api/vibe64/accounts/codex-providers${suffix}` });
       assert.ok(route);
       if (method !== "GET") {
         assert.notDeepEqual(route.options.body.schema.patch({ modelProviderId: "https://custom.invalid" }).errors, {});
         assert.deepEqual(route.options.body.schema.patch({ modelProviderId: "deepseek", apiKey: "fixture" }).errors, {});
+        assert.equal(route.options.body.schema.patch({ modelProviderId: "deepseek", apiKey: "fixture", vibe64User: { role: "owner" } })
+          .errors.vibe64User.code, "FIELD_NOT_ALLOWED", "the request's own user is the only identity");
       }
       let action;
       const member = { role: "member", username: "member" };
       await route.handler({ vibe64User: member,
-        input: { body: { modelProviderId: "deepseek", apiKey: "fixture", vibe64User: { role: "owner" } } },
+        input: { body: { modelProviderId: "deepseek", apiKey: "fixture" } },
         async executeAction(value) { action = value; return { ok: true, providers: [] }; }
       }, testReply());
-      assert.equal(Object.hasOwn(action.input, "vibe64User"), false);
+      assert.deepEqual(action.input, method === "GET" ? {} : { modelProviderId: "deepseek", apiKey: "fixture" });
       assert.ok(action.actionId);
     }
   });
@@ -336,12 +312,11 @@ test("curated Codex routes use trusted request identity and accept only curated 
 test("routing draft preview uses trusted request identity and carries both setups", async () => {
   await withLocalRequestBypass(async () => {
     const runtime = testAccountRouteRuntime();
-    registerRoutes(runtime.http, { accounts: runtime.accounts, fastify: runtime.fastify,
-      projectScoped: false, routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+    registerRoutes(runtime.http, { projectContext: getStudioProjectContext() });
     const route = findRegisteredRoute(runtime, { method: "POST", path: "/api/vibe64/accounts/model-routing/preview" });
     assert.ok(route);
-    const body = { revision: 4, owner: { fix: { follows: "junior" } }, nonOwner: {}, vibe64User: { role: "owner" } };
-    assert.equal(route.options.body.schema.patch(body).errors.vibe64User.code, "FIELD_NOT_ALLOWED");
+    const body = { revision: 4, owner: { fix: { follows: "junior" } }, nonOwner: {} };
+    assert.equal(route.options.body.schema.patch({ ...body, vibe64User: { role: "owner" } }).errors.vibe64User.code, "FIELD_NOT_ALLOWED");
     for (const vibe64User of [{ role: "member", username: "member" }, undefined]) {
       let action;
       await route.handler({ vibe64User, input: { body },
@@ -356,7 +331,6 @@ test("routing draft preview uses trusted request identity and carries both setup
 
 test("the per-tool workflow choices route is gone", () => {
   const runtime = testAccountRouteRuntime();
-  registerRoutes(runtime.http, { accounts: runtime.accounts, fastify: runtime.fastify,
-    projectScoped: false, routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+  registerRoutes(runtime.http, { projectContext: getStudioProjectContext() });
   assert.equal(findRegisteredRoute(runtime, { method: "GET", path: "/api/vibe64/accounts/model-routing/workflows" }), null);
 });

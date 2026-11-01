@@ -43,7 +43,7 @@ const SCANNED_PATTERNS = [
 const EXPECTED_TERMINAL_INVENTORY = [
   {
     count: 1,
-    file: "packages/vibe64-accounts/src/server/registerRoutes.js",
+    file: "packages/vibe64-accounts/src/server/authTerminalRoutes.js",
     pattern: "registerTerminalWebSocketRoute(",
     reason: "account auth websocket"
   },

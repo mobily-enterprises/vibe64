@@ -17,7 +17,7 @@ import { accountsResult } from "./accountRecords.js";
  * saved by whoever manages AI, and filled from recommendations.
  * @param {object} dependencies
  * @param {AccountAccess} dependencies.access
- * @param {TerminalsInspectAssistantRoutingConfiguration | null} dependencies.inspectRoutingConfiguration
+ * @param {TerminalsInspectAssistantRoutingConfiguration} dependencies.inspectRoutingConfiguration
  * @param {AccountNotifications} dependencies.notifications
  */
 function createModelRouting({
@@ -68,7 +68,6 @@ function createModelRouting({
   }
 
   async function routingView(configuration, input) {
-    if (!inspectRoutingConfiguration) throw new Error("Model routing is unavailable on this host.");
     const [result, team] = await Promise.all([
       inspectRoutingConfiguration(configuration, {
         vibe64User: input.vibe64User || null,

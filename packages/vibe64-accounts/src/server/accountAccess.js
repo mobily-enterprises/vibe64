@@ -23,7 +23,7 @@ function createAccountAccess({
 }) {
   const resolvedSystemRoot = accountRuntime.systemRoot;
 
-  // readable-check: allow method-probe - cross-repository slot vibe64.accounts.runtime: a host's account runtime may run host tool commands itself; the service's runner applies otherwise
+  // readable-check: allow method-probe - optional operation: a composing host's account runtime may run host tool commands itself; the local runtime does not
   const accountRunHostCommand = typeof accountRuntime.runHostToolCommand === "function"
     ? (commandArgs, options = {}) => accountRuntime.runHostToolCommand(commandArgs, options, {
         fallback: runHostToolCommand

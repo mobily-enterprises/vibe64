@@ -38,7 +38,7 @@ import {
 /** @typedef {import("./types.js").AuthSessionViews} AuthSessionViews */
 /** @typedef {import("./types.js").AccountStatusReads} AccountStatusReads */
 /** @typedef {import("./types.js").ModelRouting} ModelRouting */
-/** @typedef {ReturnType<typeof import("./authSessionViews.js").createAuthSessionState>} AuthSessionState */
+/** @typedef {import("./types.js").AuthSessionState} AuthSessionState */
 /** @typedef {import("./types.js").AccountAccess} AccountAccess */
 
 /**

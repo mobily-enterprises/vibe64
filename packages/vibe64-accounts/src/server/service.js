@@ -1,48 +1,18 @@
-import {
-  APP_CREDENTIAL_SCOPE,
-  GITHUB_ACCOUNT_MODE_LOCAL,
-  GITHUB_ACCOUNT_MODE_USER,
-  githubCredentialContext,
-  runVibe64Command,
-  USER_CREDENTIAL_SCOPE
-} from "@local/vibe64-execution/server";
-import {
-  ALL_CODEX_AUTH_MODES,
-  API_KEY_AUTH_MODE,
-  BROWSER_AUTH_MODE,
-  createAccountsRuntime,
-  DEVICE_AUTH_MODE,
-  resolveVibe64AccountsRoot
-} from "./accountsRuntime.js";
+import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createAccountAccess } from "./accountAccess.js";
 import { createAccountCredentials } from "./accountCredentials.js";
 import { runDefaultHostCommand } from "./accountHostCommands.js";
-import { blockedReason, hasAccountSelection } from "./accountRecords.js";
 import { createAccountStatusReads } from "./accountStatusReads.js";
-import {
-  ACCOUNT_AUTH_NAMESPACE,
-  authTerminalMetadata,
-  canReuseAuthTerminal,
-  CODEX_API_KEY_ENV,
-  codexApiKeyLoginCommandArgs,
-  ghLoginCommandArgs,
-  GITHUB_DEVICE_AUTH_URL,
-  gitIdentitySaveCommandArgs,
-  parseAuthOutput,
-  REQUIRED_GITHUB_SCOPES,
-  terminalArgsForAuth
-} from "./authCommands.js";
 import { createAuthSessionState, createAuthSessionViews } from "./authSessionViews.js";
 import { createAuthTerminals } from "./authTerminals.js";
 import { createCodexAccountStatus } from "./codexAccountStatus.js";
 import { createCodexProviderKeys } from "./codexProviderKeys.js";
-import { GITHUB_GIT_CREDENTIAL_HELPER } from "./githubAccountStatus.js";
 import { createModelRouting } from "./modelRouting.js";
 
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {import("@local/vibe64-core/server/types").PersonalAiProfileStore} PersonalAiProfileStore */
+/** @typedef {import("./types.js").PersonalProfile} PersonalProfile */
 /** @typedef {import("./types.js").PublishAccountChanged} PublishAccountChanged */
 /** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64AccountAuthSessionChangedPublisher>} PublishAuthSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -65,11 +35,11 @@ import { createModelRouting } from "./modelRouting.js";
  * @param {RuntimeEnv} [dependencies.env]
  * @param {TerminalsService["invalidateAgentRuntimes"]} dependencies.invalidateAgentRuntimes
  * @param {RuntimeLogger} dependencies.logger
- * @param {PersonalAiProfileStore | null} dependencies.personalProfileStore
- * @param {TerminalsInspectAssistantRoutingConfiguration | null} dependencies.inspectRoutingConfiguration
+ * @param {PersonalProfile} dependencies.personalProfile
+ * @param {TerminalsInspectAssistantRoutingConfiguration} dependencies.inspectRoutingConfiguration
  * @param {PublishAccountChanged} dependencies.publishAccountChanged
  * @param {PublishAuthSessionChanged} dependencies.publishAuthSessionChanged
- * @param {TerminalsReadClaudeAccountStatus | null} dependencies.readClaudeAccountStatus
+ * @param {TerminalsReadClaudeAccountStatus} dependencies.readClaudeAccountStatus
  * @param {typeof runDefaultHostCommand} [dependencies.runHostToolCommand]
  * @param {typeof runVibe64Command} [dependencies.runAuthTerminalCommand]
  */
@@ -78,7 +48,7 @@ function createService({
   env = process.env,
   invalidateAgentRuntimes,
   logger,
-  personalProfileStore,
+  personalProfile,
   inspectRoutingConfiguration,
   publishAccountChanged,
   publishAuthSessionChanged,
@@ -110,7 +80,7 @@ function createService({
     codexStatus,
     env,
     logger,
-    personalProfileStore,
+    personalProfile,
     readClaudeAccountStatus
   });
   const modelRouting = createModelRouting({
@@ -175,30 +145,5 @@ function createService({
 }
 
 export {
-  ACCOUNT_AUTH_NAMESPACE,
-  API_KEY_AUTH_MODE,
-  APP_CREDENTIAL_SCOPE,
-  ALL_CODEX_AUTH_MODES,
-  blockedReason,
-  canReuseAuthTerminal,
-  CODEX_API_KEY_ENV,
-  codexApiKeyLoginCommandArgs,
-  BROWSER_AUTH_MODE,
-  DEVICE_AUTH_MODE,
-  GITHUB_DEVICE_AUTH_URL,
-  GITHUB_GIT_CREDENTIAL_HELPER,
-  GITHUB_ACCOUNT_MODE_LOCAL,
-  GITHUB_ACCOUNT_MODE_USER,
-  hasAccountSelection,
-  USER_CREDENTIAL_SCOPE,
-  parseAuthOutput,
-  REQUIRED_GITHUB_SCOPES,
-  authTerminalMetadata,
-  createAccountsRuntime,
-  createService,
-  gitIdentitySaveCommandArgs,
-  ghLoginCommandArgs,
-  terminalArgsForAuth,
-  githubCredentialContext,
-  resolveVibe64AccountsRoot
+  createService
 };

@@ -7,7 +7,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { createAccountsRuntime, createService as createAccountsService } from "../../packages/vibe64-accounts/src/server/service.js";
+import { createService as createAccountsService } from "../../packages/vibe64-accounts/src/server/service.js";
+import { createAccountsRuntime } from "../../packages/vibe64-accounts/src/server/accountsRuntime.js";
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";

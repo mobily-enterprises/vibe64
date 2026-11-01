@@ -7,9 +7,11 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createAccountsActions, createAiConnectionActions } from "../../packages/vibe64-accounts/src/server/accountsActions.js";
-import { createAiConnectionService } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
+import { createAiConnectionService, createManagedAiConnections } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
 import { createAiConnectionStore } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
-import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
+import { registerLocalAiConnectionRoutes, registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
+import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { testReply, testRouteApp, findRegisteredRoute, withLocalRequestBypass } from "./vibe64RouteTestHelpers.js";
 
 test("all account operations use project-independent canonical contracts and authenticated actors", async () => {
@@ -53,13 +55,14 @@ test("all account operations use project-independent canonical contracts and aut
     const aiConnectionService = Object.fromEntries(cases.filter((entry) => entry[2].startsWith("ai-connections.")).map((entry) => [entry[3], record(entry[3])]));
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy, events: { async publish(event) { events.push(event); } } });
     actions.register({ contributorId: "accounts", domain: "accounts", actions: [
-      ...createAccountsActions({ accounts }), ...createAiConnectionActions({ aiConnectionService, requireAiManagement })
+      ...createAccountsActions({ accounts }),
+      ...createAiConnectionActions({ managedAiConnections: createManagedAiConnections({ aiConnectionService, requireAiManagement }) })
     ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, { resolveUser: async () => user,
       authorizeProject() { throw new Error("Account access must not require a project."); } });
     const app = testRouteApp();
-    registerRoutes(app.http, { accounts, aiConnectionService, fastify: { get() {} }, projectScoped: false,
-      routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+    registerRoutes(app.http, { projectContext: getStudioProjectContext() });
+    registerLocalAiConnectionRoutes(app.http, { projectContext: getStudioProjectContext() });
     assert.equal(actions.listDefinitions().length, 18);
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
       const route = findRegisteredRoute(app, { method, path: `/api/vibe64/accounts${suffix}` });
@@ -138,16 +141,19 @@ test("Colleague reads every saved provider's readiness through the original owne
     async verifyConnection() { verifications++; return { ok: true }; },
     async onConnectionChanged() { changes++; }
   });
-  let service = createAiConnectionService({ aiConnections: store });
+  const service = createAiConnectionService({ aiConnections: store, logger: silentLogger,
+    initializeModelRouting: async () => ({ ok: true }), readAssistantCapabilities: async () => ({ ok: true, engines: [] }) });
   const owner = { username: "owner", role: "owner" };
   let actor = owner;
   let managementAllowed = true;
   let reads = 0;
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
-    aiConnectionService: { async list() { reads++; return service.list(); } },
-    requireAiManagement: ({ vibe64User }) => vibe64User?.role === "owner" && managementAllowed ? null
-      : { ok: false, code: "vibe64_owner_required", error: "private-host-error" }
+    managedAiConnections: createManagedAiConnections({
+      aiConnectionService: { async list() { reads++; return service.list(); } },
+      requireAiManagement: ({ vibe64User }) => vibe64User?.role === "owner" && managementAllowed ? null
+        : { ok: false, code: "vibe64_owner_required", error: "private-host-error" }
+    })
   }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => actor,
     authorizeProject() { assert.fail("Saved connection status must work without a project."); } });
@@ -197,14 +203,12 @@ test("Colleague reads every saved provider's readiness through the original owne
   const requireLocalManagement = ({ vibe64User }) => { localActors.push(vibe64User); return null; };
   const localActions = createActionCatalogue({ policy: vibe64ActionPolicy });
   localActions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
-    aiConnectionService: service, requireAiManagement: requireLocalManagement
+    managedAiConnections: createManagedAiConnections({ aiConnectionService: service, requireAiManagement: requireLocalManagement })
   }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   assert.deepEqual(await localActions.execute({ actionId: tool.actionId, input: {}, context: { channel: "api", surface: "app" } }), api,
     "standalone loopback account reads retain their existing host policy without a hosted owner identity");
   const localApp = testRouteApp();
-  registerRoutes(localApp.http, { accounts: { subscribeAuthTerminal() {} }, aiConnectionService: service,
-    fastify: localApp.fastify, projectScoped: false,
-    routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+  registerLocalAiConnectionRoutes(localApp.http, { projectContext: getStudioProjectContext() });
   const localRequest = { hostname: "localhost", ip: "127.0.0.1", query: {},
     executeAction({ actionId, input }) {
       return localActions.execute({ actionId, input, context: { channel: "api", surface: "app", requestMeta: { request: localRequest } } });
@@ -233,9 +237,6 @@ test("Colleague reads every saved provider's readiness through the original owne
     error: "Saved AI connection status could not be read. Go to AI Accounts for details." });
   assert.equal(reads, beforeReads);
   managementAllowed = true;
-  service = createAiConnectionService({});
-  response = await execute();
-  assert.deepEqual(response.result, { ok: true, unavailable: true, connections: [] });
 });
 
 test("Colleague saves the person's own stated Git name and email and returns only those values", async () => {

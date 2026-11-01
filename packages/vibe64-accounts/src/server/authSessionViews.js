@@ -16,7 +16,7 @@ import { ACCOUNT_AUTH_NAMESPACE, parseAuthOutput, publicAuthSession } from "./au
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
 /** @typedef {import("./types.js").AccountStatusReads} AccountStatusReads */
 /** @typedef {import("./types.js").AccountAccess} AccountAccess */
-/** @typedef {ReturnType<typeof createAuthSessionState>} AuthSessionState */
+/** @typedef {import("./types.js").AuthSessionState} AuthSessionState */
 
 /**
  * The sign-in sessions this process started or found, shared by their readers

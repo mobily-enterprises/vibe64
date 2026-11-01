@@ -21,8 +21,7 @@ import {
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").AccountsService} AccountsService */
-/** @typedef {import("./types.js").AiConnectionService} AiConnectionService */
-/** @typedef {import("./types.js").AccountsRequireAiManagement} AccountsRequireAiManagement */
+/** @typedef {import("./types.js").ManagedAiConnections} ManagedAiConnections */
 
 const ACTION_READ_CODEX_PROVIDERS = "vibe64.accounts.codex-providers.read";
 const ACTION_READ_MODEL_ROUTING = "vibe64.accounts.model-routing.read";
@@ -37,6 +36,11 @@ const ACTION_READ_ACCOUNT_AUTH_SESSION = "vibe64.accounts.auth-session.read";
 const ACTION_CANCEL_ACCOUNT_AUTH_SESSION = "vibe64.accounts.auth-session.cancel";
 const ACTION_SAVE_GIT_IDENTITY = "vibe64.accounts.git-identity.save";
 const ACTION_SAVE_PERSONAL_AI_PROFILE = "vibe64.accounts.personal-ai-profile.save";
+const ACTION_LIST_AI_CONNECTIONS = "vibe64.accounts.ai-connections.list";
+const ACTION_READ_AI_CONNECTION_CATALOG = "vibe64.accounts.ai-connections.catalog";
+const ACTION_SAVE_AI_CONNECTION = "vibe64.accounts.ai-connections.save";
+const ACTION_REMOVE_AI_CONNECTION = "vibe64.accounts.ai-connections.remove";
+const ACTION_SAVE_AI_CONNECTION_MODEL_ACCESS = "vibe64.accounts.ai-connections.modelAccess";
 
 const gitIdentityText = { type: "string", maxLength: 512, required: false };
 // Saves only the person's own Git name and email; the account object stays out.
@@ -238,66 +242,63 @@ function createAccountsActions({ accounts }) {
 }
 
 /**
+ * The AI connection actions; every one is the AI manager's alone, which managedAiConnections enforces.
  * @param {object} dependencies
- * @param {AiConnectionService} dependencies.aiConnectionService
- * @param {AccountsRequireAiManagement} dependencies.requireAiManagement
+ * @param {ManagedAiConnections} dependencies.managedAiConnections
  */
-function createAiConnectionActions({ aiConnectionService, requireAiManagement }) {
-  /**
-   * Every AI connection operation is the AI manager's alone.
-   */
-  async function manageAiConnection(operation, input) {
-    const denied = await requireAiManagement({ vibe64User: input.vibe64User });
-    if (denied) return { ...denied, statusCode: 403 };
-    return aiConnectionService[operation](input);
-  }
-
+function createAiConnectionActions({ managedAiConnections }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.accounts.ai-connections.list",
+      id: ACTION_LIST_AI_CONNECTIONS,
       input: aiConnectionInputValidators.list,
       extensions: { assistant: aiConnectionsListTool, vibe64: WORKSPACE_OPERATION },
-      execute: (input) => manageAiConnection("list", input)
+      execute: (input) => managedAiConnections.list(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.accounts.ai-connections.catalog",
+      id: ACTION_READ_AI_CONNECTION_CATALOG,
       input: aiConnectionInputValidators.catalog,
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
-      execute: (input) => manageAiConnection("catalog", input)
+      execute: (input) => managedAiConnections.catalog(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.accounts.ai-connections.save",
+      id: ACTION_SAVE_AI_CONNECTION,
       input: aiConnectionInputValidators.save,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
-      execute: (input) => manageAiConnection("save", input)
+      execute: (input) => managedAiConnections.save(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.accounts.ai-connections.remove",
+      id: ACTION_REMOVE_AI_CONNECTION,
       input: aiConnectionInputValidators.remove,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
-      execute: (input) => manageAiConnection("remove", input)
+      execute: (input) => managedAiConnections.remove(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.accounts.ai-connections.modelAccess",
+      id: ACTION_SAVE_AI_CONNECTION_MODEL_ACCESS,
       input: aiConnectionInputValidators.modelAccess,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
-      execute: (input) => manageAiConnection("modelAccess", input)
+      execute: (input) => managedAiConnections.modelAccess(input)
     })
   ]);
 }
 
 export {
   createAiConnectionActions,
+  ACTION_LIST_AI_CONNECTIONS,
   ACTION_PREVIEW_MODEL_ROUTING,
-  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING,
+  ACTION_READ_AI_CONNECTION_CATALOG,
+  ACTION_READ_MODEL_ROUTING,
+  ACTION_REMOVE_AI_CONNECTION,
+  ACTION_SAVE_AI_CONNECTION,
+  ACTION_SAVE_AI_CONNECTION_MODEL_ACCESS,
+  ACTION_SAVE_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS,
   ACTION_SAVE_CODEX_PROVIDER,
   ACTION_REMOVE_CODEX_PROVIDER,

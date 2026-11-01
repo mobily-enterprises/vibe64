@@ -8,6 +8,7 @@
     "./client": "./src/client/index.js",
     "./server/actions": "./src/server/accountsActions.js",
     "./server/accountRealtimeEvents": "./src/server/accountRealtimeEvents.js",
+    "./server/accountsRuntime": "./src/server/accountsRuntime.js",
     "./server/githubCliAuth": "./src/server/githubCliAuth.js",
     "./server/registerRoutes": "./src/server/registerRoutes.js",
     "./server/service": "./src/server/service.js",
@@ -35,7 +36,9 @@
         "runtime.events",
         "runtime.fastify",
         "runtime.http",
-        "vibe64.project"
+        "runtime.logger",
+        "vibe64.project",
+        "vibe64.terminals"
       ]
     },
     "runtime": {

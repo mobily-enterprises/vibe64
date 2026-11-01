@@ -345,7 +345,7 @@ function routeTable() {
   const fastify = { get() {} };
   registerStudioHealthRoutes(http);
   registerCurrentAppRoutes(http);
-  registerAccountRoutes(http, { accounts: { subscribeAuthTerminal() {} }, fastify });
+  registerAccountRoutes(http, { projectContext: {} });
   registerColleagueRoutes(http);
   registerDatabaseRoutes(http);
   registerProjectRoutes(http);

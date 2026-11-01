@@ -132,7 +132,7 @@ test("the tool PATH puts ~/.local/bin and mise shims before the inherited PATH",
 
 test("the terminal stays quiet when an AI tool is there; one plain message when none is", async (t) => {
   const home = await withHome(t);
-  const { warnMissingOperatorClis } = await import("../../packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js");
+  const { warnMissingOperatorClis } = await import("../../packages/vibe64-accounts/src/server/operatorCliWarning.js");
   const lines = [];
   configureVibe64Host({ runtimePackRoot: path.join(home, "packs") });
   warnMissingOperatorClis((text) => lines.push(text));

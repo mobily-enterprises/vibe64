@@ -7,6 +7,8 @@ import { runLoggedAccountChange } from "./accountChangeLog.js";
 /** @typedef {import("./types.js").AiConnectionStore} AiConnectionStore */
 /** @typedef {import("./types.js").AccountsService} AccountsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("./types.js").AiConnectionService} AiConnectionService */
+/** @typedef {import("./types.js").AccountsRequireAiManagement} AccountsRequireAiManagement */
 
 /**
  * @param {object} dependencies
@@ -29,25 +31,6 @@ function createAiConnectionService({
       { actor: String(vibe64User?.username || ""), engineId: "opencode", modelProviderId: String(modelProviderId || "") }, work);
   }
 
-  function requireConnectionStore() {
-    if (!aiConnections) {
-      throw aiConnectionError(
-        "vibe64_ai_connections_unavailable",
-        "AI provider connections are unavailable on this Vibe64 host."
-      );
-    }
-  }
-
-  function requireAssistantCatalog() {
-    if (!aiConnections || typeof readAssistantCapabilities !== "function") {
-      throw aiConnectionError(
-        "vibe64_ai_catalog_unavailable",
-        "The OpenCode provider catalog is unavailable on this Vibe64 host.",
-        503
-      );
-    }
-  }
-
   function completeCapabilityPage(engine = {}, total = 0) {
     return {
       ...engine.page,
@@ -59,7 +42,7 @@ function createAiConnectionService({
     };
   }
 
-  const readOpenCodeCapabilityPages = ({ currentUser, modelProviderId = "" } = {}) =>
+  const readOpenCodeCapabilityPages = ({ currentUser, modelProviderId = "" }) =>
     readAllOpenCodeCapabilityRows((query) => readAssistantCapabilities(query, currentUser), { modelProviderId });
 
   async function readOpenCodeProvider(modelProviderId, currentUser) {
@@ -125,15 +108,13 @@ function createAiConnectionService({
 
   async function list() {
     return {
-      connections: aiConnections ? await aiConnections.listConnections() : [],
+      connections: await aiConnections.listConnections(),
       ok: true,
-      unavailable: !aiConnections
+      unavailable: false
     };
   }
 
-  async function catalog({ modelProviderId = "", vibe64User } = {}) {
-    requireAssistantCatalog();
-    modelProviderId = String(modelProviderId || "").trim();
+  async function catalog({ modelProviderId, vibe64User }) {
     if (!modelProviderId) return readAllOpenCodeProviders(vibe64User);
     const { engine, policy, provider, result } = await readOpenCodeProvider(modelProviderId, vibe64User);
     const models = provider.models || [];
@@ -149,31 +130,24 @@ function createAiConnectionService({
     };
   }
 
-  function save({ modelProviderId, vibe64User, ...input } = {}) {
+  function save({ modelProviderId, vibe64User, ...input }) {
     return connectionChange("save-connection", { modelProviderId, vibe64User }, async () => {
-      requireConnectionStore();
-      requireAssistantCatalog();
       const { provider } = await readOpenCodeProvider(modelProviderId, vibe64User);
       const connection = await aiConnections.upsertConnection({ ...input, modelProviderId }, { provider });
       // The connection is already saved. Report setup separately so a routing
       // conflict never tells the person that their working key was rejected.
-      const routing = typeof initializeModelRouting === "function"
-        ? await initializeModelRouting({ engineIds: ["opencode"], vibe64User }).catch((error) => ({ ok: false, error: error.message }))
-        : { ok: false, error: "Open Models to finish choosing models for this connection." };
+      const routing = await initializeModelRouting({ engineIds: ["opencode"], vibe64User })
+        .catch((error) => ({ ok: false, error: error.message }));
       return { connection, ok: true, routing };
     });
   }
 
-  function remove({ modelProviderId, vibe64User } = {}) {
-    return connectionChange("remove-connection", { modelProviderId, vibe64User }, async () => {
-      requireConnectionStore();
-      return aiConnections.removeConnection(modelProviderId);
-    });
+  function remove({ modelProviderId, vibe64User }) {
+    return connectionChange("remove-connection", { modelProviderId, vibe64User }, () => aiConnections.removeConnection(modelProviderId));
   }
 
-  function modelAccess({ modelProviderId, ...input } = {}) {
+  function modelAccess({ modelProviderId, ...input }) {
     return connectionChange("update-model-access", { modelProviderId, vibe64User: input.vibe64User }, async () => {
-      requireConnectionStore();
       return { connection: await aiConnections.updateModelAccess(modelProviderId, input), ok: true };
     });
   }
@@ -187,4 +161,65 @@ function createAiConnectionService({
   });
 }
 
-export { createAiConnectionService };
+/**
+ * The AI connection operations as only whoever manages AI may run them: each refuses anyone else, with status 403,
+ * before it reaches the connection service.
+ * @param {object} dependencies
+ * @param {AiConnectionService} dependencies.aiConnectionService
+ * @param {AccountsRequireAiManagement} dependencies.requireAiManagement
+ */
+function createManagedAiConnections({ aiConnectionService, requireAiManagement }) {
+  /**
+   * The refusal for a person who may not manage AI here, or null.
+   * @param {object} input
+   */
+  async function managementRefusal(input) {
+    const denied = await requireAiManagement({ vibe64User: input.vibe64User });
+    return denied ? { ...denied, statusCode: 403 } : null;
+  }
+
+  /**
+   * @param {object} input
+   */
+  async function list(input) {
+    return await managementRefusal(input) || aiConnectionService.list(input);
+  }
+
+  /**
+   * @param {object} input
+   */
+  async function catalog(input) {
+    return await managementRefusal(input) || aiConnectionService.catalog(input);
+  }
+
+  /**
+   * @param {object} input
+   */
+  async function save(input) {
+    return await managementRefusal(input) || aiConnectionService.save(input);
+  }
+
+  /**
+   * @param {object} input
+   */
+  async function remove(input) {
+    return await managementRefusal(input) || aiConnectionService.remove(input);
+  }
+
+  /**
+   * @param {object} input
+   */
+  async function modelAccess(input) {
+    return await managementRefusal(input) || aiConnectionService.modelAccess(input);
+  }
+
+  return Object.freeze({
+    list,
+    catalog,
+    save,
+    remove,
+    modelAccess
+  });
+}
+
+export { createAiConnectionService, createManagedAiConnections };

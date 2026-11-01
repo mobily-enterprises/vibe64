@@ -1,15 +1,18 @@
 import { ASSISTANT_SETUP_ROLES, assistantSetupRoleValue } from "@local/vibe64-runtime/shared/assistantRouting";
 
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/assistantRoutingStore").createAssistantRoutingStore>} AssistantRoutingStore */
+/** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+
 /**
  * Whether the team setup has a model team members can use: some team role
  * (after "Same as") is a selection whose live access is Workspace use and
  * available. The answer is kept for the routing revision until the next
  * accounts or connections change, so project admission reads access rarely.
  * @param {object} dependencies
- * @param {() => Promise<object>} dependencies.readRoutingConfiguration
- * @param {(selection: object, options: object) => Promise<object>} dependencies.readSelectionAccess
+ * @param {AssistantRoutingStore} dependencies.routingStore
+ * @param {TerminalsService} dependencies.terminals
  */
-function createTeamAiReadiness({ readRoutingConfiguration, readSelectionAccess }) {
+function createTeamAiReadiness({ routingStore, terminals }) {
   let memo = null;
 
   async function compute(nonOwner, actor) {
@@ -18,7 +21,7 @@ function createTeamAiReadiness({ readRoutingConfiguration, readSelectionAccess }
       .map((selection) => [JSON.stringify([selection.engineId, selection.modelProviderId, selection.modelId]), selection]));
     for (const selection of selections.values()) {
       try {
-        const access = await readSelectionAccess(selection, { vibe64User: actor });
+        const access = await terminals.requireAssistantSelectionAccess(selection, { vibe64User: actor });
         if (access?.available === true && access.ownerOnly === false) return true;
       } catch {
         // A personal or unavailable selection is not one team members can use.
@@ -28,7 +31,7 @@ function createTeamAiReadiness({ readRoutingConfiguration, readSelectionAccess }
   }
 
   async function ready({ actor = null } = {}) {
-    const { revision, nonOwner } = await readRoutingConfiguration();
+    const { revision, nonOwner } = await routingStore.read();
     if (memo?.revision !== revision) memo = { revision, ready: compute(nonOwner, actor) };
     return memo.ready;
   }

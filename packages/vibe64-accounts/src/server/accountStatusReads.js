@@ -25,7 +25,7 @@ import { readGithubAccountStatus, readGithubStatus } from "./githubAccountStatus
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {import("@local/vibe64-core/server/types").PersonalAiProfileStore} PersonalAiProfileStore */
+/** @typedef {import("./types.js").PersonalProfile} PersonalProfile */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").AccountAccess} AccountAccess */
 /** @typedef {ReturnType<typeof import("./codexAccountStatus.js").createCodexAccountStatus>} CodexAccountStatus */
@@ -40,8 +40,8 @@ import { readGithubAccountStatus, readGithubStatus } from "./githubAccountStatus
  * @param {CodexAccountStatus} dependencies.codexStatus
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
- * @param {PersonalAiProfileStore | null} dependencies.personalProfileStore
- * @param {TerminalsReadClaudeAccountStatus | null} dependencies.readClaudeAccountStatus
+ * @param {PersonalProfile} dependencies.personalProfile
+ * @param {TerminalsReadClaudeAccountStatus} dependencies.readClaudeAccountStatus
  */
 function createAccountStatusReads({
   access,
@@ -49,13 +49,13 @@ function createAccountStatusReads({
   codexStatus,
   env,
   logger,
-  personalProfileStore,
+  personalProfile,
   readClaudeAccountStatus
 }) {
   async function readClaudeStatus() {
     if (!resolveOperatorCli("claude", { env }).installed) return operatorCliAccount("claude");
     const credentialHome = accountRuntime.claudeContext();
-    const status = credentialHome?.ok === false || !readClaudeAccountStatus
+    const status = credentialHome?.ok === false
       ? await readClaudeCodeAuthStatus({ env, credentialHome })
       : await readClaudeAccountStatus();
     if (claudeStatusStartFailed(status)) {
@@ -219,13 +219,7 @@ function createAccountStatusReads({
         github: USER_CREDENTIAL_SCOPE
       },
       ready,
-      ...(personalProfileStore ? {
-        personalProfile: {
-          ...(await personalProfileStore.read()),
-          available: true,
-          scope: "installation"
-        }
-      } : {}),
+      ...(await personalProfile.statusFields()),
       targetRoot: access.currentTargetRoot(),
       updatedAt: new Date().toISOString()
     };
@@ -251,24 +245,7 @@ function createAccountStatusReads({
   }
 
   async function savePersonalAiProfile(input) {
-    return accountsResult(async () => {
-      if (!personalProfileStore) {
-        return authError(
-          "personal_profile_unavailable",
-          "Personal profile settings are not available in this Vibe64 runtime."
-        );
-      }
-      return {
-        ok: true,
-        personalProfile: {
-          ...(await personalProfileStore.write({
-            preferredName: input.preferredName
-          })),
-          available: true,
-          scope: "installation"
-        }
-      };
-    });
+    return accountsResult(() => personalProfile.save(input));
   }
 
   return Object.freeze({

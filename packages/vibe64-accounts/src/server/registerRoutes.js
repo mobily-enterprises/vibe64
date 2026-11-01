@@ -19,229 +19,235 @@ import {
   vibe64RouteHandler,
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
-import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
+import {
+  ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
+  ACTION_LIST_AI_CONNECTIONS,
+  ACTION_LOGOUT_ACCOUNT,
+  ACTION_PREVIEW_MODEL_ROUTING,
+  ACTION_READ_ACCOUNT_AUTH_SESSION,
+  ACTION_READ_ACCOUNTS,
+  ACTION_READ_AI_CONNECTION_CATALOG,
+  ACTION_READ_CODEX_PROVIDERS,
+  ACTION_READ_MODEL_ROUTING,
+  ACTION_REMOVE_AI_CONNECTION,
+  ACTION_REMOVE_CODEX_PROVIDER,
+  ACTION_SAVE_AI_CONNECTION,
+  ACTION_SAVE_AI_CONNECTION_MODEL_ACCESS,
+  ACTION_SAVE_CODEX_PROVIDER,
+  ACTION_SAVE_GIT_IDENTITY,
+  ACTION_SAVE_MODEL_ROUTING,
+  ACTION_SAVE_PERSONAL_AI_PROFILE,
+  ACTION_START_ACCOUNT_AUTH
+} from "./accountsActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
-/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
-/** @typedef {import("./types.js").AccountsService} AccountsService */
-/** @typedef {import("./types.js").AiConnectionService} AiConnectionService */
+/** @typedef {ReturnType<typeof createActionRouteScope>} AccountRouteScope */
+/** @typedef {import("./types.js").StudioProjectContext} StudioProjectContext */
 
 const ACCOUNT_ROUTE_TAGS = Object.freeze(["studio", "vibe64-accounts"]);
 const LOCAL_REQUEST_MESSAGE = "Vibe64 account routes only accept loopback Studio requests.";
 
 /**
- * Accounts are reached both inside a project and outside any project, so every
- * route is registered under both scopes.
+ * Accounts are reached both inside a project and outside any project, so every account route is registered in both
+ * scopes.
+ * @param {RuntimeHttp} http
+ * @param {StudioProjectContext} projectContext resolves the project of a project-scoped request
+ */
+function createAccountRouteScopes(http, projectContext) {
+  return Object.freeze({
+    projectRoutes: createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
+      routeBase: VIBE64_PROJECT_ROUTE_BASE,
+      relativePath: "vibe64/accounts",
+      surface: "app",
+      wrapHandler: vibe64RouteHandler({ localRequestMessage: LOCAL_REQUEST_MESSAGE, projectContext })
+    }),
+    workspaceRoutes: createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
+      relativePath: "vibe64/accounts",
+      surface: "app",
+      wrapHandler: vibe64RouteHandler({ localRequestMessage: LOCAL_REQUEST_MESSAGE, projectScoped: false })
+    })
+  });
+}
+
+/**
+ * @param {object} request
+ */
+function authSessionInput(request) {
+  return {
+    sessionId: request.params.sessionId
+  };
+}
+
+/**
+ * The account routes of one scope.
+ * @param {AccountRouteScope} routes
+ */
+function registerAccountRoutes(routes) {
+  routes.actionRoute("GET", "", {
+    actionId: ACTION_READ_ACCOUNTS,
+    buildInput: requestQuery,
+    query: accountsReadInputValidator,
+    summary: "Read Vibe64 account readiness."
+  });
+  routes.actionRoute("GET", "/codex-providers", {
+    actionId: ACTION_READ_CODEX_PROVIDERS,
+    summary: "Read curated Codex provider connections."
+  });
+  routes.actionRoute("PATCH", "/codex-providers", {
+    actionId: ACTION_SAVE_CODEX_PROVIDER,
+    body: codexProviderInputValidator,
+    buildInput: requestBody,
+    summary: "Check and connect a curated Codex provider."
+  });
+  routes.actionRoute("POST", "/codex-providers/remove", {
+    actionId: ACTION_REMOVE_CODEX_PROVIDER,
+    body: codexProviderInputValidator,
+    buildInput: requestBody,
+    summary: "Disconnect a curated Codex provider."
+  });
+  routes.actionRoute("GET", "/model-routing", {
+    actionId: ACTION_READ_MODEL_ROUTING,
+    buildInput: requestQuery,
+    query: modelRoutingReadInputValidator,
+    summary: "Read model roles, availability, and recommendations."
+  });
+  routes.actionRoute("PATCH", "/model-routing", {
+    actionId: ACTION_SAVE_MODEL_ROUTING,
+    body: modelRoutingInputValidator,
+    buildInput: requestBody,
+    summary: "Save the workspace's owner and team AI setups."
+  });
+  routes.actionRoute("POST", "/model-routing/preview", {
+    actionId: ACTION_PREVIEW_MODEL_ROUTING,
+    body: modelRoutingInputValidator,
+    buildInput: requestBody,
+    summary: "Preview the owner and team AI setups without saving or running AI."
+  });
+  routes.actionRoute("POST", "/auth", {
+    actionId: ACTION_START_ACCOUNT_AUTH,
+    body: accountAuthStartInputValidator,
+    buildInput: requestBody,
+    summary: "Start an Vibe64 account login flow."
+  });
+  routes.actionRoute("POST", "/logout", {
+    actionId: ACTION_LOGOUT_ACCOUNT,
+    body: accountIdInputValidator,
+    buildInput: requestBody,
+    summary: "Log out an Vibe64 account."
+  });
+  routes.actionRoute("POST", "/git-identity", {
+    actionId: ACTION_SAVE_GIT_IDENTITY,
+    body: gitIdentityInputValidator,
+    buildInput: requestBody,
+    summary: "Save the Git identity used for Vibe64 GitHub operations."
+  });
+  routes.actionRoute("PATCH", "/personal-ai-profile", {
+    actionId: ACTION_SAVE_PERSONAL_AI_PROFILE,
+    body: personalAiProfileInputValidator,
+    buildInput: requestBody,
+    summary: "Save the standalone Vibe64 personal AI profile."
+  });
+  routes.actionRoute("GET", "/auth/:sessionId", {
+    actionId: ACTION_READ_ACCOUNT_AUTH_SESSION,
+    buildInput: authSessionInput,
+    params: accountAuthSessionParamsValidator,
+    summary: "Read an Vibe64 account login session."
+  });
+  routes.actionRoute("DELETE", "/auth/:sessionId", {
+    actionId: ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
+    buildInput: authSessionInput,
+    params: accountAuthSessionParamsValidator,
+    summary: "Cancel an Vibe64 account login session."
+  });
+}
+
+/**
+ * The account routes, in the project scope and outside any project.
  * @param {RuntimeHttp} http
  * @param {object} options
- * @param {AccountsService} options.accounts
- * @param {AiConnectionService | null} options.aiConnectionService
- * @param {RuntimeFastify} options.fastify
- * @param {StudioProjectContext} [options.projectContext]
+ * @param {StudioProjectContext} options.projectContext
  */
-function registerRoutes(
-  http,
-  {
-    accounts,
-    aiConnectionService,
-    fastify,
-    projectContext
-  }
-) {
-  const projectRoutes = createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
-    routeBase: VIBE64_PROJECT_ROUTE_BASE,
-    relativePath: "vibe64/accounts",
-    surface: "app",
-    wrapHandler: vibe64RouteHandler({ localRequestMessage: LOCAL_REQUEST_MESSAGE, projectContext })
-  });
-  const workspaceRoutes = createActionRouteScope(vibe64RouteHttp(http, { tags: ACCOUNT_ROUTE_TAGS }), {
-    relativePath: "vibe64/accounts",
-    surface: "app",
-    wrapHandler: vibe64RouteHandler({ localRequestMessage: LOCAL_REQUEST_MESSAGE, projectScoped: false })
-  });
+function registerRoutes(http, { projectContext }) {
+  const { projectRoutes, workspaceRoutes } = createAccountRouteScopes(http, projectContext);
+  registerAccountRoutes(projectRoutes);
+  registerAccountRoutes(workspaceRoutes);
+}
 
-  const bodyInput = (request) => withoutVibe64User(requestBody(request));
-  const queryInput = (request) => withoutVibe64User(requestQuery(request));
-  const operationOptions = {
-    read: {
-      buildInput: queryInput,
-      query: accountsReadInputValidator,
-      summary: "Read Vibe64 account readiness."
-    },
-    "codex-providers.read": {
-      buildInput: () => withoutVibe64User(),
-      summary: "Read curated Codex provider connections."
-    },
-    "codex-providers.save": {
-      body: codexProviderInputValidator,
-      buildInput: bodyInput,
-      summary: "Check and connect a curated Codex provider."
-    },
-    "codex-providers.remove": {
-      body: codexProviderInputValidator,
-      buildInput: bodyInput,
-      summary: "Disconnect a curated Codex provider."
-    },
-    "model-routing.read": {
-      query: modelRoutingReadInputValidator,
-      buildInput: queryInput,
-      summary: "Read model roles, availability, and recommendations."
-    },
-    "model-routing.save": {
-      body: modelRoutingInputValidator,
-      buildInput: bodyInput,
-      summary: "Save the workspace's owner and team AI setups."
-    },
-    "model-routing.preview": {
-      body: modelRoutingInputValidator,
-      buildInput: bodyInput,
-      summary: "Preview the owner and team AI setups without saving or running AI."
-    },
-    "auth.start": {
-      body: accountAuthStartInputValidator,
-      buildInput: bodyInput,
-      summary: "Start an Vibe64 account login flow."
-    },
-    logout: {
-      body: accountIdInputValidator,
-      buildInput: bodyInput,
-      summary: "Log out an Vibe64 account."
-    },
-    "git-identity.save": {
-      body: gitIdentityInputValidator,
-      buildInput: bodyInput,
-      summary: "Save the Git identity used for Vibe64 GitHub operations."
-    },
-    "personal-ai-profile.save": {
-      body: personalAiProfileInputValidator,
-      buildInput: bodyInput,
-      summary: "Save the standalone Vibe64 personal AI profile."
-    },
-    "auth-session.read": {
-      buildInput: sessionInput,
-      params: accountAuthSessionParamsValidator,
-      summary: "Read an Vibe64 account login session."
-    },
-    "auth-session.cancel": {
-      buildInput: sessionInput,
-      params: accountAuthSessionParamsValidator,
-      summary: "Cancel an Vibe64 account login session."
+/**
+ * Runs an AI connection action with only the request values its input declares, and the provider from the path.
+ * @param {object} request
+ * @param {string} actionId
+ * @param {object} validator the action's input validator
+ * @param {object} [values] the request's query or body
+ */
+function runAiConnectionAction(request, actionId, validator, values) {
+  const source = values || {};
+  const fields = Object.keys(validator.schema.getFieldDefinitions());
+  return request.executeAction({
+    actionId,
+    input: {
+      ...Object.fromEntries(fields.filter((field) => Object.hasOwn(source, field)).map((field) => [field, source[field]])),
+      ...(request.params?.providerId ? { modelProviderId: request.params.providerId } : {})
     }
-  };
-  for (const [method, suffix, operation] of [
-    ["GET", "", "read"],
-    ["GET", "/codex-providers", "codex-providers.read"],
-    ["PATCH", "/codex-providers", "codex-providers.save"],
-    ["POST", "/codex-providers/remove", "codex-providers.remove"],
-    ["GET", "/model-routing", "model-routing.read"],
-    ["PATCH", "/model-routing", "model-routing.save"],
-    ["POST", "/model-routing/preview", "model-routing.preview"],
-    ["POST", "/auth", "auth.start"],
-    ["POST", "/logout", "logout"],
-    ["POST", "/git-identity", "git-identity.save"],
-    ["PATCH", "/personal-ai-profile", "personal-ai-profile.save"],
-    ["GET", "/auth/:sessionId", "auth-session.read"],
-    ["DELETE", "/auth/:sessionId", "auth-session.cancel"]
-  ]) {
-    projectRoutes.actionRoute(method, suffix, { ...operationOptions[operation], actionId: `vibe64.accounts.${operation}` });
-    workspaceRoutes.actionRoute(method, suffix, { ...operationOptions[operation], actionId: `vibe64.accounts.${operation}` });
-  }
+  });
+}
 
-  for (const [routes, projectScoped] of [[projectRoutes, true], [workspaceRoutes, false]]) {
-    if (aiConnectionService) {
-      registerAiConnectionRoutes((method, suffix, handler) => {
-        routes.serviceRoute(method, `/ai-connections${suffix}`, {
-          summary: "Manage AI provider connections."
-        }, async (request) => {
-          try {
-            return await handler({
-              body: requestBody(request),
-              query: requestQuery(request),
-              params: request.params,
-              executeAction: request.executeAction
-            });
-          } catch (error) {
-            return {
-              ...vibe64ErrorResponse(error),
-              statusCode: error.statusCode || 500,
-              ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {})
-            };
-          }
-        });
-      });
-    }
+/**
+ * The AI connection routes, for a host to serve under its own scope and checks: register(method, suffix, handler) adds
+ * one route, whose handler reads the request's query, body and params and runs its action.
+ * @param {(method: string, suffix: string, handler: (request: object) => Promise<object>) => void} register
+ */
+function registerAiConnectionRoutes(register) {
+  register("GET", "", (request) =>
+    runAiConnectionAction(request, ACTION_LIST_AI_CONNECTIONS, aiConnectionInputValidators.list, request.query));
+  register("GET", "/catalog", (request) =>
+    runAiConnectionAction(request, ACTION_READ_AI_CONNECTION_CATALOG, aiConnectionInputValidators.catalog, request.query));
+  register("PATCH", "/:providerId", (request) =>
+    runAiConnectionAction(request, ACTION_SAVE_AI_CONNECTION, aiConnectionInputValidators.save, request.body));
+  register("POST", "/:providerId/remove", (request) =>
+    runAiConnectionAction(request, ACTION_REMOVE_AI_CONNECTION, aiConnectionInputValidators.remove, request.body));
+  register("PATCH", "/:providerId/model-access", (request) =>
+    runAiConnectionAction(request, ACTION_SAVE_AI_CONNECTION_MODEL_ACCESS, aiConnectionInputValidators.modelAccess, request.body));
+}
 
-    registerTerminalWebSocketRoute(fastify, {
-      projectContext,
-      projectScoped,
-      resize(service, { cols, request, rows, terminalSessionId }) {
-        return service.resizeAuthTerminal(withVibe64User(request, {
-          sessionId: terminalSessionId
-        }), {
-          cols,
-          rows
+/**
+ * One scope's AI connection routes, under /ai-connections. A failure is answered as JSON with its status, field errors
+ * included, rather than thrown.
+ * @param {AccountRouteScope} routes
+ */
+function registerScopeAiConnectionRoutes(routes) {
+  registerAiConnectionRoutes(function serveAiConnectionRoute(method, suffix, handler) {
+    routes.serviceRoute(method, `/ai-connections${suffix}`, {
+      summary: "Manage AI provider connections."
+    }, async (request) => {
+      try {
+        return await handler({
+          body: requestBody(request),
+          query: requestQuery(request),
+          params: request.params,
+          executeAction: request.executeAction
         });
-      },
-      routePath: `${routes.routeBase}/auth/:terminalSessionId/ws`,
-      service: accounts,
-      subscribe(service, { request, subscriber, terminalSessionId }) {
-        return service.subscribeAuthTerminal(withVibe64User(request, {
-          sessionId: terminalSessionId
-        }), subscriber);
-      },
-      write(service, { data, request, terminalSessionId }) {
-        return service.writeAuthTerminal(withVibe64User(request, {
-          sessionId: terminalSessionId
-        }), data);
+      } catch (error) {
+        return {
+          ...vibe64ErrorResponse(error),
+          statusCode: error.statusCode || 500,
+          ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {})
+        };
       }
     });
-  }
-}
-
-function registerAiConnectionRoutes(register) {
-  for (const [method, suffix, operation] of [
-    ["GET", "", "list"],
-    ["GET", "/catalog", "catalog"],
-    ["PATCH", "/:providerId", "save"],
-    ["POST", "/:providerId/remove", "remove"],
-    ["PATCH", "/:providerId/model-access", "modelAccess"]
-  ]) {
-    const fields = Object.keys(aiConnectionInputValidators[operation].schema.getFieldDefinitions());
-    register(method, suffix, (request) => {
-      const source = method === "GET" ? request.query || {} : request.body || {};
-      return request.executeAction({
-        actionId: `vibe64.accounts.ai-connections.${operation}`,
-        input: {
-          ...Object.fromEntries(fields.filter((field) => Object.hasOwn(source, field)).map((field) => [field, source[field]])),
-          ...(request.params?.providerId ? { modelProviderId: request.params.providerId } : {})
-        }
-      });
-    });
-  }
-}
-
-function sessionInput(request) {
-  return withoutVibe64User({
-    sessionId: request.params.sessionId
   });
 }
 
-function withoutVibe64User(input) {
-  const { vibe64User: _ignored, ...safeInput } = input || {};
-  void _ignored;
-  return safeInput;
+/**
+ * The local runtime's AI connection routes, in the project scope and outside any project.
+ * @param {RuntimeHttp} http
+ * @param {object} options
+ * @param {StudioProjectContext} options.projectContext
+ */
+function registerLocalAiConnectionRoutes(http, { projectContext }) {
+  const { projectRoutes, workspaceRoutes } = createAccountRouteScopes(http, projectContext);
+  registerScopeAiConnectionRoutes(projectRoutes);
+  registerScopeAiConnectionRoutes(workspaceRoutes);
 }
 
-function withVibe64User(request, input = {}) {
-  const safeInput = withoutVibe64User(input);
-  if (!request.vibe64User) {
-    return safeInput;
-  }
-  return {
-    ...safeInput,
-    vibe64User: request.vibe64User
-  };
-}
-
-export { registerRoutes, registerAiConnectionRoutes };
+export { registerAiConnectionRoutes, registerLocalAiConnectionRoutes, registerRoutes };

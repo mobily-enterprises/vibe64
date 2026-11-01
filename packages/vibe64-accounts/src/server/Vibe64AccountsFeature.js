@@ -6,29 +6,21 @@ import {
   createVibe64AccountsChangedPublisher,
   createVibe64ConnectionsChangedPublisher
 } from "./accountRealtimeEvents.js";
-import { registerRoutes } from "./registerRoutes.js";
+import { registerLocalAiConnectionRoutes, registerRoutes } from "./registerRoutes.js";
+import { registerAuthTerminalRoutes } from "./authTerminalRoutes.js";
 import { createAiConnectionRuntime, configureAiConnectionRuntime } from "./aiConnectionRuntime.js";
-import { createAiConnectionService } from "./aiConnectionService.js";
+import { createAiConnectionService, createManagedAiConnections } from "./aiConnectionService.js";
 import { createTeamAiReadiness } from "./teamAiReadiness.js";
-import { createAccountsRuntime } from "./accountsRuntime.js";
-import {
-  blockedReason,
-  createService,
-  GITHUB_ACCOUNT_MODE_LOCAL,
-  hasAccountSelection
-} from "./service.js";
-import {
-  OPERATOR_CLIS,
-  operatorCliInstall,
-  resolveOperatorCli
-} from "@local/vibe64-execution/server";
+import { ACCOUNTS_RUNTIME_TOKEN, createAccountsRuntime } from "./accountsRuntime.js";
+import { createConnections } from "./connections.js";
+import { createPersonalProfile, NO_PERSONAL_PROFILE } from "./personalProfile.js";
+import { warnMissingOperatorClis } from "./operatorCliWarning.js";
+import { configureSignInStatusRuntime } from "./signInStatusRuntime.js";
+import { createService } from "./service.js";
 import {
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
-import {
-  projectRequiresGithubConnection
-} from "@local/vibe64-core/server/projectRepository";
 import {
   createPersonalAiProfileStore
 } from "@local/vibe64-core/server/personalAiProfile";
@@ -39,8 +31,8 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {import("./types.js").AccountsService} AccountsService */
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
+/** @typedef {import("./types.js").AccountsService} AccountsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
@@ -48,105 +40,6 @@ import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-
-/**
- * @param {object} dependencies
- * @param {AccountsRuntime | null} dependencies.accountRuntime
- * @param {ProjectService} dependencies.project
- * @param {string} [dependencies.systemRoot]
- * @param {string} [dependencies.targetRoot]
- */
-function createDefaultAccountRuntime({
-  accountRuntime,
-  project,
-  systemRoot = "",
-  targetRoot = ""
-}) {
-  return accountRuntime || createAccountsRuntime({
-    githubAccountMode: GITHUB_ACCOUNT_MODE_LOCAL,
-    project,
-    requireExplicitRoots: true,
-    systemRoot,
-    targetRoot
-  });
-}
-
-/**
- * @param {object} [input]
- * @param {ProjectService} project
- */
-async function connectionAccountStatusInput(input, project) {
-  if (hasAccountSelection(input)) {
-    return input;
-  }
-  const currentProject = await project.readCurrentProject();
-  return {
-    ...input,
-    providerIds: projectRequiresGithubConnection(currentProject || {})
-      ? ["codex", "github"]
-      : ["codex"]
-  };
-}
-
-/**
- * @param {object} dependencies
- * @param {AccountsService} dependencies.accounts
- * @param {ProjectService} dependencies.project
- * @param {((input: object) => ReturnType<TerminalsService["listAssistantCapabilities"]>) | null} dependencies.listAssistantCapabilities
- */
-function createConnections({
-  accounts,
-  project,
-  listAssistantCapabilities
-}) {
-  async function getStatus(input = {}) {
-    const accountInput = await connectionAccountStatusInput(input, project);
-    // Readiness needs only whether GitHub is connected, not the Git name
-    // the Account card reads for the person.
-    const status = await accounts.getStatus({ ...accountInput, readGitIdentity: false });
-    if (status?.ok === false) {
-      return status;
-    }
-    const connections = Array.isArray(status?.accounts) ? [...status.accounts] : [];
-    if (!hasAccountSelection(input) && listAssistantCapabilities) {
-      const catalog = await listAssistantCapabilities({ configuredOnly: "true", vibe64User: input.vibe64User });
-      if (catalog?.ok === false) return catalog;
-      const connected = (catalog.engines || []).some((engine) =>
-        (engine.modelProviders || []).some((provider) => provider.connected === true));
-      const codexIndex = connections.findIndex((account) => account.id === "codex");
-      if (codexIndex >= 0) connections.splice(codexIndex, 1);
-      connections.unshift({
-        id: "ai",
-        label: "AI connection",
-        connected,
-        required: true,
-        message: connected ? "An AI provider is connected." : "Connect an AI provider in AI Accounts."
-      });
-    }
-    const ready = connections.every((connection) => connection.required !== true || connection.connected === true);
-    return {
-      ...status,
-      blockedReason: ready ? "" : blockedReason(connections),
-      connections,
-      ready
-    };
-  }
-
-  return Object.freeze({ getStatus });
-}
-
-/**
- * Plain words in the terminal, and only when no AI tool runs Vibe64 at all:
- * one tool is enough, so a missing second one is not worth a warning.
- */
-function warnMissingOperatorClis(write = (line) => process.stderr.write(`${line}\n`)) {
-  if (Object.keys(OPERATOR_CLIS).some((tool) => resolveOperatorCli(tool).installed)) return;
-  write([
-    "No AI tool is installed on this computer yet. Vibe64 needs one.",
-    `To install Claude Code, run: ${operatorCliInstall("claude")}`,
-    "Codex and opencode work too: open Vibe64 and choose AI setup."
-  ].join("\n"));
-}
 
 const Vibe64AccountsFeature = defineFeature({
   id: "vibe64.accounts",
@@ -157,11 +50,11 @@ const Vibe64AccountsFeature = defineFeature({
     fastify: "runtime.fastify",
     http: "runtime.http",
     logger: "runtime.logger",
-    project: "vibe64.project"
+    project: "vibe64.project",
+    terminals: "vibe64.terminals"
   },
   optional: {
-    accountRuntime: "vibe64.accounts.runtime",
-    terminals: "vibe64.terminals"
+    accountRuntime: ACCOUNTS_RUNTIME_TOKEN
   },
   provides: {
     accounts: "vibe64.accounts",
@@ -169,14 +62,14 @@ const Vibe64AccountsFeature = defineFeature({
   },
   /**
    * @param {object} capabilities
-   * @param {AccountsRuntime | null} capabilities.accountRuntime
+   * @param {AccountsRuntime} [capabilities.accountRuntime]
    * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeFastify} capabilities.fastify
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
    * @param {ProjectService} capabilities.project
-   * @param {TerminalsService | null} capabilities.terminals
+   * @param {TerminalsService} capabilities.terminals
    * @param {FeatureSetupContext} context
    */
   setup({
@@ -196,53 +89,34 @@ const Vibe64AccountsFeature = defineFeature({
     const runtimeProfile = projectContext.runtimeProfile || {};
     const localRuntime = runtimeProfile.local === true ||
       ["local", "local-editor"].includes(String(runtimeProfile.mode || "").trim().toLowerCase());
-    const personalProfileStore = localRuntime && systemRoot
-      ? createPersonalAiProfileStore({ systemRoot })
-      : null;
-    const resolvedAccountRuntime = createDefaultAccountRuntime({
-      accountRuntime,
+    const resolvedAccountRuntime = accountRuntime ?? createAccountsRuntime({
       project,
       systemRoot,
       targetRoot
     });
-    // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
-    const listAssistantCapabilities = typeof terminals?.listAssistantCapabilities === "function"
-      // The reader's user is the authority option, not catalogue input: a page
-      // outside a project (Studio Health) has no project user to fall back on.
-      ? (input) => terminals.listAssistantCapabilities(input, { vibe64User: input.vibe64User || null })
-      : null;
     const accounts = createService({
       accountRuntime: resolvedAccountRuntime,
-      personalProfileStore,
-      // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
-      inspectRoutingConfiguration: typeof terminals?.inspectAssistantRoutingConfiguration === "function"
-        ? (configuration, options) => terminals.inspectAssistantRoutingConfiguration(configuration, options) : null,
-      invalidateAgentRuntimes: async (input = {}) => {
-        // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
-        if (typeof terminals?.invalidateAgentRuntimes === "function") {
-          return terminals.invalidateAgentRuntimes(input);
-        }
-        return null;
-      },
+      personalProfile: localRuntime && systemRoot
+        ? createPersonalProfile({ store: createPersonalAiProfileStore({ systemRoot }) })
+        : NO_PERSONAL_PROFILE,
+      inspectRoutingConfiguration: terminals.inspectAssistantRoutingConfiguration,
+      invalidateAgentRuntimes: terminals.invalidateAgentRuntimes,
       logger,
       publishAccountChanged: createVibe64AccountsChangedPublisher({ events }),
       publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({ events }),
-      // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
-      readClaudeAccountStatus: typeof terminals?.readClaudeAccountStatus === "function"
-        ? () => terminals.readClaudeAccountStatus() : null
+      readClaudeAccountStatus: terminals.readClaudeAccountStatus
     });
     const connections = createConnections({
       accounts,
       project,
-      listAssistantCapabilities
+      terminals
     });
 
     // Project admission's team AI gate reads the team setup through live access.
-    // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
-    if (resolvedAccountRuntime.systemRoot && typeof terminals?.requireAssistantSelectionAccess === "function") {
+    if (resolvedAccountRuntime.systemRoot) {
       const teamAi = createTeamAiReadiness({
-        readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: resolvedAccountRuntime.systemRoot }).read(),
-        readSelectionAccess: (selection, options) => terminals.requireAssistantSelectionAccess(selection, options)
+        routingStore: createAssistantRoutingStore({ systemRoot: resolvedAccountRuntime.systemRoot }),
+        terminals
       });
       registerTeamAiReadiness(teamAi.ready);
       events.register({
@@ -252,72 +126,61 @@ const Vibe64AccountsFeature = defineFeature({
       });
     }
 
-    // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
-    if (typeof terminals?.configureAssistantRuntime === "function") {
-      terminals.configureAssistantRuntime({
-        async claudeConnectionStatus() {
-          return (await accounts.getClaudeStatus()).account?.connected === true;
-        },
-        async codexConnectionStatus() {
-          const status = await accounts.getStatus({ accountIds: ["codex"] });
-          return status.ok === true &&
-            status.accounts.some((account) => account.id === "codex" && account.connected === true);
-        }
-      });
-    }
+    configureSignInStatusRuntime({
+      accounts,
+      terminals
+    });
+    registerRoutes(http, { projectContext });
 
     // A host-supplied account runtime also owns connection wiring. Do not
     // register a second copy of its actions/store.
-    const aiConnections = !accountRuntime && localRuntime && terminals && systemRoot
-      ? createAiConnectionRuntime({
-          systemRoot: resolvedAccountRuntime.systemRoot,
-          terminals,
-          publishConnectionChanged: createVibe64ConnectionsChangedPublisher({ events })
-        })
-      : null;
-    const aiConnectionService = aiConnections
-      ? createAiConnectionService({
-          aiConnections,
-          initializeModelRouting: accounts.initializeModelRouting,
-          logger,
-          readAssistantCapabilities: (input, vibe64User) => terminals.listAssistantCapabilities({ ...input, vibe64User })
-        })
-      : null;
-    if (aiConnections) {
+    if (!accountRuntime && localRuntime && systemRoot) {
+      const aiConnections = createAiConnectionRuntime({
+        systemRoot: resolvedAccountRuntime.systemRoot,
+        terminals,
+        publishConnectionChanged: createVibe64ConnectionsChangedPublisher({ events })
+      });
       configureAiConnectionRuntime({
         aiConnections,
         terminals,
         requireAiManagement: resolvedAccountRuntime.requireAiManagement
       });
-    }
-    if (aiConnectionService) {
       actionCatalogue.register({
         contributorId: "vibe64.accounts.ai-connections",
         domain: "vibe64-accounts",
         actions: createAiConnectionActions({
-          aiConnectionService,
-          requireAiManagement: resolvedAccountRuntime.requireAiManagement
-        }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action }))
+          managedAiConnections: createManagedAiConnections({
+            aiConnectionService: createAiConnectionService({
+              aiConnections,
+              initializeModelRouting: accounts.initializeModelRouting,
+              logger,
+              readAssistantCapabilities: (input, vibe64User) => terminals.listAssistantCapabilities({ ...input, vibe64User })
+            }),
+            requireAiManagement: resolvedAccountRuntime.requireAiManagement
+          })
+        })
       });
+      registerLocalAiConnectionRoutes(http, { projectContext });
     }
-
-    registerRoutes(http, {
+    registerAuthTerminalRoutes(fastify, {
       accounts,
-      aiConnectionService,
-      fastify,
       projectContext
     });
 
-    return { accounts, connections };
+    return {
+      accounts,
+      connections
+    };
   },
+  /**
+   * @param {object} capabilities
+   * @param {AccountsService} capabilities.accounts
+   */
   actions({ accounts }) {
     return createAccountsActions({ accounts });
   }
 });
 
 export {
-  Vibe64AccountsFeature,
-  createConnections,
-  createDefaultAccountRuntime,
-  warnMissingOperatorClis
+  Vibe64AccountsFeature
 };

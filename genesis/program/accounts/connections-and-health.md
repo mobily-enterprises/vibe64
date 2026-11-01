@@ -114,6 +114,11 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/server/codexAccountStatus.js`
 - `packages/vibe64-accounts/src/server/githubAccountStatus.js`
 - `packages/vibe64-accounts/src/server/registerRoutes.js`
+- `packages/vibe64-accounts/src/server/authTerminalRoutes.js`
+- `packages/vibe64-accounts/src/server/connections.js`
+- `packages/vibe64-accounts/src/server/personalProfile.js`
+- `packages/vibe64-accounts/src/server/signInStatusRuntime.js`
+- `packages/vibe64-accounts/src/server/operatorCliWarning.js`
 - `packages/vibe64-core/src/server/terminalWebSocketRoutes.js`
 - `packages/vibe64-core/src/server/localStudioRequest.js`
 - `server/lib/browserLifecycle.js`

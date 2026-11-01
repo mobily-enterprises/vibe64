@@ -53,7 +53,8 @@ function accessReader(access) {
 function readiness(nonOwner, access, revision = 1) {
   const configuration = { schemaVersion: 5, revision, owner: { senior: CLAUDE }, nonOwner };
   const reader = accessReader(access);
-  const teamAi = createTeamAiReadiness({ readRoutingConfiguration: async () => configuration, readSelectionAccess: reader.read });
+  const teamAi = createTeamAiReadiness({ routingStore: { read: async () => configuration },
+    terminals: { requireAssistantSelectionAccess: reader.read } });
   return { configuration, reads: reader.reads, teamAi };
 }
 
