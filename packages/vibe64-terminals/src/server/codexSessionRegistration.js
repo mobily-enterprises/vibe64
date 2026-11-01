@@ -25,6 +25,7 @@ import {
 import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
+import { runtimeProfileIsLocal } from "@local/vibe64-core/server/studioRoots";
 import {
   createPersonalAiProfileStore
 } from "@local/vibe64-core/server/personalAiProfile";
@@ -220,9 +221,7 @@ function createCodexSessionRegistration({
   const {
     codexAppServerProviderKeyFields
   } = codexRuntimeHost;
-  const studioRuntimeProfile = getStudioProjectContext().runtimeProfile || {};
-  const localRuntime = studioRuntimeProfile.local === true ||
-    ["local", "local-editor"].includes(normalizeText(studioRuntimeProfile.mode).toLowerCase());
+  const localRuntime = runtimeProfileIsLocal(getStudioProjectContext().runtimeProfile);
   const personalProfileStore = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
     ? createPersonalAiProfileStore({
         systemRoot: codexAppServerProviderOptions.systemRoot

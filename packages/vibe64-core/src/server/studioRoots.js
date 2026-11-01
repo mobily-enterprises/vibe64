@@ -17,6 +17,9 @@ function normalizeRoot(value, fallbackRoot) {
   return path.resolve(root || fallbackRoot || process.cwd());
 }
 
+/**
+ * A local editor or local runtime profile: the person runs Vibe64 on their own machine.
+ */
 function runtimeProfileIsLocal(runtimeProfile) {
   const mode = String(runtimeProfile?.mode || "").trim().toLowerCase();
   return runtimeProfile?.local === true || mode === "local" || mode === "local-editor";
@@ -201,5 +204,6 @@ export {
   resolveVibe64ServiceDataRoot,
   resolveVibe64SystemRoot,
   resolveStudioAppRoot,
-  resolveStudioTargetRoot
+  resolveStudioTargetRoot,
+  runtimeProfileIsLocal
 };

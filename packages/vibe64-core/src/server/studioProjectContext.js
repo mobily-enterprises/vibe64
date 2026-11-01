@@ -6,7 +6,8 @@ import { assertProjectEffectAdmission } from "./practiceContext.js";
 
 import {
   resolveVibe64Roots,
-  resolveExplicitStudioTargetRoot
+  resolveExplicitStudioTargetRoot,
+  runtimeProfileIsLocal
 } from "./studioRoots.js";
 import {
   normalizeProjectSlug,
@@ -38,14 +39,7 @@ function projectCatalogEnabledForRuntimeProfile(runtimeProfile = null) {
   if (runtimeProfile?.projectCatalogEnabled === false) {
     return false;
   }
-  if (runtimeProfile?.local === true) {
-    return false;
-  }
-  const mode = String(runtimeProfile?.mode || "").trim().toLowerCase();
-  if (mode === "local" || mode === "local-editor") {
-    return false;
-  }
-  return true;
+  return !runtimeProfileIsLocal(runtimeProfile);
 }
 
 function createStudioProjectContext({
