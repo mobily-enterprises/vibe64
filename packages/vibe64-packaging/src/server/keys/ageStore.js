@@ -24,7 +24,7 @@ function storeError(message, code) {
   return Object.assign(new Error(message), { code });
 }
 
-function publicFacts(meta = {}) {
+function publicFacts(meta) {
   const facts = {};
   for (const [name, value] of Object.entries(meta || {})) {
     if (!/^[a-z][A-Za-z0-9]*$/u.test(name)) continue;
@@ -156,103 +156,121 @@ function createAgeStore({
     };
   }
 
+  function create({ passphrase, windowMs } = {}) {
+    return exclusive(async () => {
+      if (await exists()) throw storeError("Your publishing keys already exist. Unlock them instead.", "vibe64_publishing_keys_exist");
+      zero();
+      const state = { entries: new Map(), passphrase: Buffer.from(String(passphrase ?? ""), "utf8"), until: now() + windowOf(windowMs) };
+      try {
+        await seal(state);
+      } catch (error) {
+        state.passphrase.fill(0);
+        throw error;
+      }
+      unlocked = state;
+      await writeIndex({ entries: [], recoveryKit: null });
+      return status();
+    });
+  }
+
+  function unlock({ passphrase, windowMs } = {}) {
+    return exclusive(async () => {
+      if (!await exists()) throw storeError("Create your publishing keys first.", "vibe64_publishing_keys_missing");
+      const entries = await open(passphrase);
+      zero();
+      unlocked = { entries, passphrase: Buffer.from(String(passphrase), "utf8"), until: now() + windowOf(windowMs) };
+      return status();
+    });
+  }
+
+  function lock() {
+    zero();
+    return status();
+  }
+
+  function isUnlocked() {
+    return Boolean(current());
+  }
+
+  // Internal: the decrypted value of one entry, for one Stage 2 operation.
+  // Callers copy it into the stage's private file; never into a response.
+  function read(id) {
+    const state = requireUnlocked();
+    const value = state.entries.get(id);
+    if (!value) throw storeError(`Your publishing keys hold no ${id}.`, "vibe64_publishing_key_missing");
+    return Buffer.from(value);
+  }
+
+  function has(id) {
+    return Boolean(current()?.entries.has(id));
+  }
+
+  function put(id, { value, kind, label, meta = {} } = {}) {
+    return exclusive(async () => {
+      if (!ENTRY_ID.test(id || "")) throw storeError("That key name is not valid.", "vibe64_publishing_key_invalid");
+      const state = requireUnlocked();
+      const bytes = Buffer.isBuffer(value) ? Buffer.from(value) : Buffer.from(String(value ?? ""), "utf8");
+      if (!bytes.length) throw storeError("There is nothing to store.", "vibe64_publishing_key_invalid");
+      const previous = state.entries.get(id);
+      state.entries.set(id, bytes);
+      try {
+        await seal(state);
+      } catch (error) {
+        if (previous) state.entries.set(id, previous);
+        else state.entries.delete(id);
+        throw error;
+      }
+      previous?.fill(0);
+      const index = await readIndex();
+      const entry = { id, kind: String(kind || "secret"), label: String(label || id).slice(0, 200), createdAt: new Date(now()).toISOString(), ...publicFacts(meta) };
+      await writeIndex({ ...index, entries: [...index.entries.filter((existing) => existing.id !== id), entry].sort((left, right) => left.id.localeCompare(right.id)) });
+      return entry;
+    });
+  }
+
+  function remove(id) {
+    return exclusive(async () => {
+      const state = requireUnlocked();
+      const previous = state.entries.get(id);
+      if (!previous) throw storeError(`Your publishing keys hold no ${id}.`, "vibe64_publishing_key_missing");
+      state.entries.delete(id);
+      await seal(state);
+      previous.fill(0);
+      const index = await readIndex();
+      await writeIndex({ ...index, entries: index.entries.filter((entry) => entry.id !== id) });
+      return { removed: id };
+    });
+  }
+
+  // Internal, for the recovery kit: every entry with its index facts.
+  function snapshot() {
+    const state = requireUnlocked();
+    return [...state.entries].map(([id, value]) => ({ id, value: Buffer.from(value) }));
+  }
+
+  function recordRecoveryKit(record) {
+    return exclusive(async () => {
+      const index = await readIndex();
+      await writeIndex({ ...index, recoveryKit: record });
+      return record;
+    });
+  }
+
   return Object.freeze({
     directory,
     file,
     status,
-    create({ passphrase, windowMs } = {}) {
-      return exclusive(async () => {
-        if (await exists()) throw storeError("Your publishing keys already exist. Unlock them instead.", "vibe64_publishing_keys_exist");
-        zero();
-        const state = { entries: new Map(), passphrase: Buffer.from(String(passphrase ?? ""), "utf8"), until: now() + windowOf(windowMs) };
-        try {
-          await seal(state);
-        } catch (error) {
-          state.passphrase.fill(0);
-          throw error;
-        }
-        unlocked = state;
-        await writeIndex({ entries: [], recoveryKit: null });
-        return status();
-      });
-    },
-    unlock({ passphrase, windowMs } = {}) {
-      return exclusive(async () => {
-        if (!await exists()) throw storeError("Create your publishing keys first.", "vibe64_publishing_keys_missing");
-        const entries = await open(passphrase);
-        zero();
-        unlocked = { entries, passphrase: Buffer.from(String(passphrase), "utf8"), until: now() + windowOf(windowMs) };
-        return status();
-      });
-    },
-    lock() {
-      zero();
-      return status();
-    },
-    isUnlocked() {
-      return Boolean(current());
-    },
-    // Internal: the decrypted value of one entry, for one Stage 2 operation.
-    // Callers copy it into the stage's private file; never into a response.
-    read(id) {
-      const state = requireUnlocked();
-      const value = state.entries.get(id);
-      if (!value) throw storeError(`Your publishing keys hold no ${id}.`, "vibe64_publishing_key_missing");
-      return Buffer.from(value);
-    },
-    has(id) {
-      return Boolean(current()?.entries.has(id));
-    },
-    put(id, { value, kind, label, meta = {} } = {}) {
-      return exclusive(async () => {
-        if (!ENTRY_ID.test(id || "")) throw storeError("That key name is not valid.", "vibe64_publishing_key_invalid");
-        const state = requireUnlocked();
-        const bytes = Buffer.isBuffer(value) ? Buffer.from(value) : Buffer.from(String(value ?? ""), "utf8");
-        if (!bytes.length) throw storeError("There is nothing to store.", "vibe64_publishing_key_invalid");
-        const previous = state.entries.get(id);
-        state.entries.set(id, bytes);
-        try {
-          await seal(state);
-        } catch (error) {
-          if (previous) state.entries.set(id, previous);
-          else state.entries.delete(id);
-          throw error;
-        }
-        previous?.fill(0);
-        const index = await readIndex();
-        const entry = { id, kind: String(kind || "secret"), label: String(label || id).slice(0, 200), createdAt: new Date(now()).toISOString(), ...publicFacts(meta) };
-        await writeIndex({ ...index, entries: [...index.entries.filter((existing) => existing.id !== id), entry].sort((left, right) => left.id.localeCompare(right.id)) });
-        return entry;
-      });
-    },
-    remove(id) {
-      return exclusive(async () => {
-        const state = requireUnlocked();
-        const previous = state.entries.get(id);
-        if (!previous) throw storeError(`Your publishing keys hold no ${id}.`, "vibe64_publishing_key_missing");
-        state.entries.delete(id);
-        await seal(state);
-        previous.fill(0);
-        const index = await readIndex();
-        await writeIndex({ ...index, entries: index.entries.filter((entry) => entry.id !== id) });
-        return { removed: id };
-      });
-    },
-    // Internal, for the recovery kit: every entry with its index facts.
-    snapshot() {
-      const state = requireUnlocked();
-      return [...state.entries].map(([id, value]) => ({ id, value: Buffer.from(value) }));
-    },
-    async index() {
-      return readIndex();
-    },
-    recordRecoveryKit(record) {
-      return exclusive(async () => {
-        const index = await readIndex();
-        await writeIndex({ ...index, recoveryKit: record });
-        return record;
-      });
-    }
+    create,
+    unlock,
+    lock,
+    isUnlocked,
+    read,
+    has,
+    put,
+    remove,
+    snapshot,
+    index: readIndex,
+    recordRecoveryKit
   });
 }
 
