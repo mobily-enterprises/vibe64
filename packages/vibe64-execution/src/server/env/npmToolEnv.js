@@ -15,8 +15,8 @@ function npmConfigPrefix({ env = {} } = {}) {
   if (!runtimePackRoot()) {
     return "";
   }
-  return normalizeAbsolutePath(env?.[NPM_CONFIG_PREFIX_ENV]) ||
-    (normalizeAbsolutePath(env?.HOME) ? path.join(normalizeAbsolutePath(env.HOME), ".local") : "");
+  return normalizeAbsolutePath(env[NPM_CONFIG_PREFIX_ENV]) ||
+    (normalizeAbsolutePath(env.HOME) ? path.join(normalizeAbsolutePath(env.HOME), ".local") : "");
 }
 
 function npmToolEnv(options = {}) {

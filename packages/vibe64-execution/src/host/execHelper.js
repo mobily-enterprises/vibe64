@@ -678,7 +678,7 @@ function connectManagedExecutionController(leaseName = "") {
       socket.destroy();
       reject(new Error("Vibe64 managed service could not attach to its controller lease."));
     }, 3000);
-    timeout.unref?.();
+    timeout.unref();
     socket.once("connect", () => {
       clearTimeout(timeout);
       socket.removeListener("error", onError);
@@ -698,7 +698,7 @@ function connectManagedExecutionController(leaseName = "") {
 function terminateManagedExecutionChild(child = null) {
   signalManagedExecutionChild(child, "SIGTERM");
   const timer = setTimeout(() => signalManagedExecutionChild(child, "SIGKILL"), 5000);
-  timer.unref?.();
+  timer.unref();
   return timer;
 }
 

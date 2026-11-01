@@ -186,7 +186,7 @@ function detachedIdleStartedAtMs(session = {}) {
 }
 
 function detachedIdleForMs(session = {}, now = Date.now()) {
-  if (session?.subscribers?.size) {
+  if (session.subscribers?.size) {
     return 0;
   }
   const startedAt = detachedIdleStartedAtMs(session);
@@ -194,7 +194,7 @@ function detachedIdleForMs(session = {}, now = Date.now()) {
 }
 
 function clearDetachedCleanupTimer(session = {}) {
-  if (!session?.detachedCleanupTimer) {
+  if (!session.detachedCleanupTimer) {
     return;
   }
   clearTimeout(session.detachedCleanupTimer);

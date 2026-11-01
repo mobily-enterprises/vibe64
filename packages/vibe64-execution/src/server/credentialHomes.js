@@ -71,19 +71,19 @@ function credentialHomeRequiredError(label = "credential") {
   };
 }
 
-function actingUsernameFromUser(user = {}) {
+function actingUsernameFromUser(user) {
   return normalizeOsUsername(user?.username || user?.osUsername || user?.name);
 }
 
-function actingHomeFromUser(user = {}) {
+function actingHomeFromUser(user) {
   return normalizeHome(user?.home || user?.osHome);
 }
 
-function actingUidFromUser(user = {}) {
+function actingUidFromUser(user) {
   return normalizeId(user?.uid ?? user?.osUid);
 }
 
-function actingGidFromUser(user = {}) {
+function actingGidFromUser(user) {
   return normalizeId(user?.gid ?? user?.osGid);
 }
 
@@ -131,7 +131,7 @@ function codexCredentialContext(options = {}) {
   return appCredentialContext(options);
 }
 
-function githubCredentialContext(input = {}, {
+function githubCredentialContext(input, {
   accountMode = GITHUB_ACCOUNT_MODE_USER
 } = {}) {
   const resolvedAccountMode = normalizeGithubAccountMode(accountMode);
@@ -278,7 +278,7 @@ async function resolveGithubHomeForStoredActor({
 }
 
 function composeGithubTerminalHome(result = {}) {
-  if (result?.ok === false) {
+  if (result.ok === false) {
     return result;
   }
   const githubToolHomeSource = normalizeText(result.githubToolHomeSource || result.toolHomeSource);
@@ -292,7 +292,7 @@ function composeGithubTerminalHome(result = {}) {
   };
 }
 
-function logGithubCredentialHomeResolution(logger, result = {}, {
+function logGithubCredentialHomeResolution(logger, result, {
   operation = "",
   terminalKind = ""
 } = {}) {

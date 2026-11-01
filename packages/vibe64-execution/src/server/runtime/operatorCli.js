@@ -58,7 +58,7 @@ function resolveOperatorCli(tool = "", { env = process.env } = {}) {
  * with runtime packs installs its own CLIs, so its results are never read
  * this way.
  */
-function operatorCliStartFailed(result = {}) {
+function operatorCliStartFailed(result) {
   if (runtimePackRoot() || result?.ok === true) return false;
   return [126, 127].includes(result?.exitCode) || /\bspawn \S+ (?:ENOENT|EACCES)\b/u.test(String(result?.error || ""));
 }

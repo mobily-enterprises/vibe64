@@ -83,7 +83,7 @@ function namespacesForPrefix(namespacePrefix = "") {
 
 function scheduleDetachedCleanup(session = {}, namespace = "default") {
   clearDetachedCleanupTimer(session);
-  if (!sessionUsesDetachedCleanup(session) || session?.subscribers?.size) {
+  if (!sessionUsesDetachedCleanup(session) || session.subscribers?.size) {
     return;
   }
   const timeoutMs = normalizeDetachedIdleTimeoutMs(session.detachedIdleTimeoutMs);
@@ -335,8 +335,8 @@ function startTerminalSession({
           chunk: data,
           output: session.output,
           session: terminalSessionResponse(session),
-          updateMetadata(metadata) {
-            return applySessionMetadata(session, metadata);
+          updateMetadata(nextMetadata) {
+            return applySessionMetadata(session, nextMetadata);
           }
         });
       } catch (error) {

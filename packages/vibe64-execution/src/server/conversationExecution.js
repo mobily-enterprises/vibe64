@@ -104,103 +104,104 @@ export function createVibe64ConversationExecution({
       entry.exit.reject(error);
     }
   }
-  return Object.freeze({
-    stop,
-    async run(input = {}) {
-      if (input.mode !== "capture") throw new TypeError("Conversation execution requires capture mode.");
-      return commandRunner({
-        ...input, actor: "app", inheritProcessEnv: false,
-        credentialHome: input.credentialHome ?? credentialHome, allowedRoots: [input.cwd],
-        envPolicy: "auth", purpose: capturePurpose, runtimes: ["operator-clis", "node26"]
+
+  async function run(input = {}) {
+    if (input.mode !== "capture") throw new TypeError("Conversation execution requires capture mode.");
+    return commandRunner({
+      ...input, actor: "app", inheritProcessEnv: false,
+      credentialHome: input.credentialHome ?? credentialHome, allowedRoots: [input.cwd],
+      envPolicy: "auth", purpose: capturePurpose, runtimes: ["operator-clis", "node26"]
+    });
+  }
+
+  async function start({ command, args = [], cwd, env, stream = false } = {}) {
+    if (!cwd || !path.isAbsolute(cwd)) throw new TypeError("Native execution requires an absolute workspace directory.");
+    // A driver can isolate its own configuration/state without borrowing the
+    // account's home. The gateway still validates those paths against the actor.
+    const processHome = { ...credentialHome };
+    for (const [field, name] of [["home", "HOME"], ["cacheRoot", "XDG_CACHE_HOME"],
+      ["configRoot", "XDG_CONFIG_HOME"], ["dataRoot", "XDG_DATA_HOME"], ["stateRoot", "XDG_STATE_HOME"]]) {
+      if (env?.[name] === undefined) continue;
+      if (typeof env[name] !== "string" || !path.isAbsolute(env[name])) throw new TypeError(`Native ${name} must be an absolute directory.`);
+      processHome[field] = env[name];
+    }
+    // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
+    const uid = typeof process.getuid === "function" ? process.getuid() : "user";
+    const root = await mkdtemp(path.join(os.tmpdir(), `v64-conversation-${uid}-`));
+    const socketPath = path.join(root, "stream.sock");
+    const outputPath = logPath || path.join(root, "stderr.log");
+    let id;
+    try {
+      const result = await commandRunner({
+        actor: "app", command: stream ? process.execPath : command,
+        args: stream ? [bridgePath, socketPath, vibe64ProcessUmask(), command, ...args] : args,
+        baseEnv: env, inheritProcessEnv: false, credentialHome: processHome, cwd,
+        allowedRoots: [cwd], envPolicy: "auth", purpose, mode: "detached",
+        shimDirs, runtimes: ["node26", "operator-clis"], logPath: outputPath,
+        execution: { ...execution, kind: "assistant", lifecycle: "service",
+          operationId, ownerId: execution.ownerId || randomUUID(), label }
       });
-    },
-    async start({ command, args = [], cwd, env, stream = false } = {}) {
-      if (!cwd || !path.isAbsolute(cwd)) throw new TypeError("Native execution requires an absolute workspace directory.");
-      // A driver can isolate its own configuration/state without borrowing the
-      // account's home. The gateway still validates those paths against the actor.
-      const processHome = { ...credentialHome };
-      for (const [field, name] of [["home", "HOME"], ["cacheRoot", "XDG_CACHE_HOME"],
-        ["configRoot", "XDG_CONFIG_HOME"], ["dataRoot", "XDG_DATA_HOME"], ["stateRoot", "XDG_STATE_HOME"]]) {
-        if (env?.[name] === undefined) continue;
-        if (typeof env[name] !== "string" || !path.isAbsolute(env[name])) throw new TypeError(`Native ${name} must be an absolute directory.`);
-        processHome[field] = env[name];
-      }
-      // readable-check: allow method-probe - platform object: process.getuid() and process.getgid() exist only on POSIX
-      const uid = typeof process.getuid === "function" ? process.getuid() : "user";
-      const root = await mkdtemp(path.join(os.tmpdir(), `v64-conversation-${uid}-`));
-      const socketPath = path.join(root, "stream.sock");
-      const outputPath = logPath || path.join(root, "stderr.log");
-      let id;
-      try {
-        const result = await commandRunner({
-          actor: "app", command: stream ? process.execPath : command,
-          args: stream ? [bridgePath, socketPath, vibe64ProcessUmask(), command, ...args] : args,
-          baseEnv: env, inheritProcessEnv: false, credentialHome: processHome, cwd,
-          allowedRoots: [cwd], envPolicy: "auth", purpose, mode: "detached",
-          shimDirs, runtimes: ["node26", "operator-clis"], logPath: outputPath,
-          execution: { ...execution, kind: "assistant", lifecycle: "service",
-            operationId, ownerId: execution.ownerId || randomUUID(), label }
-        });
-        if (result?.ok !== true || !String(result?.execution?.id ?? "").trim()) {
-          const error = new Error(String(result?.error || result?.output || "").trim() || "The native process could not start.");
-          error.code = result?.code;
-          error.execution = result?.execution;
-          error.retryable = result?.retryable === true;
-          throw error;
-        }
-        id = result.execution.id;
-        const entry = { root, pid: result.pid, socket: null, stopping: null, running: true,
-          observation: new AbortController(), exit: Promise.withResolvers() };
-        // Startup can fail before the driver has received its handle.
-        entry.exit.promise.catch(() => {});
-        entries.set(id, entry);
-        void observe(id, entry);
-        await onStarted?.(id);
-        if (stream) {
-          const deadline = Date.now() + 30_000;
-          while (!entry.socket) {
-            if (!entry.running) {
-              await entry.exit.promise;
-              throw new Error("The native process exited before its stream was ready.");
-            }
-            try {
-              entry.socket = await new Promise((resolve, reject) => {
-                const socket = net.createConnection({ path: socketPath, allowHalfOpen: true });
-                socket.on("error", () => {});
-                socket.once("connect", () => { socket.off("error", reject); resolve(socket); });
-                socket.once("error", (error) => { socket.destroy(); reject(error); });
-              });
-            } catch (error) {
-              if (!["ENOENT", "ECONNREFUSED"].includes(error.code) || Date.now() >= deadline) throw error;
-              await delay(25);
-            }
-          }
-        }
-        return Object.freeze({ id, pid: result.pid, stdin: entry.socket, stdout: entry.socket, exited: entry.exit.promise,
-          readLogs() {
-            let descriptor;
-            try {
-              descriptor = openSync(outputPath, "r");
-              const size = fstatSync(descriptor).size;
-              const output = Buffer.alloc(Math.min(size, 64 * 1024));
-              readSync(descriptor, output, 0, output.length, Math.max(0, size - output.length));
-              return { stderr: output.toString("utf8").trim(), stdout: "",
-                ...(size > output.length ? { stderrTruncated: true } : {}) };
-            } catch (error) {
-              if (error.code === "ENOENT") return { stderr: "", stdout: "" };
-              throw error;
-            } finally { if (descriptor !== undefined) closeSync(descriptor); }
-          },
-          get running() { return entry.running; } });
-      } catch (error) {
-        if (id) {
-          error.executionId = id;
-          try { error.stopProof = await stop(id); }
-          catch (cleanupError) { error.cleanupError = cleanupError; error.stopProof = { scopeEmpty: false }; }
-          if (error.stopProof?.scopeEmpty !== true) error.cleanupFailed = true;
-        } else await rm(root, { recursive: true, force: true });
+      if (result?.ok !== true || !String(result?.execution?.id ?? "").trim()) {
+        const error = new Error(String(result?.error || result?.output || "").trim() || "The native process could not start.");
+        error.code = result?.code;
+        error.execution = result?.execution;
+        error.retryable = result?.retryable === true;
         throw error;
       }
+      id = result.execution.id;
+      const entry = { root, pid: result.pid, socket: null, stopping: null, running: true,
+        observation: new AbortController(), exit: Promise.withResolvers() };
+      // Startup can fail before the driver has received its handle.
+      entry.exit.promise.catch(() => {});
+      entries.set(id, entry);
+      void observe(id, entry);
+      await onStarted?.(id);
+      if (stream) {
+        const deadline = Date.now() + 30_000;
+        while (!entry.socket) {
+          if (!entry.running) {
+            await entry.exit.promise;
+            throw new Error("The native process exited before its stream was ready.");
+          }
+          try {
+            entry.socket = await new Promise((resolve, reject) => {
+              const socket = net.createConnection({ path: socketPath, allowHalfOpen: true });
+              socket.on("error", () => {});
+              socket.once("connect", () => { socket.off("error", reject); resolve(socket); });
+              socket.once("error", (error) => { socket.destroy(); reject(error); });
+            });
+          } catch (error) {
+            if (!["ENOENT", "ECONNREFUSED"].includes(error.code) || Date.now() >= deadline) throw error;
+            await delay(25);
+          }
+        }
+      }
+      return Object.freeze({ id, pid: result.pid, stdin: entry.socket, stdout: entry.socket, exited: entry.exit.promise,
+        readLogs() {
+          let descriptor;
+          try {
+            descriptor = openSync(outputPath, "r");
+            const size = fstatSync(descriptor).size;
+            const output = Buffer.alloc(Math.min(size, 64 * 1024));
+            readSync(descriptor, output, 0, output.length, Math.max(0, size - output.length));
+            return { stderr: output.toString("utf8").trim(), stdout: "",
+              ...(size > output.length ? { stderrTruncated: true } : {}) };
+          } catch (error) {
+            if (error.code === "ENOENT") return { stderr: "", stdout: "" };
+            throw error;
+          } finally { if (descriptor !== undefined) closeSync(descriptor); }
+        },
+        get running() { return entry.running; } });
+    } catch (error) {
+      if (id) {
+        error.executionId = id;
+        try { error.stopProof = await stop(id); }
+        catch (cleanupError) { error.cleanupError = cleanupError; error.stopProof = { scopeEmpty: false }; }
+        if (error.stopProof?.scopeEmpty !== true) error.cleanupFailed = true;
+      } else await rm(root, { recursive: true, force: true });
+      throw error;
     }
-  });
+  }
+
+  return Object.freeze({ stop, run, start });
 }
