@@ -95,19 +95,19 @@ const commandServers = createSessionCommandServers({
 /**
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {ProductionEnvironmentProvider} dependencies.productionEnvironmentProvider a host's production Env values
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link
  */
 function createAgentEnvCommandService({
   logger,
-  projectService,
+  project,
   productionEnvironmentProvider,
   savedEnvValueLinks
 }) {
   // The person whose request prepared this agent; a host's saved values
   // apply that person's permissions.
-  const projectBinding = createAgentCommandProjectBinding(projectService, {
+  const projectBinding = createAgentCommandProjectBinding(project, {
     sessionRequired: ["Vibe64 Env command session id is required.", "vibe64_agent_env_command_session_required"],
     projectRequired: ["Vibe64 Env command could not bind this session to a project.", "vibe64_agent_env_command_project_required"],
     unbound: ["Vibe64 Env command is not bound to this session project.", "vibe64_agent_env_command_project_binding_missing"],
@@ -130,7 +130,7 @@ function createAgentEnvCommandService({
       return toText(record?.source) === ENV_USER_VALUE_SOURCE;
     },
     async readRecords({ sessionId = "" } = {}) {
-      const result = assertOperationResult(await projectService.readEnv({
+      const result = assertOperationResult(await project.readEnv({
         environment: "dev",
         sessionId
       }), "Development Env could not be read.");
@@ -140,7 +140,7 @@ function createAgentEnvCommandService({
       key = "",
       sessionId = ""
     } = {}) {
-      assertOperationResult(await projectService.saveEnvUserValues({
+      assertOperationResult(await project.saveEnvUserValues({
         environment: "dev",
         sessionId,
         values: {
@@ -157,7 +157,7 @@ function createAgentEnvCommandService({
       sessionId = "",
       value = ""
     } = {}) {
-      assertOperationResult(await projectService.saveEnvUserValues({
+      assertOperationResult(await project.saveEnvUserValues({
         environment: "dev",
         sessionId,
         values: {

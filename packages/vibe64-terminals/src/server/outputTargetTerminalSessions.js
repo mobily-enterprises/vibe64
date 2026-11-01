@@ -27,13 +27,13 @@ import { readLaunchContext } from "./outputTargetLaunchContext.js";
  * @param {object} dependencies
  * @param {OutputTargetTerminalState} dependencies.state
  * @param {OutputTargetLaunchCoordination} dependencies.launchCoordination
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {(sessionId: string) => Promise<object>} dependencies.stopPreviewBrowsers
  */
 function createOutputTargetTerminalSessions({
   state,
   launchCoordination,
-  projectService,
+  project,
   stopPreviewBrowsers
 }) {
   async function close() {
@@ -58,7 +58,7 @@ function createOutputTargetTerminalSessions({
   }
 
   async function removeResultsForSession(sessionId) {
-    const context = await readLaunchContext(projectService, sessionId);
+    const context = await readLaunchContext(project, sessionId);
     await removeOutputResults(context.session);
     return {
       ok: true,
@@ -85,7 +85,7 @@ function createOutputTargetTerminalSessions({
   }
 
   async function readResult(sessionId, resultId) {
-    const context = await readLaunchContext(projectService, sessionId);
+    const context = await readLaunchContext(project, sessionId);
     return readOutputResult(context.session, resultId);
   }
 
@@ -113,8 +113,8 @@ function createOutputTargetTerminalSessions({
           error: "A newer Preview run is active. Refresh its status before stopping it."
         };
       }
-      const runtime = await projectService.createRuntime();
-      const projectSlug = currentProjectSlug(projectService);
+      const runtime = await project.createRuntime();
+      const projectSlug = currentProjectSlug(project);
       await writePreviewStopState(runtime.store, sessionId, { stopped: true });
       const activeId = active?.id && (!requestedId || active.id === requestedId) ? active.id : "";
       let result = { ok: true, id: requestedId, running: false, status: "exited" };

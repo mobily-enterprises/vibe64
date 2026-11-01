@@ -132,7 +132,7 @@ function createVibe64TerminalsFeature({
         opencodeTerminalController,
         productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,
         projectServices,
-        projectService: project,
+        project,
         publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
         publishSessionChanged: createTerminalSessionChangedPublishers(events),
         savedEnvValueLinks: savedEnvValueLinks ?? NO_SAVED_ENV_VALUE_LINKS

@@ -36,13 +36,13 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * @param {object} dependencies
  * @param {PromptHintContext} dependencies.hintContext
  * @param {PromptHintJobs} dependencies.hintJobs
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PromptHintState} dependencies.state
  */
 function createPromptHintRequests({
   hintContext,
   hintJobs,
-  projectService,
+  project,
   state
 }) {
   const requestsBySession = new Map();
@@ -253,7 +253,7 @@ function createPromptHintRequests({
       hintJobs.cancelRequest(request);
     }
     await Promise.all(requests.map((request) => request.promise.catch(() => null)));
-    const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+    const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
     const session = options.session || await runtime.getSession(normalizedSessionId, { inspectSource: false });
     const readPaths = options.renewalCleanup
       ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;

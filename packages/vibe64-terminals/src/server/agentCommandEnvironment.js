@@ -73,7 +73,7 @@ async function prepareOpenCodeSessionCommandEnvironment(context, {
   codexGitCommand,
   env,
   prepareCommandEnvironment,
-  projectService
+  project
 }) {
   if (context.assistantScope) {
     return {
@@ -87,7 +87,7 @@ async function prepareOpenCodeSessionCommandEnvironment(context, {
   if (!codexGitCommand) {
     return { env: {}, shimDirs: [] };
   }
-  const project = await projectService.readCurrentProject();
+  const projectRecord = await project.readCurrentProject();
   const prepared = await prepareCommandEnvironment({
     agentDatabaseCommand,
     agentEnvCommand,
@@ -95,7 +95,7 @@ async function prepareOpenCodeSessionCommandEnvironment(context, {
     agentSessionCommand,
     env,
     gitCommand: codexGitCommand,
-    project,
+    project: projectRecord,
     runtime: context.runtime,
     sessionId: context.sessionId,
     worktreePath: context.workdir
@@ -110,7 +110,7 @@ async function prepareOpenCodeSessionCommandEnvironment(context, {
   }
   return {
     env: {
-      ...await loadProjectExecutionEnv({ projectService, session: context.session, target: "opencode" }),
+      ...await loadProjectExecutionEnv({ project, session: context.session, target: "opencode" }),
       ...normalizeObject(prepared.env)
     },
     shimDirs: prepared.shimDirs

@@ -259,14 +259,14 @@ function createCodexRuntimeHost({
  * @param {CodexRuntimeHost} dependencies.runtimeHost
  * @param {CodexAccountPreparation} dependencies.accountPreparation
  * @param {CodexSessionEnvironment} dependencies.sessionEnvironment
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {RunVibe64Command} dependencies.runCommand
  */
 function createCodexSessionRuntimeHost({
   runtimeHost,
   accountPreparation,
   sessionEnvironment,
-  projectService,
+  project,
   runCommand
 }) {
   const { codexRuntimeForTerminalEnv, codexAppServerRuntimeOptions } = runtimeHost;
@@ -274,7 +274,7 @@ function createCodexSessionRuntimeHost({
   const { codexManagedCommandEnv } = sessionEnvironment;
 
   function createRuntimeForSession() {
-    return projectService.createRuntime({
+    return project.createRuntime({
       inspectSource: false
     });
   }
@@ -288,7 +288,7 @@ function createCodexSessionRuntimeHost({
    * Do not mask a regression with throttles or caches: keep the hot path bounded.
    */
   function createStoreForSession(sessionId = "") {
-    return projectService.createSessionStore({
+    return project.createSessionStore({
       sessionId
     });
   }
@@ -328,7 +328,7 @@ function createCodexSessionRuntimeHost({
     const baseTerminalEnv = suppliedTerminalEnv
       ? terminalEnv
       : learningRoot ? {} : await loadProjectExecutionEnv({
-          projectService,
+          project,
           runCommand,
           runtime: effectiveRuntime,
           session,

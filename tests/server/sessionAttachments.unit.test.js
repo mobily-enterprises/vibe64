@@ -20,9 +20,9 @@ async function fixture(root) {
   }
   const runtime = { store, getSession: (id) => store.readSession(id) };
   const env = { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") };
-  const projectService = { createRuntime: async () => runtime };
-  const attachments = createSessionAttachments({ env, projectService });
-  return { attachments, env, projectService, runtime, store };
+  const project = { createRuntime: async () => runtime };
+  const attachments = createSessionAttachments({ env, project });
+  return { attachments, env, project, runtime, store };
 }
 
 async function upload(attachments, fileName = "screen.png") {
@@ -36,7 +36,7 @@ async function upload(attachments, fileName = "screen.png") {
 for (const engine of ["codex", "opencode"]) {
   test(`${engine}: shared attachment admission resolves IDs, persists metadata, and keeps files beyond upload expiry`, async () => {
     await withTemporaryRoot(async (root) => {
-      const { attachments, env, projectService, runtime, store } = await fixture(root);
+      const { attachments, env, project, runtime, store } = await fixture(root);
       let delivered;
       const manager = createSessionAgentManager({
         ...sessionAgentManagerDefaults,
@@ -62,7 +62,7 @@ for (const engine of ["codex", "opencode"]) {
       await utimes(uploaded.path, old, old);
       await prepareCodexAttachmentStorage({ env });
       await assert.rejects(readFile(uploaded.path), { code: "ENOENT" });
-      const restarted = createSessionAttachments({ env, projectService });
+      const restarted = createSessionAttachments({ env, project });
       for (let turn = 0; turn < 5; turn++) {
         await store.writeConversationUserMessage("one", { text: `Follow-up ${turn}`, messageId: `follow-${turn}` });
       }
@@ -239,7 +239,7 @@ test("saved attachment reads reject symlink replacement and other project identi
     const otherRoot = path.join(root, "other-project");
     await mkdir(otherRoot);
     const other = await fixture(otherRoot);
-    const otherAttachments = createSessionAttachments({ env, projectService: other.projectService });
+    const otherAttachments = createSessionAttachments({ env, project: other.project });
     await assert.rejects(otherAttachments.readAttachment({ sessionId: "one" }, uploaded.attachmentId));
     await rm(prepared.attachments[0].path);
     await symlink(uploaded.path, prepared.attachments[0].path);

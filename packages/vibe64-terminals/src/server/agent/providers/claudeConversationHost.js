@@ -52,7 +52,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 /**
  * @param {object} dependencies
  * @param {RuntimeEnv} [dependencies.env]
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {RuntimeLogger} dependencies.logger
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(event: object) => unknown} dependencies.publishConversation
@@ -75,7 +75,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
  */
 function createClaudeConversationHost({
   env = process.env,
-  projectService,
+  project,
   logger,
   publishSessionChanged: publishApplicationSessionChanged,
   publishConversation,
@@ -124,7 +124,7 @@ function createClaudeConversationHost({
   const { prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess } =
     createClaudeConversationEnvironment({
       env,
-      projectService,
+      project,
       command: claudeCommand,
       credentialHome,
       commandRunner,
@@ -186,7 +186,7 @@ function createClaudeConversationHost({
   });
   const { queries: accountQueries, queryFailure: accountQueryFailure } = accounts;
   const turnEvents = createClaudeConversationEvents({
-    projectService,
+    project,
     storage: conversationStorage,
     messagePolicy,
     owner: conversations,
@@ -202,7 +202,7 @@ function createClaudeConversationHost({
   const terminalAccess = createTerminalAccess(conversations, recordGitActor);
   async function contextFor(context) {
     const projectContext = captureProjectRequestContext();
-    return { ...await readSessionConversationContext("claude", projectService, context.sessionId, context), projectContext };
+    return { ...await readSessionConversationContext("claude", project, context.sessionId, context), projectContext };
   }
 
   function prepareEntry(ctx, context, conversationId, { create, cleanupExecutionId, operation, input }) {
@@ -245,7 +245,7 @@ function createClaudeConversationHost({
    * Cleanup reaches the owner's retained work by session key; a conversation it
    * reopens gets its full context from the owner's own preparation.
    */
-  const ownerContextFor = context => readClaudeConversationOwnerContext(projectService, context.sessionId, context);
+  const ownerContextFor = context => readClaudeConversationOwnerContext(project, context.sessionId, context);
   const cleanupApplication = {
     readContext: context => ownerContextFor({ ...context, allowClosing: true }),
     terminals: { close: sessionId => closeTerminalSessionsForNamespace(claudeTerminalNamespace(sessionId)) }

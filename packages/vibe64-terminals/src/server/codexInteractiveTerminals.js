@@ -44,11 +44,11 @@ const CODEX_VISIBLE_TERMINAL_DETACHED_IDLE_TIMEOUT_MS = 5_000;
 const CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 4 * 1024 * 1024;
 
 /**
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {Vibe64SessionRuntime} [runtime]
  */
-async function globalCodexRuntimeRoot(projectService, runtime = null) {
-  const serviceRoot = normalizeText(projectService.currentProjectRuntimeRoot());
+async function globalCodexRuntimeRoot(project, runtime = null) {
+  const serviceRoot = normalizeText(project.currentProjectRuntimeRoot());
   if (serviceRoot) {
     return serviceRoot;
   }
@@ -67,7 +67,7 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
 /**
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {RunVibe64Command} dependencies.runCommand
  * @param {CodexRuntimeHost} dependencies.runtimeHost
  * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
@@ -79,7 +79,7 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
  */
 function createCodexInteractiveTerminals({
   env,
-  projectService,
+  project,
   runCommand,
   runtimeHost,
   sessionRuntimeHost,
@@ -265,10 +265,10 @@ function createCodexInteractiveTerminals({
   }
 
   async function startGlobalCodexTerminalSession() {
-    const runtime = await projectService.createRuntime({
+    const runtime = await project.createRuntime({
       inspectSource: false
     });
-    const executionRoot = await globalCodexRuntimeRoot(projectService, runtime);
+    const executionRoot = await globalCodexRuntimeRoot(project, runtime);
     if (!executionRoot) {
       return nonRetryableTerminalFailure({
         ok: false,
@@ -294,7 +294,7 @@ function createCodexInteractiveTerminals({
     });
     const terminalEnv = await loadProjectExecutionEnv({
       prepare: true,
-      projectService,
+      project,
       runCommand,
       runtime,
       session,
@@ -443,7 +443,7 @@ function createCodexInteractiveTerminals({
 
   function readGlobalTerminal(terminalSessionId) {
     return vibe64Result(async () => {
-      const executionRoot = await globalCodexRuntimeRoot(projectService);
+      const executionRoot = await globalCodexRuntimeRoot(project);
       const snapshot = readTerminalSession(terminalSessionId, {
         namespace: globalCodexTerminalNamespace()
       });
@@ -475,7 +475,7 @@ function createCodexInteractiveTerminals({
 
   async function globalTerminalState() {
     return vibe64Result(async () => {
-      const executionRoot = await globalCodexRuntimeRoot(projectService);
+      const executionRoot = await globalCodexRuntimeRoot(project);
       const codexTerminal = activeGlobalCodexTerminal(executionRoot);
       return {
         codexTerminal,
@@ -487,7 +487,7 @@ function createCodexInteractiveTerminals({
 
   function subscribeGlobalTerminal(terminalSessionId, subscriber) {
     return vibe64Result(async () => {
-      const executionRoot = await globalCodexRuntimeRoot(projectService);
+      const executionRoot = await globalCodexRuntimeRoot(project);
       const subscribed = subscribeTerminalSession(terminalSessionId, subscriber, {
         namespace: globalCodexTerminalNamespace()
       });

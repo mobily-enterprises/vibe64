@@ -17,12 +17,12 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * the audited writes that run on it, and the server this computer runs for it.
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {typeof import("./connection.js").withSessionKnex} dependencies.withKnex
  */
 function createSessionDatabase({
   logger,
-  projectService,
+  project,
   withKnex
 }) {
   async function sessionContext(input) {
@@ -30,9 +30,9 @@ function createSessionDatabase({
     if (!sessionId) {
       throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
-    const store = await projectService.createSessionStore();
+    const store = await project.createSessionStore();
     const session = await store.readSession(sessionId);
-    const database = await projectService.sessionDatabaseEnvironment({
+    const database = await project.sessionDatabaseEnvironment({
       session,
       sessionId
     });
@@ -177,9 +177,9 @@ function createSessionDatabase({
     if (!sessionId) {
       throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
-    const store = await projectService.createSessionStore();
+    const store = await project.createSessionStore();
     const session = await store.readSession(sessionId);
-    const servers = await projectService.localDatabaseServers({ session, sessionId });
+    const servers = await project.localDatabaseServers({ session, sessionId });
     if (servers.managed) return { ok: true, managed: true, databases: [] };
     const family = thisComputerToolFamily();
     const databases = await Promise.all(servers.databases.map(async ({ endpoint, ...database }) => ({

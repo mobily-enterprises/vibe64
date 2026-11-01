@@ -271,7 +271,7 @@ function createFixture({
     cacheTtlMs,
     diagnostic(event) { calls.diagnostic.push(event); },
     now,
-    projectService: {
+    project: {
       async createRuntime() {
         return runtime;
       },

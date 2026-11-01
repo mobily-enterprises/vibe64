@@ -147,18 +147,18 @@ async function withSourceEditorExplanationFreshness(context = {}, explanation = 
 /**
  * @param {object} [context]
  * @param {string} [threadId]
- * @param {TerminalsService} terminalService
+ * @param {TerminalsService} terminals
  * @param {object | null} [executionProfile]
  */
 async function cleanupRejectedSourceEditorExplanationThread(
   context,
   threadId,
-  terminalService,
+  terminals,
   executionProfile = null
 ) {
   if (context.assistantHelper) {
     try {
-      const result = await deleteSourceEditorExplanationAgentThread(context, { helper: context.assistantHelper }, { terminalService });
+      const result = await deleteSourceEditorExplanationAgentThread(context, { helper: context.assistantHelper }, { terminals });
       await removeSourceEditorExplanationCleanupRecord(context, context.explanationId);
       context.assistantHelper = null;
       return result;
@@ -167,7 +167,7 @@ async function cleanupRejectedSourceEditorExplanationThread(
     }
   }
   try {
-    const cleanup = await terminalService.deleteDetachedAgentChatThread(
+    const cleanup = await terminals.deleteDetachedAgentChatThread(
       context.sessionId,
       {
         executionProfile: sourceEditorExecutionProfileSnapshot(executionProfile) ||
@@ -269,7 +269,7 @@ function emitSourceEditorExplanationEvent(emit = null, isClosed = null, type = "
 /**
  * @param {object} [context]
  * @param {object} [options]
- * @param {TerminalsService} options.terminalService
+ * @param {TerminalsService} options.terminals
  */
 async function streamSourceEditorAgentTurn(context = {}, options = {}) {
   const {
@@ -279,7 +279,7 @@ async function streamSourceEditorAgentTurn(context = {}, options = {}) {
     onTurn = null,
     prompt = "",
     promptLabel = "",
-    terminalService,
+    terminals,
     threadId = "",
     outputSchema = SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA,
     answerMaxChars = SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS
@@ -290,7 +290,7 @@ async function streamSourceEditorAgentTurn(context = {}, options = {}) {
   let latestTurnId = "";
   let result = null;
   try {
-    result = await runSourceEditorHelperTurn(terminalService, context, {
+    result = await runSourceEditorHelperTurn(terminals, context, {
       executionProfile: resolvedSourceEditorExecutionProfile(context.agentExecutionProfile),
       outputSchema,
       prompt,
@@ -550,7 +550,7 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
  * @param {object} [context]
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
- * @param {TerminalsService} options.terminalService
+ * @param {TerminalsService} options.terminals
  */
 async function runTrackedSourceEditorAgentTurn(context = {}, options = {}) {
   const {
@@ -561,7 +561,7 @@ async function runTrackedSourceEditorAgentTurn(context = {}, options = {}) {
     fallbackError = "Source explanation failed.",
     remember = async () => ({}),
     run = async () => ({}),
-    terminalService
+    terminals
   } = options;
   const finishStoppedExplanation = async (executionProfile = null) => {
     let stopped = await readStoppedSourceEditorExplanation(context, currentExplanation().id, {
@@ -616,7 +616,7 @@ async function runTrackedSourceEditorAgentTurn(context = {}, options = {}) {
       ? await cleanupRejectedSourceEditorExplanationThread(
           context,
           rejectedThreadId,
-          terminalService,
+          terminals,
           rejectedThread.executionProfile
         )
       : null;

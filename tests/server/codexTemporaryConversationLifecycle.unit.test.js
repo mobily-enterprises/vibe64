@@ -557,13 +557,13 @@ test("helper work consumes the caller runtime and session without an implicit pr
     controller,
     projectContextRoot,
     projectRuntimeRoot,
-    projectService,
+    project,
     session,
     subscribers
   }) => {
     let implicitRuntimeLookups = 0;
     let explicitRuntimeSessionLookups = 0;
-    const originalCreateRuntime = projectService.createRuntime;
+    const originalCreateRuntime = project.createRuntime;
     const callerSession = {
       ...session,
       projectContextRoot: path.join(projectRuntimeRoot, "wrong-session-authority")
@@ -576,7 +576,7 @@ test("helper work consumes the caller runtime and session without an implicit pr
       projectContextRoot,
       stateRoot: projectRuntimeRoot
     };
-    projectService.createRuntime = () => {
+    project.createRuntime = () => {
       implicitRuntimeLookups += 1;
       throw new Error("Explicit helper context must not create another project runtime.");
     };
@@ -619,7 +619,7 @@ test("helper work consumes the caller runtime and session without an implicit pr
         callerSession.projectContextRoot
       );
     } finally {
-      projectService.createRuntime = originalCreateRuntime;
+      project.createRuntime = originalCreateRuntime;
     }
   });
 });
@@ -630,7 +630,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
     captures,
     projectContextRoot,
     projectRuntimeRoot,
-    projectService,
+    project,
     session,
     subscribers,
     temporaryRoot
@@ -667,7 +667,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       toolHomeSource: codexToolHomeSource
     });
     const terminalProjectService = {
-      ...projectService,
+      ...project,
       createRuntime() {
         return runtime;
       },
@@ -676,7 +676,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       },
       async readCurrentProject() {
         return {
-          projectContextRoot: projectService.createRuntime().projectContextRoot,
+          projectContextRoot: project.createRuntime().projectContextRoot,
           slug: "test-project"
         };
       },
@@ -690,7 +690,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
         return { ok: true };
       }
     };
-    const terminalService = createTerminalService({
+    const terminals = createTerminalService({
       logger: silentLogger,
       codexTerminalController: {
             codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
@@ -704,7 +704,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
         VIBE64_RUNTIME_NAMESPACE: "test",
         VIBE64_WORKSPACE: "test"
       },
-      projectService: terminalProjectService
+      project: terminalProjectService
     });
     await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
     await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ owner: {
@@ -719,20 +719,20 @@ test("source explanations preserve one pre-resolved profile through the terminal
       resolutionCallsWhenThreadStarted = resolutionCalls;
     };
     const sourceTerminalService = {
-      ...terminalService,
+      ...terminals,
       async resolveEphemeralAgentExecutionProfile(...args) {
         resolutionCalls += 1;
-        resolvedProfile = await terminalService.resolveEphemeralAgentExecutionProfile(...args);
+        resolvedProfile = await terminals.resolveEphemeralAgentExecutionProfile(...args);
         firstResolvedProfile ||= resolvedProfile;
         return resolvedProfile;
       }
     };
     const sourceEditor = createSourceEditorService({ logger: console,
-      projectService: terminalProjectService,
+      project: terminalProjectService,
       temporaryRoot,
-      terminalService: sourceTerminalService
+      terminals: sourceTerminalService
     });
-    terminalService.setSourceEditorProvider(sourceEditor);
+    terminals.setSourceEditorProvider(sourceEditor);
     await writeFile(
       path.join(session.metadata.source_path, "app.js"),
       "export function total(left, right) { return left + right; }\n"
@@ -775,7 +775,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       assert.equal(captures.turns[0].settings.model, auditProfile.model);
     } finally {
       await sourceEditor.close();
-      await terminalService.closeSessionTerminals(session.sessionId);
+      await terminals.closeSessionTerminals(session.sessionId);
     }
   });
 });
@@ -791,7 +791,7 @@ for (const startFails of [false, true]) {
       captures,
       projectContextRoot,
       projectRuntimeRoot,
-      projectService,
+      project,
       session,
       subscribers,
       temporaryRoot
@@ -829,7 +829,7 @@ for (const startFails of [false, true]) {
       });
       captures.interruptCompletesTurns = true;
       const terminalProjectService = {
-        ...projectService,
+        ...project,
         createRuntime() {
           return runtime;
         },
@@ -851,7 +851,7 @@ for (const startFails of [false, true]) {
       };
       const followupDispatch = createDeterministicHold();
       const stopInputRead = createDeterministicHold();
-      const terminalService = createTerminalService({
+      const terminals = createTerminalService({
         logger: silentLogger,
         codexTerminalController: {
                 codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
@@ -879,7 +879,7 @@ for (const startFails of [false, true]) {
           VIBE64_RUNTIME_NAMESPACE: "test",
           VIBE64_WORKSPACE: "test"
         },
-        projectService: terminalProjectService
+        project: terminalProjectService
       });
       await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
       await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ owner: {
@@ -887,11 +887,11 @@ for (const startFails of [false, true]) {
         explain: { follows: "quickHelper" }
       }, nonOwner: {} }, 0);
       const sourceEditor = createSourceEditorService({ logger: console,
-        projectService: terminalProjectService,
+        project: terminalProjectService,
         temporaryRoot,
-        terminalService
+        terminals
       });
-      terminalService.setSourceEditorProvider(sourceEditor);
+      terminals.setSourceEditorProvider(sourceEditor);
       const cleanupPath = path.join(temporaryRoot, "vibe64-source-editor",
         createHash("sha256").update(session.sessionId).digest("hex").slice(0, 24), "source-editor-explanation-cleanup.json");
       const explanationId = "exp-stop-pending-followup";
@@ -1035,7 +1035,7 @@ for (const startFails of [false, true]) {
         followupDispatch.release();
         stopInputRead.release();
         await sourceEditor.close();
-        await terminalService.closeSessionTerminals(session.sessionId);
+        await terminals.closeSessionTerminals(session.sessionId);
       }
       await assert.rejects(readFile(cleanupPath), { code: "ENOENT" });
       assert.ok(captures.deletes.includes("conversation-1"));
@@ -1050,7 +1050,7 @@ for (const startFails of [false, true]) {
 }
 
 test("terminal renewal callbacks run inside the agent-write lock and hidden seeding uses only its renewal reader", async () => {
-  await withConversationController(async ({ projectRuntimeRoot, projectService, session, temporaryRoot }) => {
+  await withConversationController(async ({ projectRuntimeRoot, project, session, temporaryRoot }) => {
     const codexToolHomeSource = path.join(temporaryRoot, "codex-tool-home");
     await mkdir(path.join(codexToolHomeSource, ".codex"), { recursive: true });
     await writeFile(
@@ -1075,10 +1075,10 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
           status: VIBE64_SESSION_STATUS.RENEWAL_PENDING
         };
       },
-      projectContextRoot: projectService.createRuntime().projectContextRoot,
+      projectContextRoot: project.createRuntime().projectContextRoot,
       stateRoot: projectRuntimeRoot,
       store: {
-        ...projectService.createRuntime().store,
+        ...project.createRuntime().store,
         async runSessionExclusive(sessionId, operationName, operation) {
           assert.equal(sessionId, session.sessionId);
           assert.equal(operationName, "agent-write-mode");
@@ -1108,7 +1108,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
       }
     };
     const terminalProjectService = {
-      ...projectService,
+      ...project,
       createSessionStore() {
         return {};
       },
@@ -1131,7 +1131,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
         return { ok: true };
       }
     };
-    const terminalService = createTerminalService({
+    const terminals = createTerminalService({
       logger: silentLogger,
       codexTerminalController: {
         codexAppServerProviderFactory() {
@@ -1144,14 +1144,14 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
         VIBE64_RUNTIME_NAMESPACE: "test",
         VIBE64_WORKSPACE: "test"
       },
-      projectService: terminalProjectService
+      project: terminalProjectService
     });
     const cancelled = {
       code: "cancelled-inside-lock",
       ok: false
     };
 
-    const generated = await terminalService.generateSessionRenewalHandover(
+    const generated = await terminals.generateSessionRenewalHandover(
       session.sessionId,
       { operationId: "renewal:generate" },
       {
@@ -1163,7 +1163,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
         runtime
       }
     );
-    const merged = await terminalService.generateSessionRenewalHandover(
+    const merged = await terminals.generateSessionRenewalHandover(
       session.sessionId,
       { operationId: "renewal:merged" },
       {
@@ -1184,7 +1184,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
         runtime
       }
     );
-    const seeded = await terminalService.seedSessionRenewalHandover(
+    const seeded = await terminals.seedSessionRenewalHandover(
       session.sessionId,
       { operationId: "renewal:seed" },
       {
@@ -1208,13 +1208,13 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
     };
     assert.equal(normalReads, 3);
     await assert.rejects(
-      () => terminalService.closeRenewalSuccessorSessionTerminals(hiddenSuccessor, {
+      () => terminals.closeRenewalSuccessorSessionTerminals(hiddenSuccessor, {
         renewalId: "wrong-renewal",
         runtime
       }),
       TypeError
     );
-    await terminalService.closeRenewalSuccessorSessionTerminals(hiddenSuccessor, {
+    await terminals.closeRenewalSuccessorSessionTerminals(hiddenSuccessor, {
       renewalId,
       runtime
     });
@@ -1765,7 +1765,7 @@ async function withConversationController(operation, {
     toolHomeSource: "",
     transport: "unix"
   };
-  const projectService = {
+  const project = {
     agentRuntimeRoot: path.join(temporaryRoot, "agent-runtimes"),
     createRuntime() {
       return {
@@ -1812,7 +1812,7 @@ async function withConversationController(operation, {
     }
   };
   const controller = createCodexTerminalController({
-    nativeTestContext: { runtime: projectService.createRuntime(), session },
+    nativeTestContext: { runtime: project.createRuntime(), session },
     codexAppServerProviderFactory(providerOptions) {
       captures.onProviderFactory?.();
       return providerFactory
@@ -1824,12 +1824,12 @@ async function withConversationController(operation, {
     ...(codexToolHomeSource === undefined ? {} : { codexToolHomeSource }),
     ...(codexSystemRoot === undefined ? {} : { codexAppServerProviderOptions: { systemRoot: codexSystemRoot } }),
     env: {
-      VIBE64_AGENT_RUNTIME_DIR: projectService.agentRuntimeRoot,
+      VIBE64_AGENT_RUNTIME_DIR: project.agentRuntimeRoot,
       ...(codexGitCommand ? { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(temporaryRoot, "attachments") } : {}),
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
-    projectService
+    project
   });
   let closeController = true;
   try {
@@ -1840,7 +1840,7 @@ async function withConversationController(operation, {
       promptHintReads,
       projectContextRoot,
       projectRuntimeRoot,
-      projectService,
+      project,
       session,
       simulateControllerCrash() {
         closeController = false;
@@ -1898,15 +1898,15 @@ function createRestartedController({
   calls = [],
   captures,
   codexHelperThreadLedgerFactory,
-  projectService,
+  project,
   providerFactory = null,
   codexToolHomeSource = undefined,
   codexSystemRoot = undefined,
   subscribers = new Set()
 } = {}) {
-  const runtime = projectService.createRuntime();
+  const runtime = project.createRuntime();
   const projectRuntimeRoot = runtime.stateRoot;
-  const agentRuntimeRoot = projectService.agentRuntimeRoot ||
+  const agentRuntimeRoot = project.agentRuntimeRoot ||
     path.join(projectRuntimeRoot, "agent-runtimes");
   return createCodexTerminalController({
     ...(session ? { nativeTestContext: { runtime, session } } : {}),
@@ -1923,7 +1923,7 @@ function createRestartedController({
     ...(codexHelperThreadLedgerFactory ? { codexHelperThreadLedgerFactory } : {}),
     ...(codexToolHomeSource === undefined ? {} : { codexToolHomeSource }),
     ...(codexSystemRoot === undefined ? {} : { codexAppServerProviderOptions: { systemRoot: codexSystemRoot } }),
-    projectService
+    project
   });
 }
 
@@ -2006,7 +2006,7 @@ async function withAgentMessageController(operation, {
     store
   };
   if (runtimeFactory) store = runtime.store;
-  const projectService = {
+  const project = {
     createRuntime() {
       return runtime;
     },
@@ -2270,7 +2270,7 @@ async function withAgentMessageController(operation, {
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
-    projectService
+    project
   };
   const terminalServices = [];
   const createService = ({ logger = silentLogger } = {}) => {
@@ -2281,13 +2281,13 @@ async function withAgentMessageController(operation, {
       env: controllerOptions.env,
       logger,
       publishSessionChanged: { agentTerminal: controllerOptions.publishSessionChanged },
-      projectService
+      project
     });
     terminalServices.push(service);
     return service;
   };
-  const terminalService = throughTerminalService ? createService() : null;
-  const controller = terminalService ? null : createCodexTerminalController(controllerOptions);
+  const terminals = throughTerminalService ? createService() : null;
+  const controller = terminals ? null : createCodexTerminalController(controllerOptions);
 
   try {
     await operation({
@@ -2295,14 +2295,14 @@ async function withAgentMessageController(operation, {
       createService,
       controller,
       controllerOptions,
-      projectService,
+      project,
       runtime,
       sessionId: session.sessionId,
       store,
-      terminalService
+      terminals
     });
   } finally {
-    if (terminalService) {
+    if (terminals) {
       for (const service of terminalServices) await service.close();
     } else {
       await controller.closeAllForSession(session.sessionId);
@@ -2317,7 +2317,7 @@ async function withAgentMessageController(operation, {
 }
 
 test("cold terminal cleanup honors an idle session's saved OpenCode selection", { timeout: 15_000 }, async () => {
-  await withAgentMessageController(async ({ captures, terminalService, sessionId, store }) => {
+  await withAgentMessageController(async ({ captures, terminals, sessionId, store }) => {
     const session = await store.readSession(sessionId);
     const selection = JSON.parse(session.metadata.assistant_selection);
     await store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, JSON.stringify({
@@ -2327,14 +2327,14 @@ test("cold terminal cleanup honors an idle session's saved OpenCode selection", 
 
     // No chat has opened in this service: cleanup must use durable selection,
     // not an in-memory binding or the default Codex provider.
-    const result = await terminalService.closeSessionTerminals(sessionId);
+    const result = await terminals.closeSessionTerminals(sessionId);
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(captures.providerOptions.length, 0, "cleanup must not prepare Codex");
   }, { throughTerminalService: true });
 });
 
 test("an archived session's assistant check prepares no provider", { timeout: 15_000 }, async () => {
-  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
     // The store still returns an archived session, such as a renewed predecessor.
     const { getSession } = runtime;
     runtime.getSession = async (id, options) => {
@@ -2343,7 +2343,7 @@ test("an archived session's assistant check prepares no provider", { timeout: 15
         metadata: { ...session.metadata, session_closing_reason: "archived", source_removed: "yes" } };
     };
     try {
-      const result = await terminalService.ensureAgentSession(sessionId);
+      const result = await terminals.ensureAgentSession(sessionId);
       assert.deepEqual(result, { ok: false, code: "vibe64_session_archived", error: "This session is archived.", sessionId });
       assert.equal(captures.providerOptions.length, 0, "an archived session must not prepare its assistant");
     } finally {
@@ -2358,14 +2358,14 @@ test("session terminal cleanup drains its supporting services through the existi
     async closeSession(context, sessionId) { calls.push({ context, sessionId }); return { ok: true }; },
     async closeAll() {}
   };
-  await withAgentMessageController(async ({ terminalService, sessionId, projectService }) => {
-    const project = await projectService.readCurrentProject();
-    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
-      assert.equal((await terminalService.closeSessionTerminals(sessionId)).ok, true);
+  await withAgentMessageController(async ({ terminals, sessionId, project }) => {
+    const projectRecord = await project.readCurrentProject();
+    await runWithProjectRequestContext({ slug: projectRecord.slug, targetRoot: projectRecord.path }, async () => {
+      assert.equal((await terminals.closeSessionTerminals(sessionId)).ok, true);
     });
     assert.equal(calls.length, 1);
     assert.equal(calls[0].sessionId, sessionId);
-    assert.equal(calls[0].context.projectContextRoot, project.path);
+    assert.equal(calls[0].context.projectContextRoot, projectRecord.path);
   }, { throughTerminalService: true, projectServices });
 });
 
@@ -2375,16 +2375,16 @@ test("a helper cleanup that cannot finish still lets every later session cleanup
     async closeSession(_context, sessionId) { calls.push(`services:${sessionId}`); return { ok: true }; },
     async closeAll() {}
   };
-  await withAgentMessageController(async ({ terminalService, sessionId, projectService }) => {
-    terminalService.setDatabaseToolsProvider({ refreshSchema: async () => ({ ok: true }),
+  await withAgentMessageController(async ({ terminals, sessionId, project }) => {
+    terminals.setDatabaseToolsProvider({ refreshSchema: async () => ({ ok: true }),
       async closeAssistantsForSession(id) { calls.push(`database:${id}`); return { ok: false, code: "cleanup_pending", error: "Native process still owned." }; }
     });
-    terminalService.setSourceEditorProvider({
+    terminals.setSourceEditorProvider({
       async closeExplanationsForSession(id) { calls.push(`explanations:${id}`); throw new Error("Explanation ledger unavailable."); }
     });
-    const project = await projectService.readCurrentProject();
-    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
-      await assert.rejects(terminalService.closeSessionTerminals(sessionId), (error) => {
+    const projectRecord = await project.readCurrentProject();
+    await runWithProjectRequestContext({ slug: projectRecord.slug, targetRoot: projectRecord.path }, async () => {
+      await assert.rejects(terminals.closeSessionTerminals(sessionId), (error) => {
         assert.equal(error.code, "vibe64_session_stop_failed");
         assert.equal(error.sessionId, sessionId);
         assert.deepEqual(error.controllers, ["Database copilot", "Source explanations"]);
@@ -2394,42 +2394,42 @@ test("a helper cleanup that cannot finish still lets every later session cleanup
     });
     assert.deepEqual(calls, [`database:${sessionId}`, `explanations:${sessionId}`, `services:${sessionId}`],
       "Project services still drain after both helper cleanups fail");
-    terminalService.setSourceEditorProvider(null);
-    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
-      await assert.rejects(terminalService.closeSessionTerminals(sessionId), { code: "cleanup_pending",
+    terminals.setSourceEditorProvider(null);
+    await runWithProjectRequestContext({ slug: projectRecord.slug, targetRoot: projectRecord.path }, async () => {
+      await assert.rejects(terminals.closeSessionTerminals(sessionId), { code: "cleanup_pending",
         message: "Database copilot: Native process still owned." });
     });
     // A step's own refusal of a retry (a renewal reads `retryable`) survives the label.
     const refusal = Object.assign(new Error("Codex admission is frozen."), {
       code: "vibe64_session_renewal_quiesced", retryable: false, statusCode: 409 });
-    terminalService.setDatabaseToolsProvider({ refreshSchema: async () => ({ ok: true }),
+    terminals.setDatabaseToolsProvider({ refreshSchema: async () => ({ ok: true }),
       async closeAssistantsForSession() { throw refusal; } });
-    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
-      await assert.rejects(terminalService.closeSessionTerminals(sessionId), (error) => {
+    await runWithProjectRequestContext({ slug: projectRecord.slug, targetRoot: projectRecord.path }, async () => {
+      await assert.rejects(terminals.closeSessionTerminals(sessionId), (error) => {
         assert.deepEqual({ code: error.code, retryable: error.retryable, statusCode: error.statusCode, cause: error.cause },
           { code: "vibe64_session_renewal_quiesced", retryable: false, statusCode: 409, cause: refusal });
         assert.equal(error.message, "Database copilot: Codex admission is frozen.");
         return true;
       });
-      terminalService.setSourceEditorProvider({ async closeExplanationsForSession() { throw new Error("Explanation ledger unavailable."); } });
-      await assert.rejects(terminalService.closeSessionTerminals(sessionId),
+      terminals.setSourceEditorProvider({ async closeExplanationsForSession() { throw new Error("Explanation ledger unavailable."); } });
+      await assert.rejects(terminals.closeSessionTerminals(sessionId),
         { code: "vibe64_session_stop_failed", retryable: false, controllers: ["Database copilot", "Source explanations"] });
     });
   }, { throughTerminalService: true, projectServices });
 });
 
 test("archive retires the session's open temporary chats while an ordinary session close keeps them", { timeout: 15_000 }, async () => {
-  await withAgentMessageController(async ({ terminalService, sessionId, projectService }) => {
-    const project = await projectService.readCurrentProject();
-    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
-      await terminalService.createTemporaryConversation(sessionId, { conversationId: "archived-chat" },
+  await withAgentMessageController(async ({ terminals, sessionId, project }) => {
+    const projectRecord = await project.readCurrentProject();
+    await runWithProjectRequestContext({ slug: projectRecord.slug, targetRoot: projectRecord.path }, async () => {
+      await terminals.createTemporaryConversation(sessionId, { conversationId: "archived-chat" },
         { vibe64User: { username: "owner", role: "owner" } });
-      const handle = await terminalService.openTemporaryBrowserConversation(sessionId, "archived-chat", { browserAuthority: {
-        actorId: "owner", conversationId: "archived-chat", projectSlug: project.slug, sessionId } });
+      const handle = await terminals.openTemporaryBrowserConversation(sessionId, "archived-chat", { browserAuthority: {
+        actorId: "owner", conversationId: "archived-chat", projectSlug: projectRecord.slug, sessionId } });
       await handle.subscribe(() => {});
-      assert.equal((await terminalService.closeSessionTerminals(sessionId)).ok, true);
+      assert.equal((await terminals.closeSessionTerminals(sessionId)).ok, true);
       await handle.subscribe(() => {});
-      assert.equal((await terminalService.closeSessionTerminals(sessionId, { forgetConversationBinding: true })).ok, true);
+      assert.equal((await terminals.closeSessionTerminals(sessionId, { forgetConversationBinding: true })).ok, true);
       await assert.rejects(handle.subscribe(() => {}), { code: "conversation_closed" });
     });
   }, { actions: { listDefinitions: () => [], async execute({ actionId }) {
@@ -2691,7 +2691,7 @@ test("Codex reasoning activity follows native item boundaries, clears on tool us
 });
 
 test("Codex initialization pins its routing home even when a previous engine has a conversation", async () => {
-  await withAgentMessageController(async ({ captures, controllerOptions, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, controllerOptions, sessionId, store, terminals }) => {
     const session = await store.readSession(sessionId);
     const selection = { ...JSON.parse(session.metadata.assistant_selection), modelProviderId: "deepseek", modelId: "deepseek-flash" };
     const connections = createCodexProviderConnectionStore({ systemRoot: controllerOptions.codexAppServerProviderOptions.systemRoot,
@@ -2702,22 +2702,22 @@ test("Codex initialization pins its routing home even when a previous engine has
       agent_identity_conversation_id: "previous-opencode-thread", opencode_conversation_id: "previous-opencode-thread"
     })) await store.writeMetadataValue(sessionId, name, value);
 
-    const prepared = await terminalService.ensureAgentSession(sessionId);
+    const prepared = await terminals.ensureAgentSession(sessionId);
     assert.equal(prepared.ok, true, JSON.stringify(prepared));
     const ready = await store.readSession(sessionId);
     assert.equal(ready.metadata.codex_routing_home_provider, "openai");
     assert.equal(ready.metadata.opencode_conversation_id, "previous-opencode-thread");
     assert.equal(captures.providerOptions.at(-1).toolHomeSource, controllerOptions.codexToolHomeSource);
     assert.equal(captures.turns.length, 0, "Preparing a new assistant must not send a message.");
-    await terminalService.prepareRoutingSelection(sessionId, selection, { runtime: { store }, session: ready });
+    await terminals.prepareRoutingSelection(sessionId, selection, { runtime: { store }, session: ready });
     assert.equal((await store.readSession(sessionId)).metadata.agent_identity_conversation_id,
       ready.metadata.agent_identity_conversation_id, "Routing must retain the prepared native conversation.");
   }, { throughTerminalService: true });
 });
 
 test("assistant verification shares a stalled status read while attachments remain usable", { timeout: 15_000 }, async () => {
-  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
-    assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
+    assert.equal((await terminals.ensureAgentSession(sessionId)).ok, true);
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
     let reads = 0;
@@ -2729,11 +2729,11 @@ test("assistant verification shares a stalled status read while attachments rema
     };
     captures.provider.ensureAvailable = async () => { throw new Error("Verification repeated provider preparation"); };
     captures.provider.resumeThread = async () => { throw new Error("Verification resumed an already subscribed thread"); };
-    const first = terminalService.ensureAgentSession(sessionId);
+    const first = terminals.ensureAgentSession(sessionId);
     await entered.promise;
-    const second = terminalService.ensureAgentSession(sessionId);
+    const second = terminals.ensureAgentSession(sessionId);
     try {
-      const uploaded = await terminalService.uploadAgentAttachment(sessionId, {
+      const uploaded = await terminals.uploadAgentAttachment(sessionId, {
         fileName: "while-checking.txt",
         stream: Readable.from(["Uploaded while the provider is stalled."])
       });
@@ -2780,8 +2780,8 @@ test("a late assistant verification response cannot reattach a closed session", 
 });
 
 test("verification of an unloaded or missing Codex thread requires protected preparation", { timeout: 15_000 }, async () => {
-  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
-    assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
+    assert.equal((await terminals.ensureAgentSession(sessionId)).ok, true);
     captures.provider.readThreadStatus = async () => ({ status: { type: "notLoaded" } });
     captures.provider.resumeThread = async () => { throw new Error("Verification resumed a thread without write admission"); };
     const attempts = [];
@@ -2789,18 +2789,18 @@ test("verification of an unloaded or missing Codex thread requires protected pre
       attempts.push({ lock, ...options });
       return { acquired: false };
     };
-    const unloaded = await terminalService.ensureAgentSession(sessionId);
+    const unloaded = await terminals.ensureAgentSession(sessionId);
     assert.equal(unloaded.code, "vibe64_agent_write_mode_busy");
     captures.provider.readThreadStatus = async (threadId) => {
       throw Object.assign(new Error(`thread not loaded: ${threadId}`), { code: -32600, method: "thread/read" });
     };
-    const missing = await terminalService.ensureAgentSession(sessionId);
+    const missing = await terminals.ensureAgentSession(sessionId);
     assert.equal(missing.code, "vibe64_agent_write_mode_busy");
     assert.deepEqual(attempts, Array(2).fill({ lock: "agent-write-mode", operation: "prepare-agent-session", waitMs: 10_000 }));
     captures.provider.readThreadStatus = async () => {
       throw Object.assign(new Error("invalid thread/read configuration"), { code: -32600, method: "thread/read" });
     };
-    const invalid = await terminalService.ensureAgentSession(sessionId);
+    const invalid = await terminals.ensureAgentSession(sessionId);
     assert.equal(invalid.ok, false);
     assert.equal(invalid.error, "invalid thread/read configuration");
     assert.equal(attempts.length, 2, "An unrelated provider error triggered preparation");
@@ -2808,13 +2808,13 @@ test("verification of an unloaded or missing Codex thread requires protected pre
 });
 
 test("assistant preparation still takes the session write lock", { timeout: 15_000 }, async () => {
-  await withAgentMessageController(async ({ runtime, sessionId, terminalService }) => {
+  await withAgentMessageController(async ({ runtime, sessionId, terminals }) => {
     const attempts = [];
     runtime.store.runSessionExclusive = async (_id, lock, _operation, options) => {
       attempts.push({ lock, ...options });
       return { acquired: false };
     };
-    const result = await terminalService.ensureAgentSession(sessionId);
+    const result = await terminals.ensureAgentSession(sessionId);
     assert.equal(result.code, "vibe64_agent_write_mode_busy");
     assert.deepEqual(attempts, [{ lock: "agent-write-mode", operation: "prepare-agent-session", waitMs: 10_000 }]);
   }, { throughTerminalService: true });
@@ -3370,9 +3370,9 @@ test("Codex admission inspection uses exact native user identity without sending
 });
 
 test("a signed-out Codex selection is refused naming the OpenAI account as AI Accounts does", async () => {
-  await withAgentMessageController(async ({ terminalService, sessionId }) => {
-    terminalService.configureAssistantRuntime({ codexConnectionStatus: async () => false });
-    await assert.rejects(terminalService.ensureAgentSession(sessionId), {
+  await withAgentMessageController(async ({ terminals, sessionId }) => {
+    terminals.configureAssistantRuntime({ codexConnectionStatus: async () => false });
+    await assert.rejects(terminals.ensureAgentSession(sessionId), {
       code: "vibe64_assistant_connection_unavailable",
       message: "Codex (OpenAI) isn't connected. Reconnect it in AI Accounts or choose another model."
     });
@@ -3380,14 +3380,14 @@ test("a signed-out Codex selection is refused naming the OpenAI account as AI Ac
 });
 
 test("Codex integration continuation recovers native acceptance with a fresh service after local persistence failure", async () => {
-  await withAgentMessageController(async ({ captures, controllerOptions, projectService, terminalService, sessionId, store }) => {
+  await withAgentMessageController(async ({ captures, controllerOptions, project, terminals, sessionId, store }) => {
     const systemRoot = controllerOptions.env.VIBE64_SYSTEM_ROOT;
     await writeCodexAuthMarker(systemRoot, { connected: true, loginId: randomUUID() });
     const junior = { ...JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection), selectionSource: "explicit" };
     await createAssistantRoutingStore({ systemRoot }).write({ owner: { senior: junior, junior }, nonOwner: {} }, 0);
-    const routingAccess = await terminalService.inspectAssistantAccess(sessionId);
+    const routingAccess = await terminals.inspectAssistantAccess(sessionId);
     assert.equal(routingAccess.purposes.junior.available, true, JSON.stringify(routingAccess));
-    const prepared = await terminalService.ensureAgentSession(sessionId);
+    const prepared = await terminals.ensureAgentSession(sessionId);
     assert.equal(prepared.ok, true, JSON.stringify(prepared));
     const mainProvider = captures.provider;
     await store.writeConversationUserMessage(sessionId, { text: "Configure mail." });
@@ -3405,7 +3405,7 @@ test("Codex integration continuation recovers native acceptance with a fresh ser
     };
     let restarted;
     try {
-      const uncertain = await terminalService.resumeIntegrationContinuation(sessionId, input, {
+      const uncertain = await terminals.resumeIntegrationContinuation(sessionId, input, {
         readIntegrationConfiguration: async () => ({ ok: true, baseHash: "a".repeat(64),
           configuration: { integrations: { mail: {} } } })
       });
@@ -3418,10 +3418,10 @@ test("Codex integration continuation recovers native acceptance with a fresh ser
       captures.threadSnapshotTurns = [{ id: acceptedTurn.turnId, items: [{
         type: "userMessage", id: "native-user", clientId: acceptedTurn.settings.clientUserMessageId
       }], status: "completed" }];
-      await terminalService.close();
+      await terminals.close();
       store.writeConversationUserMessage = writeUser;
       restarted = createTerminalService({ logger: silentLogger, codexTerminalController: controllerOptions,
-        env: controllerOptions.env, projectService });
+        env: controllerOptions.env, project });
       const result = await restarted.resumeIntegrationContinuation(sessionId, input);
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.equal(result.integrationSetup.continuation.status, "accepted");
@@ -3594,9 +3594,9 @@ test("an idle message does not replace a thread for an unrelated invalid request
 });
 
 test("Codex changeover resumes its original thread and sends one combined normal prompt", async () => {
-  await withAgentMessageController(async ({ captures, controllerOptions, terminalService, runtime, sessionId, store }) => {
+  await withAgentMessageController(async ({ captures, controllerOptions, terminals, runtime, sessionId, store }) => {
     const originalSelection = (await store.readSession(sessionId)).metadata.assistant_selection;
-    const first = await terminalService.sendAgentMessage(sessionId, { message: "Original Codex task", messageId: "changeover-first" });
+    const first = await terminals.sendAgentMessage(sessionId, { message: "Original Codex task", messageId: "changeover-first" });
     assert.equal(first.delivered, true, JSON.stringify(first));
     const originalThread = captures.turns[0].threadId;
     completeAgentMessageHarnessTurn(captures, captures.provider, "turn-1", "Original Codex answer");
@@ -3608,7 +3608,7 @@ test("Codex changeover resumes its original thread and sends one combined normal
     await rm(authFile);
     const stoppedThreads = [];
     captures.provider.stopThreadForObservationLoss = async (id) => { stoppedThreads.push(id); };
-    const closed = await terminalService.prepareAssistantChangeover(sessionId, context);
+    const closed = await terminals.prepareAssistantChangeover(sessionId, context);
     assert.equal(closed.ok, true, JSON.stringify(closed));
     assert.deepEqual(stoppedThreads, [originalThread]);
     await writeFile(authFile, auth);
@@ -3630,10 +3630,10 @@ test("Codex changeover resumes its original thread and sends one combined normal
         }
       });
     await store.writeMetadataValue(sessionId, "assistant_selection", originalSelection);
-    const blockedGoal = await terminalService.updateAgentGoal(sessionId, { action: "resume" });
+    const blockedGoal = await terminals.updateAgentGoal(sessionId, { action: "resume" });
     assert.equal(blockedGoal.code, "vibe64_changeover_message_required");
     assert.equal(captures.turns.length, 1);
-    const returning = await terminalService.sendAgentMessage(sessionId, { message: "Continue with that plan", messageId: "changeover-return" });
+    const returning = await terminals.sendAgentMessage(sessionId, { message: "Continue with that plan", messageId: "changeover-return" });
     assert.equal(returning.delivered, true, JSON.stringify(returning));
     assert.equal(captures.threadStarts.length, 1, "returning must not create a replacement Codex thread");
     assert.equal(captures.turns.length, 2, "there must be no separate handover turn");
@@ -3786,7 +3786,7 @@ test("provider receipt persists the authored message before its answer while the
 });
 
 test("terminal service accepts steering after a receipt while the first provider acknowledgement is pending", async () => {
-  await withAgentMessageController(async ({ captures, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, sessionId, store, terminals }) => {
     const accepted = Promise.withResolvers();
     captures.sendTurnWait = accepted.promise;
     const messageId = "service-pending-send";
@@ -3807,7 +3807,7 @@ test("terminal service accepts steering after a receipt while the first provider
         });
       }
     };
-    const sending = terminalService.sendAgentMessage(sessionId, {
+    const sending = terminals.sendAgentMessage(sessionId, {
       message: "First project request.",
       messageId
     });
@@ -3820,7 +3820,7 @@ test("terminal service accepts steering after a receipt while the first provider
         "the terminal service's durable provider receipt"
       );
       assert.deepEqual(captures.turnReplies, []);
-      steering = terminalService.sendAgentMessage(sessionId, {
+      steering = terminals.sendAgentMessage(sessionId, {
         message: "Keep the change focused.",
         messageId: "service-steering-after-receipt"
       });
@@ -3849,7 +3849,7 @@ test("terminal service accepts steering after a receipt while the first provider
 });
 
 test("terminal service holds admission until its exact receipt is persisted", async () => {
-  await withAgentMessageController(async ({ captures, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, sessionId, store, terminals }) => {
     const acknowledgement = Promise.withResolvers();
     const persistReceipt = Promise.withResolvers();
     const messageId = "receipt-must-be-durable";
@@ -3880,7 +3880,7 @@ test("terminal service holds admission until its exact receipt is persisted", as
         });
       }
     };
-    const sending = terminalService.sendAgentMessage(sessionId, {
+    const sending = terminals.sendAgentMessage(sessionId, {
       message: "Persist this before accepting the next message.",
       messageId
     });
@@ -3936,9 +3936,9 @@ test("terminal service holds admission until its exact receipt is persisted", as
 for (const deliveryMode of ["opening", "steering"]) {
   for (const lateReply of ["success", "failure"]) {
     test(`terminal service settles duplicate ${deliveryMode} messages from a receipt and ignores a late ${lateReply}`, async () => {
-      await withAgentMessageController(async ({ captures, sessionId, store, terminalService }) => {
+      await withAgentMessageController(async ({ captures, sessionId, store, terminals }) => {
         if (deliveryMode === "steering") {
-          const opened = await terminalService.sendAgentMessage(sessionId, {
+          const opened = await terminals.sendAgentMessage(sessionId, {
             message: "Start the task.",
             messageId: "receipt-test-opening"
           });
@@ -3973,8 +3973,8 @@ for (const deliveryMode of ["opening", "steering"]) {
           };
         }
         const input = { message: "The accepted request.", messageId };
-        const sending = terminalService.sendAgentMessage(sessionId, input);
-        const duplicate = terminalService.sendAgentMessage(sessionId, input);
+        const sending = terminals.sendAgentMessage(sessionId, input);
+        const duplicate = terminals.sendAgentMessage(sessionId, input);
         let timeout;
         try {
           const results = await Promise.race([
@@ -4001,7 +4001,7 @@ for (const deliveryMode of ["opening", "steering"]) {
           captures.onSendTurn = null;
           captures.onSteerTurn = null;
           captures.sendTurnWait = null;
-          const next = await terminalService.sendAgentMessage(sessionId, {
+          const next = await terminals.sendAgentMessage(sessionId, {
             message: "Start the next independent task.",
             messageId: "receipt-test-next-turn"
           });
@@ -4305,10 +4305,10 @@ test("agent messages reject while a FINALIZING turn retains its provider turn id
 
 for (const throughTerminalService of [false, true]) {
   test(`completion during steer starts one ordinary turn with the same message id${throughTerminalService ? " through the common Main manager" : ""}`, async () => {
-    await withAgentMessageController(async ({ captures, controller: originalController, sessionId, store, terminalService }) => {
-      const controller = terminalService
+    await withAgentMessageController(async ({ captures, controller: originalController, sessionId, store, terminals }) => {
+      const controller = terminals
         ? { async sendMessage(...args) {
-            const result = await terminalService.sendAgentMessage(...args);
+            const result = await terminals.sendAgentMessage(...args);
             return { ...result, turnId: result.turn?.id };
           } }
         : originalController;
@@ -4349,10 +4349,10 @@ for (const throughTerminalService of [false, true]) {
   });
 
   test(`a delayed start notification from a completed turn cannot replace the next chat turn${throughTerminalService ? " through the common Main manager" : ""}`, async () => {
-    await withAgentMessageController(async ({ captures, controller: originalController, sessionId, store, terminalService }) => {
-      const controller = terminalService
+    await withAgentMessageController(async ({ captures, controller: originalController, sessionId, store, terminals }) => {
+      const controller = terminals
         ? { async sendMessage(...args) {
-            const result = await terminalService.sendAgentMessage(...args);
+            const result = await terminals.sendAgentMessage(...args);
             return { ...result, turnId: result.turn?.id };
           } }
         : originalController;
@@ -5195,7 +5195,7 @@ test("a changed session environment retires the previous provider for the same r
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
-    projectService: {
+    project: {
       createRuntime() {
         return {
           async getSession() {
@@ -5314,7 +5314,7 @@ test("Codex sessions retain one shared runtime and concurrent final closes stop 
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
-    projectService: {
+    project: {
       createRuntime() {
         return {
           async getSession(sessionId) {
@@ -5539,7 +5539,7 @@ test("an active chat keeps one composed session context while authored turns sta
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
-    projectService: {
+    project: {
       createRuntime() {
         return runtime;
       },
@@ -5717,7 +5717,7 @@ test("closing a session without recorded Codex ownership leaves the shared runti
       env: providerEnv
     },
     env: providerEnv,
-    projectService: {
+    project: {
       createRuntime() {
         return {
           async getSession() {
@@ -5780,7 +5780,7 @@ test("temporary conversations start turns without resuming a nonexistent rollout
 });
 
 test("temporary Repair conversations do not depend on failed helper cleanup after a restart", async () => {
-  await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, projectService,
+  await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, project,
     simulateControllerCrash, subscribers }) => {
     const executionProfile = sourceExplanationHelperProfile();
     const pending = controller.runDetachedChatTurn("session-1", {
@@ -5807,7 +5807,7 @@ test("temporary Repair conversations do not depend on failed helper cleanup afte
         return { id: threadId };
       }
     });
-    const restarted = createRestartedController({ session, calls, captures: restartedState, projectService });
+    const restarted = createRestartedController({ session, calls, captures: restartedState, project });
     const conversation = await restarted.createConversation("session-1", {
       ephemeral: true
     });
@@ -5830,11 +5830,11 @@ test("temporary Repair conversations do not depend on failed helper cleanup afte
 });
 
 test("temporary Codex uses normal execution settings, preserves command edits on close, and never writes main history", async () => {
-  await withConversationController(async ({ captures, controller, projectService, session, subscribers }) => {
+  await withConversationController(async ({ captures, controller, project, session, subscribers }) => {
     const workdir = session.metadata.source_path;
     await writeFile(path.join(workdir, "existing.txt"), "Unrelated local work");
-    const createRuntime = projectService.createRuntime.bind(projectService);
-    projectService.createRuntime = (...args) => {
+    const createRuntime = project.createRuntime.bind(project);
+    project.createRuntime = (...args) => {
       const runtime = createRuntime(...args);
       for (const method of ["writeConversationUserMessage", "writeConversationAssistantMessage", "upsertConversationAssistantMessage"]) {
         runtime.store[method] = () => assert.fail("Temporary messages must not enter main History");
@@ -6217,7 +6217,7 @@ test("scoped Codex completion keeps admission busy and cannot overwrite Stop dur
 });
 
 test("scoped Codex helper cleanup after a restart starts no Codex app-server and has no native thread to delete", async () => {
-  await withConversationController(async ({ captures, controller, projectService, temporaryRoot }) => {
+  await withConversationController(async ({ captures, controller, project, temporaryRoot }) => {
     controller = throughCommonScopedConversation(controller);
     const scope = { id: "restart_job", environment: {}, workdir: temporaryRoot, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
       stableContext: "Use supplied text only." };
@@ -6226,7 +6226,7 @@ test("scoped Codex helper cleanup after a restart starts no Codex app-server and
     const created = await controller.createConversation(scope.id, { ephemeral: true, executionProfile }, options);
     assert.equal(created.ok, true, JSON.stringify(created));
     const after = restartedCaptures(captures);
-    const restarted = throughCommonScopedConversation(createRestartedController({ captures: after, projectService }));
+    const restarted = throughCommonScopedConversation(createRestartedController({ captures: after, project }));
     const input = { ephemeral: true, executionProfile, conversationId: created.conversationId };
     const deleted = await restarted.deleteConversation(scope.id, input, options);
     assert.equal(deleted.ok, true, JSON.stringify(deleted));
@@ -6641,9 +6641,9 @@ test("temporary conversations accept the final answer after the completion notif
 });
 
 test("helper discovery, overlapping turns and cleanup inspect the environment without preparing it", async () => {
-  await withConversationController(async ({ captures, controller, projectService, session, subscribers }) => {
+  await withConversationController(async ({ captures, controller, project, session, subscribers }) => {
     captures.uniqueThreadIds = true;
-    projectService.projectExecutionEnvironment = () => {
+    project.projectExecutionEnvironment = () => {
       assert.fail("Helper requests must not prepare project resources or environment files.");
     };
     await controller.executionProfileModelCatalog(session.sessionId);
@@ -7200,7 +7200,7 @@ test("account-wide Codex auth invalidation stops a pruned runtime without a sele
   await withAgentMessageController(async ({
     captures,
     controller,
-    projectService,
+    project,
     runtime,
     sessionId
   }) => {
@@ -7214,8 +7214,8 @@ test("account-wide Codex auth invalidation stops a pruned runtime without a sele
     assert.equal(captures.provider.closed, 1);
     assert.equal(captures.stopRuntimes, 0);
 
-    const createRuntime = projectService.createRuntime;
-    projectService.createRuntime = () => {
+    const createRuntime = project.createRuntime;
+    project.createRuntime = () => {
       const error = new Error("Choose a project before using project tools.");
       error.code = "vibe64_project_not_selected";
       throw error;
@@ -7230,7 +7230,7 @@ test("account-wide Codex auth invalidation stops a pruned runtime without a sele
       assert.equal(invalidated.providerCount, 1);
       assert.equal(invalidated.stopped, 1);
     } finally {
-      projectService.createRuntime = createRuntime;
+      project.createRuntime = createRuntime;
     }
     assert.equal(captures.stopRuntimes, 1);
     assert.deepEqual(captures.stopRuntimeOptions, {
@@ -7691,7 +7691,7 @@ test("server shutdown serializes with an owned runtime before metadata is publis
       VIBE64_RUNTIME_NAMESPACE: process.env.VIBE64_RUNTIME_NAMESPACE,
       VIBE64_WORKSPACE: "test"
     },
-    projectService: {
+    project: {
       createRuntime() {
         return {
           async getSession() {
@@ -7830,7 +7830,7 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
       VIBE64_RUNTIME_NAMESPACE: process.env.VIBE64_RUNTIME_NAMESPACE,
       VIBE64_WORKSPACE: "test"
     },
-    projectService: {
+    project: {
       createRuntime() {
         return {
           async getSession() {
@@ -7890,7 +7890,7 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
 test("same raw session closes remain isolated across project request contexts", async () => {
   await withConversationController(async ({
     controller,
-    projectService,
+    project,
     simulateControllerCrash,
     temporaryRoot
   }) => {
@@ -7924,13 +7924,13 @@ test("same raw session closes remain isolated across project request contexts", 
         return fixture.session;
       };
     }
-    projectService.createRuntime = () => {
+    project.createRuntime = () => {
       const slug = currentProjectRequestContext()?.slug;
       const fixture = fixtures.get(slug);
       assert.ok(fixture, `Missing scoped fixture for ${slug || "no project"}.`);
       return fixture.runtime;
     };
-    projectService.createSessionStore = () => {
+    project.createSessionStore = () => {
       const slug = currentProjectRequestContext()?.slug;
       return fixtures.get(slug)?.store;
     };
@@ -7988,7 +7988,7 @@ test("same raw session delivery admission remains independent across project req
 }, async () => {
   await withConversationController(async ({
     controller,
-    projectService,
+    project,
     simulateControllerCrash,
     temporaryRoot
   }) => {
@@ -8013,12 +8013,12 @@ test("same raw session delivery admission remains independent across project req
         return readSession();
       };
     }
-    projectService.createRuntime = () => {
+    project.createRuntime = () => {
       const fixture = fixtures.get(currentProjectRequestContext()?.slug);
       assert.ok(fixture);
       return fixture.runtime;
     };
-    projectService.createSessionStore = () => {
+    project.createSessionStore = () => {
       return fixtures.get(currentProjectRequestContext()?.slug)?.store;
     };
 
@@ -8113,7 +8113,7 @@ test("renewal cleanup cannot observe or delete another project's Temporary AI st
   await withConversationController(async ({
     captures,
     controller,
-    projectService,
+    project,
     simulateControllerCrash,
     temporaryRoot
   }) => {
@@ -8132,13 +8132,13 @@ test("renewal cleanup cannot observe or delete another project's Temporary AI st
       [alpha.context.slug, alpha],
       [beta.context.slug, beta]
     ]);
-    projectService.createRuntime = () => {
+    project.createRuntime = () => {
       const slug = currentProjectRequestContext()?.slug;
       const fixture = fixtures.get(slug);
       assert.ok(fixture, `Missing scoped fixture for ${slug || "no project"}.`);
       return fixture.runtime;
     };
-    projectService.createSessionStore = () => {
+    project.createSessionStore = () => {
       const slug = currentProjectRequestContext()?.slug;
       return fixtures.get(slug)?.store;
     };
@@ -8236,7 +8236,7 @@ test("renewal cleanup cannot drain another project's notification queue", {
   await withConversationController(async ({
     captures,
     controller,
-    projectService,
+    project,
     simulateControllerCrash,
     subscribers,
     temporaryRoot
@@ -8248,12 +8248,12 @@ test("renewal cleanup cannot drain another project's notification queue", {
       [alpha.context.slug, alpha],
       [beta.context.slug, beta]
     ]);
-    const originalCreateRuntime = projectService.createRuntime.bind(projectService);
-    projectService.createRuntime = () => {
+    const originalCreateRuntime = project.createRuntime.bind(project);
+    project.createRuntime = () => {
       const fixture = fixtures.get(currentProjectRequestContext()?.slug);
       return fixture?.runtime || originalCreateRuntime();
     };
-    projectService.createSessionStore = () => {
+    project.createSessionStore = () => {
       return fixtures.get(currentProjectRequestContext()?.slug)?.store;
     };
 
@@ -8281,7 +8281,7 @@ test("renewal cleanup cannot drain another project's notification queue", {
         return beta.store.mutateSession(...args);
       }
     });
-    projectService.createSessionStore = () => {
+    project.createSessionStore = () => {
       const slug = currentProjectRequestContext()?.slug;
       return slug === "beta" ? betaNotificationStore : fixtures.get(slug)?.store;
     };
@@ -8345,7 +8345,7 @@ test("renewal cleanup cannot cancel another project's finalizing recovery timer"
       calls,
       captures,
       controller,
-      projectService,
+      project,
       simulateControllerCrash,
       subscribers,
       temporaryRoot
@@ -8357,12 +8357,12 @@ test("renewal cleanup cannot cancel another project's finalizing recovery timer"
         [alpha.context.slug, alpha],
         [beta.context.slug, beta]
       ]);
-      const originalCreateRuntime = projectService.createRuntime.bind(projectService);
-      projectService.createRuntime = () => {
+      const originalCreateRuntime = project.createRuntime.bind(project);
+      project.createRuntime = () => {
         const fixture = fixtures.get(currentProjectRequestContext()?.slug);
         return fixture?.runtime || originalCreateRuntime();
       };
-      projectService.createSessionStore = () => {
+      project.createSessionStore = () => {
         return fixtures.get(currentProjectRequestContext()?.slug)?.store;
       };
 
@@ -8403,7 +8403,7 @@ test("renewal cleanup cannot cancel another project's finalizing recovery timer"
           return beta.store.mutateSession(...args);
         }
       });
-      projectService.createSessionStore = () => {
+      project.createSessionStore = () => {
         const slug = currentProjectRequestContext()?.slug;
         return slug === "beta" ? betaNotificationStore : fixtures.get(slug)?.store;
       };
@@ -8474,7 +8474,7 @@ test("hidden renewal successor shutdown requires its exact explicit cleanup cont
   await withConversationController(async ({
     captures,
     controller,
-    projectService,
+    project,
     session,
     simulateControllerCrash
   }) => {
@@ -8491,7 +8491,7 @@ test("hidden renewal successor shutdown requires its exact explicit cleanup cont
       },
       status: VIBE64_SESSION_STATUS.RENEWAL_PENDING
     };
-    const ordinaryRuntime = projectService.createRuntime();
+    const ordinaryRuntime = project.createRuntime();
     let ordinaryReads = 0;
     const hiddenRuntime = {
       ...ordinaryRuntime,
@@ -8502,7 +8502,7 @@ test("hidden renewal successor shutdown requires its exact explicit cleanup cont
         throw error;
       }
     };
-    projectService.createRuntime = () => hiddenRuntime;
+    project.createRuntime = () => hiddenRuntime;
 
     await assert.rejects(
       () => controller.closeAllForSession(hiddenSession.sessionId),
@@ -8550,7 +8550,7 @@ test("hidden renewal successor shutdown requires its exact explicit cleanup cont
 });
 
 test("renewal cleanup accepts a session that never acquired a Codex runtime", async () => {
-  await withConversationController(async ({ captures, controller, projectService, session }) => {
+  await withConversationController(async ({ captures, controller, project, session }) => {
     const renewalId = "renewal-unused-session";
     await controller.closeAllForSession(session.sessionId, {
       renewalCleanup: {
@@ -8558,7 +8558,7 @@ test("renewal cleanup accepts a session that never acquired a Codex runtime", as
         renewalId,
         sourceSessionId: session.sessionId
       },
-      runtime: projectService.createRuntime(),
+      runtime: project.createRuntime(),
       session: { ...session, status: VIBE64_SESSION_STATUS.ACTIVE }
     });
     assert.equal(captures.providerOptions.length, 0);
@@ -8567,12 +8567,12 @@ test("renewal cleanup accepts a session that never acquired a Codex runtime", as
 });
 
 test("renewal predecessor cleanup fails closed when a cached Codex process does not confirm exit", async () => {
-  await withConversationController(async ({ captures, controller, projectService, session }) => {
+  await withConversationController(async ({ captures, controller, project, session }) => {
     const catalog = await controller.executionProfileModelCatalog(session.sessionId);
     assert.equal(catalog.data[0].model, "gpt-5.6-luna");
     captures.stopRuntimeResult = { stopped: false };
     const renewalId = "renewal-predecessor-unverified-cache";
-    const runtime = projectService.createRuntime();
+    const runtime = project.createRuntime();
     const activeSession = {
       ...session,
       status: VIBE64_SESSION_STATUS.ACTIVE
@@ -8611,7 +8611,7 @@ test("renewal predecessor cleanup fails closed when a cached Codex process does 
 });
 
 test("renewal predecessor cleanup accepts exact preserved process-exit proof", async () => {
-  await withConversationController(async ({ captures, controller, projectService, session }) => {
+  await withConversationController(async ({ captures, controller, project, session }) => {
     const catalog = await controller.executionProfileModelCatalog(session.sessionId);
     assert.equal(catalog.data[0].model, "gpt-5.6-luna");
     captures.stopRuntimeResult = {
@@ -8620,7 +8620,7 @@ test("renewal predecessor cleanup accepts exact preserved process-exit proof", a
       stopped: false
     };
     const renewalId = "renewal-predecessor-preserved-proof";
-    const runtime = projectService.createRuntime();
+    const runtime = project.createRuntime();
 
     await controller.closeAllForSession(session.sessionId, {
       renewalCleanup: {
@@ -8644,12 +8644,12 @@ test("renewal predecessor cleanup accepts exact preserved process-exit proof", a
 
 for (const closingMode of ["changeover", "renewal"]) {
 test(`${closingMode} retries after a restart require the old runtime owner's verified empty scope`, async () => {
-  await withConversationController(async ({ controller, projectService, session, temporaryRoot }) => {
+  await withConversationController(async ({ controller, project, session, temporaryRoot }) => {
     const runtimeDir = path.join(temporaryRoot, "codex-app-server-old");
     session.metadata.agent_transport_runtime_dir = runtimeDir;
     const options = closingMode === "changeover" ? { changeover: true } : {
       renewalCleanup: { kind: "predecessor", renewalId: "renewal-owner-recovery", sourceSessionId: session.sessionId },
-      runtime: projectService.createRuntime(), session: { ...session, status: VIBE64_SESSION_STATUS.ACTIVE }
+      runtime: project.createRuntime(), session: { ...session, status: VIBE64_SESSION_STATUS.ACTIVE }
     };
     const stops = [];
     let scopeEmpty = false;
@@ -8674,7 +8674,7 @@ test(`${closingMode} retries after a restart require the old runtime owner's ver
 }
 
 test("renewal predecessor cleanup does not treat an already-missing runtime directory as exit proof", async () => {
-  await withConversationController(async ({ captures, controller, projectService, session, temporaryRoot }) => {
+  await withConversationController(async ({ captures, controller, project, session, temporaryRoot }) => {
     const activeSession = {
       ...session,
       metadata: {
@@ -8684,7 +8684,7 @@ test("renewal predecessor cleanup does not treat an already-missing runtime dire
       status: VIBE64_SESSION_STATUS.ACTIVE
     };
     const renewalId = "renewal-predecessor-missing-runtime";
-    const runtime = projectService.createRuntime();
+    const runtime = project.createRuntime();
 
     await assert.rejects(
       () => controller.closeAllForSession(session.sessionId, {
@@ -8703,7 +8703,7 @@ test("renewal predecessor cleanup does not treat an already-missing runtime dire
 });
 
 test("renewal proof release preserves a runtime still retained by another session", async () => {
-  await withConversationController(async ({ captures, controller, projectService, session }) => {
+  await withConversationController(async ({ captures, controller, project, session }) => {
     await controller.executionProfileModelCatalog(session.sessionId);
     const runtimeDir = captures.providerOptions.at(-1).runtimeDir;
     await mkdir(runtimeDir, { recursive: true });
@@ -8713,7 +8713,7 @@ test("renewal proof release preserves a runtime still retained by another sessio
     const archivedSession = { ...session, sessionId: "archived-predecessor", archived: true,
       status: VIBE64_SESSION_STATUS.ARCHIVED, metadata: { ...session.metadata,
         agent_transport_runtime_dir: runtimeDir, renewal_id: "shared-renewal", renewed_to: "successor" } };
-    const options = { renewalId: "shared-renewal", runtime: projectService.createRuntime(), session: archivedSession };
+    const options = { renewalId: "shared-renewal", runtime: project.createRuntime(), session: archivedSession };
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const released = await controller.releaseRenewalPredecessorProcessExitProof(archivedSession.sessionId, options);
       assert.equal(released.released, true);
@@ -8728,7 +8728,7 @@ test("renewal proof release preserves a runtime still retained by another sessio
 });
 
 test("archived renewal predecessor releases preserved runtime proof idempotently", async () => {
-  await withConversationController(async ({ controller, projectService, session, temporaryRoot }) => {
+  await withConversationController(async ({ controller, project, session, temporaryRoot }) => {
     const renewalId = "renewal-predecessor-proof-release";
     const runtimeDir = path.join(temporaryRoot, "codex-app-server-renewal-proof");
     await mkdir(runtimeDir, { recursive: true });
@@ -8747,7 +8747,7 @@ test("archived renewal predecessor releases preserved runtime proof idempotently
       },
       status: VIBE64_SESSION_STATUS.ARCHIVED
     };
-    const runtime = projectService.createRuntime();
+    const runtime = project.createRuntime();
 
     const released = await controller.releaseRenewalPredecessorProcessExitProof(
       session.sessionId,
@@ -8791,7 +8791,7 @@ test("archived renewal predecessor releases preserved runtime proof idempotently
 });
 
 test("authorized renewal successor releases preserved runtime proof idempotently", async () => {
-  await withConversationController(async ({ controller, projectService, session, temporaryRoot }) => {
+  await withConversationController(async ({ controller, project, session, temporaryRoot }) => {
     const renewalId = "renewal-successor-proof-release";
     const sourceSessionId = "source-session";
     const runtimeDir = path.join(temporaryRoot, "codex-app-server-successor-renewal-proof");
@@ -8819,7 +8819,7 @@ test("authorized renewal successor releases preserved runtime proof idempotently
       sourceSessionId,
       successorSessionId: session.sessionId
     };
-    const runtime = projectService.createRuntime();
+    const runtime = project.createRuntime();
 
     await assert.rejects(
       () => controller.releaseRenewalSuccessorProcessExitProof(
@@ -8979,7 +8979,7 @@ test("renewal freeze cannot cross persisted helper runtime identity recovery", a
   await withConversationController(async ({
     captures,
     controller,
-    projectService,
+    project,
     session,
     simulateControllerCrash,
     subscribers
@@ -9011,7 +9011,7 @@ test("renewal freeze cannot cross persisted helper runtime identity recovery", a
     });
     const restartedController = createRestartedController({ session,
       captures: restarted,
-      projectService
+      project
     });
 
     const deleted = await restartedController.deleteDetachedChatThread(session.sessionId, {
@@ -9220,7 +9220,7 @@ test("a completed result is not exposed when READY ownership cannot be persisted
   await withConversationController(async ({ session,
     captures,
     projectRuntimeRoot,
-    projectService,
+    project,
     subscribers
   }) => {
     const failingLedgerFactory = ({ projectRuntimeRoot: ledgerRoot }) => {
@@ -9243,7 +9243,7 @@ test("a completed result is not exposed when READY ownership cannot be persisted
     const failingController = createRestartedController({ session,
       captures,
       codexHelperThreadLedgerFactory: failingLedgerFactory,
-      projectService,
+      project,
       subscribers
     });
     try {
@@ -9425,7 +9425,7 @@ test("a completed helper thread survives a controller crash and resumes only aft
     controller,
     projectContextRoot,
     projectRuntimeRoot,
-    projectService,
+    project,
     session,
     simulateControllerCrash,
     subscribers
@@ -9457,7 +9457,7 @@ test("a completed helper thread survives a controller crash and resumes only aft
     const restartedController = createRestartedController({ session,
       calls: restartedCalls,
       captures: restarted,
-      projectService,
+      project,
       subscribers: restartedSubscribers
     });
     const followUpPending = restartedController.runDetachedChatTurn("session-1", {
@@ -9489,7 +9489,7 @@ test("a missing helper runtime retires stale ownership before provider identity 
     captures,
     controller,
     projectRuntimeRoot,
-    projectService,
+    project,
     simulateControllerCrash,
     subscribers
   }) => {
@@ -9518,7 +9518,7 @@ test("a missing helper runtime retires stale ownership before provider identity 
     const restarted = restartedCaptures(captures);
     const restartedController = createRestartedController({ session,
       captures: restarted,
-      projectService,
+      project,
       subscribers: restartedSubscribers
     });
     const freshPending = restartedController.runDetachedChatTurn("session-1", {
@@ -9549,7 +9549,7 @@ test("provider context drift retires a verified stale helper runtime", async () 
     captures,
     controller,
     projectRuntimeRoot,
-    projectService,
+    project,
     simulateControllerCrash,
     subscribers
   }) => {
@@ -9572,7 +9572,7 @@ test("provider context drift retires a verified stale helper runtime", async () 
     const restarted = restartedCaptures(captures);
     const restartedController = createRestartedController({ session,
       captures: restarted,
-      projectService,
+      project,
       subscribers: restartedSubscribers
     });
     const freshPending = restartedController.runDetachedChatTurn("session-1", {
@@ -9603,7 +9603,7 @@ test("startup inventory retires READY ownership missing after a helper runtime r
     captures,
     controller,
     projectRuntimeRoot,
-    projectService,
+    project,
     session,
     simulateControllerCrash,
     subscribers
@@ -9634,7 +9634,7 @@ test("startup inventory retires READY ownership missing after a helper runtime r
     });
     const restartedController = createRestartedController({ session,
       captures: restarted,
-      projectService,
+      project,
       subscribers: restartedSubscribers
     });
     const reconciliation = await restartedController.reconcileThreads([session]);
@@ -9687,7 +9687,7 @@ test("an active helper turn is interrupted and deleted during crash reconciliati
     captures,
     controller,
     projectRuntimeRoot,
-    projectService,
+    project,
     session,
     simulateControllerCrash,
     subscribers
@@ -9709,7 +9709,7 @@ test("an active helper turn is interrupted and deleted during crash reconciliati
     const restarted = restartedCaptures(captures);
     const restartedController = createRestartedController({ session,
       captures: restarted,
-      projectService
+      project
     });
     const reconciliation = await restartedController.reconcileThreads([session]);
     assert.equal(reconciliation.ok, true, JSON.stringify(reconciliation));
@@ -9733,7 +9733,7 @@ test("an active helper turn is interrupted and deleted during crash reconciliati
 test("startup reconciliation deletes a thread orphaned before its first ledger write", async () => {
   await withConversationController(async ({ session,
     captures,
-    projectService,
+    project,
     simulateControllerCrash,
     subscribers
   }) => {
@@ -9752,7 +9752,7 @@ test("startup reconciliation deletes a thread orphaned before its first ledger w
     const failedController = createRestartedController({ session,
       captures,
       codexHelperThreadLedgerFactory: failingLedgerFactory,
-      projectService,
+      project,
       subscribers
     });
     const failed = await failedController.runDetachedChatTurn("session-1", {
@@ -9775,7 +9775,7 @@ test("startup reconciliation deletes a thread orphaned before its first ledger w
     });
     const restartedController = createRestartedController({ session,
       captures: restarted,
-      projectService
+      project
     });
     const reconciliation = await restartedController.reconcileThreads(["session-1"]);
     assert.equal(reconciliation.ok, true, JSON.stringify(reconciliation));
@@ -9914,7 +9914,7 @@ test("an account switch blocks persisted helper ownership without deleting it", 
     captures,
     controller,
     projectRuntimeRoot,
-    projectService,
+    project,
     simulateControllerCrash,
     subscribers
   }) => {
@@ -9940,7 +9940,7 @@ test("an account switch blocks persisted helper ownership without deleting it", 
     });
     const switchedController = createRestartedController({ session,
       captures: switched,
-      projectService
+      project
     });
     const blocked = await switchedController.runDetachedChatTurn("session-1", {
       executionProfile,
@@ -9959,7 +9959,7 @@ test("an account switch blocks persisted helper ownership without deleting it", 
     const original = restartedCaptures(captures);
     const cleanupController = createRestartedController({ session,
       captures: original,
-      projectService
+      project
     });
     const cleanup = await cleanupController.deleteDetachedChatThread("session-1", {
       executionProfile,
@@ -9976,7 +9976,7 @@ test("a same-account auth refresh can resume persisted helper ownership", async 
   await withConversationController(async ({ session,
     captures,
     controller,
-    projectService,
+    project,
     simulateControllerCrash,
     subscribers
   }) => {
@@ -10003,7 +10003,7 @@ test("a same-account auth refresh can resume persisted helper ownership", async 
     });
     const refreshedController = createRestartedController({ session,
       captures: refreshed,
-      projectService,
+      project,
       subscribers: refreshedSubscribers
     });
     const followUpPending = refreshedController.runDetachedChatTurn("session-1", {
@@ -10027,7 +10027,7 @@ test("an archived session retires its persisted helper thread during reconciliat
     captures,
     controller,
     projectRuntimeRoot,
-    projectService,
+    project,
     session,
     simulateControllerCrash,
     subscribers
@@ -10048,7 +10048,7 @@ test("an archived session retires its persisted helper thread during reconciliat
     const restarted = restartedCaptures(captures);
     const restartedController = createRestartedController({ session,
       captures: restarted,
-      projectService
+      project
     });
     const reconciliation = await restartedController.reconcileThreads([session]);
     assert.equal(reconciliation.ok, true, JSON.stringify(reconciliation));
@@ -10258,7 +10258,7 @@ for (const [outcome, deleteFailures] of [
   ["retry after deletion failure", 1]
 ]) {
   test(`account-switch cleanup deletes only its persisted helper: ${outcome}`, async () => {
-    await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, projectService,
+    await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, project,
       simulateControllerCrash, subscribers }) => {
       const executionProfile = sourceExplanationHelperProfile();
       const pending = controller.runDetachedChatTurn("session-1", {
@@ -10274,7 +10274,7 @@ for (const [outcome, deleteFailures] of [
       assert.equal(failed.ok, false);
       const ledger = createCodexHelperThreadLedger({ projectRuntimeRoot });
       assert.equal((await ledger.readAll()).records[0].lifecycle, "cleanup_required");
-      const runtime = projectService.createRuntime();
+      const runtime = project.createRuntime();
       const auditStore = createVibe64SessionStore({
         projectContextRoot: runtime.projectContextRoot,
         projectRuntimeRoot,
@@ -10283,7 +10283,7 @@ for (const [outcome, deleteFailures] of [
       await auditStore.createSession({
         sessionId: "session-1", runtimeKind: "genesis", metadata: (await runtime.getSession()).metadata
       });
-      projectService.createRuntime = () => ({ ...runtime, store: auditStore });
+      project.createRuntime = () => ({ ...runtime, store: auditStore });
       simulateControllerCrash();
       const switched = restartedCaptures(captures, {
         runtimeInfo: { ...captures.runtimeInfo, accountIdentitySignature: TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE },
@@ -10291,7 +10291,7 @@ for (const [outcome, deleteFailures] of [
         failDeletes: deleteFailures,
         stopRuntimeResult: { stopped: false, processExitVerified: false }
       });
-      const restarted = createRestartedController({ session, captures: switched, projectService });
+      const restarted = createRestartedController({ session, captures: switched, project });
       const result = await restarted.deleteDetachedChatThread("session-1", {
         executionProfile, threadId: first.threadId
       });
@@ -10340,7 +10340,7 @@ test("helper admission retries same-account cleanup without a controller restart
 
 for (const failureIndex of [0, 1]) {
   test(`mixed account-switch cleanup keeps failure visible at position ${failureIndex}`, async () => {
-    await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, projectService,
+    await withConversationController(async ({ session, captures, controller, projectRuntimeRoot, project,
       simulateControllerCrash, subscribers }) => {
       captures.uniqueThreadIds = true;
       for (let index = 1; index <= 2; index += 1) {
@@ -10365,7 +10365,7 @@ for (const failureIndex of [0, 1]) {
           updatedAt: new Date(Date.parse(record.updatedAt) + 1).toISOString()
         }, { expected: record });
       }
-      const runtime = projectService.createRuntime();
+      const runtime = project.createRuntime();
       const auditStore = createVibe64SessionStore({
         projectContextRoot: runtime.projectContextRoot, projectRuntimeRoot,
         projectSessionSourceRoot: path.resolve((await runtime.getSession()).metadata.source_path, "../../..")
@@ -10373,7 +10373,7 @@ for (const failureIndex of [0, 1]) {
       await auditStore.createSession({
         sessionId: "session-1", runtimeKind: "genesis", metadata: (await runtime.getSession()).metadata
       });
-      projectService.createRuntime = () => ({ ...runtime, store: auditStore });
+      project.createRuntime = () => ({ ...runtime, store: auditStore });
       let deleteIndex = 0;
       const switched = restartedCaptures(captures, {
         runtimeInfo: { ...captures.runtimeInfo, accountIdentitySignature: TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE },
@@ -10384,7 +10384,7 @@ for (const failureIndex of [0, 1]) {
           return { id: threadId };
         }
       });
-      const restarted = createRestartedController({ session, captures: switched, projectService });
+      const restarted = createRestartedController({ session, captures: switched, project });
       await assert.rejects(restarted.executionProfileModelCatalog("session-1"), {
         code: "vibe64_codex_helper_ownership_blocked"
       });
@@ -10427,8 +10427,8 @@ test("a first goal prepares the ordinary main conversation before activation", a
 });
 
 test("setting a goal uses the observed main thread and rejects overwriting a live goal", async () => {
-  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
-    assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
+    assert.equal((await terminals.ensureAgentSession(sessionId)).ok, true);
     const provider = captures.provider;
     let goal = null;
     const calls = [];
@@ -10441,9 +10441,9 @@ test("setting a goal uses the observed main thread and rejects overwriting a liv
       return { goal };
     };
     const input = { action: "set", threadId: provider.threadId, objective: "Finish the fixture", tokenBudget: 5000 };
-    assert.equal((await terminalService.readAgentGoal(sessionId)).threadId, provider.threadId);
-    assert.equal((await terminalService.updateAgentGoal(sessionId, { ...input, tokenBudget: 0 })).ok, false);
-    assert.equal((await terminalService.updateAgentGoal(sessionId, { ...input, threadId: "old-thread" })).ok, false);
+    assert.equal((await terminals.readAgentGoal(sessionId)).threadId, provider.threadId);
+    assert.equal((await terminals.updateAgentGoal(sessionId, { ...input, tokenBudget: 0 })).ok, false);
+    assert.equal((await terminals.updateAgentGoal(sessionId, { ...input, threadId: "old-thread" })).ok, false);
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();
     const writing = runtime.store.runSessionExclusive(sessionId, "agent-write-mode", async () => {
@@ -10452,15 +10452,15 @@ test("setting a goal uses the observed main thread and rejects overwriting a liv
     });
     await entered.promise;
     try {
-      const blocked = await terminalService.updateAgentGoal(sessionId, input);
+      const blocked = await terminals.updateAgentGoal(sessionId, input);
       assert.equal(blocked.code, "vibe64_agent_write_mode_busy", JSON.stringify(blocked));
       assert.deepEqual(calls, []);
     } finally { release.resolve(); await writing; }
-    const created = await terminalService.updateAgentGoal(sessionId, input);
+    const created = await terminals.updateAgentGoal(sessionId, input);
     assert.equal(created.ok, true, JSON.stringify(created));
     assert.deepEqual(calls, [{ threadId: provider.threadId, objective: input.objective, tokenBudget: 5000 }]);
     assert.equal((await runtime.getSession(sessionId)).agentRuns[0].providerGoalStatus, "active");
-    assert.equal((await terminalService.updateAgentGoal(sessionId, input)).ok, false);
+    assert.equal((await terminals.updateAgentGoal(sessionId, input)).ok, false);
     assert.equal(calls.length, 1);
   }, { throughTerminalService: true });
 });
@@ -10558,8 +10558,8 @@ test("failed goal cancellation preserves the goal for retry", async () => {
 });
 
 test("goal Resume respects Save admission and protects the gap before a native turn starts", async () => {
-  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
-    assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
+    assert.equal((await terminals.ensureAgentSession(sessionId)).ok, true);
     const provider = captures.provider;
     const goal = { threadId: provider.threadId, status: "paused", objective: "Finish fixture", createdAt: 10 };
     const writes = [];
@@ -10573,7 +10573,7 @@ test("goal Resume respects Save admission and protects the gap before a native t
     const saveEntered = Promise.withResolvers();
     const releaseSave = Promise.withResolvers();
     const stopBeforeGit = new Error("Stop this fixture before Git publication.");
-    const saving = assert.rejects(terminalService.saveSessionWork(sessionId, {
+    const saving = assert.rejects(terminals.saveSessionWork(sessionId, {
       async onRepositoryWriteAcquired() {
         saveEntered.resolve();
         await releaseSave.promise;
@@ -10582,7 +10582,7 @@ test("goal Resume respects Save admission and protects the gap before a native t
     }), (error) => error === stopBeforeGit);
     await saveEntered.promise;
     try {
-      const blocked = await terminalService.updateAgentGoal(sessionId, input);
+      const blocked = await terminals.updateAgentGoal(sessionId, input);
       assert.equal(blocked.code, "vibe64_agent_write_mode_busy");
       assert.deepEqual(writes, []);
     } finally {
@@ -10590,15 +10590,15 @@ test("goal Resume respects Save admission and protects the gap before a native t
       await saving;
     }
 
-    const resumed = await terminalService.updateAgentGoal(sessionId, input);
+    const resumed = await terminals.updateAgentGoal(sessionId, input);
     assert.equal(resumed.ok, true, JSON.stringify(resumed));
     assert.deepEqual(writes, ["active"]);
     assert.equal(provider.status, "idle", "The native scheduler has not started its turn yet");
     const pending = (await runtime.getSession(sessionId)).agentRuns.find((run) => run.providerGoalThreadId === goal.threadId);
     assert.equal(pending.providerGoalStatus, "active");
     assert.equal(pending.active, false, "Do not invent a running provider turn");
-    await assert.rejects(terminalService.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
-    const earlyMessage = await terminalService.sendAgentMessage(sessionId, {
+    await assert.rejects(terminals.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    const earlyMessage = await terminals.sendAgentMessage(sessionId, {
       message: "Keep the migration small.", messageId: "goal-message-before-native-turn"
     });
     assert.equal(earlyMessage.operationOutcome, "active_turn_not_ready");
@@ -10614,8 +10614,8 @@ test("goal Resume respects Save admission and protects the gap before a native t
     await waitForSessionValue(() => runtime.getSession(sessionId), (session) => (
       session.agentRuns.some((run) => run.active && run.providerTurnId === provider.turnId)
     ), "the resumed goal's native turn to enter normal lifecycle tracking");
-    await assert.rejects(terminalService.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
-    const steering = await terminalService.sendAgentMessage(sessionId, {
+    await assert.rejects(terminals.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    const steering = await terminals.sendAgentMessage(sessionId, {
       message: "Keep the migration small.", messageId: "goal-message-with-native-turn"
     });
     assert.equal(steering.ok, true, JSON.stringify(steering));
@@ -10626,7 +10626,7 @@ test("goal Resume respects Save admission and protects the gap before a native t
     const interrupted = [];
     provider.interruptTurn = async (threadId, turnId) => { interrupted.push(turnId); provider.status = "interrupted"; return { interrupted: true }; };
     const paused = await runtime.store.runSessionExclusive(sessionId, "agent-write-mode", () => (
-      terminalService.updateAgentGoal(sessionId, { ...input, action: "pause" })
+      terminals.updateAgentGoal(sessionId, { ...input, action: "pause" })
     ));
     assert.equal(paused.acquired, true);
     assert.equal(paused.value.ok, true, JSON.stringify(paused.value));
@@ -10636,10 +10636,10 @@ test("goal Resume respects Save admission and protects the gap before a native t
     await waitForSessionValue(() => runtime.getSession(sessionId), (session) => (
       session.agentRuns.some((run) => run.providerGoalStatus === "paused" && !run.active)
     ), "the paused goal's current turn to stop");
-    await assert.rejects(terminalService.saveSessionWork(sessionId, {
+    await assert.rejects(terminals.saveSessionWork(sessionId, {
       onRepositoryWriteAcquired() { throw stopBeforeGit; }
     }), (error) => error === stopBeforeGit);
-    const messageWhilePaused = await terminalService.sendAgentMessage(sessionId, {
+    const messageWhilePaused = await terminals.sendAgentMessage(sessionId, {
       message: "Review the checkpoint.", messageId: "goal-message-while-paused"
     });
     assert.equal(messageWhilePaused.ok, true, JSON.stringify(messageWhilePaused));
@@ -10648,8 +10648,8 @@ test("goal Resume respects Save admission and protects the gap before a native t
 });
 
 test("clearing the current goal releases pending Resume ownership while stale thread events do not", async () => {
-  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
-    assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
+    assert.equal((await terminals.ensureAgentSession(sessionId)).ok, true);
     const provider = captures.provider;
     const goal = { threadId: provider.threadId, status: "paused", objective: "Finish fixture", createdAt: 10 };
     provider.readGoal = async () => ({ goal: { ...goal } });
@@ -10657,14 +10657,14 @@ test("clearing the current goal releases pending Resume ownership while stale th
       goal.status = status;
       return { goal: { ...goal } };
     };
-    const resumed = await terminalService.updateAgentGoal(sessionId, {
+    const resumed = await terminals.updateAgentGoal(sessionId, {
       action: "resume", threadId: goal.threadId, objective: goal.objective, createdAt: goal.createdAt
     });
     assert.equal(resumed.ok, true, JSON.stringify(resumed));
     for (const subscriber of captures.subscribers) {
       subscriber({ method: "thread/goal/cleared", params: { threadId: "another-thread" } });
     }
-    await assert.rejects(terminalService.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
+    await assert.rejects(terminals.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
     for (const subscriber of captures.subscribers) {
       subscriber({ method: "thread/goal/cleared", params: { threadId: goal.threadId } });
     }
@@ -10672,7 +10672,7 @@ test("clearing the current goal releases pending Resume ownership while stale th
       session.agentRuns.some((run) => run.providerGoalThreadId === goal.threadId && run.providerGoalStatus === "")
     ), "the cleared goal to release pending native work");
     const stopBeforeGit = new Error("Stop this fixture before Git publication.");
-    await assert.rejects(terminalService.saveSessionWork(sessionId, {
+    await assert.rejects(terminals.saveSessionWork(sessionId, {
       onRepositoryWriteAcquired() { throw stopBeforeGit; }
     }), (error) => error === stopBeforeGit);
   }, { throughTerminalService: true });
@@ -10744,8 +10744,8 @@ test("a goal event from an old subscribed thread cannot reconcile the replacemen
 
 for (const recordedThread of [false, true]) {
   test(`connection checks recover a stale Codex busy record (thread recorded: ${recordedThread})`, async () => {
-    await withAgentMessageController(async ({ captures, sessionId, store, terminalService }) => {
-      assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+    await withAgentMessageController(async ({ captures, sessionId, store, terminals }) => {
+      assert.equal((await terminals.ensureAgentSession(sessionId)).ok, true);
       const provider = captures.provider;
       await store.writeAgentRunEvent(sessionId, "codex_app_server", {
         event: { kind: "observation-lost" },
@@ -10759,11 +10759,11 @@ for (const recordedThread of [false, true]) {
       captures.onSessionChanged = (_id, event) => notifications.push(event);
       provider.resumeThread = async () => { throw new Error("Stale-record recovery must not resume work"); };
       const stopBeforeGit = new Error("Repository admission recovered.");
-      await assert.rejects(terminalService.updateSessionWork(sessionId, {
+      await assert.rejects(terminals.updateSessionWork(sessionId, {
         onRepositoryWriteAcquired() { throw stopBeforeGit; }
       }), error => error === stopBeforeGit);
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const result = await terminalService.ensureAgentSession(sessionId);
+        const result = await terminals.ensureAgentSession(sessionId);
         assert.equal(result.ok, true, JSON.stringify(result));
         assert.equal((await store.readAgentRun(sessionId, "codex_app_server")).active, false);
       }
@@ -10775,7 +10775,7 @@ for (const recordedThread of [false, true]) {
       assert.equal(notifications.filter(event => event.reason === "codex-observation-stop-recovered").length, 1);
       assert.equal(captures.turns.length, 0);
       assert.deepEqual(await store.readConversationLog(sessionId), []);
-      await assert.rejects(terminalService.updateSessionWork(sessionId, {
+      await assert.rejects(terminals.updateSessionWork(sessionId, {
         onRepositoryWriteAcquired() { throw stopBeforeGit; }
       }), error => error === stopBeforeGit);
     }, { throughTerminalService: true });
@@ -10784,8 +10784,8 @@ for (const recordedThread of [false, true]) {
 
 for (const condition of ["active turn", "active goal", "unknown goal", "unknown status", "read failure", "newer run"]) {
   test(`stale Codex recovery preserves the busy record with ${condition}`, async () => {
-    await withAgentMessageController(async ({ captures, sessionId, store, terminalService }) => {
-      assert.equal((await terminalService.ensureAgentSession(sessionId)).ok, true);
+    await withAgentMessageController(async ({ captures, sessionId, store, terminals }) => {
+      assert.equal((await terminals.ensureAgentSession(sessionId)).ok, true);
       await store.writeAgentRunEvent(sessionId, "codex_app_server", {
         event: { kind: "observation-lost" },
         patch: { state: VIBE64_AGENT_RUN_STATE.STARTING, providerStatus: "observation_lost" }
@@ -10803,11 +10803,11 @@ for (const condition of ["active turn", "active goal", "unknown goal", "unknown 
         }
         return { status: condition === "active turn" ? "inProgress" : condition === "unknown status" ? "unknown" : "idle" };
       };
-      await terminalService.ensureAgentSession(sessionId);
+      await terminals.ensureAgentSession(sessionId);
       const run = await store.readAgentRun(sessionId, "codex_app_server");
       assert.equal(run.active, true);
       assert.equal(run.events.some(event => event.kind === "codex-observation-stop-recovered"), false);
-      await assert.rejects(terminalService.updateSessionWork(sessionId), { code: "vibe64_session_update_agent_active" });
+      await assert.rejects(terminals.updateSessionWork(sessionId), { code: "vibe64_session_update_agent_active" });
       assert.equal(captures.turns.length, 0);
     }, { throughTerminalService: true });
   });
@@ -11080,7 +11080,7 @@ test("Codex stops when its notification queue cannot save commentary", async () 
 });
 
 test("Codex streams answer chunks before persistence, replaces the live answer and rejects late output", async () => {
-  await withAgentMessageController(async ({ captures, controller, sessionId, store, projectService, runtime }) => {
+  await withAgentMessageController(async ({ captures, controller, sessionId, store, project, runtime }) => {
     await controller.sendMessage(sessionId, { message: "Work", messageId: "stream-work" });
     const { threadId, turnId } = captures.provider;
     const snapshots = [];
@@ -11089,8 +11089,8 @@ test("Codex streams answer chunks before persistence, replaces the live answer a
     };
     const params = { threadId, turnId, itemId: "stream-answer" };
     let hydrations = 0;
-    const createRuntime = projectService.createRuntime;
-    projectService.createRuntime = (...args) => { hydrations += 1; return createRuntime(...args); };
+    const createRuntime = project.createRuntime;
+    project.createRuntime = (...args) => { hydrations += 1; return createRuntime(...args); };
     emitCodexNotification(captures.subscribers, { method: "item/started", params: {
       ...params, item: { id: params.itemId, type: "agentMessage", phase: "final_answer" }
     } });
@@ -11274,7 +11274,7 @@ test("Codex keeps reasoning summaries when both channels are exposed and ignores
 });
 
 test("durable Codex history reads exposed reasoning content and prefers available summaries", async () => {
-  await withConversationController(async ({ captures, controller, projectService }) => {
+  await withConversationController(async ({ captures, controller, project }) => {
     captures.persistentHistory = [{ id: "saved-turn", status: "completed", items: [
       { id: "raw", type: "reasoning", summary: [], content: ["Exposed reasoning"] },
       { id: "summary", type: "reasoning", summary: ["Readable summary"], content: ["Duplicate content"] },
@@ -11296,7 +11296,7 @@ test("durable Codex history reads exposed reasoning content and prefers availabl
     ]);
     assert.equal(result.message, "Done.", "progress cannot be repeated in the final reply");
     await controller.closeAllForSession("session-1");
-    const restarted = createRestartedController({ captures, projectService });
+    const restarted = createRestartedController({ captures, project });
     try {
       const restored = await restarted.readConversation("session-1", { conversationId, persistent: true });
       assert.deepEqual(restored.messages, result.messages);
@@ -11392,9 +11392,9 @@ for (const failure of [
   { code: "internalServerError", message: "The provider could not complete this request." }
 ]) {
   test(`recovered Codex output retains ${failure.code} through Main storage, realtime and reopen`, async () => {
-    await withAgentMessageController(async ({ captures, terminalService, createService, runtime, sessionId, store }) => {
+    await withAgentMessageController(async ({ captures, terminals, createService, runtime, sessionId, store }) => {
       const input = { message: "Continue the work", messageId: `recovered-failure-${failure.code}` };
-      const started = await terminalService.sendAgentMessage(sessionId, input);
+      const started = await terminals.sendAgentMessage(sessionId, input);
       assert.equal(started.ok, true, JSON.stringify(started));
       const { threadId, turnId } = captures.provider;
       const partial = "The first part is done; the remaining work is unfinished.";
@@ -11422,9 +11422,9 @@ for (const failure of [
         rows => JSON.stringify(rows).includes(failure.message), "the terminal notice's realtime publication");
 
       emitCodexNotification(captures.subscribers, completed);
-      await terminalService.agentSessionState(sessionId, { runtime });
+      await terminals.agentSessionState(sessionId, { runtime });
       assert.deepEqual(await store.readConversationLog(sessionId), saved, "duplicate completion preserves one notice");
-      await terminalService.close();
+      await terminals.close();
       const reopened = createService();
       const state = await reopened.agentSessionState(sessionId, { runtime });
       assert.equal(state.ok, true, JSON.stringify(state));
@@ -11855,8 +11855,8 @@ for (const fallback of [false, true]) {
 }
 
 test("durable Codex chats keep native history and goal ownership across browser and controller lifetimes", async () => {
-  await withConversationController(async ({ captures, controller, subscribers, projectService, calls, session }) => {
-    const context = { runtime: await projectService.createRuntime(), session, routingConversationId: "saved-temporary" };
+  await withConversationController(async ({ captures, controller, subscribers, project, calls, session }) => {
+    const context = { runtime: await project.createRuntime(), session, routingConversationId: "saved-temporary" };
     controller = throughCommonScopedConversation(controller, context);
     const events = [];
     captures.persistentHistory = [];
@@ -11903,7 +11903,7 @@ test("durable Codex chats keep native history and goal ownership across browser 
     await controller.closeAllForSession("session-1");
     assert.equal(captures.persistentGoal.status, "paused");
     assert.deepEqual(captures.deletes, [], "runtime shutdown must preserve durable native chats");
-    const restarted = throughCommonScopedConversation(createRestartedController({ captures, projectService, subscribers: new Set() }), context);
+    const restarted = throughCommonScopedConversation(createRestartedController({ captures, project, subscribers: new Set() }), context);
     try {
       result = await restarted.readConversation("session-1", { conversationId, persistent: true });
       assert.equal(result.messages.at(-1).text, "Edited again.");
@@ -12039,9 +12039,9 @@ test("persistent Codex waits beyond three minutes but retains completion, Stop, 
 });
 
 test("temporary Codex steers its exact active native conversation without starting a second turn", async () => {
-  await withConversationController(async ({ captures, controller, calls, projectService, session }) => {
+  await withConversationController(async ({ captures, controller, calls, project, session }) => {
     controller = throughCommonScopedConversation(controller, {
-      runtime: await projectService.createRuntime(), session, routingConversationId: "saved-temporary"
+      runtime: await project.createRuntime(), session, routingConversationId: "saved-temporary"
     });
     captures.persistentHistory = [];
     const { conversationId } = await controller.createConversation("session-1", { persistent: true });
@@ -12060,7 +12060,7 @@ test("temporary Codex steers its exact active native conversation without starti
 test("Main browser facade uses the original native owner and action authority without Colleague", { timeout: 30_000 }, async () => {
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const access = { allowed: true, user: { ...os.userInfo(), role: "owner" } };
-  await withAgentMessageController(async ({ captures, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, controllerOptions, project, runtime, sessionId, store, terminals }) => {
     registerVibe64ActionContext(actions, {
       projectContext: {
         projectsRoot: path.dirname(runtime.projectContextRoot),
@@ -12075,9 +12075,9 @@ test("Main browser facade uses the original native owner and action authority wi
         }
       }
     });
-    const sessions = createSessionService({ actions, project: projectService, terminals: terminalService });
+    const sessions = createSessionService({ actions, project, terminals });
     actions.register({ contributorId: "test.main-terminals", domain: "vibe64-terminals",
-      actions: createTerminalActions({ terminals: terminalService }).map(definition => ({
+      actions: createTerminalActions({ terminals }).map(definition => ({
         channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition
       })) });
     actions.register({ contributorId: "test.main-sessions", domain: "vibe64-sessions",
@@ -12201,7 +12201,7 @@ test("Main browser facade uses the original native owner and action authority wi
       assert.equal(accepted.length, 1);
       assert.equal(accepted[0].user.text, "A visible request");
       assert.equal(accepted[0].metadata.runtime, undefined, "the original history has no reconstructed runtime-v3 metadata");
-      assert.equal((await terminalService.agentSessionState(sessionId, { runtime })).turn.id, captures.provider.turnId);
+      assert.equal((await terminals.agentSessionState(sessionId, { runtime })).turn.id, captures.provider.turnId);
       assert.ok(events.some(event => event.type === "accepted"));
       assert.ok(events.every(event => event.conversationId === id && !Object.hasOwn(event, "session") && !Object.hasOwn(event, "nativeResult")));
 
@@ -12431,7 +12431,7 @@ test("Main browser delivery inspection preserves original receipts while native 
 
 test("Main Codex canonical goals preserve original result policy, pinned targets and passive availability", { timeout: 15_000 }, async t => {
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  await withAgentMessageController(async ({ captures, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, controllerOptions, project, runtime, sessionId, store, terminals }) => {
     const options = { runtime, vibe64User: { ...os.userInfo(), role: "owner" } };
     await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
     const selection = { ...JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection), selectionSource: "explicit" };
@@ -12446,9 +12446,9 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
       resolveUser: async () => options.vibe64User,
       authorizeProject: async ({ slug }) => assert.equal(slug, "test-project")
     });
-    const sessions = createSessionService({ actions, project: projectService, terminals: terminalService });
+    const sessions = createSessionService({ actions, project, terminals });
     actions.register({ contributorId: "test.canonical-main-goals", domain: "vibe64",
-      actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals: terminalService })]
+      actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals })]
         .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
     const goalFacade = await sessions.browserConversations.open({
       id: mainConversationId({ projectSlug: "test-project", sessionId }), context: { channel: "internal", surface: "app" }
@@ -12530,7 +12530,7 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         }
         assert.equal(settled, false);
         assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, completedPin);
-        const awaitingAcknowledgement = await terminalService.readAgentGoal(sessionId, options);
+        const awaitingAcknowledgement = await terminals.readAgentGoal(sessionId, options);
         assert.equal(awaitingAcknowledgement.goal.objective, "Keep the original control");
         assert.equal(awaitingAcknowledgement.routing, undefined, "a new native goal does not inherit the previous engine's routing");
         assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, completedPin,
@@ -12539,7 +12539,7 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         assert.equal((await store.runSessionExclusive(sessionId, "agent-write-mode", () => null)).acquired, false,
           "the original service Set owns agent-write admission through its acknowledgement");
         let stopSettled = false;
-        stopping = terminalService.interruptAgentTurn(sessionId, {}, { ...options, session: await store.readSession(sessionId) })
+        stopping = terminals.interruptAgentTurn(sessionId, {}, { ...options, session: await store.readSession(sessionId) })
           .then(value => { stopSettled = true; return { value }; }, error => { stopSettled = true; return { error }; });
         await flushPromises();
         assert.equal(stopSettled, false, "service Stop waits for the original routing admission gate");
@@ -12577,8 +12577,8 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         available = false;
         const providerCount = captures.providerOptions.length;
         const readsBeforeUnavailable = nativeCalls.filter(([kind]) => kind === "read").length;
-        assert.deepEqual(await terminalService.readAgentGoal(sessionId, options), { status: "unavailable", goal: null });
-        await assert.rejects(terminalService.readAgentGoal(sessionId, options, { canonical: true }), {
+        assert.deepEqual(await terminals.readAgentGoal(sessionId, options), { status: "unavailable", goal: null });
+        await assert.rejects(terminals.readAgentGoal(sessionId, options, { canonical: true }), {
           code: "conversation_goal_unavailable", statusCode: 503
         });
         assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, exactPin);
@@ -12589,22 +12589,22 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         const differentSelection = { ...selection, engineId: "claude", agentId: "claude", modelProviderId: "anthropic", modelId: "sonnet" };
         await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(differentSelection));
         const stopOptions = { runtime, vibe64User: { username: "reader", role: "member" } };
-        const pinnedRead = await terminalService.readAgentGoal(sessionId, stopOptions, { canonical: true });
+        const pinnedRead = await terminals.readAgentGoal(sessionId, stopOptions, { canonical: true });
         assert.equal(pinnedRead.goal.id, created.id);
         assert.equal(pinnedRead.target.segmentId, segmentId);
         assert.equal(pinnedRead.routing.selection.engineId, "codex");
         const controls = { ...stopOptions, expectedSegmentId: segmentId, expectedGoalId: created.id };
         const callsBeforeStale = nativeCalls.filter(([kind]) => kind !== "read").length;
-        await assert.rejects(terminalService.updateAgentGoal(sessionId, { ...controls, action: "pause", expectedGoalId: "stale" }, { canonical: true }), /goal changed/);
+        await assert.rejects(terminals.updateAgentGoal(sessionId, { ...controls, action: "pause", expectedGoalId: "stale" }, { canonical: true }), /goal changed/);
         assert.equal(nativeCalls.filter(([kind]) => kind !== "read").length, callsBeforeStale);
         assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, exactPin);
-        const paused = await terminalService.updateAgentGoal(sessionId, { ...controls, action: "pause" }, { canonical: true });
+        const paused = await terminals.updateAgentGoal(sessionId, { ...controls, action: "pause" }, { canonical: true });
         assert.equal(paused.status, "paused");
         assert.deepEqual(nativeCalls.filter(([kind]) => kind === "status"), [["status", threadId, "paused"]]);
         const pausedPin = (await store.readSession(sessionId)).metadata.assistant_routing_goal;
         assert.equal(JSON.parse(pausedPin).status, "paused");
         await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(selection));
-        const resumed = await terminalService.updateAgentGoal(sessionId, { ...options, action: "resume",
+        const resumed = await terminals.updateAgentGoal(sessionId, { ...options, action: "resume",
           expectedSegmentId: segmentId, expectedGoalId: created.id }, { canonical: true });
         assert.equal(resumed.status, "active");
         assert.equal(resumed.id, created.id);
@@ -12613,11 +12613,11 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         assert.equal(JSON.parse(resumedPin).objective, "Keep the original control");
         await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(differentSelection));
         clearFailure = new Error("Native clear was rejected");
-        await assert.rejects(terminalService.updateAgentGoal(sessionId, { ...controls, action: "cancel" }, { canonical: true }), error => error === clearFailure);
+        await assert.rejects(terminals.updateAgentGoal(sessionId, { ...controls, action: "cancel" }, { canonical: true }), error => error === clearFailure);
         assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, resumedPin);
         assert.equal(goal.status, "active");
         clearFailure = null;
-        assert.equal(await terminalService.updateAgentGoal(sessionId, { ...controls, action: "cancel" }, { canonical: true }), null);
+        assert.equal(await terminals.updateAgentGoal(sessionId, { ...controls, action: "cancel" }, { canonical: true }), null);
         assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_routing_goal).status, "complete");
         assert.equal((await store.readSession(sessionId)).metadata.assistant_selection, JSON.stringify(differentSelection),
           "pinned read and stop controls do not rebind the visible assistant");
@@ -12957,7 +12957,7 @@ test("Codex real provider cold resume composes retained Public hook preparation 
   let options;
   let status = "notLoaded";
   let workdir;
-  await withConversationController(async ({ controller, projectService, projectContextRoot,
+  await withConversationController(async ({ controller, project, projectContextRoot,
     projectRuntimeRoot, session, temporaryRoot, captures }) => {
     workdir = session.metadata.source_path;
     const appStore = createVibe64SessionStore({
@@ -12974,7 +12974,7 @@ test("Codex real provider cold resume composes retained Public hook preparation 
       protocol.push({ method: "before-resume", args });
       return appStore.readAgentRun(...args);
     } });
-    projectService.createSessionStore = () => store;
+    project.createSessionStore = () => store;
 
     const { native } = await controller.prepareConversationHost("session-1", {}, "create");
     const context = await native.runOwner.conversationContext("session-1", { conversationId: threadId }, {});
@@ -13078,11 +13078,11 @@ test("Codex real provider cold resume composes retained Public hook preparation 
 test("Codex real provider refreshes Public commands and current instructions without authored work", async () => {
   const threadId = randomUUID();
   const protocol = [];
-  const commandService = createCodexGitCommandService({ logger: silentLogger, projectService: {} });
+  const commandService = createCodexGitCommandService({ logger: silentLogger, project: {} });
   let provider;
   let options;
   let nativeEnvironment;
-  await withConversationController(async ({ controller, projectService, projectRuntimeRoot,
+  await withConversationController(async ({ controller, project, projectRuntimeRoot,
     projectContextRoot, session, temporaryRoot, captures }) => {
     execFileSync("git", ["init", "--quiet"], { cwd: session.metadata.source_path });
     execFileSync("git", ["-c", "user.name=Composition test", "-c", "user.email=composition@example.test",
@@ -13097,8 +13097,8 @@ test("Codex real provider refreshes Public commands and current instructions wit
       runtimeKind: "genesis",
       sessionId: session.sessionId
     });
-    projectService.createSessionStore = () => store;
-    projectService.readCurrentProject = async () => ({});
+    project.createSessionStore = () => store;
+    project.readCurrentProject = async () => ({});
     const { native } = await controller.prepareConversationHost("session-1", {}, "create");
     const context = await native.runOwner.conversationContext("session-1", { conversationId: threadId }, {});
     assert.equal(context.provider, provider);
@@ -13109,10 +13109,10 @@ test("Codex real provider refreshes Public commands and current instructions wit
     const firstEnvironment = { ...nativeEnvironment };
     assert.equal(await agentSessionCommandEnvironmentIsHealthy(firstEnvironment), true);
     const firstPrompt = protocol.find(({ method }) => method === "thread/start").params.developerInstructions;
-    const registry = await vibe64HostContextRegistry(projectService.agentRuntimeRoot);
+    const registry = await vibe64HostContextRegistry(project.agentRuntimeRoot);
     await registry.register(threadId, { ...hostContext, conversationKind: "main" }, session.metadata.source_path);
     const replacement = await prepareCodexGitCommand({
-      commandService: createCodexGitCommandService({ logger: silentLogger, projectService: {} }),
+      commandService: createCodexGitCommandService({ logger: silentLogger, project: {} }),
       env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(temporaryRoot, "attachments") },
       sessionId: session.sessionId,
       stateRoot: projectRuntimeRoot
@@ -13273,7 +13273,7 @@ test("Codex real provider restores the same-account Helper after an actual auth 
     return provider;
   };
   try {
-    await withConversationController(async ({ controller, captures, session, projectService,
+    await withConversationController(async ({ controller, captures, session, project,
       projectRuntimeRoot, simulateControllerCrash }) => {
       const profile = sourceExplanationHelperProfile();
       const firstPending = controller.runDetachedChatTurn("session-1", {
@@ -13293,7 +13293,7 @@ test("Codex real provider restores the same-account Helper after an actual auth 
       await writeAccount("fixture-access-two");
       await writeCodexAuthMarker(systemRoot, { connected: true, loginId, generation: "two" });
       const refreshed = restartedCaptures(captures);
-      const restored = createRestartedController({ session, captures: refreshed, projectService,
+      const restored = createRestartedController({ session, captures: refreshed, project,
         codexToolHomeSource: toolHomeSource, codexSystemRoot: systemRoot, providerFactory });
       try {
         const followUp = restored.runDetachedChatTurn("session-1", {
@@ -13329,7 +13329,7 @@ test("Codex real provider restores the same-account Helper after an actual auth 
 
 test("R11 original persistent scoped Codex preserves history and excludes stopped writers without retiring a sibling", async () => {
   const wires = new Map();
-  await withConversationController(async ({ captures, controller, calls, subscribers, temporaryRoot, projectContextRoot, projectService }) => {
+  await withConversationController(async ({ captures, controller, calls, subscribers, temporaryRoot, projectContextRoot, project }) => {
     captures.uniqueThreadIds = true;
     const scopes = ["colleague_legacy", "colleague_sibling"].map(id => ({ id, environment: {},
       workdir: path.join(temporaryRoot, id), runtimeRoot: path.join(temporaryRoot, id),
@@ -13397,7 +13397,7 @@ test("R11 original persistent scoped Codex preserves history and excludes stoppe
     assert.equal(captures.turns.length, turnCount, "shutdown and delayed output never infer again");
     assert.deepEqual(captures.deletes, [], "stopped-service exclusion retains durable native history");
     const after = restartedCaptures(captures);
-    const restarted = createRestartedController({ captures: after, projectService, providerFactory });
+    const restarted = createRestartedController({ captures: after, project, providerFactory });
     try {
       const restored = await restarted.readConversation(old.scope.id, { conversationId: old.conversationId, persistent: true }, old.options);
       assert.equal(restored.conversationId, old.conversationId);
@@ -13510,7 +13510,7 @@ test("Main browser fresh authorization for a local practice project opened as an
   const access = { allowed: true }, reads = [], denied = [], events = [];
   const resume = Promise.withResolvers();
   let publishing = false, held = false, browser, unsubscribe, goalOperation;
-  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
     // The learning space holds this learner's practice project (its marker
     // names learner "42"); the local transport supplies the person.
     const projectContext = { projectCatalogEnabled: false, projectsRoot: path.dirname(runtime.projectContextRoot),
@@ -13558,14 +13558,14 @@ test("Main browser fresh authorization for a local practice project opened as an
     captures.onSessionChanged = (_id, event) => { if (event.reason === "codex-goal") publishing = true; };
     try {
       await runWithProjectRequestContext(ordinary, async () => {
-        const ready = await terminalService.ensureAgentSession(sessionId, { runtime, vibe64User: actor });
+        const ready = await terminals.ensureAgentSession(sessionId, { runtime, vibe64User: actor });
         assert.equal(ready.ok, true, JSON.stringify(ready));
-        browser = await terminalService.openBrowserConversation(sessionId, { runtime, vibe64User: actor,
+        browser = await terminals.openBrowserConversation(sessionId, { runtime, vibe64User: actor,
           browserAuthority: { sessionId, projectSlug: slug, actorId: "42", requestContext } });
         unsubscribe = await browser.subscribe(event => events.push(event));
         const segment = (await browser.read()).segmentId;
         // Main Cancel records a message without opening its native turn; it then has no other receipt.
-        assert.deepEqual(await terminalService.cancelAgentMessage(sessionId, { messageId: "cancelled-before-sending" }, { runtime, vibe64User: actor }),
+        assert.deepEqual(await terminals.cancelAgentMessage(sessionId, { messageId: "cancelled-before-sending" }, { runtime, vibe64User: actor }),
           { ok: true, cancelled: true, messageId: "cancelled-before-sending", interrupted: false });
         assert.deepEqual(await browser.inspectDelivery({ messageId: "cancelled-before-sending" }),
           { status: "cancelled", messageId: "cancelled-before-sending" });
@@ -13603,7 +13603,7 @@ test("Main browser fresh authorization for a local practice project opened as an
 
 
 test("Main Codex active goal continues once after service restart and explicit Pause survives restart", { timeout: 30_000 }, async () => {
-  await withAgentMessageController(async ({ captures, createService, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, createService, controllerOptions, project, runtime, sessionId, store, terminals }) => {
     const actor = { ...os.userInfo(), role: "owner" };
     const options = { runtime, vibe64User: actor };
     runtime.listSessions = async () => [await store.readSession(sessionId)];
@@ -13632,17 +13632,17 @@ test("Main Codex active goal continues once after service restart and explicit P
     const configure = service => service.configureAssistantRuntime({
       authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user
     });
-    configure(terminalService);
-    const created = await terminalService.updateAgentGoal(sessionId, { ...options, action: "set",
+    configure(terminals);
+    const created = await terminals.updateAgentGoal(sessionId, { ...options, action: "set",
       expectedSegmentId: null, objective: "Finish the Codex work", tokenBudget: 5000 }, { canonical: true });
     const initial = JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent);
     assert.equal(initial.active, true);
     assert.equal(initial.native.threadId, captures.provider.threadId);
-    await terminalService.close();
-    projectService.listProjects = async () => ({ projects: [
+    await terminals.close();
+    project.listProjects = async () => ({ projects: [
       { slug: "removed-project", runtime: { open: true } }, { slug: "test-project", runtime: { open: true } }
     ] });
-    projectService.runInProjectContext = async (slug, operation) => {
+    project.runInProjectContext = async (slug, operation) => {
       if (slug === "removed-project") throw new Error("Project was removed during startup.");
       return operation();
     };
@@ -13652,7 +13652,7 @@ test("Main Codex active goal continues once after service restart and explicit P
     assert.equal(recovered.ok, false, JSON.stringify(recovered));
     assert.match(recovered.results[0].error, /removed during startup/u);
     assert.equal(recovered.results[1].resumed, true, "one unavailable project cannot suppress another goal");
-    delete projectService.listProjects;
+    delete project.listProjects;
     assert.deepEqual(writes.map(([action]) => action), ["set", "active"]);
     assert.equal(writes[0][1], writes[1][1], "restart retains the same native conversation");
     const resumed = await resumedService.readAgentGoal(sessionId, options, { canonical: true });
@@ -13674,7 +13674,7 @@ test("Main Codex active goal continues once after service restart and explicit P
 
 
 test("Main Cancel answers while the goal settings lock is held and its goal pause holds until saved", { timeout: 30_000 }, async () => {
-  await withAgentMessageController(async ({ captures, createService, controllerOptions, runtime, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, createService, controllerOptions, runtime, sessionId, store, terminals }) => {
     const actor = { ...os.userInfo(), role: "owner" };
     const options = { runtime, vibe64User: actor };
     runtime.listSessions = async () => [await store.readSession(sessionId)];
@@ -13695,8 +13695,8 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
     const configure = service => service.configureAssistantRuntime({
       authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user
     });
-    configure(terminalService);
-    await terminalService.updateAgentGoal(sessionId, { ...options, action: "set",
+    configure(terminals);
+    await terminals.updateAgentGoal(sessionId, { ...options, action: "set",
       expectedSegmentId: null, objective: "Finish the Codex work" }, { canonical: true });
     const metadata = async () => (await store.readSession(sessionId)).metadata;
     const intent = JSON.parse((await metadata()).assistant_goal_intent);
@@ -13715,7 +13715,7 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
     let timer;
     try {
       await entered.promise;
-      cancelling = terminalService.cancelAgentMessage(sessionId, { messageId }, options);
+      cancelling = terminals.cancelAgentMessage(sessionId, { messageId }, options);
       const answer = await Promise.race([
         cancelling,
         new Promise(resolve => { timer = setTimeout(() => resolve(null), 2_000); })
@@ -13747,7 +13747,7 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
 
 
 test("a Codex goal paused by an account change resumes on the current account once the old runtime stopped", { timeout: 30_000 }, async () => {
-  await withAgentMessageController(async ({ captures, controllerOptions, runtime, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, controllerOptions, runtime, sessionId, store, terminals }) => {
     const actor = { ...os.userInfo(), role: "owner" };
     const options = { runtime, vibe64User: actor };
     await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
@@ -13764,22 +13764,22 @@ test("a Codex goal paused by an account change resumes on the current account on
         return { goal: goal = { ...goal, status } };
       };
     };
-    terminalService.configureAssistantRuntime({ authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user });
-    await terminalService.updateAgentGoal(sessionId, { ...options, action: "set",
+    terminals.configureAssistantRuntime({ authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user });
+    await terminals.updateAgentGoal(sessionId, { ...options, action: "set",
       expectedSegmentId: null, objective: "Finish the Codex work" }, { canonical: true });
     const threadId = captures.provider.threadId;
     // The account change paused it natively on the runtime that kept running its turn.
     goal = { ...goal, status: "paused" };
 
-    assert.deepEqual(await terminalService.continueGoalAfterAccountChange(sessionId, { threadId: "another-thread" }),
+    assert.deepEqual(await terminals.continueGoalAfterAccountChange(sessionId, { threadId: "another-thread" }),
       { sessionId, skipped: true }, "only the goal of the paused thread continues");
     // Disconnecting Codex leaves nothing to continue on.
-    terminalService.configureAssistantRuntime({ codexConnectionStatus: async () => false });
-    const refused = await terminalService.continueGoalAfterAccountChange(sessionId, { threadId });
+    terminals.configureAssistantRuntime({ codexConnectionStatus: async () => false });
+    const refused = await terminals.continueGoalAfterAccountChange(sessionId, { threadId });
     assert.equal(refused.code, "vibe64_assistant_connection_unavailable", JSON.stringify(refused));
     assert.equal(goal.status, "paused", "Without a Codex sign-in the goal stays paused");
-    terminalService.configureAssistantRuntime({ codexConnectionStatus: async () => true });
-    assert.deepEqual(await terminalService.continueGoalAfterAccountChange(sessionId, { threadId }), { sessionId, resumed: true });
+    terminals.configureAssistantRuntime({ codexConnectionStatus: async () => true });
+    assert.deepEqual(await terminals.continueGoalAfterAccountChange(sessionId, { threadId }), { sessionId, resumed: true });
     assert.deepEqual(writes, [["set", threadId], ["active", threadId]]);
     const intent = JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent);
     assert.equal(intent.active, true);
@@ -13788,7 +13788,7 @@ test("a Codex goal paused by an account change resumes on the current account on
 });
 
 test("a goal that cannot continue after restart is logged with its project and the person who set it", { timeout: 30_000 }, async () => {
-  await withAgentMessageController(async ({ captures, createService, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
+  await withAgentMessageController(async ({ captures, createService, controllerOptions, project, runtime, sessionId, store, terminals }) => {
     const actor = { ...os.userInfo(), role: "owner" };
     const options = { runtime, vibe64User: actor };
     runtime.listSessions = async () => [await store.readSession(sessionId)];
@@ -13799,12 +13799,12 @@ test("a goal that cannot continue after restart is logged with its project and t
       provider.setGoal = async (_threadId, input) => ({ goal: goal = { ...input, status: "active", createdAt: 100, tokensUsed: 0, timeUsedSeconds: 0 } });
       provider.setGoalStatus = async (_threadId, status) => ({ goal: goal = { ...goal, status } });
     };
-    terminalService.configureAssistantRuntime({ authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user });
-    await terminalService.updateAgentGoal(sessionId, { ...options, action: "set",
+    terminals.configureAssistantRuntime({ authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user });
+    await terminals.updateAgentGoal(sessionId, { ...options, action: "set",
       expectedSegmentId: null, objective: "Finish the Codex work" }, { canonical: true });
-    await terminalService.close();
-    projectService.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
-    projectService.runInProjectContext = async (_slug, operation) => operation();
+    await terminals.close();
+    project.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
+    project.runInProjectContext = async (_slug, operation) => operation();
     const warnings = [];
     const resumedService = createService({ logger: { warn: (fields, message) => warnings.push({ fields, message }),
       info() {}, error() {}, debug() {} } });
@@ -13821,7 +13821,7 @@ test("a goal that cannot continue after restart is logged with its project and t
         code: logged.fields.code }, { sessionId, projectSlug: "test-project", actor: actor.username,
         code: "vibe64_assistant_actor_unavailable" }, "the operator can tell which project and person the goal belongs to");
     } finally {
-      delete projectService.listProjects;
+      delete project.listProjects;
       await resumedService.close();
     }
   }, { throughTerminalService: true });

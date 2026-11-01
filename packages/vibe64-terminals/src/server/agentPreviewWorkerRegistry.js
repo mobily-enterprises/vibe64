@@ -20,7 +20,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
  * @param {object} dependencies
  * @param {AgentPreviewCommandState} dependencies.state
  * @param {SessionCommandServers} dependencies.commandServers
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {RunVibe64Command} dependencies.runManagedCommand
  * @param {StopVibe64Execution} dependencies.stopManagedExecution
  * @param {StopVibe64OwnedExecutions} dependencies.stopOwnedExecutions
@@ -28,7 +28,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 function createAgentPreviewWorkerRegistry({
   state,
   commandServers,
-  projectService,
+  project,
   runManagedCommand,
   stopManagedExecution,
   stopOwnedExecutions
@@ -39,13 +39,13 @@ function createAgentPreviewWorkerRegistry({
    * request, as after a restart.
    */
   function sessionProjectSlug(sessionId) {
-    const project = [...(state.browserWorkers.get(sessionId)?.values() || [])][0]?.project;
-    return normalizeText(project?.slug || project?.name);
+    const projectRecord = [...(state.browserWorkers.get(sessionId)?.values() || [])][0]?.project;
+    return normalizeText(projectRecord?.slug || projectRecord?.name);
   }
 
   async function runBrowserCommand(request) {
-    const runtimeConfigEnv = await projectService.runInProjectContext(request.project.slug, () => (
-      projectService.projectInspectionEnvironment({
+    const runtimeConfigEnv = await project.runInProjectContext(request.project.slug, () => (
+      project.projectInspectionEnvironment({
         sessionId: request.session.sessionId,
         target: "preview"
       })

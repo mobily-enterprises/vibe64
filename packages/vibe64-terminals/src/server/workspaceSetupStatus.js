@@ -17,12 +17,12 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * A session's workspace setup status: marking it required again, whether it
  * is prepared for the current recipe and resources, and its run in progress.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
  * @param {WorkspaceSetupExecution} dependencies.setupExecution
  */
 function createWorkspaceSetupStatus({
-  projectService,
+  project,
   runnerState,
   setupExecution
 }) {
@@ -71,8 +71,8 @@ function createWorkspaceSetupStatus({
       return false;
     }
     // readable-check: allow method-probe - optional operation: a project service without environment status reports its resources ready
-    const environmentStatus = typeof projectService.projectEnvironmentStatus === "function"
-      ? await projectService.projectEnvironmentStatus({ sessionId: session.sessionId, session }) : { status: "ready" };
+    const environmentStatus = typeof project.projectEnvironmentStatus === "function"
+      ? await project.projectEnvironmentStatus({ sessionId: session.sessionId, session }) : { status: "ready" };
     return setup.status === "ready" &&
       previous.status === "succeeded" &&
       Boolean(setup.recipeHash) &&

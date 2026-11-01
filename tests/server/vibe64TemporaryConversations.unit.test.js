@@ -156,8 +156,8 @@ async function conversationFixture(root, engineId = "codex") {
     ...sourceMetadata(root, "one"), assistant_selection: serializeVibe64AssistantSelection(selection)
   } });
   const runtime = { store, stateRoot: projectRuntimeRoot(root), getSession: (id) => store.readSession(id) };
-  const projectService = { createRuntime: async () => runtime };
-  const attachments = createSessionAttachments({ projectService, env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
+  const project = { createRuntime: async () => runtime };
+  const attachments = createSessionAttachments({ project, env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
   const native = { messages: [], status: "ready", runId: "", admitted: false, starts: 0, deletes: 0, stopError: "", deleteError: "" };
   const sessionAgent = {
     async inspectAssistantPurposes() { return {}; },

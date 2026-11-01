@@ -167,7 +167,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {RuntimeEnv} [dependencies.env]
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {((event: object) => unknown) | null} [dependencies.publishConversation]
  * @param {(sessionId: string, options: object) => Promise<unknown>} dependencies.continueGoalAfterAccountChange
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
@@ -192,7 +192,7 @@ function createCodexSessionRegistration({
   env = process.env,
   codexGitCommand,
   logger,
-  projectService,
+  project,
   publishConversation = null,
   continueGoalAfterAccountChange,
   runNativeDetachedConversation,
@@ -243,7 +243,7 @@ function createCodexSessionRegistration({
     agentSessionCommand,
     codexGitCommand,
     env,
-    projectService,
+    project,
     runCommand
   });
 
@@ -251,7 +251,7 @@ function createCodexSessionRegistration({
     runtimeHost: codexRuntimeHost,
     accountPreparation: codexAccountPreparation,
     sessionEnvironment: codexSessionEnvironment,
-    projectService,
+    project,
     runCommand
   });
   const {
@@ -306,7 +306,7 @@ function createCodexSessionRegistration({
       codexTerminalNamespace, publishSessionChanged, publishConversation, sessionId, event, publicEvent
     );
   }
-  const checkpointCodexAppServerTurn = createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged });
+  const checkpointCodexAppServerTurn = createCodexSessionTurnCheckpoint({ project, publishSessionChanged });
   const codexAppServerRunOwner = createCodexAppServerRunOwner({
     namespace: codexTerminalNamespace,
     normalizeRunState: normalizeVibe64AgentRunState,
@@ -384,7 +384,7 @@ function createCodexSessionRegistration({
     providerHost: codexSessionProviderHost,
     runOwner: codexAppServerRunOwner
   });
-  const codexConversationStorage = createCodexConversationStorage({ projectService, runOwner: codexAppServerRunOwner });
+  const codexConversationStorage = createCodexConversationStorage({ project, runOwner: codexAppServerRunOwner });
   const codexAttachments = createCodexSessionAttachmentRenewal({
     sessionRuntimeHost: codexSessionRuntimeHost,
     sessionEnvironment: codexSessionEnvironment
@@ -396,7 +396,7 @@ function createCodexSessionRegistration({
     health: codexStartupHealth
   });
   const codexConversationPreparation = createCodexConversationPreparation({
-    projectService,
+    project,
     runtimeHost: codexRuntimeHost,
     sessionRuntimeHost: codexSessionRuntimeHost,
     accountPreparation: codexAccountPreparation,
@@ -407,7 +407,7 @@ function createCodexSessionRegistration({
     checkpoint: checkpointCodexAppServerTurn
   });
   const codexLifecyclePreparation = createCodexLifecyclePreparation({
-    projectService,
+    project,
     runtimeHost: codexRuntimeHost,
     sessionRuntimeHost: codexSessionRuntimeHost,
     sessionEnvironment: codexSessionEnvironment,
@@ -435,7 +435,7 @@ function createCodexSessionRegistration({
     sessionEnvironment: codexSessionEnvironment,
     actorMetadata: currentConversationActorMetadata
   });
-  const markCodexAppServerContextRefreshPending = createCodexContextRefreshMarker({ projectService, runOwner: codexAppServerRunOwner });
+  const markCodexAppServerContextRefreshPending = createCodexContextRefreshMarker({ project, runOwner: codexAppServerRunOwner });
 
   function recordCodexAppServerProductSignal(kind, { store, sessionId, threadId, notification, reason }) {
     if (kind === "usage") {
@@ -456,7 +456,7 @@ function createCodexSessionRegistration({
 
   const codexInteractiveTerminals = createCodexInteractiveTerminals({
     env,
-    projectService,
+    project,
     runCommand,
     runtimeHost: codexRuntimeHost,
     sessionRuntimeHost: codexSessionRuntimeHost,

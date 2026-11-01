@@ -25,7 +25,7 @@ import { openCodeError, throwVibe64OpenCodeError as runtimeFailure,
  * Authorized application facts and awaited product cleanup. The supplied native
  * owner retains process/turn state, readiness, stopping and retry coordination.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
  * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
@@ -35,7 +35,7 @@ import { openCodeError, throwVibe64OpenCodeError as runtimeFailure,
  * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
  */
 function createOpenCodeLifecyclePreparation({
-  projectService,
+  project,
   getAssistantManager,
   sharedRuntime,
   hostPreparation,
@@ -93,7 +93,7 @@ function createOpenCodeLifecyclePreparation({
         closeTerminals: () => closeTerminalSessionsForNamespace(opencodeTerminalNamespace(id)),
         async afterRelease() {
           if (getAssistantManager() && !options.assistantScope) {
-            const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+            const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
             await cleanupReasoningSummary({
               sessionId: id,
               runtime,

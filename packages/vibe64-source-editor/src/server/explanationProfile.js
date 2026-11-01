@@ -112,11 +112,11 @@ function sourceEditorAgentOperationOptions(context = {}, options = {}, {
 }
 
 /**
- * @param {TerminalsService} terminalService
+ * @param {TerminalsService} terminals
  * @param {object} [context]
  */
-async function describeSourceEditorAgentProvider(terminalService, context = {}) {
-  const decision = await terminalService.resolveAssistantPurpose({ purpose: "source_explanation" }, {
+async function describeSourceEditorAgentProvider(terminals, context = {}) {
+  const decision = await terminals.resolveAssistantPurpose({ purpose: "source_explanation" }, {
     runtime: context.runtime,
     session: context.session,
     vibe64User: context.vibe64User
@@ -126,12 +126,12 @@ async function describeSourceEditorAgentProvider(terminalService, context = {}) 
 }
 
 /**
- * @param {TerminalsService} terminalService
+ * @param {TerminalsService} terminals
  * @param {object} [context]
  */
-async function resolveSourceEditorAgentExecutionProfile(terminalService, context = {}) {
+async function resolveSourceEditorAgentExecutionProfile(terminals, context = {}) {
   // readable-check: allow method-probe - test asserts error: a terminal service without the low-cost profile is refused with execution_profile_missing
-  if (typeof terminalService.resolveEphemeralAgentExecutionProfile !== "function") {
+  if (typeof terminals.resolveEphemeralAgentExecutionProfile !== "function") {
     throw sourceEditorError(
       "The selected assistant provider cannot resolve the low-cost profile required for source explanations.",
       "vibe64_source_explanation_execution_profile_missing",
@@ -139,7 +139,7 @@ async function resolveSourceEditorAgentExecutionProfile(terminalService, context
       503
     );
   }
-  const resolved = await terminalService.resolveEphemeralAgentExecutionProfile(
+  const resolved = await terminals.resolveEphemeralAgentExecutionProfile(
     context.assistantHelper.scope,
     sourceEditorExecutionProfileRequest(),
     {
@@ -161,15 +161,15 @@ async function resolveSourceEditorAgentExecutionProfile(terminalService, context
 }
 
 /**
- * @param {TerminalsService} terminalService
+ * @param {TerminalsService} terminals
  * @param {object} context
  * @param {object} input
  * @param {object} [options]
  */
-async function runSourceEditorHelperTurn(terminalService, context, input, options = {}) {
+async function runSourceEditorHelperTurn(terminals, context, input, options = {}) {
   const { onEvent: forwardEvent = async () => {} } = options;
   const helper = context.assistantHelper;
-  const result = await terminalService.runEphemeralAgentChatTurn(helper.scope, {
+  const result = await terminals.runEphemeralAgentChatTurn(helper.scope, {
     ...input,
     executionProfile: resolvedSourceEditorExecutionProfile(context.agentExecutionProfile)
   }, {

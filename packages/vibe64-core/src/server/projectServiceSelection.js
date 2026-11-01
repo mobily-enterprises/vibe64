@@ -1,17 +1,17 @@
-function projectServiceSourceRoot(projectService = null) {
+function projectServiceSourceRoot(project = null) {
   // readable-check: allow method-probe - optional operation: without a project service there is no selected source
-  if (projectService && typeof projectService.currentProjectSourceRoot === "function") {
-    return String(projectService.currentProjectSourceRoot() || "").trim();
+  if (project && typeof project.currentProjectSourceRoot === "function") {
+    return String(project.currentProjectSourceRoot() || "").trim();
   }
   return "";
 }
 
-function projectServiceNamespaceRoot(projectService = null) {
+function projectServiceNamespaceRoot(project = null) {
   // readable-check: allow method-probe - optional operation: without a project service there is no selected namespace
-  if (!projectService || typeof projectService.currentTargetRoot !== "function") {
+  if (!project || typeof project.currentTargetRoot !== "function") {
     return "";
   }
-  return String(projectService.currentTargetRoot() || "").trim();
+  return String(project.currentTargetRoot() || "").trim();
 }
 
 export {

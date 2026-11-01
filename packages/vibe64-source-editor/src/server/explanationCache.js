@@ -23,12 +23,12 @@ const SOURCE_EDITOR_EXPLANATION_CACHE_MAX_ENTRIES = 64;
 const SOURCE_EDITOR_EXPLANATION_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /**
- * @param {TerminalsService} terminalService
+ * @param {TerminalsService} terminals
  * @param {object} [context]
  * @param {object | null} [template]
  */
 async function sourceEditorCompletedCacheIdentityUnchanged(
-  terminalService,
+  terminals,
   context = {},
   template = null
 ) {
@@ -46,12 +46,12 @@ async function sourceEditorCompletedCacheIdentityUnchanged(
     return false;
   }
   try {
-    const current = await describeSourceEditorAgentProvider(terminalService, context);
+    const current = await describeSourceEditorAgentProvider(terminals, context);
     return JSON.stringify(current?.decision.effectiveSelection) === JSON.stringify(context.assistantHelper.selection) &&
       toText(current?.providerId) === expectedProviderId &&
       toText(current?.accountIdentitySignature) === expectedAccountIdentitySignature &&
       sourceEditorExecutionProfileIdentity(
-        await resolveSourceEditorAgentExecutionProfile(terminalService, context)
+        await resolveSourceEditorAgentExecutionProfile(terminals, context)
       ) === expectedExecutionProfileIdentity;
   } catch {
     return false;

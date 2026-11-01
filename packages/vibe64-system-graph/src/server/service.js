@@ -205,7 +205,7 @@ function architectureInspectionRequest(architecture, inspection, cacheDirectory 
 /**
  * Runs one declared inspector and returns its parsed observation document.
  */
-async function runArchitectureInspector({ inspector, request, current, signal, progress, runCommand, projectService, runtimeReader }) {
+async function runArchitectureInspector({ inspector, request, current, signal, progress, runCommand, project, runtimeReader }) {
   if (signal.aborted) throw architectureCancelled();
   const runtime = inspectorRuntime(inspector, runtimeReader);
   await assertInspectorWorkdir(current.sourceRoot, inspector);
@@ -220,8 +220,8 @@ async function runArchitectureInspector({ inspector, request, current, signal, p
     mode: "capture",
     purpose: "source",
     envPolicy: "project",
-    env: await projectService.projectInspectionEnvironment({ sessionId: current.sessionId }),
-    project: await projectService.readCurrentProject(),
+    env: await project.projectInspectionEnvironment({ sessionId: current.sessionId }),
+    project: await project.readCurrentProject(),
     session: current.session,
     runtimes: runtime.runtimes,
     input: request,
@@ -308,7 +308,7 @@ function relationView(relation) {
  * @param {typeof inspectVibe64ArchitectureLayout} [dependencies.layoutReader]
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof vibe64RuntimePacks} [dependencies.runtimeReader]
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {RuntimeLogger} dependencies.logger
  * @param {typeof refreshGenesisCities} [dependencies.refresher]
@@ -319,7 +319,7 @@ function createService({
   layoutReader = inspectVibe64ArchitectureLayout,
   runCommand = runVibe64Command,
   runtimeReader = vibe64RuntimePacks,
-  projectService,
+  project,
   publishSessionChanged,
   logger,
   refresher = refreshGenesisCities
@@ -347,7 +347,7 @@ function createService({
     if (!normalizedSessionId) {
       throw systemError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
-    const runtime = await projectService.createRuntime({
+    const runtime = await project.createRuntime({
       sessionId: normalizedSessionId
     });
     const session = await runtime.getSession(normalizedSessionId);
@@ -509,7 +509,7 @@ function createService({
                 signal: controller.signal,
                 progress,
                 runCommand,
-                projectService,
+                project,
                 runtimeReader
               }));
             }

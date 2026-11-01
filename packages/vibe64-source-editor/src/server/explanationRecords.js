@@ -212,16 +212,16 @@ async function readSourceEditorExplanationCleanupRecord(context = {}, explanatio
  * @param {object} [context]
  * @param {object} [record]
  * @param {object} [options]
- * @param {TerminalsService} options.terminalService
+ * @param {TerminalsService} options.terminals
  */
 async function deleteSourceEditorExplanationAgentThread(context = {}, record = {}, options = {}) {
   const {
-    terminalService
+    terminals
   } = options;
   if (record.helper) {
     const helper = record.helper;
     sourceEditorHelperRoot(context, helper);
-    const deleted = await terminalService.deleteEphemeralAgentConversation(helper.scope, {
+    const deleted = await terminals.deleteEphemeralAgentConversation(helper.scope, {
       conversationId: helper.conversationId,
       cleanupExecutionId: helper.executionId,
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
@@ -241,7 +241,7 @@ async function deleteSourceEditorExplanationAgentThread(context = {}, record = {
       threadId
     };
   }
-  const agentCleanup = await terminalService.deleteDetachedAgentChatThread(context.sessionId, {
+  const agentCleanup = await terminals.deleteDetachedAgentChatThread(context.sessionId, {
     executionProfile: sourceEditorExecutionProfileSnapshot(record.executionProfile) ||
       sourceEditorExecutionProfileRequest(),
     threadId

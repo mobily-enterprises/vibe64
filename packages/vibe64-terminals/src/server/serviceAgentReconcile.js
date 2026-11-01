@@ -39,12 +39,12 @@ function reconcileResultWithSourceFailures(result = {}, sourceFailures = []) {
  * Reconciling a project's agent sessions after a restart: one reset of the known agent sessions,
  * legacy assistant selections migrated, and reconciled session sources made self-contained.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {SessionConversations} dependencies.sessionConversations
  */
 function createServiceAgentReconcile({
-  projectService,
+  project,
   sessionAgent,
   sessionConversations
 }) {
@@ -53,7 +53,7 @@ function createServiceAgentReconcile({
   async function resetKnownAgentSessionsOnce() {
     if (!knownAgentSessionReset) {
       knownAgentSessionReset = (async () => {
-        const runtime = await projectService.createRuntime({
+        const runtime = await project.createRuntime({
           inspectSource: false
         });
         const listOptions = {
@@ -103,10 +103,10 @@ function createServiceAgentReconcile({
     }
     const sessionId = sessionRecordId(session);
     // readable-check: allow method-probe - optional operation: a project service without runtimes keeps the session it was given
-    if (!sessionId || typeof projectService.createRuntime !== "function") {
+    if (!sessionId || typeof project.createRuntime !== "function") {
       return session;
     }
-    const runtime = await projectService.createRuntime({
+    const runtime = await project.createRuntime({
       inspectSource: false
     });
     // readable-check: allow method-probe - optional operation: a runtime without a session reader keeps the session it was given
@@ -188,7 +188,7 @@ function createServiceAgentReconcile({
         connected: true
       }))
     };
-    const runtime = await projectService.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntime({ inspectSource: false });
     for (const session of legacy) {
       const sessionId = sessionRecordId(session);
       try {

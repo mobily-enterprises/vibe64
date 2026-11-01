@@ -18,7 +18,7 @@ import { createWorkspaceSetupStatus } from "./workspaceSetupStatus.js";
  * @param {(request: object) => Promise<object>} [dependencies.inspect]
  * @param {typeof inspectGenesisProjectFormat} [dependencies.inspectProjectFormat]
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {(request: object) => Promise<object>} [dependencies.startWorkflow]
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
  * @param {typeof runVibe64Command} [dependencies.runCommand]
@@ -27,36 +27,36 @@ function createWorkspaceSetupRunner({
   inspect: suppliedInspect = null,
   inspectProjectFormat = inspectGenesisProjectFormat,
   connectedPreparation,
-  projectService,
+  project,
   startWorkflow = startResourceWorkflow,
   finishWorkflow = finishVibe64Workflow,
   runCommand = runVibe64Command
 }) {
-  const inspect = suppliedInspect || projectService.inspectWorkspaceSetup?.bind(projectService) || inspectVibe64WorkspaceSetup;
+  const inspect = suppliedInspect || project.inspectWorkspaceSetup?.bind(project) || inspectVibe64WorkspaceSetup;
   const runnerState = createWorkspaceSetupRunnerState({ inspect });
   const setupExecution = createWorkspaceSetupExecution({
     connectedPreparation,
     finishWorkflow,
-    projectService,
+    project,
     runCommand,
     runnerState,
     startWorkflow
   });
   const setupMigration = createWorkspaceSetupMigration({
-    projectService,
+    project,
     runCommand,
     runnerState
   });
   const setupStart = createWorkspaceSetupStart({
     connectedPreparation,
     inspectProjectFormat,
-    projectService,
+    project,
     runnerState,
     setupExecution,
     setupMigration
   });
   const setupStatus = createWorkspaceSetupStatus({
-    projectService,
+    project,
     runnerState,
     setupExecution
   });

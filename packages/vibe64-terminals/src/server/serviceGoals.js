@@ -61,7 +61,7 @@ const goalStopRequestFor = session => {
  * @param {ActionCatalogue | null} dependencies.actions
  * @param {AssistantRouting} dependencies.assistantRouting
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
  * @param {ReadRoutingConfiguration} dependencies.readRoutingConfiguration
  * @param {SessionAgentManager} dependencies.sessionAgent
@@ -74,7 +74,7 @@ function createServiceGoals({
   actions,
   assistantRouting,
   logger,
-  projectService,
+  project,
   publishAgentSessionChanged,
   readRoutingConfiguration,
   sessionAgent
@@ -597,13 +597,13 @@ function createServiceGoals({
         }
       };
       // readable-check: allow method-probe - optional operation: a project service without a project list recovers only the current project
-      if (typeof projectService.listProjects === "function") {
-        const listed = await projectService.listProjects();
+      if (typeof project.listProjects === "function") {
+        const listed = await project.listProjects();
         if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
-        for (const project of openProjectRuntimeRecords(listed)) {
+        for (const projectRecord of openProjectRuntimeRecords(listed)) {
           if (state.lifecycle.closing) break;
-          try { await projectService.runInProjectContext(project.slug, () => recoverCurrentProject(project.slug)); }
-          catch (error) { reportFailure(error, { projectSlug: project.slug }); }
+          try { await project.runInProjectContext(projectRecord.slug, () => recoverCurrentProject(projectRecord.slug)); }
+          catch (error) { reportFailure(error, { projectSlug: projectRecord.slug }); }
         }
       } else await recoverCurrentProject(sessionAccess.projectRuntimeContext().projectSlug);
       return { ok: results.every(result => result.ok !== false), results };

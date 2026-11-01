@@ -16,14 +16,14 @@ const DEFAULT_MANAGED_GIT_BRANCH = "main";
  * @param {object} dependencies
  * @param {typeof initializePublicManagedProject} [dependencies.initializeManagedProject]
  * @param {StudioProjectContext} dependencies.projectContext
- * @param {ProjectService | null} dependencies.projectService
- * @param {((request: { projectContextRoot: string, projectService: ProjectService | null, slug: string }) => Promise<object>) | null} dependencies.configureProject
+ * @param {ProjectService | null} dependencies.project
+ * @param {((request: { projectContextRoot: string, project: ProjectService | null, slug: string }) => Promise<object>) | null} dependencies.configureProject
  *   the defaults a host adds to each new project record
  */
 function createManagedProjectRepositoryService({
   initializeManagedProject = initializePublicManagedProject,
   projectContext,
-  projectService,
+  project,
   configureProject
 }) {
   /**
@@ -42,7 +42,7 @@ function createManagedProjectRepositoryService({
         slug
       });
     const projectDefaults = configureProject
-      ? await configureProject({ projectContextRoot, projectService, slug })
+      ? await configureProject({ projectContextRoot, project, slug })
       : {};
     const removeProjectContextRootOnFailure = !await pathExists(projectContextRoot);
     let created = null;
@@ -93,11 +93,11 @@ function createManagedProjectRepositoryService({
    */
   async function verifyTrainingProjectSource({ slug, training }, options = {}) {
     const { files } = options;
-    assertProjectSessionAuthority(projectService, { requireSourceLock: true });
-    return projectService.runInProjectContext(slug, () => projectService.runProjectSourceExclusive(async () => {
+    assertProjectSessionAuthority(project, { requireSourceLock: true });
+    return project.runInProjectContext(slug, () => project.runProjectSourceExclusive(async () => {
       const record = await projectContext.readWorkspaceProjectState({ slug });
-      const project = await readProjectForService(projectContext, { slug });
-      assertProjectRepositoryMode(project, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+      const projectRecord = await readProjectForService(projectContext, { slug });
+      assertProjectRepositoryMode(projectRecord, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
       if (record.metadata.deletion || !isDeepStrictEqual(record.metadata.training, training)) {
         throw repositoryServiceError(
           "VIBE64_TRAINING_PROJECT_CONFLICT",
@@ -106,7 +106,7 @@ function createManagedProjectRepositoryService({
         );
       }
       return verifyManagedProjectSource({
-        branch: project.repository.defaultBranch,
+        branch: projectRecord.repository.defaultBranch,
         files,
         projectRuntimeRoot: projectContext.projectRuntimeRootForSlug(slug)
       });
@@ -153,18 +153,18 @@ function assertProjectRepositoryMode(project = {}, mode = "", message = "Project
 }
 
 /**
- * @param {ProjectService | null} [projectService]
+ * @param {ProjectService | null} [project]
  * @param {object} [options]
  * @param {boolean} [options.requireSourceLock]
  */
-function assertProjectSessionAuthority(projectService = null, options = {}) {
+function assertProjectSessionAuthority(project = null, options = {}) {
   const {
     requireSourceLock = false
   } = options;
   // readable-check: allow method-probe - optional operation: without the project service repository changes answer session_authority_unavailable
-  if (typeof projectService?.runInProjectContext !== "function" || typeof projectService?.createRuntime !== "function" ||
+  if (typeof project?.runInProjectContext !== "function" || typeof project?.createRuntime !== "function" ||
     // readable-check: allow method-probe - optional operation: without the project service repository changes answer session_authority_unavailable
-    (requireSourceLock && typeof projectService?.runProjectSourceExclusive !== "function")
+    (requireSourceLock && typeof project?.runProjectSourceExclusive !== "function")
   ) {
     throw repositoryServiceError(
       "vibe64_project_session_authority_unavailable",

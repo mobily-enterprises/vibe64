@@ -23,19 +23,19 @@ import { readLaunchContext, listOutputTargets } from "./outputTargetLaunchContex
  * @param {object} dependencies
  * @param {OutputTargetTerminalState} dependencies.state
  * @param {OutputTargetLaunchCoordination} dependencies.launchCoordination
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  */
 function createOutputTargetLaunchStatus({
   state,
   launchCoordination,
-  projectService
+  project
 }) {
   /**
    * The launch status of the session's outputs; launchStatus reads it under
    * the start lock and the session's admission.
    */
   async function readLaunchStatus(sessionId, options) {
-    const context = await readLaunchContext(projectService, sessionId);
+    const context = await readLaunchContext(project, sessionId);
     const unavailable = launchCoordination.launchAdmissionFailure(sessionId, context.session);
     if (unavailable) {
       return unavailable;
@@ -122,7 +122,7 @@ function createOutputTargetLaunchStatus({
    */
   async function usageRecordingTargets(sessionId) {
     return vibe64Result(async () => {
-      const context = await readLaunchContext(projectService, sessionId);
+      const context = await readLaunchContext(project, sessionId);
       const [outputs, targets] = await Promise.all([
         inspectVibe64OutputsForContext(context),
         listOutputTargets(context)

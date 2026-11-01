@@ -148,7 +148,7 @@ process.stdout.write(JSON.stringify({
       async deleteMetadataValue(_id, key) { delete session.metadata[key]; }
     }
   };
-  const projectService = {
+  const project = {
     runInProjectContext: (_slug, operation) => operation(),
     async createRuntime() { return runtime; },
     currentTargetRoot() { return sourceRoot; },
@@ -207,7 +207,7 @@ process.stdout.write(JSON.stringify({
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared: async () => ({ ok: true }),
     env: { TMPDIR: socketRoot },
-    projectService,
+    project,
     runCommand,
     stopPreviewBrowsers: async () => ({ ok: true }),
     // This standalone fixture runs inside the test execution, not a hosted project.
@@ -215,7 +215,7 @@ process.stdout.write(JSON.stringify({
     ...workflowHooks
   });
   const commandService = createAgentPreviewCommandService({ logger: silentLogger,
-    projectService,
+    project,
     launchTarget: controller, runManagedCommand: runCommand,
     stopManagedExecution: stopDetachedExecution, readSessionUiState: () => null,
     resourceProvider: workflowHooks.resourceProvider,
@@ -242,7 +242,7 @@ process.stdout.write(JSON.stringify({
     }
     throw new Error(`Preview ${terminal.id} did not become ready`);
   };
-  return { root, socketRoot, sourceRoot, sessionId, projectService, controller, commandService, command, waitReady, captureExecutionIds, previewStarts };
+  return { root, socketRoot, sourceRoot, sessionId, project, controller, commandService, command, waitReady, captureExecutionIds, previewStarts };
 }
 
 async function browserCommands(f) {
@@ -418,7 +418,7 @@ test("explicitly stopped Preview stays stopped after test success, failure and c
   await f.waitReady(normal);
   const originalData = await readFile(path.join(f.sourceRoot, "working.json"), "utf8");
   assert.equal((await f.controller.stopTerminal(f.sessionId, normal.id)).ok, true);
-  const saved = await (await f.projectService.createRuntime()).getSession(f.sessionId);
+  const saved = await (await f.project.createRuntime()).getSession(f.sessionId);
   assert.equal(saved.metadata.output_target_id, "app");
   assert.deepEqual(JSON.parse(saved.metadata.output_target_parameters), parameters);
   assert.equal(saved.metadata.output_target_terminal_id, undefined);
@@ -444,7 +444,7 @@ test("explicitly stopped Preview stays stopped after test success, failure and c
     assert.equal((await f.controller.startTerminal(f.sessionId, { automatic: true })).code, "vibe64_preview_stopped");
     assert.equal(await readFile(path.join(f.sourceRoot, "working.json"), "utf8"), originalData);
   }
-  const reopened = createOutputTargetTerminalController({ ensureWorkspacePrepared: async () => ({ ok: true }), stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null, env: { TMPDIR: f.socketRoot }, projectService: f.projectService });
+  const reopened = createOutputTargetTerminalController({ ensureWorkspacePrepared: async () => ({ ok: true }), stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null, env: { TMPDIR: f.socketRoot }, project: f.project });
   t.after(() => reopened.close());
   const afterReopen = await reopened.launchStatus(f.sessionId);
   assert.equal(afterReopen.preview.state, "stopped");

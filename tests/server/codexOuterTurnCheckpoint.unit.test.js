@@ -14,7 +14,7 @@ test("checkpoint confirmation projects the original outcome after failure cleanu
     async writeBackgroundTaskEvent(_id, _taskId, value) { task = value.patch; return task; }
   } };
   const result = await checkpointSessionTurn({ runtime, session, sessionId: session.sessionId,
-    outerTurnId: "failed-claude-turn", outcome: "interrupted", projectService: { async readCurrentProject() { return {}; } },
+    outerTurnId: "failed-claude-turn", outcome: "interrupted", project: { async readCurrentProject() { return {}; } },
     createCheckpoint: async () => ({ ok: true, created: false, commit: "a".repeat(40), outcome: "failed" }) });
   assert.equal(result.ok, true);
   assert.equal(task.status, "ready");
@@ -60,7 +60,7 @@ test("shared turn checkpoints preserve outcome and expose recovery failures", as
     getSession: async () => session,
     store: { writeBackgroundTaskEvent: async (_id, _task, { patch }) => { changes.push(patch); return patch; } }
   };
-  const input = { runtime, session, sessionId: session.sessionId, projectService: { readCurrentProject: async () => ({}) },
+  const input = { runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
     outerTurnId: "claude:conversation:turn", outcome: "interrupted" };
   let received;
   const created = await checkpointSessionTurn({ ...input, createCheckpoint: async (value) => {
@@ -149,7 +149,7 @@ test("source-bearing Learning retains the original native source and Git checkpo
       }
       const project = Object.freeze({ slug: "actual-practice" });
       const input = { runtime, sessionId: id, outerTurnId: `outer-${engine}`, outcome: "completed",
-        projectService: { readCurrentProject: async () => project },
+        project: { readCurrentProject: async () => project },
         createCheckpoint: async value => {
           checkpoints.push(value); return { created: true, commit: "d".repeat(40) };
         },
@@ -193,7 +193,7 @@ test("temporary and Main Codex turns record the same checkpoint outcome for a tu
     store: { async writeBackgroundTaskEvent(_id, _task, { patch }) { patches.push(patch); return patch; } }
   };
   const checkpoint = createCodexSessionTurnCheckpoint({
-    projectService: { async createRuntime() { return runtime; }, async readCurrentProject() { return {}; } },
+    project: { async createRuntime() { return runtime; }, async readCurrentProject() { return {}; } },
     publishSessionChanged: async () => {}
   });
   for (const [turnOutcome, outcome] of [["user_cancelled", "cancelled"], ["response_delivery_failure", "failed"]]) {

@@ -280,10 +280,10 @@ async function clearCodexAppServerContextRefreshPending(store, sessionId = "", o
  * This application receipt keeps the original bounded read and stale-thread fence.
  * Native event interpretation remains in the existing shared codecs.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {CodexAppServerRunOwner} dependencies.runOwner
  */
-function createCodexContextRefreshMarker({ projectService, runOwner }) {
+function createCodexContextRefreshMarker({ project, runOwner }) {
   const { readAgentRunForSession: readCodexAppServerAgentRunForSession } = runOwner;
 
   async function markCodexAppServerContextRefreshPending(sessionId = "", threadId = "", notification = {}, options = {}) {
@@ -296,7 +296,7 @@ function createCodexContextRefreshMarker({ projectService, runOwner }) {
       return null;
     }
 
-    const store = await projectService.createSessionStore({ sessionId: normalizedSessionId });
+    const store = await project.createSessionStore({ sessionId: normalizedSessionId });
     const [
       run,
       briefingDelivered,

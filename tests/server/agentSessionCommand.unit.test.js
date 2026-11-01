@@ -59,7 +59,7 @@ test("agent shell commands run as session-owned managed executions and drain on 
       setupRetries.push(id);
       return { state: { status: "running", currentLabel: "Install dependencies" } };
     },
-    projectService: {
+    project: {
       async createRuntime() { return { async getSession() { return descriptor; } }; },
       async inspectWorkspaceSetup() { return { status: "ready", steps: [], diagnostics: [] }; },
       async createSessionStore() {
@@ -274,7 +274,7 @@ test("session status gives the assistant the stored reason a repository needs he
   const tasks = new Map([["update-session", { code: "vibe64_session_update_conflict", conflictRecovery: { reviewId: "review-1" },
     error: message, finishedAt: "2026-10-25T14:49:52.000Z", operationId: "update-1", status: "failed" }]]);
   const service = createAgentSessionCommandService({ logger: silentLogger,
-    projectService: {
+    project: {
       async createSessionStore() {
         return { async readSessionSourceDescriptor() { return descriptor; },
           async readBackgroundTask(sessionId, taskId) { assert.equal(sessionId, "session-1"); return tasks.get(taskId) || null; },
@@ -317,7 +317,7 @@ test("project contract decisions are one shared predicate and keep agent status 
     source_path_authority: "managed_session_source" }, sessionId: "session-1" };
   let failure;
   const service = createAgentSessionCommandService({ logger: silentLogger,
-    projectService: {
+    project: {
       async createSessionStore() {
         return { async readSessionSourceDescriptor() { return descriptor; },
           async readBackgroundTask() { return null; },

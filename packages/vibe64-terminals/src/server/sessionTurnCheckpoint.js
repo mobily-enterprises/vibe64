@@ -14,7 +14,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 const SESSION_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
 
 async function checkpointSessionTurn({
-  projectService,
+  project,
   runtime,
   session,
   sessionId,
@@ -25,7 +25,7 @@ async function checkpointSessionTurn({
   createCheckpoint = createGitTurnCheckpointAsOneJob
 }) {
   if (!outerTurnId) return { ok: true, processed: false, reason: "outer_turn_unavailable" };
-  runtime ||= await projectService.createRuntime({ inspectSource: false });
+  runtime ||= await project.createRuntime({ inspectSource: false });
   session ||= await runtime.getSession(sessionId, { inspectSource: false });
   const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true });
   if (learningRoot) {
@@ -44,7 +44,7 @@ async function checkpointSessionTurn({
       outcome,
       timestamp,
       sessionId,
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       worktreePath: sessionSourcePath(session)
     });
   } catch (error) {
@@ -80,10 +80,10 @@ async function checkpointSessionTurn({
  * Preserve the original Codex Main and temporary checkpoint projections.
  * The native owner still decides when the existing callback is invoked.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  */
-function createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged }) {
+function createCodexSessionTurnCheckpoint({ project, publishSessionChanged }) {
   function checkpointOutcomeForCodexTurn(status = "", turnOutcome = "") {
     const normalizedTurnOutcome = normalizeText(turnOutcome);
     if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.USER_CANCELLED) {
@@ -115,7 +115,7 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
     } = options;
     if (conversationOuterTurnId) {
       await checkpointSessionTurn({
-        projectService,
+        project,
         sessionId,
         outerTurnId: conversationOuterTurnId,
         outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
@@ -130,12 +130,12 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
       });
     }
     const normalizedSessionId = normalizeText(sessionId);
-    const runtime = await projectService.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntime({ inspectSource: false });
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session, normalizeVibe64AgentRunState);
     const outerTurnId = normalizeText(turn.outerTurnId);
     return checkpointSessionTurn({
-      projectService,
+      project,
       runtime,
       session,
       sessionId: normalizedSessionId,

@@ -10,13 +10,13 @@ async function loadProjectExecutionEnvRecords({
   prepare = false,
   reusePrepared = false,
   includeResourceConfiguration = false,
-  projectService = {},
+  project = {},
   session = {},
   target = ""
 } = {}) {
   const resolveEnvironment = prepare
-    ? projectService.projectExecutionEnvironment
-    : projectService.projectInspectionEnvironment;
+    ? project.projectExecutionEnvironment
+    : project.projectInspectionEnvironment;
   if (typeof resolveEnvironment !== "function") {
     return {
       runtimeConfigEnv: {},
@@ -24,7 +24,7 @@ async function loadProjectExecutionEnvRecords({
     };
   }
   const sessionId = String(session.sessionId || "").trim();
-  const env = await resolveEnvironment.call(projectService, {
+  const env = await resolveEnvironment.call(project, {
     ...(includeResourceConfiguration ? { includeResourceConfiguration: true } : {}),
     ...(reusePrepared ? { reusePrepared: true } : {}),
     ...(sessionId ? { sessionId } : {}),

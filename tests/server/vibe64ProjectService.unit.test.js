@@ -37,7 +37,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-function projectService(targetRoot, options = {}) {
+function project(targetRoot, options = {}) {
   return createService({ logger: console,
     env: {},
     projectContext: createStudioProjectContext({
@@ -109,7 +109,7 @@ test("prepared execution reuses confirmed resources without source admission and
         values: { endpoint: "https://service.example.test" }
       }]
     });
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment: () => ({
         components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
         resources: [resource], status: "ready"
@@ -148,7 +148,7 @@ test("execution preparation rechecks current declarations after acquiring source
     const sourceRoot = sourcePath(targetRoot, sessionId);
     await mkdir(path.join(sourceRoot, ".git", "info"), { recursive: true });
     let inspections = 0;
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment: () => ({
         components: [], environmentDefaults: [{ name: "SETTING", value: ++inspections === 1 ? "stale" : "current" }],
         files: [{ format: "dotenv", path: ".env" }], resources: [], status: "ready"
@@ -164,7 +164,7 @@ test("execution preparation rechecks current declarations after acquiring source
 
 test("an explicit project exposes one plain Genesis project", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot);
+    const service = project(targetRoot);
     const response = await service.listProjects();
 
     assert.equal(response.ok, true);
@@ -604,7 +604,7 @@ test("scope saving and session creation share one project policy boundary", asyn
     const namingCanFinish = new Promise((resolve) => {
       releaseNaming = resolve;
     });
-    const projectService = createService({ logger: console,
+    const project = createService({ logger: console,
       env: {},
       projectContext,
       resourceEnvironmentProvider: {
@@ -619,7 +619,7 @@ test("scope saving and session creation share one project policy boundary", asyn
         managedDevelopmentDatabase: true
       }
     });
-    await projectService.createProject({ name: "Serialized database" });
+    await project.createProject({ name: "Serialized database" });
 
     const openSessions = [];
     let createCalls = 0;
@@ -653,10 +653,10 @@ test("scope saving and session creation share one project policy boundary", asyn
           return runtime;
         },
         developmentDatabasePolicy(input) {
-          return projectService.developmentDatabasePolicy(input);
+          return project.developmentDatabasePolicy(input);
         },
         runProjectSessionPolicyExclusive(operation, options) {
-          return projectService.runProjectSessionPolicyExclusive(operation, options);
+          return project.runProjectSessionPolicyExclusive(operation, options);
         }
       },
       terminals: {
@@ -677,7 +677,7 @@ test("scope saving and session creation share one project policy boundary", asyn
       }
     });
 
-    const saving = projectService.saveDevelopmentDatabaseScope({
+    const saving = project.saveDevelopmentDatabaseScope({
       scope: "project"
     });
     await namingStarted;
@@ -698,7 +698,7 @@ test("scope saving and session creation share one project policy boundary", asyn
     });
     assert.equal(createCalls, 1);
     assert.equal(
-      (await projectService.listProjects()).currentProject.developmentDatabaseScope,
+      (await project.listProjects()).currentProject.developmentDatabaseScope,
       "project"
     );
   });
@@ -707,7 +707,7 @@ test("scope saving and session creation share one project policy boundary", asyn
 test("project settings keep Genesis collaboration and Vibe64 prompt hints separate", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const collaboration = collaborationHarness();
-    const service = projectService(targetRoot, collaboration);
+    const service = project(targetRoot, collaboration);
     const initial = await service.readSettings({
       vibe64User: { role: "member" }
     });
@@ -781,7 +781,7 @@ test("project settings saves report the project's slug, not its raw directory na
   await withTemporaryRoot(async (root) => {
     const targetRoot = path.join(root, "My App");
     await mkdir(targetRoot, { recursive: true });
-    const service = projectService(targetRoot, collaborationHarness());
+    const service = project(targetRoot, collaborationHarness());
     const owner = { role: "owner" };
     const collaboration = await service.saveCollaborationSettings({
       experience: "expert", explanationStyle: "conclusions", requirements: "",
@@ -814,7 +814,7 @@ test("settings read reports no repository workflow, not a request failure, while
 
 test("prompt-hint settings never inspect or mutate Genesis collaboration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       async inspectCollaboration() {
         throw new Error("Collaboration must not be read for prompt hints.");
       },
@@ -843,7 +843,7 @@ test("prompt-hint settings never inspect or mutate Genesis collaboration", async
 
 test("collaboration validation errors come from Genesis rather than a Vibe64 parser", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot, collaborationHarness());
+    const service = project(targetRoot, collaborationHarness());
     const input = {
       experience: "comfortable",
       explanationStyle: "concise",
@@ -952,7 +952,7 @@ test("hosted collaboration follows the selected session source while prompt hint
 for (const setting of ["collaboration", "engineering"]) {
   test(`real Genesis ${setting} settings preserve source identity, validation, and renewal exclusion`, async (t) => {
     await withTemporaryRoot(async (targetRoot) => {
-      const service = projectService(targetRoot);
+      const service = project(targetRoot);
       const store = await service.createSessionStore();
       const sessionId = `${setting}-selected`;
       const siblingSessionId = `${setting}-sibling`;
@@ -1225,7 +1225,7 @@ test("standalone collaboration is keyed to the exact local source folder", async
 
 test("the project service exposes the selected session source without leaking its storage layout", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot);
+    const service = project(targetRoot);
     const store = await service.createSessionStore();
     await store.createSession({
       runtimeKind: "genesis",
@@ -1256,7 +1256,7 @@ test("the project service exposes the selected session source without leaking it
 test("Env is user-owned and reaches Genesis sessions without an adapter", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     let environmentInspections = 0;
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         environmentInspections += 1;
         return { components: [], environmentDefaults: [], files: [], resources: [], status: "ready" };
@@ -1332,7 +1332,7 @@ test("the owner downloads every Env record with its real value as one .env file"
     const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
       resourceValues: [{ declaration: { component: "example", id: "service", kind: "example" },
         values: { endpoint: "https://managed.example.test/a b", token: "managed-$ecret" } }] });
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment: () => ({ components: [], environmentDefaults: [{ name: "APP_MODE", value: "demo" }],
         files: [], resources: [resource], status: "ready" }),
       savedEnvValues: { label: "Test vault",
@@ -1382,7 +1382,7 @@ test("the owner downloads every Env record with its real value as one .env file"
 
 test("Env keeps Stack defaults for resource bindings and asks only for the missing value", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         return {
           components: ["spring-boot-mysql"],
@@ -1422,7 +1422,7 @@ test("Env keeps Stack defaults for resource bindings and asks only for the missi
 test("Genesis Stack defaults remain editable fallbacks for project Env values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     let fallback = ".host-config/public-source";
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         return {
           components: [],
@@ -1497,7 +1497,7 @@ test("lazy prompt environment stays with the runtime's project when resolved fro
     for (const context of contexts) {
       await mkdir(context.sourceRoot, { recursive: true });
     }
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         return { components: [], environmentDefaults: [], files: [], resources: [], status: "ready" };
       }
@@ -1526,7 +1526,7 @@ test("saving or removing Env values immediately refreshes declared environment f
     await mkdir(path.join(targetRoot, ".git", "info"), {
       recursive: true
     });
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         return {
           components: ["example-stack"],
@@ -1565,7 +1565,7 @@ test("saving or removing Env values immediately refreshes declared environment f
 
 test("reserved Vibe64 Env names require an explicit Genesis Stack declaration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot);
+    const service = project(targetRoot);
     const response = await service.saveEnvUserValues({
       values: {
         VIBE64_INTERNAL_OVERRIDE: "unsafe"
@@ -1579,7 +1579,7 @@ test("reserved Vibe64 Env names require an explicit Genesis Stack declaration", 
 
 test("Genesis Stack resources define expected Env names without technology checks in Vibe64", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         return {
           components: ["example-stack"],
@@ -1632,7 +1632,7 @@ test("project execution Env reuses an exact internally authorized session record
     const sessionSource = sourcePath(targetRoot, sessionId);
     await mkdir(sessionSource, { recursive: true });
     const inspectedRoots = [];
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment({ projectRoot }) {
         inspectedRoots.push(projectRoot);
         return {
@@ -1707,7 +1707,7 @@ test("current-app inspection resolves Env without materializing session files", 
       resources: [],
       status: "ready"
     });
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment({ projectRoot }) {
         if (blockNextTargetInspection && projectRoot === quiescedSource) {
           blockNextTargetInspection = false;
@@ -1754,7 +1754,7 @@ test("current-app inspection resolves Env without materializing session files", 
           targets: []
         };
       },
-      projectService: service
+      project: service
     });
 
     const active = await currentApp.inspectCurrentApp({ sessionId: activeSessionId });
@@ -1798,7 +1798,7 @@ test("Env saving cannot update project state or source projection once renewal i
       resources: [],
       status: "ready"
     };
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         return declaration;
       }
@@ -1865,7 +1865,7 @@ test("hidden renewal resource cleanup requires and reuses its exact internal ses
     const successorSource = sourcePath(targetRoot, successorSessionId);
     await mkdir(successorSource, { recursive: true });
     const released = [];
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       resourceEnvironmentProvider: {
         async environmentForResources() {
           return { environment: {} };
@@ -1964,7 +1964,7 @@ test("a host maps semantic database values onto exact Laravel-style Stack bindin
         }
       }]
     };
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         return {
           components: ["example-stack"],
@@ -2137,7 +2137,7 @@ test("the installed JSKIT MySQL Stack materializes its declared names without ex
       projectRoot: sessionSource
     });
 
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       resourceEnvironmentProvider: {
         managedDevelopmentDatabase: true,
         async environmentForResources({ resources }) {
@@ -2215,7 +2215,7 @@ test("the installed JSKIT PostgreSQL Stack materializes its declared names witho
       projectRoot: sessionSource
     });
 
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       resourceEnvironmentProvider: {
         managedDevelopmentDatabase: true,
         async environmentForResources({ resources }) {
@@ -2281,7 +2281,7 @@ test("the installed JSKIT PostgreSQL Stack materializes its declared names witho
 
 test("managed app identities are stored in the repository source", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot);
+    const service = project(targetRoot);
 
     assert.deepEqual(await service.readPreviewApplicationIdentities(), {
       identities: [],
@@ -2346,7 +2346,7 @@ test("managed app identities are stored in the repository source", async () => {
 
 test("managed app identities use the exact selected session source", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot);
+    const service = project(targetRoot);
     const store = await service.createSessionStore();
     const sessionSource = path.join(
       path.dirname(targetRoot),
@@ -2404,7 +2404,7 @@ test("managed app identity writes cannot mutate a renewal-quiesced session sourc
     const sessionId = "identity-renewal";
     const sessionSource = sourcePath(targetRoot, sessionId);
     await mkdir(sessionSource, { recursive: true });
-    const service = projectService(targetRoot, {
+    const service = project(targetRoot, {
       inspectEnvironment() {
         const declaration = {
           components: [],
@@ -2457,7 +2457,7 @@ test("managed app identity writes cannot mutate a renewal-quiesced session sourc
 
 test("managed app identity validation rejects ambiguous names", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot);
+    const service = project(targetRoot);
     const response = await service.savePreviewApplicationIdentities({
       identities: [
         {
@@ -2481,7 +2481,7 @@ test("managed app identity validation rejects ambiguous names", async () => {
 
 test("managed app identities ignore retired machine-local state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = projectService(targetRoot);
+    const service = project(targetRoot);
     const runtimeRoot = service.currentProjectRuntimeRoot();
     const retiredPath = path.join(
       runtimeRoot,

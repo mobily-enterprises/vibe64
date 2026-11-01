@@ -109,10 +109,10 @@ function vibe64Result(operation) {
 /**
  * The project whose runtime holds the work, read without listing projects.
  * Changes and executions name it because they can happen outside any request.
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  */
-function currentProjectSlug(projectService) {
-  return String(projectService.currentProjectSlug() || "").trim();
+function currentProjectSlug(project) {
+  return String(project.currentProjectSlug() || "").trim();
 }
 
 function terminalNamespace(base = "", ...parts) {

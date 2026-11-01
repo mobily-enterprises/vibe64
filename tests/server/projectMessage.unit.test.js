@@ -29,7 +29,7 @@ test("project messages use only the current selected Main session with fresh acc
       if (denied) throw new Error("Access revoked");
       return actor;
     },
-    projectService: {
+    project: {
       runInProjectContext: async (slug, operation, options) => {
         assert.ok(["jskit-ai", "online"].includes(slug)); assert.equal(options.vibe64User, actor); return operation();
       },
@@ -118,7 +118,7 @@ test("the installed helper sends through its bound socket and supplies server-ow
   t.after(() => rm(root, { recursive: true, force: true }));
   const calls = [];
   const service = createAgentSessionCommandService({ logger: silentLogger,
-    projectService: {
+    project: {
       readCurrentProject: async () => ({ slug: "online", projectRoot: root }),
       runInProjectContext: async (slug, operation) => { assert.equal(slug, "online"); return operation(); },
       createSessionStore: async () => ({
@@ -159,7 +159,7 @@ test("exact same-project messages and replies retain their recipients and reject
   const sent = [], prepared = [], failures = [];
   const dependencies = {
     authorize: async (actor, project) => { assert.equal(project, "compas-next"); return actor; },
-    projectService: {
+    project: {
       runInProjectContext: async (project, operation) => { assert.equal(project, "compas-next"); return operation(); },
       readCurrentProject: async () => ({ runtime: { open: true } }),
       createRuntime: async () => ({ store: { readSession: store.readSession, readCurrentSession: () => store.readSession(selected) } }),
@@ -222,7 +222,7 @@ test("project-preview returns the other project's current Preview URL through th
   t.after(() => rm(root, { recursive: true, force: true }));
   const calls = [];
   const service = createAgentSessionCommandService({ logger: silentLogger,
-    projectService: {
+    project: {
       readCurrentProject: async () => ({ slug: "inspector", projectRoot: root }),
       runInProjectContext: async (slug, operation) => { assert.equal(slug, "inspector"); return operation(); },
       createSessionStore: async () => ({
@@ -255,7 +255,7 @@ test("readProjectPreview re-reads the Preview, never waits past its bound and re
   const dependencies = {
     authorize: async (identity, slug) => { assert.equal(identity, actor); assert.equal(slug, "mercbot"); return actor; },
     assertOpen: () => {},
-    projectService: {
+    project: {
       runInProjectContext: async (slug, operation, options) => { assert.equal(slug, "mercbot"); assert.equal(options.vibe64User, actor); return operation(); },
       readCurrentProject: async () => ({ runtime: { open } }),
       createRuntime: async () => ({ store: { readCurrentSession: async () => session, readSession: async id => id === session?.sessionId ? session : null } })

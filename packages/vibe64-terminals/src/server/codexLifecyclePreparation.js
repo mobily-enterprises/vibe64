@@ -21,12 +21,12 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").CodexStartupHealth} CodexStartupHealth */
 
 /**
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {string} sessionId
  */
-async function terminalSessionSourceRootForSession(projectService, sessionId) {
+async function terminalSessionSourceRootForSession(project, sessionId) {
   try {
-    const runtime = await projectService.createRuntime({
+    const runtime = await project.createRuntime({
       inspectSource: false
     });
     const session = await runtime.getSession(sessionId);
@@ -40,7 +40,7 @@ async function terminalSessionSourceRootForSession(projectService, sessionId) {
  * Authorized application facts and cleanup effects. Native stop/recovery and
  * session-closure coordination belong to assistant-core's runtime lifecycle.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {CodexRuntimeHost} dependencies.runtimeHost
  * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
  * @param {CodexSessionEnvironment} dependencies.sessionEnvironment
@@ -50,7 +50,7 @@ async function terminalSessionSourceRootForSession(projectService, sessionId) {
  * @param {CodexStartupHealth} dependencies.health
  */
 function createCodexLifecyclePreparation({
-  projectService,
+  project,
   runtimeHost,
   sessionRuntimeHost,
   sessionEnvironment,
@@ -247,7 +247,7 @@ function createCodexLifecyclePreparation({
             const executionRoot = renewalCleanup
               ? sessionSourcePath(session)
               : await terminalSessionSourceRootForSession(
-                  projectService,
+                  project,
                   normalizedSessionId
                 );
             if (executionRoot && !options.changeover && renewalCleanup?.kind !== "predecessor") {

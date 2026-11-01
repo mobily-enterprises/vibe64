@@ -81,7 +81,7 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
  * @param {(request: object) => Promise<object[]>} dependencies.listConnections
  * @param {PrepareAgentSessionCommandEnvironment} dependencies.prepareCommandEnvironment
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
  * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
  */
@@ -97,7 +97,7 @@ function createOpenCodeHostPreparation({
   getAssistantManager,
   listConnections,
   prepareCommandEnvironment,
-  projectService,
+  project,
   resolveConnection,
   sharedRuntime
 }) {
@@ -131,7 +131,7 @@ function createOpenCodeHostPreparation({
 
   function sharedRoots() {
     const root = path.join(codexAppServerRuntimeBaseDir({ env }), "opencode");
-    const serviceDataRoot = toText(projectService.currentServiceDataRoot());
+    const serviceDataRoot = toText(project.currentServiceDataRoot());
     if (!serviceDataRoot) {
       throw new TypeError("OpenCode requires a persistent service data root.");
     }
@@ -280,7 +280,7 @@ function createOpenCodeHostPreparation({
           codexGitCommand,
           env,
           prepareCommandEnvironment,
-          projectService
+          project
         });
         sessionEnvironments.set(context.key, {
           helperModelId,

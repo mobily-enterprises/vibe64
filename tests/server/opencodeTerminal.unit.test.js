@@ -2263,7 +2263,7 @@ test("sequential scoped OpenCode helpers reuse the service after removing their 
 
 test("OpenCode receives the same complete session command boundary as Codex", async (t) => {
   const harness = await controllerHarness({ withCommandBoundary: true });
-  harness.controllerOptions.projectService.projectInspectionEnvironment = async (input) => {
+  harness.controllerOptions.project.projectInspectionEnvironment = async (input) => {
     assert.equal(input.sessionId, "session-1");
     assert.equal(input.target, "opencode");
     return { REFERENCE_SECRET: "dummy-project-secret" };
@@ -2799,7 +2799,7 @@ async function boundMainOpenCodeFixture(t, options = {}) {
     projectRuntimeRoot: path.join(harness.root, "runtime") });
   if (suppliedRuntime) {
     harness.runtime = suppliedRuntime;
-    harness.controllerOptions.projectService.createRuntime = async () => suppliedRuntime;
+    harness.controllerOptions.project.createRuntime = async () => suppliedRuntime;
   } else {
     await appStore.createSession({ sessionId: "session-1", runtimeKind: "genesis" });
     for (const [key, value] of Object.entries(harness.session.metadata)) await appStore.writeMetadataValue("session-1", key, value);
@@ -2908,8 +2908,8 @@ async function mainOpenCodeServiceFixture(t, { actions = null, onSessionChanged 
     finally { await removeFixture(); }
   });
   await f.store.writeMetadataValue(f.context.sessionId, "label", "BoundOpenCode");
-  const projectService = {
-    ...f.controllerOptions.projectService,
+  const project = {
+    ...f.controllerOptions.project,
     createRuntime: () => f.runtime,
     createSessionStore: () => f.store,
     currentTargetRoot: () => f.root,
@@ -2922,7 +2922,7 @@ async function mainOpenCodeServiceFixture(t, { actions = null, onSessionChanged 
     saveEnvUserValues: async () => ({ ok: true })
   };
   const publications = [];
-  service = createTerminalService({ actions, logger: silentLogger, projectService,
+  service = createTerminalService({ actions, logger: silentLogger, project,
     env: { ...f.controllerOptions.env, VIBE64_SYSTEM_ROOT: path.join(f.root, "system"),
       VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
     codexTerminalController: { codexToolHomeRequired: false,
@@ -2939,7 +2939,7 @@ async function mainOpenCodeServiceFixture(t, { actions = null, onSessionChanged 
     readAssistantAccess: async () => ({ available: true, ownerOnly: false,
       connectionIdentity: f.connection.fingerprint, endpointCode: f.connection.endpointCode })
   });
-  return { ...f, service, projectService, publications };
+  return { ...f, service, project, publications };
 }
 
 test("main OpenCode terminal service retains original admission, streaming and Stop", { timeout: 30000 }, async t => {
@@ -3131,7 +3131,7 @@ test("Main OpenCode browser facade keeps original action authority and live nati
       }
     }
   });
-  const sessions = createSessionService({ actions, project: f.projectService, terminals: f.service });
+  const sessions = createSessionService({ actions, project: f.project, terminals: f.service });
   actions.register({ contributorId: "test.main-opencode-sessions", domain: "vibe64-sessions",
     actions: createSessionActions({ sessions }).map(definition => ({
       channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition

@@ -194,7 +194,7 @@ test("Codex retirement uses native deletion only after preserving idle descendan
   const controller = createCodexTerminalController({
     env: { VIBE64_SYSTEM_ROOT: path.join(root, "system"), VIBE64_RUNTIME_NAMESPACE: "test" },
     codexToolHomeSource: home, codexToolHomeRequired: false,
-    projectService: { createRuntime: async () => runtime, currentTargetRoot: () => root, currentServiceDataRoot: () => path.join(root, "service") },
+    project: { createRuntime: async () => runtime, currentTargetRoot: () => root, currentServiceDataRoot: () => path.join(root, "service") },
     codexAppServerProviderFactory: () => ({
       ensureAvailable: async () => ({ ok: true }),
       listThreadDescendants: async () => rows.has("child") ? ["child"] : [],

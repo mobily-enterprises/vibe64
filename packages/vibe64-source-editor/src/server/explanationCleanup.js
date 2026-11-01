@@ -35,13 +35,13 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * @param {string} [explanationId]
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
- * @param {TerminalsService} options.terminalService
+ * @param {TerminalsService} options.terminals
  */
 async function stopSourceEditorExplanation(context = {}, explanationId = "", options = {}) {
   const {
     explanationChats,
     explanationTurns,
-    terminalService
+    terminals
   } = options;
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
@@ -64,7 +64,7 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", opt
   if (!pendingTurn && threadId && turnId && cleanupRecord?.helper) {
     const helper = cleanupRecord.helper;
     sourceEditorHelperRoot(context, helper);
-    const stopped = await terminalService.stopEphemeralAgentConversation(helper.scope, {
+    const stopped = await terminals.stopEphemeralAgentConversation(helper.scope, {
       conversationId: helper.conversationId,
       runId: helper.runId,
       cleanupExecutionId: helper.executionId,
@@ -73,7 +73,7 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", opt
     if (stopped?.ok !== true) throw sourceEditorError(stopped?.error || "The source explanation could not be stopped.",
       stopped?.code || "vibe64_source_explanation_agent_interrupt_unconfirmed");
   } else if (!pendingTurn && threadId && turnId) {
-    const result = await terminalService.interruptDetachedAgentChatTurn(context.sessionId, {
+    const result = await terminals.interruptDetachedAgentChatTurn(context.sessionId, {
       executionProfile: sourceEditorExecutionProfileSnapshot(explanation.executionProfile) ||
         sourceEditorExecutionProfileRequest(),
       threadId,
@@ -122,14 +122,14 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", opt
  * @param {object} [input]
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
- * @param {TerminalsService} options.terminalService
+ * @param {TerminalsService} options.terminals
  */
 async function cleanupSourceEditorExplanations(context = {}, input = {}, options = {}) {
   const {
     all = false,
     explanationChats,
     explanationTurns,
-    terminalService
+    terminals
   } = options;
   const activeIds = sourceEditorCleanupActiveIds(input.activeExplanationIds);
   const originId = toText(input.originId);
@@ -162,7 +162,7 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, options
       try {
         const key = sourceEditorExplanationMemoryKey(context, record.id);
         const agentCleanup = await deleteSourceEditorExplanationAgentThread(context, record, {
-          terminalService
+          terminals
         });
         explanationChats.delete(key);
         if (record.helper) cleanedHelpers.push(record.helper);
@@ -199,13 +199,13 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, options
  * @param {string} [explanationId]
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
- * @param {TerminalsService} options.terminalService
+ * @param {TerminalsService} options.terminals
  */
 async function deleteSourceEditorExplanation(context = {}, explanationId = "", options = {}) {
   const {
     explanationChats,
     explanationTurns,
-    terminalService
+    terminals
   } = options;
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
@@ -222,7 +222,7 @@ async function deleteSourceEditorExplanation(context = {}, explanationId = "", o
     };
   }
   const agentCleanup = await deleteSourceEditorExplanationAgentThread(context, explanation, {
-    terminalService
+    terminals
   });
   explanationChats.delete(key);
   await removeSourceEditorExplanationCleanupRecord(context, explanationId);

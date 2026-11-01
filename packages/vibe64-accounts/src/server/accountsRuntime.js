@@ -87,7 +87,7 @@ function unsupportedCodexAuthMode() {
  * @param {RuntimeEnv} [dependencies.env]
  * @param {string} [dependencies.githubAccountMode]
  * @param {(input: object) => object | null} [dependencies.previousGithub]
- * @param {ProjectService | null} [dependencies.projectService]
+ * @param {ProjectService | null} [dependencies.project]
  * @param {(input: object) => object | null} [dependencies.requireAiManagement]
  * @param {boolean} [dependencies.requireExplicitRoots]
  * @param {string} [dependencies.systemRoot]
@@ -105,7 +105,7 @@ function createAccountsRuntime({
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   previousGithub = noPreviousGithub,
   // readable-check: allow dependency-default - input validation: only a runtime without its target root reads the project's namespace root
-  projectService = null,
+  project = null,
   requireAiManagement = ownerManagesAi,
   requireExplicitRoots = true,
   systemRoot = "",
@@ -122,7 +122,7 @@ function createAccountsRuntime({
   const codexAuthModes = normalizeCodexAuthModes(allowedCodexAuthModes);
 
   function currentTargetRoot() {
-    const selectedTargetRoot = String(targetRoot || projectServiceNamespaceRoot(projectService)).trim();
+    const selectedTargetRoot = String(targetRoot || projectServiceNamespaceRoot(project)).trim();
     return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot) : "";
   }
 

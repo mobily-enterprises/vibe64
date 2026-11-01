@@ -12,7 +12,7 @@ const linkedRecord = {
   requiredFor: [], scope: "dev", secret: true, source: "vibe64-host:saved-value", value: "********", valuePresent: true
 };
 
-function projectService(records = []) {
+function project(records = []) {
   return {
     async readCurrentProject() { return { projectRoot: "/srv/projects/demo", slug: "demo" }; },
     async readEnv() { return { ok: true, env: { records } }; },
@@ -45,7 +45,7 @@ function testVault() {
 
 async function boundCommand(records = [], actor = { username: "teammate", role: "member" }, savedEnvValueLinks = NO_SAVED_ENV_VALUE_LINKS) {
   const command = createAgentEnvCommandService({ logger: silentLogger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
-    projectService: projectService(records), savedEnvValueLinks });
+    project: project(records), savedEnvValueLinks });
   await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("saved-session"));
   return command;
 }

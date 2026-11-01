@@ -19,7 +19,7 @@ import {
 test("environment reads use inspection without preparing project resources", async () => {
   let request = null;
   const env = await loadProjectExecutionEnv({
-    projectService: {
+    project: {
       async projectExecutionEnvironment() {
         assert.fail("Reading environment must not provision resources or write files.");
       },
@@ -55,7 +55,7 @@ test("environment reads use inspection without preparing project resources", asy
 test("execution startup explicitly prepares the project environment", async () => {
   const env = await loadProjectExecutionEnv({
     prepare: true,
-    projectService: {
+    project: {
       async projectInspectionEnvironment() {
         assert.fail("Startup must prepare its environment.");
       },
@@ -106,16 +106,16 @@ test("Codex message preparation reuses only current resources and Env files", as
     await runtime.store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(targetRoot, sessionId) });
     const session = await runtime.getSession(sessionId, { inspectSource: false });
     runtime.inspectSourceForSession = async () => assert.fail("Send does not need a Git conflict scan.");
-    const environment = createCodexSessionEnvironment({ env: {}, projectService: service });
+    const environment = createCodexSessionEnvironment({ env: {}, project: service });
     const sendEnvironment = () => environment.codexProjectTerminalEnv({ runtime, session, sessionId });
     const envPath = path.join(session.sourcePath, ".env");
 
     assert.equal((await sendEnvironment()).DB_PASSWORD, password);
     assert.equal(provisions, 1, "A missing environment is still prepared.");
     assert.deepEqual((await service.projectEnvironmentStatus({ sessionId, session })).resourcePreparation, resourcePreparation);
-    assert.deepEqual((await loadProjectExecutionEnvRecords({ projectService: service, session,
+    assert.deepEqual((await loadProjectExecutionEnvRecords({ project: service, session,
       includeResourceConfiguration: true })).resourcePreparation, resourcePreparation);
-    assert.equal(Object.hasOwn(await loadProjectExecutionEnvRecords({ projectService: service, session }), "resourcePreparation"), false);
+    assert.equal(Object.hasOwn(await loadProjectExecutionEnvRecords({ project: service, session }), "resourcePreparation"), false);
     assert.equal((await sendEnvironment()).DB_PASSWORD, password);
     assert.equal(provisions, 1, "A second send does not provision the same resources again.");
     await rm(envPath);
@@ -224,7 +224,7 @@ test("resource configuration follows resolved application settings without secre
         return { components: [], environmentDefaults: defaults, resources: [], files: [{ format: "dotenv", path: ".env" }] };
       }
     });
-    const input = { includeResourceConfiguration: true, projectService: service, target: "output-target" };
+    const input = { includeResourceConfiguration: true, project: service, target: "output-target" };
     const first = await loadProjectExecutionEnvRecords(input);
     assert.equal(inspections, 1);
     assert.deepEqual(first.runtimeConfigEnv, { WORKERS: "2", AUTH_SECRET: "default-secret" });
@@ -324,7 +324,7 @@ test("managed session credentials preserve resource configuration identity, but 
       await mkdir(sourcePath(targetRoot, sessionId), { recursive: true });
       await store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(targetRoot, sessionId) });
     }
-    const input = { projectService: service, includeResourceConfiguration: true, target: "output-target" };
+    const input = { project: service, includeResourceConfiguration: true, target: "output-target" };
     const one = await loadProjectExecutionEnvRecords({ ...input, session: { sessionId: "one", metadata: sourceMetadata(targetRoot, "one") } });
     const two = await loadProjectExecutionEnvRecords({ ...input, session: { sessionId: "two", metadata: sourceMetadata(targetRoot, "two") } });
     assert.equal(inspections, 2);

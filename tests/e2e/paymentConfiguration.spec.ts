@@ -17,7 +17,7 @@ test('payment configuration persists and catalogue publication requires review',
     await mkdir(source, { recursive: true });
     const service = createService({
       temporaryRoot: path.join(root, "temporary"),
-      projectService: { createRuntime: async () => ({
+      project: { createRuntime: async () => ({
         stateRoot: path.join(root, "state"),
         getSession: async (sessionId) => ({ sessionId, metadata: {
           source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source"

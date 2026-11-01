@@ -78,7 +78,7 @@ test("the real chat helper renames only its bound session and cannot use the she
   const wrapperHostDir = path.join(f.root, "wrappers");
   const project = { slug: "test", projectRoot: f.root };
   const service = createAgentSessionCommandService({ logger: silentLogger,
-    projectService: {
+    project: {
       readCurrentProject: async () => project,
       createSessionStore: async () => f.store,
       runInProjectContext: async (slug, operation) => { assert.equal(slug, "test"); return operation(); }

@@ -1099,7 +1099,7 @@ test("database members can browse, run SQL and use a shared assistant through th
       artifacts.set(artifactPath, JSON.stringify(value));
     }
   };
-  const projectService = {
+  const project = {
     createRuntime: async () => helperRuntime,
     async createSessionStore() {
       return store;
@@ -1177,7 +1177,7 @@ test("database members can browse, run SQL and use a shared assistant through th
       knex
     });
   };
-  const terminalService = {
+  const terminals = {
     async deleteEphemeralAgentConversation(scope, input, options) {
       assistantDeletions.push({ input, options, scope });
       return { deleted: true, ok: true };
@@ -1203,7 +1203,7 @@ test("database members can browse, run SQL and use a shared assistant through th
       };
     }
   };
-  const service = createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, projectService, terminalService, withKnex });
+  const service = createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, project, terminals, withKnex });
 
   const memberState = await service.readState({
     sessionId: "service-session",
@@ -1416,7 +1416,7 @@ for (const { name, scenario } of [
       logger: { info() {}, warn() {} },
       publishLayoutChanged: async () => {},
       sourceEditor: {},
-      projectService: {
+      project: {
         createRuntime: async () => helperRuntime,
         async createSessionStore() {
           return {
@@ -1456,7 +1456,7 @@ for (const { name, scenario } of [
           };
         }
       },
-      terminalService: {
+      terminals: {
         async resolveAssistantPurpose() { return { available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-api" }; },
         async resolveEphemeralAgentExecutionProfile() { return databaseExecutionProfile(); },
         async runEphemeralAgentChatTurn(scope, _input, options) {
@@ -1702,7 +1702,7 @@ test("database copilot keeps failed cleanup for restart and closes a late cancel
     readArtifact: async () => JSON.stringify(testSchema())
   };
   const endpoint = { database: "catalogue", host: "127.0.0.1", username: "reader", password: "private-password", port: 5432 };
-  const projectService = { createSessionStore: async () => store, createRuntime: async () => runtime,
+  const project = { createSessionStore: async () => store, createRuntime: async () => runtime,
     localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
       contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: endpoint, write: endpoint
@@ -1714,7 +1714,7 @@ test("database copilot keeps failed cleanup for restart and closes a late cancel
   let waiting = null;
   let runningOptions;
   let helperScope;
-  const terminalService = {
+  const terminals = {
     async resolveAssistantPurpose(input, options) {
       resolutions += 1;
       assert.equal(input.workflowEngineId, undefined);
@@ -1745,7 +1745,7 @@ test("database copilot keeps failed cleanup for restart and closes a late cancel
       return cleanupFailure ? { ok: false, error: "Native cleanup unavailable" } : { ok: true };
     }
   };
-  const makeService = () => createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, projectService, terminalService });
+  const makeService = () => createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, project, terminals });
   let service = makeService();
   const request = { sessionId: "copilot-session", vibe64User: { username: "member", role: "member" },
     messages: [{ role: "user", content: "Private question" }] };
@@ -1791,14 +1791,14 @@ test("database copilot keeps a failed question's own error when its helper clean
     readArtifact: async () => JSON.stringify(testSchema())
   };
   const endpoint = { database: "catalogue", host: "127.0.0.1", username: "reader", password: "private-password", port: 5432 };
-  const projectService = { createSessionStore: async () => store, createRuntime: async () => runtime,
+  const project = { createSessionStore: async () => store, createRuntime: async () => runtime,
     localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
       contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: endpoint, write: endpoint
     } }) };
   let starts = 0;
   let deletes = 0;
-  const terminalService = {
+  const terminals = {
     resolveAssistantPurpose: async () => ({ available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-connection" }),
     resolveEphemeralAgentExecutionProfile: async () => databaseExecutionProfile(),
     async runEphemeralAgentChatTurn(_scope, _input, options) {
@@ -1812,7 +1812,7 @@ test("database copilot keeps a failed question's own error when its helper clean
       return { ok: false, error: "Native cleanup unavailable" };
     }
   };
-  const service = createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, projectService, terminalService });
+  const service = createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, project, terminals });
   const request = { sessionId: "copilot-session", vibe64User: { username: "member", role: "member" },
     messages: [{ role: "user", content: "Private question" }] };
   const failed = await service.askAssistant(request);
@@ -1840,14 +1840,14 @@ test("session close tries every database copilot receipt and names each one that
   await writeFile(path.join(tasks, `${"b".repeat(20)}.json`), JSON.stringify(receipt("bbbb", "stuck-thread")));
   await writeFile(path.join(tasks, `${"c".repeat(20)}.json`), JSON.stringify(receipt("cccc", "closable-thread")));
   const deleted = [];
-  const terminalService = {
+  const terminals = {
     async deleteEphemeralAgentConversation(_scope, input) {
       deleted.push(input.conversationId);
       return input.conversationId === "stuck-thread"
         ? { ok: false, error: "Connect Codex - DeepSeek in AI Accounts first." } : { ok: true };
     }
   };
-  const service = createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, terminalService, projectService: { createSessionStore: async () => runtime.store,
+  const service = createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, terminals, project: { createSessionStore: async () => runtime.store,
     createRuntime: async () => runtime, localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: () => assert.fail("Cleanup must not connect to a database") } });
   await assert.rejects(service.closeAssistantsForSession("copilot-session"), (error) => {
@@ -1895,7 +1895,7 @@ test("database assistant denial happens before schema inspection or its read-que
     logger: { info() {}, warn() {} },
     publishLayoutChanged: async () => {},
     sourceEditor: {},
-    projectService: {
+    project: {
       async createSessionStore() {
         return store;
       },
@@ -1925,7 +1925,7 @@ test("database assistant denial happens before schema inspection or its read-que
         };
       }
     },
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation() {
         providerCalls += 1;
       },
@@ -1974,7 +1974,7 @@ test("database service replaces a schema snapshot owned by a different database"
       artifacts.set(artifactPath, JSON.stringify(value));
     }
   };
-  const projectService = {
+  const project = {
     async createSessionStore() {
       return store;
     },
@@ -2009,8 +2009,8 @@ test("database service replaces a schema snapshot owned by a different database"
     logger: { info() {}, warn() {} },
     publishLayoutChanged: async () => {},
     sourceEditor: {},
-    terminalService: {},
-    projectService,
+    terminals: {},
+    project,
     withKnex: async (endpoint) => {
       assert.equal(endpoint.username, "reader");
       refreshCount += 1;

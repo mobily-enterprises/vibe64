@@ -81,7 +81,7 @@ test("native account logout and credential restoration drain old processes and c
     projectRuntimeRoot: path.join(root, "project-state")
   });
   await store.createSession({ sessionId: session.sessionId, metadata: session.metadata, runtimeKind: "genesis" });
-  const projectService = {
+  const project = {
     createSessionStore: () => store,
     createRuntime: () => ({
       getSession: async () => session,
@@ -112,7 +112,7 @@ test("native account logout and credential restoration drain old processes and c
     codexToolHomeSource: toolHome,
     codexAppServerProviderOptions: { systemRoot },
     env: { VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agents"), VIBE64_RUNTIME_NAMESPACE: "native-handover" },
-    projectService,
+    project,
     codexAppServerProviderFactory(options) {
       const provider = createCodexAppServerAgentProvider({ ...options, codexCommand: "codex", commandRunner });
       providers.push(provider);
@@ -123,7 +123,7 @@ test("native account logout and credential restoration drain old processes and c
     publishAccountChanged: async () => null,
     publishAuthSessionChanged: async () => null,
     accountRuntime: createAccountsRuntime({ daemonHome: toolHome, systemRoot }),
-    projectService,
+    project,
     invalidateAgentRuntimes: (input) => controller.invalidateAppServerRuntimes(input),
     runHostToolCommand: async (args) => {
       const result = spawnSync("codex", args.slice(1), { env: nativeEnv, encoding: "utf8", timeout: 10_000 });

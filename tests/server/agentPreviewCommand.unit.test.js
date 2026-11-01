@@ -400,7 +400,7 @@ function createReadyPreviewCommandService({
   onEnsurePreview = null,
   selectPreviewIdentity = null,
   previewUrl,
-  projectService = {
+  project = {
     runInProjectContext: (_slug, operation) => operation(),
     projectInspectionEnvironment: async () => ({})
   },
@@ -410,7 +410,7 @@ function createReadyPreviewCommandService({
   terminalId = () => "launch-terminal"
 } = {}) {
   return createAgentPreviewCommandService({ logger: silentLogger, publishSessionChanged: async () => null,
-    projectService,
+    project,
     launchTarget: {
       previewTestRunAdmission() { return null; },
       async ensurePreview() {
@@ -522,7 +522,7 @@ test("agent preview identities read and save only the session's bound project th
   let context = "";
   let identityTypes = ["email"];
   const command = createAgentPreviewCommandService({ logger: silentLogger, publishSessionChanged: async () => null,
-    projectService: {
+    project: {
       async runInProjectContext(slug, operation) {
         context = slug;
         try {
@@ -1197,7 +1197,7 @@ test("managed browser and Playwright receive saved project secrets and reload th
     const sessionId = "browser-project-env";
     const runtimeRoot = path.join(root, "runtime-packs");
     const worktreePath = sourcePath(root, sessionId);
-    const projectService = createProjectService({ logger: console,
+    const project = createProjectService({ logger: console,
       env: {},
       projectContext: createStudioProjectContext({
         explicitTargetRoot: root,
@@ -1208,17 +1208,17 @@ test("managed browser and Playwright receive saved project secrets and reload th
       inspectEnvironment: async () => ({ components: [], environmentDefaults: [], resources: [], files: [] })
     });
     await mkdir(worktreePath, { recursive: true });
-    const store = await projectService.createSessionStore();
+    const store = await project.createSessionStore();
     await store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(root, sessionId) });
-    const project = await projectService.readCurrentProject();
+    const projectRecord = await project.readCurrentProject();
     const commandService = createReadyPreviewCommandService({
       previewUrl: "https://preview.example.test/",
-      projectService
+      project
     });
     try {
       await createFakePlaywrightRuntime(runtimeRoot);
       const prepared = await prepareAgentPreviewCommand({
-        commandService, project, sessionId, worktreePath,
+        commandService, project: projectRecord, sessionId, worktreePath,
         env: packEnv(runtimeRoot),
         wrapperHostDir: path.join(root, "commands")
       });
@@ -1228,7 +1228,7 @@ test("managed browser and Playwright receive saved project secrets and reload th
       await mkdir(path.dirname(cliPath), { recursive: true });
       await writeFile(cliPath, `(async () => process.stdout.write(${digestCode}))();`);
       for (const value of ["saved-dummy-secret", "rotated-dummy-secret"]) {
-        assert.equal((await projectService.saveEnvUserValues({
+        assert.equal((await project.saveEnvUserValues({
           environment: "dev", values: { BROWSER_REFERENCE_SECRET: { value, secret: true } }
         })).ok, true);
         const result = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
@@ -1330,7 +1330,7 @@ test("managed browser does not start when its project environment cannot be read
   const sessionId = "browser-env-failure";
   const commandService = createReadyPreviewCommandService({
     previewUrl: "https://preview.example.test/",
-    projectService: {
+    project: {
       runInProjectContext: (_slug, operation) => operation(),
       async projectInspectionEnvironment() { throw new Error("Project environment unavailable."); }
     },

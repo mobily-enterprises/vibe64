@@ -23,14 +23,14 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * identity hints run as, and keeps the helper's durable record.
  * @param {object} dependencies
  * @param {SessionAgentManager} dependencies.agent
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {typeof import("./promptHintGenesisFiles.js").readPromptHintBlueprint} dependencies.readBlueprintText
  * @param {typeof import("./promptHintGenesisFiles.js").readPromptHintSubsystems} dependencies.readSubsystemsText
  * @param {typeof import("@local/vibe64-core/server/sessionSourcePath").sessionSourcePath} dependencies.sessionSourcePath
  */
 function createPromptHintContext({
   agent,
-  projectService,
+  project,
   readBlueprintText,
   readSubsystemsText,
   sessionSourcePath
@@ -47,11 +47,11 @@ function createPromptHintContext({
   }
 
   async function readContext(sessionId = "") {
-    const runtime = await projectService.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntime({ inspectSource: false });
     const session = await runtime.getSession(sessionId, { inspectSource: false });
     const sourceRoot = toText(sessionSourcePath(session));
     const [promptHintsResult, conversation, repositoryTasks, blueprint, subsystems] = await Promise.all([
-      projectService.readPromptHints(),
+      project.readPromptHints(),
       runtime.readConversationLogPage(sessionId, {
         limit: PROMPT_HINT_RECENT_TURN_LIMIT
       }),

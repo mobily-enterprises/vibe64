@@ -64,10 +64,10 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * @param {typeof fetch} [dependencies.integrationDiscoveryFetch]
  * @param {() => number} [dependencies.explanationCacheNow]
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {ReturnType<typeof createSourceEditorFileObserver>} [dependencies.sourceFileObserver]
- * @param {TerminalsService} dependencies.terminalService
+ * @param {TerminalsService} dependencies.terminals
  * @param {string} [dependencies.temporaryRoot]
  */
 function createService({
@@ -75,10 +75,10 @@ function createService({
   integrationDiscoveryFetch = globalThis.fetch,
   explanationCacheNow = Date.now,
   logger,
-  projectService,
+  project,
   publishSessionChanged,
   sourceFileObserver = createSourceEditorFileObserver({ logger }),
-  terminalService,
+  terminals,
   temporaryRoot = tmpdir()
 }) {
   const fileIndex = createSourceEditorFileIndex({
@@ -99,7 +99,7 @@ function createService({
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
 
-    const runtime = existingRuntime || await projectService.createRuntime({
+    const runtime = existingRuntime || await project.createRuntime({
       sessionId: normalizedSessionId
     });
     const session = await runtime.getSession(normalizedSessionId);
@@ -143,7 +143,7 @@ function createService({
     let agentRoutingDecision = null;
     let agentProviderId = "";
     if (agentOperation) {
-      const provider = await describeSourceEditorAgentProvider(terminalService, { runtime, session, vibe64User });
+      const provider = await describeSourceEditorAgentProvider(terminals, { runtime, session, vibe64User });
       agentProviderId = toText(
         provider?.providerId ||
         session?.agentSession?.providerId ||
@@ -176,7 +176,7 @@ function createService({
     if (!sessionId) {
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
-    const runtime = await projectService.createRuntime({ sessionId });
+    const runtime = await project.createRuntime({ sessionId });
     const exclusive = await runVibe64AgentWriteExclusive(
       runtime,
       sessionId,
@@ -209,10 +209,10 @@ function createService({
   } = createExplanationOperations({
     explanationCacheNow,
     logger,
-    projectService,
+    project,
     sourceEditorContext,
     temporaryRoot,
-    terminalService
+    terminals
   });
 
   /**
@@ -223,7 +223,7 @@ function createService({
     searchIndex.invalidate(sourceRoot);
   }
 
-  const fileArea = createFileArea(projectService, { repoChanged: invalidateRepoIndexes });
+  const fileArea = createFileArea(project, { repoChanged: invalidateRepoIndexes });
   const {
     runIntegrationSetup,
     registerOAuthIntegration,
@@ -235,7 +235,7 @@ function createService({
     fileIndex,
     integrationCommandRunner,
     integrationDiscoveryFetch,
-    projectService,
+    project,
     publishSessionChanged,
     runSourceEditorWriteExclusive,
     searchIndex,

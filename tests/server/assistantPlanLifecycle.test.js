@@ -164,7 +164,7 @@ test("the installed plan command uses the admitted role, emits live changes and 
   const store = { ...f.context.runtime.store, readMetadataValue: async () => JSON.stringify(request),
     readSessionSourceDescriptor: async () => ({ sessionId: f.context.session.sessionId,
       metadata: { source_kind: "session_clone", source_path: path.join(f.root, "sessions", "active", f.context.session.sessionId, "source"), source_path_authority: "managed_session_source" } }) };
-  const service = createAgentSessionCommandService({ logger: silentLogger, projectService: {
+  const service = createAgentSessionCommandService({ logger: silentLogger, project: {
     createSessionStore: async () => store, readCurrentProject: async () => ({ slug: "project", projectRoot: f.root }),
     runInProjectContext: async (_slug, callback) => callback()
   }, publishSessionChanged: async (_id, event) => events.push(event) });

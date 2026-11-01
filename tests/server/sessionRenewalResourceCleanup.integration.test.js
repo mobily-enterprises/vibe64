@@ -184,7 +184,7 @@ function handoverText(commit) {
   ].join("\n");
 }
 
-function projectServiceProxy(projectService, runtime) {
+function projectServiceProxy(project, runtime) {
   return new Proxy({}, {
     get(_target, property) {
       if (property === "createRuntime") {
@@ -196,8 +196,8 @@ function projectServiceProxy(projectService, runtime) {
       if (property === "projectExecutionEnvironment") {
         return async () => ({});
       }
-      const value = Reflect.get(projectService, property);
-      return typeof value === "function" ? value.bind(projectService) : value;
+      const value = Reflect.get(project, property);
+      return typeof value === "function" ? value.bind(project) : value;
     }
   });
 }
@@ -213,7 +213,7 @@ async function createLiveResourceSet({
   const wrapperRoot = path.join(path.dirname(targetRoot), "cmd", sessionId);
   const envCommands = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: commandProject
+    project: commandProject
   });
   const previewCommands = createAgentPreviewCommandService({ logger: silentLogger, publishSessionChanged: async () => null,
     launchTarget: {
@@ -395,7 +395,7 @@ async function renewalHarness(targetRoot, {
   const predecessorResource = path.join(resourceRoot, PREDECESSOR_ID);
   await mkdir(predecessorResource, { recursive: true });
   await writeFile(path.join(predecessorResource, "database.marker"), "owned\n", "utf8");
-  const projectService = createProjectService({ logger: console,
+  const project = createProjectService({ logger: console,
     env: {},
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
@@ -417,7 +417,7 @@ async function renewalHarness(targetRoot, {
       }
     }
   });
-  const commandProject = projectServiceProxy(projectService, runtime);
+  const commandProject = projectServiceProxy(project, runtime);
   const attachmentRoot = path.join(targetRoot, "attachments");
   const env = {
     VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot,
@@ -434,14 +434,14 @@ async function renewalHarness(targetRoot, {
     })}\n`,
     "utf8"
   );
-  const terminalService = createTerminalService({
+  const terminals = createTerminalService({
     logger: silentLogger,
     codexTerminalController: {
       codexToolHomeRequired: false,
       codexToolHomeSource
     },
     env,
-    projectService: commandProject
+    project: commandProject
   });
   const predecessor = await runtime.getSession(PREDECESSOR_ID, {
     inspectSource: false
@@ -454,8 +454,8 @@ async function renewalHarness(targetRoot, {
     targetRoot
   });
   let attachmentReleaseCalls = 0;
-  const terminals = {
-    ...terminalService,
+  const sessionTerminals = {
+    ...terminals,
     async assertSessionRenewalIdle() {
       return { idle: true, ok: true };
     },
@@ -502,7 +502,7 @@ async function renewalHarness(targetRoot, {
     },
     async releaseRenewalPredecessorAttachments(session, options) {
       attachmentReleaseCalls += 1;
-      const result = await terminalService.releaseRenewalPredecessorAttachments(
+      const result = await terminals.releaseRenewalPredecessorAttachments(
         session,
         options
       );
@@ -539,7 +539,7 @@ async function renewalHarness(targetRoot, {
         return runtime;
       },
       releaseSessionResources(input) {
-        return projectService.releaseSessionResources(input);
+        return project.releaseSessionResources(input);
       }
     },
     publishSessionChanged: async () => null,
@@ -562,7 +562,7 @@ async function renewalHarness(targetRoot, {
         return { status: "unconfigured" };
       }
     },
-    terminals
+    terminals: sessionTerminals
   });
   return {
     attachmentReleaseCallCount: () => attachmentReleaseCalls,
@@ -570,12 +570,12 @@ async function renewalHarness(targetRoot, {
     controller,
     env,
     predecessorResource,
-    projectService,
+    project,
     resourceCalls,
     resources,
     runtime,
     runtimeDir,
-    terminalService
+    terminals
   };
 }
 
@@ -603,7 +603,7 @@ async function closeHarness(context) {
     context.resources.previewCommands.closeAllForSession(PREDECESSOR_ID),
     closeTerminalSessionsForNamespace(context.resources.assistantNamespace),
     closeTerminalSessionsForNamespace(context.resources.launchNamespace),
-    context.terminalService.close()
+    context.terminals.close()
   ]);
 }
 

@@ -267,7 +267,7 @@ async function fixture(t, { scopedConversations = false } = {}) {
   },
     logger: { info: fields => diagnostics.push(fields), warn: fields => diagnostics.push(fields) },
     publishSessionChanged: async (_id, event) => publications.push(event),
-    projectService: { readCurrentProject: async () => ({ sourceRoot: workdir }) },
+    project: { readCurrentProject: async () => ({ sourceRoot: workdir }) },
     accountStatus: async () => behavior.account,
     credentialHome: { home: root }, recordGitActor: async () => ({ ok: true }), connectionStatus: async () => true,
     createProcess: async (options) => {
@@ -304,9 +304,9 @@ test("Claude main and temporary chats receive project values with their managed 
   const provider = createClaudeSessionAgentProvider({
     ...f.providerOptions,
     codexGitCommand: {},
-    projectService: {
-      ...f.providerOptions.projectService,
-      readCurrentProject: async () => ({ ...await f.providerOptions.projectService.readCurrentProject(), slug: "demo-project" }),
+    project: {
+      ...f.providerOptions.project,
+      readCurrentProject: async () => ({ ...await f.providerOptions.project.readCurrentProject(), slug: "demo-project" }),
       async projectInspectionEnvironment(input) {
         assert.equal(input.sessionId, "test");
         assert.equal(input.target, "claude");
@@ -2269,8 +2269,8 @@ for (const busyGoal of [false, true]) test(`main Claude terminal service uses ac
   const runtime = { ...f.context.runtime, stateRoot: path.join(f.root, "runtime"),
     projectContextRoot: f.root, store, getSession: id => store.readSession(id),
     listSessions: async () => [await store.readSession("test")] };
-  const projectService = {
-    ...f.providerOptions.projectService,
+  const project = {
+    ...f.providerOptions.project,
     createRuntime: () => runtime,
     createSessionStore: () => store,
     currentServiceDataRoot: () => path.join(f.root, "service-data"),
@@ -2379,7 +2379,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
   const actor = { username: "service-owner", uid: 73, role: "owner" };
   let recoveredActorReads = 0;
   const createService = () => {
-    const value = createTerminalService({ projectService, actions,
+    const value = createTerminalService({ project, actions,
     logger: { info: recordDeliveryDiagnostic, warn: recordDeliveryDiagnostic, error: recordDeliveryDiagnostic },
     env: { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: command, JSKIT_REALTIME_DEBUG: "1",
       VIBE64_SYSTEM_ROOT: path.join(f.root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
@@ -2417,7 +2417,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
   });
   // Daemon recreation below must leave the browser facade using the current owner.
   const terminals = new Proxy({}, { get: (_target, key) => service[key] });
-  const sessions = createSessionService({ actions, project: projectService, terminals });
+  const sessions = createSessionService({ actions, project, terminals });
   actions.register({ contributorId: "test.claude-main-goals", domain: "vibe64",
     actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals })]
       .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });

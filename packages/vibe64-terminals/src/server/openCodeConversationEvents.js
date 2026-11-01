@@ -110,13 +110,13 @@ function openCodeRunRealtimePayload(run = {}) {
 
 /**
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
  * @param {OpenCodeConversationPresentation} dependencies.presentation
  */
 function createOpenCodeConversationEvents({
-  projectService,
+  project,
   publishSessionChanged,
   sharedRuntime,
   presentation
@@ -165,7 +165,7 @@ function createOpenCodeConversationEvents({
   async function writeRun(context = {}, turn = {}, state = VIBE64_AGENT_RUN_STATE.ACTIVE, error = "") {
     if (!vibe64AgentRunStateIsActive(state) && turn.id && !context.assistantScope) {
       await checkpointSessionTurn({
-        projectService,
+        project,
         runtime: context.runtime,
         session: context.session,
         sessionId: context.sessionId,

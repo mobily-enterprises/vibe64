@@ -100,7 +100,7 @@ test("a Preview change made outside any request reaches the session's viewers", 
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared: async () => ({ ok: true }),
     // Outside a request, the project service still knows the project it holds.
-    projectService: { currentProjectSlug: () => "alpha", async createRuntime() { return { store }; } },
+    project: { currentProjectSlug: () => "alpha", async createRuntime() { return { store }; } },
     publishSessionChanged: createSessionChangedPublisher(events),
     stopPreviewBrowsers: () => ({ ok: true })
   });
@@ -116,7 +116,7 @@ test("a browser test's change made outside any request reaches the session's vie
   const service = createAgentPreviewCommandService({
     launchTarget: { previewTestRunAdmission: () => null },
     logger: silentLogger,
-    projectService: {},
+    project: {},
     publishSessionChanged: createSessionChangedPublisher(events)
   });
   // The assistant's start registers its browser inside the session's project.

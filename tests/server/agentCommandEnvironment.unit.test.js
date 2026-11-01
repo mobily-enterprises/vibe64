@@ -169,7 +169,7 @@ test("readiness proves live control identity and lifecycle logs exclude credenti
   const entries = [];
   const changes = [];
   const logger = { info: (event) => entries.push(event), warn: (event) => entries.push(event) };
-  const service = createAgentEnvCommandService({ logger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS, projectService: {
+  const service = createAgentEnvCommandService({ logger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS, project: {
     readCurrentProject: async () => ({ slug: "control-test" }),
     readEnv: async () => ({}), saveEnvUserValues: async () => ({}),
     runInProjectContext: async (_slug, operation) => operation()

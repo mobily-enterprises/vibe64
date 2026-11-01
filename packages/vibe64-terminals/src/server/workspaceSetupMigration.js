@@ -25,12 +25,12 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * The Genesis migration a retried outdated project runs before its setup is
  * inspected again.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {typeof import("@local/vibe64-execution/server").runVibe64Command} dependencies.runCommand
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
  */
 function createWorkspaceSetupMigration({
-  projectService,
+  project,
   runCommand,
   runnerState
 }) {
@@ -61,7 +61,7 @@ function createWorkspaceSetupMigration({
     try {
       projectEnv = await loadProjectExecutionEnv({
         prepare: true,
-        projectService,
+        project,
         session,
         target: "workspace-setup"
       });

@@ -18,14 +18,14 @@ import { createService } from "./service.js";
  * @param {typeof admitUsageRecording} dependencies.admission
  * @param {RuntimeEvents} dependencies.events
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
  */
 function createUsageRecording({
   admission,
   events,
   logger,
-  projectService,
+  project,
   terminals
 }) {
   const {
@@ -43,7 +43,7 @@ function createUsageRecording({
     admission,
     events,
     logger,
-    projectService,
+    project,
     terminals
   });
   return Object.freeze({
@@ -100,7 +100,7 @@ const Vibe64UsageRecordingFeature = defineFeature({
       admission: admit,
       events,
       logger,
-      projectService: project,
+      project,
       terminals
     });
     registerRoutes(http);

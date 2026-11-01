@@ -29,7 +29,7 @@ import { createPromptHintRequests } from "./promptHintRequests.js";
  * @param {SessionAgentManager} dependencies.agent
  * @param {(event: object) => void} dependencies.diagnostic
  * @param {() => number} [dependencies.now]
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof readPromptHintBlueprint} [dependencies.readBlueprintText]
  * @param {typeof readPromptHintSubsystems} [dependencies.readSubsystemsText]
@@ -41,7 +41,7 @@ function createSessionPromptHintsService({
   agent,
   diagnostic,
   now = () => Date.now(),
-  projectService,
+  project,
   publishSessionChanged,
   readBlueprintText = readPromptHintBlueprint,
   readSubsystemsText = readPromptHintSubsystems,
@@ -50,7 +50,7 @@ function createSessionPromptHintsService({
   const state = createPromptHintState({ diagnostic });
   const hintContext = createPromptHintContext({
     agent,
-    projectService,
+    project,
     readBlueprintText,
     readSubsystemsText,
     sessionSourcePath
@@ -67,7 +67,7 @@ function createSessionPromptHintsService({
   const hintRequests = createPromptHintRequests({
     hintContext,
     hintJobs,
-    projectService,
+    project,
     state
   });
 

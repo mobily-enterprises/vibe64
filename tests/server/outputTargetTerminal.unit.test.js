@@ -67,7 +67,7 @@ test("preview status, open, and identity selection reject frozen sessions before
     ok: false
   };
   const controller = createOutputTargetTerminalController({ ensureWorkspacePrepared: async () => ({ ok: true }), stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null,
-    projectService: {
+    project: {
       async createRuntime() {
         projectReads += 1;
         throw new Error("Frozen preview must not read the project.");
@@ -105,7 +105,7 @@ test("explicit Preview Stop persists and refuses incidental startup before prepa
   };
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { prepared += 1; throw new Error("Stop must not prepare a workspace."); },
-    projectService: { currentProjectSlug: () => "", async createRuntime() { return {
+    project: { currentProjectSlug: () => "", async createRuntime() { return {
       store,
       async getSession() { return { sessionId, metadata }; }
     }; } },
@@ -132,7 +132,7 @@ test("Preview Stop drains before queued recovery and isolates other session clea
   const cleaned = [];
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { assert.fail("Queued automatic recovery must not prepare after Stop."); },
-    projectService: { currentProjectSlug: () => "", async createRuntime() { return {
+    project: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {
         async mutateSession(_id, operation) { return operation(); },
         async writeMetadataValue(id, key, value) { metadata.get(id)[key] = value; }
@@ -170,7 +170,7 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
     const metadata = { output_target_preview_stopped: value };
     const controller = createOutputTargetTerminalController({ stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
       ensureWorkspacePrepared() { prepared += 1; },
-      projectService: { currentProjectSlug: () => "", async createRuntime() { return {
+      project: { currentProjectSlug: () => "", async createRuntime() { return {
         store: { async mutateSession() { writes += 1; } },
         async getSession() { return { metadata }; }
       }; } }
@@ -191,7 +191,7 @@ test("an explicit Preview start reruns a failed setup; an automatic one does not
       requests.push(context.rerunFailedSetup);
       return { ok: false, error: "Workspace preparation failed." };
     },
-    projectService: { currentProjectSlug: () => "", async createRuntime() { return {
+    project: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {},
       async getSession(sessionId) { return { sessionId, metadata: {} }; }
     }; } }
@@ -213,7 +213,7 @@ test("failed Preview browser cleanup retains Stop across controllers and retries
   let attempts = 0;
   const options = { ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { assert.fail("Stopped Preview must not prepare a workspace."); },
-    projectService: { currentProjectSlug: () => "", async createRuntime() { return {
+    project: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {
         async mutateSession(_id, operation) { return operation(); },
         async writeMetadataValue(_id, key, value) { metadata[key] = value; }
@@ -526,7 +526,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
         }
       }
     };
-    const projectService = {
+    const project = {
       async createRuntime() {
         return runtime;
       },
@@ -592,7 +592,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
           })
         };
       },
-      projectService,
+      project,
       async publishSessionChanged(_sessionId, event = {}) {
         if (holdLaunchCleanupPublication && event.reason === "output-target-stale-cleared") {
           await launchCleanupPublication;

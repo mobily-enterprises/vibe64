@@ -17,22 +17,22 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /**
  * What a launch works from, for a session already read: its source root,
  * project environment, Preview identities and the project's roots.
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {Vibe64SessionRuntime} runtime
  * @param {object} session
  * @param {boolean} prepareEnvironment
  */
-async function launchContextFor(projectService, runtime, session, prepareEnvironment) {
+async function launchContextFor(project, runtime, session, prepareEnvironment) {
   const sessionSourceRoot = sessionSourcePath(session);
   const projectEnvironment = await loadProjectExecutionEnv({
     prepare: prepareEnvironment,
     reusePrepared: prepareEnvironment,
-    projectService,
+    project,
     session,
     target: "output-target"
   });
-  const projectContextRoot = String(projectService.currentTargetRoot() || "").trim();
-  const previewIdentitySettings = await projectService.readPreviewApplicationIdentities({
+  const projectContextRoot = String(project.currentTargetRoot() || "").trim();
+  const previewIdentitySettings = await project.readPreviewApplicationIdentities({
     sessionId: session.sessionId
   });
   if (previewIdentitySettings?.ok === false) {
@@ -46,14 +46,14 @@ async function launchContextFor(projectService, runtime, session, prepareEnviron
     throw error;
   }
   return {
-    projectService,
+    project,
     previewApplicationIdentities: previewIdentitySettings.identities || [],
     projectEnvironment,
-    projectsRoot: projectService.selectedProject?.projectsRoot || "",
+    projectsRoot: project.selectedProject?.projectsRoot || "",
     projectContextRoot,
-    projectSlug: currentProjectSlug(projectService),
+    projectSlug: currentProjectSlug(project),
     runtime,
-    serviceDataRoot: projectService.currentServiceDataRoot(),
+    serviceDataRoot: project.currentServiceDataRoot(),
     session,
     store: runtime.store,
     sessionSourceRoot
@@ -63,27 +63,27 @@ async function launchContextFor(projectService, runtime, session, prepareEnviron
 /**
  * Reads what a launch works from: the session, its source root, project
  * environment, Preview identities and the project's roots.
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {string} sessionId
  */
-async function readLaunchContext(projectService, sessionId) {
-  const runtime = await projectService.createRuntime();
+async function readLaunchContext(project, sessionId) {
+  const runtime = await project.createRuntime();
   const session = await runtime.getSession(sessionId);
   assertSourceInspectionHealthy(session.sourceInspection);
-  return launchContextFor(projectService, runtime, session, false);
+  return launchContextFor(project, runtime, session, false);
 }
 
 /**
  * Reads what a launch starts from: the session after its workspace
  * preparation has completed, with the project environment prepared.
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {string} sessionId
  * @param {object} options
  * @param {(sessionId: string, context: object) => Promise<object>} options.ensureWorkspacePrepared
  * @param {boolean} options.rerunFailedSetup
  */
-async function readPreparedLaunchContext(projectService, sessionId, { ensureWorkspacePrepared, rerunFailedSetup }) {
-  const runtime = await projectService.createRuntime();
+async function readPreparedLaunchContext(project, sessionId, { ensureWorkspacePrepared, rerunFailedSetup }) {
+  const runtime = await project.createRuntime();
   const session = await runtime.getSession(sessionId);
   assertSourceInspectionHealthy(session.sourceInspection);
   const setup = await ensureWorkspacePrepared(sessionId, {
@@ -97,7 +97,7 @@ async function readPreparedLaunchContext(projectService, sessionId, { ensureWork
   if (setup?.completion) {
     await setup.completion;
   }
-  return launchContextFor(projectService, runtime, await runtime.getSession(sessionId), true);
+  return launchContextFor(project, runtime, await runtime.getSession(sessionId), true);
 }
 
 async function listOutputTargets(context, options = {}) {

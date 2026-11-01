@@ -93,7 +93,7 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   const session = { sessionId: "test-session", status: "active", sourceReady: true, metadata: { source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source" } };
   const store = createVibe64SessionStore({ projectContextRoot: source, projectRuntimeRoot: path.join(root, "state") });
   await store.createSession({ sessionId: session.sessionId, metadata: session.metadata, runtimeKind: "genesis" });
-  const projectService = {
+  const project = {
     createSessionStore: () => store,
     createRuntime: () => ({ store, getSession: () => session, projectContextRoot: source, stateRoot: path.join(root, "state") }),
     projectInspectionEnvironment: async () => ({}), currentTargetRoot: () => source
@@ -110,7 +110,7 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   const controller = createCodexTerminalController({ codexToolHomeSource: home,
     codexAppServerProviderOptions: { systemRoot },
     env: { VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agents"), VIBE64_RUNTIME_NAMESPACE: "curated-fixture" },
-    projectService, codexAppServerProviderFactory(options) {
+    project, codexAppServerProviderFactory(options) {
       const provider = createCodexAppServerAgentProvider({ ...options, codexCommand: "codex", commandRunner,
         async prepareThreadParams(params) {
           const prepared = await options.prepareThreadParams?.(params) || params;

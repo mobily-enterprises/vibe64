@@ -26,18 +26,18 @@ async function withProjects(callback) {
 
 // A project whose runtime keeps its state under stateRoot and lists the given
 // open sessions; the current-session alias accepts any listed session.
-function projectService(stateRoot, { pinned = "", sessionIds = ["s1", "s2", "s3"] } = {}) {
-  const project = {
+function project(stateRoot, { pinned = "", sessionIds = ["s1", "s2", "s3"] } = {}) {
+  const projectRecord = {
     sessionIds: [...sessionIds],
     async createRuntime() {
       return {
         stateRoot,
         store: { async listSessionsForRenewal() { return []; }, async readAgentRuns() { return []; } },
         async listSessionSummaries() {
-          return project.sessionIds.map((sessionId) => ({ sessionId, status: "active", revision: 1 }));
+          return projectRecord.sessionIds.map((sessionId) => ({ sessionId, status: "active", revision: 1 }));
         },
         async updateCurrentSession(sessionId) {
-          if (sessionId && !project.sessionIds.includes(sessionId)) {
+          if (sessionId && !projectRecord.sessionIds.includes(sessionId)) {
             throw Object.assign(new Error(`Vibe64 session cannot be selected: ${sessionId}`), { code: "vibe64_session_not_selectable" });
           }
           return { sessionId: pinned || sessionId };
@@ -47,11 +47,11 @@ function projectService(stateRoot, { pinned = "", sessionIds = ["s1", "s2", "s3"
     async developmentDatabasePolicy() { return { creation: {}, limits: {} }; }
   };
   const service = createService({
-    project,
+    project: projectRecord,
     terminals: {},
     workspaceSetupRunner: { isRunning: () => false, wait: () => null }
   });
-  return { project, service };
+  return { project: projectRecord, service };
 }
 
 async function recordFiles(stateRoot) {
@@ -71,7 +71,7 @@ async function lastOpened(service, vibe64User) {
 
 test("opening or switching to a session remembers it as that person's last one", async () => {
   await withProjects(async (root) => {
-    const { service } = projectService(path.join(root, "alpha"));
+    const { service } = project(path.join(root, "alpha"));
     assert.equal(await lastOpened(service, ada), "");
     assert.equal((await service.updateCurrentSession("s1", { vibe64User: ada })).ok, true);
     assert.equal(await lastOpened(service, ada), "s1");
@@ -82,8 +82,8 @@ test("opening or switching to a session remembers it as that person's last one",
 
 test("each person keeps one record per project, independent of other people and projects", async () => {
   await withProjects(async (root) => {
-    const alpha = projectService(path.join(root, "alpha")).service;
-    const beta = projectService(path.join(root, "beta")).service;
+    const alpha = project(path.join(root, "alpha")).service;
+    const beta = project(path.join(root, "beta")).service;
     await alpha.updateCurrentSession("s3", { vibe64User: ada });
     await alpha.updateCurrentSession("s1", { vibe64User: bob });
     await beta.updateCurrentSession("s2", { vibe64User: ada });
@@ -103,9 +103,9 @@ test("each person keeps one record per project, independent of other people and 
 test("a remembered session that is archived, missing or damaged is not offered", async () => {
   await withProjects(async (root) => {
     const stateRoot = path.join(root, "alpha");
-    const { project, service } = projectService(stateRoot);
+    const { project: projectRecord, service } = project(stateRoot);
     await service.updateCurrentSession("s3", { vibe64User: ada });
-    project.sessionIds = ["s1", "s2"];
+    projectRecord.sessionIds = ["s1", "s2"];
     assert.equal(await lastOpened(service, ada), "");
     await service.updateCurrentSession("s1", { vibe64User: ada });
     assert.equal(await lastOpened(service, ada), "s1");
@@ -118,7 +118,7 @@ test("a remembered session that is archived, missing or damaged is not offered",
 test("a refused selection is not remembered", async () => {
   await withProjects(async (root) => {
     const stateRoot = path.join(root, "alpha");
-    const { service } = projectService(stateRoot);
+    const { service } = project(stateRoot);
     await service.updateCurrentSession("s2", { vibe64User: ada });
     const refused = await service.updateCurrentSession("gone", { vibe64User: ada });
     assert.equal(refused.ok, false);
@@ -131,7 +131,7 @@ test("a refused selection is not remembered", async () => {
 
 test("a pinned project still remembers the session the person opened", async () => {
   await withProjects(async (root) => {
-    const { service } = projectService(path.join(root, "alpha"), { pinned: "s1" });
+    const { service } = project(path.join(root, "alpha"), { pinned: "s1" });
     const result = await service.updateCurrentSession("s3", { vibe64User: ada });
     assert.equal(result.sessionId, "s1");
     assert.equal(await lastOpened(service, ada), "s3");
@@ -141,7 +141,7 @@ test("a pinned project still remembers the session the person opened", async () 
 test("publishing the remembered session again does not rewrite its record", async () => {
   await withProjects(async (root) => {
     const stateRoot = path.join(root, "alpha");
-    const { service } = projectService(stateRoot);
+    const { service } = project(stateRoot);
     await service.updateCurrentSession("s3", { vibe64User: ada });
     const [file] = await recordFiles(stateRoot);
     const recordPath = path.join(stateRoot, "last-opened-sessions", file);

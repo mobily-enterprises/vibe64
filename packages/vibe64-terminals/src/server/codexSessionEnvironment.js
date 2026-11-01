@@ -48,7 +48,7 @@ function codexSessionWorktreeIsUnavailable(session = {}) {
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeEnv} dependencies.env
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {RunVibe64Command} dependencies.runCommand
  */
 function createCodexSessionEnvironment({
@@ -58,7 +58,7 @@ function createCodexSessionEnvironment({
   agentSessionCommand,
   codexGitCommand,
   env,
-  projectService,
+  project,
   runCommand
 }) {
 
@@ -89,7 +89,7 @@ function createCodexSessionEnvironment({
     if (!codexGitCommand || !normalizeText(sessionId)) {
       return {};
     }
-    const project = await projectService.readCurrentProject();
+    const projectRecord = await project.readCurrentProject();
     const prepared = await prepareAgentSessionCommandEnvironment({
       agentDatabaseCommand,
       agentEnvCommand,
@@ -98,7 +98,7 @@ function createCodexSessionEnvironment({
       env,
       gitCommand: codexGitCommand,
       gitEnvironment: codexAttachmentEnv(),
-      project,
+      project: projectRecord,
       runtime,
       sessionId,
       worktreePath: sessionSourcePath(session)
@@ -151,7 +151,7 @@ function createCodexSessionEnvironment({
       const projectEnvPromise = loadProjectExecutionEnv({
         prepare: true,
         reusePrepared: true,
-        projectService,
+        project,
         runCommand,
         runtime,
         session: currentSession,

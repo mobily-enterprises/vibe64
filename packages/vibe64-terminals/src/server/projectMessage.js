@@ -5,7 +5,7 @@ import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server";
  * Resolve the recipient at acceptance; native delivery runs independently
  * of the sender's command socket. There is no mailbox for a closed project.
  */
-async function sendProjectMessage(input, { projectService, authorize, assertOpen, prepare, send, reportFailure, publish }) {
+async function sendProjectMessage(input, { project, authorize, assertOpen, prepare, send, reportFailure, publish }) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(input.projectSlug) || !input.message) {
     throw vibe64Error("A project slug and message are required.", "vibe64_project_message_input_required");
   }
@@ -18,16 +18,16 @@ async function sendProjectMessage(input, { projectService, authorize, assertOpen
     );
   }
   const actor = await authorize(input.actor, input.projectSlug);
-  return projectService.runInProjectContext(input.projectSlug, async () => {
-    const project = await projectService.readCurrentProject();
-    if (project?.runtime?.open !== true) {
+  return project.runInProjectContext(input.projectSlug, async () => {
+    const projectRecord = await project.readCurrentProject();
+    if (projectRecord?.runtime?.open !== true) {
       throw vibe64Error(
         "The destination project is closed. Open it and select a session before sending.",
         "vibe64_project_message_project_closed"
       );
     }
-    assertOpen(project);
-    const runtime = await projectService.createRuntime({ inspectSource: false });
+    assertOpen(projectRecord);
+    const runtime = await project.createRuntime({ inspectSource: false });
     const explicitSession = input.destinationSessionId !== undefined;
     if (explicitSession && !input.destinationSessionId) {
       throw vibe64Error("An exact destination session ID is required after --session.", "vibe64_project_message_session_required");
@@ -69,8 +69,8 @@ async function sendProjectMessage(input, { projectService, authorize, assertOpen
       body: input.message
     };
     async function writeReceipt(status, error = "") {
-      return projectService.runInProjectContext(input.sourceProject, async () => {
-        const store = await projectService.createSessionStore({ sessionId: input.sourceSession });
+      return project.runInProjectContext(input.sourceProject, async () => {
+        const store = await project.createSessionStore({ sessionId: input.sourceSession });
         const noticeId = `project-message:${receipt.projectSlug}:${receipt.sessionId}:${input.messageId}`;
         const turn = await store.conversationStorage.write(input.sourceSession, async (transaction) => {
           let previous;
@@ -131,21 +131,21 @@ async function sendProjectMessage(input, { projectService, authorize, assertOpen
  * Resolve it on every call: a restart may move the Preview to a new address.
  * Never start or wait indefinitely for another project's Preview.
  */
-async function readProjectPreview(input, { projectService, authorize, assertOpen, launchTarget, waitMs = 10000, pollMs = 500 }) {
+async function readProjectPreview(input, { project, authorize, assertOpen, launchTarget, waitMs = 10000, pollMs = 500 }) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(input.projectSlug)) {
     throw vibe64Error("A project slug is required.", "vibe64_project_preview_input_required");
   }
   const actor = await authorize(input.actor, input.projectSlug);
-  return projectService.runInProjectContext(input.projectSlug, async () => {
-    const project = await projectService.readCurrentProject();
-    if (project?.runtime?.open !== true) {
+  return project.runInProjectContext(input.projectSlug, async () => {
+    const projectRecord = await project.readCurrentProject();
+    if (projectRecord?.runtime?.open !== true) {
       throw vibe64Error(
         `${input.projectSlug} is closed, so its Preview is unavailable. Ask the person to open it.`,
         "vibe64_project_preview_project_closed"
       );
     }
-    assertOpen(project);
-    const runtime = await projectService.createRuntime({ inspectSource: false });
+    assertOpen(projectRecord);
+    const runtime = await project.createRuntime({ inspectSource: false });
     const session = input.destinationSessionId
       ? await runtime.store.readSession(input.destinationSessionId)
       : await runtime.store.readCurrentSession();

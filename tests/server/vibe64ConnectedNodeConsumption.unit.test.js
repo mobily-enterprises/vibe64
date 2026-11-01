@@ -109,7 +109,7 @@ async function createTask(target, name, releaseRoot, env) {
 
 function connectedWorkspaceRunner(tasks) {
   return createWorkspaceSetupRunner({
-    projectService: {},
+    project: {},
     async inspect({ projectRoot, session, environment }) {
       const task = tasks.find(candidate => candidate.root === projectRoot);
       assert.equal(session.sessionId, task.session.sessionId);

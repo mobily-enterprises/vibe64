@@ -63,12 +63,12 @@ async function learningSessionExecutionRoot(runtime, sessionId, options = {}) {
  * conversation. Codex/OpenCode require matching snapshots; Claude retains its
  * captured/pinned snapshot.
  * @param {string} engine
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {string} sessionId
  * @param {object} [options]
  * @param {object} codexHost the Codex tool home and unavailable-worktree handlers
  */
-async function readSessionConversationContext(engine, projectService, sessionId, options, codexHost) {
+async function readSessionConversationContext(engine, project, sessionId, options, codexHost) {
   const id = engine === "codex" ? sessionId : engine === "opencode"
     ? openCodeSessionId(sessionId) : String(sessionId ?? "").trim();
   let codex;
@@ -87,7 +87,7 @@ async function readSessionConversationContext(engine, projectService, sessionId,
 
   const runtime = (codex ? codex.runtime : options.runtime) || (scope
     ? { stateRoot: scope.runtimeRoot }
-    : await projectService.createRuntime({ inspectSource: false }));
+    : await project.createRuntime({ inspectSource: false }));
   let session;
   if (codex) {
     session = codex.session?.sessionId === id ? codex.session : await runtime.getSession(id, { inspectSource: false });
@@ -160,16 +160,16 @@ function claudeConversationScope(id, options) {
  * Cleanup and activity reach what the Claude owner retains for a session by its
  * key alone. They need no workspace or Claude selection: a session whose source
  * was never created or was already removed can still be closed and inspected.
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {string} sessionId
  * @param {object} [options]
  */
-async function readClaudeConversationOwnerContext(projectService, sessionId, options = {}) {
+async function readClaudeConversationOwnerContext(project, sessionId, options = {}) {
   const id = String(sessionId ?? "").trim();
   const scope = claudeConversationScope(id, options);
   const runtime = options.runtime || (scope
     ? { stateRoot: scope.runtimeRoot }
-    : await projectService.createRuntime({ inspectSource: false }));
+    : await project.createRuntime({ inspectSource: false }));
   if (!runtime.stateRoot) throw claudeConversationError("Claude requires a session state root.");
   return { ...options, runtime, sessionId: id, key: claudeConversationKey(runtime, id) };
 }

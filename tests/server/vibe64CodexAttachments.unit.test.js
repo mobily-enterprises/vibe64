@@ -846,7 +846,7 @@ test("Codex controller renews accepted attachments in the selected session sourc
           VIBE64_RUNTIME_NAMESPACE: "test",
           VIBE64_WORKSPACE: "test"
         },
-        projectService: {
+        project: {
           createRuntime() {
             return {
               async getSession() {
@@ -894,10 +894,10 @@ test("shared upload, Codex renewal, and cleanup use the configured attachment ro
     projectRuntimeRoot: path.join(root, "runtime")
   });
   const runtime = { store, getSession: (id) => store.readSession(id) };
-  const projectService = { createRuntime: () => runtime };
-  const attachments = createSessionAttachments({ env, projectService });
+  const project = { createRuntime: () => runtime };
+  const attachments = createSessionAttachments({ env, project });
   const { attachments: controller } = createCodexSessionRegistration({ listConnections: async () => [], codexAppServerProviderOptions: {},
-    publishSessionChanged: async () => null, env, projectService });
+    publishSessionChanged: async () => null, env, project });
   try {
     await store.createSession({
       metadata: {
@@ -973,7 +973,7 @@ test("shared attachment admission rejects persisted and in-flight session closin
     const runtime = { store, getSession: (id) => store.readSession(id) };
     const persistedAttachments = createSessionAttachments({
       env,
-      projectService: { createRuntime: () => runtime }
+      project: { createRuntime: () => runtime }
     });
     await assert.rejects(persistedAttachments.uploadAttachment({ sessionId: "persisted-closing" }, {
       fileName: "blocked.txt",
@@ -987,7 +987,7 @@ test("shared attachment admission rejects persisted and in-flight session closin
     let sessionReads = 0;
     const racingAttachments = createSessionAttachments({
       env,
-      projectService: {
+      project: {
         createRuntime() {
           return {
             store,

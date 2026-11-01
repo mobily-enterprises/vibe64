@@ -48,7 +48,7 @@ async function fixture(t, { sourcesBase } = {}) {
     stores.set(slug, store);
     sources.set(slug, sourceRoot);
   }
-  const service = createService({ logger: console, projectService: { async createRuntime() {
+  const service = createService({ logger: console, project: { async createRuntime() {
     const store = stores.get(currentProjectRequestContext().slug);
     return { store, getSession: store.readSession };
   } } });

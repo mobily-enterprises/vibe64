@@ -151,7 +151,7 @@ const Vibe64TrainingFeature = defineFeature({
     });
     const content = createInstalledTrainingContent({ systemRoot });
     const learners = createTrainingLearnerState({ systemRoot, content });
-    const projectRepositoryService = createManagedProjectRepositoryService({ projectContext, projectService: project });
+    const projectRepositoryService = createManagedProjectRepositoryService({ projectContext, project });
     const codeAuthorship = createTrainingCodeAuthorship({
       learners,
       content,

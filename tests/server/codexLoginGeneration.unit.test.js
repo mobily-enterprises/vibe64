@@ -73,7 +73,7 @@ test("a session saved on the previous sign-in moves to the current sign-in's run
     runtimeHost,
     accountPreparation: { codexToolHomeResult: async () => ({ ok: true, toolHomeSource }) },
     sessionEnvironment: { codexManagedCommandEnv: async () => ({}) },
-    projectService: {},
+    project: {},
     runCommand: async () => ({})
   });
   await signIn();

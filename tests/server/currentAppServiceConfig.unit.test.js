@@ -9,7 +9,7 @@ import {
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 
-function projectService(root, {
+function project(root, {
   sessionSourceRoot = "",
   userEnvironment = {}
 } = {}) {
@@ -64,7 +64,7 @@ test("current app returns the explicit Vibe64 Outputs contract", async () => {
           }]
         };
       },
-      projectService: projectService(root, {
+      project: project(root, {
         userEnvironment: {
           BOOKS_ORIGIN: "http://books.test"
         }
@@ -93,7 +93,7 @@ test("current app tells the Outputs reason when the host is still preparing its 
           seen.push(input.resourcesPreparing);
           return { diagnostics: [], resources: [], stackHash: "h", status: "ready", targets: [] };
         },
-        projectService: { ...projectService(root), async projectEnvironmentStatus(input) {
+        project: { ...project(root), async projectEnvironmentStatus(input) {
           assert.equal(input.scope, "dev");
           return { status };
         } }
@@ -112,7 +112,7 @@ test("missing Vibe64 Outputs declarations are unconfigured, not guessed", async 
         error.code = "STACK_REQUIRED";
         throw error;
       },
-      projectService: projectService(root)
+      project: project(root)
     });
 
     const response = await service.inspectCurrentApp({});
@@ -132,7 +132,7 @@ test("a project without a baseline source is unconfigured until a session exists
       inspected = true;
       return {};
     },
-    projectService: projectService("")
+    project: project("")
   });
 
   const response = await service.inspectCurrentApp({});
@@ -151,8 +151,8 @@ test("current app never inspects a project namespace as source", async () => {
       inspected = true;
       return {};
     },
-    projectService: {
-      ...projectService(""),
+    project: {
+      ...project(""),
       currentTargetRoot() {
         return projectNamespace;
       }
@@ -186,7 +186,7 @@ test("session inspection uses that session's source directory", async () => {
           targets: []
         };
       },
-      projectService: projectService(root, {
+      project: project(root, {
         sessionSourceRoot
       })
     });
@@ -209,7 +209,7 @@ test("unexpected Genesis inspection errors remain visible", async () => {
         error.code = "EACCES";
         throw error;
       },
-      projectService: projectService(root)
+      project: project(root)
     });
 
     const response = await service.inspectCurrentApp({});

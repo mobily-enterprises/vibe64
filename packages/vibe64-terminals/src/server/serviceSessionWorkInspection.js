@@ -29,13 +29,13 @@ import { GENESIS_DERIVED_ARTIFACT_PATHS } from "@local/vibe64-genesis/server";
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceSessionWork} dependencies.sessionWork
  * @param {CodexGitCommandService} dependencies.codexGitCommand
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  */
 function createServiceSessionWorkInspection({
   sessionAccess,
   sessionWork,
   codexGitCommand,
-  projectService
+  project
 }) {
   async function checkSessionUpdates(sessionId, input = {}) {
     // This refreshes canonical authority under the project source lock but
@@ -49,9 +49,9 @@ function createServiceSessionWorkInspection({
     return checkManagedSessionUpdates({
       commandOptions: execution.commandOptions,
       operationId: input.operationId,
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       runCommand: execution.runCommand,
-      runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
+      runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),
       session
     });
   }
@@ -64,7 +64,7 @@ function createServiceSessionWorkInspection({
   async function readRepositoryAuthorityHeads({ sessions = [] } = {}) {
     return readManagedSessionAuthorityHeads({
       executionFor: (session) => codexGitCommand.sessionWorkSaveContext({ session }),
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       sessions
     });
   }
@@ -83,13 +83,13 @@ function createServiceSessionWorkInspection({
         inspectContributionPublication: true,
         knownSubmittedCommit: input.knownSubmittedCommit || ""
       } : {}),
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       session
     });
     return {
       ...work,
       publicationRequiresPullRequest: work.destination?.mode === "github" && !sessionConnectedContribution(session) &&
-        (await projectService.readRepositoryWorkflow()).requirePullRequest
+        (await project.readRepositoryWorkflow()).requirePullRequest
     };
   }
 
@@ -100,18 +100,18 @@ function createServiceSessionWorkInspection({
   async function inspectSessionUpdateFailure(sessionId, input = {}) {
     const { session } = await sessionAccess.sessionContext(String(sessionId || "").trim(), input);
     return inspectManagedSessionUpdateFailure({
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       session,
       targetCommit: input.targetCommit
     });
   }
 
   async function inspectIncomingContributions(sessionId, input = {}) {
-    const { project, actions } = await projectService.incomingRepository(input);
+    const { project: projectRecord, actions } = await project.incomingRepository(input);
     const { execution, session } = await sessionWork.sessionWorkExecution(sessionId, input, "incoming-inspection");
     return {
       ...await inspectManagedIncomingContributions({
-        project,
+        project: projectRecord,
         session,
         id: input.id,
         state: input.state,
@@ -132,13 +132,13 @@ function createServiceSessionWorkInspection({
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
       limit: input.limit,
       offset: input.offset,
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       session
     });
     return {
       ...work,
       publicationRequiresPullRequest: work.destination?.mode === "github" && !sessionConnectedContribution(session) &&
-        (await projectService.readRepositoryWorkflow()).requirePullRequest
+        (await project.readRepositoryWorkflow()).requirePullRequest
     };
   }
 
@@ -149,7 +149,7 @@ function createServiceSessionWorkInspection({
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
       lineLimit: input.lineLimit,
       path: input.path,
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       session
     });
   }
@@ -158,7 +158,7 @@ function createServiceSessionWorkInspection({
     return inspectManagedRepositoryHistory({
       cursor: input.cursor,
       limit: input.limit,
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       session: input.session || null
     });
   }
@@ -169,7 +169,7 @@ function createServiceSessionWorkInspection({
       historySnapshotCommit: input.historySnapshotCommit,
       limit: input.limit,
       offset: input.offset,
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       session: input.session || null
     });
   }
@@ -180,7 +180,7 @@ function createServiceSessionWorkInspection({
       historySnapshotCommit: input.historySnapshotCommit,
       lineLimit: input.lineLimit,
       path: input.path,
-      project: await projectService.readCurrentProject(),
+      project: await project.readCurrentProject(),
       session: input.session || null
     });
   }

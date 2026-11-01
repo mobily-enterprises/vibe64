@@ -153,7 +153,7 @@ async function writeWrapper({
  * @param {object} dependencies
  * @param {OutputTargetTerminalController} dependencies.launchTarget
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {typeof readSessionUiSyncStateForSession} [dependencies.readSessionUiState]
  * @param {typeof runVibe64Command} [dependencies.runManagedCommand]
  * @param {typeof stopVibe64Execution} [dependencies.stopManagedExecution]
@@ -164,7 +164,7 @@ async function writeWrapper({
 function createAgentPreviewCommandService({
   launchTarget,
   logger,
-  projectService,
+  project,
   readSessionUiState = readSessionUiSyncStateForSession,
   runManagedCommand = runVibe64Command,
   stopManagedExecution = stopVibe64Execution,
@@ -176,7 +176,7 @@ function createAgentPreviewCommandService({
   const workerRegistry = createAgentPreviewWorkerRegistry({
     state,
     commandServers,
-    projectService,
+    project,
     runManagedCommand,
     stopManagedExecution,
     stopOwnedExecutions
@@ -193,7 +193,7 @@ function createAgentPreviewCommandService({
     workerRegistry,
     launchTarget,
     logger,
-    projectService,
+    project,
     readSessionUiState
   });
 

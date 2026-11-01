@@ -46,14 +46,14 @@ function releaseCallWeb(sourceRoot) {
 
 /**
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {typeof readGenesisCity} [dependencies.cityReader]
  * @param {typeof readGenesisCallWeb} [dependencies.callWebReader]
  * @param {typeof inspectVibe64ArchitectureLayout} [dependencies.layoutReader]
  * @param {typeof callWebs} [dependencies.callWebCache]
  */
 function createUsageService({
-  projectService,
+  project,
   cityReader = readGenesisCity,
   callWebReader = readGenesisCallWeb,
   layoutReader = inspectVibe64ArchitectureLayout,
@@ -64,7 +64,7 @@ function createUsageService({
   async function sessionSource(sessionId = "") {
     const normalizedSessionId = toText(sessionId);
     if (!normalizedSessionId) throw usageError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
-    const runtime = await projectService.createRuntime({ sessionId: normalizedSessionId });
+    const runtime = await project.createRuntime({ sessionId: normalizedSessionId });
     const session = await runtime.getSession(normalizedSessionId);
     const sourceRoot = sessionSourcePath(session);
     if (!sourceRoot || !await pathExists(sourceRoot)) {

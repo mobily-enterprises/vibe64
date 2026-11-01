@@ -109,7 +109,7 @@ async function createSourceEditorFixture({
   logger = undefined,
   sessionState = null,
   sourceFileObserver = undefined,
-  terminalService = null,
+  terminals = null,
   writeExclusive = null
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-source-editor-"));
@@ -177,7 +177,7 @@ async function createSourceEditorFixture({
     async deleteEphemeralAgentConversation(_scope, input) {
       return input.conversationId ? { ok: false, error: "No native cleanup mock supplied." } : { ok: true };
     },
-    ...(terminalService || {})
+    ...(terminals || {})
   };
   // Shorthand for cache, admission and identity tests: answer each Helper turn
   // from a generator returning { body, executionProfile }. Follow-up turns
@@ -237,7 +237,7 @@ async function createSourceEditorFixture({
   const serviceOptions = {
     explanationCacheNow,
     logger: logger || console,
-    projectService: {
+    project: {
       async createRuntime() {
         return {
           stateRoot: path.join(root, "state"),
@@ -272,7 +272,7 @@ async function createSourceEditorFixture({
       }
     },
     sourceFileObserver,
-    terminalService: fixtureTerminalService,
+    terminals: fixtureTerminalService,
     temporaryRoot
   };
   const service = createService(serviceOptions);
@@ -289,7 +289,7 @@ async function createSourceEditorFixture({
 
 test("interface explanations separate Description and Steps caches and reject changed symbol source", async t => {
   const prompts = [];
-  const fixture = await createSourceEditorFixture({ terminalService: {
+  const fixture = await createSourceEditorFixture({ terminals: {
     async runEphemeralAgentChatTurn(_sessionId, input) {
       prompts.push(input.prompt);
       return { ok: true, executionProfile: resolvedSourceExplanationProfile(), text: structuredExplanation(`Explanation ${prompts.length}.`), threadId: `interface-thread-${prompts.length}`, turnId: `interface-turn-${prompts.length}` };
@@ -493,7 +493,7 @@ test('file overviews use the whole saved file without an index, survive restart 
 
 test('file overviews describe manifests without function input/output contracts', async t => {
   const prompts = [];
-  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'package.json', text: '{"name":"example","exports":{".":"./src/app.js"}}' }], terminalService: {
+  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'package.json', text: '{"name":"example","exports":{".":"./src/app.js"}}' }], terminals: {
     async runEphemeralAgentChatTurn(_scope, input) {
       prompts.push(input.prompt);
       return { ok: true, text: structuredExplanation('Declares the package entry point.'), executionProfile: resolvedSourceExplanationProfile(), threadId: 'thread-manifest', turnId: 'turn-manifest' };
@@ -509,7 +509,7 @@ test('file overviews describe manifests without function input/output contracts'
 test('document explanations include every line within the byte budget and admit complete indexed long functions', async t => {
   const text = ['export function app() {', ...Array.from({ length: 300 }, (_, index) => `  observe(${index});`), '  return "middle-behavior";', '}'].join('\n');
   const prompts = [];
-  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'src/app.js', text }], terminalService: {
+  const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'src/app.js', text }], terminals: {
     async runEphemeralAgentChatTurn(_scope, input) {
       prompts.push(input.prompt);
       return { ok: true, text: structuredExplanation('Observes the input and returns a result.'), executionProfile: resolvedSourceExplanationProfile(), threadId: 'thread-document', turnId: 'turn-document' };
@@ -1084,7 +1084,7 @@ test("source editor rejects assistant-backed explanations before inspecting a qu
     sessionState: {
       status: "renewal_quiesced"
     },
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose() {
         providerInspections += 1;
         throw new Error("The provider must not be inspected after renewal quiescence.");
@@ -1116,7 +1116,7 @@ test("source editor rejects assistant-backed explanations before inspecting a qu
 test("source editor rejects explanation admission before provider inspection or ledger writes", async () => {
   let providerInspections = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose() {
         providerInspections += 1;
         throw new Error("Provider inspection must stay behind session admission.");
@@ -1166,7 +1166,7 @@ test("source editor keeps provider failure cleanup ownership inside its conversa
   let lockReleased = false;
   const providerStages = [];
   fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose() {
         assert.equal(lockHeld, true);
         providerStages.push("describe");
@@ -1262,7 +1262,7 @@ test("explanations overlap source work and exclude only a second turn in the sam
     writeExclusive(...args) {
       return store.runSessionExclusive(...args);
     },
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn(_sessionId, _input, options) {
         await options.onEvent({ threadId: "thread-concurrent", type: "thread" });
         await options.onEvent({ threadId: "thread-concurrent", turnId: "turn-concurrent", type: "turn" });
@@ -1402,7 +1402,7 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
         body: `Generated explanation for:\n${generatorCalls.at(-1)}`
       };
     },
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(sessionId, input = {}) {
         // Helpers that never opened a conversation (cache hits) are released too.
         if (input.conversationId) deletedThreads.push({
@@ -1514,7 +1514,7 @@ test("source editor streams explanation chat events through the agent service", 
   const events = [];
   const streamCalls = [];
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn(sessionId, input = {}, options = {}) {
         streamCalls.push({ ...input, expectedConnectionIdentity: options.expectedConnectionIdentity });
         if (input.promptLabel === "Source code explanation follow-up") {
@@ -1666,7 +1666,7 @@ test("source editor persists the resolved profile while running and through an i
     releaseTurn = resolve;
   });
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation() {
         cleanupAttempts += 1;
         return { ok: true };
@@ -1769,7 +1769,7 @@ test("source editor deletes announced streaming threads when the resulting expla
       const threadId = `agent-thread-stream-${outcome}`;
       const turnId = `agent-turn-stream-${outcome}`;
       const fixture = await createSourceEditorFixture({
-        terminalService: {
+        terminals: {
           async deleteEphemeralAgentConversation(sessionId, input = {}) {
             deletedThreads.push({
               executionProfile: input.executionProfile,
@@ -1877,7 +1877,7 @@ test("source editor deletes announced streaming threads when the resulting expla
 test("source editor retains streaming ownership unless cleanup explicitly succeeds", async () => {
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation() {
         cleanupAttempts += 1;
         return cleanupAttempts === 1 ? undefined : { ok: true };
@@ -1948,7 +1948,7 @@ test("source editor retains streaming ownership unless cleanup explicitly succee
 test("source editor immediately cleans a result missing its final audit profile", async () => {
   const deletedThreads = [];
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
           threadId: input.conversationId
@@ -2013,7 +2013,7 @@ test("source editor isolates helper execution while retaining the selected conne
   const fixture = await createSourceEditorFixture({
     agentAccountIdentitySignature: "codex-account-ada-v1",
     agentProviderId: "codex",
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose(_input, options = {}) {
         assert.equal(options.session.metadata.agent_identity_provider, "codex");
         assert.deepEqual(options.vibe64User, vibe64User);
@@ -2084,7 +2084,7 @@ test("source editor isolates helper execution while retaining the selected conne
 test("source editor cleans a rejected agent result after its thread is announced", async () => {
   const deletedThreads = [];
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
           executionProfile: input.executionProfile,
@@ -2146,7 +2146,7 @@ test("source editor cleans a rejected agent result after its thread is announced
 test("source editor retains cleanup ownership when an agent throws after announcing a thread", async () => {
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         return cleanupAttempts === 1
@@ -2217,7 +2217,7 @@ test("source editor retains cleanup ownership when an agent throws after announc
 test("source editor does not accept a missing cleanup acknowledgement for an invalid result", async () => {
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         return cleanupAttempts === 1
@@ -2300,7 +2300,7 @@ test("source editor cache invalidates on source or provider changes and force by
   };
   const fixture = await createSourceEditorFixture({
     agentProviderId: () => providerId,
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose(_input, options = {}) {
         assert.equal(options.session.metadata.agent_identity_provider, providerId);
         assert.deepEqual(options.vibe64User, vibe64User);
@@ -2465,7 +2465,7 @@ test("source editor cache identity follows the resolved helper profile revision 
         title: "Profile cache explanation"
       };
     },
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose() {
         return sourceRoutingDecision("codex", "codex-account-profile-cache");
       },
@@ -2540,7 +2540,7 @@ test("source explanation access denial precedes provider inspection, cache reuse
         title: "Authorized explanation"
       };
     },
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose(input, options) {
         accessCalls += 1;
         assert.equal(input.purpose, "source_explanation");
@@ -2664,7 +2664,7 @@ test("source editor never coalesces an in-flight explanation across resolved pro
         title: "Profile flight explanation"
       };
     },
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose() {
         return sourceRoutingDecision("codex", "codex-account-profile-flight");
       },
@@ -2716,7 +2716,7 @@ test("source editor does not cache output across an account switch during genera
   const expectedAccountIdentitySignatures = [];
   let generationCalls = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose() {
         return sourceRoutingDecision("codex", accountIdentitySignature);
       },
@@ -2794,7 +2794,7 @@ test("source editor rechecks the account before serving a completed cache entry"
   let descriptionCalls = 0;
   let generationCalls = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       resolveAssistantPurpose() {
         descriptionCalls += 1;
         const description = sourceRoutingDecision("codex", accountIdentitySignature);
@@ -2970,7 +2970,7 @@ test("source editor coalesces concurrent identical explanation requests", async 
   });
   const fixture = await createSourceEditorFixture({
     agentAccountIdentitySignature: "",
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         agentCalls += 1;
         await options.onEvent({
@@ -3052,7 +3052,7 @@ test("source editor explanation cache evicts its least-recently-used entry at th
       path: `src/cache-${index}.js`,
       text: `export const cachedValue${index} = ${index};\n`
     })),
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         agentCalls += 1;
         const threadId = `agent-thread-cache-bound-${agentCalls}`;
@@ -3104,7 +3104,7 @@ test("source editor explanation cache evicts its least-recently-used entry at th
 test("source editor preserves failed explanation details for recovery", async () => {
   const events = [];
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn(_sessionId, _input, options = {}) {
         await options.onEvent({
           executionProfile: resolvedSourceExplanationProfile(),
@@ -3176,7 +3176,7 @@ test("source editor preserves failed explanation details for recovery", async ()
 test("source editor fails closed when the helper profile observation is missing", async () => {
   const events = [];
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn() {
         return {
           ok: true,
@@ -3220,7 +3220,7 @@ test("source editor fails closed when the helper profile observation is missing"
 test("source editor fails closed before generation when helper profile resolution is unavailable", async () => {
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       resolveEphemeralAgentExecutionProfile: null,
       async runEphemeralAgentChatTurn() {
         agentCalls += 1;
@@ -3253,7 +3253,7 @@ test("source editor fails closed before generation when helper profile resolutio
 test("source editor blocks required explanations when the selected assistant account is unauthenticated", async () => {
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async resolveAssistantPurpose() {
         const error = new Error("Codex authentication is required.");
         error.code = "vibe64_codex_auth_required";
@@ -3308,7 +3308,7 @@ test("source editor surfaces helper availability blockers without an interactive
     await t.test(outcome.name, async () => {
       let agentCalls = 0;
       const fixture = await createSourceEditorFixture({
-        terminalService: {
+        terminals: {
           async runEphemeralAgentChatTurn(_sessionId, input = {}) {
             agentCalls += 1;
             assert.deepEqual(input.executionProfile, resolvedSourceExplanationProfile());
@@ -3350,7 +3350,7 @@ test("source editor surfaces helper availability blockers without an interactive
 test("source editor never reuses an unverified explanation thread for follow-ups", async () => {
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation() { return { ok: false, error: "Retained for the follow-up check." }; },
       async runEphemeralAgentChatTurn() {
         agentCalls += 1;
@@ -3400,7 +3400,7 @@ test("source editor never reuses an unverified explanation thread for follow-ups
 test("source editor asks for regeneration when a helper follow-up thread is unavailable", async () => {
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn() {
         agentCalls += 1;
         if (agentCalls > 1) {
@@ -3469,7 +3469,7 @@ test("source editor retires a helper thread after an invalid follow-up", async (
   const deletedThreads = [];
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
           executionProfile: input.executionProfile,
@@ -3545,7 +3545,7 @@ test("source editor preserves retryable ownership when a failed follow-up cannot
   let agentCalls = 0;
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         return cleanupAttempts === 1
@@ -3625,7 +3625,7 @@ test("source editor cleans abandoned explanation chats from its disk cleanup led
   const deletedThreads = [];
   let streamCount = 0;
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(sessionId, input = {}) {
         deletedThreads.push({
           threadId: input.conversationId
@@ -3758,7 +3758,7 @@ test("source editor stop is not overwritten by late streaming output", async () 
     releaseAgentTurn = resolve;
   });
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async stopEphemeralAgentConversation(sessionId, input = {}) {
         interruptedTurns.push({
           executionProfile: input.executionProfile,
@@ -3866,7 +3866,7 @@ for (const stopBoundary of [
       writeExclusive(...args) {
         return store.runSessionExclusive(...args);
       },
-      terminalService: {
+      terminals: {
         async deleteEphemeralAgentConversation(sessionId, input) {
           deletedThreads.push({ threadId: input.conversationId });
           return { ok: true };
@@ -4026,7 +4026,7 @@ for (const stopBoundary of [
 
 test("source editor allows whole-file explanations for files larger than selected-range limits", async () => {
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn(_sessionId, input = {}) {
         assert.match(input.prompt, /Target: whole file/u);
         assert.match(input.prompt, /bounded excerpt may omit content/u);
@@ -4088,7 +4088,7 @@ test("source editor keeps temporary explanation chat retryable when agent cleanu
         title: "Generated app.js explanation"
       };
     },
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         if (cleanupAttempts === 1) {
@@ -4159,7 +4159,7 @@ test("source editor keeps temporary explanation chat retryable when cleanup is n
         title: "Generated app.js explanation"
       };
     },
-    terminalService: {
+    terminals: {
       async deleteEphemeralAgentConversation(_sessionId, input = {}) {
         cleanupAttempts += 1;
         return cleanupAttempts === 1
@@ -4540,7 +4540,7 @@ test("source explanations use a member's shared Helper without the personal work
   const nativeScopes = [];
   const deleted = [];
   const fixture = await createSourceEditorFixture({
-    terminalService: {
+    terminals: {
       requireAssistantAccess() { throw new Error("The working conversation must not authorize this helper."); },
       resolveAssistantPurpose(input, options) {
         assert.equal(input.purpose, "source_explanation");
@@ -4599,7 +4599,7 @@ for (const changed of ["connection", "model", "actor"]) {
     let actor = { role: "member", username: "ada" };
     let runs = 0;
     const deleted = [];
-    const fixture = await createSourceEditorFixture({ terminalService: {
+    const fixture = await createSourceEditorFixture({ terminals: {
       resolveAssistantPurpose() {
         const decision = sourceRoutingDecision("codex", connectionIdentity);
         return { ...decision, effectiveSelection: { ...decision.effectiveSelection, modelId: model } };
@@ -4640,7 +4640,7 @@ for (const action of ["Close", "session close"]) {
     const starting = Promise.withResolvers();
     const release = Promise.withResolvers();
     let deletedScope;
-    const fixture = await createSourceEditorFixture({ terminalService: {
+    const fixture = await createSourceEditorFixture({ terminals: {
       async runEphemeralAgentChatTurn(_scope, _input, options) {
         starting.resolve();
         await release.promise;
@@ -4678,7 +4678,7 @@ test("source cleanup survives a restart and uses the captured destination withou
   let routingAllowed = true;
   let runs = 0;
   const deletes = [];
-  const fixture = await createSourceEditorFixture({ terminalService: {
+  const fixture = await createSourceEditorFixture({ terminals: {
     resolveAssistantPurpose() {
       assert.equal(routingAllowed, true, "restart cleanup does not resolve new inference");
       return sourceRoutingDecision();
@@ -4721,7 +4721,7 @@ test("session close names every source explanation helper that cannot close and 
   const warnings = [];
   const fixture = await createSourceEditorFixture({
     logger: { debug() {}, error() {}, info() {}, warn(fields, message) { warnings.push({ message, fields }); } },
-    terminalService: {
+    terminals: {
       async runEphemeralAgentChatTurn(_scope, _input, options) {
         thread += 1;
         await options.onEvent({ type: "thread", threadId: `close-thread-${thread}` });
@@ -4762,7 +4762,7 @@ test("session close names every source explanation helper that cannot close and 
 test("source Stop reports a rejected provider acknowledgement and preserves cleanup ownership", async (t) => {
   const ready = Promise.withResolvers();
   const release = Promise.withResolvers();
-  const fixture = await createSourceEditorFixture({ terminalService: {
+  const fixture = await createSourceEditorFixture({ terminals: {
     async runEphemeralAgentChatTurn(_scope, _input, options) {
       await options.onEvent({ type: "thread", threadId: "unconfirmed-stop" });
       await options.onEvent({ type: "turn", turnId: "unconfirmed-turn" });
@@ -4796,7 +4796,7 @@ test("source Stop can cancel before profile resolution without starting or leaki
   const release = Promise.withResolvers();
   let runs = 0;
   let cleanedScope;
-  const fixture = await createSourceEditorFixture({ terminalService: {
+  const fixture = await createSourceEditorFixture({ terminals: {
     async resolveEphemeralAgentExecutionProfile() {
       preparing.resolve();
       await release.promise;
@@ -4826,7 +4826,7 @@ test("source Stop can cancel before profile resolution without starting or leaki
 
 test("source cleanup retires old thread-only references without resolving a new helper", async (t) => {
   const deleted = [];
-  const fixture = await createSourceEditorFixture({ terminalService: {
+  const fixture = await createSourceEditorFixture({ terminals: {
     resolveAssistantPurpose() { throw new Error("Cleanup must not resolve inference."); },
     async deleteDetachedAgentChatThread(sessionId, input) {
       deleted.push({ sessionId, threadId: input.threadId });

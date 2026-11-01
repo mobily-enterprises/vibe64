@@ -55,10 +55,10 @@ const Vibe64DatabaseToolsFeature = defineFeature({
   }) {
     const databaseTools = createService({
       logger,
-      projectService: project,
+      project,
       sourceEditor,
       publishLayoutChanged: createDatabaseLayoutChangedPublisher(events),
-      terminalService: terminals
+      terminals
     });
     registerRoutes(http);
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals

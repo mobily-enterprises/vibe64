@@ -50,7 +50,7 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {WorkspaceSetupRunner} dependencies.workspaceSetup
  */
@@ -62,7 +62,7 @@ function createServiceSessionWork({
   codexGitCommand,
   env,
   logger,
-  projectService,
+  project,
   sessionAgent,
   workspaceSetup
 }) {
@@ -73,11 +73,11 @@ function createServiceSessionWork({
       "session-save",
       { createsCommits: true }
     );
-    const project = await projectService.readCurrentProject();
-    const destination = assertSessionRepositoryReview(project, session, input.destinationReview);
+    const projectRecord = await project.readCurrentProject();
+    const destination = assertSessionRepositoryReview(projectRecord, session, input.destinationReview);
     const assertWorkflow = async () => {
       if (destination.mode !== "github") return;
-      const workflow = await projectService.readRepositoryWorkflow();
+      const workflow = await project.readRepositoryWorkflow();
       if (workflow.requirePullRequest && !sessionConnectedContribution(session) && !context.creatingPullRequest &&
           !JSON.parse(session.metadata?.github_pull_request || "null")?.number) {
         const error = new Error("This project requires a pull request. Create or open a pull request before saving this session.");
@@ -94,7 +94,7 @@ function createServiceSessionWork({
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
       limit: 40,
       operationId: input.operationId,
-      project,
+      project: projectRecord,
       runCommand: execution.runCommand,
       session
     });
@@ -167,11 +167,11 @@ function createServiceSessionWork({
       },
       onProgress: input.onProgress,
       operationId: input.operationId,
-      project,
+      project: projectRecord,
       readConnectedWorkSnapshots: input.assertConnectedWorkSaved,
       runCommand: execution.runCommand,
-      runProjectSourceExclusive: (operation, options) => projectService.runProjectSourceExclusive(async () => {
-        assertSessionRepositoryReview(await projectService.readCurrentProject(), session, input.destinationReview);
+      runProjectSourceExclusive: (operation, options) => project.runProjectSourceExclusive(async () => {
+        assertSessionRepositoryReview(await project.readCurrentProject(), session, input.destinationReview);
         await assertWorkflow();
         return operation();
       }, options),
@@ -274,16 +274,16 @@ function createServiceSessionWork({
 
   async function createSessionSource(input = {}) {
     // readable-check: allow method-probe - test asserts error: a project service without the source mutation lock is refused
-    if (typeof projectService.runProjectSourceExclusive !== "function") {
+    if (typeof project.runProjectSourceExclusive !== "function") {
       const error = new Error("Session source creation requires the project source mutation lock.");
       error.code = "vibe64_project_source_lock_unavailable";
       throw error;
     }
-    return projectService.runProjectSourceExclusive(async () => {
+    return project.runProjectSourceExclusive(async () => {
       const source = await createManagedSessionSource({
         ...input,
         env,
-        project: await projectService.readCurrentProject()
+        project: await project.readCurrentProject()
       });
       if (input.session?.metadata?.github_pull_request || input.session?.metadata?.connected_contribution) {
         const session = input.session.metadata.renewed_from
@@ -369,7 +369,7 @@ function createServiceSessionWork({
       throw new TypeError("Exclusive session source reads require an internal operation.");
     }
     // readable-check: allow method-probe - test asserts error: a project service without the source mutation lock is refused
-    if (typeof projectService.runProjectSourceExclusive !== "function") {
+    if (typeof project.runProjectSourceExclusive !== "function") {
       throw Object.assign(new Error("Session source reads require the project source mutation lock."), {
         code: "vibe64_project_source_lock_unavailable"
       });
@@ -396,7 +396,7 @@ function createServiceSessionWork({
       await agentConversations.assertSessionRenewalIdle(id, context);
       // Repository admission owns the session lease. Save takes this same
       // project lock downstream; acquiring it here preserves that order.
-      return projectService.runProjectSourceExclusive(async () => {
+      return project.runProjectSourceExclusive(async () => {
         const session = await context.runtime.getSession(id, { inspectSource: false });
         const sourceRoot = sessionSourcePath(session);
         if (session.sessionId !== id || !sourceRoot) {
@@ -421,11 +421,11 @@ function createServiceSessionWork({
     return runSessionRepositoryWrite(sessionId, input, { operation: "create-pull-request" }, async (context) => {
       const { runtime } = context;
       let session = context.session;
-      const project = await projectService.readCurrentProject();
-      assertSessionRepositoryReview(project, session, input.destinationReview);
+      const projectRecord = await project.readCurrentProject();
+      assertSessionRepositoryReview(projectRecord, session, input.destinationReview);
       let source = session.metadata?.github_pull_request
         ? JSON.parse(session.metadata.github_pull_request)
-        : await projectService.preparePullRequestSource(session, input);
+        : await project.preparePullRequestSource(session, input);
       if (source.number) {
         return { ok: true, pullRequest: source };
       }
@@ -456,7 +456,7 @@ function createServiceSessionWork({
       await prepareSessionPullRequestBranch({
         // readable-check: allow optional-call - input validation: a caller's optional check that connected work is saved
         connectedWorkSnapshots: await input.assertConnectedWorkSaved?.(),
-        project: await projectService.readCurrentProject(),
+        project: await project.readCurrentProject(),
         session,
         commandOptions: execution.commandOptions,
         runCommand: execution.runCommand
@@ -464,7 +464,7 @@ function createServiceSessionWork({
 
       const saved = await saveSessionWorkInsideWrite(sessionId, {
         ...input,
-        destinationReview: sessionRepositoryDestination(project, session)
+        destinationReview: sessionRepositoryDestination(projectRecord, session)
       }, { ...context, session, creatingPullRequest: true });
       await runtime.store.writeMetadataValue(sessionId, "canonical_commit", saved.saveCommit);
       if (saved.reconciled === true) {
@@ -473,7 +473,7 @@ function createServiceSessionWork({
       await runtime.store.writeMetadataValue(sessionId, "base_branch", source.headBranch);
       await runtime.store.writeMetadataValue(sessionId, "source_default_branch", source.headBranch);
 
-      source = await projectService.publishSessionPullRequest(source, input);
+      source = await project.publishSessionPullRequest(source, input);
       await runtime.store.writeMetadataValue(sessionId, "github_pull_request", JSON.stringify(source));
       return { ok: true, pullRequest: source, saveCommit: saved.saveCommit };
     });
@@ -494,10 +494,10 @@ function createServiceSessionWork({
         reviewedConflictId: input.reviewedConflictId,
         onProgress: input.onProgress,
         operationId: input.operationId,
-        project: await projectService.readCurrentProject(),
+        project: await project.readCurrentProject(),
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
         runCommand: execution.runCommand,
-        runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
+        runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),
         session
       });
     });
@@ -514,10 +514,10 @@ function createServiceSessionWork({
       return recoverManagedSessionWorkUpdate({
         beforeSourceChange: () => workspacePreparation.invalidateWorkspaceSetup(context),
         commandOptions: execution.commandOptions,
-        project: await projectService.readCurrentProject(),
+        project: await project.readCurrentProject(),
         recovery: input.recovery || {},
         runCommand: execution.runCommand,
-        runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
+        runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),
         session
       });
     });
@@ -528,10 +528,10 @@ function createServiceSessionWork({
       const execution = await saveExecution(session, sessionId, "Save recovery");
       return recoverManagedSessionWorkSave({
         commandOptions: execution.commandOptions,
-        project: await projectService.readCurrentProject(),
+        project: await project.readCurrentProject(),
         recovery: input.recovery || {},
         runCommand: execution.runCommand,
-        runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
+        runProjectSourceExclusive: project.runProjectSourceExclusive.bind(project),
         session
       });
     });
@@ -549,7 +549,7 @@ function createServiceSessionWork({
       await retireManagedSessionWorkSave({
         commandOptions: execution.commandOptions,
         operationId: input.operationId,
-        project: await projectService.readCurrentProject(),
+        project: await project.readCurrentProject(),
         runCommand: execution.runCommand,
         session
       });
@@ -563,8 +563,8 @@ function createServiceSessionWork({
 
   async function changeIncomingContribution(sessionId, input = {}) {
     return runSessionRepositoryWrite(sessionId, input, { operation: "incoming-contribution" }, context =>
-      projectService.runProjectSourceExclusive(async () => {
-        const { project } = await projectService.incomingRepository({
+      project.runProjectSourceExclusive(async () => {
+        const { project: projectRecord } = await project.incomingRepository({
           ...input,
           action: input.action === "review-repair" ? "merge" : input.action
         });
@@ -580,7 +580,7 @@ function createServiceSessionWork({
         const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution",
           { createsCommits: input.action !== "discard" });
         return changeManagedIncomingContribution({
-          project,
+          project: projectRecord,
           session,
           action: input.action,
           derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,

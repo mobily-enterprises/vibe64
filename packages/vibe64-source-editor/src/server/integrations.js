@@ -237,7 +237,7 @@ async function runApplicationIntegrationSetup({
  * @param {SourceEditorFileIndex} dependencies.fileIndex
  * @param {RunVibe64Command} dependencies.integrationCommandRunner
  * @param {typeof fetch} dependencies.integrationDiscoveryFetch
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(input: object, operation: (context: object) => Promise<unknown>, options?: object) => Promise<unknown>} dependencies.runSourceEditorWriteExclusive
  * @param {SourceEditorSearchIndex} dependencies.searchIndex
@@ -247,7 +247,7 @@ function createIntegrationOperations({
   fileIndex,
   integrationCommandRunner,
   integrationDiscoveryFetch,
-  projectService,
+  project,
   publishSessionChanged,
   runSourceEditorWriteExclusive,
   searchIndex,
@@ -303,13 +303,13 @@ function createIntegrationOperations({
       if (!preflight.setup) return preflight;
       // Env preparation owns its own lock. Reinspect after it releases the
       // lock so a changed configuration or declaration cannot run unchecked.
-      const env = await projectService.projectExecutionEnvironment({ sessionId: input.sessionId, reusePrepared: true });
+      const env = await project.projectExecutionEnvironment({ sessionId: input.sessionId, reusePrepared: true });
       return runSourceEditorWriteExclusive(input, async (context) => {
         const savedRequest = await inspectIntegrationSetupRequest(context, input);
         const setupOptions = {
           sourceRoot: context.sourceRoot,
           env,
-          project: await projectService.readCurrentProject(),
+          project: await project.readCurrentProject(),
           session: context.session,
           selection: input,
           runCommand: integrationCommandRunner
@@ -399,7 +399,7 @@ function createIntegrationOperations({
           throw sourceEditorError("Configuration changed. Reload before registering a client.", SOURCE_EDITOR_CONFLICT_CODE, {}, 409);
         }
         const envInput = { sessionId: input.sessionId, environment: "dev" };
-        const environment = await projectService.readEnv(envInput);
+        const environment = await project.readEnv(envInput);
         if (!environment?.ok || !Array.isArray(environment.env?.records)) {
           throw sourceEditorError("Read project Env before registering a client.", "vibe64_integration_registration_unavailable", {}, 503);
         }
@@ -418,7 +418,7 @@ function createIntegrationOperations({
           expectedEndpoint
         });
         try {
-          const savedEnv = await projectService.saveEnvUserValues({
+          const savedEnv = await project.saveEnvUserValues({
             ...envInput,
             values: {
               [secretKey]: { value: client.clientSecret, secret: true },

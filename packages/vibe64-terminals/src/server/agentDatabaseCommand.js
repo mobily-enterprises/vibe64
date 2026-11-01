@@ -209,15 +209,15 @@ const commandServers = createSessionCommandServers({
 /**
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {() => object | null} dependencies.readDatabaseTools the installed database tools service, or null without one
  */
 function createAgentDatabaseCommandService({
   logger,
-  projectService,
+  project,
   readDatabaseTools
 }) {
-  const projectBinding = createAgentCommandProjectBinding(projectService, {
+  const projectBinding = createAgentCommandProjectBinding(project, {
     sessionRequired: ["Vibe64 database command session id is required.", "vibe64_agent_database_command_session_required"],
     projectRequired: [
       "Vibe64 database command could not bind this session to a project.",

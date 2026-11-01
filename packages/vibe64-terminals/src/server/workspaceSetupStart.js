@@ -33,7 +33,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * @param {object} dependencies
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisProjectFormat} dependencies.inspectProjectFormat
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
  * @param {WorkspaceSetupExecution} dependencies.setupExecution
  * @param {WorkspaceSetupMigration} dependencies.setupMigration
@@ -41,7 +41,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 function createWorkspaceSetupStart({
   connectedPreparation,
   inspectProjectFormat,
-  projectService,
+  project,
   runnerState,
   setupExecution,
   setupMigration
@@ -267,10 +267,10 @@ function createWorkspaceSetupStart({
       (stateBase.status === "succeeded" || (stateBase.status === "failed" && rerunFailed !== true))
     ) {
       // readable-check: allow method-probe - optional operation: a project service without environment status has no prepared resources to compare
-      if (stateBase.status === "failed" || typeof projectService.projectEnvironmentStatus !== "function") {
+      if (stateBase.status === "failed" || typeof project.projectEnvironmentStatus !== "function") {
         return { completion: null, state: stateBase };
       }
-      const environmentStatus = await projectService.projectEnvironmentStatus({ sessionId, session });
+      const environmentStatus = await project.projectEnvironmentStatus({ sessionId, session });
       const sameResources = resourceIdentityMatches(stateBase, environmentStatus);
       if (environmentStatus.status === "ready" && sameResources) return { completion: null, state: stateBase };
       if (sameResources && stateBase.resourceIdentity) {
@@ -281,7 +281,7 @@ function createWorkspaceSetupStart({
             prepare: true,
             reusePrepared: true,
             includeResourceConfiguration: true,
-            projectService,
+            project,
             session,
             target: "workspace-setup"
           });
@@ -293,7 +293,7 @@ function createWorkspaceSetupStart({
           if (restoredSetup?.status !== "ready" || restoredSetup.recipeHash !== recipe.recipeHash) {
             throw new Error("Workspace setup changed while preparing its environment. Retry preparation to run the current steps.");
           }
-          const restored = await projectService.projectEnvironmentStatus({ sessionId, session });
+          const restored = await project.projectEnvironmentStatus({ sessionId, session });
           if (restored.status !== "ready") {
             throw new Error("Project environment is not ready. Correct its configuration and retry preparation.");
           }

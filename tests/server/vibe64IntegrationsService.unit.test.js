@@ -48,7 +48,7 @@ async function fixture(t, { locked = false, setup = false, prepareEnvironment, e
   const service = createService({ logger: console,
     integrationDiscoveryFetch,
     publishSessionChanged: async (...args) => { notifications.push(args); },
-    terminalService: authorize ? { requireAssistantAccess: authorize } : undefined,
+    terminals: authorize ? { requireAssistantAccess: authorize } : undefined,
     integrationCommandRunner: async (command) => {
       calls.push(command);
       if (executeCommand) return runVibe64Command(command);
@@ -58,7 +58,7 @@ async function fixture(t, { locked = false, setup = false, prepareEnvironment, e
         status: request.operation === "cancel" ? "cancelled" : "disconnected", ...commandResult }) };
     },
     temporaryRoot: path.join(root, "temporary"),
-    projectService: {
+    project: {
       readEnv: async () => ({ ok: true, env: { records: envRecords } }),
       saveEnvUserValues: async (input) => saveRegistrationEnv ? saveRegistrationEnv(input) : { ok: false },
       projectExecutionEnvironment: async (input) => {
@@ -739,7 +739,7 @@ test("n8n registration uses real project Env and nested session locking", { time
   const resource = "https://tools.example/mcp-server/http";
   const issuer = "https://auth.example";
   let posts = 0;
-  const service = createService({ logger: console, projectService: project, temporaryRoot: path.join(root, "temporary"),
+  const service = createService({ logger: console, project, temporaryRoot: path.join(root, "temporary"),
     integrationDiscoveryFetch: async (url, options) => {
       if (options.method === "POST") {
         posts++;

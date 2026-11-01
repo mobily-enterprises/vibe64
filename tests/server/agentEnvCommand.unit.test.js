@@ -188,7 +188,7 @@ test("agent Env status reports both scopes without exposing values", async () =>
   const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: production,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project
+    project
   });
   await command.bindSession("status-session");
 
@@ -222,7 +222,7 @@ test("agent Env persists and reports empty development and production values", a
   const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: production,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project
+    project
   });
   await command.bindSession("empty-session");
 
@@ -305,7 +305,7 @@ test("agent Env creates development values through the project service and never
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project
+    project
   });
   await command.bindSession("development-session");
   const secretValue = "private-development-value";
@@ -338,7 +338,7 @@ test("agent Env production writes use only the host production provider", async 
   const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: production,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project
+    project
   });
   await command.bindSession("production-session");
   const secretValue = "private-production-value";
@@ -383,7 +383,7 @@ test("agent Env refuses system-managed values and unavailable production writes"
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project
+    project
   });
   await command.bindSession("guard-session");
 
@@ -411,7 +411,7 @@ test("agent Env refuses a stale session binding after the project identity chang
   const project = createProjectService();
   const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project
+    project
   });
   await command.bindSession("stale-session");
   project.state.currentProject = {
@@ -444,7 +444,7 @@ test("agent Env removes only stored user values", async () => {
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project
+    project
   });
   await command.bindSession("remove-session");
 
@@ -472,7 +472,7 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
   const project = createProjectService();
   const command = createAgentEnvCommandService({ logger: silentLogger,
     productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project
+    project
   });
   const sessionId = "wrapper-session";
   const secretValue = "wrapper-private-value";
@@ -539,7 +539,7 @@ test("agent Env preparation repairs one missing cached socket and fences its old
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-env-command-repair-"));
   const project = createProjectService();
   const command = createAgentEnvCommandService({ logger: silentLogger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
-    projectService: project });
+    project });
   const sessionId = "env-repair-session";
   try {
     const options = {

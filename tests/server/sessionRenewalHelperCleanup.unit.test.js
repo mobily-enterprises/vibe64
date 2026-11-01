@@ -40,13 +40,13 @@ for (const kind of ["hints", "database"]) {
         assert.deepEqual(options.assistantSelection, helper.selection);
         return cleanupReady ? { ok: true } : { ok: false, code: "cleanup_pending", error: "Native process still owned" };
       };
-      const projectService = { createRuntime: async () => runtime, createSessionStore: async () => store,
+      const project = { createRuntime: async () => runtime, createSessionStore: async () => store,
         localDatabaseServers: async () => ({ managed: true, databases: [] }),
         sessionDatabaseEnvironment: () => assert.fail("Cleanup must not connect to a database") };
       const service = kind === "hints"
-        ? createSessionPromptHintsService({ projectService, diagnostic: () => {}, publishSessionChanged: async () => {}, agent: { deleteEphemeralConversation: remove,
+        ? createSessionPromptHintsService({ project, diagnostic: () => {}, publishSessionChanged: async () => {}, agent: { deleteEphemeralConversation: remove,
           resolveAssistantPurpose: () => assert.fail("Cleanup must not resolve a new helper") } })
-        : createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, projectService, terminalService: { deleteEphemeralAgentConversation: remove } });
+        : createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, project, terminals: { deleteEphemeralAgentConversation: remove } });
       const close = kind === "hints" ? service.cancelSessionPromptHintsForSession : service.closeAssistantsForSession;
       const context = { runtime, session: await store.readSessionForRenewal(sessionId),
         renewalCleanup: { kind: "successor", renewalId: "exact-renewal", sourceSessionId: "predecessor" } };

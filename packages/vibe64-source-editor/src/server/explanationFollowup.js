@@ -80,7 +80,7 @@ function sourceEditorHelperFollowupThread(explanation = {}) {
  * @param {object} [input]
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
- * @param {TerminalsService} options.terminalService
+ * @param {TerminalsService} options.terminals
  */
 async function streamSourceEditorExplanationFollowup(context = {}, input = {}, options = {}) {
   const {
@@ -88,7 +88,7 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, o
     explanationChats,
     explanationTurns,
     isClosed = null,
-    terminalService
+    terminals
   } = options;
   const message = sourceEditorExplanationFollowupMessage(input.message);
   const baseExplanation = await readSourceEditorExplanation(context, input.explanationId, {
@@ -140,13 +140,13 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, o
     explanationChats,
     fallbackError: "Source explanation follow-up failed.",
     remember: stream.remember,
-    terminalService,
+    terminals,
     run: () => streamSourceEditorAgentTurn(context, {
       answerMaxChars: SOURCE_EDITOR_FOLLOWUP_ANSWER_MAX_CHARS,
       outputSchema: SOURCE_EDITOR_FOLLOWUP_OUTPUT_SCHEMA,
       prompt: sourceEditorExplanationFollowupPrompt(baseExplanation, message),
       promptLabel: "Source code explanation follow-up",
-      terminalService,
+      terminals,
       threadId: agentThreadId,
       ...stream.streamHandlers
     })

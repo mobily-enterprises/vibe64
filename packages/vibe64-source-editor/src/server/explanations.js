@@ -82,18 +82,18 @@ const SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES = 128 * 1024 * 1024;
  * @param {object} dependencies
  * @param {() => number} dependencies.explanationCacheNow
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.sourceEditorContext
  * @param {string} dependencies.temporaryRoot
- * @param {TerminalsService} dependencies.terminalService
+ * @param {TerminalsService} dependencies.terminals
  */
 function createExplanationOperations({
   explanationCacheNow,
   logger,
-  projectService,
+  project,
   sourceEditorContext,
   temporaryRoot,
-  terminalService
+  terminals
 }) {
   /** @type {SourceEditorExplanationChats} */
   const explanationChats = new Map();
@@ -139,7 +139,7 @@ function createExplanationOperations({
         context.assistantHelper = helper;
       } else {
         if (retained) {
-          await deleteSourceEditorExplanationAgentThread(context, retained, { terminalService });
+          await deleteSourceEditorExplanationAgentThread(context, retained, { terminals });
           await removeSourceEditorExplanationCleanupRecord(context, context.explanationId);
         }
         const id = `source_${crypto.randomUUID()}`;
@@ -175,7 +175,7 @@ function createExplanationOperations({
       try {
         await mkdir(context.assistantHelper.scope.workdir, { recursive: true, mode: 0o700 });
         await mkdir(context.assistantHelper.scope.runtimeRoot, { recursive: true, mode: 0o700 });
-        context.agentExecutionProfile = await resolveSourceEditorAgentExecutionProfile(terminalService, context);
+        context.agentExecutionProfile = await resolveSourceEditorAgentExecutionProfile(terminals, context);
         context.assistantHelper.executionProfile = sourceEditorExecutionProfileSnapshot(context.agentExecutionProfile);
         await retain();
         context.signal.throwIfAborted();
@@ -187,13 +187,13 @@ function createExplanationOperations({
           await deleteSourceEditorExplanationAgentThread(context, {
             id: context.explanationId,
             helper: context.assistantHelper
-          }, { terminalService });
+          }, { terminals });
           await removeSourceEditorExplanationCleanupRecord(context, context.explanationId);
         }
       }
     };
     task.promise = (async () => {
-      runtime = await projectService.createRuntime({ sessionId });
+      runtime = await project.createRuntime({ sessionId });
       task.controller.signal.throwIfAborted();
       // Only turns in the same explanation share mutable conversation state.
       // The session store still checks renewal admission before starting work.
@@ -242,7 +242,7 @@ function createExplanationOperations({
             explanationInput,
             explanationTurns,
             isClosed: stream.isClosed,
-            terminalService
+            terminals
           }),
           reuse: (template, cacheState) => createCachedSourceEditorExplanation(
             context,
@@ -257,7 +257,7 @@ function createExplanationOperations({
             }
           ),
           validateCompleted: (template) => sourceEditorCompletedCacheIdentityUnchanged(
-            terminalService,
+            terminals,
             context,
             template
           )
@@ -274,7 +274,7 @@ function createExplanationOperations({
           explanationChats,
           explanationTurns,
           isClosed: stream.isClosed,
-          terminalService
+          terminals
         })
       ));
     }, stream);
@@ -289,7 +289,7 @@ function createExplanationOperations({
         explanation: await stopSourceEditorExplanation(context, input.explanationId, {
           explanationChats,
           explanationTurns,
-          terminalService
+          terminals
         }),
         ok: true
       };
@@ -305,7 +305,7 @@ function createExplanationOperations({
         ...await deleteSourceEditorExplanation(context, input.explanationId, {
           explanationChats,
           explanationTurns,
-          terminalService
+          terminals
         }),
         ok: true
       };
@@ -321,7 +321,7 @@ function createExplanationOperations({
         ...await cleanupSourceEditorExplanations(context, input, {
           explanationChats,
           explanationTurns,
-          terminalService
+          terminals
         }),
         ok: true
       };
@@ -333,12 +333,12 @@ function createExplanationOperations({
    * keeps its record for the next close, is logged and is named here.
    */
   async function closeExplanationsForSession(sessionId) {
-    const runtime = await projectService.createRuntime({ sessionId });
+    const runtime = await project.createRuntime({ sessionId });
     const result = await cleanupSourceEditorExplanations({
       runtime,
       sessionId,
       sourceEditorTempRoot: sourceEditorTempRoot(temporaryRoot, sessionId)
-    }, {}, { all: true, explanationChats, explanationTurns, terminalService });
+    }, {}, { all: true, explanationChats, explanationTurns, terminals });
     for (const failure of result.failures) {
       logOperationalEvent(logger, "warn", {
         component: "vibe64-source-editor",
@@ -609,7 +609,7 @@ async function createCachedSourceEditorExplanation(
  * @param {object} [input]
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
- * @param {TerminalsService} options.terminalService
+ * @param {TerminalsService} options.terminals
  */
 async function streamSourceEditorExplanation(context = {}, input = {}, options = {}) {
   const {
@@ -618,7 +618,7 @@ async function streamSourceEditorExplanation(context = {}, input = {}, options =
     explanationInput = null,
     explanationTurns,
     isClosed = null,
-    terminalService
+    terminals
   } = options;
   const preparedInput = explanationInput || await sourceEditorExplanationInput(context, input);
   const createdAt = new Date().toISOString();
@@ -675,11 +675,11 @@ async function streamSourceEditorExplanation(context = {}, input = {}, options =
     emitEvent: stream.emitEvent,
     explanationChats,
     remember: stream.remember,
-    terminalService,
+    terminals,
     run: () => streamSourceEditorAgentTurn(context, {
       prompt: sourceEditorExplanationPrompt(preparedInput),
       promptLabel: "Source code explanation",
-      terminalService,
+      terminals,
       ...stream.streamHandlers
     })
   });

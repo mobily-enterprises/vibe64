@@ -82,7 +82,7 @@ function closedProjectOutputTargetStatus({
  * @param {ServiceAgentReconcile} dependencies.reconcile
  * @param {AgentPreviewCommandService} dependencies.agentPreviewCommand
  * @param {OutputTargetTerminalController} dependencies.outputTarget
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {ProjectServices} dependencies.projectServices
  * @param {ProjectRuntimeChangedPublisher} dependencies.publishProjectRuntimeChanged
  * @param {SessionAgentManager} dependencies.sessionAgent
@@ -94,7 +94,7 @@ function createServiceProjectRuntime({
   reconcile,
   agentPreviewCommand,
   outputTarget,
-  projectService,
+  project,
   projectServices,
   publishProjectRuntimeChanged,
   sessionAgent
@@ -252,13 +252,13 @@ function createServiceProjectRuntime({
     };
   }
 
-  async function closeDormantListedProjectRuntime(project = {}, input = {}) {
+  async function closeDormantListedProjectRuntime(projectRecord = {}, input = {}) {
     // readable-check: allow method-probe - optional operation: a project service without request contexts cannot close a listed project's runtime
-    if (typeof projectService.runInProjectContext !== "function") {
+    if (typeof project.runInProjectContext !== "function") {
       throw new TypeError("Vibe64 project service must own project request-context resolution.");
     }
-    return projectService.runInProjectContext(
-      project.slug,
+    return project.runInProjectContext(
+      projectRecord.slug,
       () => closeDormantCurrentProjectRuntime(input)
     );
   }
@@ -297,7 +297,7 @@ function createServiceProjectRuntime({
 
   async function closeDormantProjectRuntimes(input = {}) {
     // readable-check: allow method-probe - optional operation: a project service without a project list closes only the current project
-    if (typeof projectService.listProjects !== "function") {
+    if (typeof project.listProjects !== "function") {
       const result = await closeDormantCurrentProjectRuntime(input);
       return {
         closedCount: result.dormant ? 1 : 0,
@@ -307,7 +307,7 @@ function createServiceProjectRuntime({
         results: [result]
       };
     }
-    const listed = await projectService.listProjects();
+    const listed = await project.listProjects();
     if (listed?.ok === false) {
       return {
         closedCount: 0,
@@ -322,10 +322,10 @@ function createServiceProjectRuntime({
     // Practice projects are outside the catalogue but run Preview and agents
     // like any project; the dormant close reads each one's own open state.
     const results = [];
-    const listedSlugs = new Set(projects.map((project) => project.slug));
+    const listedSlugs = new Set(projects.map((projectRecord) => projectRecord.slug));
     try {
       // readable-check: allow optional-call - optional operation: a project service without practice projects lists none
-      for (const slug of await projectService.listPracticeProjectSlugs?.() || []) {
+      for (const slug of await project.listPracticeProjectSlugs?.() || []) {
         if (!listedSlugs.has(slug)) projects.push({ slug });
       }
     } catch (error) {
@@ -334,15 +334,15 @@ function createServiceProjectRuntime({
         ok: false
       });
     }
-    for (const project of projects) {
+    for (const projectRecord of projects) {
       try {
-        results.push(await closeDormantListedProjectRuntime(project, input));
+        results.push(await closeDormantListedProjectRuntime(projectRecord, input));
       } catch (error) {
         results.push({
           error: error instanceof Error ? error.message : String(error || "Dormant project runtime cleanup failed."),
           ok: false,
-          projectContextRoot: String(project.projectContextRoot || project.projectRoot || "").trim(),
-          projectSlug: project.slug
+          projectContextRoot: String(projectRecord.projectContextRoot || projectRecord.projectRoot || "").trim(),
+          projectSlug: projectRecord.slug
         });
       }
     }
@@ -363,7 +363,7 @@ function createServiceProjectRuntime({
     const projectScope = currentProjectScopeKey();
     const projectContextRoot = context.projectContextRoot;
     const reason = String(input?.reason || "project-close").trim() || "project-close";
-    const pinRuntime = await projectService.createRuntime({ inspectSource: false });
+    const pinRuntime = await project.createRuntime({ inspectSource: false });
     return pinRuntime.store.withUnpinnedProject(async () => {
       projectServices.beginClose(context);
       const failed = [];

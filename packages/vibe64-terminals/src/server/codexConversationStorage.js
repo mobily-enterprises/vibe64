@@ -104,14 +104,14 @@ function withCodexState(response = {}, session = {}) {
  * Read only the original bounded state files. Every read stays fresh; this
  * storage projection never creates a session runtime or acquires a provider.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {CodexAppServerRunOwner} dependencies.runOwner
  */
-function createCodexConversationStorage({ projectService, runOwner }) {
+function createCodexConversationStorage({ project, runOwner }) {
   const { readAgentRunForSession: readCodexAppServerAgentRunForSession } = runOwner;
   async function readCodexStateSession(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
-    const store = await projectService.createSessionStore({ sessionId: normalizedSessionId });
+    const store = await project.createSessionStore({ sessionId: normalizedSessionId });
     const [
       sourceDescriptor,
       run,

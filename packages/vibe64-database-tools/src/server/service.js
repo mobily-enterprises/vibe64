@@ -92,23 +92,23 @@ function auditSql(sql = "") {
 /**
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishLayoutChanged} dependencies.publishLayoutChanged
  * @param {SourceEditorService} dependencies.sourceEditor
- * @param {TerminalsService} dependencies.terminalService
+ * @param {TerminalsService} dependencies.terminals
  * @param {typeof withSessionKnex} [dependencies.withKnex]
  */
 function createService({
   logger,
-  projectService,
+  project,
   publishLayoutChanged,
   sourceEditor,
-  terminalService,
+  terminals,
   withKnex = withSessionKnex
 }) {
   const sessionDatabase = createSessionDatabase({
     logger,
-    projectService,
+    project,
     withKnex
   });
   const activeQueries = new Map();
@@ -119,7 +119,7 @@ function createService({
   }
 
   async function assistantDecision(context) {
-    return terminalService.resolveAssistantPurpose({ purpose: "database_assistant" }, {
+    return terminals.resolveAssistantPurpose({ purpose: "database_assistant" }, {
       session: context.session,
       vibe64User: context.vibe64User
     });
@@ -153,7 +153,7 @@ function createService({
         "vibe64_database_assistant_receipt_invalid"
       );
     }
-    const result = await terminalService.deleteEphemeralAgentConversation(helper.scope, {
+    const result = await terminals.deleteEphemeralAgentConversation(helper.scope, {
       conversationId: helper.conversationId,
       cleanupExecutionId: helper.executionId,
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
@@ -180,7 +180,7 @@ function createService({
     const queries = activeQueries.get(sessionQueryKey(sessionId));
     await Promise.allSettled([...(queries?.values() || [])].filter((query) => query.cancel).map((query) => query.cancel()));
     await Promise.allSettled(tasks.map((task) => task.promise));
-    const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
+    const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
     const readPaths = options.renewalCleanup
       ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
     const files = await readPaths(sessionId, async (paths) => {
@@ -595,7 +595,7 @@ function createService({
       task.controller.signal.throwIfAborted();
       const decision = await assistantDecision(context);
       if (!decision.available) throw databaseError(decision.message, decision.reasonCode);
-      const runtime = await projectService.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntime({ inspectSource: false });
       const admitted = await runtime.store.runSessionExclusive(context.sessionId, `database-assistant-${task.actor}`, async () => {
         const schema = await sessionDatabase.currentSchema(context);
         const artifact = `database/assistant-tasks/${task.actor}.json`;
@@ -638,7 +638,7 @@ function createService({
         try {
           await mkdir(helper.scope.workdir, { recursive: true, mode: 0o700 });
           await mkdir(helper.scope.runtimeRoot, { recursive: true, mode: 0o700 });
-          const profile = await terminalService.resolveEphemeralAgentExecutionProfile(
+          const profile = await terminals.resolveEphemeralAgentExecutionProfile(
             helper.scope,
             { ...DATABASE_ASSISTANT_EXECUTION_PROFILE },
             options
@@ -654,7 +654,7 @@ function createService({
               return executeSessionQuery(context, { schema, sql, signal: task.controller.signal });
             },
             messages: input.messages,
-            runAgentTurn: (turnInput, turnOptions) => terminalService.runEphemeralAgentChatTurn(helper.scope,
+            runAgentTurn: (turnInput, turnOptions) => terminals.runEphemeralAgentChatTurn(helper.scope,
               { ...turnInput, executionProfile: profile }, turnOptions),
             schema
           });

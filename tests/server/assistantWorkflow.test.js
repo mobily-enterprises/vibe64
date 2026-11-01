@@ -331,7 +331,7 @@ test("the bound plan helper returns workflow identity without a plan and forward
   await f.service.send("session-1", request, f.context);
   f.context.runtime.store.readSessionSourceDescriptor = async () => ({ metadata: { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: `${f.context.runtime.stateRoot}/sessions/active/session-1/source` } });
   const calls = [];
-  const commands = createAgentSessionCommandService({ logger: silentLogger, projectService: {
+  const commands = createAgentSessionCommandService({ logger: silentLogger, project: {
     readCurrentProject: async () => ({ slug: "fixture", projectRoot: f.context.runtime.stateRoot }),
     createSessionStore: async () => f.context.runtime.store,
     runInProjectContext: async (_slug, operation) => operation()

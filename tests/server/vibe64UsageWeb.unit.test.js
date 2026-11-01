@@ -409,7 +409,7 @@ test("the service answers each query with the snapshot and reloads a changed cal
     const reads = [];
     const cache = createCallWebCache();
     const service = createUsageService({
-      projectService: projectServiceFor(root),
+      project: projectServiceFor(root),
       cityReader: async () => ({ builtAt: "2026-10-30T10:00:00.000Z", city, exists: true, kind: "machine", path: ".genesis/machine-city.json" }),
       callWebReader: async (sourceRoot, architecture) => { reads.push([sourceRoot, architecture.callWeb.identity]); return callWeb; },
       layoutReader: async () => LAYOUT,
@@ -457,7 +457,7 @@ test("a scan's release drops the session's parsed call web from the service's ow
   try {
     let reads = 0;
     const service = createUsageService({
-      projectService: projectServiceFor(root),
+      project: projectServiceFor(root),
       cityReader: async () => ({ builtAt: "2026-10-30T10:00:00.000Z", city: machine, exists: true, kind: "machine", path: ".genesis/machine-city.json" }),
       callWebReader: async () => { reads += 1; return callWeb; },
       layoutReader: async () => LAYOUT

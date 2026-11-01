@@ -141,7 +141,7 @@ function sessionTerminalAdmissionFailure(sessionId = "", kind = "agent") {
  * @param {RuntimeLogger} dependencies.logger
  * @param {OutputTargetTerminalController} dependencies.outputTarget
  * @param {PreviewDiagnosticRecorder} dependencies.previewDiagnostics
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {ProjectServices} dependencies.projectServices
  * @param {ProviderUsage} dependencies.providerUsage
  * @param {SessionAgentManager} dependencies.sessionAgent
@@ -163,7 +163,7 @@ function createServiceSessionTerminals({
   logger,
   outputTarget,
   previewDiagnostics,
-  projectService,
+  project,
   projectServices,
   providerUsage,
   sessionAgent,
@@ -183,7 +183,7 @@ function createServiceSessionTerminals({
     return closeAgentSessionCommandEnvironment(sessionId, async () => {
       let learningNativeAvailable = false;
       if (controllerOptions.session?.sourceReady === false && controllerOptions.session?.purpose === "learning") {
-        const runtime = controllerOptions.runtime || await projectService.createRuntime({ inspectSource: false });
+        const runtime = controllerOptions.runtime || await project.createRuntime({ inspectSource: false });
         if (runtime.learningScope) {
           await runtime.getNativeExecutionRoot(sessionId, { allowClosing: true });
           learningNativeAvailable = true;

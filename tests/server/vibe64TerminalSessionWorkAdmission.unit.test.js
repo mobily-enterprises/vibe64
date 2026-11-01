@@ -191,7 +191,7 @@ async function terminalServiceFixture(t, lock, {
       }
     }
   };
-  const projectService = {
+  const project = {
     currentServiceDataRoot() {
       return path.join(root, "service-data");
     },
@@ -243,7 +243,7 @@ async function terminalServiceFixture(t, lock, {
       VIBE64_WORKSPACE: "test",
       ...env
     },
-    projectService,
+    project,
     opencodeTerminalController,
     publishSessionChanged,
     runCodexGitGatewayCommand
@@ -254,7 +254,7 @@ async function terminalServiceFixture(t, lock, {
   });
   return {
     attachmentRoot,
-    projectService,
+    project,
     root,
     runtime,
     service,
@@ -455,7 +455,7 @@ for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work r
   });
   const lock = agentWriteLockHarness();
   const events = [];
-  const { service, session, projectService, runtime, root } = await terminalServiceFixture(t, lock, {
+  const { service, session, project, runtime, root } = await terminalServiceFixture(t, lock, {
     ...(kind === "goal" ? { assistantSelection: {
       engineId: "opencode", agentId: "build", modelProviderId: "opencode", modelId: "big-pickle",
       variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`
@@ -492,7 +492,7 @@ for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work r
   const custom = `${await readFile(customPath, "utf8")}\nKeep the project's custom rule.\n`;
   await writeFile(customPath, custom);
   let sourceWrites = 0;
-  projectService.runProjectSourceExclusive = async (operation, options) => {
+  project.runProjectSourceExclusive = async (operation, options) => {
     assert.equal(lock.held, true);
     assert.equal(options.operation, "sync-agent-skills");
     sourceWrites += 1;
@@ -519,10 +519,10 @@ for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work r
 
 for (const practice of [true, false]) test(`${practice ? "practice" : "ordinary"} project agent guidance ${practice ? "stays out of" : "remains in"} Current changes`, async (t) => {
   const lock = agentWriteLockHarness();
-  const { service, session, runtime, root, projectService } = await terminalServiceFixture(t, lock, {
+  const { service, session, runtime, root, project } = await terminalServiceFixture(t, lock, {
     opencodeTerminalController: { createServerProcess() { throw new Error("The test does not start an AI provider."); } }
   });
-  projectService.runProjectSourceExclusive = async (operation) => operation();
+  project.runProjectSourceExclusive = async (operation) => operation();
   if (practice) {
     // A learning-space practice project's context root is named by its reserved slug.
     runtime.projectContextRoot = path.join(root, "learning", "learner", "practice", `training-${"a".repeat(32)}`);
@@ -552,7 +552,7 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
   const lock = agentWriteLockHarness();
   const warnings = [];
   const events = [];
-  const { service, session, projectService } = await terminalServiceFixture(t, lock, {
+  const { service, session, project } = await terminalServiceFixture(t, lock, {
     logger: { warn(event) { warnings.push(event); } },
     publishSessionChanged: { agentTerminal: async (_sessionId, event) => events.push(event) }
   });
@@ -560,7 +560,7 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
   const { skillPath, original } = await outdatedSkillFixture(projectRoot);
   await rm(path.join(projectRoot, "node_modules/genesis-compiler"), { recursive: true });
   session.workspaceSetup = { status: "succeeded", recipeHash: "unchanged-install-command" };
-  projectService.runProjectSourceExclusive = async () => assert.fail("Unavailable skills must not change source.");
+  project.runProjectSourceExclusive = async () => assert.fail("Unavailable skills must not change source.");
 
   await assert.rejects(inspectGenesisSkills({ projectRoot }), { code: "AGENT_SKILL_UNAVAILABLE" });
   // Delivery reaches assistant admission; this fixture has no durable selection.
@@ -578,7 +578,7 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
 
 test("a pending Stack section proposal neither defers skill refresh nor changes source", async (t) => {
   const warnings = [];
-  const { service, session, projectService } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+  const { service, session, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {
     logger: { warn(event) { warnings.push(event); } }
   });
   const projectRoot = session.metadata.source_path;
@@ -590,7 +590,7 @@ test("a pending Stack section proposal neither defers skill refresh nor changes 
     .replace(/\n## Resource estimates\n[\s\S]*?(?=\n## |$)/u, "");
   await writeFile(stackPath, stack);
   session.workspaceSetup = { status: "succeeded", recipeHash: "existing-setup" };
-  projectService.runProjectSourceExclusive = async () => assert.fail("A pending proposal must not change source.");
+  project.runProjectSourceExclusive = async () => assert.fail("A pending proposal must not change source.");
   // Genesis lists an unadopted component section as pending; the Stack still reads.
   await inspectGenesisSkills({ projectRoot });
   await assert.rejects(service.sendAgentMessage(session.sessionId,
@@ -607,7 +607,7 @@ test("an undecided competing Stack section defers skill refresh without blocking
     code: "STACK_SECTION_AMBIGUOUS",
     details: { name: "Connected development", sources: ["component:nodejs", "component:python"], proposals: [] }
   });
-  const { service, session, projectService } = await terminalServiceFixture(t, agentWriteLockHarness(), {
+  const { service, session, project } = await terminalServiceFixture(t, agentWriteLockHarness(), {
     inspectAgentSkills: async () => { throw ambiguous; },
     logger: { warn(event) { warnings.push(event); } }
   });
@@ -617,7 +617,7 @@ test("an undecided competing Stack section defers skill refresh without blocking
   const stackPath = path.join(projectRoot, "genesis/stack.md");
   const stack = await readFile(stackPath, "utf8");
   session.workspaceSetup = { status: "succeeded", recipeHash: "existing-setup" };
-  projectService.runProjectSourceExclusive = async () => assert.fail("An undecided section must not change source.");
+  project.runProjectSourceExclusive = async () => assert.fail("An undecided section must not change source.");
   await assert.rejects(service.sendAgentMessage(session.sessionId,
     { message: "Help decide the connected development section." }, { engineId: "opencode" }),
   { code: "vibe64_assistant_selection_invalid" });
@@ -629,14 +629,14 @@ test("an undecided competing Stack section defers skill refresh without blocking
 
 test("assistant inspection and active-turn steering leave outdated skills untouched", async (t) => {
   const lock = agentWriteLockHarness();
-  const { service, session, projectService } = await terminalServiceFixture(t, lock, {
+  const { service, session, project } = await terminalServiceFixture(t, lock, {
     opencodeTerminalController: {
       createServerProcess() { throw new Error("The test does not start an AI provider."); }
     }
   });
   const { skillPath, original } = await outdatedSkillFixture(session.metadata.source_path);
   let sourceWrites = 0;
-  projectService.runProjectSourceExclusive = async () => {
+  project.runProjectSourceExclusive = async () => {
     sourceWrites += 1;
     assert.fail("This operation must remain read-only.");
   };
@@ -1003,11 +1003,11 @@ for (const method of ["saveSessionWork", "updateSessionWork"]) {
 }
 
 test("publication rejects missing reviews and enforces the project's PR workflow before Git work", async (t) => {
-  const { service, session, projectService } = await terminalServiceFixture(t, { store: {} });
-  projectService.readCurrentProject = async () => ({
+  const { service, session, project } = await terminalServiceFixture(t, { store: {} });
+  project.readCurrentProject = async () => ({
     repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/project" } }
   });
-  projectService.readRepositoryWorkflow = async () => ({ requirePullRequest: true });
+  project.readRepositoryWorkflow = async () => ({ requirePullRequest: true });
   await assert.rejects(service.saveSessionWork(session.sessionId), { code: "vibe64_session_repository_review_changed" });
   await assert.rejects(service.saveSessionWork(session.sessionId, {
     destinationReview: { sessionId: session.sessionId, mode: "github", repository: "example/project", branch: "main" }
@@ -1015,11 +1015,11 @@ test("publication rejects missing reviews and enforces the project's PR workflow
 });
 
 test("a bound contribution reaches ordinary Save preparation without requiring a pull request", async (t) => {
-  const { service, session, projectService } = await terminalServiceFixture(t, { store: {} });
-  projectService.readCurrentProject = async () => ({
+  const { service, session, project } = await terminalServiceFixture(t, { store: {} });
+  project.readCurrentProject = async () => ({
     repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/project" } }
   });
-  projectService.readRepositoryWorkflow = async () => ({ requirePullRequest: true });
+  project.readRepositoryWorkflow = async () => ({ requirePullRequest: true });
   const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   session.metadata.connected_contribution = JSON.stringify({ schemaVersion: 1, id,
     repository: "example/project", integrationBranch: "main", baseCommit: "a".repeat(40) });
@@ -1138,7 +1138,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
     stateRoot: projectRuntimeRoot,
     store
   };
-  const projectService = {
+  const project = {
     createSessionStore() {
       return store;
     },
@@ -1173,7 +1173,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
-    projectService
+    project
   });
   t.after(async () => {
     await service.close();
@@ -1309,7 +1309,7 @@ test("renewal workspace setup privately resumes a pending successor while public
     stateRoot: projectRuntimeRoot,
     store
   };
-  const projectService = {
+  const project = {
     createSessionStore() {
       return store;
     },
@@ -1344,7 +1344,7 @@ test("renewal workspace setup privately resumes a pending successor while public
       VIBE64_RUNTIME_NAMESPACE: "test",
       VIBE64_WORKSPACE: "test"
     },
-    projectService
+    project
   });
   t.after(async () => {
     await service.close();
@@ -1634,7 +1634,7 @@ test("an active attachment upload finishes before renewal can freeze and cleanup
 for (const personalMember of [false, true]) {
   test(`Save publishes captured work with unconfigured Helper and ${personalMember ? "a member's personal main chat" : "unavailable AI"}`, async (t) => {
     const events = [];
-    const { projectService, root, service, session } = await terminalServiceFixture(t, { store: {} });
+    const { project, root, service, session } = await terminalServiceFixture(t, { store: {} });
     if (personalMember) {
       service.configureAssistantRuntime({ readAssistantAccess: async () => ({ ownerOnly: true }) });
       session.metadata.assistant_selection = JSON.stringify({
@@ -1666,12 +1666,12 @@ for (const personalMember of [false, true]) {
     Object.assign(session.metadata, {
       base_branch: "main", base_commit: baseCommit, branch: "vibe64/session-1"
     });
-    projectService.readCurrentProject = async () => ({
+    project.readCurrentProject = async () => ({
       slug: "test-project",
       sourceRoot: baseline,
       repository: { mode: "local_source", defaultBranch: "main" }
     });
-    projectService.runProjectSourceExclusive = async (operation) => operation();
+    project.runProjectSourceExclusive = async (operation) => operation();
     if (!personalMember) {
       const contribution = { schemaVersion: 1, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         repository: "example/accepted-library", integrationBranch: "main", baseCommit };
@@ -1796,15 +1796,15 @@ test("purpose access sends a member's main chat to the owner and keeps their hel
 });
 
 test("local-source Git work with a GitHub upstream needs no GitHub actor", async (t) => {
-  const { service, session, projectService } = await terminalServiceFixture(t, { store: {} });
+  const { service, session, project } = await terminalServiceFixture(t, { store: {} });
   // The session clone's origin is the local folder's own GitHub upstream.
   session.metadata.source_remote_url = "https://github.com/example/project.git";
   const actors = [];
-  projectService.authorizeCodexGitActorAccess = async ({ actor }) => {
+  project.authorizeCodexGitActorAccess = async ({ actor }) => {
     actors.push(actor);
     return { ok: false, code: "fixture_access_denied", error: "Stop before credentials or Git." };
   };
-  projectService.runProjectSourceExclusive = async (operation) => operation();
+  project.runProjectSourceExclusive = async (operation) => operation();
   // The fixture has no repository authority, so the check stops at the
   // repository owner, past the point where a GitHub actor would be required.
   await assert.rejects(service.checkSessionUpdates(session.sessionId), { code: "vibe64_session_save_context_incomplete" });
@@ -1814,7 +1814,7 @@ test("local-source Git work with a GitHub upstream needs no GitHub actor", async
 
 test("retiring a recorded Save deletes its prepared ref while an assistant turn is active", async (t) => {
   const lock = agentWriteLockHarness();
-  const { service, session, projectService, root } = await terminalServiceFixture(t, lock);
+  const { service, session, project, root } = await terminalServiceFixture(t, lock);
   const git = async (cwd, args) => (await execFileAsync("git", args, { cwd })).stdout.trim();
   const canonical = path.join(root, "canonical");
   await mkdir(canonical);
@@ -1826,7 +1826,7 @@ test("retiring a recorded Save deletes its prepared ref while an assistant turn 
   await git(root, ["clone", "--quiet", canonical, sourcePath]);
   const baseCommit = await git(sourcePath, ["rev-parse", "HEAD"]);
   session.metadata.base_commit = baseCommit;
-  projectService.readCurrentProject = async () => ({ slug: "test-project", repositoryMode: "local_source",
+  project.readCurrentProject = async () => ({ slug: "test-project", repositoryMode: "local_source",
     sourceRoot: canonical, repository: { mode: "local_source", defaultBranch: "main" } });
   await git(sourcePath, ["update-ref", "refs/vibe64/save/fixture/prepared", baseCommit]);
   const digest = (await import("node:crypto")).createHash("sha256")
@@ -1843,7 +1843,7 @@ test("retiring a recorded Save deletes its prepared ref while an assistant turn 
 
 for (const replacement of [false, true]) {
   test(`${replacement ? "replacement" : "fresh"} contribution records its Git actor before any AI interaction`, async (t) => {
-    const { service, session, runtime, projectService, root } = await terminalServiceFixture(t, { store: {} }, {
+    const { service, session, runtime, project, root } = await terminalServiceFixture(t, { store: {} }, {
       env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" }
     });
     const publisher = path.join(root, "publisher");
@@ -1863,10 +1863,10 @@ for (const replacement of [false, true]) {
     }
     await rm(session.metadata.source_path, { recursive: true }); // Empty fixture destination; creation owns it next.
     runtime.projectSessionSourceRoot = path.join(root, "managed");
-    projectService.readCurrentProject = async () => ({ slug: "test-project", repositoryMode: "github",
+    project.readCurrentProject = async () => ({ slug: "test-project", repositoryMode: "github",
       githubRepository: { fullName: "example/library", cloneUrl: publisher },
       repository: { mode: "github", defaultBranch: "main", github: { fullName: "example/library", cloneUrl: publisher } } });
-    projectService.runProjectSourceExclusive = async operation => operation();
+    project.runProjectSourceExclusive = async operation => operation();
     const user = { username: "developer", home: root, uid: process.getuid(), gid: process.getgid() };
     const source = await service.createSessionSource({ runtime, store: runtime.store, session, vibe64User: user,
       runCommand: async request => {
@@ -1891,7 +1891,7 @@ for (const replacement of [false, true]) {
     assert.equal(saved.metadata.session_git_command_actor_workdir, source.sourcePath);
     assert.equal(saved.metadata.session_git_command_actor_reason, "connected-contribution-session");
     let authorized = false;
-    projectService.authorizeCodexGitActorAccess = async ({ actor }) => {
+    project.authorizeCodexGitActorAccess = async ({ actor }) => {
       assert.equal(actor.actorUserKey, user.username);
       assert.equal(actor.sourceRoot, source.sourcePath);
       authorized = true;
@@ -1905,12 +1905,12 @@ for (const replacement of [false, true]) {
 
 test("workspace readiness reloads the exact session without setup admission or writes", async (t) => {
   const lock = agentWriteLockHarness();
-  const { service, session, runtime, projectService } = await terminalServiceFixture(t, lock);
+  const { service, session, runtime, project } = await terminalServiceFixture(t, lock);
   await execFileAsync("git", ["init", "--quiet"], { cwd: session.metadata.source_path });
   let runtimeReads = 0;
   let sessionReads = 0;
   let currentState = { status: "unconfigured" };
-  projectService.createRuntime = async (options) => {
+  project.createRuntime = async (options) => {
     assert.deepEqual(options, { inspectSource: false });
     runtimeReads += 1;
     return runtime;
@@ -2064,7 +2064,7 @@ async function exclusiveSourceReadFixture(t, lock = agentWriteLockHarness(), opt
     ...options
   });
   const { runProjectSourceExclusive } = await import("../../packages/vibe64-project/src/server/projectSourceMutationLock.js");
-  fixture.projectService.runProjectSourceExclusive = (operation, lockOptions) =>
+  fixture.project.runProjectSourceExclusive = (operation, lockOptions) =>
     runProjectSourceExclusive(fixture.runtime.stateRoot, operation, lockOptions);
   return fixture;
 }
@@ -2242,7 +2242,7 @@ test("source read preserves reconnection timeout and requires original project s
     message: "The assistant is still reconnecting. Wait until it is ready, then try again.",
     details: { blockingOperation: "prepare-agent-session" }
   });
-  delete f.projectService.runProjectSourceExclusive;
+  delete f.project.runProjectSourceExclusive;
   await assert.rejects(read(), { code: "vibe64_project_source_lock_unavailable" });
 });
 
@@ -2272,9 +2272,9 @@ test("captured practice control cannot admit fresh user work or session and repo
     await core.createWorkspaceProjectRecord({ slug, training });
     control = captureProjectRequestContext();
   });
-  const sessions = createSessions({ project: f.projectService, terminals: f.service,
+  const sessions = createSessions({ project: f.project, terminals: f.service,
     initializeModelRouting: () => assert.fail("Denied creation must not initialize routing.") });
-  const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: f.projectService,
+  const repository = createManagedProjectRepositoryService({ projectContext: core, project: f.project,
     configureProject: () => assert.fail("Denied creation must not configure or clean a project."),
     initializeManagedProject: () => assert.fail("Denied creation must not initialize a repository.") });
   await runWithProjectRequestContext(control, async () => {

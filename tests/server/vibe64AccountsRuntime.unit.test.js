@@ -480,7 +480,7 @@ test("Accounts, assistant readiness and Claude conversations share one Claude Co
     const unused = () => assert.fail("Reading Claude Code's account must not touch a project.");
     // The terminals service as the server composes it, with the runtime's own env.
     const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot }, logger: silentLogger,
-      projectService: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
+      project: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
         readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } });
     let readiness;
     const feature = await startAccountsFeature({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
@@ -620,7 +620,7 @@ test("accounts status can read Codex-only readiness without a GitHub user", asyn
         requireExplicitRoots: true,
         systemRoot
       }),
-      projectService: {
+      project: {
         currentTargetRoot() {
           return "";
         }
@@ -820,7 +820,7 @@ test("GitHub identity save updates Git config without starting an auth terminal"
         requireExplicitRoots: true,
         systemRoot
       }),
-      projectService: {
+      project: {
         currentTargetRoot() {
           return "";
         }
@@ -911,7 +911,7 @@ test("GitHub auth terminal running limit is scoped to the OS user", async () => 
         requireExplicitRoots: true,
         systemRoot
       }),
-      projectService: {
+      project: {
         currentTargetRoot() {
           return root;
         }
@@ -1002,7 +1002,7 @@ test("GitHub auth terminal uses a gateway real-user PTY request", async () => {
         requireExplicitRoots: true,
         systemRoot
       }),
-      projectService: {
+      project: {
         currentTargetRoot() {
           return root;
         }
@@ -1083,7 +1083,7 @@ test("GitHub auth terminal finalization checks and publishes the same OS user co
         requireExplicitRoots: true,
         systemRoot
       }),
-      projectService: {
+      project: {
         currentTargetRoot() {
           return root;
         }
@@ -1202,7 +1202,7 @@ test("GitHub auth terminal failure publishes useful terminal output", async () =
         requireExplicitRoots: true,
         systemRoot
       }),
-      projectService: {
+      project: {
         currentTargetRoot() {
           return root;
         }
@@ -1603,7 +1603,7 @@ test("cached GitHub status preserves proven invalid and logout states until live
           requireExplicitRoots: true,
           systemRoot
         }),
-        projectService: {
+        project: {
           currentTargetRoot() {
             return "";
           }
@@ -1744,7 +1744,7 @@ test("Codex status exposes the account email and access scope without rotating a
       publishAccountChanged: async () => null,
       publishAuthSessionChanged: async () => null,
       accountRuntime: createAccountsRuntime({ daemonHome, requireExplicitRoots: true, systemRoot }),
-      projectService: { currentTargetRoot: () => "" },
+      project: { currentTargetRoot: () => "" },
       invalidateAgentRuntimes: async (input) => { invalidations.push(input); return { ok: true }; },
       runHostToolCommand: async (args) => {
         commands.push(args);
@@ -1816,7 +1816,7 @@ test("proven invalid Codex auth stays reconnect-required until a login session f
         requireExplicitRoots: true,
         systemRoot
       }),
-      projectService: {
+      project: {
         currentTargetRoot() {
           return "";
         }
@@ -1890,7 +1890,7 @@ test("cancelled Codex auth sessions do not clear reconnect-required state", asyn
         requireExplicitRoots: true,
         systemRoot
       }),
-      projectService: {
+      project: {
         currentTargetRoot() {
           return root;
         }
@@ -1967,7 +1967,7 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
           stopped: 1
         };
       },
-      projectService: {
+      project: {
         currentTargetRoot() {
           return "";
         }
@@ -2135,7 +2135,7 @@ test("Codex creates a new local identity once per successful sign-in and preserv
     const service = createService({
       publishAccountChanged: async () => null,
       accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
-      projectService: { currentTargetRoot: () => root },
+      project: { currentTargetRoot: () => root },
       invalidateAgentRuntimes: async () => { invalidations += 1; return { ok: true }; },
       inspectRoutingConfiguration: async () => { throw new Error("Routing catalogue is temporarily unavailable."); },
       runHostToolCommand: async () => { statusProbes += 1; return { ok: true, output: "Logged in using ChatGPT" }; },
@@ -2188,7 +2188,7 @@ test("a finished sign-in is forgotten once a later sign-in finishes or the accou
     const service = createService({
       publishAccountChanged: async () => null,
       accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
-      projectService: { currentTargetRoot: () => root },
+      project: { currentTargetRoot: () => root },
       invalidateAgentRuntimes: async () => ({ ok: true }),
       runHostToolCommand: async (args) => ({ ok: true, output: args.includes("logout") ? "Logged out" : "Logged in using ChatGPT" }),
       publishAuthSessionChanged: async (session) => { published.push(session); },
@@ -2393,7 +2393,7 @@ test("a Claude account change goes through the terminals service without touchin
     const systemRoot = path.join(root, "system");
     const unused = () => assert.fail("A Claude account change must not touch a project.");
     const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot }, logger: silentLogger,
-      projectService: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
+      project: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
         readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } });
     let refusal = null;
     const requests = [];

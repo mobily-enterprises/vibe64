@@ -36,7 +36,7 @@ function codexEffectiveAgentSettings(agentSettings = {}) {
  * Application preparation only. Existing native owners invoke these phases;
  * this facility creates no native owner, queue, retained state or session read.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {CodexRuntimeHost} dependencies.runtimeHost
  * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
  * @param {CodexAccountPreparation} dependencies.accountPreparation
@@ -47,7 +47,7 @@ function codexEffectiveAgentSettings(agentSettings = {}) {
  * @param {CodexSessionTurnCheckpoint} dependencies.checkpoint
  */
 function createCodexConversationPreparation({
-  projectService,
+  project,
   runtimeHost,
   sessionRuntimeHost,
   accountPreparation,
@@ -116,7 +116,7 @@ function createCodexConversationPreparation({
   }
 
   async function codexAppServerSessionContext(sessionId, options = {}) {
-    return readSessionConversationContext("codex", projectService, sessionId, options, {
+    return readSessionConversationContext("codex", project, sessionId, options, {
       toolHome: codexToolHomeResult,
       unavailableWorktree: blockCodexAppServerForUnavailableWorktree
     });

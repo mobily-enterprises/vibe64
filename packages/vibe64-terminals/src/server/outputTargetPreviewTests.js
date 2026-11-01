@@ -31,14 +31,14 @@ const ignoreTestRunState = () => {};
  * @param {OutputTargetTerminalState} dependencies.state
  * @param {OutputTargetLaunchCoordination} dependencies.launchCoordination
  * @param {OutputTargetLaunchStart} dependencies.launchStart
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {typeof import("@local/vibe64-execution/server").stopVibe64Execution} dependencies.stopExecution
  */
 function createOutputTargetPreviewTests({
   state,
   launchCoordination,
   launchStart,
-  projectService,
+  project,
   stopExecution
 }) {
   async function withPreviewTarget(sessionId, outputTargetId, operation, {
@@ -60,7 +60,7 @@ function createOutputTargetPreviewTests({
           code: "vibe64_preview_test_busy"
         });
       }
-      const context = await readLaunchContext(projectService, sessionId);
+      const context = await readLaunchContext(project, sessionId);
       testRun.projectSlug = context.projectSlug;
       const unavailable = launchCoordination.launchAdmissionFailure(sessionId, context.session);
       if (unavailable) throw Object.assign(new Error(unavailable.error), unavailable);

@@ -21,7 +21,7 @@ import { createKeyedQueue } from "./keyedOperations.js";
  * @param {object} dependencies
  * @param {OutputTargetTerminalState} dependencies.state
  * @param {RuntimeEnv} dependencies.env
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof import("@local/vibe64-execution/server").runVibe64Command} dependencies.runCommand
  * @param {typeof import("@local/vibe64-execution/server").setVibe64WorkflowPhase} dependencies.setWorkflowPhase
@@ -30,7 +30,7 @@ import { createKeyedQueue } from "./keyedOperations.js";
 function createOutputTargetLaunchCoordination({
   state,
   env,
-  projectService,
+  project,
   publishSessionChanged,
   runCommand,
   setWorkflowPhase,
@@ -46,7 +46,7 @@ function createOutputTargetLaunchCoordination({
     return {
       ...options,
       env,
-      projectService,
+      project,
       runCommand
     };
   }

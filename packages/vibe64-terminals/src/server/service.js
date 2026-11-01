@@ -108,7 +108,7 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
  * @param {ProductionEnvironmentProvider} [dependencies.productionEnvironmentProvider] a host's production Env
  * @param {ProjectServices | null} [dependencies.projectServices]
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {ProjectRuntimeChangedPublisher} [dependencies.publishProjectRuntimeChanged]
  * @param {TerminalSessionChangedPublishers} [dependencies.publishSessionChanged]
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
@@ -127,7 +127,7 @@ function createService({
   productionEnvironmentProvider = NO_PRODUCTION_ENVIRONMENT,
   // readable-check: allow dependency-default - optional operation: without supplied project services the service creates its own
   projectServices: suppliedProjectServices = null,
-  projectService,
+  project,
   // readable-check: allow dependency-default - optional operation: without a project runtime publisher runtime changes are not announced
   publishProjectRuntimeChanged = async () => null,
   // readable-check: allow dependency-default - optional operation: without session publishers session changes are not announced
@@ -135,7 +135,7 @@ function createService({
   runCodexGitGatewayCommand,
   savedEnvValueLinks = NO_SAVED_ENV_VALUE_LINKS
 }) {
-  if (!projectService) {
+  if (!project) {
     throw new TypeError("createService requires vibe64.project.");
   }
   const previewDiagnostics = createPreviewDiagnosticRecorder({ logger });
@@ -162,7 +162,7 @@ function createService({
   let mainConversationHost;
 
   const workspaceSetup = createWorkspaceSetupRunner({
-    projectService,
+    project,
     connectedPreparation: options => {
       // readable-check: allow method-probe - cycle: vibe64.sessions requires vibe64.terminals
       if (typeof state.slots.connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
@@ -171,12 +171,12 @@ function createService({
   });
   const sessionAccess = createServiceSessionAccess({
     logger,
-    projectService,
+    project,
     publishSessionChanged
   });
   const workspacePreparation = createServiceWorkspacePreparation({
     sessionAccess,
-    projectService,
+    project,
     publishSessionChanged,
     workspaceSetup
   });
@@ -248,7 +248,7 @@ function createService({
   const codexGitCommand = createCodexGitCommandService({
     env,
     logger,
-    projectService,
+    project,
     runGatewayCommand: runCodexGitGatewayCommand
   });
   let agentPreviewCommand;
@@ -265,7 +265,7 @@ function createService({
         waitForCompletion: true
       });
     },
-    projectService,
+    project,
     stopPreviewBrowsers: (sessionId) => agentPreviewCommand.stopBrowsersForSession(sessionId),
     publishSessionChanged: publishSessionChanged.outputTarget,
     sessionAdmissionFailure: (sessionId) => sessionTerminalAdmissionFailure(sessionId, "output")
@@ -273,30 +273,30 @@ function createService({
   agentPreviewCommand = createAgentPreviewCommandService({
     launchTarget: outputTarget,
     logger,
-    projectService,
+    project,
     publishSessionChanged: publishSessionChanged.outputTarget
   });
   const agentEnvCommand = createAgentEnvCommandService({
     logger,
     productionEnvironmentProvider,
-    projectService,
+    project,
     savedEnvValueLinks
   });
   const agentDatabaseCommand = createAgentDatabaseCommandService({
     logger,
-    projectService,
+    project,
     readDatabaseTools: () => state.slots.databaseToolsProvider
   });
   const agentSessionCommand = createAgentSessionCommandService({
     retryWorkspaceSetup: sessionId => workspacePreparation.prepareWorkspaceSetup(sessionId, { publish: true, retry: true }),
     readProjectPreview: input => readProjectPreview(input, {
-      projectService,
+      project,
       authorize: (actor, slug) => state.assistantRuntime.authorizeProjectMessage(actor, slug),
       assertOpen: () => projectServices.assertOpen(sessionAccess.projectRuntimeContext()),
       launchTarget: outputTarget
     }),
     sendProjectMessage: input => sendProjectMessage(input, {
-      projectService,
+      project,
       publish: publishAgentSessionChanged,
       authorize: (actor, slug) => state.assistantRuntime.authorizeProjectMessage(actor, slug),
       assertOpen: () => projectServices.assertOpen(sessionAccess.projectRuntimeContext()),
@@ -334,7 +334,7 @@ function createService({
     reportWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),
     logger,
     publishSessionChanged: publishAgentSessionChanged,
-    projectService
+    project
   });
   const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
   const codexProviderConnections = createCodexProviderConnectionStore({ systemRoot: codexProviderOptions.systemRoot });
@@ -358,7 +358,7 @@ function createService({
     codexGitCommand,
     env,
     logger,
-    projectService,
+    project,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
     continueGoalAfterAccountChange: (sessionId, input) => goals.continueGoalAfterAccountChange(sessionId, input),
@@ -403,16 +403,16 @@ function createService({
     getAssistantManager: () => sessionAgent,
     listConnections: (context) => state.assistantRuntime.listConnections(context),
     logger,
-    projectService,
+    project,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
     resolveConnection: (context) => state.assistantRuntime.resolveConnection(context),
     runNativeDetachedConversation
   });
-  const sessionAttachments = createSessionAttachments({ projectService, env });
+  const sessionAttachments = createSessionAttachments({ project, env });
   const claudeProvider = createClaudeConversationHost({
     env,
-    projectService,
+    project,
     logger,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
@@ -458,14 +458,14 @@ function createService({
       error: event.error,
       event: event.event
     }, "Vibe64 prompt hints were unavailable."),
-    projectService
+    project
   });
   const assistantPreparation = createServiceAssistantPreparation({
     sessionAccess,
     workspacePreparation,
     inspectAgentSkills,
     logger,
-    projectService,
+    project,
     sessionAgent
   });
 
@@ -555,7 +555,7 @@ function createService({
     logger,
     outputTarget,
     previewDiagnostics,
-    projectService,
+    project,
     projectServices,
     providerUsage,
     sessionAgent,
@@ -571,7 +571,7 @@ function createService({
     actions,
     assistantRouting,
     logger,
-    projectService,
+    project,
     publishAgentSessionChanged,
     readRoutingConfiguration,
     sessionAgent
@@ -601,7 +601,7 @@ function createService({
     actions,
     env,
     logger,
-    projectService,
+    project,
     sessionAgent,
     sessionConversations
   });
@@ -609,7 +609,7 @@ function createService({
     sessionAccess,
     assistantContext,
     mainConversations,
-    projectService,
+    project,
     publishAgentSessionChanged,
     sessionAgent,
     sessionAttachments,
@@ -623,7 +623,7 @@ function createService({
     codexGitCommand,
     env,
     logger,
-    projectService,
+    project,
     sessionAgent,
     workspaceSetup
   });
@@ -631,10 +631,10 @@ function createService({
     sessionAccess,
     sessionWork,
     codexGitCommand,
-    projectService
+    project
   });
   const reconcile = createServiceAgentReconcile({
-    projectService,
+    project,
     sessionAgent,
     sessionConversations
   });
@@ -645,7 +645,7 @@ function createService({
     reconcile,
     agentPreviewCommand,
     outputTarget,
-    projectService,
+    project,
     projectServices,
     publishProjectRuntimeChanged,
     sessionAgent

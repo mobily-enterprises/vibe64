@@ -139,11 +139,11 @@ function gitCommandActorFromSession(session = {}, options = {}) {
 }
 
 /**
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {string} [sessionId]
  */
-async function readGitCommandSession(projectService, sessionId = "") {
-  const store = await projectService.createSessionStore({
+async function readGitCommandSession(project, sessionId = "") {
+  const store = await project.createSessionStore({
     sessionId
   });
   const [
@@ -208,7 +208,7 @@ function localGitCommandToolHome() {
  * @param {typeof fetch} [dependencies.fetch]
  * @param {RuntimeLogger} dependencies.logger
  * @param {() => number} [dependencies.now]
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {typeof runVibe64Command} [dependencies.runGatewayCommand]
  */
 function createCodexGitCommandService({
@@ -217,7 +217,7 @@ function createCodexGitCommandService({
   fetch: fetchRemote = globalThis.fetch,
   logger,
   now = Date.now,
-  projectService,
+  project,
   runGatewayCommand: gatewayCommandRunner = runVibe64Command
 }) {
   const actorCredentials = createActorCredentialCache({ now });
@@ -248,8 +248,8 @@ function createCodexGitCommandService({
       return authorizeActorAccess;
     }
     // readable-check: allow method-probe - optional operation: a project service without Git actor authorization admits every actor
-    return typeof projectService.authorizeCodexGitActorAccess === "function"
-      ? projectService.authorizeCodexGitActorAccess.bind(projectService)
+    return typeof project.authorizeCodexGitActorAccess === "function"
+      ? project.authorizeCodexGitActorAccess.bind(project)
       : null;
   }
 
@@ -291,7 +291,7 @@ function createCodexGitCommandService({
         "vibe64_session_save_session_required"
       );
     }
-    const session = suppliedSession || await readGitCommandSession(projectService, sessionId);
+    const session = suppliedSession || await readGitCommandSession(project, sessionId);
     const actor = gitCommandActorFromSession(session, {
       command: "git"
     });
@@ -452,7 +452,7 @@ function createCodexGitCommandService({
     // `git status` subcommand (hundreds of MB every few seconds on long-lived
     // sessions). Keep this hot path structurally bounded—never hide a full
     // session read here behind caching or throttling.
-    const session = await readGitCommandSession(projectService, sessionId);
+    const session = await readGitCommandSession(project, sessionId);
     if (phaseElapsedMs) phaseElapsedMs.session = Math.round(performance.now() - startedAt);
     const actor = gitCommandActorFromSession(session, {
       command
@@ -493,8 +493,8 @@ function createCodexGitCommandService({
         return finish({ ok: true, exitCode: 0, stdout: `${usage}\n` }, actor);
       }
       if (args.length === 2 && args[0] === "issue-link" && /^[1-9]\d*$/u.test(args[1]) && Number.isSafeInteger(Number(args[1]))) {
-        const project = await projectService.readCurrentProject();
-        const slug = normalizeText(project.slug);
+        const projectRecord = await project.readCurrentProject();
+        const slug = normalizeText(projectRecord.slug);
         if (!slug) {
           return finish(responseError("The current project has no issue link.", "vibe64_github_issue_link_unavailable"), actor);
         }
@@ -507,7 +507,7 @@ function createCodexGitCommandService({
       if (args.length !== 1 || args[0] !== "refresh") {
         return finish(responseError(usage, "vibe64_github_refresh_input_invalid"), actor);
       }
-      await projectService.refreshGithub();
+      await project.refreshGithub();
       return finish({
         ok: true,
         exitCode: 0,
@@ -548,7 +548,7 @@ function createCodexGitCommandService({
     const gatewayUserKey = gatewayGitIdentityUserKey(session, actor, toolHome);
     // Resources show the AI's command under the project whose session store
     // was just read, and its session. Reading the slug lists no projects.
-    const projectSlug = currentProjectSlug(projectService);
+    const projectSlug = currentProjectSlug(project);
     stage = "command";
     if (phaseElapsedMs) phaseElapsedMs.commandStarted = Math.round(performance.now() - startedAt);
     const result = await runWithinBudget({

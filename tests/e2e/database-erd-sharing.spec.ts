@@ -111,7 +111,7 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
       id: "test.database", requires: { events: "runtime.events", realtime: "runtime.realtime" },
       setup(values) {
         realtime = values.realtime;
-        const projectService = {
+        const project = {
             createSessionStore: async () => store,
             createRuntime: async () => ({ getSession: store.readSession, store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) } }),
             localDatabaseServers: async () => ({ managed: true, databases: [] }),
@@ -121,9 +121,9 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
               write: { host: "127.0.0.1", port: 5432, database: schema.database, username: "writer" }
             } })
           };
-        sourceEditor = createSourceEditor({ projectService, temporaryRoot });
+        sourceEditor = createSourceEditor({ project, temporaryRoot });
         service = createService({
-          projectService,
+          project,
           sourceEditor,
           publishLayoutChanged: createDatabaseLayoutChangedPublisher(values.events),
           withKnex: () => { throw new Error("Layout synchronization must not execute SQL"); }

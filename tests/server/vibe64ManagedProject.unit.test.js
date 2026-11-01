@@ -433,7 +433,7 @@ test("shared managed repository owner provisions and clones a real private pract
     const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
       explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
     const project = createProject({ projectContext: core });
-    const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: project,
+    const repository = createManagedProjectRepositoryService({ projectContext: core, project,
       initializeManagedProject: input => initializeManagedProject({ ...input, runCommand: directCommand }) });
     const actor = { uid: 42, username: "learner" };
     const training = { schemaVersion: 2, learnerKey: Buffer.from("42").toString("base64url"),

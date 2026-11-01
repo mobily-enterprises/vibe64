@@ -86,7 +86,7 @@ function previewStoppedRefusal() {
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
  * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
  * @param {RuntimeEnv} dependencies.env
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof import("@local/vibe64-execution/server").runVibe64Command} dependencies.runCommand
  * @param {typeof import("./resourceWorkflow.js").startResourceWorkflow} dependencies.startWorkflow
@@ -99,7 +99,7 @@ function createOutputTargetLaunchStart({
   ensureWorkspacePrepared,
   ensureProjectServices,
   env,
-  projectService,
+  project,
   publishSessionChanged,
   runCommand,
   startWorkflow,
@@ -149,13 +149,13 @@ function createOutputTargetLaunchStart({
       }
       return launchCoordination.withLaunchAdmission(sessionId, async () => {
         if (input.automatic === true && !(testRun && input.previewTestRun === testRun)) {
-          const runtime = await projectService.createRuntime();
+          const runtime = await project.createRuntime();
           const session = await runtime.getSession(sessionId);
           if (previewStopState(session.metadata).stopped) {
             return previewStoppedRefusal();
           }
         }
-        const context = await readPreparedLaunchContext(projectService, sessionId, {
+        const context = await readPreparedLaunchContext(project, sessionId, {
           ensureWorkspacePrepared,
           // An explicit start runs a failed setup again; an automatic one
           // reports the stored failure instead of rerunning it unasked.
@@ -297,7 +297,7 @@ function createOutputTargetLaunchStart({
         try {
           const terminalEnvRecords = await loadProjectExecutionEnvRecords({
             includeResourceConfiguration: true,
-            projectService,
+            project,
             runCommand,
             runtime: context.runtime,
             session: context.session,

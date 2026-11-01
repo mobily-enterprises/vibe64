@@ -34,7 +34,7 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
  * @param {ServiceWorkspacePreparation} dependencies.workspacePreparation
  * @param {InspectAgentSkills} dependencies.inspectAgentSkills
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {SessionAgentManager} dependencies.sessionAgent
  */
 function createServiceAssistantPreparation({
@@ -42,7 +42,7 @@ function createServiceAssistantPreparation({
   workspacePreparation,
   inspectAgentSkills,
   logger,
-  projectService,
+  project,
   sessionAgent
 }) {
   /**
@@ -122,7 +122,7 @@ function createServiceAssistantPreparation({
     const guidance = await inspectGenesisAgentIntegrations({ projectRoot });
     const refreshSkills = ["missing", "outdated"].includes(inspection.status);
     if (!refreshSkills && guidance.status === "current") return;
-    const result = await projectService.runProjectSourceExclusive(
+    const result = await project.runProjectSourceExclusive(
       async () => {
         const skills = refreshSkills ? await syncGenesisSkills({ projectRoot }) : { changedFiles: [] };
         const integrations = await syncGenesisAgentIntegrations({ projectRoot });

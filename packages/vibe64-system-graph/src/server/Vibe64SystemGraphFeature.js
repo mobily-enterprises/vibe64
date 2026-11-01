@@ -27,11 +27,11 @@ function createSystemGraph({
   project
 }) {
   const { readStatus, readArchitecture, readRefreshStatus, cancelRefresh, refresh } = createService({
-    projectService: project,
+    project,
     logger,
     publishSessionChanged: createSessionChangedPublisher(events)
   });
-  const { readUsageEntries, readUsageWeb, readUsageFunction, joinUsage } = createUsageService({ projectService: project });
+  const { readUsageEntries, readUsageWeb, readUsageFunction, joinUsage } = createUsageService({ project });
   return Object.freeze({
     readStatus,
     readArchitecture,

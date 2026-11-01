@@ -65,7 +65,7 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
  * Vibe64's selected settings, managed command environment and Genesis host facts.
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {() => string} dependencies.command
  * @param {object} dependencies.credentialHome
  * @param {RunVibe64Command} dependencies.commandRunner
@@ -80,7 +80,7 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
  */
 function createClaudeConversationEnvironment({
   env,
-  projectService,
+  project,
   command,
   credentialHome,
   commandRunner,
@@ -115,7 +115,7 @@ function createClaudeConversationEnvironment({
     return vibe64HostContextEnvironment(runtimeRoot);
   }
 
-  async function prepareSessionEnvironment(context, project) {
+  async function prepareSessionEnvironment(context, projectRecord) {
     if (await learningSessionExecutionRoot(context.runtime, context.sessionId)) {
       return { env: {}, shimDirs: [] };
     }
@@ -126,7 +126,7 @@ function createClaudeConversationEnvironment({
       agentEnvCommand,
       agentPreviewCommand,
       agentSessionCommand,
-      project,
+      project: projectRecord,
       runtime: context.runtime,
       sessionId: context.sessionId,
       worktreePath: context.workdir
@@ -135,7 +135,7 @@ function createClaudeConversationEnvironment({
     return {
       ...prepared,
       env: {
-        ...await loadProjectExecutionEnv({ projectService, session: context.session, target: "claude" }),
+        ...await loadProjectExecutionEnv({ project, session: context.session, target: "claude" }),
         ...prepared.env
       }
     };
@@ -192,14 +192,14 @@ function createClaudeConversationEnvironment({
 
   async function prepareProcess(_entry, { profile }, ctx) {
     // A session's process belongs to its project; Resources show it there.
-    const project = ctx.assistantScope ? null : await projectService.readCurrentProject();
+    const projectRecord = ctx.assistantScope ? null : await project.readCurrentProject();
     let prepared = { env: ctx.assistantScope?.environment || {}, shimDirs: [] };
     if (!ctx.assistantScope && !profile && codexGitCommand) {
-      prepared = await prepareSessionEnvironment(ctx, project);
+      prepared = await prepareSessionEnvironment(ctx, projectRecord);
     }
     return {
       ...prepared,
-      projectSlug: project?.slug || "",
+      projectSlug: projectRecord?.slug || "",
       workdir: profile || ctx.assistantScope ? credentialHome.home : ctx.workdir
     };
   }

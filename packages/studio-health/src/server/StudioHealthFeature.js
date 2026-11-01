@@ -32,8 +32,8 @@ const StudioHealthFeature = defineFeature({
     project
   }) {
     const studioHealth = createService({
-      connectionsService: connections,
-      projectService: project,
+      connections,
+      project,
       studioRoot: resolveStudioAppRoot()
     });
     registerRoutes(http);

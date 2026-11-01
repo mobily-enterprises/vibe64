@@ -80,7 +80,7 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
 
 /**
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {OpenCodeMainMessagePreparationContextFor} dependencies.contextFor
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
  * @param {OpenCodeConversationEvents} dependencies.events
@@ -88,7 +88,7 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
  * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareSessionCleanup
  */
 export function createOpenCodeScopedPreparation({
-  projectService,
+  project,
   contextFor,
   hostPreparation,
   events,
@@ -252,7 +252,7 @@ export function createOpenCodeScopedPreparation({
               async afterClose({ stopped, outcome }) {
                 if (stopped && !executionProfile && !context.assistantScope) {
                   await checkpointSessionTurn({
-                    projectService,
+                    project,
                     runtime: context.runtime,
                     session: context.session,
                     sessionId,

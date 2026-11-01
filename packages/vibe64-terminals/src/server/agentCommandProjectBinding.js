@@ -15,12 +15,12 @@ function projectContextRoot(project) {
  * later requests only inside that same project. `errors` gives each command
  * its own [message, code] for: sessionRequired, projectRequired, unbound and
  * changed. `capture()` adds command-specific fields to a new binding.
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {object} errors
  * @param {object} [options]
  * @param {() => object} [options.capture]
  */
-function createAgentCommandProjectBinding(projectService, errors, options = {}) {
+function createAgentCommandProjectBinding(project, errors, options = {}) {
   const { capture = () => ({}) } = options;
   const bindings = new Map();
   const fail = ([message, code]) => vibe64Error(message, code);
@@ -28,10 +28,10 @@ function createAgentCommandProjectBinding(projectService, errors, options = {}) 
   async function bind(sessionId = "") {
     const normalizedSessionId = toText(sessionId);
     if (!normalizedSessionId) throw fail(errors.sessionRequired);
-    const project = await projectService.readCurrentProject();
-    const projectSlug = toText(project?.slug || project?.name);
+    const projectRecord = await project.readCurrentProject();
+    const projectSlug = toText(projectRecord?.slug || projectRecord?.name);
     if (!projectSlug) throw fail(errors.projectRequired);
-    const binding = { ...capture(), projectContextRoot: projectContextRoot(project), projectSlug };
+    const binding = { ...capture(), projectContextRoot: projectContextRoot(projectRecord), projectSlug };
     bindings.set(normalizedSessionId, binding);
     return binding;
   }
@@ -43,15 +43,15 @@ function createAgentCommandProjectBinding(projectService, errors, options = {}) 
   async function run(sessionId = "", operation) {
     const binding = bindings.get(toText(sessionId));
     if (!binding?.projectSlug) throw fail(errors.unbound);
-    return projectService.runInProjectContext(binding.projectSlug, async () => {
-      const project = await projectService.readCurrentProject();
+    return project.runInProjectContext(binding.projectSlug, async () => {
+      const projectRecord = await project.readCurrentProject();
       if (
-        toText(project?.slug || project?.name) !== binding.projectSlug ||
-        binding.projectContextRoot && projectContextRoot(project) !== binding.projectContextRoot
+        toText(projectRecord?.slug || projectRecord?.name) !== binding.projectSlug ||
+        binding.projectContextRoot && projectContextRoot(projectRecord) !== binding.projectContextRoot
       ) {
         throw fail(errors.changed);
       }
-      return operation(binding, project);
+      return operation(binding, projectRecord);
     });
   }
 

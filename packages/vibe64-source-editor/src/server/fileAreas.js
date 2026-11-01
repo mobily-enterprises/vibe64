@@ -74,11 +74,11 @@ const TRANSFER_MAX_LABEL = "2 GiB";
 const CONFLICT_NAMES_MAX = 500;
 
 /**
- * @param {ProjectService} projectService
+ * @param {ProjectService} project
  * @param {object} options
  * @param {(sourceRoot: string) => void} options.repoChanged
  */
-function createFileArea(projectService, { repoChanged }) {
+function createFileArea(project, { repoChanged }) {
 
   /**
    * Opens one area for this request: checks the caller and operation, resolves
@@ -228,7 +228,7 @@ function createFileArea(projectService, { repoChanged }) {
       }
       const owner = !requestContext.vibe64User || requestContext.vibe64User.role === "owner";
       const sessionId = toText(input.sessionId);
-      const runtime = await projectService.createRuntime({ sessionId });
+      const runtime = await project.createRuntime({ sessionId });
       if (operation === "areas") {
         await runtime.store.readSessionSummary(sessionId);
         return { ok: true, areas: ["repo", "drop-zone", ...(owner ? ["session"] : [])] };

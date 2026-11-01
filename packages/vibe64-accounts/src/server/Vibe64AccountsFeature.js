@@ -64,7 +64,7 @@ function createDefaultAccountRuntime({
 }) {
   return accountRuntime || createAccountsRuntime({
     githubAccountMode: GITHUB_ACCOUNT_MODE_LOCAL,
-    projectService: project,
+    project,
     requireExplicitRoots: true,
     systemRoot,
     targetRoot

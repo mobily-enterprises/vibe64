@@ -89,16 +89,16 @@ function openProjectRuntimeRecords(listed = {}) {
  * project runtime, terminal session publication, and the hidden renewal write.
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  */
 function createServiceSessionAccess({
   logger,
-  projectService,
+  project,
   publishSessionChanged
 }) {
   async function runMainAgentWrite(sessionId, options, operation, lockOptions = {}) {
-    const runtime = options.runtime || await projectService.createRuntime({
+    const runtime = options.runtime || await project.createRuntime({
       inspectSource: false
     });
     const lockStartedAt = performance.now();
@@ -140,7 +140,7 @@ function createServiceSessionAccess({
    * session when given (the session only when it is this one), else fresh reads.
    */
   async function sessionContext(sessionId = "", input = {}) {
-    const runtime = input.runtime || await projectService.createRuntime({ inspectSource: false });
+    const runtime = input.runtime || await project.createRuntime({ inspectSource: false });
     const session = input.session?.sessionId === sessionId
       ? input.session
       : await runtime.getSession(sessionId, { inspectSource: false });
@@ -157,7 +157,7 @@ function createServiceSessionAccess({
     options,
     operation
   ) {
-    const runtime = options.runtime || await projectService.createRuntime({
+    const runtime = options.runtime || await project.createRuntime({
       inspectSource: false
     });
     const exclusive = await runVibe64RenewalAgentWriteExclusive(
@@ -202,12 +202,12 @@ function createServiceSessionAccess({
   function projectRuntimeContext() {
     const requestContext = currentProjectRequestContext();
     const projectContextRoot = requestContext?.targetRoot ||
-      projectServiceNamespaceRoot(projectService) ||
+      projectServiceNamespaceRoot(project) ||
       "";
     const projectRuntimeRoot = requestContext?.projectRuntimeRoot ||
       // readable-check: allow method-probe - optional operation: a project service without a runtime root uses the request's
-      (typeof projectService.currentProjectRuntimeRoot === "function"
-        ? projectService.currentProjectRuntimeRoot()
+      (typeof project.currentProjectRuntimeRoot === "function"
+        ? project.currentProjectRuntimeRoot()
         : "");
     // "global" names the runtime used when no project request context is set.
     const projectSlug = String(requestContext?.slug || "").trim() || "global";
@@ -230,7 +230,7 @@ function createServiceSessionAccess({
   }
 
   async function listOpenProjectRuntimeSessions() {
-    const runtime = await projectService.createRuntime({
+    const runtime = await project.createRuntime({
       inspectSource: false
     });
     const listOptions = {

@@ -1957,7 +1957,7 @@ test("a practice session is an ordinary local project session that stays the lea
   const core = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
   const project = createProject({ projectContext: core });
-  const repository = createManagedProjectRepositoryService({ projectContext: core, projectService: project });
+  const repository = createManagedProjectRepositoryService({ projectContext: core, project });
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
   await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });

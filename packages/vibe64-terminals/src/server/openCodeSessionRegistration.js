@@ -78,7 +78,7 @@ import {
  * @param {(request: object) => Promise<object[]>} dependencies.listConnections
  * @param {RuntimeLogger} dependencies.logger
  * @param {typeof prepareAgentSessionCommandEnvironment} [dependencies.prepareCommandEnvironment]
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(event: object) => unknown} dependencies.publishConversation
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
@@ -101,7 +101,7 @@ function createOpenCodeSessionRegistration({
   listConnections,
   logger,
   prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
-  projectService,
+  project,
   publishSessionChanged: publishApplicationSessionChanged,
   publishConversation,
   runNativeDetachedConversation,
@@ -137,7 +137,7 @@ function createOpenCodeSessionRegistration({
     getAssistantManager,
     listConnections,
     prepareCommandEnvironment,
-    projectService,
+    project,
     resolveConnection,
     sharedRuntime
   });
@@ -148,13 +148,13 @@ function createOpenCodeSessionRegistration({
     temporaryConversations
   });
   const events = createOpenCodeConversationEvents({
-    projectService,
+    project,
     publishSessionChanged,
     sharedRuntime,
     presentation
   });
   const mainMessagePreparation = createOpenCodeMainMessagePreparation({
-    projectService,
+    project,
     env,
     recordGitActor,
     hostPreparation,
@@ -175,7 +175,7 @@ function createOpenCodeSessionRegistration({
     resolveConnection
   });
   const scopedPreparation = createOpenCodeScopedPreparation({
-    projectService,
+    project,
     contextFor,
     hostPreparation,
     events,
@@ -184,7 +184,7 @@ function createOpenCodeSessionRegistration({
   });
 
   const lifecyclePreparation = createOpenCodeLifecyclePreparation({
-    projectService,
+    project,
     getAssistantManager,
     sharedRuntime,
     hostPreparation,

@@ -75,8 +75,8 @@ test("agent ERD moves retain exact routed paths, reject stale batches and preser
   const service = createService({
     logger: { info() {}, warn() {} },
     sourceEditor: {},
-    terminalService: {},
-    projectService: {
+    terminals: {},
+    project: {
       createSessionStore: async () => store,
       localDatabaseServers: async () => ({ managed: true, databases: [] }),
       sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
@@ -150,8 +150,8 @@ test("service publishes a scoped hint only after a successful shared save, witho
   const service = createService({
     logger: { info() {}, warn() {} },
     sourceEditor: {},
-    terminalService: {},
-    projectService: {
+    terminals: {},
+    project: {
       createSessionStore: async () => store,
       localDatabaseServers: async () => ({ managed: true, databases: [] }),
       sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {

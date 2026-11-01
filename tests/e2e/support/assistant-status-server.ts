@@ -585,7 +585,7 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
     ...sourceMetadata(targetRoot, session.sessionId), assistant_selection: serializeVibe64AssistantSelection(selection)
   } });
   const runtime = { store, stateRoot, getSession: id => store.readSession(id) };
-  const attachments = createSessionAttachments({ projectService: { createRuntime: async () => runtime },
+  const attachments = createSessionAttachments({ project: { createRuntime: async () => runtime },
     env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
   const native = new Map();
   let nextNativeId = 0;

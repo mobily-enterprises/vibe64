@@ -64,14 +64,14 @@ function failedStatusResult(status, fallbackError) {
  * @param {AgentPreviewWorkerRegistry} dependencies.workerRegistry
  * @param {OutputTargetTerminalController} dependencies.launchTarget
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {ReadSessionUiSyncState} dependencies.readSessionUiState
  */
 function createAgentPreviewCommandLine({
   workerRegistry,
   launchTarget,
   logger,
-  projectService,
+  project,
   readSessionUiState
 }) {
   async function authorizeBrowserIdentity(sessionId = "", identity = "") {
@@ -121,7 +121,7 @@ function createAgentPreviewCommandLine({
         "vibe64_agent_preview_identities_project_required"
       );
     }
-    return projectService.runInProjectContext(projectSlug, async () => {
+    return project.runInProjectContext(projectSlug, async () => {
       const status = await launchTarget.launchStatus(sessionId);
       if (status?.ok === false) return status;
       const identityTypes = [...new Set((status.outputTargets || []).flatMap((target) => target.identityTypes || []))];
@@ -148,9 +148,9 @@ function createAgentPreviewCommandLine({
             : "This project's Stack declares no #### Preview identity types; add the application's Preview identity command first (vibe64-helper spec outputs).",
           "vibe64_agent_preview_identities_type_undeclared");
         }
-        result = await projectService.savePreviewApplicationIdentities({ identities, sessionId });
+        result = await project.savePreviewApplicationIdentities({ identities, sessionId });
       } else {
-        result = await projectService.readPreviewApplicationIdentities({ sessionId });
+        result = await project.readPreviewApplicationIdentities({ sessionId });
       }
       return result?.ok === false ? result : {
         exitCode: 0,

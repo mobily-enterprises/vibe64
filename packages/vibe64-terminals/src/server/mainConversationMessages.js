@@ -327,7 +327,7 @@ function createClaudeConversationMessagePolicy({
 
 /**
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {RuntimeEnv} dependencies.env
  * @param {RecordSessionGitCommandActor} dependencies.recordGitActor
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
@@ -335,7 +335,7 @@ function createClaudeConversationMessagePolicy({
  * @param {OpenCodeConversationPresentation} dependencies.presentation
  */
 function createOpenCodeMainMessagePreparation({
-  projectService,
+  project,
   env,
   recordGitActor,
   hostPreparation,
@@ -347,7 +347,7 @@ function createOpenCodeMainMessagePreparation({
   const { publishConversationTurn } = presentation;
 
   async function contextFor(sessionId = "", options = {}) {
-    return readSessionConversationContext("opencode", projectService, sessionId, options);
+    return readSessionConversationContext("opencode", project, sessionId, options);
   }
 
   async function prepareMessageInput(sessionId = "", input = {}, options = {}) {

@@ -115,7 +115,7 @@ const directEnv = Object.fromEntries(Object.entries(process.env)
   .filter(([name]) => !PROXY_VARIABLES.includes(name)));
 
 function service({ env = directEnv, fetch, runGatewayCommand }) {
-  return createCodexGitCommandService({ env, fetch, logger: silentLogger, projectService: {}, runGatewayCommand });
+  return createCodexGitCommandService({ env, fetch, logger: silentLogger, project: {}, runGatewayCommand });
 }
 
 async function githubFixture(t, root, { env } = {}) {

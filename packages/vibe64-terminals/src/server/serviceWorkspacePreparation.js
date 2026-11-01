@@ -15,13 +15,13 @@ import { inProjectContext } from "./workspaceSetupRules.js";
  * too, invalidated when sources change, and observed while it runs.
  * @param {object} dependencies
  * @param {ServiceSessionAccess} dependencies.sessionAccess
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {WorkspaceSetupRunner} dependencies.workspaceSetup
  */
 function createServiceWorkspacePreparation({
   sessionAccess,
-  projectService,
+  project,
   publishSessionChanged,
   workspaceSetup
 }) {
@@ -41,7 +41,7 @@ function createServiceWorkspacePreparation({
   }
 
   async function prepareRenewalWorkspaceSetup(sessionId = "", options = {}) {
-    const runtime = options.runtime || await projectService.createRuntime({
+    const runtime = options.runtime || await project.createRuntime({
       inspectSource: false
     });
     const exclusive = await runVibe64RenewalAgentWriteExclusive(
@@ -69,7 +69,7 @@ function createServiceWorkspacePreparation({
       session: existingSession = null
     } = options;
     const requestContext = captureProjectRequestContext();
-    const runtime = existingRuntime || await projectService.createRuntime({
+    const runtime = existingRuntime || await project.createRuntime({
       inspectSource: false
     });
     const session = existingSession || await runtime.getSession(sessionId, {

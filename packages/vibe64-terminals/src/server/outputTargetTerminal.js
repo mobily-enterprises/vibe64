@@ -37,7 +37,7 @@ import { createOutputTargetTerminalSessions } from "./outputTargetTerminalSessio
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
  * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
  * @param {RuntimeEnv} [dependencies.env]
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof startResourceWorkflow} [dependencies.startWorkflow]
@@ -51,7 +51,7 @@ function createOutputTargetTerminalController({
   ensureWorkspacePrepared,
   ensureProjectServices,
   env = process.env,
-  projectService,
+  project,
   publishSessionChanged,
   runCommand = runVibe64Command,
   startWorkflow = startResourceWorkflow,
@@ -65,7 +65,7 @@ function createOutputTargetTerminalController({
   const launchCoordination = createOutputTargetLaunchCoordination({
     state,
     env,
-    projectService,
+    project,
     publishSessionChanged,
     runCommand,
     setWorkflowPhase,
@@ -77,7 +77,7 @@ function createOutputTargetTerminalController({
     ensureWorkspacePrepared,
     ensureProjectServices,
     env,
-    projectService,
+    project,
     publishSessionChanged,
     runCommand,
     startWorkflow,
@@ -88,18 +88,18 @@ function createOutputTargetTerminalController({
     state,
     launchCoordination,
     launchStart,
-    projectService,
+    project,
     stopExecution
   });
   const outputStatus = createOutputTargetLaunchStatus({
     state,
     launchCoordination,
-    projectService
+    project
   });
   const terminalSessions = createOutputTargetTerminalSessions({
     state,
     launchCoordination,
-    projectService,
+    project,
     stopPreviewBrowsers
   });
 

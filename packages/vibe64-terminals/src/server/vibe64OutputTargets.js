@@ -144,7 +144,7 @@ async function inspectVibe64OutputsForContext(context = {}, options = {}) {
 
 async function inspectVibe64WorkspaceSetupForContext(context = {}, options = {}) {
   const {
-    inspect = context.projectService?.inspectWorkspaceSetup?.bind(context.projectService) || inspectVibe64WorkspaceSetup
+    inspect = context.project?.inspectWorkspaceSetup?.bind(context.project) || inspectVibe64WorkspaceSetup
   } = options;
   return inspectVibe64ForContext(context, inspect, {
     recipeHash: "",

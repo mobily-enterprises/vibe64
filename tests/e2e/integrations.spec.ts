@@ -366,7 +366,7 @@ for (const { viewport, providerBatch } of [
         return Response.json({ ...JSON.parse(options.body), client_id: providerBatch === "confidence" ? `assigned-confidence-${JSON.parse(options.body).client_name.includes("Flags") ? "flags" : "exp"}` : `assigned-${providerBatch}-client`, client_secret: `private-${providerBatch}-browser-fixture` });
       },
       temporaryRoot: path.join(root, "temporary"),
-      projectService: {
+      project: {
         readEnv: async () => ({ ok: true, env: { records: [] } }),
         saveEnvUserValues: async (request) => { registrationEnv.push(request); return { ok: true }; },
         createRuntime: async () => ({

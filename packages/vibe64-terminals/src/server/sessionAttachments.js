@@ -53,12 +53,12 @@ async function readSavedAttachment(paths, id) {
 
 /**
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {RuntimeEnv} [dependencies.env]
  */
-function createSessionAttachments({ projectService, env = process.env }) {
+function createSessionAttachments({ project, env = process.env }) {
   async function attachmentContext(context) {
-    const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
+    const runtime = context.runtime || await project.createRuntime({ inspectSource: false });
     const session = context.session || await runtime.getSession(context.sessionId, { inspectSource: false });
     const executionRoot = sessionSourcePath(session);
     if (!executionRoot) throw new Error("The attachment session source is unavailable.");
@@ -182,7 +182,7 @@ function createSessionAttachments({ projectService, env = process.env }) {
 
   async function readAttachment(context, id) {
     const { sessionId } = context;
-    const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
+    const runtime = context.runtime || await project.createRuntime({ inspectSource: false });
     const session = context.session || await runtime.getSession(sessionId, { inspectSource: false });
     const openAttachment = async (attachment) => ({
       attachment: { ...attachment, contentType: conversationAttachmentContentType(attachment.fileName) },

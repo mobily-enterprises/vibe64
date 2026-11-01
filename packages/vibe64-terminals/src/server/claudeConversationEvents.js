@@ -19,7 +19,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 /**
  * The native owner emits once; Vibe64 persists and publishes its existing effects.
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {ClaudeConversationStorage} dependencies.storage
  * @param {ClaudeConversationMessagePolicy} dependencies.messagePolicy
  * @param {ClaudeConversationOwner} dependencies.owner
@@ -28,7 +28,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
  * @param {RuntimeLogger} dependencies.logger
  */
 function createClaudeConversationEvents({
-  projectService,
+  project,
   storage,
   messagePolicy,
   owner,
@@ -206,7 +206,7 @@ function createClaudeConversationEvents({
     if (!event.active && entry.turn.active && !entry.context.assistantScope && !entry.profile && !entry.renewal) {
       const runtime = entry.context.runtime;
       return checkpointSessionTurn({
-        projectService,
+        project,
         runtime,
         session: entry.context.session,
         sessionId: entry.context.sessionId,

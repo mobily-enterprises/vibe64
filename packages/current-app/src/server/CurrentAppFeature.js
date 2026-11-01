@@ -32,7 +32,7 @@ const CurrentAppFeature = defineFeature({
   }) {
     const currentApp = createService({
       env,
-      projectService: project
+      project
     });
     registerRoutes(http);
     return { currentApp };

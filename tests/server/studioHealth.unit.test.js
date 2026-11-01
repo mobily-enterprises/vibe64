@@ -60,7 +60,7 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
   withRuntimePacks(t, studioRoot);
   const commandCalls = [];
   const service = createService({
-    connectionsService: {
+    connections: {
       async getStatus(input) {
         assert.equal(input.providerIds, undefined);
         return {
@@ -72,7 +72,7 @@ test("Studio Health reports explicit platform checks without repairs", async (t)
         };
       }
     },
-    projectService: {
+    project: {
       async listProjects() {
         return {
           ok: true,
@@ -122,12 +122,12 @@ test("Studio Health reports unavailable checks without inventing readiness", asy
   await writeFile(path.join(studioRoot, "package.json"), "{}\n", "utf8");
   withRuntimePacks(t, studioRoot);
   const service = createService({
-    connectionsService: {
+    connections: {
       async getStatus() {
         throw new Error("Account service unavailable.");
       }
     },
-    projectService: {
+    project: {
       async listProjects() {
         return { ok: false, error: "Catalog unavailable." };
       }
@@ -168,11 +168,11 @@ test("without runtime packs Health counts only what is needed; one AI tool is en
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const versions = { node: "v26.12.1", git: "git version 2.53.0", codex: "codex-cli 0.163.0" };
   const service = createService({
-    connectionsService: { getStatus: async () => ({ ok: true, connections: [
+    connections: { getStatus: async () => ({ ok: true, connections: [
       { connected: true, id: "ai", status: "connected" },
       { connected: false, required: false, id: "github", status: "signed_out" }
     ] }) },
-    projectService: { listProjects: async () => ({ ok: true, projects: [] }) },
+    project: { listProjects: async () => ({ ok: true, projects: [] }) },
     async runCommand({ args, command }) {
       if (isProbe(command, args)) return probeResult(args, versions);
       return args.join(" ").includes("playwright_command")
@@ -215,8 +215,8 @@ test("without runtime packs a tool that is there but fails is not counted as ins
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-plain-"));
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const service = createService({
-    connectionsService: { getStatus: async () => ({ ok: true, connections: [] }) },
-    projectService: { listProjects: async () => ({ ok: true, projects: [] }) },
+    connections: { getStatus: async () => ({ ok: true, connections: [] }) },
+    project: { listProjects: async () => ({ ok: true, projects: [] }) },
     async runCommand({ args, command }) {
       return isProbe(command, args)
         ? probeResult(args, { node: "v26.1.0", git: null, claude: "2.1.0 (Claude Code)" })
@@ -287,9 +287,9 @@ test("without runtime packs Health shows the name commits get and how to set you
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
   const inspect = async (ident) => {
     const service = createService({
-      connectionsService: { getStatus: async () => ({ ok: true, connections: [] }) },
+      connections: { getStatus: async () => ({ ok: true, connections: [] }) },
       env: { HOME: path.join(studioRoot, "home"), PATH: path.join(studioRoot, "empty") },
-      projectService: { listProjects: async () => ({ ok: true, projects: [] }) },
+      project: { listProjects: async () => ({ ok: true, projects: [] }) },
       async runCommand({ args, command }) {
         if (command === "git" && args.join(" ") === "var GIT_AUTHOR_IDENT") {
           return ident ? { ok: true, stdout: `${ident} 1761200000 +0800\n` } : { ok: false, error: "spawn git ENOENT" };

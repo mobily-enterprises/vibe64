@@ -33,7 +33,7 @@ async function fixture(t) {
     await writeFile(path.join(store.paths("shared-id").dropZoneRoot, "shared.txt"), `${slug} exchange`);
     stores.set(slug, store);
   }
-  const service = createService({ logger: console, projectService: { async createRuntime() {
+  const service = createService({ logger: console, project: { async createRuntime() {
     const store = stores.get(currentProjectRequestContext().slug);
     return { store, getSession: store.readSession };
   } } });

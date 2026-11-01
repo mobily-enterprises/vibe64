@@ -61,19 +61,19 @@ function outputsView(root = "", outputs = {}) {
  * @param {object} dependencies
  * @param {RuntimeEnv} [dependencies.env]
  * @param {typeof inspectVibe64Outputs} [dependencies.inspectOutputs]
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  */
 function createService({
   env = process.env,
   inspectOutputs = inspectVibe64Outputs,
-  projectService
+  project
 }) {
   async function rootForInput(input) {
     const sessionId = String(input.sessionId || "").trim();
     if (!sessionId) {
-      return projectServiceSourceRoot(projectService);
+      return projectServiceSourceRoot(project);
     }
-    const runtime = await projectService.createRuntime({
+    const runtime = await project.createRuntime({
       inspectSource: false
     });
     const session = await runtime.getSession(sessionId, {
@@ -90,7 +90,7 @@ function createService({
   }
 
   async function projectEnvironment(input) {
-    const userEnvironment = await projectService.projectInspectionEnvironment({
+    const userEnvironment = await project.projectInspectionEnvironment({
       scope: "dev",
       sessionId: input.sessionId
     });
@@ -106,7 +106,7 @@ function createService({
    */
   async function resourcesBeingPrepared(input) {
     try {
-      return (await projectService.projectEnvironmentStatus({ scope: "dev", sessionId: input.sessionId })).status === "not-prepared";
+      return (await project.projectEnvironmentStatus({ scope: "dev", sessionId: input.sessionId })).status === "not-prepared";
     } catch {
       return false;
     }

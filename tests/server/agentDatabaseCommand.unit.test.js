@@ -22,7 +22,7 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
-function projectService() {
+function project() {
   const state = {
     contexts: [],
     currentProject: {
@@ -61,10 +61,10 @@ function run(command, args, env, input = "") {
 }
 
 test("agent database command refreshes only its bound session schema", async () => {
-  const project = projectService();
+  const projectRecord = project();
   const refreshes = [];
   let databaseTools = null;
-  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: project, readDatabaseTools: () => databaseTools });
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: projectRecord, readDatabaseTools: () => databaseTools });
   databaseTools = ({
     async refreshSchema(input) {
       refreshes.push(input);
@@ -91,7 +91,7 @@ test("agent database command refreshes only its bound session schema", async () 
     tableCount: 3
   });
   assert.deepEqual(refreshes, [{ sessionId: "database-session", source: "agent" }]);
-  assert.deepEqual(project.state.contexts, ["catalogue"]);
+  assert.deepEqual(projectRecord.state.contexts, ["catalogue"]);
 
   const otherSession = await command.run({
     args: ["refresh"],
@@ -102,9 +102,9 @@ test("agent database command refreshes only its bound session schema", async () 
 });
 
 test("agent database overview exposes schema and authoring guidance only for its bound session", async () => {
-  const project = projectService();
+  const projectRecord = project();
   let databaseTools = null;
-  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: project, readDatabaseTools: () => databaseTools });
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: projectRecord, readDatabaseTools: () => databaseTools });
   const reads = [];
   databaseTools = ({
     refreshSchema() { assert.fail("Overview should use the existing snapshot"); },
@@ -121,16 +121,16 @@ test("agent database overview exposes schema and authoring guidance only for its
 });
 
 test("agent database command refuses a stale project binding", async () => {
-  const project = projectService();
+  const projectRecord = project();
   let databaseTools = null;
-  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: project, readDatabaseTools: () => databaseTools });
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: projectRecord, readDatabaseTools: () => databaseTools });
   databaseTools = ({
     async refreshSchema() {
       assert.fail("a stale project must not reach the database provider");
     }
   });
   await command.bindSession("stale-database-session");
-  project.state.currentProject = {
+  projectRecord.state.currentProject = {
     projectRoot: "/srv/projects/recreated-catalogue",
     slug: "catalogue"
   };
@@ -147,7 +147,7 @@ test("agent database command refuses a stale project binding", async () => {
 test("agent ERD wrapper reads geometry and submits stdin moves only to its bound session", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-erd-command-"));
   let databaseTools = null;
-  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: projectService(), readDatabaseTools: () => databaseTools });
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: project(), readDatabaseTools: () => databaseTools });
   const calls = [];
   databaseTools = ({
     refreshSchema() { assert.fail("ERD commands do not refresh the schema"); },
@@ -188,9 +188,9 @@ test("agent ERD wrapper reads geometry and submits stdin moves only to its bound
 
 test("agent database wrapper authenticates to its session socket", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-database-command-"));
-  const project = projectService();
+  const projectRecord = project();
   let databaseTools = null;
-  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: project, readDatabaseTools: () => databaseTools });
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: projectRecord, readDatabaseTools: () => databaseTools });
   const sessionId = "database-wrapper-session";
   databaseTools = ({
     async refreshSchema() {
@@ -228,7 +228,7 @@ test("agent database wrapper authenticates to its session socket", async () => {
 test("agent database control has random credentials, a generation and a health check", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-database-control-"));
   let databaseTools = null;
-  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: projectService(), readDatabaseTools: () => databaseTools });
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: project(), readDatabaseTools: () => databaseTools });
   const sessionId = "database-control-session";
   databaseTools = ({ async refreshSchema() { return { ok: true, schema: { tables: [] } }; } });
   try {
@@ -260,7 +260,7 @@ test("agent database control has random credentials, a generation and a health c
 test("agent database control never removes a socket owned by another live listener", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-database-owner-"));
   let databaseTools = null;
-  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: projectService(), readDatabaseTools: () => databaseTools });
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: project(), readDatabaseTools: () => databaseTools });
   const sessionId = "database-owner-session";
   const probe = await prepareAgentDatabaseCommand({ commandService: command, sessionId, wrapperHostDir: root });
   await command.closeAllForSession(sessionId);

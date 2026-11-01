@@ -129,7 +129,7 @@ test("helper and individual database commands use the same authenticated session
   const databaseTools = {
     async refreshSchema(input) { calls.push(input); return { ok: true, schema: { tables: [] } }; }
   };
-  const command = createAgentDatabaseCommandService({ logger: silentLogger, projectService: {
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: {
     async readCurrentProject() { return { slug: "demo", projectRoot: root }; },
     async runInProjectContext(slug, operation) { assert.equal(slug, "demo"); return operation(); }
   }, readDatabaseTools: () => databaseTools });

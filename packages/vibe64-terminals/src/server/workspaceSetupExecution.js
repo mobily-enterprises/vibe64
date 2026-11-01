@@ -31,7 +31,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * @param {object} dependencies
  * @param {(request: object) => Promise<object>} dependencies.connectedPreparation
  * @param {typeof import("@local/vibe64-execution/server").finishVibe64Workflow} dependencies.finishWorkflow
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {typeof import("@local/vibe64-execution/server").runVibe64Command} dependencies.runCommand
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
  * @param {(request: object) => Promise<object>} dependencies.startWorkflow
@@ -39,7 +39,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 function createWorkspaceSetupExecution({
   connectedPreparation,
   finishWorkflow,
-  projectService,
+  project,
   runCommand,
   runnerState,
   startWorkflow
@@ -66,7 +66,7 @@ function createWorkspaceSetupExecution({
     const environmentRecords = preparedEnvironment || await loadProjectExecutionEnvRecords({
       prepare: true,
       includeResourceConfiguration: true,
-      projectService,
+      project,
       session,
       target: "workspace-setup"
     });

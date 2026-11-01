@@ -234,10 +234,10 @@ async function gitIdentityCheck({ runCommand, studioRoot }) {
   };
 }
 
-async function inspectWorkspace({ packs = true, projectService, studioRoot }) {
+async function inspectWorkspace({ packs = true, project, studioRoot }) {
   try {
     await access(path.join(studioRoot, "package.json"));
-    const catalog = await projectService.listProjects();
+    const catalog = await project.listProjects();
     if (catalog?.ok === false) {
       throw new Error(catalog.error || catalog.errors?.[0]?.message || "Project catalog is unavailable.");
     }
@@ -278,13 +278,13 @@ const LOCAL_ACCOUNT_HINTS = Object.freeze({
   default: ""
 });
 
-async function inspectAccounts({ connectionsService, input, packs = true }) {
+async function inspectAccounts({ connections, input, packs = true }) {
   try {
-    const result = await connectionsService.getStatus(input);
+    const result = await connections.getStatus(input);
     if (result?.ok === false) throw new Error(result.error || result.blockedReason || "Account status could not be read.");
-    const connections = Array.isArray(result?.connections) ? result.connections : [];
-    if (!connections.length) throw new Error("The account service returned no connection status.");
-    return connections.map((account) => {
+    const accountConnections = Array.isArray(result?.connections) ? result.connections : [];
+    if (!accountConnections.length) throw new Error("The account service returned no connection status.");
+    return accountConnections.map((account) => {
       const label = account.label || (account.id === "github" ? "GitHub authentication" : "AI connection");
       const check = {
         id: `${account.id}-auth`,
@@ -379,18 +379,18 @@ function packCommandChecks(check, { runCommand, studioRoot }) {
 
 /**
  * @param {object} dependencies
- * @param {ConnectionsService} dependencies.connectionsService
- * @param {ProjectService} dependencies.projectService
+ * @param {ConnectionsService} dependencies.connections
+ * @param {ProjectService} dependencies.project
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {string} dependencies.studioRoot
  */
 function createService({
-  connectionsService,
-  projectService,
+  connections,
+  project,
   runCommand = runVibe64Command,
   studioRoot
 } = {}) {
-  if (!connectionsService || !projectService || !studioRoot) {
+  if (!connections || !project || !studioRoot) {
     throw new TypeError("Studio Health requires account, project, and Studio-root services.");
   }
 
@@ -452,8 +452,8 @@ function createService({
     ];
 
     const [workspace, accounts, local, commands] = await Promise.all([
-      inspectWorkspace({ packs, projectService, studioRoot }),
-      inspectAccounts({ connectionsService, input, packs }),
+      inspectWorkspace({ packs, project, studioRoot }),
+      inspectAccounts({ connections, input, packs }),
       packs ? [] : inspectLocalTools({ nodeMajor, runCommand, studioRoot }),
       Promise.all(commandChecks)
     ]);

@@ -95,7 +95,7 @@ require("node:http").createServer((_request, response) => {
     codexTerminalController: { codexToolHomeRequired: false },
     env: { VIBE64_RUNTIME_NAMESPACE: "preview-preparation-test" },
     logger: silentLogger,
-    projectService: project,
+    project,
     publishSessionChanged
   });
   await terminals.openProjectRuntime();

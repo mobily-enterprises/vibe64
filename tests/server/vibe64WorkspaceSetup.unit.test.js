@@ -111,7 +111,7 @@ test("workspace preparation executes declared argv in order through the managed 
           workdir: "web"
         }]
       }),
-      projectService: {
+      project: {
         async projectExecutionEnvironment(input) {
           assert.equal(input.includeResourceConfiguration, true);
           return {
@@ -222,7 +222,7 @@ test("a requested connected preparation returns at once and records each progres
           { repository: "example/vibe64", update: { status: "skipped", reason: "It has changes that are not on main yet." } }
         ] };
       },
-      projectService: {
+      project: {
         async projectExecutionEnvironment() { return { environment: {}, resourceConfigurationFingerprint: "c".repeat(64) }; }
       },
       async runCommand() { return { exitCode: 0, ok: true, output: "" }; }
@@ -281,7 +281,7 @@ for (const [phase, change] of ["environment preparation", "admission"].flatMap((
       const finishes = [];
       const workflowId = "4c6a4b6c-1fde-4364-9f48-5b1cafb2535c";
       const runner = createWorkspaceSetupRunner({
-        projectService: {
+        project: {
           async projectExecutionEnvironment() {
             environmentCalls += 1;
             if (phase === "environment preparation") await writeFile(stackPath, updated);
@@ -343,7 +343,7 @@ test("source invalidation survives restart and reruns an unchanged preparation r
     let installs = 0;
     const options = {
       inspect: () => readySetup(),
-      projectService: {},
+      project: {},
       async runCommand() { installs += 1; return { ok: true }; }
     };
     const runner = createWorkspaceSetupRunner(options);
@@ -393,7 +393,7 @@ test("resource refusal preserves its decision identity across reload and clears 
     let rejected = true;
     let commands = 0;
     const runner = createWorkspaceSetupRunner({
-      inspect: () => readySetup(), projectService: {},
+      inspect: () => readySetup(), project: {},
       async startWorkflow() {
         return rejected ? { ok: false, code: "vibe64_capacity_rejected", error: "Insufficient peak headroom.", admission: { id } }
           : { ok: true, workflow: null };
@@ -424,7 +424,7 @@ test("workspace preparation transcript remains visible after a runtime restart",
     const { runtime, session } = await workspaceSession(targetRoot, "restart-session");
     const runner = createWorkspaceSetupRunner({
       inspect: () => readySetup(),
-      projectService: {},
+      project: {},
       async runCommand() {
         return {
           exitCode: 0,
@@ -471,7 +471,7 @@ test("workspace preparation configuration never infers a package manager", async
         status: "unconfigured",
         steps: []
       }),
-      projectService: {},
+      project: {},
       async runCommand() {
         commandCount += 1;
       }
@@ -513,7 +513,7 @@ test("workspace preparation starts when a later Stack declaration supplies a rec
             status: "unconfigured",
             steps: []
           },
-      projectService: {},
+      project: {},
       async runCommand() {
         commandCount += 1;
         return {
@@ -546,7 +546,7 @@ test("workspace preparation reruns a successful recipe after its identity change
     let commandCount = 0;
     const runner = createWorkspaceSetupRunner({
       inspect: () => readySetup({ recipeHash }),
-      projectService: {},
+      project: {},
       async runCommand() {
         commandCount += 1;
         return {
@@ -580,7 +580,7 @@ test("unchanged setup provisions newly declared resources before reusing a succe
     let commands = 0;
     const runner = createWorkspaceSetupRunner({
       inspect: () => readySetup(),
-      projectService: {
+      project: {
         async projectEnvironmentStatus() { return { status: prepared ? "ready" : "not-prepared" }; },
         async projectExecutionEnvironment() {
           preparations += 1;
@@ -639,7 +639,7 @@ for (const scenario of ["preserved", "created", "changed identity", "unknown", "
       let includesEvidence = true;
       const runner = createWorkspaceSetupRunner({
         inspect: () => readySetup(),
-        projectService: {
+        project: {
           async projectEnvironmentStatus() {
             return { status: prepared ? "ready" : "not-prepared",
               ...(includesEvidence ? { resourcePreparation: { identity, preserved: prepared } } : {}) };
@@ -694,7 +694,7 @@ for (const failure of ["provisioning failed", "still unprepared", "recipe change
       let commands = 0;
       const runner = createWorkspaceSetupRunner({
         inspect: () => readySetup({ recipeHash }),
-        projectService: {
+        project: {
           async projectEnvironmentStatus() { return { status: prepared ? "ready" : "not-prepared", resourcePreparation }; },
           async projectExecutionEnvironment() {
             if (recovering && failure === "provisioning failed") throw new Error("Database unavailable.");
@@ -729,7 +729,7 @@ test("workspace preparation treats a missing Genesis Stack as unconfigured", asy
         error.code = "STACK_REQUIRED";
         throw error;
       },
-      projectService: {}
+      project: {}
     });
 
     const result = await runner.start({ runtime, session });
@@ -748,7 +748,7 @@ test("workspace preparation reports project contract decisions with Genesis's me
       const runner = createWorkspaceSetupRunner({
         inspect: async () => { throw Object.assign(new Error(message), { code }); },
         inspectProjectFormat: async () => ({ action: "none", status: "current" }),
-        projectService: {},
+        project: {},
         async runCommand(request) { commands.push(request); return { ok: true, exitCode: 0, output: "" }; }
       });
       for (const retry of [false, true]) {
@@ -792,7 +792,7 @@ test("workspace preparation retry migrates a recognized legacy Genesis project b
           supportedVersion: 2
         };
       },
-      projectService: {},
+      project: {},
       async runCommand(request) {
         calls.push(request);
         return {
@@ -866,7 +866,7 @@ test("workspace preparation never migrates a current project after an inspection
           supportedVersion: 2
         };
       },
-      projectService: {},
+      project: {},
       async runCommand() {
         commandCount += 1;
         return { exitCode: 0, ok: true };
@@ -896,7 +896,7 @@ test("workspace preparation keeps a failed Genesis migration recoverable", async
           status: "outdated"
         };
       },
-      projectService: {},
+      project: {},
       async runCommand() {
         return {
           exitCode: 1,
@@ -930,7 +930,7 @@ test("ambiguous setup remains an actionable session state without executing eith
         status: "blocked",
         steps: []
       }),
-      projectService: {},
+      project: {},
       async runCommand() {
         commandCount += 1;
       }
@@ -959,7 +959,7 @@ test("a program that isn't installed reads as one plain sentence", async () => {
       async startWorkflow() { return { ok: true, workflow: { id: "setup-workflow" } }; },
       async finishWorkflow() {},
       inspect: () => readySetup(),
-      projectService: {
+      project: {
         async projectExecutionEnvironment() {
           return { environment: {}, resourceConfigurationFingerprint: "d".repeat(64) };
         }
@@ -983,7 +983,7 @@ test("command failure records a short diagnostic and leaves the session active",
       async startWorkflow() { return { ok: true, workflow: { id: "setup-workflow" } }; },
       async finishWorkflow(id, options) { workflowOutcomes.push({ id, ...options }); },
       inspect: () => readySetup(),
-      projectService: {
+      project: {
         async projectExecutionEnvironment(input) {
           assert.equal(input.includeResourceConfiguration, true);
           return {
@@ -1049,7 +1049,7 @@ test("a failed setup runs again on an explicit start; a success stays cached", a
     let commandCount = 0;
     const runner = createWorkspaceSetupRunner({
       inspect: () => readySetup(),
-      projectService: {},
+      project: {},
       async runCommand() {
         commandCount += 1;
         return shouldFail
@@ -1092,7 +1092,7 @@ test("a long failure keeps its first line intact and marks the omitted middle", 
     assert.ok(stderr.length > 1600);
     const runner = createWorkspaceSetupRunner({
       inspect: () => readySetup(),
-      projectService: {},
+      project: {},
       runCommand: async () => ({ exitCode: 1, ok: false, stderr })
     });
     const { diagnostic } = await (await runner.start({ runtime, session })).completion;
@@ -1113,7 +1113,7 @@ test("an active preparation is shared instead of starting another run", async ()
     });
     const runner = createWorkspaceSetupRunner({
       inspect: () => readySetup(),
-      projectService: {},
+      project: {},
       runCommand: () => commandFinished
     });
 
@@ -1159,7 +1159,7 @@ test("same raw session workspace preparations remain isolated across project con
     const resumedContexts = [];
     const runner = createWorkspaceSetupRunner({
       inspect: () => readySetup(),
-      projectService: {},
+      project: {},
       async runCommand() {
         const slug = currentProjectRequestContext()?.slug;
         gates[slug].enter();
@@ -1239,7 +1239,7 @@ test("admitted practice Workspace setup finishes in original owner control after
     let calls = 0;
     let completion;
     let actualRuntime;
-    const runner = createWorkspaceSetupRunner({ projectService: project, inspect: () => readySetup(),
+    const runner = createWorkspaceSetupRunner({ project, inspect: () => readySetup(),
       async runCommand(request) {
         calls++;
         started();

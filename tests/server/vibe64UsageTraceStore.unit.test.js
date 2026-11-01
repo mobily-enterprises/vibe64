@@ -43,7 +43,7 @@ function fixtureService(sessionRoot, nowIso) {
   const session = { sessionId: "session-fixture", status: "active", sessionRoot, metadata: {} };
   const service = createService({
     now: () => Date.parse(nowIso),
-    projectService: { createRuntime: async () => ({ getSession: async () => session }) },
+    project: { createRuntime: async () => ({ getSession: async () => session }) },
     terminals: {}
   });
   return (method, input = {}) => runWithProjectRequestContext({ slug: "demo" },

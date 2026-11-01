@@ -44,7 +44,7 @@ function realtimeDebugEnabled(env = {}) {
  * @param {ActionCatalogue | null} dependencies.actions
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {SessionConversations} dependencies.sessionConversations
  */
@@ -55,7 +55,7 @@ function createServiceMainConversationHost({
   actions,
   env,
   logger,
-  projectService,
+  project,
   sessionAgent,
   sessionConversations
 }) {
@@ -162,7 +162,7 @@ function createServiceMainConversationHost({
       // Scoped work already has its own authorized host and native identity;
       // opening its existing handle must not hydrate a project session.
       if (context.assistantScope) return createSessionConversationBinding(provider, id, context);
-      const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
+      const runtime = context.runtime || await project.createRuntime({ inspectSource: false });
       const binding = await createSessionConversationBinding(provider, id, {
         ...context,
         runtime,

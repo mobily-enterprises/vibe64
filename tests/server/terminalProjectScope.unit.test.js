@@ -72,7 +72,7 @@ test("Vibe64 terminal roots never fall back to the hosted namespace", () => {
 test("shared conversation hosts preserve Claude's native profile lookup", () => {
   for (const env of [{}, { CLAUDE_CONFIG_DIR: "/tmp/selected-claude-profile" }, { CLAUDE_CONFIG_DIR: "" }]) {
     const unused = () => assert.fail("Preparing a shared host must not read or change project state.");
-    const service = createService({ env, logger: silentLogger, projectService: { readCurrentProject: unused, readEnv: unused,
+    const service = createService({ env, logger: silentLogger, project: { readCurrentProject: unused, readEnv: unused,
       runInProjectContext: unused, saveEnvUserValues: unused, createRuntime: unused, createSessionStore: unused } });
     const host = service.createConversationHost({ id: "colleague-profile", workdir: "/tmp/colleague-profile",
       runtimeRoot: "/tmp/colleague-profile-runtime" });
@@ -96,7 +96,7 @@ test("opt-in browser opening timings retain failure boundaries without request o
       const unused = () => assert.fail("A failed browser read must not start work.");
       const service = createService({ env: { JSKIT_REALTIME_DEBUG: enabled ? "1" : "0" },
         logger: { warn: event => events.push(event) },
-        projectService: { readCurrentProject: unused, readEnv: unused, runInProjectContext: unused,
+        project: { readCurrentProject: unused, readEnv: unused, runInProjectContext: unused,
           saveEnvUserValues: unused, createRuntime: async () => runtime, createSessionStore: unused } });
       await assert.rejects(service.openBrowserConversation("session-1", {}), { code: "conversation_forbidden" });
       assert.equal(events.length, 0, "Unadmitted handles do not enter diagnostics");

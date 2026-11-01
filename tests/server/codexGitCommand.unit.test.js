@@ -125,7 +125,7 @@ function serviceForSession(session = {}, {
     env,
     logger,
     now,
-    projectService: {
+    project: {
       currentProjectSlug,
       readCurrentProject,
       refreshGithub,
@@ -162,7 +162,7 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     const events = [];
     const projects = ["first", "second"].map((slug) => ({ slug, path: path.join(root, slug),
       githubRepository: { fullName: `owner/${slug}` }, repositoryMode: "local_source" }));
-    const projectService = createProjectService({ logger: console,
+    const project = createProjectService({ logger: console,
       projectContext: {
         targetRoot: projects[0].path,
         requestContextMatchesSelectedProject: () => false,
@@ -172,8 +172,8 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     });
     const service = serviceForSession(session, {
       authorizeActorAccess: async ({ actor }) => ({ ok: actor.sessionId === session.sessionId }),
-      refreshGithub: projectService.refreshGithub,
-      readCurrentProject: projectService.readCurrentProject,
+      refreshGithub: project.refreshGithub,
+      readCurrentProject: project.readCurrentProject,
       runGatewayCommand: async () => { throw new Error("Refresh must not read credentials or execute GitHub commands."); }
     });
     const prepared = await runWithProjectRequestContext({ slug: "second", targetRoot: projects[1].path }, () => prepareCodexGitCommand({

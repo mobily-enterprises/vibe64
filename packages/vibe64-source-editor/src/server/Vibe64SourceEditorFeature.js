@@ -45,9 +45,9 @@ const Vibe64SourceEditorFeature = defineFeature({
   }) {
     const sourceEditor = createService({
       logger,
-      projectService: project,
+      project,
       publishSessionChanged: createSessionChangedPublisher(events),
-      terminalService: terminals
+      terminals
     });
     registerRoutes(http, {
       sourceEditor

@@ -174,7 +174,7 @@ const commandServers = createSessionCommandServers({
  * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.reportWorkflowOutcome
  * @param {(sessionId: string) => Promise<object>} dependencies.retryWorkspaceSetup
  * @param {RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
@@ -186,13 +186,13 @@ function createAgentSessionCommandService({
   reportWorkflowOutcome,
   retryWorkspaceSetup,
   logger,
-  projectService,
+  project,
   publishSessionChanged,
   runCommand = runVibe64Command,
   stopExecution = stopVibe64Execution,
   stopOwnedExecutions = stopVibe64OwnedExecutions
 }) {
-  const projectBinding = createAgentCommandProjectBinding(projectService, {
+  const projectBinding = createAgentCommandProjectBinding(project, {
     sessionRequired: ["Vibe64 session command binding is incomplete.", "vibe64_agent_session_command_binding_required"],
     projectRequired: ["Vibe64 session commands require a project.", "vibe64_agent_session_command_project_required"],
     unbound: ["This shell command is not bound to an active Vibe64 session.", "vibe64_agent_session_command_session_unbound"],
@@ -235,8 +235,8 @@ function createAgentSessionCommandService({
 
   async function runInSessionProject(sessionId, operation) {
     const normalizedSessionId = toText(sessionId);
-    const runBound = () => projectBinding.run(normalizedSessionId, async (binding, project) => {
-      const store = await projectService.createSessionStore({
+    const runBound = () => projectBinding.run(normalizedSessionId, async (binding, projectRecord) => {
+      const store = await project.createSessionStore({
         sessionId: normalizedSessionId
       });
       const descriptor = await store.readSessionSourceDescriptor(normalizedSessionId);
@@ -255,7 +255,7 @@ function createAgentSessionCommandService({
         binding,
         store,
         descriptor,
-        project,
+        project: projectRecord,
         sourceRoot: path.resolve(sourceRoot)
       });
     });
@@ -308,16 +308,16 @@ function createAgentSessionCommandService({
   }
 
   async function sessionStatus(sessionId) {
-    return runInSessionProject(sessionId, async ({ descriptor, sourceRoot, project, store }) => {
-      const environment = await projectService.projectEnvironmentStatus({
+    return runInSessionProject(sessionId, async ({ descriptor, sourceRoot, project: projectRecord, store }) => {
+      const environment = await project.projectEnvironmentStatus({
         sessionId,
         session: { ...descriptor, sessionId }
       });
       let setup;
       try {
-        setup = await projectService.inspectWorkspaceSetup({
+        setup = await project.inspectWorkspaceSetup({
           projectRoot: sourceRoot,
-          session: await (await projectService.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false })
+          session: await (await project.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false })
         });
       } catch (error) {
         // The agent repairing or deciding a project contract still needs status;
@@ -336,7 +336,7 @@ function createAgentSessionCommandService({
       return {
         ok: true,
         sessionId,
-        project: toText(project.slug || project.name),
+        project: toText(projectRecord.slug || projectRecord.name),
         environment,
         repository: repositoryProblem
           ? { needsHelp: true, ...repositoryProblem }
@@ -439,7 +439,7 @@ function createAgentSessionCommandService({
       return cwd;
     }
     const runtimeConfigEnv = await loadProjectExecutionEnv({
-      projectService,
+      project,
       session: { ...context.descriptor, sessionId: toText(input.sessionId) }
     });
     const commandId = randomUUID();

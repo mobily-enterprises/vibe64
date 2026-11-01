@@ -170,7 +170,7 @@ async function directorySize(directory) {
 
 /**
  * @param {object} dependencies
- * @param {ProjectService} dependencies.projectService
+ * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
  * @param {RuntimeEvents} dependencies.events
  * @param {RuntimeLogger} dependencies.logger
@@ -179,7 +179,7 @@ async function directorySize(directory) {
  * @param {object} [dependencies.timing]
  */
 function createService({
-  projectService,
+  project,
   terminals,
   events,
   logger,
@@ -204,7 +204,7 @@ function createService({
   async function sessionContext(sessionId = "") {
     const id = String(sessionId || "").trim();
     if (!id) throw recordingError(400, "A session id is required.", "vibe64_invalid_session_id");
-    const runtime = await projectService.createRuntime({ sessionId: id });
+    const runtime = await project.createRuntime({ sessionId: id });
     const session = await runtime.getSession(id);
     return {
       directory: usageRecordingsPath(session),

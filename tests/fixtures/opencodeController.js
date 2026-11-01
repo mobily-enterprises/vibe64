@@ -473,7 +473,7 @@ async function controllerHarness({
         providerRevision: connection.providerRevision
       }];
     },
-    projectService: {
+    project: {
       async readCurrentProject() { return { sourceRoot }; },
       currentServiceDataRoot() {
         return path.join(root, "services");
@@ -524,7 +524,7 @@ async function controllerHarness({
     const nativeOwner = controller.prepareConversationHost(session.sessionId, {}, "activity").native.owner;
     const { monitors, turns, turnSnapshot: openCodeTurnSnapshot } = nativeOwner;
     async function contextFor(sessionId = "", options = {}) {
-      return readSessionConversationContext("opencode", controllerOptions.projectService, sessionId, options);
+      return readSessionConversationContext("opencode", controllerOptions.project, sessionId, options);
     }
     const conversations = createConversationRuntime({
       authorize: ({ context, conversationId }) => context.sessionId === conversationId,
