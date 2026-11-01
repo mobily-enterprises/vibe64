@@ -113,8 +113,8 @@ function createTrainingCodeAuthorship({
 }) {
   async function liveFiles(attempt, files) {
     return project.runInProjectContext(attempt.projectSlug, async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(attempt.preparation.initialSessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(attempt.preparation.initialSessionId);
       if (!session || session.sessionId !== attempt.preparation.initialSessionId) {
         throw conflictFailure("VIBE64_TRAINING_CODE_SESSION_STALE", "The prepared lesson session is unavailable.");
       }

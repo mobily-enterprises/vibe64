@@ -4375,7 +4375,7 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   const producer = createClaudeConversationHost({ env: host.env, command: () => host.commands.claude,
     publishConversation: async () => {},
     credentialHome: { home: host.env.HOME }, systemRoot: root,
-    project: { createRuntime: () => assert.fail("A retained scoped producer cannot borrow a development session") },
+    project: { createRuntime: () => assert.fail("A retained scoped producer cannot borrow a development session"), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     accountStatus: async () => ({ loggedIn: true, authMethod: "claude.ai", email: await readFile(host.env.TEST_ACCOUNT, "utf8") }),
     // Existing standalone process facility: the original host's managed identity
     // descriptor is not an execution API. No alternate native owner is created.

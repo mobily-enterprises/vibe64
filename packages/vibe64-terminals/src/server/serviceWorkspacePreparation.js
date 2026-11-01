@@ -41,9 +41,7 @@ function createServiceWorkspacePreparation({
   }
 
   async function prepareRenewalWorkspaceSetup(sessionId = "", options = {}) {
-    const runtime = options.runtime || await project.createRuntime({
-      inspectSource: false
-    });
+    const runtime = options.runtime || await project.createRuntimeWithoutSource();
     const exclusive = await runVibe64RenewalAgentWriteExclusive(
       runtime,
       sessionId,
@@ -69,12 +67,8 @@ function createServiceWorkspacePreparation({
       session: existingSession = null
     } = options;
     const requestContext = captureProjectRequestContext();
-    const runtime = existingRuntime || await project.createRuntime({
-      inspectSource: false
-    });
-    const session = existingSession || await runtime.getSession(sessionId, {
-      inspectSource: false
-    });
+    const runtime = existingRuntime || await project.createRuntimeWithoutSource();
+    const session = existingSession || await runtime.getSessionWithoutSource(sessionId);
     const setup = await workspaceSetup.start({
       renewal,
       rerunFailed,
@@ -87,17 +81,13 @@ function createServiceWorkspacePreparation({
     if (publish && setupChanged) {
       await publishSessionChanged.agentTerminal(sessionId, {
         reason: "workspace-setup-updated",
-        session: await runtime.getSession(sessionId, {
-          inspectSource: false
-        })
+        session: await runtime.getSessionWithoutSource(sessionId)
       });
       if (setup.completion) {
         const publishCompleted = async () => {
           await publishSessionChanged.agentTerminal(sessionId, {
             reason: "workspace-setup-completed",
-            session: await runtime.getSession(sessionId, {
-              inspectSource: false
-            })
+            session: await runtime.getSessionWithoutSource(sessionId)
           });
         };
         void setup.completion.then(() => inProjectContext(requestContext, publishCompleted)).catch((error) => {

@@ -23,9 +23,11 @@ function projectApi() {
       return {
         async getSession(sessionId) {
           return { sessionId, sourcePath: "", targetRoot: "" };
-        }
+        },
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
       };
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     currentProjectSourceRoot() {
       return "";
     },

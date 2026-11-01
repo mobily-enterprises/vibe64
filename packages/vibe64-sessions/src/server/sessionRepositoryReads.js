@@ -26,8 +26,8 @@ async function optionalRepositorySession(project, value = "") {
   if (!sessionId) {
     return null;
   }
-  const runtime = await project.createRuntime({ inspectSource: false });
-  return runtime.getSession(sessionId, { inspectSource: false });
+  const runtime = await project.createRuntimeWithoutSource();
+  return runtime.getSessionWithoutSource(sessionId);
 }
 
 /**

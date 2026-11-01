@@ -412,7 +412,8 @@ test("a v2 lesson passes start, resume, learning.read, completion, finish and de
       async createRuntime() { return { async getSession() {
         if (!session) throw Object.assign(new Error("Missing session"), { code: "vibe64_session_not_found" });
         return session;
-      } }; } },
+      }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     sessions: { async createSession(_input, { sessionId }) { session = { sessionId, status: "open", workspaceSetup: { status: "succeeded" } }; return session; } },
     terminals: { async workspaceSetupIsPrepared() { return true; } }
   });

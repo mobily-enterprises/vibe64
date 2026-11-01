@@ -84,9 +84,7 @@ function createProjectDevelopmentDatabase({
   async function currentDevelopmentDatabasePolicy(input = {}) {
     const openSessions = Array.isArray(input.openSessions)
       ? input.openSessions
-      : await (await sessionWork.createRuntime({
-          inspectSource: false
-        })).listSessionSummaries({
+      : await (await sessionWork.createRuntimeWithoutSource()).listSessionSummaries({
           statusGroup: "open"
         });
     return developmentDatabasePolicy({

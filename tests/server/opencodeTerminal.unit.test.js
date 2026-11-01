@@ -2801,6 +2801,7 @@ async function boundMainOpenCodeFixture(t, options = {}) {
   if (suppliedRuntime) {
     harness.runtime = suppliedRuntime;
     harness.controllerOptions.project.createRuntime = async () => suppliedRuntime;
+    harness.controllerOptions.project.createRuntimeWithoutSource = harness.controllerOptions.project.createRuntime;
   } else {
     await appStore.createSession({ sessionId: "session-1", runtimeKind: "genesis" });
     for (const [key, value] of Object.entries(harness.session.metadata)) await appStore.writeMetadataValue("session-1", key, value);
@@ -2814,7 +2815,10 @@ async function boundMainOpenCodeFixture(t, options = {}) {
     return result;
   } };
   harness.runtime.store = store;
-  if (!suppliedRuntime) harness.runtime.getSession = id => store.readSession(id);
+  if (!suppliedRuntime) {
+    harness.runtime.getSession = id => store.readSession(id);
+    harness.runtime.getSessionWithoutSource = harness.runtime.getSession;
+  }
   const context = { runtime: harness.runtime, sessionId: suppliedRuntime ? harness.session.sessionId : "session-1", providerId: "opencode",
     vibe64User: { id: "owner", username: "Owner", role: "owner" } };
   conversations = createConversationRuntime({ authorize: ({ context, conversationId }) => context.sessionId === conversationId,
@@ -2912,6 +2916,7 @@ async function mainOpenCodeServiceFixture(t, { actions = null, onSessionChanged 
   const project = {
     ...f.controllerOptions.project,
     createRuntime: () => f.runtime,
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     createSessionStore: () => f.store,
     currentTargetRoot: () => f.root,
     readCurrentProject: async () => ({ path: f.root, projectContextRoot: f.root,
@@ -3056,6 +3061,7 @@ test("main OpenCode closes its retained native owner when the session is unreada
       if (unavailable === "unreadable") throw new Error("Session storage is unavailable.");
       return null;
     };
+    f.runtime.getSessionWithoutSource = f.runtime.getSession;
     const closed = await f.manager.closeSession(f.context.sessionId, { ...f.context, session: null });
     assert.equal(closed.ok, true, JSON.stringify(closed));
     assert.equal(closed.processExitProof.exited, true);
@@ -3082,6 +3088,7 @@ test("main OpenCode close retires delayed initialization without deleting a late
       }
       return readSession(...args);
     };
+    f.runtime.getSessionWithoutSource = f.runtime.getSession;
     const opening = f.open("native");
     opening.catch(() => {});
     t.after(() => release.resolve(null));
@@ -3094,6 +3101,7 @@ test("main OpenCode close retires delayed initialization without deleting a late
     await assert.rejects(opening, outcome === "resolve"
       ? { code: "conversation_closed" } : /retired initialization read failed/);
     f.runtime.getSession = async () => { throw new Error("Do not reopen the replacement to close it."); };
+    f.runtime.getSessionWithoutSource = f.runtime.getSession;
     assert.equal((await f.manager.closeSession(f.context.sessionId, f.context)).ok, true);
     await assert.rejects(replacement.read(), { code: "conversation_closed" },
       "the late retired initializer must not remove the replacement from the retained map");
@@ -4599,14 +4607,14 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
     actorId: "owner", actorDisplayName: "Owner", confirmedAt: "2026-10-10T10:00:00.000Z",
     metadata: { assistant_selection: f.session.metadata.assistant_selection },
     sourceContext: { expectedCommit: f.git("rev-parse", "HEAD") } });
-  const successor = await f.runtime.getSessionForRenewal(successorId, { inspectSource: false });
+  const successor = await f.runtime.getSessionForRenewalWithoutSource(successorId);
   const predecessor = await f.store.readSessionForRenewal("session-1");
   assert.equal(successor.status, "renewal_pending");
   assert.equal(successor.metadata.renewed_from, "session-1");
   assert.equal(successor.sourcePath, path.join(f.root, "sessions", "active", successorId, "source"));
   assert.ok(path.isAbsolute(successor.sessionRoot));
   assert.ok(path.isAbsolute(f.runtime.stateRoot));
-  await assert.rejects(f.runtime.getSession(successorId, { inspectSource: false }),
+  await assert.rejects(f.runtime.getSessionWithoutSource(successorId),
     { code: "vibe64_session_renewal_private" });
   const forbiddenReads = [];
   const restoreReaders = [];
@@ -4644,14 +4652,14 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
       assert.equal(preparedHost.worktreePath, successor.sourcePath);
       assert.equal(f.promptCalls.length, 1, "Same-operation retry must inspect the exact native seed without resending");
       assert.equal(f.processStops.length, 0, "Invalid ACK must not release native ownership");
-      const retained = await f.runtime.getSessionForRenewal(successorId, { inspectSource: false });
+      const retained = await f.runtime.getSessionForRenewalWithoutSource(successorId);
       assert.equal(retained.status, "renewal_pending");
       assert.ok(retained.metadata.opencode_conversation_id);
       assert.equal(retained.metadata.agent_renewal_seed_acknowledged_at, undefined);
     }
     // Match the workflow's accepted-native failure catch, without accepting its Markdown ACK.
     const retainedNativeRows = structuredClone(nativeResponse.messages);
-    const cleanupSuccessor = await f.runtime.getSessionForRenewal(successorId, { inspectSource: false });
+    const cleanupSuccessor = await f.runtime.getSessionForRenewalWithoutSource(successorId);
     let cleaned;
     try {
       cleaned = await f.service.closeRenewalSuccessorSessionTerminals(cleanupSuccessor, { renewalId, runtime: f.runtime });
@@ -4662,7 +4670,7 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
     assert.equal(cleaned.ok, true);
     assert.equal(f.promptCalls.length, 1, "Accepted-native failure cleanup must not replay the renewal seed");
     assert.deepEqual(nativeResponse.messages, retainedNativeRows, "Cleanup must retain the exact native seed history");
-    const cleanedSuccessor = await f.runtime.getSessionForRenewal(successorId, { inspectSource: false });
+    const cleanedSuccessor = await f.runtime.getSessionForRenewalWithoutSource(successorId);
     assert.equal(cleanedSuccessor.status, "renewal_pending");
     assert.equal(cleanedSuccessor.metadata.agent_renewal_seed_acknowledged_at, undefined);
     // Retained helper cleanup reuses the same event writer within the exact private lease.
@@ -4683,13 +4691,13 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
         return { ok: deleteConfirmed, error: deleteConfirmed ? "" : "Helper deletion is not confirmed" };
       } }), turns: new Map(), temporaryConversations: new Map(), publishSessionChanged: async () => {} });
     const privateCleanup = { sessionId: successorId, runtime: f.runtime,
-      session: await f.runtime.getSessionForRenewal(successorId, { inspectSource: false }),
+      session: await f.runtime.getSessionForRenewalWithoutSource(successorId),
       renewalCleanup: { kind: "successor", renewalId, sourceSessionId: "session-1" }, vibe64User: f.context.vibe64User };
     await assert.rejects(presentation.cleanupReasoningSummary({ ...privateCleanup,
       renewalCleanup: { ...privateCleanup.renewalCleanup, renewalId: "wrong-renewal" } }), TypeError);
     assert.equal(deletedHelpers.length, 0);
     await assert.rejects(presentation.cleanupReasoningSummary(privateCleanup), /Helper deletion is not confirmed/);
-    const failedHelperRun = (await f.runtime.getSessionForRenewal(successorId, { inspectSource: false })).agentRuns.find(run => run.id === "opencode_server");
+    const failedHelperRun = (await f.runtime.getSessionForRenewalWithoutSource(successorId)).agentRuns.find(run => run.id === "opencode_server");
     assert.deepEqual(failedHelperRun.reasoningSummaryHelper, helper);
     assert.equal(failedHelperRun.events.some(event => event.kind === "reasoning-helper-closed"), false);
     assert.ok((await (await import("node:fs/promises")).stat(helperRoot)).isDirectory());
@@ -4698,7 +4706,7 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
     assert.deepEqual(deletedHelpers[1], { scope: helper.scope,
       input: { conversationId: helper.conversationId, cleanupExecutionId: helper.executionId },
       options: { assistantSelection: helper.selection, vibe64User: f.context.vibe64User } });
-    const closedHelperRun = (await f.runtime.getSessionForRenewal(successorId, { inspectSource: false })).agentRuns.find(run => run.id === "opencode_server");
+    const closedHelperRun = (await f.runtime.getSessionForRenewalWithoutSource(successorId)).agentRuns.find(run => run.id === "opencode_server");
     assert.equal(closedHelperRun.reasoningSummaryHelper, null);
     assert.equal(closedHelperRun.events.filter(event => event.kind === "reasoning-helper-closed").length, 1);
     await assert.rejects((await import("node:fs/promises")).stat(helperRoot), { code: "ENOENT" });

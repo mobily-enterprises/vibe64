@@ -192,7 +192,7 @@ function createSessionRenewalController({
         await predecessorSession.freezePredecessorTerminalAdmission(current);
         try {
           await predecessorSession.closePredecessorTerminals(runtime, current, idleSession);
-          const session = await runtime.getSession(sessionId, { inspectSource: false });
+          const session = await runtime.getSessionWithoutSource(sessionId);
           const basis = await inspectSessionRenewalEligibility({
             operationId: operationId(current.renewalId, "confirm"),
             runtime,
@@ -311,9 +311,7 @@ function createSessionRenewalController({
       }
       let created = null;
       await runtime.store.mutateSessionForRenewal(sessionId, async () => {
-        const source = await runtime.getSessionForRenewal(sessionId, {
-          inspectSource: false
-        });
+        const source = await runtime.getSessionForRenewalWithoutSource(sessionId);
         if (
           source?.archived === true ||
           toText(source?.sessionId) !== toText(sessionId) ||

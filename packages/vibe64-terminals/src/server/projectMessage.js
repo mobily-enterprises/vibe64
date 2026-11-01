@@ -27,7 +27,7 @@ async function sendProjectMessage(input, { project, authorize, assertOpen, prepa
       );
     }
     assertOpen(projectRecord);
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     const explicitSession = input.destinationSessionId !== undefined;
     if (explicitSession && !input.destinationSessionId) {
       throw vibe64Error("An exact destination session ID is required after --session.", "vibe64_project_message_session_required");
@@ -145,7 +145,7 @@ async function readProjectPreview(input, { project, authorize, assertOpen, launc
       );
     }
     assertOpen(projectRecord);
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     const session = input.destinationSessionId
       ? await runtime.store.readSession(input.destinationSessionId)
       : await runtime.store.readCurrentSession();

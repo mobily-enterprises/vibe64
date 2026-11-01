@@ -458,7 +458,7 @@ function createClaudeConversationHost({
           async read(current, representation, nativeState) {
             if (representation === "native") return { nativeResult: await sessionState(current, nativeState) };
             const nativeResult = current ? await sessionState(current, nativeState) : null;
-            const session = await runtime.getSession(sessionId, { inspectSource: false });
+            const session = await runtime.getSessionWithoutSource(sessionId);
             const id = nativeResult?.thread.id || toText(session.metadata.claude_conversation_id);
             const turn = conversations.readRetainedTurn(context.key, id, {
               nativeResult,

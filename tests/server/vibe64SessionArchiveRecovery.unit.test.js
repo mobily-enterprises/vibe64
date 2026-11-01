@@ -26,6 +26,7 @@ function fixture(operation = null) {
       }
     },
     async getSession() { return structuredClone(session); },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() { return [structuredClone(session)]; },
     async markSessionClosing() {
       session.metadata.session_closing_reason = "archived";
@@ -40,6 +41,7 @@ function fixture(operation = null) {
   const terminals = { async closeSessionTerminals() { calls.push("stop"); } };
   const project = {
     async createRuntime() { return runtime; },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     async releaseSessionResources() { calls.push("resources"); return { ok: true }; }
   };
   const service = () => createService({
@@ -186,7 +188,7 @@ test("SIGKILL leaves durable progress and a fresh runtime recovers through the s
     const runtime = new Vibe64SessionRuntime(options);
     const events = [];
     const service = createService({
-      project: { createRuntime: async () => runtime },
+      project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
       terminals: { closeSessionTerminals: async () => ({ ok: true }) },
       publishSessionChanged: async (_id, event) => { events.push(event.reason); }
     });

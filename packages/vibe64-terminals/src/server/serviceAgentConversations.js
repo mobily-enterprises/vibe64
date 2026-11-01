@@ -78,7 +78,7 @@ function createServiceAgentConversations({
   }
 
   async function listAgentConversationStorage(sessionId, options = {}) {
-    const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
+    const runtime = options.runtime || await project.createRuntimeWithoutSource();
     // A summary names an archived session's status without extracting it.
     const summary = await runtime.store.readSessionSummary(sessionId);
     if (summary.status === VIBE64_SESSION_STATUS.ARCHIVED) {
@@ -89,7 +89,7 @@ function createServiceAgentConversations({
   }
 
   async function scanAgentConversationStorage(sessionId, options = {}) {
-    const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
+    const runtime = options.runtime || await project.createRuntimeWithoutSource();
     const session = options.session || await runtime.store.readSession(sessionId);
     const bindings = nativeConversationBindings(session);
     const scopes = new Map();
@@ -113,7 +113,7 @@ function createServiceAgentConversations({
   async function retireAgentConversationHistory(sessionId, input = {}, options = {}) {
     // readable-check: allow method-probe - input validation: retirement requires the caller's preservation callback
     if (typeof options.beforeDelete !== "function") throw new TypeError("Native retirement requires a host preservation callback.");
-    const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
+    const runtime = options.runtime || await project.createRuntimeWithoutSource();
     const retire = async (session, archived, publishArtifacts) => {
       if (!archived && (session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(session) ||
           sessionHasActiveAgentRun(session) || workspaceSetup.isRunning(sessionId))) {
@@ -274,7 +274,7 @@ function createServiceAgentConversations({
           trustedInput,
           trustedContext
         ),
-        () => context.runtime.getSession(sessionId, { inspectSource: false })
+        () => context.runtime.getSessionWithoutSource(sessionId)
       )
     ), { operation: "generate-renewal-handover" });
   }

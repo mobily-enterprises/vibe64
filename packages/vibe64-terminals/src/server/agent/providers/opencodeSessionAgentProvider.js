@@ -191,7 +191,7 @@ function createOpenCodeSessionAgentProvider({
         state: {
           async read(current, representation, nativeResult) {
             if (representation === "native") return { nativeResult };
-            const session = await runtime.getSession(sessionId, { inspectSource: false });
+            const session = await runtime.getSessionWithoutSource(sessionId);
             return { session, threadId: nativeResult.thread.id, turn: nativeResult.turn, nativeResult };
           }
         },

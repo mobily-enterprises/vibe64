@@ -72,7 +72,7 @@ function createReceivingContributions({
           !state.successor?.availableAt || state.successor.sessionId !== successorId ||
           state.commit?.successorSessionId !== successorId ||
           state.renewalId !== session.metadata.renewal_id) break;
-      const successor = await runtime.getSession(successorId, { inspectSource: false });
+      const successor = await runtime.getSessionWithoutSource(successorId);
       if (successor?.metadata?.renewed_from !== session.sessionId) break;
       session = successor;
     }
@@ -93,14 +93,14 @@ function createReceivingContributions({
     const contribution = parseSessionConnectedContribution(input.contribution);
     if (!contribution) throw new TypeError("Connected work requires its exact saved contribution binding.");
     const source = await project.connectedContributionSource(input);
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     if (source.repository !== contribution.repository || source.integrationBranch !== contribution.integrationBranch) {
       throw Object.assign(new Error("The receiving source binding changed. Preserve its checkout and review the connection."), {
         code: "vibe64_contribution_authority_changed"
       });
     }
     const session = await resolveConnectedSession(runtime, contribution,
-      await runtime.getSession(contribution.id, { inspectSource: false }));
+      await runtime.getSessionWithoutSource(contribution.id));
     return { contribution, runtime, session };
   }
 
@@ -251,10 +251,10 @@ function createReceivingContributions({
           code: "vibe64_contribution_authority_changed"
         });
       }
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       let predecessor;
       if (contribution.replaces) {
-        predecessor = await runtime.getSession(contribution.replaces, { inspectSource: false });
+        predecessor = await runtime.getSessionWithoutSource(contribution.replaces);
         const saved = sessionConnectedContribution(predecessor);
         if (!saved || saved.repository !== contribution.repository || saved.integrationBranch !== contribution.integrationBranch) {
           throw Object.assign(new Error(
@@ -288,7 +288,7 @@ function createReceivingContributions({
         }
       };
       let existing;
-      try { existing = await runtime.getSession(contribution.id, { inspectSource: false }); }
+      try { existing = await runtime.getSessionWithoutSource(contribution.id); }
       catch (error) { if (error.code !== "vibe64_session_not_found") throw error; }
       if (existing) {
         return named(publicSession(await resolveConnectedSession(runtime, contribution, existing)));

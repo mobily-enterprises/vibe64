@@ -183,7 +183,7 @@ function createServiceSessionTerminals({
     return closeAgentSessionCommandEnvironment(sessionId, async () => {
       let learningNativeAvailable = false;
       if (controllerOptions.session?.sourceReady === false && controllerOptions.session?.purpose === "learning") {
-        const runtime = controllerOptions.runtime || await project.createRuntime({ inspectSource: false });
+        const runtime = controllerOptions.runtime || await project.createRuntimeWithoutSource();
         if (runtime.learningScope) {
           await runtime.getNativeExecutionRoot(sessionId, { allowClosing: true });
           learningNativeAvailable = true;

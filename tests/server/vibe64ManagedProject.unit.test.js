@@ -459,7 +459,7 @@ test("shared managed repository owner provisions and clones a real private pract
       const canonical = path.join(state.projectRuntimeRoot, "canonical-repository", "repository.git");
       assert.equal((await execFileAsync("git", ["--git-dir", canonical, "rev-list", "--count", proof.commit])).stdout.trim(), "1");
       await project.runInProjectContext(slug, async () => {
-        const runtime = await project.createRuntime({ inspectSource: false, createSessionSource: context =>
+        const runtime = await project.createRuntimeWithoutSource({ createSessionSource: context =>
           project.runProjectSourceExclusive(async () => createSessionSource({ ...context, project: await project.readCurrentProject(),
             runCommand: directCommand }), { operation: "session-source-create" }) });
         const session = await runtime.createSession({ sessionId: `training-${training.practiceId}`,
@@ -469,7 +469,7 @@ test("shared managed repository owner provisions and clones a real private pract
         assert.equal(source, path.join(state.projectContextRoot, "sessions", "active", session.sessionId, "source"));
         assert.deepEqual(await readFile(path.join(source, files[0].path)), files[0].bytes);
         assert.equal((await execFileAsync("git", ["-C", source, "rev-parse", "HEAD"])).stdout.trim(), proof.commit);
-        assert.equal((await runtime.getSession(session.sessionId, { inspectSource: false })).sessionId, session.sessionId);
+        assert.equal((await runtime.getSessionWithoutSource(session.sessionId)).sessionId, session.sessionId);
       });
     });
     assert.equal(core.targetRoot, working);

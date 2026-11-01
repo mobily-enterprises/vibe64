@@ -274,9 +274,7 @@ function createCodexSessionRuntimeHost({
   const { codexManagedCommandEnv } = sessionEnvironment;
 
   function createRuntimeForSession() {
-    return project.createRuntime({
-      inspectSource: false
-    });
+    return project.createRuntimeWithoutSource();
   }
 
   /**

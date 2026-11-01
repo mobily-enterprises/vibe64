@@ -78,7 +78,8 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
         calls.push(["session-read", id]);
         if (!session) throw Object.assign(new Error("Missing session"), { code: "vibe64_session_not_found" });
         return session;
-      } }; }
+      }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: { async workspaceSetupIsPrepared(id) { calls.push(["setup-check", id]); return true; }, waitForWorkspaceSetup() { return null; } },
     sessions: { async createSession(input, options) { calls.push(["session-create", input, options]); session = { sessionId: options.sessionId, status: "open", workspaceSetup: { status: setup } }; return session; } }
@@ -404,7 +405,7 @@ test("practice preparation creates an ordinary initial session under exactly its
   const originalRuntime = f.owners.project.createRuntime;
   // Retain this ORIGINAL coordinator fixture's controlled session/setup seams.
   // Actual Runtime/Store/Git binding is proved in the original learner owner file.
-  f.owners.project = { ...actualProject, createRuntime: originalRuntime };
+  f.owners.project = { ...actualProject, createRuntime: originalRuntime, createRuntimeWithoutSource: originalRuntime };
   f.owners.projectContext = core;
   let held = false;
   let entries = 0;

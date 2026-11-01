@@ -58,8 +58,8 @@ async function readSavedAttachment(paths, id) {
  */
 function createSessionAttachments({ project, env = process.env }) {
   async function attachmentContext(context) {
-    const runtime = context.runtime || await project.createRuntime({ inspectSource: false });
-    const session = context.session || await runtime.getSession(context.sessionId, { inspectSource: false });
+    const runtime = context.runtime || await project.createRuntimeWithoutSource();
+    const session = context.session || await runtime.getSessionWithoutSource(context.sessionId);
     const executionRoot = sessionSourcePath(session);
     if (!executionRoot) throw new Error("The attachment session source is unavailable.");
     return { runtime, session, executionRoot, sessionId: context.sessionId };
@@ -101,7 +101,7 @@ function createSessionAttachments({ project, env = process.env }) {
       input,
       env,
       beforeCreate: async () => {
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const session = await runtime.getSessionWithoutSource(sessionId);
         if (sessionIsClosing(session) || !vibe64SessionStatusIsOpen(session.status)) {
           const closingReason = sessionClosingReason(session);
           throw Object.assign(new Error(closingReason
@@ -182,8 +182,8 @@ function createSessionAttachments({ project, env = process.env }) {
 
   async function readAttachment(context, id) {
     const { sessionId } = context;
-    const runtime = context.runtime || await project.createRuntime({ inspectSource: false });
-    const session = context.session || await runtime.getSession(sessionId, { inspectSource: false });
+    const runtime = context.runtime || await project.createRuntimeWithoutSource();
+    const session = context.session || await runtime.getSessionWithoutSource(sessionId);
     const openAttachment = async (attachment) => ({
       attachment: { ...attachment, contentType: conversationAttachmentContentType(attachment.fileName) },
       fileHandle: await open(attachment.path, constants.O_RDONLY | constants.O_NOFOLLOW)

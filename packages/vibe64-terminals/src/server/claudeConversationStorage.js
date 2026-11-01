@@ -116,9 +116,9 @@ function createClaudeConversationStorage({ createError: error }) {
     if (ctx.assistantScope) return records(null);
     // Renewal cleanup rereads its exact hidden session through the renewal reader.
     if (!renewalCleanupContext(ctx.sessionId, ctx)) {
-      return Promise.resolve(ctx.runtime.getSession(ctx.sessionId, { inspectSource: false })).then(records);
+      return Promise.resolve(ctx.runtime.getSessionWithoutSource(ctx.sessionId)).then(records);
     }
-    return ctx.runtime.getSessionForRenewal(ctx.sessionId, { inspectSource: false }).then(session => {
+    return ctx.runtime.getSessionForRenewalWithoutSource(ctx.sessionId).then(session => {
       renewalCleanupContext(ctx.sessionId, { ...ctx, session });
       return records(session);
     });

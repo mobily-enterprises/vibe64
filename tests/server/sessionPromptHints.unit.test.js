@@ -258,6 +258,7 @@ function createFixture({
             sessionId
           };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async readConversationLogPage(sessionId, options) {
       assert.ok(Number(options?.limit) > 0);
       return typeof currentConversation === "function"
@@ -275,6 +276,7 @@ function createFixture({
       async createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async readPromptHints() {
         calls.promptHints.push({});
         return {

@@ -37,6 +37,7 @@ test("the dormancy sweep reads session records only and closes an idle runtime w
       runtime ||= new Vibe64SessionRuntime({ projectContextRoot: targetRoot, projectRuntimeRoot: runtimeRoot, inspectSourceByDefault: false });
       return runtime;
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
     async listPracticeProjectSlugs() { return []; },
     async listProjects() { return { ok: true, projects: [{ slug: "inspector", runtime: { open: true } }] }; },

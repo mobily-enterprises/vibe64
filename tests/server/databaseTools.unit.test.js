@@ -1117,6 +1117,7 @@ test("database members can browse, run SQL and use a shared assistant through th
   };
   const project = {
     createRuntime: async () => helperRuntime,
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     async createSessionStore() {
       return store;
     },
@@ -1434,6 +1435,7 @@ for (const { name, scenario } of [
       sourceEditor: {},
       project: {
         createRuntime: async () => helperRuntime,
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); },
         async createSessionStore() {
           return {
             async readArtifact(_sessionId, artifactPath) {
@@ -1718,7 +1720,7 @@ test("database copilot keeps failed cleanup for restart and closes a late cancel
     readArtifact: async () => JSON.stringify(testSchema())
   };
   const endpoint = { database: "catalogue", host: "127.0.0.1", username: "reader", password: "private-password", port: 5432 };
-  const project = { createSessionStore: async () => store, createRuntime: async () => runtime,
+  const project = { createSessionStore: async () => store, createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
       contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: endpoint, write: endpoint
@@ -1807,7 +1809,7 @@ test("database copilot keeps a failed question's own error when its helper clean
     readArtifact: async () => JSON.stringify(testSchema())
   };
   const endpoint = { database: "catalogue", host: "127.0.0.1", username: "reader", password: "private-password", port: 5432 };
-  const project = { createSessionStore: async () => store, createRuntime: async () => runtime,
+  const project = { createSessionStore: async () => store, createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
       contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: endpoint, write: endpoint
@@ -1864,7 +1866,8 @@ test("session close tries every database copilot receipt and names each one that
     }
   };
   const service = createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, terminals, project: { createSessionStore: async () => runtime.store,
-    createRuntime: async () => runtime, localDatabaseServers: async () => ({ managed: true, databases: [] }),
+    createRuntime: async () => runtime,
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); }, localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: () => assert.fail("Cleanup must not connect to a database") } });
   await assert.rejects(service.closeAssistantsForSession("copilot-session"), (error) => {
     assert.equal(error.code, "vibe64_database_assistant_cleanup_failed");

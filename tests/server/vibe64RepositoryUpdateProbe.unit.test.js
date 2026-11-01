@@ -112,6 +112,7 @@ function harness(t, projects = { alpha: 3 }) {
     async listSessions() { return [...current().sessions.values()].map((session) => structuredClone(session)); },
     async listSessionSummaries() { return this.listSessions(); },
     async getSession(sessionId) { return structuredClone(current().sessions.get(sessionId)); },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       async readSessionRenewalStateRecord() { return ""; },
       async writeMetadataValue(sessionId, name, value) {
@@ -124,6 +125,7 @@ function harness(t, projects = { alpha: 3 }) {
     project: {
       runInProjectContext: (slug, operation) => context.run(slug, operation),
       async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async readCurrentProject() { return projectRecord(context.getStore()); }
     },
     async publishSessionChanged(sessionId, event) {

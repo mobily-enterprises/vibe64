@@ -47,6 +47,7 @@ test("connected Save commits and records each receiver, resumes after failure, a
       repository: { defaultBranch: "main", github: { fullName: `example/${target}` } } });
     const runtimeFor = target => ({
       async getSession(id) { const value = sessions.get(target); assert.equal(value.sessionId, id); return value; },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       async listSessionSummaries() { return []; },
       store: {
         async readBackgroundTask(id, key) { return tasks.get(`${id}:${key}`) || null; },
@@ -70,6 +71,7 @@ test("connected Save commits and records each receiver, resumes after failure, a
     const service = createService({ actions,
       project: {
         createRuntime: async () => runtimeFor(currentProjectRequestContext().slug),
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); },
         readCurrentProject: async () => projectFor(currentProjectRequestContext().slug),
         connectedContributionSource: async () => {
           assert.equal(allowReceiver, true, "receiving repository write permission is rechecked");
@@ -271,9 +273,11 @@ test("PR creation reuses connected Save admission with fresh receiving authoriza
       project: {
         createRuntime: async () => ({
           getSession: async () => currentProjectRequestContext().slug === slug ? parent : receiver,
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: { readBackgroundTask: async () => null,
             async writeMetadataValue(_id, key, value) { receiver.metadata[key] = value; } }
         }),
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); },
         connectedContributionSource: async () => ({ repository: contribution.repository, integrationBranch: "main" })
       },
       terminals: {

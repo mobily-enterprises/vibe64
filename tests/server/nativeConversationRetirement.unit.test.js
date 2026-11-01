@@ -189,12 +189,12 @@ test("Codex retirement uses native deletion only after preserving idle descendan
     rows.set(id, { id, historyMode: "paginated", cwd: "/saved/source", path: file, updatedAt: 1, status: { type: "idle" } });
   }
   const session = { sessionId: "archived", status: "archived", metadata: {} };
-  const runtime = { projectContextRoot: root, stateRoot: path.join(root, "state"), getSession: async () => session };
+  const runtime = { projectContextRoot: root, stateRoot: path.join(root, "state"), getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
   let deleted = 0;
   const controller = createCodexTerminalController({
     env: { VIBE64_SYSTEM_ROOT: path.join(root, "system"), VIBE64_RUNTIME_NAMESPACE: "test" },
     codexToolHomeSource: home, codexToolHomeRequired: false,
-    project: { createRuntime: async () => runtime, currentTargetRoot: () => root, currentServiceDataRoot: () => path.join(root, "service") },
+    project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); }, currentTargetRoot: () => root, currentServiceDataRoot: () => path.join(root, "service") },
     codexAppServerProviderFactory: () => ({
       ensureAvailable: async () => ({ ok: true }),
       listThreadDescendants: async () => rows.has("child") ? ["child"] : [],

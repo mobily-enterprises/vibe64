@@ -318,7 +318,7 @@ function createAgentSessionCommandService({
       try {
         setup = await project.inspectWorkspaceSetup({
           projectRoot: sourceRoot,
-          session: await (await project.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false })
+          session: await (await project.createRuntimeWithoutSource()).getSessionWithoutSource(sessionId)
         });
       } catch (error) {
         // The agent repairing or deciding a project contract still needs status;

@@ -27,9 +27,11 @@ function project(root, {
             sessionRoot: path.join(root, "runtime", sessionId),
             sourcePath: sessionSourceRoot
           };
-        }
+        },
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
       };
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     currentProjectSourceRoot() {
       return root;
     },

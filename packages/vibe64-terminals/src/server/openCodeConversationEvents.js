@@ -209,7 +209,7 @@ function createOpenCodeConversationEvents({
     });
     const updatedSession = await context.runtime.store.mutateSession(context.sessionId, async () => {
       await write();
-      return context.runtime.getSession(context.sessionId, { inspectSource: false });
+      return context.runtime.getSessionWithoutSource(context.sessionId);
     });
     await publishSessionChanged(context.sessionId, {
       payload: {

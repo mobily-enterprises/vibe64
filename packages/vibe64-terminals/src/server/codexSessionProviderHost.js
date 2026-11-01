@@ -103,7 +103,7 @@ function createCodexSessionProviderHost(host) {
     /** @param {Vibe64SessionRuntime} runtime */
     async function readProviderSession(runtime) {
       if (options.renewalId) {
-        const session = await runtime.getSessionForRenewal(sessionId, { inspectSource: false });
+        const session = await runtime.getSessionForRenewalWithoutSource(sessionId);
         if ([VIBE64_SESSION_STATUS.RENEWAL_PENDING, VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING].includes(session.status)) {
           if (normalizeText(session.metadata?.renewal_id) !== options.renewalId) {
             throw Object.assign(new Error("The assistant belongs to a different renewal reservation."), {
@@ -113,7 +113,7 @@ function createCodexSessionProviderHost(host) {
           return session;
         }
       }
-      return runtime.getSession(sessionId, { inspectSource: false });
+      return runtime.getSessionWithoutSource(sessionId);
     }
     const hostEnvironment = await vibe64HostContextEnvironment(runtimeRoot);
     return {
@@ -341,7 +341,7 @@ function createCodexSessionProviderHost(host) {
           throw admissionError;
         }
         const runtime = await createRuntimeForSession();
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const session = await runtime.getSessionWithoutSource(sessionId);
         return session;
       }
     };

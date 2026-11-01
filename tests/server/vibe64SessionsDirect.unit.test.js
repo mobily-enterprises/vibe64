@@ -191,6 +191,7 @@ function sessionCreationPolicyHarness({
     async getSession(sessionId) {
       return openSessions.find((session) => session.sessionId === sessionId) || null;
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() {
       return openSessions
         .filter((session) => ["active", "blocked", "renewal_quiesced"].includes(session.status))
@@ -202,6 +203,7 @@ function sessionCreationPolicyHarness({
       runtimeCreations += 1;
       return runtime;
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     async developmentDatabasePolicy({ openSessions: currentSessions = [] } = {}) {
       return developmentDatabasePolicy({
         managed,
@@ -356,9 +358,11 @@ test("typing presence trusts the authenticated request user and never accepts a 
       async createRuntime() {
         return {
           getSession() { throw new Error("Typing must not load full session or agent state"); },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: { async readStatus() { return "active"; } }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     sessionPresence,
     terminals: {}
@@ -412,6 +416,7 @@ test("temporary typing presence requires a saved chat in the requested session",
       async createRuntime() {
         return {
           getSession() { throw new Error("Typing must not load full session or agent state"); },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: {
             async readStatus() { return "active"; },
             async readSessionConversation(sessionId, conversationId) {
@@ -420,7 +425,8 @@ test("temporary typing presence requires a saved chat in the requested session",
             }
           }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     sessionPresence: {
       close() {},
@@ -564,7 +570,7 @@ test("conversation history includes the current live snapshot for reconnecting c
         return conversationStream;
       } }
     };
-  } } });
+  }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } } });
   const result = await service.readSessionConversationLog("session-1", {});
   assert.equal(result.ok, true);
   assert.equal(result.conversationStream, conversationStream);
@@ -592,11 +598,13 @@ test("session detail exposes renewal advice from the current thread and durable 
           async getSession() {
             return session;
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           async readConversationLogPage() {
             return { pagination: { totalTurnCount: 57 }, turns: [] };
           }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async agentSessionState() {
@@ -622,8 +630,9 @@ test("archived session detail reads retained history without starting a native p
   const service = createService({
     project: { async createRuntime() { return {
       async getSession() { return session; },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       async readConversationLogPage() { return { pagination: { totalTurnCount: 1 }, turns: [] }; }
-    }; } },
+    }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: { async agentSessionState() { assert.fail("Archived source and native history may be gone."); } }
   });
   const result = await service.inspectSession(session.sessionId);
@@ -645,7 +654,7 @@ test("session status refreshes do not inspect Git and explicit source health che
     project: {
       async createRuntime(options = {}) {
         runtime = new Vibe64SessionRuntime({
-          inspectSourceByDefault: options.inspectSource !== false,
+          inspectSourceByDefault: !options.withoutSource,
           sourceInspectionAvailable: false,
           store: {
             async readSession() { return session; },
@@ -655,7 +664,8 @@ test("session status refreshes do not inspect Git and explicit source health che
           }
         });
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource() { return this.createRuntime({ withoutSource: true }); }
     },
     terminals: {
       async agentSessionState(sessionId, context) {
@@ -682,23 +692,32 @@ test("session status refreshes do not inspect Git and explicit source health che
 test("assistant messages use the plain message contract", async () => {
   const calls = [];
   const publications = [];
-  const runtimeCreationOptions = [];
-  const sessionReadOptions = [];
+  const runtimeCreations = [];
+  const sessionReads = [];
   const session = {
     sessionId: "session-1",
     status: "active"
   };
   const runtime = {
-    async getSession(sessionId, options) {
+    async getSession(sessionId) {
       assert.equal(sessionId, session.sessionId);
-      sessionReadOptions.push(options);
+      sessionReads.push("getSession");
+      return session;
+    },
+    async getSessionWithoutSource(sessionId) {
+      assert.equal(sessionId, session.sessionId);
+      sessionReads.push("getSessionWithoutSource");
       return session;
     }
   };
   const service = createService({
     project: {
-      async createRuntime(options) {
-        runtimeCreationOptions.push(options);
+      async createRuntime() {
+        runtimeCreations.push("createRuntime");
+        return runtime;
+      },
+      async createRuntimeWithoutSource() {
+        runtimeCreations.push("createRuntimeWithoutSource");
         return runtime;
       }
     },
@@ -743,17 +762,17 @@ test("assistant messages use the plain message contract", async () => {
   assert.equal(result.messageId, "message:test");
   assert.equal(result.ok, true);
   assert.equal(publications.length, 1);
-  assert.deepEqual(runtimeCreationOptions, [{ inspectSource: false }]);
+  assert.deepEqual(runtimeCreations, ["createRuntimeWithoutSource"]);
   assert.equal(calls[0][2].runtime, runtime);
   assert.equal(Object.hasOwn(calls[0][2], "session"), false);
-  assert.deepEqual(sessionReadOptions, [{ inspectSource: false }]);
+  assert.deepEqual(sessionReads, ["getSessionWithoutSource"]);
 });
 
 test("a lesson-sent assistant message reaches the terminal owner as turn metadata", async () => {
   const calls = [];
-  const runtime = { async getSession() { return { sessionId: "session-1" }; } };
+  const runtime = { async getSession() { return { sessionId: "session-1" }; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
   const service = createService({
-    project: { async createRuntime() { return runtime; } },
+    project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     async publishSessionChanged() {},
     terminals: { async sendAgentMessage(...args) { calls.push(args); return { delivered: true, ok: true }; } }
   });
@@ -875,9 +894,11 @@ test("failed assistant delivery is published as failed, not accepted", async () 
         return {
           async getSession() {
             return session;
-          }
+          },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     async publishSessionChanged(...args) {
       publications.push(args);
@@ -911,6 +932,7 @@ test("session work inspection includes the durable native Save operation", async
           async getSession() {
             return { sessionId: "session-1", status: "active" };
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: {
             async readBackgroundTask(sessionId, taskId) {
               assert.equal(sessionId, "session-1");
@@ -919,7 +941,8 @@ test("session work inspection includes the durable native Save operation", async
             }
           }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async inspectSessionWork(sessionId) {
@@ -949,9 +972,11 @@ test("overlapping work reads share one inspection only for the same project and 
           async getSession(sessionId) {
             return { sessionId, metadata: { canonical_commit: canonicalCommit }, status: "active" };
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: { async readBackgroundTask() { return null; } }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       inspectSessionWork(sessionId, { runtime }) {
@@ -1010,13 +1035,15 @@ test("session work inspection returns operations read after repository inspectio
           async getSession() {
             return { sessionId: "session-1", status: "active" };
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: {
             async readBackgroundTask(_sessionId, taskId) {
               return taskId === "save-work" ? saveTask : updateTask;
             }
           }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async requireAssistantAccess() {
@@ -1058,6 +1085,7 @@ test("work inspection reconciles an interrupted published Save exactly once", as
     async getSession() {
       return { sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       async readBackgroundTask(_sessionId, taskId) {
         return taskId === "save-work"
@@ -1080,7 +1108,8 @@ test("work inspection reconciles an interrupted published Save exactly once", as
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async inspectSessionWork() {
@@ -1124,13 +1153,14 @@ test("unknown Save publication survives failed recovery and service restart with
   let saves = 0;
   const runtime = {
     async getSession() { return { sessionId: "session-1", status: "active", metadata: { ...metadata } }; },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       async readBackgroundTask(_id, key) { return key === "save-work" ? task : null; },
       async writeBackgroundTaskEvent(_id, _key, { patch }) { task = { ...task, ...patch }; return task; },
       async writeMetadataValue(_id, key, value) { metadata[key] = value; }
     }
   };
-  const restart = () => createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+  const restart = () => createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {
     async inspectSessionWork() { return { unsaved: false }; },
     async saveSessionWork() { saves++; throw new Error("An uncertain operation must not be overwritten."); },
     async recoverSessionWorkSave(_id, { recovery }) {
@@ -1194,6 +1224,7 @@ test("work inspection recovers an interrupted prepared Update and advances its b
     async getSession() {
       return { sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       async readBackgroundTask(_sessionId, taskId) {
         return taskId === "update-session"
@@ -1216,7 +1247,8 @@ test("work inspection recovers an interrupted prepared Update and advances its b
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     setupRunner: {
       async start() {
@@ -1273,6 +1305,7 @@ test("work inspection observes a live Save without mistaking it for an interrupt
     async getSession() {
       return { sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() {
       return [{ sessionId: "session-1", status: "active" }];
     },
@@ -1300,7 +1333,8 @@ test("work inspection observes a live Save without mistaking it for an interrupt
       async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async requireAssistantAccess() {
@@ -1356,6 +1390,7 @@ test("members can Save and create pull requests independently of AI access", asy
     async getSession() {
       return { agentRuns: [], sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() { return []; },
     store: {
       async readBackgroundTask() { return null; },
@@ -1373,7 +1408,8 @@ test("members can Save and create pull requests independently of AI access", asy
       async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async requireAssistantAccess() {
@@ -1425,6 +1461,7 @@ test("Save authority races become a ready update requirement rather than an AI f
     async getSession() {
       return { sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       async readBackgroundTask() { return null; },
       async writeBackgroundTaskEvent(_sessionId, taskId, input) {
@@ -1442,7 +1479,8 @@ test("Save authority races become a ready update requirement rather than an AI f
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     async publishSessionChanged(_sessionId, change) {
       publications.push(change);
@@ -1487,6 +1525,7 @@ test("native Save persists bounded progress and advances the session base only a
     async getSession(sessionId) {
       return sessions.get(sessionId);
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() {
       return [...sessions.values()];
     },
@@ -1513,7 +1552,8 @@ test("native Save persists bounded progress and advances the session base only a
       async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     async publishSessionChanged(...args) {
       publications.push(args);
@@ -1605,6 +1645,7 @@ for (const namingFallback of [false, true]) {
         getSession(id) {
           return store.readSession(id);
         },
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
         async listSessionSummaries() {
           return [await store.readSession(sessionId)];
         },
@@ -1615,7 +1656,8 @@ for (const namingFallback of [false, true]) {
         async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
           async createRuntime() {
             return runtime;
-          }
+          },
+          createRuntimeWithoutSource(options) { return this.createRuntime(options); }
         },
         terminals: {
           async requireAssistantAccess() {
@@ -1674,6 +1716,7 @@ test("a successful Save keeps mirror maintenance failure as a visible retryable 
     async getSession() {
       return { agentRuns: [], sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() {
       return [{ agentRuns: [], sessionId: "session-1", status: "active" }];
     },
@@ -1706,7 +1749,8 @@ test("a successful Save keeps mirror maintenance failure as a visible retryable 
       async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     async publishSessionChanged() {},
     terminals: {
@@ -1760,6 +1804,7 @@ test("a reconciled Save supersedes an older failed session update", async () => 
     async getSession() {
       return { agentRuns: [], sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() {
       return [{ agentRuns: [], sessionId: "session-1", status: "active" }];
     },
@@ -1786,7 +1831,8 @@ test("a reconciled Save supersedes an older failed session update", async () => 
       async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async requireAssistantAccess() {
@@ -1836,6 +1882,7 @@ test("work inspection repairs a failed update superseded by a later reconciled S
     async getSession() {
       return { agentRuns: [], sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       async readBackgroundTask(_sessionId, taskId) {
         return tasks.get(taskId) || null;
@@ -1857,7 +1904,8 @@ test("work inspection repairs a failed update superseded by a later reconciled S
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async inspectSessionWork() {
@@ -1896,6 +1944,7 @@ function failedUpdateInspection(evidence) {
     async getSession() {
       return { agentRuns: [], sessionId: "session-1", status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       async readBackgroundTask(_sessionId, taskId) {
         return tasks.get(taskId) || null;
@@ -1913,7 +1962,8 @@ function failedUpdateInspection(evidence) {
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async inspectSessionWork() {
@@ -2000,6 +2050,7 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
     async getSession() {
       return session;
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() {
       return [session];
     },
@@ -2036,7 +2087,8 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     async publishSessionChanged(_sessionId, event) {
       publications.push(event);
@@ -2184,6 +2236,7 @@ test("one exact update check is shared, cached, and invalidates every sibling se
     async getSession(sessionId) {
       return sessions.get(sessionId);
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() {
       return [...sessions.values()];
     },
@@ -2208,7 +2261,8 @@ test("one exact update check is shared, cached, and invalidates every sibling se
       async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     async publishSessionChanged(...args) {
       publications.push(args);
@@ -2328,11 +2382,11 @@ test("repository history facades read project history without a session and othe
         const loaded = [];
         const service = createService({
           project: {
-            async createRuntime(options) {
-              calls.push(["runtime", options]);
+            async createRuntimeWithoutSource() {
+              calls.push(["runtimeWithoutSource"]);
               return {
-                async getSession(sessionId, sessionOptions) {
-                  calls.push(["session", sessionId, sessionOptions]);
+                async getSessionWithoutSource(sessionId) {
+                  calls.push(["sessionWithoutSource", sessionId]);
                   const session = await selectedStore.readSession(sessionId);
                   loaded.push(session);
                   return session;
@@ -2359,8 +2413,8 @@ test("repository history facades read project history without a session and othe
         assert.equal(foreign.ok, false);
         assert.equal(foreign.code, "vibe64_session_not_found");
         assert.deepEqual(calls, [
-          ["runtime", { inspectSource: false }],
-          ["session", "history-beta", { inspectSource: false }]
+          ["runtimeWithoutSource"],
+          ["sessionWithoutSource", "history-beta"]
         ]);
         assert.deepEqual(loaded, []);
 
@@ -2371,8 +2425,8 @@ test("repository history facades read project history without a session and othe
         assert.equal(loaded.length, 1);
         assert.equal(loaded[0].projectContextRoot, selectedRoot);
         assert.deepEqual(calls, [
-          ["runtime", { inspectSource: false }],
-          ["session", "history-alpha", { inspectSource: false }],
+          ["runtimeWithoutSource"],
+          ["sessionWithoutSource", "history-alpha"],
           ["terminal", { ...selectedInput, session: loaded[0] }]
         ]);
         assert.equal(calls[2][1].session, loaded[0]);
@@ -2418,9 +2472,11 @@ test("repository history returns the last successful update check from session s
               },
               sessionId: "session-1"
             };
-          }
+          },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async inspectRepositoryHistory() {
@@ -2483,9 +2539,11 @@ test("repository history does not reuse an update check from an older canonical 
               },
               sessionId: "session-1"
             };
-          }
+          },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async inspectRepositoryHistory() {
@@ -2517,9 +2575,11 @@ test("repository history does not reuse an old behind check without incoming ver
               },
               sessionId: "session-1"
             };
-          }
+          },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async inspectRepositoryHistory() {
@@ -2545,9 +2605,11 @@ test("native Save rejects every active provider state before touching Git", asyn
               status: "active"
             };
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: { async readBackgroundTask() { return null; } }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async requireAssistantAccess() {
@@ -2584,9 +2646,11 @@ test("an early assistant message waits for workspace preparation and is sent onc
               sessionId: "session-1",
               status: "active"
             };
-          }
+          },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async sendAgentMessage() {
@@ -2622,9 +2686,11 @@ test("live workspace preparation prevents retry and archive races", async () => 
               sessionId: "session-1",
               status: "active"
             };
-          }
+          },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async requireAssistantSelectionAccess() {
@@ -2659,7 +2725,8 @@ test("archiving retains main and temporary routing cleanup records", async () =>
     if (temporary) lock.store.listSessionConversations = async () => [{ conversationId: "chat", routingMetadata: metadata }];
     let closed = false;
     const service = createService({ project: { createRuntime: async () => ({ store: lock.store,
-      getSession: async () => session, markSessionClosing: async () => { closed = true; } }) },
+      getSession: async () => session,
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, markSessionClosing: async () => { closed = true; } }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
       terminals: {},
       setupRunner: { isRunning: () => false, wait: () => null } });
     const result = await service.archiveSession("session-1");
@@ -2678,7 +2745,7 @@ test("archive cancels exact pending routing outside its lock and retains deliver
     const session = { sessionId: "session-1", status: "active", sourceReady: true, metadata: temporary ? {} : metadata };
     const calls = [];
     if (temporary) lock.store.listSessionConversations = async () => [{ conversationId: "chat", routingMetadata: metadata }];
-    const runtime = { store: lock.store, getSession: async () => session,
+    const runtime = { store: lock.store, getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       markSessionClosing: async () => { calls.push("closing"); return session; },
       archiveSession: async () => { calls.push("archive"); return { ...session, status: "archived" }; } };
     const cancel = async (id, input, options) => {
@@ -2690,7 +2757,7 @@ test("archive cancels exact pending routing outside its lock and retains deliver
         metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true });
       });
     };
-    const service = createService({ project: { createRuntime: async () => runtime },
+    const service = createService({ project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
       terminals: { cancelAssistantRoutingForSelection: cancel, cancelTemporaryConversationRouting: cancel,
         closeSessionTerminals: async (id, options) => {
           assert.equal(options.forgetConversationBinding, true, "an archived session's conversations leave memory");
@@ -2710,10 +2777,10 @@ test("archive cancellation failures retain the session and a reload retries clea
     metadata: { assistant_routing_request: JSON.stringify(route) } };
   let cleanupFailed = true;
   let archived = false;
-  const runtime = { store: lock.store, getSession: async () => session,
+  const runtime = { store: lock.store, getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     markSessionClosing: async () => session,
     archiveSession: async () => { archived = true; return { ...session, status: "archived" }; } };
-  const options = { project: { createRuntime: async () => runtime },
+  const options = { project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: { async cancelAssistantRoutingForSelection() {
       session.metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true });
       if (cleanupFailed) throw Object.assign(new Error("The routing helper could not be closed. Retry Close."), { code: "cleanup-failed" });
@@ -2738,8 +2805,8 @@ test("archive preserves pin and renewal guards before cancelling routing and rej
     let preparing = false;
     if (guard === "pinned") lock.store.assertSessionNotPinned = async () => { throw new Error("Unpin this session first."); };
     if (guard === "renewal") lock.store.listSessionsForRenewal = async () => [{ status: "renewal_pending", metadata: { renewed_from: "session-1" } }];
-    const service = createService({ project: { createRuntime: async () => ({ store: lock.store, getSession: async () => session,
-      markSessionClosing: async () => { assert.fail("must not close"); } }) },
+    const service = createService({ project: { createRuntime: async () => ({ store: lock.store, getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+      markSessionClosing: async () => { assert.fail("must not close"); } }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
       terminals: { async cancelAssistantRoutingForSelection() {
         cancelled++;
         session.metadata.assistant_routing_request = JSON.stringify({ messageId: "replacement", delivery: "pending", status: "waiting",
@@ -2782,6 +2849,7 @@ test("an active Save keeps archiving out of its agent-write window", async () =>
     async getSession() {
       return { ...session };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async markSessionClosing() {
       calls.push("closing");
     },
@@ -2791,7 +2859,8 @@ test("an active Save keeps archiving out of its agent-write window", async () =>
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async closeSessionTerminals() {
@@ -2856,6 +2925,7 @@ test("active archiving keeps Save out of its agent-write window", async () => {
     async getSession() {
       return { sessionId: "session-1", sourceReady: true, status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async markSessionClosing() {
       calls.push("closing");
     },
@@ -2865,7 +2935,8 @@ test("active archiving keeps Save out of its agent-write window", async () => {
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async closeSessionTerminals() {
@@ -2918,6 +2989,7 @@ test("failed archiving cleanup releases the agent-write lock for retry", async (
     async getSession() {
       return { sessionId: "session-1", sourceReady: true, status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async markSessionClosing() {
       calls.push("closing");
     },
@@ -2927,7 +2999,8 @@ test("failed archiving cleanup releases the agent-write lock for retry", async (
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async closeSessionTerminals() {
@@ -2984,6 +3057,7 @@ test("concurrent archiving has one cleanup owner", async () => {
     async getSession() {
       return { sessionId: "session-1", sourceReady: true, status: "active" };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async markSessionClosing() {},
     store: lock.store
   };
@@ -2991,7 +3065,8 @@ test("concurrent archiving has one cleanup owner", async () => {
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async closeSessionTerminals() {
@@ -3038,6 +3113,7 @@ test("archiving a session releases its managed resources after terminals stop", 
     async getSession() {
       return session;
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async markSessionClosing() {
       calls.push("closing");
     }
@@ -3047,6 +3123,7 @@ test("archiving a session releases its managed resources after terminals stop", 
       async createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async releaseSessionResources(input) {
         calls.push(`resources:${input.sessionId}`);
         return { ok: true };
@@ -3088,6 +3165,7 @@ test("archiving a source-creation failure does not release resources that were n
     async getSession() {
       return session;
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async markSessionClosing() {
       calls.push("closing");
     }
@@ -3097,6 +3175,7 @@ test("archiving a source-creation failure does not release resources that were n
       async createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async releaseSessionResources() {
         calls.push("resources");
         throw new Error("resources must not be released");
@@ -3286,6 +3365,7 @@ test("assistant selection can recover from an unavailable current choice before 
     async getSession() {
       return session;
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: {
       ...lock.store,
       async writeMetadataValue(...args) {
@@ -3297,7 +3377,8 @@ test("assistant selection can recover from an unavailable current choice before 
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {
       async agentSessionState() {
@@ -3348,13 +3429,13 @@ test("assistant selection checks destination access and prepares routing before 
         ? { ...current, agentId: "build", engineId: "opencode", modelProviderId: "deepseek", modelId: "deepseek-chat" }
         : { ...current, modelProviderId: target, modelId: target === "deepseek" ? "deepseek-flash" : "glm-5.3" };
       const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: { assistant_selection: JSON.stringify(current) } };
-      const runtime = { async getSession() { return session; }, store: { ...lock.store,
+      const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
         async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; }
       } };
       const service = createService({
         // Session changes only; each also sends its project's pages a summary.
         publishSessionChanged: createSessionChangedPublisher({ events: { publish(event) { if (event.type === "entity.changed") events.push(event); } } }),
-        project: { async createRuntime() { return runtime; } }, terminals: {
+        project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {
         async resolveAssistantSelection() { return next; },
         async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
         async requireAssistantSelectionAccess(value) { assert.equal(value.modelProviderId, next.modelProviderId); operations.push("access"); },
@@ -3450,6 +3531,7 @@ test("session listing reports unavailable sessions separately without changing c
           }
         };
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async developmentDatabasePolicy({ openSessions }) {
         assert.deepEqual(openSessions, [healthy]);
         return { creation, limits };
@@ -3491,8 +3573,7 @@ test("session listing reads saved activity without opening chats and isolates un
     };
     const service = createService({
       project: {
-        async createRuntime(options) {
-          assert.deepEqual(options, { inspectSource: false });
+        async createRuntimeWithoutSource() {
           return runtime;
         },
         async developmentDatabasePolicy() { return { creation: {}, limits: {} }; }
@@ -3531,7 +3612,8 @@ test("archived session history is ordered by archive time with a stable session-
             ];
           }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {},
     setupRunner: {
@@ -3984,6 +4066,7 @@ test("new sessions publish running workspace preparation and its eventual result
     async getSession() {
       return { ...session };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() {
       return sessionCreationInputs.length > 0 ? [{ ...session }] : [];
     },
@@ -4004,6 +4087,7 @@ test("new sessions publish running workspace preparation and its eventual result
       async createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async developmentDatabasePolicy({ openSessions = [] } = {}) {
         return developmentDatabasePolicy({
           managed: false,
@@ -4073,7 +4157,7 @@ test("an applied starter prepares the session workspace once and publishes its p
   const completion = new Promise((resolve) => { finishSetup = resolve; });
   const session = () => ({ sessionId: "session-1", status: "active", workspaceSetup: { status } });
   const service = createService({
-    project: { async createRuntime() { return { async getSession() { return session(); } }; } },
+    project: { async createRuntime() { return { async getSession() { return session(); }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     publishSessionChanged: async (...args) => { publications.push(args); },
     terminals: {},
     setupRunner: {
@@ -4114,8 +4198,8 @@ test("an applied starter announces new unsaved session work before and without p
   const publications = [];
   const service = createService({
     project: { async createRuntime() {
-      return { async getSession() { return { sessionId: "session-1", status: "active", workspaceSetup: {} }; } };
-    } },
+      return { async getSession() { return { sessionId: "session-1", status: "active", workspaceSetup: {} }; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
+    }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     publishSessionChanged: async (...args) => { publications.push(args); },
     terminals: {},
     setupRunner: { isRunning: () => true, async start() { throw new Error("not started"); }, wait: () => null }
@@ -4140,13 +4224,15 @@ test("workspace preparation explicitly reruns succeeded recipes and retains retr
   const runtime = {
     async getSession() {
       return session();
-    }
+    },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
   };
   const service = createService({
     project: {
       async createRuntime() {
         return runtime;
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     terminals: {},
     setupRunner: {
@@ -4229,7 +4315,7 @@ test("workspace preparation explicitly reruns succeeded recipes and retains retr
   status = "succeeded";
   const terminalCalls = [];
   const terminalOwned = createService({
-    project: { async createRuntime() { return runtime; } },
+    project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: {
       async prepareWorkspaceSetup(id, options) {
         terminalCalls.push(["prepare", id, options.retry]);
@@ -4249,7 +4335,7 @@ test("integration continuation action forwards only request identity and authent
   const calls = [];
   const events = [];
   const sessions = createService({
-    project: { async createRuntime() { return runtime; } },
+    project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: { async resumeIntegrationContinuation(...args) {
       calls.push(args);
       return { ok: true, integrationSetup: { outcome: "completed", continuation: { status: "accepted" } } };
@@ -4280,9 +4366,9 @@ test("integration setup skip needs no AI access and still validates the saved re
       text: 'Configure mail.\n\n```vibe64-integration\n{"integrationId":"mail"}\n```'
     });
     const events = [];
-    const runtime = { store, async getSession(sessionId) { return { sessionId, status: "active" }; } };
+    const runtime = { store, async getSession(sessionId) { return { sessionId, status: "active" }; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
     const sessions = createService({
-      project: { async createRuntime() { return runtime; } },
+      project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
       terminals: { async requireAssistantAccess() { throw new Error("AI is unavailable."); } },
       publishSessionChanged: async (...args) => events.push(args)
     });
@@ -4325,9 +4411,9 @@ test("chat mode changes save for the next message without changing the main AI",
     modelId: "big-pickle", modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: "" };
   const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
     assistant_selection: JSON.stringify(current), assistant_routing: JSON.stringify({ mode: "junior", review: false }) } };
-  const runtime = { async getSession() { return session; }, store: { ...lock.store,
+  const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
-  const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {} });
+  const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {} });
   const changed = await service.updateAssistantSelection(session.sessionId, {
     assistantRouting: { mode: "senior", review: true }, vibe64User: { role: "owner", username: "owner" } });
   assert.notEqual(changed.ok, false, JSON.stringify(changed));
@@ -4348,9 +4434,9 @@ test("a team member can't change main chat's mode, review or model outside their
     assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
       modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` }) } };
   let runtimes = 0;
-  const runtime = { async getSession() { return session; }, store: { ...lock.store,
+  const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
-  const service = createService({ project: { async createRuntime() { runtimes += 1; return runtime; } }, terminals: {
+  const service = createService({ project: { async createRuntime() { runtimes += 1; return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {
     async readAgentGoal() { return { status: "available", goal: null }; } } });
   const member = { role: "member", username: "member" };
   for (const input of [{ assistantRouting: { mode: "senior", review: true } }, { assistantRouting: { mode: "auto", review: false } },
@@ -4375,10 +4461,10 @@ test("Auto preferences can be saved without changing an unfinished goal when obs
     assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
       modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` })
   } };
-  const runtime = { async getSession() { return session; }, store: { ...lock.store,
+  const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
   let observed = { status: "unavailable", goal: null };
-  const service = createService({ project: { async createRuntime() { return runtime; } },
+  const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: {
       async readAgentGoal() { return observed; },
       async resolveAssistantPurpose() { return { available: true, seniorJuniorPair: { senior: {
@@ -4415,10 +4501,10 @@ test("named chat modes rebind only an unfinished goal, through authorized access
         ...(failure === "no-goal" ? {} : { assistant_routing_goal: JSON.stringify({ status: "active" }) })
       } };
       const original = { ...session.metadata };
-      const runtime = { async getSession() { return session; }, store: { ...lock.store,
+      const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
         async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; }
       } };
-      const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+      const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {
         async resolveAssistantPurpose(input, options) {
           assert.deepEqual(input, { purpose: mode, reviewEnabled: mode === "auto" });
           assert.equal(options.vibe64User, actor);
@@ -4465,9 +4551,9 @@ test("a chat mode change sees the live session's unfinished goal once, like a mo
     assistant_selection: JSON.stringify(current),
     assistant_routing: JSON.stringify({ mode: "custom", review: false, override: current })
   } };
-  const runtime = { async getSession() { return session; }, store: { ...lock.store,
+  const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
     async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; } } };
-  const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+  const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {
     async agentSessionState() { operations.push("state"); return { turn: { active: false }, goal: { status: "active" } }; },
     async readAgentGoal() { operations.push("goal"); return { status: "unavailable" }; },
     async resolveAssistantPurpose() { operations.push("resolve"); return { available: true, effectiveSelection: next, connectionIdentity: "c" }; },
@@ -4513,7 +4599,7 @@ test("credit exhaustion permits an authorized assistant change without replaying
         ...(failure === "helper-cleanup" ? { helper: { conversationId: "retained-helper", scope: {} } } : {}) };
       const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
         assistant_selection: JSON.stringify(current), assistant_routing_request: JSON.stringify(original) } };
-      const runtime = { stateRoot: "/unused-selection-fixture", async getSession() { return session; }, store: { ...lock.store,
+      const runtime = { stateRoot: "/unused-selection-fixture", async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
         async readMetadataValue(_id, name) { return session.metadata[name]; },
         async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
       const routing = createAssistantRouting({ agent: { async deleteEphemeralConversation() { return { ok: false }; } }, prepareSelection: async () => {},
@@ -4525,7 +4611,7 @@ test("credit exhaustion permits an authorized assistant change without replaying
       let accesses = 0;
       let cancelled = false;
       let prepared = false;
-      const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+      const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {
         async resolveAssistantSelection() { return next; },
         async requireAssistantSelectionAccess() {
           if (++accesses === 2 && failure === "access-changed") throw new Error("Destination access was revoked.");
@@ -4691,10 +4777,10 @@ test("paused goals save next-turn settings without clearing, resuming or replaci
       if (failure === "stale-pin") session.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, status: "active", objective: "Old objective" });
       const original = { ...session.metadata };
       const calls = [];
-      const runtime = { async getSession() { return session; }, store: { ...lock.store,
+      const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { ...lock.store,
         async writeMetadataValue(_id, name, value) { calls.push(name); session.metadata[name] = value; }
       } };
-      const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+      const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {
         async readAgentGoal() { return { status: failure === "goal-unavailable" ? "unavailable" : "available", goal: nativeGoal }; },
         async resolveAssistantSelection() { return next; },
         async resolveAssistantPurpose() { return { available: true, effectiveSelection: next, connectionIdentity: "same-account" }; },
@@ -4741,7 +4827,7 @@ test("source pin action keeps the session identity and publishes a list refresh"
   lock.store.updatePinnedSession = async (sessionId, pinned) => {
     calls.push({ sessionId, pinned }); return { pinnedSessionId: pinned ? sessionId : "" };
   };
-  const service = createService({ project: { createRuntime: async () => ({ store: lock.store }) }, terminals: {},
+  const service = createService({ project: { createRuntime: async () => ({ store: lock.store }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {},
     publishSessionChanged: async (...event) => events.push(event) });
   const pin = createSessionActions({ sessions: service }).find(action => action.id === ACTION_PIN_SESSION);
   assert.ok(pin);
@@ -4763,7 +4849,7 @@ test("source pin works during assistant preparation and retains closing and rene
     await store.createSession({ sessionId: "source", runtimeKind: "genesis" });
     await writeProjectRuntimeOpenState({ projectRuntimeRoot: projectRuntimeRoot(root) });
     const runtime = new Vibe64SessionRuntime({ store, inspectSourceByDefault: false });
-    const service = createService({ project: { createRuntime: async () => runtime }, terminals: {} });
+    const service = createService({ project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {} });
     const ready = Promise.withResolvers();
     const release = Promise.withResolvers();
     const preparing = runVibe64AgentWriteExclusive(runtime, "source", async () => {
@@ -4838,6 +4924,7 @@ test("automatic save after a completed plan runs ordinary Save once and reports 
     metadata: { assistant_routing: JSON.stringify(preferences) } });
   const runtime = {
     async getSession() { return session(); },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() { return [session()]; },
     store: {
       async readBackgroundTask() { return null; },
@@ -4849,7 +4936,8 @@ test("automatic save after a completed plan runs ordinary Save once and reports 
   createService({
     project: {
       async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
-      async createRuntime() { return runtime; }
+      async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     async publishSessionChanged() {},
     terminals: {

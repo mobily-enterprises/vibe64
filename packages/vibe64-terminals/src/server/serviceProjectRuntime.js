@@ -347,7 +347,7 @@ function createServiceProjectRuntime({
     const projectScope = currentProjectScopeKey();
     const projectContextRoot = context.projectContextRoot;
     const reason = String(input?.reason || "project-close").trim() || "project-close";
-    const pinRuntime = await project.createRuntime({ inspectSource: false });
+    const pinRuntime = await project.createRuntimeWithoutSource();
     return pinRuntime.store.withUnpinnedProject(async () => {
       projectServices.beginClose(context);
       const failed = [];

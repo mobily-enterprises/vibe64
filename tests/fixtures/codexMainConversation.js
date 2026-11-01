@@ -67,7 +67,7 @@ export function createCodexTerminalController(options = {}) {
     } }
   });
   async function binding(sessionId, current = {}) {
-    const runtime = current.runtime || await options.project.createRuntime({ inspectSource: false });
+    const runtime = current.runtime || await options.project.createRuntimeWithoutSource();
     return createSessionConversationBinding(provider, sessionId, { ...current, runtime });
   }
   async function scopedOperation(method, nativeMethod, sessionId, input = {}, current = {}) {

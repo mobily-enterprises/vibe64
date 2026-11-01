@@ -18,9 +18,9 @@ async function fixture(root) {
   for (const sessionId of ["one", "two"]) {
     await store.createSession({ runtimeKind: "genesis", sessionId, metadata: sourceMetadata(root, sessionId) });
   }
-  const runtime = { store, getSession: (id) => store.readSession(id) };
+  const runtime = { store, getSession: (id) => store.readSession(id), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
   const env = { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") };
-  const project = { createRuntime: async () => runtime };
+  const project = { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } };
   const attachments = createSessionAttachments({ env, project });
   return { attachments, env, project, runtime, store };
 }

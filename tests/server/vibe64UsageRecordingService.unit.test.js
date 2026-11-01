@@ -54,7 +54,7 @@ async function recorder(t, { status = "active", startResult = null, admission, t
     admission: admission ?? admitUsageRecording,
     events: { publish: async (event) => published.push(event) },
     logger: { warn() {} },
-    project: { createRuntime: async () => ({ getSession: async () => session }) },
+    project: { createRuntime: async () => ({ getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: {
       usageRecordingTargets: async () => ({ ok: true, previewTargetId: "web", targets }),
       startOutputTargetTerminal: async (sessionId, input) => {

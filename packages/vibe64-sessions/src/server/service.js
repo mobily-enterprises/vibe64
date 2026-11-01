@@ -169,8 +169,8 @@ function createService({
    * @param {{ submittedBy?: object | null }} details
    */
   async function saveAfterCompletedPlan(sessionId, details) {
-    const runtime = await project.createRuntime({ inspectSource: false });
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
+    const session = await runtime.getSessionWithoutSource(sessionId);
     const preferences = assistantRoutingFromMetadata(session.metadata);
     if (preferences?.mode !== "auto" || !preferences.autoSave) return "";
     const skipped = reason => `Automatic save didn't run: ${reason}`;
@@ -205,7 +205,7 @@ function createService({
         await publishSessionChanged(session.sessionId, {
           operation: "updated",
           reason: "workspace-setup-progress",
-          session: await runtime.getSession(session.sessionId, { inspectSource: false })
+          session: await runtime.getSessionWithoutSource(session.sessionId)
         });
       }
     } : {};

@@ -32,7 +32,7 @@ async function fixture(t) {
 
 test("rename API persists the display name and publishes a list refresh without needing an AI", async (t) => {
   const f = await fixture(t);
-  const service = createService({ project: { createRuntime: async () => ({ store: f.store }) }, terminals: {}, publishSessionChanged: f.publishSessionChanged });
+  const service = createService({ project: { createRuntime: async () => ({ store: f.store }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, terminals: {}, publishSessionChanged: f.publishSessionChanged });
   const action = createSessionActions({ sessions: service }).find(({ id }) => id === ACTION_RENAME_SESSION);
   assert.deepEqual(await runWithProjectRequestContext({ slug: "unit_project" }, () => action.execute({ sessionId: "one", name: "  My work  ", originId: "tab1" })), { ok: true, sessionId: "one", sessionName: "My work" });
   assert.equal(await f.store.readMetadataValue("one", "label"), "My work");

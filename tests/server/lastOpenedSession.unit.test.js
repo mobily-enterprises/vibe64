@@ -44,6 +44,7 @@ function project(stateRoot, { pinned = "", sessionIds = ["s1", "s2", "s3"] } = {
         }
       };
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     async developmentDatabasePolicy() { return { creation: {}, limits: {} }; }
   };
   const service = createService({

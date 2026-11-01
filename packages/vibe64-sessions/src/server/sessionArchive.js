@@ -87,7 +87,7 @@ function createSessionArchive({
     const prepared = await archivePreparation({
       phase,
       runtime,
-      session: await runtime.getSession(sessionId, { inspectSource: false })
+      session: await runtime.getSessionWithoutSource(sessionId)
     });
     if (prepared?.ok === false) {
       throw Object.assign(new Error(prepared.error || "Session archive preparation failed."), {
@@ -113,7 +113,7 @@ function createSessionArchive({
         error.code = "vibe64_workspace_setup_running";
         throw error;
       }
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       let routingCancelled = false;
       const cancelledRouting = new Map();
       while (true) {
@@ -123,9 +123,7 @@ function createSessionArchive({
               code: "vibe64_workspace_setup_running"
             });
           }
-          const currentSession = await runtime.getSession(sessionId, {
-            inspectSource: false
-          });
+          const currentSession = await runtime.getSessionWithoutSource(sessionId);
           await runtime.store.assertSessionNotPinned(sessionId);
           const conversations = await runtime.store.listSessionConversations(sessionId);
           const routingRequests = [{ metadata: currentSession.metadata }, ...conversations.map(record => ({
@@ -251,7 +249,7 @@ function createSessionArchive({
   }
 
   async function resumeSessionArchives({ signal = null } = {}) {
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     // A closed session whose archive cannot be published is reported with the
     // others; it does not stop the open sessions' interrupted archives.
     const published = await runtime.store.recoverSessionArchives();

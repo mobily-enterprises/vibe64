@@ -125,8 +125,8 @@ function createTrainingDeclaredCheckOwner({
     const checkId = responseStepCheck(lesson, input.stepId);
     const declared = await content.readCheck({ ...pin, checkId });
     return project.runInProjectContext(attempt.projectSlug, async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(input.sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(input.sessionId);
       if (!session || session.sessionId !== input.sessionId) {
         throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The exact prepared lesson session is unavailable.");
       }
@@ -152,7 +152,7 @@ function createTrainingDeclaredCheckOwner({
         }
         signal?.throwIfAborted();
         const before = await readAttempt(actor, input);
-        const beforeSession = await runtime.getSession(input.sessionId, { inspectSource: false });
+        const beforeSession = await runtime.getSessionWithoutSource(input.sessionId);
         const beforeRun = activeRun(await terminals.outputTargetStatus(input.sessionId), beforeSession || {}, input);
         if (canonicalJson(before.pin) !== canonicalJson(attempt.pin) ||
             before.projectSlug !== attempt.projectSlug ||
@@ -200,7 +200,7 @@ function createTrainingDeclaredCheckOwner({
           { execution: result?.execution, scratch });
         signal?.throwIfAborted();
         const current = await readAttempt(actor, input);
-        const freshSession = await runtime.getSession(input.sessionId, { inspectSource: false });
+        const freshSession = await runtime.getSessionWithoutSource(input.sessionId);
         const freshRun = activeRun(await terminals.outputTargetStatus(input.sessionId), freshSession || {}, input);
         if (canonicalJson(current.pin) !== canonicalJson(attempt.pin) ||
             current.projectSlug !== attempt.projectSlug ||
@@ -303,8 +303,8 @@ function createTrainingDeclaredCheckOwner({
     const result = (outcome, extra = {}) => ({ checkResult: { check: check.id, observationId: input.observationId, outcome }, ...extra });
     const sameAttempt = current => canonicalJson(current.pin) === canonicalJson(attempt.pin) && current.projectSlug === attempt.projectSlug;
     return project.runInProjectContext(attempt.projectSlug, async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(input.sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(input.sessionId);
       if (!session || session.sessionId !== input.sessionId) {
         throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The exact prepared lesson session is unavailable.");
       }

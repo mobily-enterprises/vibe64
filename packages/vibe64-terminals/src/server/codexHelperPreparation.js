@@ -105,7 +105,7 @@ function createCodexHelperPreparation({
       async prepareRecord(record, ledger) {
         const currentSession = normalizeText(session?.sessionId) === record.sessionId
           ? session
-          : await effectiveRuntime.getSession(record.sessionId, { inspectSource: false });
+          : await effectiveRuntime.getSessionWithoutSource(record.sessionId);
         return prepareCodexAppServerHelperThreadRestore(record, {
           ledger,
           runtime: effectiveRuntime,

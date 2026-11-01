@@ -31,7 +31,8 @@ async function fixture(t, { agentRuns = [], conversationLog = [] } = {}) {
       assistant_routing: JSON.stringify({ mode: "senior" }) } };
   const project = {
     async runInProjectContext(slug, operation) { assert.equal(slug, projectSlug); return operation(); },
-    async createRuntime() { return { async getSession(id) { assert.equal(id, sessionId); return session; } }; }
+    async createRuntime() { return { async getSession(id) { assert.equal(id, sessionId); return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); }
   };
   const actionCalls = [];
   const actions = { async execute(call) { actionCalls.push(call); return { ok: true, conversationLog, pagination: { hasMoreBefore: false } }; } };

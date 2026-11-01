@@ -264,13 +264,15 @@ async function createSourceEditorFixture({
               sourceReady: true
             };
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           store: {
             runSessionExclusive: typeof writeExclusive === "function"
               ? writeExclusive
               : async (_sessionId, _operationName, operation) => ({ acquired: true, value: await operation() })
           }
         };
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     sourceFileObserver,
     terminals: fixtureTerminalService,

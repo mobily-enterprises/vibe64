@@ -10,7 +10,7 @@ import {
 test("checkpoint confirmation projects the original outcome after failure cleanup reports interruption", async () => {
   let task;
   const session = { sessionId: "session-1", sourcePath: "/retained/worktree", metadata: {} };
-  const runtime = { async getSession() { return session; }, store: {
+  const runtime = { async getSession() { return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: {
     async writeBackgroundTaskEvent(_id, _taskId, value) { task = value.patch; return task; }
   } };
   const result = await checkpointSessionTurn({ runtime, session, sessionId: session.sessionId,
@@ -59,6 +59,7 @@ test("shared turn checkpoints preserve outcome and expose recovery failures", as
   const changes = [];
   const runtime = {
     getSession: async () => session,
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: { writeBackgroundTaskEvent: async (_id, _task, { patch }) => { changes.push(patch); return patch; } }
   };
   const input = { runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
@@ -131,19 +132,19 @@ test("source-bearing Learning retains the original native source and Git checkpo
       assert.equal(await learningSessionExecutionRoot(runtime, id), "", "Only no-exercise learning opts out of the source path");
       const host = { toolHome: async () => ({ ok: true, toolHomeSource: "/authorized/account" }),
         unavailableWorktree: async (_runtime, receivedId, failure) => { assert.equal(receivedId, id); return failure; } };
-      const context = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id, {}, host);
+      const context = await readSessionConversationContext(engine, { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, id, {}, host);
       assert.equal(context.workdir, nativeRoot);
       assert.equal(context.session.sourcePath, nativeRoot);
       if (engine === "codex") {
         assert.equal(context.ok, true);
         assert.equal(context.executionRoot, nativeRoot);
         await runtime.store.writeMetadataValue(id, "source_removed", "yes");
-        const removed = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id, {}, host);
+        const removed = await readSessionConversationContext(engine, { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, id, {}, host);
         assert.equal(removed.ok, false);
         assert.equal(removed.code, "vibe64_session_worktree_unavailable");
         await runtime.store.writeMetadataValue(id, "source_removed", "");
         await rm(nativeRoot, { recursive: true });
-        const missing = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id, {}, host);
+        const missing = await readSessionConversationContext(engine, { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, id, {}, host);
         assert.equal(missing.ok, false);
         assert.equal(missing.code, "vibe64_session_worktree_unavailable");
         await mkdir(nativeRoot, { recursive: true });
@@ -174,7 +175,7 @@ test("source-bearing Learning retains the original native source and Git checkpo
       await assert.rejects(() => learningSessionExecutionRoot(runtime, id, { allowClosing: "true" }),
         { code: "vibe64_learning_session_inactive" });
       assert.equal(await learningSessionExecutionRoot(runtime, id, { allowClosing: true }), "");
-      const control = await readSessionConversationContext(engine, { createRuntime: async () => runtime }, id,
+      const control = await readSessionConversationContext(engine, { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }, id,
         { allowClosing: true }, host);
       assert.equal(control.workdir, nativeRoot);
       const interrupted = await checkpointSessionTurn({ ...input, outerTurnId: `closing-${engine}`, outcome: "interrupted" });
@@ -191,10 +192,11 @@ test("temporary and Main Codex turns record the same checkpoint outcome for a tu
   const session = { sessionId: "session-1", sourcePath: "/missing/session-source", metadata: {} };
   const runtime = {
     async getSession() { return session; },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     store: { async writeBackgroundTaskEvent(_id, _task, { patch }) { patches.push(patch); return patch; } }
   };
   const checkpoint = createCodexSessionTurnCheckpoint({
-    project: { async createRuntime() { return runtime; }, async readCurrentProject() { return {}; } },
+    project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); }, async readCurrentProject() { return {}; } },
     publishSessionChanged: async () => {}
   });
   for (const [turnOutcome, outcome] of [["user_cancelled", "cancelled"], ["response_delivery_failure", "failed"]]) {

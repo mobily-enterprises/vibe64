@@ -35,6 +35,7 @@ test("project messages use only the current selected Main session with fresh acc
       },
       readCurrentProject: async () => ({ runtime: { open } }),
       createRuntime: async () => ({ store: { readCurrentSession: async () => selection ? { sessionId: selection } : null } }),
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       createSessionStore: async () => store
     },
     assertOpen: () => { if (closing) throw new Error("Project is closing"); },
@@ -163,6 +164,7 @@ test("exact same-project messages and replies retain their recipients and reject
       runInProjectContext: async (project, operation) => { assert.equal(project, "compas-next"); return operation(); },
       readCurrentProject: async () => ({ runtime: { open: true } }),
       createRuntime: async () => ({ store: { readSession: store.readSession, readCurrentSession: () => store.readSession(selected) } }),
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       createSessionStore: async () => store
     },
     assertOpen: () => {},
@@ -258,7 +260,8 @@ test("readProjectPreview re-reads the Preview, never waits past its bound and re
     project: {
       runInProjectContext: async (slug, operation, options) => { assert.equal(slug, "mercbot"); assert.equal(options.vibe64User, actor); return operation(); },
       readCurrentProject: async () => ({ runtime: { open } }),
-      createRuntime: async () => ({ store: { readCurrentSession: async () => session, readSession: async id => id === session?.sessionId ? session : null } })
+      createRuntime: async () => ({ store: { readCurrentSession: async () => session, readSession: async id => id === session?.sessionId ? session : null } }),
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     launchTarget: { launchStatus: async id => { launched.push(id); return statuses.shift() || { previewTarget: {} }; } },
     waitMs: 60,

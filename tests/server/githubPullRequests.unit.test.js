@@ -547,11 +547,11 @@ test("PR update notifications reach only sessions sharing the same source branch
   const sessions = [{ sessionId: "pr-one", metadata }, { sessionId: "pr-two", metadata },
     { sessionId: "main", metadata: {} }, { sessionId: "other-pr", metadata: { github_pull_request: JSON.stringify({ ...pullRequestSessionSource(pr), headBranch: "other" }) } }];
   const writes = [];
-  const runtime = { async getSession(id) { return sessions.find((item) => item.sessionId === id); },
+  const runtime = { async getSession(id) { return sessions.find((item) => item.sessionId === id); }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async listSessionSummaries() { return sessions; },
     store: { async writeMetadataValue(id, name, value) { writes.push([id, name, value]); },
       async writeBackgroundTaskEvent() { return {}; }, async readBackgroundTask() { return null; } } };
-  const service = createService({ project: { async createRuntime() { return runtime; }, async readCurrentProject() { return project; } },
+  const service = createService({ project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); }, async readCurrentProject() { return project; } },
     async publishSessionChanged() {}, terminals: { async requireAssistantAccess() {},
       async saveSessionWork(_id, input) { await input.onRepositoryWriteAcquired(); return { ok: true, saveCommit: "new", reconciled: true }; } } });
   const result = await service.saveSessionWork("pr-one");

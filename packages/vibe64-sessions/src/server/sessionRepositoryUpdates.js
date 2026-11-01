@@ -95,7 +95,7 @@ function createSessionRepositoryUpdates({
       originId = ""
     } = options;
     const sessions = await runtime.listSessionSummaries({ statusGroup: "open" });
-    const source = await runtime.getSession(sourceSessionId, { inspectSource: false });
+    const source = await runtime.getSessionWithoutSource(sourceSessionId);
     const currentProject = await project.readCurrentProject();
     const authorityKey = (session) => {
       const { mode, repository, branch } = sessionRepositoryDestination(currentProject, session);
@@ -138,8 +138,8 @@ function createSessionRepositoryUpdates({
   async function checkSessionUpdates(sessionId, input) {
     return sessionResult(async () => {
       const normalizedSessionId = normalizeText(sessionId);
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const activeCheck = activeRepositoryUpdateChecks.get(normalizedSessionId);
       if (activeCheck) {
         return activeCheck;
@@ -172,7 +172,7 @@ function createSessionRepositoryUpdates({
           originId: normalizeText(input.originId),
           reason: "session-repository-checked",
           payload: { repositoryUpdateCheck: updateCheck },
-          session: await runtime.getSession(sessionId, { inspectSource: false })
+          session: await runtime.getSessionWithoutSource(sessionId)
         });
         if (previousCanonicalCommit && previousCanonicalCommit !== result.canonicalCommit) {
           await publishCanonicalChanged(runtime, sessionId, result.canonicalCommit, {
@@ -209,7 +209,7 @@ function createSessionRepositoryUpdates({
   async function probeRepositoryUpdates(slug, state) {
     const { memory, watched } = state;
     return project.runInProjectContext(slug, async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       const open = await runtime.listSessions({ statusGroup: "open" });
       if (!watched && !open.some(sessionHasActiveAgentRun)) {
         return { failed: false, inUse: false };
@@ -235,7 +235,7 @@ function createSessionRepositoryUpdates({
             : remembered.authority !== read.authority);
           if (!failure && moved && read.head && !remembered.error) {
             // An earlier session's check or a browser's may have caught up.
-            const session = await runtime.getSession(sessionId, { inspectSource: false });
+            const session = await runtime.getSessionWithoutSource(sessionId);
             moved = cachedRepositoryUpdateCheck(session)?.canonicalCommit !== read.head;
           }
           const renewal = !failure && moved ? await readSessionRenewalState(runtime, sessionId) : null;

@@ -131,7 +131,7 @@ function createConnectedContributions({
    * @param {object} requestContext
    */
   async function assertConnectedWorkSaved(runtime, sessionId, requestContext) {
-    const current = await runtime.getSession(sessionId, { inspectSource: false });
+    const current = await runtime.getSessionWithoutSource(sessionId);
     // Read each integration branch live before taking snapshots, so Save
     // publishes only work tested against every connected branch's latest commit.
     const checks = [];
@@ -193,7 +193,7 @@ function createConnectedContributions({
         // Earlier repositories can take time to publish. Recheck this source
         // at its turn rather than skipping work from the initial review snapshot.
         const [item] = await inspectConnectedWork(
-          await runtime.getSession(sessionId, { inspectSource: false }), requestContext, [reviewed]
+          await runtime.getSessionWithoutSource(sessionId), requestContext, [reviewed]
         );
         if (Object.entries(reviewed.destination).some(([key, value]) => item.destination?.[key] !== value)) {
           throw Object.assign(new Error("The connected Save destination changed. Inspect work and review it again."), {
@@ -363,7 +363,7 @@ function createConnectedContributions({
       if (targets.length) report("Linking connected sources");
       preparingRepository = "";
       const development = await project.prepareConnectedDevelopmentInputs({
-        session: await runtime.getSession(sessionId, { inspectSource: false }),
+        session: await runtime.getSessionWithoutSource(sessionId),
         projects: resolvedSources,
         environment: await runtime.resolvePromptEnvironment()
       });
@@ -411,8 +411,8 @@ function createConnectedContributions({
 
   async function reviewConnectedReplacement(sessionId, input, requestContext) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const { incoming } = await inspectConnectedReplacement(session, input, requestContext);
       return incoming;
     });
@@ -448,7 +448,7 @@ function createConnectedContributions({
         const serialized = serializeSessionConnectedSources(sources);
         await runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
       }
-      const current = await runtime.getSession(sessionId, { inspectSource: false });
+      const current = await runtime.getSessionWithoutSource(sessionId);
       const result = await prepareConnectedSourcesInsideAgentWrite({ runtime, session: current }, input, requestContext);
       return { ...result, sessionId: result.prepared?.find(item => item.repository === input.repository)?.sessionId };
     }));
@@ -456,8 +456,8 @@ function createConnectedContributions({
 
   async function inspectConnectedDevelopmentInputs(sessionId, input, requestContext) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const targets = await project.connectedProjectTargets({ sessionId, vibe64User: trustedAssistantUser(input) });
       const bindings = sessionConnectedSources(session);
       const projects = [];

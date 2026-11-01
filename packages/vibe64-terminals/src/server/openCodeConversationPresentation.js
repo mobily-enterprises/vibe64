@@ -149,7 +149,7 @@ function createOpenCodeConversationPresentation({
     const cleanup = async () => {
       let helper;
       if (renewal) {
-        const session = await context.runtime.getSessionForRenewal(context.sessionId, { inspectSource: false });
+        const session = await context.runtime.getSessionForRenewalWithoutSource(context.sessionId);
         renewalCleanupContext(context.sessionId, { ...context, session });
         helper = session.agentRuns?.find(run => run.id === OPENCODE_AGENT_RUN_ID)?.reasoningSummaryHelper;
       } else {

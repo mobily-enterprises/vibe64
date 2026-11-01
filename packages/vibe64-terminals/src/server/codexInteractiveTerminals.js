@@ -265,9 +265,7 @@ function createCodexInteractiveTerminals({
   }
 
   async function startGlobalCodexTerminalSession() {
-    const runtime = await project.createRuntime({
-      inspectSource: false
-    });
+    const runtime = await project.createRuntimeWithoutSource();
     const executionRoot = await globalCodexRuntimeRoot(project, runtime);
     if (!executionRoot) {
       return nonRetryableTerminalFailure({

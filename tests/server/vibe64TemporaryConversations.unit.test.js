@@ -155,8 +155,8 @@ async function conversationFixture(root, engineId = "codex") {
   await store.createSession({ runtimeKind: "genesis", sessionId: "one", metadata: {
     ...sourceMetadata(root, "one"), assistant_selection: serializeVibe64AssistantSelection(selection)
   } });
-  const runtime = { store, stateRoot: projectRuntimeRoot(root), getSession: (id) => store.readSession(id) };
-  const project = { createRuntime: async () => runtime };
+  const runtime = { store, stateRoot: projectRuntimeRoot(root), getSession: (id) => store.readSession(id), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
+  const project = { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } };
   const attachments = createSessionAttachments({ project, env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "uploads") } });
   const native = { messages: [], status: "ready", runId: "", admitted: false, starts: 0, deletes: 0, stopError: "", deleteError: "" };
   const sessionAgent = {
@@ -755,7 +755,8 @@ test("two session stores preserve draft-before-Close and reject draft-after-Clos
       projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root)
     });
     const secondRuntime = { ...f.runtime, store: secondStore,
-      getSession: id => secondStore.readSession(id) };
+      getSession: id => secondStore.readSession(id),
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
     const secondService = f.restart({ readSessionContext: async (sessionId, options = {}) => ({
       ...options, runtime: secondRuntime, session: await secondRuntime.getSession(sessionId)
     }) });

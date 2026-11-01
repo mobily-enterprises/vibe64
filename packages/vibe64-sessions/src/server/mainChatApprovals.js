@@ -86,7 +86,7 @@ function createMainChatApprovals({
   publishProjectChanged
 }) {
   async function change(sessionId, reason, operation, payload = null) {
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     const result = await runtime.store.mutateSession(sessionId, async () => {
       const approvals = parseApprovals(await runtime.store.readMetadataValue(sessionId, MAIN_CHAT_APPROVALS_METADATA));
       const value = await operation(approvals);
@@ -94,7 +94,7 @@ function createMainChatApprovals({
       await runtime.store.writeMetadataValue(sessionId, MAIN_CHAT_APPROVALS_METADATA, JSON.stringify(approvals));
       return value;
     });
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const session = await runtime.getSessionWithoutSource(sessionId);
     await publishSessionChanged(sessionId, { reason, session, ...(payload ? { payload } : {}) });
     await publishProjectChanged({ projectSlug: normalizeText(currentProjectRequestContext()?.slug) }, { reason: "main-chat-approvals" });
     return result;
@@ -141,7 +141,7 @@ function createMainChatApprovals({
 
   async function read(sessionId, options = {}) {
     const { vibe64User = null } = options;
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     const approvals = parseApprovals(await runtime.store.readMetadataValue(sessionId, MAIN_CHAT_APPROVALS_METADATA));
     const team = await readWorkspaceTeam();
     return {
@@ -163,8 +163,8 @@ function createMainChatApprovals({
     const sender = person(vibe64User);
     const id = ENTRY_ID_PATTERN.test(messageId) ? messageId : crypto.randomUUID();
     const team = await readWorkspaceTeam();
-    const runtime = await project.createRuntime({ inspectSource: false });
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
+    const session = await runtime.getSessionWithoutSource(sessionId);
     const steer = (await terminals.agentSessionState(sessionId, { runtime, session }))?.turn?.active === true;
     return change(sessionId, "main-chat-approval-queued", (approvals) => {
       const existing = approvals.entries.find((entry) => entry.id === id);

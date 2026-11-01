@@ -47,8 +47,8 @@ function createPromptHintContext({
   }
 
   async function readContext(sessionId = "") {
-    const runtime = await project.createRuntime({ inspectSource: false });
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
+    const session = await runtime.getSessionWithoutSource(sessionId);
     const sourceRoot = toText(sessionSourcePath(session));
     const [promptHintsResult, conversation, repositoryTasks, blueprint, subsystems] = await Promise.all([
       project.readPromptHints(),

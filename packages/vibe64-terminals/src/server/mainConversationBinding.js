@@ -49,7 +49,7 @@ function requireCompletedConversationRewind(session) {
  * @param {object} current
  */
 async function requireMainConversationAdmission(runtime, sessionId, current) {
-  requireCompletedConversationRewind(current.session || await runtime.getSession(sessionId, { inspectSource: false }));
+  requireCompletedConversationRewind(current.session || await runtime.getSessionWithoutSource(sessionId));
 }
 
 function synchronousConversationHost(provider, sessionId, context, purpose, label) {
@@ -219,7 +219,7 @@ async function createSessionConversationBinding(provider, sessionId, options = {
   const original = createMainConversationBinding(runtime.store, sessionId, {
     runtime,
     session,
-    readSession: () => runtime.getSession(sessionId, { inspectSource: false })
+    readSession: () => runtime.getSessionWithoutSource(sessionId)
   });
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
   const binding = {
@@ -279,7 +279,7 @@ async function createSessionConversationBinding(provider, sessionId, options = {
     ...(engine === "codex" ? { selection } : {}),
     async admission(current) {
       if (engine !== "codex") return requireMainConversationAdmission(runtime, sessionId, current);
-      const latest = await runtime.getSession(sessionId, { inspectSource: false });
+      const latest = await runtime.getSessionWithoutSource(sessionId);
       requireCompletedConversationRewind(latest);
       if (vibe64AssistantSelectionFromMetadata(latest.metadata).engineId !== "codex") {
         throw new Error("The selected assistant changed. Open its current conversation.");

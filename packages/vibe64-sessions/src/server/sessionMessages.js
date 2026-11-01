@@ -71,7 +71,7 @@ function createSessionMessages({
     }
     const startedAt = Date.now();
     await setupRunner.wait(sessionId);
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     const messageId = normalizeText(input.messageId) || crypto.randomUUID();
     vibe64SessionDebugLog("server.sessions.sendAgentMessage.dispatching", {
       durationMs: Date.now() - startedAt,
@@ -96,9 +96,7 @@ function createSessionMessages({
         reason: accepted
           ? "session-agent-message-accepted"
           : "session-agent-message-failed",
-        session: await runtime.getSession(sessionId, {
-          inspectSource: false
-        })
+        session: await runtime.getSessionWithoutSource(sessionId)
       });
       return {
         ...result,
@@ -141,7 +139,7 @@ function createSessionMessages({
   async function interruptAgentTurn(sessionId, input) {
     return sessionResult(async () => {
       const result = await terminals.interruptAgentTurn(sessionId, input, {
-        runtime: await project.createRuntime({ inspectSource: false })
+        runtime: await project.createRuntimeWithoutSource()
       });
       if (result?.ok !== false) {
         await publishSessionChanged(sessionId, {
@@ -156,7 +154,7 @@ function createSessionMessages({
   async function resumeIntegrationContinuation(sessionId, input) {
     return sessionResult(async () => {
       await setupRunner.wait(sessionId);
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       const result = await terminals.resumeIntegrationContinuation(sessionId, {
         turnId: input.turnId,
         requestId: input.requestId
@@ -175,7 +173,7 @@ function createSessionMessages({
 
   async function skipIntegrationSetupRequest(sessionId, input) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       const integrationSetup = await runtime.store.skipIntegrationSetupRequest(sessionId, {
         turnId: input.turnId,
         requestId: input.requestId

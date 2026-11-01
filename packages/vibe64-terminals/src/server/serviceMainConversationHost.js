@@ -162,7 +162,7 @@ function createServiceMainConversationHost({
       // Scoped work already has its own authorized host and native identity;
       // opening its existing handle must not hydrate a project session.
       if (context.assistantScope) return createSessionConversationBinding(provider, id, context);
-      const runtime = context.runtime || await project.createRuntime({ inspectSource: false });
+      const runtime = context.runtime || await project.createRuntimeWithoutSource();
       const binding = await createSessionConversationBinding(provider, id, {
         ...context,
         runtime,

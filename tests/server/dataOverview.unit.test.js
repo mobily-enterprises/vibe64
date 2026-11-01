@@ -177,7 +177,8 @@ test("real source-editor persistence creates complete JSON, detects stale edits 
   const schema = dataOverviewSchema();
   const events = [];
   const project = {
-    createRuntime: async () => ({ getSession: async () => session, store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) } }),
+    createRuntime: async () => ({ getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) } }),
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     createSessionStore: async () => ({ readSession: async () => session, readArtifact: async (_id, key) => key === "database/schema.json" ? JSON.stringify(schema) : "" }),
     localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: { contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: { host: "127.0.0.1", port: 5432, database: "erd_test", username: "reader" }, write: { host: "127.0.0.1", port: 5432, database: "erd_test", username: "writer" } } })
@@ -276,8 +277,10 @@ test("one persisted MySQL overview survives session database changes, UI saves a
   const project = {
     createRuntime: async () => ({
       getSession: async (id) => sessions.get(id),
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) }
     }),
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     createSessionStore: async () => ({
       readSession: async (id) => sessions.get(id),
       readArtifact: async (id, key) => key === "database/schema.json" ? JSON.stringify(schemas.get(id)) : ""

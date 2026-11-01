@@ -1672,7 +1672,7 @@ test("local practice callback uses the same real record and Project ALS without 
         assert.equal(actual.slug, slug);
         assert.equal(actual.projectRoot, before.projectContextRoot);
         assert.equal(actual.canonicalRepositoryPath, path.join(before.projectRuntimeRoot, "canonical-repository", "repository.git"));
-        assert.equal((await project.createRuntime({ inspectSource: false })).projectContextRoot, actual.projectRoot);
+        assert.equal((await project.createRuntimeWithoutSource()).projectContextRoot, actual.projectRoot);
         retained = currentProjectRequestContext();
         later = afterCallback.then(() => context.readWorkspaceProjectState({ slug })).catch(error => error);
       });
@@ -1887,7 +1887,7 @@ test("admitted practice capture retains only same-owner control after the fresh 
       assert.equal(context.currentPracticeProjectScope().access, "control");
       assert.deepEqual(context.currentPracticeProjectScope().training, training);
       assert.equal((await project.readCurrentProject()).projectRoot, actual.projectRoot);
-      assert.equal((await project.createRuntime({ inspectSource: false })).stateRoot, actual.projectRuntimeRoot);
+      assert.equal((await project.createRuntimeWithoutSource()).stateRoot, actual.projectRuntimeRoot);
       assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
       for (const effect of [() => context.discardWorkspaceProjectRecord({ slug }), () => context.beginWorkspaceProjectDeletion({ slug }),
         () => context.updateWorkspaceProjectMetadata({ slug, developmentDatabaseScope: "project" })]) {

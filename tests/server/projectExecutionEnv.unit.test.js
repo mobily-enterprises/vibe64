@@ -100,11 +100,11 @@ test("Codex message preparation reuses only current resources and Env files", as
         }
       }
     });
-    const runtime = await service.createRuntime({ inspectSource: true });
+    const runtime = await service.createRuntime();
     const sessionId = "codex-environment";
     await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
     await runtime.store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(targetRoot, sessionId) });
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const session = await runtime.getSessionWithoutSource(sessionId);
     runtime.inspectSourceForSession = async () => assert.fail("Send does not need a Git conflict scan.");
     const environment = createCodexSessionEnvironment({ env: {}, project: service });
     const sendEnvironment = () => environment.codexProjectTerminalEnv({ runtime, session, sessionId });
@@ -140,7 +140,7 @@ test("Codex context avoids source inspection while retaining workspace and accou
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({ logger: console, env: {},
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }) });
-    const runtime = await service.createRuntime({ inspectSource: true });
+    const runtime = await service.createRuntime();
     const sessionId = "codex-context";
     const workdir = sourcePath(targetRoot, sessionId);
     await mkdir(workdir, { recursive: true });

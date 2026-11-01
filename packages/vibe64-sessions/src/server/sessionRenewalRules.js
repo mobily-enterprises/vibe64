@@ -230,9 +230,7 @@ async function inspectSessionRenewalEligibility({
     session,
     vibe64User
   });
-  const refreshedSession = await runtime.getSession(session.sessionId, {
-    inspectSource: false
-  });
+  const refreshedSession = await runtime.getSessionWithoutSource(session.sessionId);
   const work = await terminals.inspectSessionWork(session.sessionId, {
     runtime,
     session: refreshedSession

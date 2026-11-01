@@ -90,8 +90,8 @@ async function fixture(t, { script = originalCheck, assets = false, lessonVersio
       previewPublicOrigin: "https://preview.example.invalid", agentTargetHref: "https://proxy.example.invalid/app" } } };
   const calls = [];
   const project = { async runInProjectContext(slug, operation) { assert.equal(slug, reserved.attempt.projectSlug); return operation(); },
-    async createRuntime(options) { assert.deepEqual(options, { inspectSource: false });
-      return { store, async getSession(id, readOptions) { assert.equal(id, sessionId); assert.deepEqual(readOptions, { inspectSource: false }); return session; } }; } };
+    async createRuntimeWithoutSource() {
+      return { store, async getSessionWithoutSource(id) { assert.equal(id, sessionId); return session; } }; } };
   const terminals = { async outputTargetStatus(id) { assert.equal(id, sessionId); return structuredClone(status); } };
   const owner = runCommand => createTrainingDeclaredCheckOwner({ learners, content, project, terminals,
     runCommand: async command => { calls.push(command); return (runCommand || runVibe64Command)(command); } });

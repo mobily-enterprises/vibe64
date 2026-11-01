@@ -71,7 +71,8 @@ test("preview status, open, and identity selection reject frozen sessions before
       async createRuntime() {
         projectReads += 1;
         throw new Error("Frozen preview must not read the project.");
-      }
+      },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); }
     },
     sessionAdmissionFailure() {
       return frozen;
@@ -107,8 +108,9 @@ test("explicit Preview Stop persists and refuses incidental startup before prepa
     ensureWorkspacePrepared() { prepared += 1; throw new Error("Stop must not prepare a workspace."); },
     project: { currentProjectSlug: () => "", async createRuntime() { return {
       store,
-      async getSession() { return { sessionId, metadata }; }
-    }; } },
+      async getSession() { return { sessionId, metadata }; },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+    }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     stopPreviewBrowsers() { browsersClosed += 1; return { ok: true }; }
   });
   t.after(() => controller.close());
@@ -137,8 +139,9 @@ test("Preview Stop drains before queued recovery and isolates other session clea
         async mutateSession(_id, operation) { return operation(); },
         async writeMetadataValue(id, key, value) { metadata.get(id)[key] = value; }
       },
-      async getSession(id) { return { sessionId: id, metadata: metadata.get(id) }; }
-    }; } },
+      async getSession(id) { return { sessionId: id, metadata: metadata.get(id) }; },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+    }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     async stopPreviewBrowsers(id) {
       cleaned.push(id);
       if (id === stoppingId) { entered.resolve(); await drain.promise; }
@@ -172,8 +175,9 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
       ensureWorkspacePrepared() { prepared += 1; },
       project: { currentProjectSlug: () => "", async createRuntime() { return {
         store: { async mutateSession() { writes += 1; } },
-        async getSession() { return { metadata }; }
-      }; } }
+        async getSession() { return { metadata }; },
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+      }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }
     });
     t.after(() => controller.close());
     const result = await controller.startTerminal(`invalid-stop-${crypto.randomUUID()}`, { automatic: true });
@@ -193,8 +197,9 @@ test("an explicit Preview start reruns a failed setup; an automatic one does not
     },
     project: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {},
-      async getSession(sessionId) { return { sessionId, metadata: {} }; }
-    }; } }
+      async getSession(sessionId) { return { sessionId, metadata: {} }; },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+    }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }
   });
   t.after(() => controller.close());
   const sessionId = `setup-rerun-${crypto.randomUUID()}`;
@@ -218,8 +223,9 @@ test("failed Preview browser cleanup retains Stop across controllers and retries
         async mutateSession(_id, operation) { return operation(); },
         async writeMetadataValue(_id, key, value) { metadata[key] = value; }
       },
-      async getSession() { return { sessionId, metadata }; }
-    }; } },
+      async getSession() { return { sessionId, metadata }; },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+    }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     async stopPreviewBrowsers() {
       attempts += 1;
       return failCleanup ? { ok: false, error: "browser drain failed" } : { ok: true };
@@ -513,6 +519,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       async getSession() {
         return session;
       },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       store: {
         async deleteMetadataValue() {},
         async mutateSession(_sessionId, operation) {
@@ -530,6 +537,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       async createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       currentProjectSlug: () => "",
       currentServiceDataRoot() {
         return path.join(root, "service");

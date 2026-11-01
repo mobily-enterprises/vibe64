@@ -145,8 +145,8 @@ function createSessionAssistant({
   async function inspectAssistantAccess(sessionId, input) {
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const context = { runtime, session, vibe64User };
       return publicAssistantAccess(await terminals.inspectAssistantAccess(sessionId, context));
     }, "Vibe64 could not inspect assistant access.");
@@ -163,10 +163,10 @@ function createSessionAssistant({
         ),
           { code: "vibe64_main_chat_approval_required", statusCode: 403 });
       }
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       const save = async () => {
         const apply = async ({ deferred = false } = {}) => {
-          const session = await runtime.getSession(sessionId, { inspectSource: false });
+          const session = await runtime.getSessionWithoutSource(sessionId);
           const current = vibe64AssistantSelectionFromMetadata(session.metadata);
           let preferences = null;
           let resolved;
@@ -196,7 +196,7 @@ function createSessionAssistant({
             // catches up on the next message. Only an active goal rebinds now.
             if (!(await readNativeState()).goalActive) {
               await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
-              return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
+              return { assistantSelection: current, session: await runtime.getSessionWithoutSource(sessionId) };
             }
             const decision = await terminals.resolveAssistantPurpose({
               purpose: preferences.mode,
@@ -230,7 +230,7 @@ function createSessionAssistant({
           if (deferred || turnActive || goalActive) {
             await terminals.applyGoalSelection(sessionId, next, nextPreferences, { runtime, session, vibe64User });
             await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));
-            return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
+            return { assistantSelection: current, session: await runtime.getSessionWithoutSource(sessionId) };
           }
           const routingRequest = assistantRoutingRequestFromMetadata(session.metadata);
           if (routingRequest?.helper || !routingRequest?.stopped && (assistantRoutingStatusIsPending(routingRequest) ||
@@ -246,7 +246,7 @@ function createSessionAssistant({
           );
           return {
             assistantSelection: next,
-            session: await runtime.getSession(sessionId, { inspectSource: false })
+            session: await runtime.getSessionWithoutSource(sessionId)
           };
         };
         const update = async () => {

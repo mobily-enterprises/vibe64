@@ -120,7 +120,7 @@ test("prepared execution reuses confirmed resources without source admission and
         async environmentForResources() { provisions += 1; prepared = true; return provided(); }
       }
     });
-    const runtime = await service.createRuntime({ inspectSource: false });
+    const runtime = await service.createRuntimeWithoutSource();
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
     const input = { sessionId, reusePrepared: true };
     await service.projectExecutionEnvironment(input);
@@ -637,6 +637,7 @@ test("scope saving and session creation share one project policy boundary", asyn
       async getSession() {
         return { ...openSessions[0] };
       },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       async listSessionSummaries() {
         return openSessions.map((session) => ({ ...session }));
       },
@@ -652,6 +653,7 @@ test("scope saving and session creation share one project policy boundary", asyn
         async createRuntime() {
           return runtime;
         },
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); },
         developmentDatabasePolicy(input) {
           return project.developmentDatabasePolicy(input);
         },
@@ -1313,7 +1315,7 @@ test("Env is user-owned and reaches Genesis sessions without an adapter", async 
     const beforeRuntime = environmentInspections;
     const runtime = await service.createRuntime();
     await runtime.store.createSession({ runtimeKind: "genesis", sessionId: "env-lazy-read" });
-    await runtime.getSession("env-lazy-read", { inspectSource: false });
+    await runtime.getSessionWithoutSource("env-lazy-read");
     assert.equal(environmentInspections, beforeRuntime);
     const promptEnvironment = await runtime.resolvePromptEnvironment();
     assert.equal(promptEnvironment.PLATFORM_VALUE, "platform");
@@ -1342,7 +1344,7 @@ test("the owner downloads every Env record with its real value as one .env file"
       resourceEnvironmentProvider: { managedDevelopmentDatabase: true,
         environmentForProvisionedResources: provided, environmentForResources: provided }
     });
-    const runtime = await service.createRuntime({ inspectSource: false });
+    const runtime = await service.createRuntimeWithoutSource();
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
     assert.equal((await service.saveEnvUserValues({ environment: "dev", sessionId, values: {
       API_KEY: { secret: true, value: "sk_live_\"quoted\"" },
@@ -1507,7 +1509,7 @@ test("lazy prompt environment stays with the runtime's project when resolved fro
         environment: "dev",
         values: { PROJECT_VALUE: { secret: false, value: "alpha" } }
       });
-      return service.createRuntime({ inspectSource: false });
+      return service.createRuntimeWithoutSource();
     });
     await runWithProjectRequestContext(contexts[1], async () => {
       await service.saveEnvUserValues({
@@ -1515,7 +1517,7 @@ test("lazy prompt environment stays with the runtime's project when resolved fro
         values: { PROJECT_VALUE: { secret: false, value: "beta" } }
       });
       assert.equal((await runtime.resolvePromptEnvironment()).PROJECT_VALUE, "alpha");
-      const otherRuntime = await service.createRuntime({ inspectSource: false });
+      const otherRuntime = await service.createRuntimeWithoutSource();
       assert.equal((await otherRuntime.resolvePromptEnvironment()).PROJECT_VALUE, "beta");
     });
   });
@@ -1644,7 +1646,7 @@ test("project execution Env reuses an exact internally authorized session record
         };
       }
     });
-    const runtime = await service.createRuntime({ inspectSource: false });
+    const runtime = await service.createRuntimeWithoutSource();
     await runtime.store.createSession({
       runtimeKind: "genesis",
       sessionId: sourceSessionId
@@ -2544,7 +2546,7 @@ test("practice project runtime keeps its learning-space roots and lazy environme
     let captured;
     await core.runWithPracticeProjectScope({ actor, training, access: "write" }, () => service.runInProjectContext(slug, async () => {
       const current = currentProjectRequestContext();
-      runtime = await service.createRuntime({ inspectSource: false });
+      runtime = await service.createRuntimeWithoutSource();
       assert.equal(runtime.projectContextRoot, path.join(projectsRoot, ".learning", "NDI", practiceId, slug));
       assert.equal(runtime.projectContextRoot, current.targetRoot);
       assert.equal(runtime.stateRoot, current.projectRuntimeRoot);
@@ -2557,7 +2559,7 @@ test("practice project runtime keeps its learning-space roots and lazy environme
         "lazy environment remains with the admitted actual Project, not the caller's later context");
     });
     await runWithProjectRequestContext(captured, async () => {
-      assert.equal((await service.createRuntime({ inspectSource: false })).projectContextRoot, runtime.projectContextRoot);
+      assert.equal((await service.createRuntimeWithoutSource()).projectContextRoot, runtime.projectContextRoot);
     });
   });
 });

@@ -63,7 +63,7 @@ function createSessionCatalogue({
 
   async function pinSession(sessionId, input) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       const result = await runtime.store.runSessionRenewalStateExclusive(sessionId, () => (
         runtime.store.mutateSession(sessionId, async () => {
           const renewal = input.pinned ? await readSessionRenewalState(runtime, sessionId) : null;
@@ -87,7 +87,7 @@ function createSessionCatalogue({
 
   async function renameSession(sessionId, input) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       const sessionName = await runtime.store.writeSessionLabel(sessionId, input.name);
       await publishSessionChanged(sessionId, {
         originId: normalizeText(input.originId),
@@ -123,8 +123,8 @@ function createSessionCatalogue({
   async function inspectSession(sessionId) {
     return sessionResult(async () => {
       // Realtime chat refreshes read state; source operations own their Git checks.
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const [agentSession, conversation] = await Promise.all([
         session.status !== "archived"
           ? terminals.agentSessionState(sessionId, {
@@ -149,9 +149,7 @@ function createSessionCatalogue({
 
   async function listSessions({ vibe64User = null }) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
       const [summaries, lastOpenedSessionId] = await Promise.all([
         runtime.listSessionSummaries({ statusGroup: "open", includeUnavailable: true }),
         readLastOpenedSessionId(runtime.stateRoot, vibe64User)
@@ -185,9 +183,7 @@ function createSessionCatalogue({
 
   async function listArchivedSessions() {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
       const summaries = await runtime.listSessionSummaries({ statusGroup: "archived", includeUnavailable: true });
       return {
         ok: true,
@@ -230,7 +226,7 @@ function createSessionCatalogue({
           status: "unavailable"
         };
       }
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       const status = await runtime.store.readStatus(sessionId);
       if (!vibe64SessionStatusIsOpen(status)) {
         return {
@@ -261,9 +257,7 @@ function createSessionCatalogue({
    */
   async function updateCurrentSession(sessionId, { vibe64User = null }) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
       const current = await runtime.updateCurrentSession(sessionId);
       if (normalizeText(sessionId)) await rememberLastOpenedSessionId(runtime.stateRoot, vibe64User, normalizeText(sessionId));
       return {

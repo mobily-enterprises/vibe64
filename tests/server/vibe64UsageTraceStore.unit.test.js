@@ -45,7 +45,7 @@ function fixtureService(sessionRoot, nowIso) {
   const service = createService({
     admission: admitUsageRecording,
     now: () => Date.parse(nowIso),
-    project: { createRuntime: async () => ({ getSession: async () => session }) },
+    project: { createRuntime: async () => ({ getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: {}
   });
   return (method, input = {}) => runWithProjectRequestContext({ slug: "demo" },

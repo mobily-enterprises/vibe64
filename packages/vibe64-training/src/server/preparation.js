@@ -294,9 +294,9 @@ function createTrainingService({
           // The initial practice session is an ordinary project session with no
           // learning binding, prepared inside the learner's own practice scope.
           const session = await project.runInProjectContext(attempt.projectSlug, async () => {
-            const runtime = await project.createRuntime({ inspectSource: false });
+            const runtime = await project.createRuntimeWithoutSource();
             let current;
-            try { current = await runtime.getSession(initialSessionId, { inspectSource: false }); }
+            try { current = await runtime.getSessionWithoutSource(initialSessionId); }
             catch (error) {
               if (error.code !== "vibe64_session_not_found") throw error;
               if (attempt.preparation.phase === "ready") {

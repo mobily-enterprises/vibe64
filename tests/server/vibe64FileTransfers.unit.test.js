@@ -66,8 +66,8 @@ async function fixture(t, { sourcesBase } = {}) {
   }
   const service = createService({ logger: console, project: { async createRuntime() {
     const store = stores.get(currentProjectRequestContext().slug);
-    return { store, getSession: store.readSession };
-  } } });
+    return { store, getSession: store.readSession, getSessionWithoutSource: store.readSession };
+  }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } } });
   t.after(async () => {
     service.close();
     await rm(root, { recursive: true, force: true });

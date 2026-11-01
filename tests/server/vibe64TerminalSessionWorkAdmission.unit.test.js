@@ -177,6 +177,7 @@ async function terminalServiceFixture(t, lock, {
     async getSession() {
       return session;
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     projectContextRoot,
     async resolvePromptEnvironment() { return {}; },
     stateRoot: projectRuntimeRoot,
@@ -202,6 +203,7 @@ async function terminalServiceFixture(t, lock, {
     createRuntime() {
       return runtime;
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     currentTargetRoot() {
       return projectContextRoot;
     },
@@ -1137,6 +1139,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
     getSession(sessionId) {
       return store.readSession(sessionId);
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     projectContextRoot,
     async resolvePromptEnvironment() { return {}; },
     stateRoot: projectRuntimeRoot,
@@ -1149,6 +1152,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
     createRuntime() {
       return runtime;
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     currentTargetRoot() {
       return projectContextRoot;
     },
@@ -1301,6 +1305,7 @@ test("renewal workspace setup privately resumes a pending successor while public
         workspaceSetup: JSON.parse(session.metadata.workspace_setup)
       };
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async getSessionForRenewal(sessionId) {
       const session = await store.readSessionForRenewal(sessionId);
       return {
@@ -1308,6 +1313,7 @@ test("renewal workspace setup privately resumes a pending successor while public
         workspaceSetup: JSON.parse(session.metadata.workspace_setup)
       };
     },
+    getSessionForRenewalWithoutSource(sessionId) { return this.getSessionForRenewal(sessionId); },
     projectContextRoot,
     async resolvePromptEnvironment() { return {}; },
     stateRoot: projectRuntimeRoot,
@@ -1320,6 +1326,7 @@ test("renewal workspace setup privately resumes a pending successor while public
     createRuntime() {
       return runtime;
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     currentTargetRoot() {
       return projectContextRoot;
     },
@@ -1914,14 +1921,14 @@ test("workspace readiness reloads the exact session without setup admission or w
   let runtimeReads = 0;
   let sessionReads = 0;
   let currentState = { status: "unconfigured" };
-  project.createRuntime = async (options) => {
-    assert.deepEqual(options, { inspectSource: false });
+  project.createRuntime = async () => assert.fail("A readiness read uses a runtime without source inspection.");
+  project.createRuntimeWithoutSource = async () => {
     runtimeReads += 1;
     return runtime;
   };
-  runtime.getSession = async (sessionId, options) => {
+  runtime.getSession = async () => assert.fail("A readiness read reads the session without source inspection.");
+  runtime.getSessionWithoutSource = async (sessionId) => {
     assert.equal(sessionId, session.sessionId);
-    assert.deepEqual(options, { inspectSource: false });
     sessionReads += 1;
     return { ...session, workspaceSetup: currentState };
   };
@@ -1937,6 +1944,7 @@ test("workspace readiness reloads the exact session without setup admission or w
   await assert.rejects(service.workspaceSetupIsPrepared(""), { code: "vibe64_invalid_session_id" });
   assert.equal(runtimeReads, 3, "Invalid identity must not choose the current session.");
   runtime.getSession = async () => { throw Object.assign(new Error("Missing exact session"), { code: "vibe64_session_not_found" }); };
+  runtime.getSessionWithoutSource = runtime.getSession;
   await assert.rejects(service.workspaceSetupIsPrepared("missing-session"), { code: "vibe64_session_not_found" });
 });
 
@@ -2187,6 +2195,7 @@ test("source read refuses running setup, closing and unavailable managed source 
     code: "vibe64_session_not_found"
   });
   f.runtime.getSession = async () => { throw Object.assign(new Error("Exact session missing"), { code: "vibe64_session_not_found" }); };
+  f.runtime.getSessionWithoutSource = f.runtime.getSession;
   await assert.rejects(read(), { code: "vibe64_session_not_found" });
 });
 
@@ -2469,6 +2478,7 @@ test("a message proven not sent returns a definite rejection so the chat shows i
   });
   const input = { messageId: "full-before-native", message: "Continue." };
   f.runtime.getSession = async () => { throw problem; };
+  f.runtime.getSessionWithoutSource = f.runtime.getSession;
   const send = () => f.service.sendAgentMessage(f.session.sessionId, input, { runtime: f.runtime });
   const delivery = { status: "not-sent", messageId: input.messageId };
   problem = Object.assign(new Error("The assistant's memory is too full to receive this conversation."), {

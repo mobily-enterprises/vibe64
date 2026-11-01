@@ -72,7 +72,8 @@ async function fixture(t, { check, timeoutSeconds, steps = [codeStep], enter = f
   const session = { sessionId, sessionRoot: paths.sessionRoot,
     metadata: { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: sourcePath } };
   const project = { async runInProjectContext(slug, operation) { assert.equal(slug, reserved.attempt.projectSlug); return operation(); },
-    async createRuntime() { return { store, async getSession(id) { assert.equal(id, sessionId); return session; } }; } };
+    async createRuntime() { return { store, async getSession(id) { assert.equal(id, sessionId); return session; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); } };
   const calls = [];
   const checks = runCommand => createTrainingDeclaredCheckOwner({ learners, content, project, terminals: { async outputTargetStatus() {} },
     runCommand: async command => { calls.push(command); return (runCommand || runVibe64Command)(command); } });

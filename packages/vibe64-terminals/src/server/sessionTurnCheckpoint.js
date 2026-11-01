@@ -25,8 +25,8 @@ async function checkpointSessionTurn({
   createCheckpoint = createGitTurnCheckpointAsOneJob
 }) {
   if (!outerTurnId) return { ok: true, processed: false, reason: "outer_turn_unavailable" };
-  runtime ||= await project.createRuntime({ inspectSource: false });
-  session ||= await runtime.getSession(sessionId, { inspectSource: false });
+  runtime ||= await project.createRuntimeWithoutSource();
+  session ||= await runtime.getSessionWithoutSource(sessionId);
   const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true });
   if (learningRoot) {
     return {
@@ -71,7 +71,7 @@ async function checkpointSessionTurn({
   });
   await publishSessionChanged(sessionId, {
     reason: failure ? "session-turn-checkpoint-failed" : "session-turn-checkpoint-updated",
-    session: await runtime.getSession(sessionId, { inspectSource: false })
+    session: await runtime.getSessionWithoutSource(sessionId)
   });
   return { ok: !failure, processed: true, task, ...(failure ? { error: failure } : { checkpoint }) };
 }
@@ -130,7 +130,7 @@ function createCodexSessionTurnCheckpoint({ project, publishSessionChanged }) {
       });
     }
     const normalizedSessionId = normalizeText(sessionId);
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session, normalizeVibe64AgentRunState);
     const outerTurnId = normalizeText(turn.outerTurnId);

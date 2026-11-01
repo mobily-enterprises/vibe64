@@ -193,7 +193,7 @@ function createServiceSessionWork({
     const result = await sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
       if (sessionHasActiveAgentRun(context.session)) {
         const activityCheck = await sessionAgent.ensureSession(sessionId, context);
-        context.session = await context.runtime.getSession(sessionId, { inspectSource: false });
+        context.session = await context.runtime.getSessionWithoutSource(sessionId);
         if (sessionHasActiveAgentRun(context.session)) {
           const error = new Error(activityCheck?.error || activeMessage);
           error.code = activeCode;
@@ -253,7 +253,7 @@ function createServiceSessionWork({
           })
         : null;
       if (recorded?.ok !== false && recorded) {
-        session = recorded.session || await runtime.getSession(normalizedSessionId, { inspectSource: false });
+        session = recorded.session || await runtime.getSessionWithoutSource(normalizedSessionId);
         execution = await codexGitCommand.sessionWorkSaveContext({
           ...executionInput,
           session
@@ -377,7 +377,7 @@ function createServiceSessionWork({
       // Repository admission owns the session lease. Save takes this same
       // project lock downstream; acquiring it here preserves that order.
       return project.runProjectSourceExclusive(async () => {
-        const session = await context.runtime.getSession(id, { inspectSource: false });
+        const session = await context.runtime.getSessionWithoutSource(id);
         const sourceRoot = sessionSourcePath(session);
         if (session.sessionId !== id || !sourceRoot) {
           throw Object.assign(new Error("This exact session has no available managed source."), {
@@ -418,7 +418,7 @@ function createServiceSessionWork({
         await runtime.store.writeMetadataValue(sessionId, "repository_mode", "github");
         await runtime.store.writeMetadataValue(sessionId, "repository_update_check", "");
       });
-      session = await runtime.getSession(sessionId, { inspectSource: false });
+      session = await runtime.getSessionWithoutSource(sessionId);
       const recorded = await writeSessionGitCommandActor({
         env,
         reason: "create-pull-request",
@@ -432,7 +432,7 @@ function createServiceSessionWork({
       if (recorded?.ok === false) {
         throw new Error(recorded.error || "Your GitHub identity is unavailable.");
       }
-      session = recorded?.session || await runtime.getSession(sessionId, { inspectSource: false });
+      session = recorded?.session || await runtime.getSessionWithoutSource(sessionId);
       const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "create-pull-request");
       await prepareSessionPullRequestBranch({
         connectedWorkSnapshots: await assertConnectedWorkSaved(),
@@ -556,7 +556,7 @@ function createServiceSessionWork({
           reason: "incoming-contribution"
         });
         if (recorded?.ok === false) throw Object.assign(new Error(recorded.error), { code: recorded.code });
-        const session = await context.runtime.getSession(sessionId, { inspectSource: false });
+        const session = await context.runtime.getSessionWithoutSource(sessionId);
         const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution",
           { createsCommits: input.action !== "discard" });
         return changeManagedIncomingContribution({

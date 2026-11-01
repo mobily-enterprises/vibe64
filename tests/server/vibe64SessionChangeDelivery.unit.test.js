@@ -100,7 +100,7 @@ test("a Preview change made outside any request reaches the session's viewers", 
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared: async () => ({ ok: true }),
     // Outside a request, the project service still knows the project it holds.
-    project: { currentProjectSlug: () => "alpha", async createRuntime() { return { store }; } },
+    project: { currentProjectSlug: () => "alpha", async createRuntime() { return { store }; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     publishSessionChanged: createSessionChangedPublisher({ events }),
     stopPreviewBrowsers: () => ({ ok: true })
   });

@@ -80,7 +80,7 @@ test("the Preview proxy numbers recorded requests and no request content reaches
   const service = createService({
     admission: admitUsageRecording,
     events: { publish: async () => {} },
-    project: { createRuntime: async () => ({ getSession: async () => session }) },
+    project: { createRuntime: async () => ({ getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: {
       usageRecordingTargets: async () => ({ ok: true, previewTargetId: "web", targets: [
         { id: "web", label: "Web app", web: true, available: true, disabledReason: "", runtimes: ["nodejs"], parameters: [] }

@@ -53,9 +53,7 @@ function createServiceAgentReconcile({
   async function resetKnownAgentSessionsOnce() {
     if (!knownAgentSessionReset) {
       knownAgentSessionReset = (async () => {
-        const runtime = await project.createRuntime({
-          inspectSource: false
-        });
+        const runtime = await project.createRuntimeWithoutSource();
         const listOptions = {
           statusGroup: "all"
         };
@@ -99,12 +97,8 @@ function createServiceAgentReconcile({
     if (!sessionId) {
       return session;
     }
-    const runtime = await project.createRuntime({
-      inspectSource: false
-    });
-    return runtime.getSession(sessionId, {
-      inspectSource: false
-    });
+    const runtime = await project.createRuntimeWithoutSource();
+    return runtime.getSessionWithoutSource(sessionId);
   }
 
   async function ensureReconciledSessionSourcesSelfContained(sessions = []) {
@@ -177,7 +171,7 @@ function createServiceAgentReconcile({
         connected: true
       }))
     };
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     for (const session of legacy) {
       const sessionId = sessionRecordId(session);
       try {

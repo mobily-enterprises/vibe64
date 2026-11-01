@@ -34,6 +34,7 @@ function archiveFixture(phase = "", archivePreparation = prepareNothingForArchiv
       }
     },
     async getSession() { return structuredClone(session); },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async markSessionClosing() {
       session.metadata.session_closing_reason = "archived";
       return structuredClone(session);
@@ -49,6 +50,7 @@ function archiveFixture(phase = "", archivePreparation = prepareNothingForArchiv
     archivePreparation,
     project: {
       async createRuntime() { return runtime; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async releaseSessionResources() { calls.push("resources"); return { ok: true }; }
     },
     terminals: {
@@ -194,7 +196,7 @@ test("preparation writes survive real archive publication without changing the s
       archivePreparation: async ({ runtime, session }) => {
         await runtime.store.writeArtifact(session.sessionId, "archive-evidence.txt", "preserved");
       },
-      project: { async createRuntime() { return runtime; } },
+      project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
       terminals: { async closeSessionTerminals() {
         await runtime.store.writeConversationUserMessage("session-a", { text: "Preserve final history" });
       } }

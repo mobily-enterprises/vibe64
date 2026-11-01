@@ -77,8 +77,10 @@ async function fixture(t, { locked = false, setup = false, prepareEnvironment, e
       getSession: async (sessionId) => ({ sessionId, metadata: {
         source_kind: "session_clone", source_path: source,
         source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
-      } })
-    }) }
+      } }),
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+    }),
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); } }
   });
   t.after(async () => { service.close(); await rm(root, { recursive: true, force: true }); });
   return { root, source, service, calls, environmentCalls, store, notifications };

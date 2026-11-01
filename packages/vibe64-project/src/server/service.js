@@ -185,6 +185,10 @@ function createService({
     return sessionWork.createRuntime(options);
   }
 
+  async function createRuntimeWithoutSource(options = {}) {
+    return sessionWork.createRuntimeWithoutSource(options);
+  }
+
   async function createSessionStore() {
     return selection.sessionStore();
   }
@@ -423,6 +427,7 @@ function createService({
     createProject,
     createDevelopProject,
     createRuntime,
+    createRuntimeWithoutSource,
     createSessionStore,
     readSelectedSessionSource,
     currentProjectRuntimeRoot: selection.selectedProjectRuntimeRoot,

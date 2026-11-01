@@ -66,16 +66,12 @@ function createSessionWorkspaceSetup({
     }
     const context = captureProjectRequestContext();
     const observe = async (workspaceSetup) => {
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
       await publishSessionChanged(sessionId, {
         operation: "updated",
         originId: normalizeText(originId),
         reason: "workspace-setup-completed",
-        session: await runtime.getSession(sessionId, {
-          inspectSource: false
-        }),
+        session: await runtime.getSessionWithoutSource(sessionId),
         workspaceSetup
       });
     };
@@ -96,7 +92,7 @@ function createSessionWorkspaceSetup({
    */
   async function prepareUpdatedWorkspace(runtime, sessionId, options = {}) {
     try {
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const setup = await setupRunner.start({ runtime, session });
       observeWorkspaceSetup(sessionId, setup.completion, options);
       // A consumer reads this checkout next, so it waits for the rebuild.
@@ -117,12 +113,8 @@ function createSessionWorkspaceSetup({
         error.code = "vibe64_workspace_setup_running";
         throw error;
       }
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
-      const session = await runtime.getSession(sessionId, {
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const status = normalizeText(session.workspaceSetup?.status);
       if (!["ambiguous", "failed", "required", "unconfigured", "succeeded"].includes(status)) {
         const error = new Error(
@@ -139,9 +131,7 @@ function createSessionWorkspaceSetup({
       if (setup?.ok === false) {
         return setup;
       }
-      const currentSession = await runtime.getSession(sessionId, {
-        inspectSource: false
-      });
+      const currentSession = await runtime.getSessionWithoutSource(sessionId);
       await publishSessionChanged(sessionId, {
         operation: "updated",
         originId: normalizeText(input.originId),
@@ -163,8 +153,8 @@ function createSessionWorkspaceSetup({
    * without its database until something else prepares it.
    */
   async function prepareStarterWorkspace(sessionId) {
-    const runtime = await project.createRuntime({ inspectSource: false });
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
+    const session = await runtime.getSessionWithoutSource(sessionId);
     // The starter's files are unsaved session work that no turn, Save or
     // editor event announces; repository status re-inspects on this reason.
     await publishSessionChanged(sessionId, { operation: "updated", reason: "session-starter-applied", session });
@@ -174,7 +164,7 @@ function createSessionWorkspaceSetup({
     await publishSessionChanged(sessionId, {
       operation: "updated",
       reason: "workspace-setup-started",
-      session: await runtime.getSession(sessionId, { inspectSource: false })
+      session: await runtime.getSessionWithoutSource(sessionId)
     });
     observeWorkspaceSetup(sessionId, setup?.completion);
   }

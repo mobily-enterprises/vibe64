@@ -15,7 +15,7 @@ for (const kind of ["hints", "database"]) {
       const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
       const sessionId = "hidden-successor";
       await store.createSession({ sessionId, runtimeKind: "genesis" });
-      const runtime = { stateRoot: root, store, getSession: (id) => store.readSession(id) };
+      const runtime = { stateRoot: root, store, getSession: (id) => store.readSession(id), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
       const artifact = kind === "hints"
         ? `assistant/prompt-hint-tasks/${"a".repeat(64)}.json`
         : `database/assistant-tasks/${"b".repeat(20)}.json`;
@@ -40,7 +40,7 @@ for (const kind of ["hints", "database"]) {
         assert.deepEqual(options.assistantSelection, helper.selection);
         return cleanupReady ? { ok: true } : { ok: false, code: "cleanup_pending", error: "Native process still owned" };
       };
-      const project = { createRuntime: async () => runtime, createSessionStore: async () => store,
+      const project = { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); }, createSessionStore: async () => store,
         localDatabaseServers: async () => ({ managed: true, databases: [] }),
         sessionDatabaseEnvironment: () => assert.fail("Cleanup must not connect to a database") };
       const service = kind === "hints"

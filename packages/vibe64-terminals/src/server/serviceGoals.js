@@ -94,7 +94,7 @@ function createServiceGoals({
   async function changeGoalIntent(sessionId, context, change) {
     const store = context.runtime.store;
     const result = await store.runSessionExclusive(sessionId, "assistant-settings", async () => {
-      const session = await context.runtime.getSession(sessionId, { inspectSource: false });
+      const session = await context.runtime.getSessionWithoutSource(sessionId);
       const latest = readGoalIntent(session);
       const stopRequested = Boolean(goalStopRequestFor(session));
       const changed = change(latest) || (stopRequested ? latest : null);
@@ -109,7 +109,7 @@ function createServiceGoals({
    * admission at once, records the stop, and saves it under that lock afterwards.
    */
   async function requestGoalStop(sessionId, context) {
-    const intent = readGoalIntent(await context.runtime.getSession(sessionId, { inspectSource: false }));
+    const intent = readGoalIntent(await context.runtime.getSessionWithoutSource(sessionId));
     if (!intent?.active) return;
     goalAdmissions.get(intent.id)?.abort(new Error("Goal continuation was stopped before dispatch."));
     await context.runtime.store.writeMetadataValue(sessionId, GOAL_STOP_REQUEST,
@@ -229,7 +229,7 @@ function createServiceGoals({
           );
         }
         await completeGoalIntent(sessionId, context, intent, native);
-        const latest = readGoalIntent(await context.runtime.getSession(sessionId, { inspectSource: false }));
+        const latest = readGoalIntent(await context.runtime.getSessionWithoutSource(sessionId));
         if (latest?.id !== intent.id) throw new Error("Goal continuation changed while its attachment was being checked.");
         intent = latest;
       }

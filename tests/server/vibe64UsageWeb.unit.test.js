@@ -396,9 +396,11 @@ function projectServiceFor(root) {
       return {
         async getSession(sessionId) {
           return { sessionId, metadata: { source_kind: "session_clone", source_path: root, source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED } };
-        }
+        },
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
       };
-    }
+    },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); }
   };
 }
 

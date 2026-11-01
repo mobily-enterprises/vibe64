@@ -157,9 +157,7 @@ test("plain runtime exposes compact workspace setup state without leaking its st
       updatedAt: "2026-08-15T01:00:00.000Z"
     });
 
-    const session = await runtime.getSession("setup-state-session", {
-      inspectSource: false
-    });
+    const session = await runtime.getSessionWithoutSource("setup-state-session");
     assert.equal(session.workspaceSetup.status, "running");
     assert.equal(session.workspaceSetup.currentLabel, "Install dependencies");
     assert.equal(Object.hasOwn(session.metadata, WORKSPACE_SETUP_METADATA_NAME), false);
@@ -536,9 +534,7 @@ test("an archive failure after source recovery remains marked for a safe retry",
       /Worktree removal raced a preview writer/u
     );
 
-    const session = await runtime.getSession(sessionId, {
-      inspectSource: false
-    });
+    const session = await runtime.getSessionWithoutSource(sessionId);
     assert.equal(session.status, "active");
     assert.equal(session.metadata.session_closing_reason, "archived");
     assert.equal(session.metadata.source_recovery_saved, "yes");
@@ -615,7 +611,7 @@ test("renewal runtime materializes a private successor through the explicit stor
     assert.equal(successor.status, VIBE64_SESSION_STATUS.RENEWAL_PENDING);
     assert.equal(successor.sourcePath, sourcePath(targetRoot, "renewal-successor"));
     assert.equal(
-      (await runtime.getSessionForRenewal("renewal-successor", { inspectSource: false })).status,
+      (await runtime.getSessionForRenewalWithoutSource("renewal-successor")).status,
       VIBE64_SESSION_STATUS.RENEWAL_PENDING
     );
     assert.equal((await runtime.createRenewalSession({
@@ -641,7 +637,7 @@ test("renewal runtime materializes a private successor through the explicit stor
       { code: "vibe64_session_renewal_conflict" }
     );
     await assert.rejects(
-      () => runtime.getSession("renewal-successor", { inspectSource: false }),
+      () => runtime.getSessionWithoutSource("renewal-successor"),
       { code: "vibe64_session_renewal_private" }
     );
   });
@@ -747,7 +743,7 @@ test("failed renewal materialization removes only its private record and managed
       { code: "ENOENT" }
     );
     assert.equal(
-      (await runtime.getSession("renewal-source", { inspectSource: false })).status,
+      (await runtime.getSessionWithoutSource("renewal-source")).status,
       VIBE64_SESSION_STATUS.RENEWAL_QUIESCED
     );
   });
@@ -844,9 +840,9 @@ test("plain runtime cannot expose or use a private renewal successor", async () 
     assert.equal(hidden.status, VIBE64_SESSION_STATUS.RENEWAL_PENDING);
 
     for (const operation of [
-      () => runtime.getSession("renewal-successor", { inspectSource: false }),
+      () => runtime.getSessionWithoutSource("renewal-successor"),
       () => runtime.updateCurrentSession("renewal-successor"),
-      () => runtime.sessionView(hidden, { inspectSource: false }),
+      () => runtime.sessionViewWithoutSource(hidden),
       () => runtime.inspectSourceForSession(hidden),
       () => runtime.assertSourceHealthy(hidden),
       () => runtime.renderPrompt("renewal-successor", { request: "Keep working." }),

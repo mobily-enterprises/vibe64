@@ -138,6 +138,7 @@ async function controllerHarness({
     async getSession() {
       return session;
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async renderPrompt(_sessionId, input = {}) {
       renderPromptCalls.push(input);
       return { prompt: `GENESIS ${input.task}: ${input.request}` };
@@ -498,6 +499,7 @@ async function controllerHarness({
         runtimeCreateCalls += 1;
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async readPromptHints() {
         return { ok: true, promptHints: true };
       }

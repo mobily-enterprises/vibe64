@@ -199,9 +199,7 @@ function createSessionCreation({
       }
       let currentSession = created.session;
       try {
-        currentSession = await runtime.getSession(created.session.sessionId, {
-          inspectSource: false
-        }) || created.session;
+        currentSession = await runtime.getSessionWithoutSource(created.session.sessionId) || created.session;
       } catch (error) {
         vibe64SessionDebugLog("server.sessions.createSession.inspect.error", {
           error: vibe64SessionDebugError(error),

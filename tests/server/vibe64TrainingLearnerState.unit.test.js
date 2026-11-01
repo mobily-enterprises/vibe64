@@ -1916,7 +1916,7 @@ test("actual saved exercise caller admits only its same original local Project r
       assert.equal(actual.slug, target.projectSlug);
       assert.equal(actual.repositoryMode, "managed_git");
       assert.equal(actual.sourceRoot, "");
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       assert.equal(runtime.projectContextRoot, actual.projectRoot);
       assert.equal(runtime.stateRoot, actual.projectRuntimeRoot);
       assert.equal(runtime.learningScope, null, "real practice Project is never a source-less learning session");
@@ -2004,7 +2004,7 @@ test("a practice session is an ordinary local project session that stays the lea
   let retained;
   await openProject(async () => {
     assert.doesNotThrow(assertProjectEffectAdmission);
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     assert.equal(runtime.learningScope, null);
     const listed = await runtime.store.listSessions();
     assert.deepEqual(listed.map(session => session.sessionId), [created.sessionId], "the ordinary store lists it");
@@ -2023,7 +2023,7 @@ test("a practice session is an ordinary local project session that stays the lea
     requestId: "end-ordinary-practice", reason: "archived" });
   await openProject(async () => {
     assert.doesNotThrow(assertProjectEffectAdmission, "the project stays writable after its lesson ends");
-    const runtime = await project.createRuntime({ inspectSource: false });
+    const runtime = await project.createRuntimeWithoutSource();
     assert.equal((await runtime.store.readSession(created.sessionId)).sessionId, created.sessionId);
   });
   // Another person cannot open this learner's practice slug.

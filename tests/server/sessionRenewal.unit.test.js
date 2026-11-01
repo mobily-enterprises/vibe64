@@ -907,6 +907,7 @@ function fixture({
       }
       return session;
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async getSessionForRenewal(sessionId) {
       const session = sessions.get(sessionId);
       if (!session) {
@@ -916,6 +917,7 @@ function fixture({
       }
       return session;
     },
+    getSessionForRenewalWithoutSource(sessionId) { return this.getSessionForRenewal(sessionId); },
     async readConversationLogPage() {
       return { pagination: { ...conversation } };
     },
@@ -1192,6 +1194,7 @@ function fixture({
     async createRuntime() {
       return runtime;
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     async releaseSessionResources(input) {
       if (input?.session?.status === "renewal_pending") {
         calls.cleanupOrder.push("release-resources");
@@ -1489,7 +1492,8 @@ test("boot recovery retries a contended workflow lock without another request", 
     async createRuntime(input) {
       assert.equal(projectScope.getStore(), "project-a");
       return context.project.createRuntime(input);
-    }
+    },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); }
   };
   const controller = context.newController({ project: scopedProject });
 
@@ -1693,6 +1697,7 @@ test("same-named sessions in two hosted projects schedule by durable renewal ide
     createRuntime() {
       return current().runtime;
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     releaseSessionResources(input) {
       return current().project.releaseSessionResources(input);
     }
@@ -4919,6 +4924,7 @@ test("eligibility rejects active work, dirty source, and stale canonical source"
       async getSession() {
         return current;
       },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       async readConversationLogPage() {
         return { pagination: { newestTurnId: "turn", totalTurnCount: 3 } };
       }

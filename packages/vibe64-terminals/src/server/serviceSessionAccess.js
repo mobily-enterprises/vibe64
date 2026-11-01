@@ -21,9 +21,7 @@ const AGENT_WRITE_WAIT_MS = 60_000;
  * @param {string} [sessionId]
  */
 function renewalSession(runtime, sessionId) {
-  return runtime.getSessionForRenewal(sessionId, {
-    inspectSource: false
-  });
+  return runtime.getSessionForRenewalWithoutSource(sessionId);
 }
 
 async function runSessionRenewalOperation(
@@ -92,9 +90,7 @@ function createServiceSessionAccess({
   publishSessionChanged
 }) {
   async function runMainAgentWrite(sessionId, options, operation, lockOptions = {}) {
-    const runtime = options.runtime || await project.createRuntime({
-      inspectSource: false
-    });
+    const runtime = options.runtime || await project.createRuntimeWithoutSource();
     const lockStartedAt = performance.now();
     const exclusive = await runVibe64AgentWriteExclusive(
       runtime,
@@ -111,9 +107,7 @@ function createServiceSessionAccess({
             durationMs
           }, "Assistant message acquired its application write lock.");
         }
-        const session = await runtime.getSession(sessionId, {
-          inspectSource: false
-        });
+        const session = await runtime.getSessionWithoutSource(sessionId);
         if (lockOptions.operation !== "replace-agent-conversation") requireCompletedNativeConversationReplacement(session);
         return operation({
           ...options,
@@ -131,10 +125,10 @@ function createServiceSessionAccess({
    * session when given (the session only when it is this one), else fresh reads.
    */
   async function sessionContext(sessionId = "", input = {}) {
-    const runtime = input.runtime || await project.createRuntime({ inspectSource: false });
+    const runtime = input.runtime || await project.createRuntimeWithoutSource();
     const session = input.session?.sessionId === sessionId
       ? input.session
-      : await runtime.getSession(sessionId, { inspectSource: false });
+      : await runtime.getSessionWithoutSource(sessionId);
     return { runtime, session };
   }
 
@@ -148,9 +142,7 @@ function createServiceSessionAccess({
     options,
     operation
   ) {
-    const runtime = options.runtime || await project.createRuntime({
-      inspectSource: false
-    });
+    const runtime = options.runtime || await project.createRuntimeWithoutSource();
     const exclusive = await runVibe64RenewalAgentWriteExclusive(
       runtime,
       sessionId,
@@ -218,9 +210,7 @@ function createServiceSessionAccess({
   }
 
   async function listOpenProjectRuntimeSessions() {
-    const runtime = await project.createRuntime({
-      inspectSource: false
-    });
+    const runtime = await project.createRuntimeWithoutSource();
     const listOptions = {
       statusGroup: "open"
     };

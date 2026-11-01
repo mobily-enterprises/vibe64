@@ -26,9 +26,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
  */
 async function terminalSessionSourceRootForSession(project, sessionId) {
   try {
-    const runtime = await project.createRuntime({
-      inspectSource: false
-    });
+    const runtime = await project.createRuntimeWithoutSource();
     const session = await runtime.getSession(sessionId);
     return sessionSourcePath(session);
   } catch {

@@ -55,7 +55,8 @@ class Vibe64SessionRuntime {
    * @param {() => Date | string | number} [options.clock]
    * @param {(context: object) => Promise<unknown>} [options.createSessionSource]
    *   attaches a source directory to each new session
-   * @param {boolean} [options.inspectSourceByDefault]
+   * @param {boolean} [options.inspectSourceByDefault] whether getSession and sessionView inspect the source checkout;
+   *   stated once per runtime (a without-source runtime), the *WithoutSource methods never inspect
    * @param {object | null} [options.learningScope] the admitted learning session scope
    * @param {string} [options.projectContextRoot]
    * @param {string} [options.projectRuntimeRoot]
@@ -188,23 +189,27 @@ class Vibe64SessionRuntime {
     return this.promptEnvironment;
   }
 
-  async getSession(sessionId, options = {}) {
-    const {
-      inspectSource = this.inspectSourceByDefault
-    } = options;
-    return this.sessionView(await this.store.readSession(sessionId), {
-      inspectSource
-    });
+  async getSession(sessionId) {
+    return this.sessionView(await this.store.readSession(sessionId));
   }
 
-  async getSessionForRenewal(sessionId, options = {}) {
-    const {
-      inspectSource = this.inspectSourceByDefault
-    } = options;
-    return this.sessionViewForRenewal(
-      await this.store.readSessionForRenewal(sessionId),
-      { inspectSource }
-    );
+  /** Reads a session without inspecting its source checkout, whatever this runtime does by default. */
+  async getSessionWithoutSource(sessionId) {
+    return this.sessionViewWithoutSource(await this.store.readSession(sessionId));
+  }
+
+  async getSessionForRenewal(sessionId) {
+    return this.sessionViewForRenewal(await this.store.readSessionForRenewal(sessionId));
+  }
+
+  /** Reads a session for renewal without inspecting its source checkout. */
+  async getSessionForRenewalWithoutSource(sessionId) {
+    const session = await this.store.readSessionForRenewal(sessionId);
+    assertSupportedSession(session);
+    return plainSessionView(session, {
+      sourceInspection: null,
+      learningScope: this.learningScope
+    });
   }
 
   async listSessions(options = {}) {
@@ -257,12 +262,9 @@ class Vibe64SessionRuntime {
     return this.store.restoreSessionAfterRenewalCancellation(options);
   }
 
-  async sessionView(session = {}, options = {}) {
-    const {
-      inspectSource = this.inspectSourceByDefault
-    } = options;
+  async sessionView(session = {}) {
     assertUsableSession(session);
-    const sourceInspection = inspectSource
+    const sourceInspection = this.inspectSourceByDefault
       ? await this.inspectSourceForSession(session)
       : null;
     return plainSessionView(session, {
@@ -271,12 +273,18 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async sessionViewForRenewal(session = {}, options = {}) {
-    const {
-      inspectSource = this.inspectSourceByDefault
-    } = options;
+  /** The session's view without inspecting its source checkout. */
+  async sessionViewWithoutSource(session = {}) {
+    assertUsableSession(session);
+    return plainSessionView(session, {
+      sourceInspection: null,
+      learningScope: this.learningScope
+    });
+  }
+
+  async sessionViewForRenewal(session = {}) {
     assertSupportedSession(session);
-    const sourceInspection = inspectSource
+    const sourceInspection = this.inspectSourceByDefault
       ? await inspectSessionSource(this, session)
       : null;
     return plainSessionView(session, {

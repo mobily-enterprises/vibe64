@@ -257,7 +257,7 @@ async function fixture(t, { scopedConversations = false } = {}) {
       return persisted.writeConversationThinkingMessage(id, message);
     }
   };
-  const runtime = { stateRoot: root, store, getSession: async () => session,
+  const runtime = { stateRoot: root, store, getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     renderPrompt: async (_id, input) => ({ prompt: `Context: ${input.request}` }) };
   const context = { sessionId: "test", session, runtime, assistantSelection: selection };
   const processes = [];
@@ -750,7 +750,9 @@ test("Claude closes a hidden renewal successor through the renewal session reade
   runtime.getSession = async () => {
     throw Object.assign(new Error("This session is private while its renewal is pending."), { code: "vibe64_session_renewal_private" });
   };
+  runtime.getSessionWithoutSource = runtime.getSession;
   runtime.getSessionForRenewal = async () => session;
+  runtime.getSessionForRenewalWithoutSource = runtime.getSessionForRenewal;
   const closed = await f.provider.closeSession({ ...f.context,
     renewalCleanup: { kind: "successor", renewalId: "renewal-1", sourceSessionId: "previous" } });
   assert.equal(closed.ok, true, JSON.stringify(closed));
@@ -764,13 +766,15 @@ test("Claude renewal proof release forgets an archived predecessor without readi
   // Its source is removed and the session archived before proof release.
   f.context.session.status = "archived";
   f.context.session.metadata.source_removed = "yes";
-  const { getSession } = f.context.runtime;
+  const { getSession, getSessionWithoutSource } = f.context.runtime;
   f.context.runtime.getSession = async () => { throw new Error("The archived predecessor was read."); };
+  f.context.runtime.getSessionWithoutSource = f.context.runtime.getSession;
   const released = await f.provider.manager.releaseRenewalPredecessorProcessExitProof("test", { renewalId: "renewal-1" },
     { runtime: f.context.runtime, session: f.context.session });
   assert.equal(released.ok, true, JSON.stringify(released));
   assert.equal(owner.entries.size, 0);
   f.context.runtime.getSession = getSession;
+  f.context.runtime.getSessionWithoutSource = getSessionWithoutSource;
 });
 
 test("Claude changeover away from Main forgets its retained conversations", async (t) => {
@@ -1840,6 +1844,7 @@ async function boundMainFixture(t, { configureProcess, runtimeFactory, actions, 
     for (const [key, value] of Object.entries(f.context.session.metadata)) await store.writeMetadataValue("test", key, value);
     f.context.runtime.store = store;
     f.context.runtime.getSession = id => store.readSession(id);
+    f.context.runtime.getSessionWithoutSource = f.context.runtime.getSession;
     f.context.session = await store.readSession("test");
   }
   let provider;
@@ -2269,11 +2274,12 @@ for (const busyGoal of [false, true]) test(`main Claude terminal service uses ac
   await store.createSession({ sessionId: "test", runtimeKind: "genesis",
     metadata: { ...f.context.session.metadata, label: "BoundClaude" } });
   const runtime = { ...f.context.runtime, stateRoot: path.join(f.root, "runtime"),
-    projectContextRoot: f.root, store, getSession: id => store.readSession(id),
+    projectContextRoot: f.root, store, getSession: id => store.readSession(id), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     listSessions: async () => [await store.readSession("test")] };
   const project = {
     ...f.providerOptions.project,
     createRuntime: () => runtime,
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     createSessionStore: () => store,
     currentServiceDataRoot: () => path.join(f.root, "service-data"),
     currentTargetRoot: () => f.root,
@@ -3666,12 +3672,14 @@ test("Remove AI stops Claude without reopening an archived session's saved conve
   await f.provider.sendMessage(f.context, { message: "Work", messageId: "before-archive" });
   // A closed session whose source was then removed: its saved record no longer has a workspace.
   assert.equal((await f.provider.closeSession(f.context)).ok, true);
-  const { getSession } = f.context.runtime;
+  const { getSession, getSessionWithoutSource } = f.context.runtime;
   f.context.runtime.getSession = async () => ({ ...f.context.session, archived: true, status: "archived",
     metadata: { ...f.context.session.metadata, source_removed: "yes" } });
+  f.context.runtime.getSessionWithoutSource = f.context.runtime.getSession;
   try {
     assert.equal((await f.provider.invalidateRuntimes({}, { provider: "claude", reason: "claude-auth-change" })).ok, true);
   } finally {
     f.context.runtime.getSession = getSession;
+    f.context.runtime.getSessionWithoutSource = getSessionWithoutSource;
   }
 });

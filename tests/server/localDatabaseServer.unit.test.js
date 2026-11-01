@@ -64,11 +64,11 @@ test("the project answers with Env over Stack defaults, ignores the shell, and s
       })
     };
     const service = createService(options);
-    const runtime = await service.createRuntime({ inspectSource: true });
+    const runtime = await service.createRuntime();
     const sessionId = "database-server";
     await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
     await runtime.store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(targetRoot, sessionId) });
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const session = await runtime.getSessionWithoutSource(sessionId);
 
     let answer = await service.localDatabaseServers({ sessionId, session });
     assert.equal(answer.managed, false);
@@ -97,11 +97,11 @@ test("project status counts only values the project's processes get", async () =
         resource: { id: "database", kind: "postgresql", environmentAlternatives: [{ preferred: true, allowEmpty: ["password"],
           bindings: { database: "DB_DATABASE", host: "DB_HOST", password: "DB_PASSWORD", port: "DB_PORT", username: "DB_USERNAME" } }] } }] })
     });
-    const runtime = await service.createRuntime({ inspectSource: true });
+    const runtime = await service.createRuntime();
     const sessionId = "status";
     await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
     await runtime.store.createSession({ sessionId, runtimeKind: "genesis", metadata: sourceMetadata(targetRoot, sessionId) });
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const session = await runtime.getSessionWithoutSource(sessionId);
     assert.equal((await service.projectEnvironmentStatus({ sessionId, session })).status, "missing-configuration");
   });
 });

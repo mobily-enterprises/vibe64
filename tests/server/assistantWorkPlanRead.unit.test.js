@@ -15,9 +15,9 @@ test("plan service reads the actual session without AI and preserves private ren
   const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: path.join(root, "runtime") });
   const sessionId = "plan-session";
   await store.createSession({ sessionId, runtimeKind: "genesis" });
-  const runtime = { stateRoot: root, store, getSession: (id) => store.readSession(id) };
+  const runtime = { stateRoot: root, store, getSession: (id) => store.readSession(id), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
   const unused = () => assert.fail("Reading a plan must not inspect or change project configuration.");
-  const service = createService(terminalsServiceCollaborators({ env: {}, logger: silentLogger, project: { createRuntime: async () => runtime,
+  const service = createService(terminalsServiceCollaborators({ env: {}, logger: silentLogger, project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     createSessionStore: async () => store, readCurrentProject: unused, readEnv: unused,
     runInProjectContext: unused, saveEnvUserValues: unused },
     codexTerminalController: { codexAppServerProviderFactory() { assert.fail("Reading a plan must not start AI."); } } }));

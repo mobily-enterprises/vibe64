@@ -253,8 +253,8 @@ function createPromptHintRequests({
       hintJobs.cancelRequest(request);
     }
     await Promise.all(requests.map((request) => request.promise.catch(() => null)));
-    const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
-    const session = options.session || await runtime.getSession(normalizedSessionId, { inspectSource: false });
+    const runtime = options.runtime || await project.createRuntimeWithoutSource();
+    const session = options.session || await runtime.getSessionWithoutSource(normalizedSessionId);
     const readPaths = options.renewalCleanup
       ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
     const artifacts = await readPaths(normalizedSessionId, async (paths) => {

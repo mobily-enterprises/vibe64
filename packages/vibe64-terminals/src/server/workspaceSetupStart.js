@@ -206,7 +206,7 @@ function createWorkspaceSetupStart({
         if (prepared?.ok === false) throw Object.assign(new Error(prepared.error), { code: prepared.code });
         connectedUpdates = (prepared?.prepared || []).map(connectedUpdateLine).filter(Boolean);
         await onProgress("Checking connected sources");
-        session = await runtime.getSession(sessionId, { inspectSource: false });
+        session = await runtime.getSessionWithoutSource(sessionId);
         setup = await runnerState.inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
         await setupExecution.connectedSourceRoots(setup, runtime, session);
       } catch (error) {

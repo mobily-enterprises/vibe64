@@ -49,12 +49,8 @@ function createSessionWork({
    */
   async function inspectWork(sessionId, requestContext, { includeConnected, inspectContributionPublication, knownSubmittedCommit }) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
-      const session = await runtime.getSession(sessionId, {
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const existingTask = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
       const operation = await recovery.recoverInterruptedSave(runtime, session, existingTask);
       const confirmedContributionCommit = normalizeText(operation?.verifiedCommit) || knownSubmittedCommit;
@@ -175,12 +171,8 @@ function createSessionWork({
 
   async function inspectSessionChanges(sessionId, input) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
-      const session = await runtime.getSession(sessionId, {
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       return terminals.inspectSessionChanges(sessionId, {
         ...input,
         runtime,
@@ -191,12 +183,8 @@ function createSessionWork({
 
   async function inspectSessionChangeDiff(sessionId, input) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
-      const session = await runtime.getSession(sessionId, {
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       return terminals.inspectSessionChangeDiff(sessionId, {
         ...input,
         runtime,
@@ -208,8 +196,8 @@ function createSessionWork({
   async function createSessionPullRequest(sessionId, input, requestContext) {
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       try {
         return await terminals.createSessionPullRequest(sessionId, {
           assertConnectedWorkSaved: () => connectedContributions.assertConnectedWorkSaved(runtime, sessionId, requestContext),
@@ -227,7 +215,7 @@ function createSessionWork({
           operation: "updated",
           originId: normalizeText(input.originId),
           reason: "session-pull-request",
-          session: await runtime.getSession(sessionId, { inspectSource: false })
+          session: await runtime.getSessionWithoutSource(sessionId)
         });
       }
     }, "The pull request could not be confirmed. Retry to check GitHub and continue.");
@@ -237,12 +225,8 @@ function createSessionWork({
     if (input.connectedReview !== undefined) return connectedContributions.saveConnectedWork(sessionId, input, requestContext);
     return sessionResult(async () => {
       const vibe64User = trustedAssistantUser(input);
-      const runtime = await project.createRuntime({
-        inspectSource: false
-      });
-      let session = await runtime.getSession(sessionId, {
-        inspectSource: false
-      });
+      const runtime = await project.createRuntimeWithoutSource();
+      let session = await runtime.getSessionWithoutSource(sessionId);
       const previous = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
       if (previous?.status === "failed" && (
         previous.stage === "publishing" || previous.code === "vibe64_session_save_publication_unknown"
@@ -253,7 +237,7 @@ function createSessionWork({
             code: recovered.code
           });
         }
-        session = await runtime.getSession(sessionId, { inspectSource: false });
+        session = await runtime.getSessionWithoutSource(sessionId);
       }
       const operationId = crypto.randomUUID();
       let operationStarted = false;
@@ -282,7 +266,7 @@ function createSessionWork({
               operation: "updated",
               originId: normalizeText(input.originId),
               reason: "session-save-started",
-              session: await runtime.getSession(sessionId, { inspectSource: false })
+              session: await runtime.getSessionWithoutSource(sessionId)
             });
           },
           operationId,
@@ -303,7 +287,7 @@ function createSessionWork({
               operation: "updated",
               originId: normalizeText(input.originId),
               reason: "session-save-progress",
-              session: await runtime.getSession(sessionId, { inspectSource: false })
+              session: await runtime.getSessionWithoutSource(sessionId)
             });
           },
           runtime,
@@ -336,7 +320,7 @@ function createSessionWork({
           operation: "updated",
           originId: normalizeText(input.originId),
           reason: "session-save-completed",
-          session: await runtime.getSession(sessionId, { inspectSource: false })
+          session: await runtime.getSessionWithoutSource(sessionId)
         });
         await repositoryUpdates.publishCanonicalChanged(runtime, sessionId, result.saveCommit, {
           originId: input.originId
@@ -370,7 +354,7 @@ function createSessionWork({
           operation: "updated",
           originId: normalizeText(input.originId),
           reason: updateRequired ? "session-save-update-required" : "session-save-failed",
-          session: await runtime.getSession(sessionId, { inspectSource: false }),
+          session: await runtime.getSessionWithoutSource(sessionId),
           task
         });
         throw error;
@@ -390,8 +374,8 @@ function createSessionWork({
    */
   async function updateWork(sessionId, input, connectedRefresh) {
     return sessionResult(async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const reviewedConflictId = normalizeText(input.reviewedConflictId);
       // Ordinary Rebase starts over; only an explicit repair check resumes a conflict.
       const previousTask = reviewedConflictId
@@ -424,7 +408,7 @@ function createSessionWork({
               operation: "updated",
               originId: normalizeText(input.originId),
               reason: "session-update-started",
-              session: await runtime.getSession(sessionId, { inspectSource: false })
+              session: await runtime.getSessionWithoutSource(sessionId)
             });
           },
           operationId,
@@ -446,7 +430,7 @@ function createSessionWork({
         if (result.reconciled === true) {
           await runtime.store.writeMetadataValue(sessionId, "base_commit", result.canonicalCommit);
         }
-        const refreshedSession = await runtime.getSession(sessionId, { inspectSource: false });
+        const refreshedSession = await runtime.getSessionWithoutSource(sessionId);
         const refreshedWork = await terminals.inspectSessionWork(sessionId, {
           runtime,
           session: refreshedSession
@@ -480,7 +464,7 @@ function createSessionWork({
           operation: "updated",
           originId: normalizeText(input.originId),
           reason: "session-update-completed",
-          session: await runtime.getSession(sessionId, { inspectSource: false })
+          session: await runtime.getSessionWithoutSource(sessionId)
         });
         return {
           ...result,
@@ -513,7 +497,7 @@ function createSessionWork({
           operation: "updated",
           originId: normalizeText(input.originId),
           reason: "session-update-failed",
-          session: await runtime.getSession(sessionId, { inspectSource: false }),
+          session: await runtime.getSessionWithoutSource(sessionId),
           task
         });
         throw error;

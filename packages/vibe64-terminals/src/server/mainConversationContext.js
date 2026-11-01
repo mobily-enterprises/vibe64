@@ -87,16 +87,16 @@ async function readSessionConversationContext(engine, project, sessionId, option
 
   const runtime = (codex ? codex.runtime : options.runtime) || (scope
     ? { stateRoot: scope.runtimeRoot }
-    : await project.createRuntime({ inspectSource: false }));
+    : await project.createRuntimeWithoutSource());
   let session;
   if (codex) {
-    session = codex.session?.sessionId === id ? codex.session : await runtime.getSession(id, { inspectSource: false });
+    session = codex.session?.sessionId === id ? codex.session : await runtime.getSessionWithoutSource(id);
   } else if (engine === "opencode") {
     // Bounded matching snapshot: preserve both original options.session reads.
-    session = options.session?.sessionId === id ? options.session : await runtime.getSession(id, { inspectSource: false });
+    session = options.session?.sessionId === id ? options.session : await runtime.getSessionWithoutSource(id);
   } else {
     // Captured/pinned snapshot: do not replace a supplied Claude goal context.
-    session = scope ? null : options.session || await runtime.getSession(id, { inspectSource: false });
+    session = scope ? null : options.session || await runtime.getSessionWithoutSource(id);
   }
 
   if (codex) return prepareCodexConversationContext(id, runtime, session, codex.allowClosing, codexHost);
@@ -169,7 +169,7 @@ async function readClaudeConversationOwnerContext(project, sessionId, options = 
   const scope = claudeConversationScope(id, options);
   const runtime = options.runtime || (scope
     ? { stateRoot: scope.runtimeRoot }
-    : await project.createRuntime({ inspectSource: false }));
+    : await project.createRuntimeWithoutSource());
   if (!runtime.stateRoot) throw claudeConversationError("Claude requires a session state root.");
   return { ...options, runtime, sessionId: id, key: claudeConversationKey(runtime, id) };
 }

@@ -93,7 +93,7 @@ function createOpenCodeLifecyclePreparation({
         closeTerminals: () => closeTerminalSessionsForNamespace(opencodeTerminalNamespace(id)),
         async afterRelease() {
           if (getAssistantManager() && !options.assistantScope) {
-            const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
+            const runtime = options.runtime || await project.createRuntimeWithoutSource();
             await cleanupReasoningSummary({
               sessionId: id,
               runtime,
@@ -169,7 +169,7 @@ function createOpenCodeLifecyclePreparation({
             const run = (context.session.agentRuns || []).find(agentRun => agentRun.id === OPENCODE_AGENT_RUN_ID);
             await operation(run, async commit => {
               await context.runtime.store.mutateSession(sessionId, async () => {
-                const latest = await context.runtime.getSession(sessionId, { inspectSource: false });
+                const latest = await context.runtime.getSessionWithoutSource(sessionId);
                 const currentRun = (latest.agentRuns || []).find(value => value.id === OPENCODE_AGENT_RUN_ID);
                 if (JSON.stringify(currentRun) !== JSON.stringify(run)) return;
                 await commit((turn, state, error) => writeRun(context, turn, state, error));

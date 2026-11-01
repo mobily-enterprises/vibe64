@@ -86,9 +86,11 @@ test("native account logout and credential restoration drain old processes and c
     createSessionStore: () => store,
     createRuntime: () => ({
       getSession: async () => session,
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       projectContextRoot: source,
       stateRoot: path.join(root, "project-state")
     }),
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     projectInspectionEnvironment: async () => ({}),
     currentTargetRoot: () => source
   };

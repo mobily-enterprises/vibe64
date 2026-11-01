@@ -134,7 +134,7 @@ function createCodexSessionEnvironment({
     }
 
     return runtime.store.mutateSession(normalizedSessionId, async () => {
-      const currentSession = await runtime.getSession(normalizedSessionId, { inspectSource: false });
+      const currentSession = await runtime.getSessionWithoutSource(normalizedSessionId);
       return runOperation(currentSession);
     });
   }

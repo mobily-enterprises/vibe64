@@ -52,6 +52,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
         async listSessionsForRenewal() { return []; }
       },
       async getSession(id) { return structuredClone(sessionsByProject[projectSlug].get(id) || null); },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       async listSessionSummaries() { return [...sessionsByProject[projectSlug].values()]; },
       async createSession(input) {
         createCount++;
@@ -84,6 +85,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
         return { sourcesFile: ".development/sources.json", status: "inputs-prepared", recipeHash: "test-recipe" };
       },
       async createRuntime() { return runtimeFor(currentProjectRequestContext().slug); },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async connectedProjectTargets() {
         const receivingProject = currentProjectRequestContext().slug === "library" ? slug : "library";
         return [

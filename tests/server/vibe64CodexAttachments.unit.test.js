@@ -858,9 +858,11 @@ test("Codex controller renews accepted attachments in the selected session sourc
                   sessionId,
                   sessionRoot: path.join(root, "runtime", "sessions", "active", sessionId)
                 };
-              }
+              },
+              getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
             };
-          }
+          },
+          createRuntimeWithoutSource(options) { return this.createRuntime(options); }
         }
       });
 
@@ -892,8 +894,8 @@ test("shared upload, Codex renewal, and cleanup use the configured attachment ro
     projectContextRoot: root,
     projectRuntimeRoot: path.join(root, "runtime")
   });
-  const runtime = { store, getSession: (id) => store.readSession(id) };
-  const project = { createRuntime: () => runtime };
+  const runtime = { store, getSession: (id) => store.readSession(id), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
+  const project = { createRuntime: () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } };
   const attachments = createSessionAttachments({ env, project });
   const { attachments: controller } = createCodexSessionRegistration({ listConnections: async () => [], codexAppServerProviderOptions: {},
     logger: silentLogger, publishSessionChanged: async () => null, connectionStatus: async () => true,
@@ -970,10 +972,10 @@ test("shared attachment admission rejects persisted and in-flight session closin
       sessionId: "in-flight-closing",
       status: VIBE64_SESSION_STATUS.ACTIVE
     });
-    const runtime = { store, getSession: (id) => store.readSession(id) };
+    const runtime = { store, getSession: (id) => store.readSession(id), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
     const persistedAttachments = createSessionAttachments({
       env,
-      project: { createRuntime: () => runtime }
+      project: { createRuntime: () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } }
     });
     await assert.rejects(persistedAttachments.uploadAttachment({ sessionId: "persisted-closing" }, {
       fileName: "blocked.txt",
@@ -997,9 +999,11 @@ test("shared attachment admission rejects persisted and in-flight session closin
                 await store.writeMetadataValue(sessionId, "session_closing_reason", "deleting");
               }
               return store.readSession(sessionId);
-            }
+            },
+            getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
           };
-        }
+        },
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); }
       }
     });
     await assert.rejects(racingAttachments.uploadAttachment({ sessionId: "in-flight-closing" }, {

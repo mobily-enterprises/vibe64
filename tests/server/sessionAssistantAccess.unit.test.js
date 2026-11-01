@@ -4,9 +4,9 @@ import { createSessionsService as createService } from "./vibe64SessionsTestHelp
 
 test("assistant access exposes purpose decisions without private connection identities", async () => {
   const session = { sessionId: "session-1" };
-  const runtime = { getSession: async () => session };
+  const runtime = { getSession: async () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
   const service = createService({
-    project: { createRuntime: async () => runtime },
+    project: { createRuntime: async () => runtime, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: { async inspectAssistantAccess(_sessionId, context) {
       assert.equal(context.vibe64User.username, "member");
       assert.equal(context.session, session);
@@ -49,7 +49,7 @@ test("chat access omits repeated dispatch plans while retaining decisions, label
     message: "Choose a connected assistant.", missingRoles: ["custom"] };
   const original = JSON.stringify(access);
   const service = createService({
-    project: { createRuntime: async () => ({ getSession: async () => ({ sessionId: "one" }) }) },
+    project: { createRuntime: async () => ({ getSession: async () => ({ sessionId: "one" }), getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }), createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     terminals: { inspectAssistantAccess: async () => access }
   });
   const result = await service.inspectAssistantAccess("one", { vibe64User: { username: "member", role: "member" } });

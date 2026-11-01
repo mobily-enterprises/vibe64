@@ -113,7 +113,8 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
         realtime = values.realtime;
         const project = {
             createSessionStore: async () => store,
-            createRuntime: async () => ({ getSession: store.readSession, store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) } }),
+            createRuntime: async () => ({ getSession: store.readSession, getSessionWithoutSource: store.readSession, store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) } }),
+            createRuntimeWithoutSource() { return this.createRuntime(); },
             localDatabaseServers: async () => ({ managed: true, databases: [] }),
             sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
               contract: "vibe64.database-tool-environment.v1", kind: schema.engine,

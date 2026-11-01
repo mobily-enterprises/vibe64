@@ -124,9 +124,11 @@ function projectServiceFor(root, { sessionRoot } = {}) {
             sessionId,
             ...(sessionRoot ? { sessionRoot } : {})
           };
-        }
+        },
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
       };
-    }
+    },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); }
   };
 }
 
@@ -489,7 +491,7 @@ test('architecture refresh respects the existing assistant write admission lock'
           assert.equal(sessionId, 'session-1'); assert.equal(lock, 'agent-write-mode'); assert.equal(options.operation, 'architecture-refresh');
           return { acquired: false, blockingOperation: 'prepare-agent-session' };
         } } };
-      } },
+      }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
       inspectorReader: async () => { throw new Error('Must not inspect while admission is blocked'); },
       refresher: async () => { throw new Error('Must not index while admission is blocked'); }
     });

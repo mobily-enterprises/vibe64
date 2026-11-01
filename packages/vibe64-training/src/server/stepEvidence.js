@@ -232,8 +232,8 @@ function createTrainingStepEvidence({
     }
     const sessionId = attempt.preparation.initialSessionId;
     const observed = await project.runInProjectContext(attempt.projectSlug, async () => {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const source = sessionSourcePath(session);
       if (!session || session.sessionId !== sessionId || !source) {
         throw evidenceFailure("This lesson's practice session is unavailable. Resume the lesson, then try again.");

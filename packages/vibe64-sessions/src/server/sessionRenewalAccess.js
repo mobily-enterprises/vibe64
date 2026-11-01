@@ -19,10 +19,7 @@ function createRenewalSessionAccess({
   terminals
 }) {
   async function runtimeForRenewal() {
-    return project.createRuntime({
-      createSessionSource: (context) => terminals.createSessionSource(context),
-      inspectSource: false
-    });
+    return project.createRuntimeWithoutSource({ createSessionSource: (context) => terminals.createSessionSource(context) });
   }
 
   /**
@@ -30,7 +27,7 @@ function createRenewalSessionAccess({
    * @param {string} [sessionId]
    */
   async function readInternalSession(runtime, sessionId = "") {
-    return runtime.getSessionForRenewal(sessionId, { inspectSource: false });
+    return runtime.getSessionForRenewalWithoutSource(sessionId);
   }
 
   async function publish(sessionId = "", reason = "session-renewal", originId = "") {

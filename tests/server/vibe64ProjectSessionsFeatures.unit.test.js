@@ -181,7 +181,7 @@ test("project and sessions register routes and captured actions during setup", a
         }
       }
     },
-    project: { async createRuntime() { return {}; }, setTemplateApplicationObserver(observer) { templateObservers.push(observer); } },
+    project: { async createRuntime() { return {}; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); }, setTemplateApplicationObserver(observer) { templateObservers.push(observer); } },
     renewalActorResolver: async () => null,
     sourceEditor: { async readIntegrations(input) {
       configurationReads.push(input);

@@ -142,7 +142,7 @@ test("a managed resource binding wins over a linked value of the same name", asy
       savedEnvValues: testVault([{ key: "SERVICE_ENDPOINT", value: "https://linked.example.test", secret: false }]),
       resourceEnvironmentProvider: { managedDevelopmentDatabase: true,
         environmentForProvisionedResources: provided, environmentForResources: provided } });
-    const runtime = await service.createRuntime({ inspectSource: false });
+    const runtime = await service.createRuntimeWithoutSource();
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
 
     assert.equal((await service.projectInspectionEnvironment({ sessionId })).SERVICE_ENDPOINT, "https://managed.example.test");

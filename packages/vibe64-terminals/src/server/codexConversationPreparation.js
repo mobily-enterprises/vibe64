@@ -106,7 +106,7 @@ function createCodexConversationPreparation({
     const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, () => {
       return operation(sessionId, {
         store: runtime.store,
-        getSession: id => runtime.getSession(id, { inspectSource: false })
+        getSession: id => runtime.getSessionWithoutSource(id)
       }, session, {
         threadId: current => codexThreadIdForWorkdir(current, learningRoot || sessionSourcePath(current)),
         providerOptions: current => codexAppServerControlRuntimeOptionsForSession(current, { runtime })
@@ -124,7 +124,7 @@ function createCodexConversationPreparation({
 
   async function prepareCodexSessionReadiness(sessionId, options = {}) {
     const runtime = await createRuntimeForSession();
-    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const session = await runtime.getSessionWithoutSource(sessionId);
     const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
     return {
       session,
@@ -160,7 +160,7 @@ function createCodexConversationPreparation({
           codexThreadId: threadId,
           codexSessionBriefingDelivered: false,
           terminalSessionId: ""
-        }, await runtime.getSession(sessionId, { inspectSource: false }));
+        }, await runtime.getSessionWithoutSource(sessionId));
       },
       async prepare(operation) {
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, () => (

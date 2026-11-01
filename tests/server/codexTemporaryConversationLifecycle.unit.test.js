@@ -565,6 +565,7 @@ test("helper work consumes the caller runtime and session without an implicit pr
     let implicitRuntimeLookups = 0;
     let explicitRuntimeSessionLookups = 0;
     const originalCreateRuntime = project.createRuntime;
+    const originalCreateRuntimeWithoutSource = project.createRuntimeWithoutSource;
     const callerSession = {
       ...session,
       projectContextRoot: path.join(projectRuntimeRoot, "wrong-session-authority")
@@ -574,6 +575,7 @@ test("helper work consumes the caller runtime and session without an implicit pr
         explicitRuntimeSessionLookups += 1;
         return session;
       },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       projectContextRoot,
       stateRoot: projectRuntimeRoot
     };
@@ -581,6 +583,7 @@ test("helper work consumes the caller runtime and session without an implicit pr
       implicitRuntimeLookups += 1;
       throw new Error("Explicit helper context must not create another project runtime.");
     };
+    project.createRuntimeWithoutSource = project.createRuntime;
 
     try {
       const catalog = await controller.executionProfileModelCatalog("session-1", {
@@ -621,6 +624,7 @@ test("helper work consumes the caller runtime and session without an implicit pr
       );
     } finally {
       project.createRuntime = originalCreateRuntime;
+      project.createRuntimeWithoutSource = originalCreateRuntimeWithoutSource;
     }
   });
 });
@@ -650,6 +654,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       async getSession(sessionId) {
         return store.readSession(sessionId);
       },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       projectContextRoot,
       stateRoot: projectRuntimeRoot,
       store
@@ -672,6 +677,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       createSessionStore() {
         return store;
       },
@@ -811,6 +817,7 @@ for (const startFails of [false, true]) {
         async getSession(sessionId) {
           return store.readSession(sessionId);
         },
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
         projectContextRoot,
         stateRoot: projectRuntimeRoot,
         store
@@ -834,6 +841,7 @@ for (const startFails of [false, true]) {
         createRuntime() {
           return runtime;
         },
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); },
         createSessionStore() {
           return store;
         },
@@ -1069,6 +1077,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
         normalReads += 1;
         return session;
       },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
       async getSessionForRenewal() {
         renewalReads += 1;
         return {
@@ -1076,6 +1085,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
           status: VIBE64_SESSION_STATUS.RENEWAL_PENDING
         };
       },
+      getSessionForRenewalWithoutSource(sessionId) { return this.getSessionForRenewal(sessionId); },
       projectContextRoot: project.createRuntime().projectContextRoot,
       stateRoot: projectRuntimeRoot,
       store: {
@@ -1116,6 +1126,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
       createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async readCurrentProject() {
         return {
           projectContextRoot: runtime.projectContextRoot,
@@ -1576,6 +1587,7 @@ async function managedProjectScopedSessionFixture(temporaryRoot, slug, sessionId
     async getSession() {
       return store.readSession(sessionId);
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async renderPrompt(_sessionId, { request } = {}) {
       return { prompt: String(request || "Continue.") };
     },
@@ -1773,6 +1785,7 @@ async function withConversationController(operation, {
         async getSession() {
           return session;
         },
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
         projectContextRoot,
         store: {
           paths() { return {}; },
@@ -1793,6 +1806,7 @@ async function withConversationController(operation, {
         stateRoot: projectRuntimeRoot
       };
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     async projectInspectionEnvironment() {
       captures.onProjectEnvironment?.();
       if (captures.projectEnvironmentWait) {
@@ -1996,6 +2010,7 @@ async function withAgentMessageController(operation, {
     async getSession(sessionId) {
       return store.readSession(sessionId);
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async renderPrompt(_sessionId, { request, task } = {}) {
       captures.renderPrompts.push({ request, task });
       return {
@@ -2011,6 +2026,7 @@ async function withAgentMessageController(operation, {
     createRuntime() {
       return runtime;
     },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     createSessionStore() {
       return store;
     },
@@ -2337,18 +2353,18 @@ test("cold terminal cleanup honors an idle session's saved OpenCode selection", 
 test("an archived session's assistant check prepares no provider", { timeout: 15_000 }, async () => {
   await withAgentMessageController(async ({ captures, runtime, sessionId, terminals }) => {
     // The store still returns an archived session, such as a renewed predecessor.
-    const { getSession } = runtime;
-    runtime.getSession = async (id, options) => {
-      const session = await getSession(id, options);
-      return { ...session, status: "archived",
-        metadata: { ...session.metadata, session_closing_reason: "archived", source_removed: "yes" } };
-    };
+    const { getSession, getSessionWithoutSource } = runtime;
+    const archived = session => ({ ...session, status: "archived",
+      metadata: { ...session.metadata, session_closing_reason: "archived", source_removed: "yes" } });
+    runtime.getSession = async (id) => archived(await getSession(id));
+    runtime.getSessionWithoutSource = runtime.getSession;
     try {
       const result = await terminals.ensureAgentSession(sessionId);
       assert.deepEqual(result, { ok: false, code: "vibe64_session_archived", error: "This session is archived.", sessionId });
       assert.equal(captures.providerOptions.length, 0, "an archived session must not prepare its assistant");
     } finally {
       runtime.getSession = getSession;
+      runtime.getSessionWithoutSource = getSessionWithoutSource;
     }
   }, { throughTerminalService: true });
 });
@@ -2466,11 +2482,16 @@ test("the common Codex entry uses the original main journal, receipt files and c
     };
     const before = (await runtime.getSession(sessionId)).metadata;
     const readSession = runtime.getSession;
+    const readSessionWithoutSource = runtime.getSessionWithoutSource;
     runtime.getSession = async () => { throw new Error("Passive native status must not hydrate the full session history"); };
+    runtime.getSessionWithoutSource = runtime.getSession;
     try {
       const passive = await common.open({ id: sessionId, context: { runtime }, representation: "native" });
       assert.equal((await passive.read()).ok, true);
-    } finally { runtime.getSession = readSession; }
+    } finally {
+      runtime.getSession = readSession;
+      runtime.getSessionWithoutSource = readSessionWithoutSource;
+    }
     const conversation = await common.open({ id: sessionId, context: { runtime } });
     assert.equal((await conversation.read()).segmentId, null);
     assert.equal(await conversation.readGoal(), null);
@@ -3135,6 +3156,7 @@ test("renewal provider controls read only their exact hidden successor and retai
     const statusPath = store.paths(sessionId).statusPath;
     await writeFile(statusPath, `${VIBE64_SESSION_STATUS.RENEWAL_PENDING}\n`);
     runtime.getSessionForRenewal = (id) => store.readSessionForRenewal(id);
+    runtime.getSessionForRenewalWithoutSource = runtime.getSessionForRenewal;
     const handover = renewalHandoverText();
     const handoverHash = sessionRenewalHandoverHash(handover);
     const acknowledgement = JSON.stringify({ handoverHash, message: "Ready.",
@@ -5202,10 +5224,12 @@ test("a changed session environment retires the previous provider for the same r
           async getSession() {
             return session;
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           projectContextRoot,
           stateRoot: projectRuntimeRoot
         };
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async projectInspectionEnvironment() {
         return {
           PROVIDER_OWNERSHIP_VERSION: environmentVersion,
@@ -5321,10 +5345,12 @@ test("Codex sessions retain one shared runtime and concurrent final closes stop 
           async getSession(sessionId) {
             return sessions.get(sessionId);
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           projectContextRoot,
           stateRoot: projectRuntimeRoot
         };
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async projectInspectionEnvironment() {
         return {
           VIBE64_RUNTIME_NAMESPACE: "test",
@@ -5416,6 +5442,7 @@ test("an active chat keeps one composed session context while authored turns sta
     async getSession(sessionId) {
       return store.readSession(sessionId);
     },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async renderPrompt(_sessionId, { request } = {}) {
       return {
         prompt: String(request || "Continue.")
@@ -5544,6 +5571,7 @@ test("an active chat keeps one composed session context while authored turns sta
       createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       createSessionStore() {
         return store;
       },
@@ -5724,10 +5752,12 @@ test("closing a session without recorded Codex ownership leaves the shared runti
           async getSession() {
             return currentSession;
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           projectContextRoot,
           stateRoot: projectRuntimeRoot
         };
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async projectInspectionEnvironment() {
         return providerEnv;
       }
@@ -7216,11 +7246,13 @@ test("account-wide Codex auth invalidation stops a pruned runtime without a sele
     assert.equal(captures.stopRuntimes, 0);
 
     const createRuntime = project.createRuntime;
+    const createRuntimeWithoutSource = project.createRuntimeWithoutSource;
     project.createRuntime = () => {
       const error = new Error("Choose a project before using project tools.");
       error.code = "vibe64_project_not_selected";
       throw error;
     };
+    project.createRuntimeWithoutSource = project.createRuntime;
     try {
       const invalidated = await controller.invalidateAppServerRuntimes({
         includeOwned: true,
@@ -7232,6 +7264,7 @@ test("account-wide Codex auth invalidation stops a pruned runtime without a sele
       assert.equal(invalidated.stopped, 1);
     } finally {
       project.createRuntime = createRuntime;
+      project.createRuntimeWithoutSource = createRuntimeWithoutSource;
     }
     assert.equal(captures.stopRuntimes, 1);
     assert.deepEqual(captures.stopRuntimeOptions, {
@@ -7698,10 +7731,12 @@ test("server shutdown serializes with an owned runtime before metadata is publis
           async getSession() {
             return session;
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           projectContextRoot: temporaryRoot,
           stateRoot: projectRuntimeRoot
         };
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async projectInspectionEnvironment() {
         return {
           VIBE64_RUNTIME_NAMESPACE: process.env.VIBE64_RUNTIME_NAMESPACE,
@@ -7837,10 +7872,12 @@ test("server shutdown proves exit of the exact owned detached runtime", async (t
           async getSession() {
             return session;
           },
+          getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
           projectContextRoot: temporaryRoot,
           stateRoot: projectRuntimeRoot
         };
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async projectInspectionEnvironment() {
         return {
           VIBE64_RUNTIME_NAMESPACE: process.env.VIBE64_RUNTIME_NAMESPACE,
@@ -7924,6 +7961,7 @@ test("same raw session closes remain isolated across project request contexts", 
         }
         return fixture.session;
       };
+      fixture.runtime.getSessionWithoutSource = fixture.runtime.getSession;
     }
     project.createRuntime = () => {
       const slug = currentProjectRequestContext()?.slug;
@@ -7931,6 +7969,7 @@ test("same raw session closes remain isolated across project request contexts", 
       assert.ok(fixture, `Missing scoped fixture for ${slug || "no project"}.`);
       return fixture.runtime;
     };
+    project.createRuntimeWithoutSource = project.createRuntime;
     project.createSessionStore = () => {
       const slug = currentProjectRequestContext()?.slug;
       return fixtures.get(slug)?.store;
@@ -8002,8 +8041,7 @@ test("same raw session delivery admission remains independent across project req
     ]);
     const holds = { alpha: null, beta: null };
     for (const fixture of fixtures.values()) {
-      const readSession = fixture.runtime.getSession.bind(fixture.runtime);
-      fixture.runtime.getSession = async () => {
+      const heldRead = (readSession) => async () => {
         const slug = fixture.context.slug;
         const hold = holds[slug];
         if (hold) {
@@ -8013,12 +8051,15 @@ test("same raw session delivery admission remains independent across project req
         }
         return readSession();
       };
+      fixture.runtime.getSession = heldRead(fixture.runtime.getSession.bind(fixture.runtime));
+      fixture.runtime.getSessionWithoutSource = heldRead(fixture.runtime.getSessionWithoutSource.bind(fixture.runtime));
     }
     project.createRuntime = () => {
       const fixture = fixtures.get(currentProjectRequestContext()?.slug);
       assert.ok(fixture);
       return fixture.runtime;
     };
+    project.createRuntimeWithoutSource = project.createRuntime;
     project.createSessionStore = () => {
       return fixtures.get(currentProjectRequestContext()?.slug)?.store;
     };
@@ -8139,6 +8180,7 @@ test("renewal cleanup cannot observe or delete another project's Temporary AI st
       assert.ok(fixture, `Missing scoped fixture for ${slug || "no project"}.`);
       return fixture.runtime;
     };
+    project.createRuntimeWithoutSource = project.createRuntime;
     project.createSessionStore = () => {
       const slug = currentProjectRequestContext()?.slug;
       return fixtures.get(slug)?.store;
@@ -8501,9 +8543,11 @@ test("hidden renewal successor shutdown requires its exact explicit cleanup cont
         const error = new Error("Private renewal session");
         error.code = "vibe64_session_renewal_private";
         throw error;
-      }
+      },
+      getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
     };
     project.createRuntime = () => hiddenRuntime;
+    project.createRuntimeWithoutSource = project.createRuntime;
 
     await assert.rejects(
       () => controller.closeAllForSession(hiddenSession.sessionId),
@@ -10285,6 +10329,7 @@ for (const [outcome, deleteFailures] of [
         sessionId: "session-1", runtimeKind: "genesis", metadata: (await runtime.getSession()).metadata
       });
       project.createRuntime = () => ({ ...runtime, store: auditStore });
+      project.createRuntimeWithoutSource = project.createRuntime;
       simulateControllerCrash();
       const switched = restartedCaptures(captures, {
         runtimeInfo: { ...captures.runtimeInfo, accountIdentitySignature: TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE },
@@ -10375,6 +10420,7 @@ for (const failureIndex of [0, 1]) {
         sessionId: "session-1", runtimeKind: "genesis", metadata: (await runtime.getSession()).metadata
       });
       project.createRuntime = () => ({ ...runtime, store: auditStore });
+      project.createRuntimeWithoutSource = project.createRuntime;
       let deleteIndex = 0;
       const switched = restartedCaptures(captures, {
         runtimeInfo: { ...captures.runtimeInfo, accountIdentitySignature: TEST_OTHER_ACCOUNT_IDENTITY_SIGNATURE },
@@ -12662,6 +12708,7 @@ test("concurrent Main reconciliation retains the cached fallback until prune can
         const settled = { first: false, second: false, prune: false };
         const previousCreated = captures.onProviderCreated;
         const getSession = runtime.getSession;
+        const getSessionWithoutSource = runtime.getSessionWithoutSource;
         const decorated = [];
         let listAttempts = 0;
         let resumeAttempts = 0;
@@ -12692,6 +12739,10 @@ test("concurrent Main reconciliation retains the cached fallback until prune can
         runtime.getSession = (...args) => {
           if (observeSecond) secondRead = true;
           return getSession(...args);
+        };
+        runtime.getSessionWithoutSource = (...args) => {
+          if (observeSecond) secondRead = true;
+          return getSessionWithoutSource.apply(runtime, args);
         };
         try {
           const first = controller.reconcileThreads([{ sessionId }])
@@ -12753,6 +12804,7 @@ test("concurrent Main reconciliation retains the cached fallback until prune can
           fallback.release();
           await Promise.allSettled(pending);
           runtime.getSession = getSession;
+          runtime.getSessionWithoutSource = getSessionWithoutSource;
           captures.onProviderCreated = previousCreated;
           for (const { current, listLoadedThreads, resumeThread } of decorated) {
             current.listLoadedThreads = listLoadedThreads;

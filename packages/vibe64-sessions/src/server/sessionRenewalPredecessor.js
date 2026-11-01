@@ -58,9 +58,7 @@ function createRenewalPredecessorSession({
    * @param {object | null} [session]
    */
   async function assertPredecessorIdle(runtime, sessionId = "", session = null) {
-    const predecessor = session || await runtime.getSession(sessionId, {
-      inspectSource: false
-    });
+    const predecessor = session || await runtime.getSessionWithoutSource(sessionId);
     assertWorkspaceIdle(predecessor, setupRunner);
     await terminals.assertSessionRenewalIdle(sessionId, {
       runtime,

@@ -27,9 +27,7 @@ function createProjectSessionWork({ environment, selection }) {
     if (!sessionId) {
       return operation();
     }
-    const runtime = await createRuntime({
-      inspectSource: false
-    });
+    const runtime = await createRuntimeWithoutSource();
     const exclusive = await runVibe64AgentWriteExclusive(
       runtime,
       sessionId,
@@ -40,23 +38,36 @@ function createProjectSessionWork({ environment, selection }) {
     return exclusive.value;
   }
 
-  async function createRuntime(options = {}) {
+  function sessionRuntimeOptions(options) {
     const requestContext = captureProjectRequestContext() || {};
     const target = selection.requireSelectedTargetRoot();
-    return new Vibe64SessionRuntime({
+    return {
       createSessionSource: options.createSessionSource,
-      inspectSourceByDefault: options.inspectSource !== false,
       projectContextRoot: target,
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
       projectSessionSourceRoot: selection.selectedSessionSourceRoot(),
       promptEnvironment: () => runWithProjectRequestContext(requestContext, environment.promptEnvironment),
       store: selection.sessionStore()
+    };
+  }
+
+  /** A session runtime of the selected project; its session reads inspect the source checkout. */
+  async function createRuntime(options = {}) {
+    return new Vibe64SessionRuntime(sessionRuntimeOptions(options));
+  }
+
+  /** A session runtime of the selected project whose session reads never inspect the source checkout. */
+  async function createRuntimeWithoutSource(options = {}) {
+    return new Vibe64SessionRuntime({
+      ...sessionRuntimeOptions(options),
+      inspectSourceByDefault: false
     });
   }
 
   return Object.freeze({
     runSessionSourceWorkExclusive,
-    createRuntime
+    createRuntime,
+    createRuntimeWithoutSource
   });
 }
 

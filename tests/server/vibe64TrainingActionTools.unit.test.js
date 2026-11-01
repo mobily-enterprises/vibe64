@@ -416,7 +416,7 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
     env: {},
     events: { async publish() {} },
     logger: { warn() {} },
-    project: { createRuntime: unexpected, runInProjectContext: unexpected },
+    project: { createRuntime: unexpected, createRuntimeWithoutSource: unexpected, runInProjectContext: unexpected },
     sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected, closeProjectRuntime: unexpected }, trainingHost: null });
   // Learner-scoped realtime notices go through the runtime events.
   assert.deepEqual(Vibe64TrainingFeature.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor" });

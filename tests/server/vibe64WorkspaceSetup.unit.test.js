@@ -319,7 +319,7 @@ for (const [phase, change] of ["environment preparation", "admission"].flatMap((
         if (change === "command") {
           const retried = await runner.start({
             runtime,
-            session: await runtime.getSession(session.sessionId, { inspectSource: false }),
+            session: await runtime.getSessionWithoutSource(session.sessionId),
             retry: true
           });
           assert.equal((await retried.completion).status, "succeeded");
@@ -353,19 +353,19 @@ test("source invalidation survives restart and reruns an unchanged preparation r
     };
     const runner = createWorkspaceSetupRunner(options);
     await (await runner.start({ runtime, session })).completion;
-    const prepared = await runtime.getSession(session.sessionId, { inspectSource: false });
+    const prepared = await runtime.getSessionWithoutSource(session.sessionId);
     assert.equal(await runner.isPrepared({ runtime, session: prepared }), true);
     assert.equal((await runner.start({ runtime, session: prepared })).completion, null);
 
     await runner.invalidate({ runtime, session: prepared, diagnostic: "Source updated; preparation is required." });
-    const restored = await runtime.getSession(session.sessionId, { inspectSource: false });
+    const restored = await runtime.getSessionWithoutSource(session.sessionId);
     const restartedRunner = createWorkspaceSetupRunner(options);
     assert.equal(restored.workspaceSetup.status, "required");
     assert.equal(await restartedRunner.isPrepared({ runtime, session: restored }), false);
     assert.equal((await (await restartedRunner.start({ runtime, session: restored })).completion).status, "succeeded");
     assert.equal(installs, 2);
 
-    const current = await runtime.getSession(session.sessionId, { inspectSource: false });
+    const current = await runtime.getSessionWithoutSource(session.sessionId);
     await (await restartedRunner.start({ runtime, session: current, retry: true })).completion;
     assert.equal(installs, 3, "Explicit preparation retries must also repair a previously successful installation.");
   });
@@ -411,14 +411,14 @@ test("resource refusal preserves its decision identity across reload and clears 
     assert.equal(commands, 0);
     const stored = await runtime.store.readSession(session.sessionId);
     assert.equal(workspaceSetupStateFromMetadata(stored.metadata).resourceAdmissionId, id);
-    const current = await runtime.getSession(session.sessionId, { inspectSource: false });
+    const current = await runtime.getSessionWithoutSource(session.sessionId);
     assert.equal(current.workspaceSetup.resourceAdmissionId, id);
     rejected = false;
     const prepared = await (await runner.start({ runtime, session: current, retry: true })).completion;
     assert.equal(prepared.status, "succeeded");
     assert.equal(prepared.resourceAdmissionId, undefined);
     assert.equal(commands, 1);
-    assert.equal((await runtime.getSession(session.sessionId, { inspectSource: false })).workspaceSetup.resourceAdmissionId, undefined);
+    assert.equal((await runtime.getSessionWithoutSource(session.sessionId)).workspaceSetup.resourceAdmissionId, undefined);
     assert.equal(workspaceSetupState({ status: "failed", resourceAdmissionId: "../forged" }).resourceAdmissionId, undefined);
     assert.equal(workspaceSetupState({ status: "running", resourceAdmissionId: id }).resourceAdmissionId, undefined);
   });
@@ -445,9 +445,7 @@ test("workspace preparation transcript remains visible after a runtime restart",
       projectContextRoot: targetRoot,
       projectRuntimeRoot: projectRuntimeRoot(targetRoot)
     });
-    const restored = await restartedRuntime.getSession(session.sessionId, {
-      inspectSource: false
-    });
+    const restored = await restartedRuntime.getSessionWithoutSource(session.sessionId);
     assert.equal(restored.workspaceSetup.status, "succeeded");
     assert.equal(
       restored.workspaceSetup.transcript.length <= WORKSPACE_SETUP_TRANSCRIPT_MAX_LENGTH,
@@ -489,9 +487,7 @@ test("workspace preparation configuration never infers a package manager", async
 
     const repeated = await runner.start({
       runtime,
-      session: await runtime.getSession(session.sessionId, {
-        inspectSource: false
-      })
+      session: await runtime.getSessionWithoutSource(session.sessionId)
     });
     assert.deepEqual(repeated.state, result.state);
     assert.equal(
@@ -534,9 +530,7 @@ test("workspace preparation starts when a later Stack declaration supplies a rec
 
     const started = await runner.start({
       runtime,
-      session: await runtime.getSession(session.sessionId, {
-        inspectSource: false
-      })
+      session: await runtime.getSessionWithoutSource(session.sessionId)
     });
     assert.equal(started.state.status, "running");
     assert.equal((await started.completion).status, "succeeded");
@@ -567,9 +561,7 @@ test("workspace preparation reruns a successful recipe after its identity change
     recipeHash = "sha256:current-contract";
     const migrated = await runner.start({
       runtime,
-      session: await runtime.getSession(session.sessionId, {
-        inspectSource: false
-      })
+      session: await runtime.getSessionWithoutSource(session.sessionId)
     });
     assert.equal(migrated.state.status, "running");
     assert.equal((await migrated.completion).recipeHash, "sha256:current-contract");
@@ -601,7 +593,7 @@ test("unchanged setup provisions newly declared resources before reusing a succe
       }
     });
     assert.equal((await (await runner.start({ runtime, session })).completion).status, "succeeded");
-    const stored = await runtime.getSession(session.sessionId, { inspectSource: false });
+    const stored = await runtime.getSessionWithoutSource(session.sessionId);
     assert.equal(await runner.isPrepared({ runtime, session: stored }), true);
     prepared = false;
     assert.equal(await runner.isPrepared({ runtime, session: stored }), false);
@@ -610,7 +602,7 @@ test("unchanged setup provisions newly declared resources before reusing a succe
     assert.equal((await started.completion).status, "succeeded");
     assert.equal(preparations, 2);
     assert.equal(commands, 2);
-    const current = await runtime.getSession(session.sessionId, { inspectSource: false });
+    const current = await runtime.getSessionWithoutSource(session.sessionId);
     assert.equal((await runner.start({ runtime, session: current })).completion, null);
     assert.equal(preparations, 2, "Ready resources preserve setup reuse.");
   });
@@ -659,11 +651,11 @@ for (const scenario of ["preserved", "created", "changed identity", "unknown", "
       });
       const initial = await (await runner.start({ runtime, session })).completion;
       assert.equal(initial.resourceIdentity, identity);
-      let stored = await runtime.getSession(session.sessionId, { inspectSource: false });
+      let stored = await runtime.getSessionWithoutSource(session.sessionId);
       if (scenario === "legacy") {
         const { resourceIdentity: _identity, ...legacy } = stored.workspaceSetup;
         await runtime.store.writeMetadataValue(session.sessionId, "workspace_setup", JSON.stringify(legacy));
-        stored = await runtime.getSession(session.sessionId, { inspectSource: false });
+        stored = await runtime.getSessionWithoutSource(session.sessionId);
       }
       prepared = false;
       if (scenario === "changed identity") identity = "b".repeat(64);
@@ -714,7 +706,7 @@ for (const failure of ["provisioning failed", "still unprepared", "recipe change
       prepared = false;
       recovering = true;
       const result = await runner.start({ runtime,
-        session: await runtime.getSession(session.sessionId, { inspectSource: false }) });
+        session: await runtime.getSessionWithoutSource(session.sessionId) });
       assert.equal(result.completion, null);
       assert.equal(result.state.status, "failed");
       assert.equal(result.state.resourceIdentity, undefined);
@@ -758,7 +750,7 @@ test("workspace preparation reports project contract decisions with Genesis's me
       });
       for (const retry of [false, true]) {
         const result = await runner.start({ runtime, retry,
-          session: await runtime.getSession(session.sessionId, { inspectSource: false }) });
+          session: await runtime.getSessionWithoutSource(session.sessionId) });
         assert.equal(result.completion, null);
         assert.equal(result.state.status, status, `${code} keeps its project-decision status`);
         assert.equal(result.state.diagnostic, message);
@@ -819,9 +811,7 @@ test("workspace preparation retry migrates a recognized legacy Genesis project b
     const retried = await runner.start({
       retry: true,
       runtime,
-      session: await runtime.getSession(session.sessionId, {
-        inspectSource: false
-      })
+      session: await runtime.getSessionWithoutSource(session.sessionId)
     });
     assert.equal(retried.state.status, "running");
     const succeeded = await retried.completion;
@@ -949,9 +939,7 @@ test("ambiguous setup remains an actionable session state without executing eith
 
     const repeated = await runner.start({
       runtime,
-      session: await runtime.getSession(session.sessionId, {
-        inspectSource: false
-      })
+      session: await runtime.getSessionWithoutSource(session.sessionId)
     });
     assert.deepEqual(repeated.state, result.state);
   });
@@ -1029,9 +1017,7 @@ test("command failure records a short diagnostic and leaves the session active",
     const retried = await runner.start({
       retry: true,
       runtime,
-      session: await runtime.getSession(session.sessionId, {
-        inspectSource: false
-      })
+      session: await runtime.getSessionWithoutSource(session.sessionId)
     });
     const succeeded = await retried.completion;
     assert.equal(succeeded.status, "succeeded");
@@ -1064,7 +1050,7 @@ test("a failed setup runs again on an explicit start; a success stays cached", a
           : { exitCode: 0, ok: true };
       }
     });
-    const current = () => runtime.getSession(session.sessionId, { inspectSource: false });
+    const current = () => runtime.getSessionWithoutSource(session.sessionId);
 
     assert.equal((await (await runner.start({ runtime, session })).completion).status, "failed");
     // An implicit start (after a turn or an update) reports the stored failure.
@@ -1263,7 +1249,7 @@ test("admitted practice Workspace setup finishes in original owner control after
     await core.runWithPracticeProjectScope({ actor: { uid: 42, username: "learner" }, training, access: "create" }, async () => {
       await core.createWorkspaceProjectRecord({ slug, training });
       await project.runInProjectContext(slug, async () => {
-        actualRuntime = await project.createRuntime({ inspectSource: false });
+        actualRuntime = await project.createRuntimeWithoutSource();
         const sourceRoot = (await import("@local/vibe64-core/server/sessionSourcePath")).managedSessionSourcePath(
           currentProjectRequestContext().projectSessionSourceRoot, "practice-setup");
         await mkdir(sourceRoot, { recursive: true });

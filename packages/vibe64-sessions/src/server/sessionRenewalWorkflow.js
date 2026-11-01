@@ -157,7 +157,7 @@ function createRenewalWorkflow({
     }
     let basis = state.basis || null;
     try {
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const session = await runtime.getSessionWithoutSource(sessionId);
       const result = requireProviderSuccess(await terminals.generateSessionRenewalHandover(sessionId, {
         operationId: state.generation.operationId,
         source: state.basis?.source || null
@@ -432,7 +432,7 @@ function createRenewalWorkflow({
           await predecessorSession.freezePredecessorTerminalAdmission(current);
           await predecessorSession.closePredecessorTerminals(runtime, current, idleSession);
           admission.assertWorkflowAdmissionOpen();
-          const session = await runtime.getSession(sessionId, { inspectSource: false });
+          const session = await runtime.getSessionWithoutSource(sessionId);
           const basis = await inspectSessionRenewalEligibility({
             operationId: operationId(current.renewalId, "resume-quiesce"),
             runtime,

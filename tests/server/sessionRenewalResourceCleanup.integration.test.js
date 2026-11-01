@@ -188,7 +188,7 @@ function handoverText(commit) {
 function projectServiceProxy(project, runtime) {
   return new Proxy({}, {
     get(_target, property) {
-      if (property === "createRuntime") {
+      if (property === "createRuntime" || property === "createRuntimeWithoutSource") {
         return async () => runtime;
       }
       if (property === "createSessionStore") {
@@ -444,9 +444,7 @@ async function renewalHarness(targetRoot, {
     env,
     project: commandProject
   }));
-  const predecessor = await runtime.getSession(PREDECESSOR_ID, {
-    inspectSource: false
-  });
+  const predecessor = await runtime.getSessionWithoutSource(PREDECESSOR_ID);
   const resources = await createLiveResourceSet({
     attachmentRoot,
     commandProject,
@@ -479,7 +477,7 @@ async function renewalHarness(targetRoot, {
     },
     async generateSessionRenewalHandover(sessionId, _input, options) {
       await options.beforeStart({
-        session: await runtime.getSession(sessionId, { inspectSource: false })
+        session: await runtime.getSessionWithoutSource(sessionId)
       });
       return {
         handover: handoverText(commit),
@@ -539,6 +537,7 @@ async function renewalHarness(targetRoot, {
       async createRuntime() {
         return runtime;
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       releaseSessionResources(input) {
         return project.releaseSessionResources(input);
       }
@@ -642,12 +641,8 @@ test("completed renewal removes every predecessor process, command, attachment, 
         path.resolve(context.resourceCalls[0].sourceRoot),
         path.resolve(sourcePath(targetRoot, PREDECESSOR_ID))
       );
-      const predecessor = await context.runtime.getSessionForRenewal(PREDECESSOR_ID, {
-        inspectSource: false
-      });
-      const successor = await context.runtime.getSession(completed.commit.successorSessionId, {
-        inspectSource: false
-      });
+      const predecessor = await context.runtime.getSessionForRenewalWithoutSource(PREDECESSOR_ID);
+      const successor = await context.runtime.getSessionWithoutSource(completed.commit.successorSessionId);
       assert.equal(predecessor.archived, true);
       assert.equal(predecessor.status, "archived");
       assert.equal(successor.status, "active");
@@ -713,9 +708,7 @@ test("an injected pre-commit clone failure restores the predecessor, its attachm
       );
 
       assert.equal(failed.error.code, "injected_successor_clone_failure");
-      const predecessor = await context.runtime.getSession(PREDECESSOR_ID, {
-        inspectSource: false
-      });
+      const predecessor = await context.runtime.getSessionWithoutSource(PREDECESSOR_ID);
       assert.equal(predecessor.status, "active");
       assert.notEqual(predecessor.archived, true);
       assert.equal(await pathExists(predecessor.metadata.source_path), true);

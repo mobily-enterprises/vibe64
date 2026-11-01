@@ -81,7 +81,7 @@ require("node:http").createServer((_request, response) => {
       explicitTargetRoot: sourceRoot
     })
   });
-  const runtime = await project.createRuntime({ inspectSource: false });
+  const runtime = await project.createRuntimeWithoutSource();
   await runtime.store.createSession({
     metadata: {
       repository_mode: "local_source",
@@ -107,7 +107,7 @@ require("node:http").createServer((_request, response) => {
       if (setup.ok === false) {
         throw new Error(JSON.stringify(setup));
       }
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      const session = await runtime.getSessionWithoutSource(sessionId);
       if (session.workspaceSetup.status !== "succeeded") {
         throw new Error(JSON.stringify(session.workspaceSetup));
       }

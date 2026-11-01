@@ -95,7 +95,8 @@ test("native Codex isolates GPT, DeepSeek and GLM keys, models, tools and persis
   await store.createSession({ sessionId: session.sessionId, metadata: session.metadata, runtimeKind: "genesis" });
   const project = {
     createSessionStore: () => store,
-    createRuntime: () => ({ store, getSession: () => session, projectContextRoot: source, stateRoot: path.join(root, "state") }),
+    createRuntime: () => ({ store, getSession: () => session, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }, projectContextRoot: source, stateRoot: path.join(root, "state") }),
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     projectInspectionEnvironment: async () => ({}), currentTargetRoot: () => source
   };
   async function commandRunner(request) {

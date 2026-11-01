@@ -74,12 +74,8 @@ function createService({
     if (!sessionId) {
       return projectServiceSourceRoot(project);
     }
-    const runtime = await project.createRuntime({
-      inspectSource: false
-    });
-    const session = await runtime.getSession(sessionId, {
-      inspectSource: false
-    });
+    const runtime = await project.createRuntimeWithoutSource();
+    const session = await runtime.getSessionWithoutSource(sessionId);
     const root = sessionSourcePath(session);
     if (!root) {
       const error = new Error("The selected session does not have a source directory.");

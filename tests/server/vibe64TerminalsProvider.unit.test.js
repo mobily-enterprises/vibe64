@@ -172,6 +172,7 @@ test("terminals feature creates the direct API from runtime env", async () => {
         async createRuntime() {
           return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot };
         },
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); },
         currentProjectRuntimeRoot() {
           return runtimeRoot;
         },
@@ -254,6 +255,7 @@ test("personal Codex access blocks a member before authentication starts", async
         async createRuntime() {
           return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot };
         },
+        createRuntimeWithoutSource(options) { return this.createRuntime(options); },
         currentProjectRuntimeRoot() {
           return runtimeRoot;
         },
@@ -313,6 +315,7 @@ test("session source creation holds the project source mutation lock while it re
       async createRuntime() {
         return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot };
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       currentProjectRuntimeRoot() {
         return runtimeRoot;
       },
@@ -419,6 +422,7 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
       createSessionStore() { return {}; },
       async createRuntime() { return { adapter: {}, projectConfig: {}, stateRoot: runtimeRoot,
         async listSessions() { recovered += 1; return []; } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       currentProjectRuntimeRoot() { return runtimeRoot; },
       currentTargetRoot() { return targetRoot; },
       async listProjects() { return { ok: true, projects: [{ slug: "project", runtime: { open: true } }] }; },
@@ -526,6 +530,7 @@ test("original dormancy owner supplies internal close authority while an explici
     const project = {
       createSessionStore() { return {}; },
       async createRuntime() { return { store: { withUnpinnedProject: operation => operation() }, adapter: {}, projectConfig: {}, stateRoot: runtimeRoot, async listSessions() { return []; } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
       async readCurrentProject() { return { slug: "project" }; },
       async readEnv() { return { env: { records: [] }, ok: true }; },
@@ -559,6 +564,7 @@ test("the dormant sweep closes an idle practice project outside the catalogue", 
     const project = {
       createSessionStore() { return {}; },
       async createRuntime() { return { store: { withUnpinnedProject: operation => operation() }, adapter: {}, projectConfig: {}, stateRoot: runtimeRoot, async listSessions() { return []; } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
       async listProjects() { return { ok: true, projects: [] }; },
       async listPracticeProjectSlugs() { return ["training-0123abcd"]; },
@@ -606,6 +612,7 @@ test("a partial project close restores Preview service admission after services 
           async listSessions() { throw new Error("session inventory unavailable"); }
         };
       },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       currentProjectRuntimeRoot() { return runtimeRoot; },
       currentTargetRoot() { return targetRoot; },
       async readCurrentProject() { return { slug: "project" }; },
@@ -645,6 +652,7 @@ function dormancyProject(root, createRuntime) {
     project: {
       createSessionStore() { return {}; },
       createRuntime: () => createRuntime({ runtimeRoot, targetRoot }),
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
       async listProjects() { return { ok: true, projects: [] }; },
       async listPracticeProjectSlugs() { return ["training-0123abcd"]; },
@@ -681,7 +689,7 @@ test("a Claude session whose source was never created blocks no idle close, proj
       const closed = await outputs.terminals.closeProjectRuntime({ reason: "project-close" });
       assert.equal(closed.ok, true, JSON.stringify(closed.failed));
       // Archiving stops the session's work the same way before removing it.
-      const session = await runtime.getSession("clone-failed", { inspectSource: false });
+      const session = await runtime.getSessionWithoutSource("clone-failed");
       assert.equal(session.sourceReady, false);
       const stopped = await outputs.terminals.closeSessionTerminals("clone-failed", { session, forgetConversationBinding: true });
       assert.equal(stopped.ok, true);
@@ -737,6 +745,7 @@ test("a pinned project cannot close explicitly or through idle cleanup", async (
         } },
         async listSessions() { return pinned ? [{ sessionId: "main", pinnedSessionId: "main" }] : []; }
       }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
       async readCurrentProject() { return { slug: "project" }; },
       async readEnv() { return { env: { records: [] }, ok: true }; },

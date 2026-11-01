@@ -372,6 +372,7 @@ test("shared OpenCode process loss stops temporary-only sessions without writing
   await mkdir(second.metadata.source_path, { recursive: true });
   const sessions = new Map([["session-1", harness.session], [second.sessionId, second]]);
   harness.runtime.getSession = async (id) => sessions.get(id);
+  harness.runtime.getSessionWithoutSource = harness.runtime.getSession;
   const conversations = [];
   for (const id of sessions.keys()) {
     const { conversationId } = await harness.controller.createConversation(id, { ephemeral: true });

@@ -60,7 +60,8 @@ test("agent shell commands run as session-owned managed executions and drain on 
       return { state: { status: "running", currentLabel: "Install dependencies" } };
     },
     project: {
-      async createRuntime() { return { async getSession() { return descriptor; } }; },
+      async createRuntime() { return { async getSession() { return descriptor; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async inspectWorkspaceSetup() { return { status: "ready", steps: [], diagnostics: [] }; },
       async createSessionStore() {
         return {
@@ -280,7 +281,8 @@ test("session status gives the assistant the stored reason a repository needs he
           async readBackgroundTask(sessionId, taskId) { assert.equal(sessionId, "session-1"); return tasks.get(taskId) || null; },
           async readMetadataValue() { return JSON.stringify({ status: "succeeded", recipeHash: "earlier" }); } };
       },
-      async createRuntime() { return { async getSession() { return descriptor; } }; },
+      async createRuntime() { return { async getSession() { return descriptor; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async inspectWorkspaceSetup() { return { status: "ready", steps: [], diagnostics: [] }; },
       async projectEnvironmentStatus() { return { status: "ready", keys: [], resources: [] }; },
       async readCurrentProject() { return { projectRoot: path.join(temporaryRoot, "project"), slug: "project-1" }; },
@@ -323,7 +325,8 @@ test("project contract decisions are one shared predicate and keep agent status 
           async readBackgroundTask() { return null; },
           async readMetadataValue() { return JSON.stringify({ status: "succeeded", recipeHash: "earlier" }); } };
       },
-      async createRuntime() { return { async getSession() { return descriptor; } }; },
+      async createRuntime() { return { async getSession() { return descriptor; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } }; },
+      createRuntimeWithoutSource(options) { return this.createRuntime(options); },
       async inspectWorkspaceSetup() { throw failure; },
       async projectEnvironmentStatus() { return { status: "ready", keys: [], resources: [] }; },
       async readCurrentProject() { return { projectRoot: path.join(temporaryRoot, "project"), slug: "project-1" }; },

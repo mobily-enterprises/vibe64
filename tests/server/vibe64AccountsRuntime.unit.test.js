@@ -529,7 +529,7 @@ test("Accounts, assistant readiness and Claude conversations share one Claude Co
     const unused = () => assert.fail("Reading Claude Code's account must not touch a project.");
     // The terminals service as the server composes it, with the runtime's own env.
     const terminals = createTerminalsService(terminalsServiceCollaborators({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot }, logger: silentLogger,
-      project: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
+      project: { createRuntime: unused, createRuntimeWithoutSource: unused, createSessionStore: unused, readCurrentProject: unused,
         readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } }));
     let readiness;
     const feature = await startAccountsFeature({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
@@ -2447,7 +2447,7 @@ test("a Claude account change goes through the terminals service without touchin
     const systemRoot = path.join(root, "system");
     const unused = () => assert.fail("A Claude account change must not touch a project.");
     const terminals = createTerminalsService(terminalsServiceCollaborators({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot }, logger: silentLogger,
-      project: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
+      project: { createRuntime: unused, createRuntimeWithoutSource: unused, createSessionStore: unused, readCurrentProject: unused,
         readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } }));
     let refusal = null;
     const requests = [];

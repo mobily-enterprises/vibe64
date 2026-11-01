@@ -140,6 +140,7 @@ process.stdout.write(JSON.stringify({
   };
   const runtime = {
     async getSession() { return session; },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
     async resolvePromptEnvironment() { return {}; },
     store: {
       async mutateSession(_id, operation) { return operation(); },
@@ -151,6 +152,7 @@ process.stdout.write(JSON.stringify({
   const project = {
     runInProjectContext: (_slug, operation) => operation(),
     async createRuntime() { return runtime; },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
     currentTargetRoot() { return sourceRoot; },
     currentServiceDataRoot() { return root; },
     async projectExecutionEnvironment() { return {}; },

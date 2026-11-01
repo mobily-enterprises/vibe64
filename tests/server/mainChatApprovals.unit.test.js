@@ -37,12 +37,12 @@ function harness({ turnActive = false, deliver = async () => ({ ok: true, delive
     async readMetadataValue(_sessionId, name) { return metadata.get(name) || ""; },
     async writeMetadataValue(_sessionId, name, value) { metadata.set(name, value); }
   };
-  const runtime = { store, async getSession(sessionId) { return { sessionId, metadata: Object.fromEntries(metadata) }; } };
+  const runtime = { store, async getSession(sessionId) { return { sessionId, metadata: Object.fromEntries(metadata) }; }, getSessionWithoutSource(sessionId) { return this.getSession(sessionId); } };
   const sent = [];
   const sessionEvents = [];
   const projectEvents = [];
   const service = createService({
-    project: { async createRuntime() { return runtime; } },
+    project: { async createRuntime() { return runtime; }, createRuntimeWithoutSource(options) { return this.createRuntime(options); } },
     async publishSessionChanged(sessionId, event) { sessionEvents.push(event.reason); },
     async publishProjectChanged(value, options) { projectEvents.push(options.reason); },
     terminals: {

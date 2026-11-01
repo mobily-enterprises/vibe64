@@ -102,7 +102,7 @@ function createDatabaseAssistantTasks({
     for (const task of tasks) task.controller.abort();
     await sessionQueries.cancelSession(sessionId);
     await Promise.allSettled(tasks.map((task) => task.promise));
-    const runtime = options.runtime || await project.createRuntime({ inspectSource: false });
+    const runtime = options.runtime || await project.createRuntimeWithoutSource();
     const readPaths = options.renewalCleanup
       ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
     const files = await readPaths(sessionId, async (paths) => {
@@ -154,7 +154,7 @@ function createDatabaseAssistantTasks({
       task.controller.signal.throwIfAborted();
       const decision = await assistantDecision(context);
       if (!decision.available) throw databaseError(decision.message, decision.reasonCode);
-      const runtime = await project.createRuntime({ inspectSource: false });
+      const runtime = await project.createRuntimeWithoutSource();
       const admitted = await runtime.store.runSessionExclusive(context.sessionId, `database-assistant-${task.actor}`, async () => {
         const schema = await sessionDatabase.currentSchema(context);
         const artifact = `database/assistant-tasks/${task.actor}.json`;
