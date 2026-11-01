@@ -80,7 +80,9 @@ export function createVibe64ConversationExecution({
         entries.delete(id);
       }
       return proof;
-    })().finally(() => { if (entry) entry.stopping = null; });
+    })().finally(() => {
+      if (entry) entry.stopping = null;
+    });
     if (entry) entry.stopping = stopping;
     return stopping;
   }
@@ -246,15 +248,20 @@ export function createVibe64ConversationExecution({
           } catch (error) {
             if (error.code === "ENOENT") return { stderr: "", stdout: "" };
             throw error;
-          } finally { if (descriptor !== undefined) closeSync(descriptor); }
+          } finally {
+            if (descriptor !== undefined) closeSync(descriptor);
+          }
         },
-        get running() { return entry.running; }
+        get running() {
+          return entry.running;
+        }
       });
     } catch (error) {
       if (id) {
         error.executionId = id;
-        try { error.stopProof = await stop(id); }
-        catch (cleanupError) {
+        try {
+          error.stopProof = await stop(id);
+        } catch (cleanupError) {
           error.cleanupError = cleanupError;
           error.stopProof = { scopeEmpty: false };
         }

@@ -94,12 +94,18 @@ function usageRecordingNodeOptions(preload = "", fromFile = fileURLToPath(import
  */
 function managedOnlyRequestError(request) {
   if (request.releaseEnvironmentFile) {
-    return commandErrorResult("Release environment execution requires a managed host.",
-      "vibe64_release_environment_unavailable", { execution: request.execution });
+    return commandErrorResult(
+      "Release environment execution requires a managed host.",
+      "vibe64_release_environment_unavailable",
+      { execution: request.execution }
+    );
   }
   if (request.applicationAccount) {
-    return commandErrorResult("Application account execution requires a managed host.",
-      "vibe64_application_account_unavailable", { execution: request.execution });
+    return commandErrorResult(
+      "Application account execution requires a managed host.",
+      "vibe64_application_account_unavailable",
+      { execution: request.execution }
+    );
   }
   return null;
 }
@@ -233,16 +239,16 @@ async function runVibe64Command(input = {}) {
       : request.args;
     const resolveEnv = (commandInput = {}) => executionEnv(request.envFactory
       ? resolveCommandEnv({
-          actor,
-          baseEnv,
-          localPath,
-          resolvedGitIdentityEnv,
-          request: {
-            ...request,
-            env: request.envFactory(commandInput),
-            envFactory: null
-          }
-        })
+        actor,
+        baseEnv,
+        localPath,
+        resolvedGitIdentityEnv,
+        request: {
+          ...request,
+          env: request.envFactory(commandInput),
+          envFactory: null
+        }
+      })
       : env);
 
     const local = (localRequest = request, localContext = {}) => runLocalVibe64Command(

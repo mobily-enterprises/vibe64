@@ -94,17 +94,17 @@ function operatorCliProblem(tool = "", options = {}) {
   const use = purpose ? `Vibe64 uses it to work with ${purpose}.` : "Vibe64 uses it to run your AI.";
   const problem = installed
     ? {
-      code: "vibe64_cli_unavailable",
-      status: "unavailable",
-      title: `${name} didn't start`,
-      detail: `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.`
-    }
+        code: "vibe64_cli_unavailable",
+        status: "unavailable",
+        title: `${name} didn't start`,
+        detail: `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.`
+      }
     : {
-      code: "vibe64_cli_not_installed",
-      status: "not_installed",
-      title: `${name} isn't installed on this computer`,
-      detail: `${use} Install it, then choose Check again.`
-    };
+        code: "vibe64_cli_not_installed",
+        status: "not_installed",
+        title: `${name} isn't installed on this computer`,
+        detail: `${use} Install it, then choose Check again.`
+      };
   // `message` reads on its own; the install notice shows `title` above `detail`.
   return {
     ...problem,

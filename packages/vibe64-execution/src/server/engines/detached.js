@@ -26,8 +26,12 @@ function holdProcessGroup(processGroupId) {
       detached: true,
       stdio: ["pipe", "ignore", "ignore"]
     });
-    child.once("error", () => { if (reaper === child) reaper = null; });
-    child.once("exit", () => { if (reaper === child) reaper = null; });
+    child.once("error", () => {
+      if (reaper === child) reaper = null;
+    });
+    child.once("exit", () => {
+      if (reaper === child) reaper = null;
+    });
     child.stdin.on("error", () => {});
     child.unref();
     child.stdin.unref();

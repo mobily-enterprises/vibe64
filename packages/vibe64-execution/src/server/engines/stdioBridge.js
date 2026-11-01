@@ -23,7 +23,9 @@ const server = net.createServer({ allowHalfOpen: true }, (socket) => {
   child.on("error", () => socket.destroy());
   child.stdin.on("error", () => socket.destroy());
   let outputEnded = false;
-  child.stdout.once("end", () => { outputEnded = true; });
+  child.stdout.once("end", () => {
+    outputEnded = true;
+  });
   child.stdout.pipe(socket);
   socket.pipe(child.stdin);
   // Input EOF may precede the reply. Scope cleanup still belongs to the host;
@@ -40,7 +42,9 @@ const server = net.createServer({ allowHalfOpen: true }, (socket) => {
     else process.exitCode = code ?? 1;
   });
 });
-server.on("error", (error) => { throw error; });
+server.on("error", (error) => {
+  throw error;
+});
 server.listen(socketPath, async () => {
   await chmod(socketPath, 0o600);
 });

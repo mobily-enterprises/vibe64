@@ -54,9 +54,9 @@ function sharedToolEnv({ runtimePackRoot = "" } = {}) {
     ...(cacheRoot ? { [VIBE64_SHARED_CACHE_ROOT_ENV]: cacheRoot } : {}),
     ...(packRoot
       ? {
-        [PLAYWRIGHT_BROWSERS_PATH_ENV]: path.join(packRoot, PLAYWRIGHT_RUNTIME_PACK_NAME, PLAYWRIGHT_BROWSERS_DIR_NAME),
-        [PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV]: "1"
-      }
+          [PLAYWRIGHT_BROWSERS_PATH_ENV]: path.join(packRoot, PLAYWRIGHT_RUNTIME_PACK_NAME, PLAYWRIGHT_BROWSERS_DIR_NAME),
+          [PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD_ENV]: "1"
+        }
       : {}),
     ...(playwrightVersion ? { [VIBE64_PLAYWRIGHT_VERSION_ENV]: playwrightVersion } : {})
   };
