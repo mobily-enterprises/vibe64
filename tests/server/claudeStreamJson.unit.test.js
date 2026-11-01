@@ -2277,6 +2277,7 @@ for (const busyGoal of [false, true]) test(`main Claude terminal service uses ac
     createSessionStore: () => store,
     currentServiceDataRoot: () => path.join(f.root, "service-data"),
     currentTargetRoot: () => f.root,
+    listProjects: async () => ({ ok: true, projects: [{ slug: "claude-main-fixture", runtime: { open: true } }] }),
     readCurrentProject: async () => ({ path: f.root, projectContextRoot: f.root,
       sourceRoot: f.context.session.metadata.source_path, slug: "claude-main-fixture" }),
     projectInspectionEnvironment: async () => ({ VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" }),
