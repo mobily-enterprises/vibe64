@@ -163,6 +163,7 @@ function fakeDestination({ published = null } = {}) {
       id: "npm",
       label: "npm",
       credentials: [{ id: "npmrc", label: "npm token", delivery: "file" }],
+      readBackCredentials: () => [],
       async readBack() {
         return state.published ? { published: true, checksum: state.published, proof: { url: "https://registry.example/sdk/1.0.0" } } : { published: false };
       },

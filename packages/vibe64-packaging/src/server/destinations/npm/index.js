@@ -259,6 +259,13 @@ async function verifyCredential({ target, credentials }) {
   return { ok: true, account: response.json.username, message: `Signed in to npm as ${response.json.username}.` };
 }
 
+/**
+ * A restricted package needs a sign-in even to be read back; a public one does not.
+ */
+function readBackCredentials(target) {
+  return settingsOf(target).access === "restricted" ? [CREDENTIAL] : [];
+}
+
 const npmDestination = Object.freeze({
   id: "npm",
   label: "npm",
@@ -266,7 +273,7 @@ const npmDestination = Object.freeze({
   defaultRegistry: DEFAULT_REGISTRY,
   channels: Object.freeze(["latest", "next"]),
   credentials: Object.freeze([CREDENTIAL]),
-  readBackCredentials: (target) => (settingsOf(target).access === "restricted" ? [CREDENTIAL] : []),
+  readBackCredentials,
   expectedChecksum,
   dryRun,
   upload,

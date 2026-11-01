@@ -281,23 +281,13 @@ function expectedChecksum(destination, artifacts) {
 }
 
 /**
- * A destination's credential specs may depend on the target (for example a
- * private package that needs a sign-in even to be read back).
- */
-function credentialSpecs(destination, field, target) {
-  // readable-check: allow method-probe - optional operation: a destination definition's credential specs are a list or a function of the target
-  const specs = typeof destination[field] === "function" ? destination[field](target) : destination[field];
-  return Array.isArray(specs) ? specs : [];
-}
-
-/**
  * Stage 3 alone: what the destination reports for this target and version. A
  * destination that cannot read without signing in declares readBackCredentials.
  * `toolchains` (such as { javaHome, androidHome }) passes through to destinations
  * that run local signing tools; registry destinations ignore it.
  */
 async function readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains = {} }) {
-  const credentials = credentialSpecs(destination, "readBackCredentials", target);
+  const credentials = destination.readBackCredentials(target);
   const result = credentials.length
     ? await withStageCredentials({
       credentials,
@@ -358,7 +348,7 @@ async function publishTarget({
     };
   }
   const upload = await withStageCredentials({
-    credentials: credentialSpecs(destination, "credentials", target),
+    credentials: destination.credentials,
     obtainCredential,
     tempRoot
   }, (credentials) => destination.upload({ target, version, artifacts, credentials, toolchains }));
@@ -387,7 +377,6 @@ export {
   VIBE64_PUBLISH_ARTIFACTS_CONTRACT,
   artifactsDigest,
   buildStageEnvironment,
-  credentialSpecs,
   fileSha256Hex,
   passthroughEnvironment,
   publishTarget,

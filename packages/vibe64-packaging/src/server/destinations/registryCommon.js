@@ -155,6 +155,13 @@ async function httpJson(url, options = {}) {
   return { status: response.status, ok: response.ok, headers: response.headers, json, text };
 }
 
+/**
+ * The read-back credentials of a destination that reads back without signing in.
+ */
+function noReadBackCredentials() {
+  return [];
+}
+
 export {
   artifactFiles,
   commandPrefix,
@@ -162,6 +169,7 @@ export {
   httpRequest,
   httpUrl,
   namedFilesChecksum,
+  noReadBackCredentials,
   readCredentialText,
   redact,
   runTool,

@@ -9,7 +9,6 @@ import path from "node:path";
 import {
   CAPACITOR_SHELL_TEMPLATE,
   buildPackage,
-  credentialSpecs,
   gatherAndroidFacts,
   generateSideloadKey,
   npmTokenUserconfig,
@@ -138,7 +137,6 @@ function createPublishingPackaging() {
   return Object.freeze({
     androidTemplate: CAPACITOR_SHELL_TEMPLATE,
     buildPackage,
-    credentialSpecs,
     gatherAndroidFacts,
     gatherCredentialFacts,
     generateSideloadKey,

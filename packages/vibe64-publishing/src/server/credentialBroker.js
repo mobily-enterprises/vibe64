@@ -143,7 +143,7 @@ function createCredentialBroker({
   async function dryRun({ target, version, artifacts, toolchains = {} }) {
     const destination = packaging.vibe64Destination(target.destination);
     return packaging.withStageCredentials({
-      credentials: packaging.credentialSpecs(destination, "credentials", target),
+      credentials: destination.credentials,
       obtainCredential: obtainFor(target)
     },
       (credentials) => destination.dryRun({ target, version, artifacts, credentials, toolchains }));

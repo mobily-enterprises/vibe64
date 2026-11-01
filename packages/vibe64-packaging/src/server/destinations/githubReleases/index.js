@@ -252,13 +252,20 @@ async function verifyCredential({ target, credentials }) {
   return { ok: true, account: settings.repository, message: `Can publish releases to ${settings.repository}.` };
 }
 
+/**
+ * GitHub Releases reads a release back with the same sign-in it publishes with.
+ */
+function readBackCredentials() {
+  return [CREDENTIAL];
+}
+
 const githubReleasesDestination = Object.freeze({
   id: "github-releases",
   label: "GitHub Releases",
   packers: Object.freeze(["npm", "python-dist", "capacitor"]),
   channels: CHANNELS,
   credentials: Object.freeze([CREDENTIAL]),
-  readBackCredentials: Object.freeze([CREDENTIAL]),
+  readBackCredentials,
   expectedChecksum: artifactFilesChecksum,
   dryRun,
   upload,

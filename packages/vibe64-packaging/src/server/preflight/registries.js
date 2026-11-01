@@ -2,7 +2,7 @@
 // pure over facts the caller gathered; gatherCredentialFacts is the one helper
 // that asks each destination, read-only, whether its sign-in works.
 import { vibe64Destination } from "../destinations/index.js";
-import { credentialSpecs, withStageCredentials } from "../stages.js";
+import { withStageCredentials } from "../stages.js";
 import { VIBE64_PREFLIGHT_CHECKS, definePreflightCheck } from "./index.js";
 
 // facts.tags: [{ tag, commit }] for every existing tag the plan would create.
@@ -66,14 +66,9 @@ async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot,
   const facts = {};
   for (const target of targets) {
     const destination = vibe64Destination(target.destination);
-    // readable-check: allow method-probe - optional operation: a destination definition without verifyCredential() cannot be released to yet
-    if (typeof destination.verifyCredential !== "function") {
-      facts[target.id] = { ok: false, message: `${destination.label} cannot be released to yet.` };
-      continue;
-    }
     try {
       facts[target.id] = await withStageCredentials({
-        credentials: credentialSpecs(destination, "credentials", target),
+        credentials: destination.credentials,
         obtainCredential,
         tempRoot
       }, (credentials) => destination.verifyCredential({ target, credentials, toolchains }));

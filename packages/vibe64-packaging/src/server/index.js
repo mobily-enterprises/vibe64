@@ -10,7 +10,6 @@ export {
   VIBE64_PUBLISH_ARTIFACTS_CONTRACT,
   artifactsDigest,
   buildStageEnvironment,
-  credentialSpecs,
   publishTarget,
   readArtifacts,
   readBackTarget,

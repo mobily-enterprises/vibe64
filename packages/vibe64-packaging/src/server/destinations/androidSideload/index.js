@@ -15,7 +15,7 @@ import { publishError } from "../../errors.js";
 import { fileSha256Hex, spawnCommand } from "../../stages.js";
 import { describeAndroidSdk } from "../../toolchains/androidSdk.js";
 import { toolchainEnvironment } from "../../toolchains/download.js";
-import { artifactFiles, settingsOf, withToolHome } from "../registryCommon.js";
+import { artifactFiles, noReadBackCredentials, settingsOf, withToolHome } from "../registryCommon.js";
 import { SIDELOAD_KEY_ALIAS, exportCertificateSha256, generateSideloadKey } from "./key.js";
 
 const SIDELOAD_PROOF_CONTRACT = "vibe64.android-sideload-proof.v1";
@@ -284,6 +284,7 @@ const androidSideloadDestination = Object.freeze({
   packers: Object.freeze(["capacitor"]),
   channels: Object.freeze([]),
   credentials: Object.freeze([KEYSTORE, KEY_PASSWORD]),
+  readBackCredentials: noReadBackCredentials,
   dryRun,
   upload,
   readBack,

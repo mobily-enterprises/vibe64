@@ -101,18 +101,21 @@ async function findJdk({ directory = null, baseEnvironment = process.env, platfo
 /**
  * Installs the pinned Temurin JDK into `directory` (idempotent) and returns it.
  */
-async function installJdk({ directory, platform = hostPlatform(), baseEnvironment = process.env, signal } = {}, dependencies = {}) {
+async function installJdk(
+  { directory, platform = hostPlatform(), baseEnvironment = process.env, signal } = {},
+  { fetchImpl, runCommand } = {}
+) {
   if (typeof directory !== "string" || !path.isAbsolute(directory)) throw toolchainError("The JDK needs an absolute install folder.");
   const pinned = PINNED_JDKS[platform];
   if (!pinned) throw toolchainError(`Vibe64 has no pinned JDK for ${platform}; install Java ${REQUIRED_JAVA} and set JAVA_HOME.`);
-  const archive = await downloadVerified(pinned, path.join(directory, "downloads"), { fetchImpl: dependencies.fetchImpl, signal });
+  const archive = await downloadVerified(pinned, path.join(directory, "downloads"), { fetchImpl, signal });
   const javaHome = await unpackInto(archive, path.join(directory, pinned.folder), {
     inner: pinned.folder,
     kind: "tar",
     baseEnvironment,
-    runCommand: dependencies.runCommand
+    runCommand
   });
-  const description = await describeJdk({ javaHome, baseEnvironment }, dependencies);
+  const description = await describeJdk({ javaHome, baseEnvironment }, { runCommand });
   if (!description.ok) throw toolchainError(description.message);
   return { ...description, licence: TEMURIN_LICENCE };
 }
