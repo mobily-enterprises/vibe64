@@ -20,14 +20,8 @@ import {
 /** @typedef {import("./types.js").DatabaseToolsService} DatabaseToolsService */
 
 const Vibe64DatabaseToolsFeature = defineFeature({
-  actions({ databaseTools }) {
-    return createDatabaseActions({ databaseTools });
-  },
-  domain: "vibe64-database-tools",
   id: "vibe64.database-tools",
-  provides: {
-    databaseTools: "vibe64.database-tools"
-  },
+  domain: "vibe64-database-tools",
   requires: {
     events: "runtime.events",
     http: "runtime.http",
@@ -35,6 +29,9 @@ const Vibe64DatabaseToolsFeature = defineFeature({
     project: "vibe64.project",
     sourceEditor: "vibe64.source-editor",
     terminals: "vibe64.terminals"
+  },
+  provides: {
+    databaseTools: "vibe64.database-tools"
   },
   /**
    * @param {object} capabilities
@@ -56,14 +53,17 @@ const Vibe64DatabaseToolsFeature = defineFeature({
     const databaseTools = createService({
       logger,
       project,
-      sourceEditor,
       publishLayoutChanged: createDatabaseLayoutChangedPublisher(events),
+      sourceEditor,
       terminals
     });
     registerRoutes(http);
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     terminals.setDatabaseToolsProvider(databaseTools);
     return { databaseTools };
+  },
+  actions({ databaseTools }) {
+    return createDatabaseActions({ databaseTools });
   },
   /**
    * @param {{ terminals: TerminalsService }} capabilities
