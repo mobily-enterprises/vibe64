@@ -3,7 +3,6 @@ import { WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").VoiceService} VoiceService */
-/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 
 const ACTION_READ_VOICE_CATALOGUE = "vibe64.voice.catalogue.read";
 const emptyInput = Object.freeze({
@@ -40,33 +39,22 @@ const voiceCatalogueTool = Object.freeze({
 
 /**
  * @param {object} dependencies
- * @param {ActionCatalogue} dependencies.actions
  * @param {VoiceService} dependencies.voice
  */
-function createVoiceActions({ actions, voice }) {
-  /**
-   * The Colleague read must authorize the original request afresh. Its
-   * contributor rejects a resolved grant carried over from this action.
-   */
-  async function readCatalogueForColleague(context) {
-    const recheckContext = { ...context };
-    delete recheckContext.vibe64Action;
-    await actions.execute({
-      actionId: "vibe64.colleague.state.read",
-      input: {},
-      context: recheckContext
-    });
-    return voice.readCatalogue();
-  }
-
-  return Object.freeze([Object.freeze({
-    ...VIBE64_QUERY,
-    id: ACTION_READ_VOICE_CATALOGUE,
-    input: emptyInput,
-    channels: ["api", "internal"],
-    extensions: { assistant: voiceCatalogueTool, vibe64: WORKSPACE_OPERATION },
-    execute: (_input, context) => readCatalogueForColleague(context)
-  })]);
+function createVoiceActions({ voice }) {
+  return Object.freeze([
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: ACTION_READ_VOICE_CATALOGUE,
+      input: emptyInput,
+      channels: ["api", "internal"],
+      extensions: {
+        assistant: voiceCatalogueTool,
+        vibe64: WORKSPACE_OPERATION
+      },
+      execute: (_input, context) => voice.readCatalogueForColleague(context)
+    })
+  ]);
 }
 
 export {

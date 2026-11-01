@@ -11,10 +11,9 @@ import { createVoiceAccessToken } from "@jskit-ai/assistant-voice/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import {
-  Vibe64VoiceFeature,
-  registerVoiceCatalogueRoute
-} from "../../packages/vibe64-voice/src/server/Vibe64VoiceFeature.js";
+import { Vibe64VoiceFeature } from "../../packages/vibe64-voice/src/server/Vibe64VoiceFeature.js";
+import { registerRoutes } from "../../packages/vibe64-voice/src/server/registerRoutes.js";
+import { createVoice } from "../../packages/vibe64-voice/src/server/voiceRuntime.js";
 import {
   ACTION_READ_VOICE_CATALOGUE,
   createVoiceActions
@@ -73,12 +72,14 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
 test("voice catalogue HTTP reads dispatch through the canonical voice action", { timeout: 5000 }, async () => {
   let route = null;
   const calls = [];
-  registerVoiceCatalogueRoute({
+  registerRoutes({
     get(pathname, handler) { route = { pathname, handler }; }
   }, {
-    async execute(call) {
-      calls.push(call);
-      return [{ id: "voice-one", name: "Voice One" }];
+    actionCatalogue: {
+      async execute(call) {
+        calls.push(call);
+        return [{ id: "voice-one", name: "Voice One" }];
+      }
     }
   });
   const request = { vibe64User: { uid: 42 } };
@@ -91,16 +92,26 @@ test("voice catalogue HTTP reads dispatch through the canonical voice action", {
   assert.equal(calls[0].context.requestMeta.request, request);
 });
 
-test("canonical voice catalogue action preserves Colleague authorization before reading voices", { timeout: 5000 }, async () => {
-  const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: { uid: 42 } } },
-    vibe64Action: { user: { uid: 42 } } };
-  const calls = [];
+test("canonical voice catalogue action reads the catalogue through the voice capability", { timeout: 5000 }, async () => {
+  const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: { uid: 42 } } } };
+  const reads = [];
   const [action] = createVoiceActions({
-    actions: { async execute(call) { calls.push(call); return { ok: true }; } },
-    voice: { async readCatalogue() { return [{ id: "voice-two" }]; } }
+    voice: { async readCatalogueForColleague(readContext) { reads.push(readContext); return [{ id: "voice-two" }]; } }
   });
   assert.equal(action.id, ACTION_READ_VOICE_CATALOGUE);
   assert.deepEqual(await action.execute({}, context), [{ id: "voice-two" }]);
+  assert.deepEqual(reads, [context]);
+});
+
+test("the voice capability preserves Colleague authorization before reading voices", { timeout: 5000 }, async () => {
+  const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: { uid: 42 } } },
+    vibe64Action: { user: { uid: 42 } } };
+  const calls = [];
+  const voice = createVoice({
+    actionCatalogue: { async execute(call) { calls.push(call); return { ok: true }; } },
+    proxyConfig: { available: false }
+  });
+  await assert.rejects(voice.readCatalogueForColleague(context), { code: "voice_unavailable" });
   assert.deepEqual(calls, [{
     actionId: "vibe64.colleague.state.read",
     input: {},
@@ -110,7 +121,7 @@ test("canonical voice catalogue action preserves Colleague authorization before 
 });
 
 test("Colleague lists installed speaking voices by exact id, label and language only", () => {
-  const [action] = createVoiceActions({ actions: { async execute() { return { ok: true }; } }, voice: { async readCatalogue() { return {}; } } });
+  const [action] = createVoiceActions({ voice: { async readCatalogueForColleague() { return {}; } } });
   const tool = action.extensions.assistant;
   assert.equal(tool.exclude, undefined);
   assert.match(tool.description, /exact id.*British female voice.*changes nothing/su);
