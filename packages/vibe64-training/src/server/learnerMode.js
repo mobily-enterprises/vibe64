@@ -83,8 +83,11 @@ function createLearnerMode({
     return learningModeView(paths, { includeTitle: true });
   }
 
-  // readable-check: allow setter-seam - not a slot: setLearningMode saves one learner's Learn mode
-  return Object.freeze({ readLearningMode, setLearningMode });
+  return Object.freeze({
+    readLearningMode,
+    // readable-check: allow setter-seam - not a slot: setLearningMode saves one learner's Learn mode
+    setLearningMode
+  });
 }
 
 export { createLearnerMode };

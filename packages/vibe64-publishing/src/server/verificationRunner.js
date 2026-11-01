@@ -116,7 +116,10 @@ function createVerificationRunner({
     return work;
   }
 
-  return Object.freeze({ run, status });
+  return Object.freeze({
+    run,
+    status
+  });
 }
 
 export { createVerificationRunner };

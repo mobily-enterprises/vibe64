@@ -227,7 +227,10 @@ function createSessionAgentLifecycle({
         transportId: provider.transportId
       }, providerSessions, options)));
     }
-    return Object.freeze({ ok: true, results: Object.freeze(results) });
+    return Object.freeze({
+      ok: true,
+      results: Object.freeze(results)
+    });
   }
 
   return Object.freeze({

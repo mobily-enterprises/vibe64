@@ -288,7 +288,10 @@ function createSourceEditorExplanationCache({ now }) {
     inFlight.clear();
   }
 
-  return Object.freeze({ close, run });
+  return Object.freeze({
+    close,
+    run
+  });
 }
 
 export {

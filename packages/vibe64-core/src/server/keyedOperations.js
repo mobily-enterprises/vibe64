@@ -40,7 +40,10 @@ function createKeyedQueue() {
     return tails.get(key) || Promise.resolve();
   }
 
-  return Object.freeze({ run, settled });
+  return Object.freeze({
+    run,
+    settled
+  });
 }
 
 /**

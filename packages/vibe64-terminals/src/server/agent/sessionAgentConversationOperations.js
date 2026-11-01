@@ -40,10 +40,18 @@ const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
     project: true,
     run: (runtime, context) => runtime.inspectNativeTemporaryActivity({ id: context.sessionId, context })
   },
-  interruptDetachedChatTurn: {run: (runtime, context, input) => runtime.interruptNativeDetachedConversation({ id: context.sessionId, context, input }) },
-  deleteDetachedChatThread: {run: (runtime, context, input) => runtime.deleteNativeDetachedConversation({ id: context.sessionId, context, input }) },
-  listNativeConversationStorage: {run: (runtime, context, binding) => runtime.listNativeConversationStorage({ id: context.sessionId, context, binding }) },
-  retireConversationHistory: {run: (runtime, context, binding) => runtime.retireNativeConversationHistory({ id: context.sessionId, context, binding }) },
+  interruptDetachedChatTurn: {
+    run: (runtime, context, input) => runtime.interruptNativeDetachedConversation({ id: context.sessionId, context, input })
+  },
+  deleteDetachedChatThread: {
+    run: (runtime, context, input) => runtime.deleteNativeDetachedConversation({ id: context.sessionId, context, input })
+  },
+  listNativeConversationStorage: {
+    run: (runtime, context, binding) => runtime.listNativeConversationStorage({ id: context.sessionId, context, binding })
+  },
+  retireConversationHistory: {
+    run: (runtime, context, binding) => runtime.retireNativeConversationHistory({ id: context.sessionId, context, binding })
+  },
   updateSessionSettings: {
     project: true,
     run: (runtime, context, input) => runtime.updateNativeConversationSettings({ id: context.sessionId, context, input })
@@ -59,8 +67,12 @@ const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
       input
     })
   },
-  releaseRenewalPredecessorProcessExitProof: {run: (runtime, context, input) => runtime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input }) },
-  releaseRenewalSuccessorProcessExitProof: {run: (runtime, context, input) => runtime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input }) }
+  releaseRenewalPredecessorProcessExitProof: {
+    run: (runtime, context, input) => runtime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input })
+  },
+  releaseRenewalSuccessorProcessExitProof: {
+    run: (runtime, context, input) => runtime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input })
+  }
 });
 
 const SCOPED_CONVERSATION_METHODS = new Set([

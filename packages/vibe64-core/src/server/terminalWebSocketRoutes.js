@@ -183,9 +183,10 @@ function registerTerminalWebSocketRoute(
           terminalSessionId,
           toolId
         }))).then((result) => {
-          // readable-check: allow optional-call - optional operation: a subscription result may not need unsubscribing
           if (closed) {
-            result?.unsubscribe?.(); return;
+            // readable-check: allow optional-call - optional operation: a subscription result may not need unsubscribing
+            result?.unsubscribe?.();
+            return;
           }
           if (result?.ok === false) {
             closeWithError(

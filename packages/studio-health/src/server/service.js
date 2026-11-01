@@ -492,7 +492,10 @@ function createService({
     return checkLocalTools(ids, { cwd: studioRoot, runCommand });
   }
 
-  return Object.freeze({ inspect, checkTools });
+  return Object.freeze({
+    inspect,
+    checkTools
+  });
 }
 
 export {

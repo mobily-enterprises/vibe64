@@ -161,7 +161,10 @@ function createLearnerNotes({
     }
   }
 
-  return Object.freeze({ readTeacherNotes, saveTeacherNotes });
+  return Object.freeze({
+    readTeacherNotes,
+    saveTeacherNotes
+  });
 }
 
 export { createLearnerNotes };

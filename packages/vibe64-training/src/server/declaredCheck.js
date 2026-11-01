@@ -454,7 +454,10 @@ function createTrainingDeclaredCheckOwner({
     });
   }
 
-  return Object.freeze({ runOrientationCheck, runCodeCheck });
+  return Object.freeze({
+    runOrientationCheck,
+    runCodeCheck
+  });
 }
 
 export { createTrainingDeclaredCheckOwner };

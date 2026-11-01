@@ -210,7 +210,10 @@ function createTrainingCodeAuthorship({
     return result.value;
   }
 
-  return Object.freeze({ recordStepBaseline, saveLearnerFile });
+  return Object.freeze({
+    recordStepBaseline,
+    saveLearnerFile
+  });
 }
 
 export { codeStepOf, createTrainingCodeAuthorship, readDeclaredFiles, verifyStepAuthorship };

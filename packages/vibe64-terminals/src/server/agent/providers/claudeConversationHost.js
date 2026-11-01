@@ -99,7 +99,12 @@ function createClaudeConversationHost({
   agentPreviewCommand,
   agentSessionCommand
 }) {
-  const publishSessionChanged = publishMainConversationEvent.bind(null, claudeTerminalNamespace, publishApplicationSessionChanged, publishConversation);
+  const publishSessionChanged = publishMainConversationEvent.bind(
+    null,
+    claudeTerminalNamespace,
+    publishApplicationSessionChanged,
+    publishConversation
+  );
   const providerConnections = createCodexProviderConnectionStore({ systemRoot });
   const configRoot = claudeConfigRoot({ env, credentialHome });
   const conversationStorage = createClaudeConversationStorage({ createError: claudeConversationError });

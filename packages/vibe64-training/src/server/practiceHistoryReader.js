@@ -421,7 +421,10 @@ function createPracticeHistoryReader({ systemRoot, content }) {
     }
   }
 
-  return Object.freeze({ readState, readExerciseProjectScope });
+  return Object.freeze({
+    readState,
+    readExerciseProjectScope
+  });
 }
 
 export { createPracticeHistoryReader };

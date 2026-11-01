@@ -40,7 +40,10 @@ function createTeamAiReadiness({ routingStore, terminals }) {
     memo = null;
   }
 
-  return Object.freeze({ ready, invalidate });
+  return Object.freeze({
+    ready,
+    invalidate
+  });
 }
 
 export { createTeamAiReadiness };

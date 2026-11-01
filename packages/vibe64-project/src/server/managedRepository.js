@@ -113,7 +113,10 @@ function createManagedProjectRepositoryService({
     }, { operation: "verify-training-source" }));
   }
 
-  return Object.freeze({ createManagedGitProject, verifyTrainingProjectSource });
+  return Object.freeze({
+    createManagedGitProject,
+    verifyTrainingProjectSource
+  });
 }
 
 async function cleanupPreparedProjectDirectory(projectsRoot = "", projectContextRoot = "") {

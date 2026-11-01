@@ -112,7 +112,12 @@ function createOpenCodeSessionRegistration({
   resolveConnection,
   verifyConnectionCommand = verifyOpenCodeApiKey
 }) {
-  const publishSessionChanged = publishMainConversationEvent.bind(null, opencodeTerminalNamespace, publishApplicationSessionChanged, publishConversation);
+  const publishSessionChanged = publishMainConversationEvent.bind(
+    null,
+    opencodeTerminalNamespace,
+    publishApplicationSessionChanged,
+    publishConversation
+  );
   const sharedRuntime = createOpenCodeSharedRuntime({
     onStop: details => {
       vibe64SessionDebugLog("server.opencode.shared-process.stop", details);

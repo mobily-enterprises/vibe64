@@ -89,7 +89,10 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
       return next;
     });
   }
-  return Object.freeze({ read, write });
+  return Object.freeze({
+    read,
+    write
+  });
 }
 
 export { createAssistantRoutingStore, validateAssistantRoutingConfiguration };
