@@ -61,6 +61,28 @@ const logIntentClearFailure = (logger, sessionId, error) => logOperationalEvent(
   error: error?.message
 }, "A stopped goal's intent could not be cleared; its stop request stays recorded.");
 
+function readGoalIntent(session) {
+  const intent = JSON.parse(session.metadata?.assistant_goal_intent || "null");
+  if (intent && (intent.version !== 1 || typeof intent.active !== "boolean" || !intent.id)) {
+    throw new Error("Saved goal continuation intent is invalid. Inspect it before resuming.");
+  }
+  if (intent?.active && goalStopRequestFor(session) === intent.id) return { ...intent, active: false, error: null };
+  return intent;
+}
+
+async function changeGoalIntent(sessionId, context, change) {
+  const store = context.runtime.store;
+  const result = await store.runSessionExclusive(sessionId, "assistant-settings", async () => {
+    const session = await context.runtime.getSessionWithoutSource(sessionId);
+    const latest = readGoalIntent(session);
+    const stopRequested = Boolean(goalStopRequestFor(session));
+    const changed = change(latest) || (stopRequested ? latest : null);
+    if (changed) await store.writeMetadataValue(sessionId, "assistant_goal_intent", JSON.stringify(changed));
+    if (stopRequested) await store.writeMetadataValue(sessionId, GOAL_STOP_REQUEST, "null");
+  }, { operation: "save-goal-continuation", waitMs: 10_000 });
+  if (!result.acquired) throw new Error("Goal continuation settings are busy. Try the control again.");
+}
+
 /**
  * A session's goal: reading and updating it under the agent write, the goal intents this process
  * admitted, stopping and completing them, cancelling a goal when the main AI changed, and recovering
@@ -93,28 +115,6 @@ function createServiceGoals({
 }) {
   const goalRuntimeId = randomUUID();
   const goalAdmissions = new Map();
-
-  function readGoalIntent(session) {
-    const intent = JSON.parse(session.metadata?.assistant_goal_intent || "null");
-    if (intent && (intent.version !== 1 || typeof intent.active !== "boolean" || !intent.id)) {
-      throw new Error("Saved goal continuation intent is invalid. Inspect it before resuming.");
-    }
-    if (intent?.active && goalStopRequestFor(session) === intent.id) return { ...intent, active: false, error: null };
-    return intent;
-  }
-
-  async function changeGoalIntent(sessionId, context, change) {
-    const store = context.runtime.store;
-    const result = await store.runSessionExclusive(sessionId, "assistant-settings", async () => {
-      const session = await context.runtime.getSessionWithoutSource(sessionId);
-      const latest = readGoalIntent(session);
-      const stopRequested = Boolean(goalStopRequestFor(session));
-      const changed = change(latest) || (stopRequested ? latest : null);
-      if (changed) await store.writeMetadataValue(sessionId, "assistant_goal_intent", JSON.stringify(changed));
-      if (stopRequested) await store.writeMetadataValue(sessionId, GOAL_STOP_REQUEST, "null");
-    }, { operation: "save-goal-continuation", waitMs: 10_000 });
-    if (!result.acquired) throw new Error("Goal continuation settings are busy. Try the control again.");
-  }
 
   /**
    * Cancel answers without waiting for the goal settings lock: it stops a goal

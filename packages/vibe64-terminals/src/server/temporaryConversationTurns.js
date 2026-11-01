@@ -29,6 +29,39 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 /** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
+// A turn without an event stream may carry onEvent: null (the provider call context sets it so).
+const onCompletedMessage = (ctx, onComplete) => {
+  const onEvent = ctx.onEvent ?? doNothing;
+  return {
+    ...ctx,
+    onEvent(event) {
+      if (event?.type === "message" && event.message?.complete !== false && String(event.message?.text || "").trim()) {
+        onComplete();
+      }
+      return onEvent(event);
+    }
+  };
+};
+
+const nativeContext = (ctx) => ({ ...ctx, runtime: ctx.conversationContext.runtime });
+
+// The chat's log as its routing reads it: user messages of turns without routing metadata carry no receipt.
+const turnWithoutReceipt = turn => turn.metadata?.assistantRouting ? turn : {
+  ...turn,
+  ...(turn.user ? { user: { ...turn.user, receipt: false } } : {}),
+  messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message)
+};
+
+// Changing a chat's selection resumes the native conversation that selection kept, or starts afresh.
+const reboundNativeConversation = (retained, assistantSelection) => ({
+  providerConversationId: retained?.conversationId || "",
+  runId: retained?.runId || "",
+  messageId: retained?.messageId || "",
+  status: "ready",
+  error: "",
+  agentSettings: { model: assistantSelection.modelId, thinking: assistantSelection.variantId }
+});
+
 /**
  * A temporary chat's turns on the shared conversation runtime: the facilities it lends that runtime,
  * snapshots, the session write coordinator, coalesced output saves, and the chat's own routing with
@@ -120,20 +153,8 @@ function createTemporaryConversationTurns({
     }
   }
   function savingTemporaryOutput(sessionId, conversationId, ctx) {
-    // A turn without an event stream may carry onEvent: null (the provider call context sets it so).
-    const onEvent = ctx.onEvent ?? doNothing;
-    return {
-      ...ctx,
-      onEvent(event) {
-        if (event?.type === "message" && event.message?.complete !== false && String(event.message?.text || "").trim()) {
-          scheduleTemporarySave(sessionId, conversationId, ctx.runtime);
-        }
-        return onEvent(event);
-      }
-    };
+    return onCompletedMessage(ctx, () => scheduleTemporarySave(sessionId, conversationId, ctx.runtime));
   }
-
-  const nativeContext = (ctx) => ({ ...ctx, runtime: ctx.conversationContext.runtime });
   async function nativeState(sessionId, ctx, messageId) {
     const record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
     return record.providerConversationId ? requireSuccess(await sessionAgent.readConversation(
@@ -231,15 +252,7 @@ function createTemporaryConversationTurns({
           patch.assistantSelection = JSON.parse(value);
           const nextKey = chatRecords.bindingKey(ctx, { ...current, ...patch });
           if (nextKey !== chatRecords.bindingKey(ctx, current)) {
-            const retained = current.nativeBindings?.[nextKey];
-            Object.assign(patch, {
-              providerConversationId: retained?.conversationId || "",
-              runId: retained?.runId || "",
-              messageId: retained?.messageId || "",
-              status: "ready",
-              error: "",
-              agentSettings: { model: patch.assistantSelection.modelId, thinking: patch.assistantSelection.variantId }
-            });
+            Object.assign(patch, reboundNativeConversation(current.nativeBindings?.[nextKey], patch.assistantSelection));
           }
         }
         await chatRecords.save(ctx, current, patch);
@@ -247,12 +260,7 @@ function createTemporaryConversationTurns({
       })
     };
     scopedStore.readConversationTail = async () => (await store.readConversationLog(scope)).slice(-12);
-    scopedStore.readConversationLog = async () => (await store.readConversationLog(scope)).map(turn =>
-      turn.metadata?.assistantRouting ? turn : {
-        ...turn,
-        ...(turn.user ? { user: { ...turn.user, receipt: false } } : {}),
-        messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message)
-      });
+    scopedStore.readConversationLog = async () => (await store.readConversationLog(scope)).map(turnWithoutReceipt);
     scopedStore.writeConversationUserMessage = (_id, ...args) => store.writeConversationUserMessage(scope, ...args);
     const context = {
       ...selected,
