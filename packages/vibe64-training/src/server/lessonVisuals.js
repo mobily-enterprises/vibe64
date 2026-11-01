@@ -55,13 +55,15 @@ function createTrainingLessonVisuals({ learners, content }) {
       assets: resource.assets.map(encode)
     };
     if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESOURCE_BYTES) {
-      throw Object.assign(new Error(
-        "The verified lesson diagram exceeds its transport limit. Ask the owner to inspect the pinned content; no files were omitted."
-      ),
+      throw Object.assign(
+        new Error(
+          "The verified lesson diagram exceeds its transport limit. Ask the owner to inspect the pinned content; no files were omitted."
+        ),
         {
-        code: "VIBE64_TRAINING_VISUAL_RESOURCE_TOO_LARGE",
-        statusCode: 413
-      });
+          code: "VIBE64_TRAINING_VISUAL_RESOURCE_TOO_LARGE",
+          statusCode: 413
+        }
+      );
     }
     return result;
   }

@@ -79,9 +79,11 @@ function compareReleases(left, right) {
 }
 
 function invalid(message) {
-  return causedFailure(`The official course catalogue is invalid: ${message} Nothing was installed. Ask the catalogue maintainers to publish a corrected catalogue.`,
+  return causedFailure(
+    `The official course catalogue is invalid: ${message} Nothing was installed. Ask the catalogue maintainers to publish a corrected catalogue.`,
     "VIBE64_TRAINING_AVAILABLE_INVALID",
-    502);
+    502
+  );
 }
 
 function validateLock(course, lock) {
@@ -194,10 +196,12 @@ function createTrainingCourseInstaller({
         await git(root, ["init", "-q"]);
         await git(root, ["fetch", "-q", "--depth=1", "--no-tags", remoteUrl(catalogueRepository), "HEAD"]);
       } catch (cause) {
-        throw causedFailure(`The official course catalogue (${catalogueRepository}) could not be downloaded. Check this server's internet access to GitHub and retry. Installed courses are unchanged.`,
+        throw causedFailure(
+          `The official course catalogue (${catalogueRepository}) could not be downloaded. Check this server's internet access to GitHub and retry. Installed courses are unchanged.`,
           "VIBE64_TRAINING_AVAILABLE_UNREACHABLE",
           503,
-            cause);
+          cause
+        );
       }
       const commit = (await git(root, ["rev-parse", "FETCH_HEAD"])).trim();
       if (!COMMIT.test(commit)) throw invalid("its fetched revision is not a commit.");
@@ -263,7 +267,9 @@ function createTrainingCourseInstaller({
       reading = readAvailableUncached().then(value => {
         cached = { readAt: now(), value };
         return value;
-      }).finally(() => { reading = null; });
+      }).finally(() => {
+        reading = null;
+      });
     }
     return reading;
   }
@@ -282,10 +288,15 @@ function createTrainingCourseInstaller({
     const available = await readAvailable();
     const installed = await catalogue.readCatalogue();
     return {
-      repository: available.repository, commit: available.commit,
+      repository: available.repository,
+      commit: available.commit,
       domains: available.domains.map(domain => ({ domainId: domain.domainId, title: domain.title })),
       courses: available.courses.map(({ course, lock, domainId }) => ({
-        courseId: course.courseId, release: course.release, title: course.title, status: course.status, domainId,
+        courseId: course.courseId,
+        release: course.release,
+        title: course.title,
+        status: course.status,
+        domainId,
         topics: course.topics.map(topic => ({ topicId: topic.topicId, release: topic.release })),
         lessonCount: lock.topics.reduce((total, topic) => total + topic.lessons.length, 0),
         installed: installState(installed, { course, lock }),
@@ -346,8 +357,11 @@ function createTrainingCourseInstaller({
       const available = await readAvailable({ fresh: true });
       const selected = available.courses.find(entry => entry.course.courseId === courseId && entry.course.release === release);
       if (!selected) {
-        throw causedFailure(`Course ${key} is not in the official catalogue. Refresh the catalogue and choose a listed course.`,
-          "VIBE64_TRAINING_COURSE_NOT_AVAILABLE", 404);
+        throw causedFailure(
+          `Course ${key} is not in the official catalogue. Refresh the catalogue and choose a listed course.`,
+          "VIBE64_TRAINING_COURSE_NOT_AVAILABLE",
+          404
+        );
       }
       const { course, lock } = selected;
       const installed = await catalogue.readCatalogue();
@@ -358,20 +372,27 @@ function createTrainingCourseInstaller({
         return { changed: retired.length > 0, course, retired, catalogueCommit: available.commit };
       }
       if (state === "conflict") {
-        throw causedFailure(`This server already has a different course ${key}. Installed releases are immutable; ask the owner to inspect it.`,
-          "VIBE64_TRAINING_COURSE_RELEASE_CONFLICT", 409);
+        throw causedFailure(
+          `This server already has a different course ${key}. Installed releases are immutable; ask the owner to inspect it.`,
+          "VIBE64_TRAINING_COURSE_RELEASE_CONFLICT",
+          409
+        );
       }
       // Installing never re-enables a disabled release, for anyone: that stays
       // the operator's deliberate `vibe64 training enable-course`.
       if (state === "disabled") {
-        throw causedFailure(`Course ${key} was disabled on this server, and installing does not enable it again. Only the server's operator can enable it again. Nothing was changed.`,
+        throw causedFailure(
+          `Course ${key} was disabled on this server, and installing does not enable it again. Only the server's operator can enable it again. Nothing was changed.`,
           "VIBE64_TRAINING_COURSE_DISABLED",
-          409);
+          409
+        );
       }
       if (state === "not-installed" && installed.courses.length >= MAX_INSTALLED_RELEASES) {
-        throw causedFailure(`This server already keeps ${MAX_INSTALLED_RELEASES} installed course releases, its limit, so ${key} cannot be added. The server's operator can free a place by removing a release; saved lessons keep their content. Nothing was changed.`,
+        throw causedFailure(
+          `This server already keeps ${MAX_INSTALLED_RELEASES} installed course releases, its limit, so ${key} cannot be added. The server's operator can free a place by removing a release; saved lessons keep their content. Nothing was changed.`,
           "VIBE64_TRAINING_COURSE_LIMIT",
-          409);
+          409
+        );
       }
       const total = lock.topics.length;
       for (const [index, topic] of lock.topics.entries()) {
@@ -401,10 +422,12 @@ function createTrainingCourseInstaller({
             );
             await git(sourceRoot, ["checkout", "-q", "--detach", topic.commit]);
           } catch (cause) {
-            throw causedFailure(`Topic ${topic.topicId} could not be downloaded from ${topic.repository} at its pinned commit. Check this server's internet access to GitHub and retry. Nothing was enabled.`,
+            throw causedFailure(
+              `Topic ${topic.topicId} could not be downloaded from ${topic.repository} at its pinned commit. Check this server's internet access to GitHub and retry. Nothing was enabled.`,
               "VIBE64_TRAINING_TOPIC_UNREACHABLE",
               503,
-                cause);
+              cause
+            );
           }
           if ((await git(sourceRoot, ["rev-parse", "HEAD"])).trim() !== topic.commit) {
             throw causedFailure(
@@ -439,7 +462,9 @@ function createTrainingCourseInstaller({
     if (!progress.has(key)) progress.set(key, { phase: "queued", topicsDone: 0, topicsTotal: 0 });
     const operation = queue.then(() => installExact({ courseId, release }));
     queue = operation.catch(() => null);
-    const shared = operation.finally(() => { pending.delete(key); });
+    const shared = operation.finally(() => {
+      pending.delete(key);
+    });
     pending.set(key, shared);
     return shared;
   }

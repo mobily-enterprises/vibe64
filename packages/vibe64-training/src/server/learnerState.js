@@ -416,14 +416,18 @@ function createTrainingLearnerState({
       let attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       if (attempt && canonicalJson(attempt.pin) !== canonicalJson(pin)) {
         const current = await verifyInstalled(attempt.pin).catch(() => null);
-        throw failure("Another lesson is in progress. Archive it before starting this one.", TRAINING_LESSON_IN_PROGRESS_CODE, 409,
+        throw failure(
+          "Another lesson is in progress. Archive it before starting this one.",
+          TRAINING_LESSON_IN_PROGRESS_CODE,
+          409,
           {
             details: {
               attemptId: attempt.attemptId,
               lessonCode: attempt.pin.lesson.code,
               lessonTitle: current?.lesson?.title || attempt.pin.lesson.code
             }
-          });
+          }
+        );
       }
       if (expectedRevision !== state.revision) {
         throw failure(
@@ -556,8 +560,10 @@ function createTrainingLearnerState({
       await release();
     }
     // Disposable once the end is saved; a retry of the same end forgets them again.
-    await forgetAttemptRecords(paths, attemptId).catch(error => logger.warn({ error, attemptId },
-      "An ended attempt's code ledger and step results were not forgotten; a retry of the same end forgets them."));
+    await forgetAttemptRecords(paths, attemptId).catch(error => logger.warn(
+      { error, attemptId },
+      "An ended attempt's code ledger and step results were not forgotten; a retry of the same end forgets them."
+    ));
     return ended;
   }
 

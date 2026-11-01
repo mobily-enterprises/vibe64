@@ -135,10 +135,12 @@ function installedTrainingContent(systemRoot, lessonTeachable) {
    * An installed lesson this Vibe64 cannot teach (see validateTopic installed).
    */
   function unusableLesson(bundle) {
-    return Object.assign(new Error(
-      `Lesson ${bundle.lesson.code} ("${bundle.lesson.title}") cannot be taught by this version of Vibe64: ${bundle.problem} Update the course in Courses, or ask its authors for a fixed release.`
-    ),
-      { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 });
+    return Object.assign(
+      new Error(
+        `Lesson ${bundle.lesson.code} ("${bundle.lesson.title}") cannot be taught by this version of Vibe64: ${bundle.problem} Update the course in Courses, or ask its authors for a fixed release.`
+      ),
+      { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 }
+    );
   }
 
   async function readTopic(input = {}) {
@@ -224,10 +226,12 @@ function installedTrainingContent(systemRoot, lessonTeachable) {
       return { pin, ...result };
     } catch (cause) {
       const missing = ["ENOENT", "ENOTDIR"].includes(cause.code);
-      const error = new Error(missing
-        ? `Pinned teaching content ${topicId}@${commit} is missing. Ask the owner to install that exact revision.`
-        : `Pinned teaching content ${topicId}@${commit} is invalid: ${cause.message} Ask the owner to reinstall the verified snapshot.`,
-        { cause });
+      const error = new Error(
+        missing
+          ? `Pinned teaching content ${topicId}@${commit} is missing. Ask the owner to install that exact revision.`
+          : `Pinned teaching content ${topicId}@${commit} is invalid: ${cause.message} Ask the owner to reinstall the verified snapshot.`,
+        { cause }
+      );
       error.code = missing ? "VIBE64_TRAINING_CONTENT_MISSING" : "VIBE64_TRAINING_CONTENT_INVALID";
       throw error;
     }
@@ -262,8 +266,10 @@ function installedTrainingContent(systemRoot, lessonTeachable) {
       const topicRoot = path.join(contentRoot, topicId);
       const snapshotRoot = path.join(topicRoot, commit);
       for (const directory of [root, trainingRoot, contentRoot, topicRoot, snapshotRoot]) await requirePath(directory, true);
-      const pin = validateInstalledTopicPin(JSON.parse((await boundedFile(path.join(snapshotRoot, "pin.json"), 4096)).toString("utf8")),
-        { topicId, commit, topicHash });
+      const pin = validateInstalledTopicPin(
+        JSON.parse((await boundedFile(path.join(snapshotRoot, "pin.json"), 4096)).toString("utf8")),
+        { topicId, commit, topicHash }
+      );
       const bundle = JSON.parse((await boundedFile(path.join(snapshotRoot, "bundle.json"), 32 * 1024 * 1024)).toString("utf8"));
       const topicManifest = bundle.topicManifest;
       if (!topicManifest || sha256Hex(canonicalJson(topicManifest)) !== topicHash ||

@@ -30,8 +30,9 @@ async function kind(target) {
 }
 
 async function names(directory) {
-  try { return (await readdir(directory)).sort(); }
-  catch (error) {
+  try {
+    return (await readdir(directory)).sort();
+  } catch (error) {
     if (error.code === "ENOENT") return [];
     throw error;
   }
@@ -47,8 +48,11 @@ function validLearnerKey(key) {
  * A schema-2 learning-space practice project, which this reset never touches.
  */
 function learningSpaceMarker(record, slug) {
-  try { return normalizeProjectTraining(record?.training).practiceId === practiceIdFromSlug(slug); }
-  catch { return false; }
+  try {
+    return normalizeProjectTraining(record?.training).practiceId === practiceIdFromSlug(slug);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -113,8 +117,9 @@ async function moveEntry(move, { renamePath, ...copy }) {
   try {
     await renamePath(source, destination);
     return;
+  } catch (error) {
+    if (error.code !== "EXDEV") throw error;
   }
-  catch (error) { if (error.code !== "EXDEV") throw error; }
   const partial = `${destination}.partial`;
   await rm(partial, { recursive: true, force: true });
   await cp(source, partial, { recursive: true, verbatimSymlinks: true, preserveTimestamps: true, errorOnExist: true, force: false });
@@ -126,7 +131,9 @@ async function readManifest(manifestPath) {
   const kindOfManifest = await kind(manifestPath);
   if (kindOfManifest === "missing") return [];
   let manifest;
-  try { if (kindOfManifest === "file") manifest = JSON.parse(await readFile(manifestPath, "utf8")); } catch { /* Refused below. */ }
+  try {
+    if (kindOfManifest === "file") manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  } catch { /* Refused below. */ }
   if (manifest?.upgrade !== UPGRADE_ID || !Array.isArray(manifest.moves) || manifest.moves.some(move =>
     !object(move) || !path.isAbsolute(move.source || "") || !path.isAbsolute(move.destination || ""))) {
     throw new Error("Learning reset manifest is invalid. Inspect it before upgrading.");
@@ -158,7 +165,9 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
     const recordPath = path.join(runtimeRoot, "project.json");
     let record = null;
     if (await expect(recordPath, "file", "Practice project record")) {
-      try { record = JSON.parse(await readFile(recordPath, "utf8")); } catch { /* A look-alike, reported below. */ }
+      try {
+        record = JSON.parse(await readFile(recordPath, "utf8"));
+      } catch { /* A look-alike, reported below. */ }
     }
     const training = v1PracticeMarker(record, hex);
     if (!training) {

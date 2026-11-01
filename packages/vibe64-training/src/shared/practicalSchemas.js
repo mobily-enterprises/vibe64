@@ -23,7 +23,8 @@ const trainingStepObservationSchema = createSchema({
       sessionId: clientId,
       projectVisible: { type: "boolean", required: true },
       pane: { type: "string", noTrim: false, required: true, maxLength: 64 },
-      ready: { type: "boolean", required: true } })
+      ready: { type: "boolean", required: true }
+    })
   }
 });
 

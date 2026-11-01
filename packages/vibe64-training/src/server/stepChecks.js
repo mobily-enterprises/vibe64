@@ -225,8 +225,10 @@ function createTrainingStepChecks({
         };
       }
       if (entry.results.length >= MAX_STEP_RESULTS) {
-        throw stepFailure(`This lesson reached its ${MAX_STEP_RESULTS} saved step results. Its history is kept; ask the owner to review it.`,
-          "VIBE64_TRAINING_STEP_RESULTS_FULL");
+        throw stepFailure(
+          `This lesson reached its ${MAX_STEP_RESULTS} saved step results. Its history is kept; ask the owner to review it.`,
+          "VIBE64_TRAINING_STEP_RESULTS_FULL"
+        );
       }
       const saved = { ...result, requestId, recordedAt: new Date().toISOString() };
       const receipts = receipt ? [...entry.receipts.filter(kept => kept.stepId !== receipt.stepId), receipt] : entry.receipts;

@@ -188,16 +188,24 @@ function createTrainingStepOperations({
     const reader = typeof attemptLearners.readReader === "function"
       ? await attemptLearners.readReader({ actor, attemptId: attempt.attemptId }) : null;
     return {
-      ok: true, available: true, attempt: summary,
+      ok: true,
+      available: true,
+      attempt: summary,
       lesson: {
-        schemaVersion: lesson.lesson.schemaVersion, code: lesson.lesson.code, hash: lesson.hash, title: lesson.lesson.title,
-        ...pick(lesson.lesson, ["estimatedMinutes"]), exercise: Boolean(lesson.lesson.exercise),
+        schemaVersion: lesson.lesson.schemaVersion,
+        code: lesson.lesson.code,
+        hash: lesson.hash,
+        title: lesson.lesson.title,
+        ...pick(lesson.lesson, ["estimatedMinutes"]),
+        exercise: Boolean(lesson.lesson.exercise),
         // Where the lesson runs (format 3): studio or project; null for a retired format.
         stage: lesson.lesson.schemaVersion === 3 ? lesson.lesson.stage : null,
         ...(lesson.notesText !== undefined && index === 0 ? { notesText: lesson.notesText } : {}),
-        visuals: lesson.visuals.map(visualProjection), steps: projected
+        visuals: lesson.visuals.map(visualProjection),
+        steps: projected
       },
-      results: progress.results.map(resultProjection), passedStepIds: progress.passedStepIds,
+      results: progress.results.map(resultProjection),
+      passedStepIds: progress.passedStepIds,
       completion: pick(progress.completion, ["lessonCode", "lessonHash", "required", "passed", "completed"]),
       reader: reader?.attemptId === attempt.attemptId ? pick(reader, ["attemptId", "stepId", "scroll"]) : null,
       page: { index, count }
@@ -279,16 +287,21 @@ function createTrainingStepOperations({
    */
   async function removePractice(run, reason, input, actor, context) {
     if (context.channel !== "api" && input.confirmed !== true) {
-      throw conflictFailure("Ask the person to confirm this deletion, then repeat with confirmed: true.",
-        "VIBE64_TRAINING_PRACTICE_UNCONFIRMED");
+      throw conflictFailure(
+        "Ask the person to confirm this deletion, then repeat with confirmed: true.",
+        "VIBE64_TRAINING_PRACTICE_UNCONFIRMED"
+      );
     }
     let result;
-    try { result = await run(input, actor); }
-    catch (cause) {
+    try {
+      result = await run(input, actor);
+    } catch (cause) {
       if (!(cause.statusCode < 500 && /^(VIBE64_TRAINING_(PRACTICE_|ATTEMPT_MISSING)|vibe64_project_pinned)/u.test(cause.code || ""))) {
         // A removal that stopped part-way changed the lesson (its project deleting).
-        await notify(actor, input.attemptId, reason).catch(error => logger.warn({ error, attemptId: input.attemptId },
-          "The learner's tabs were not told that a failed removal changed the lesson."));
+        await notify(actor, input.attemptId, reason).catch(error => logger.warn(
+          { error, attemptId: input.attemptId },
+          "The learner's tabs were not told that a failed removal changed the lesson."
+        ));
         throw cause;
       }
       return { ok: false, available: true, attemptId: input.attemptId, error: refusalText(cause.message, "Nothing was changed.") };
@@ -309,8 +322,13 @@ function createTrainingStepOperations({
   }
 
   async function deleteArchivedLessonForLearner(input, actor, context) {
-    return removePractice((removal) => learningSpace.deleteArchive({ actor, attemptId: removal.attemptId }), "practice", input, actor,
-      context);
+    return removePractice(
+      (removal) => learningSpace.deleteArchive({ actor, attemptId: removal.attemptId }),
+      "practice",
+      input,
+      actor,
+      context
+    );
   }
 
   /**

@@ -78,8 +78,9 @@ function createTrainingLearningSpace({
    */
   async function readBundle(directory, attemptId) {
     let record;
-    try { record = JSON.parse(await readFile(path.join(directory, "attempt.json"), "utf8")); }
-    catch (error) {
+    try {
+      record = JSON.parse(await readFile(path.join(directory, "attempt.json"), "utf8"));
+    } catch (error) {
       if (error.code === "ENOENT" || error instanceof SyntaxError) return null;
       throw error;
     }
@@ -243,19 +244,22 @@ function createTrainingLearningSpace({
       const directory = bundleRoot(actor, attemptId);
       // A resumed archive already holds its (partial) bundle and its slot.
       if (archive && !await isDirectory(directory) && await archiveCount(actor) >= MAX_ARCHIVES) {
-        throw Object.assign(new Error(
-          `You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`
-        ),
+        throw Object.assign(
+          new Error(
+            `You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`
+          ),
           {
-          code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT",
-          statusCode: 409
-        });
+            code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT",
+            statusCode: 409
+          }
+        );
       }
       try {
         await learners.runClosingExclusive({ actor, attemptId }, async () => {
           const record = attempt.projectSlug ? await findRecord(actor, attemptId) : null;
           if (record) {
-            await projectContext.runWithPracticeProjectScope({ actor, training: record.training, access: "write", allowDeleting: true },
+            await projectContext.runWithPracticeProjectScope(
+              { actor, training: record.training, access: "write", allowDeleting: true },
               () => archive
                 ? projectArchive.archiveProject({
                   slug: record.slug,
@@ -263,7 +267,8 @@ function createTrainingLearningSpace({
                   checkHeadroom: true,
                   beforeRemove: () => writeAttemptRecord(actor, attemptId, reason)
                 })
-                : projectArchive.removeProject({ slug: record.slug }));
+                : projectArchive.removeProject({ slug: record.slug })
+            );
           } else if (archive) {
             await writeAttemptRecord(actor, attemptId, reason);
           }

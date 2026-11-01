@@ -257,7 +257,7 @@ function validateAttempt(attempt) {
   if (attempt.projectSlug !== projectSlug || !attempt.preparation && attempt.practiceId !== undefined ||
       !Number.isFinite(Date.parse(attempt.createdAt)) || new Date(attempt.createdAt).toISOString() !== attempt.createdAt ||
       !attempt.requestIds.length || attempt.requestIds.some(id =>
-        !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
+    !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
     throw new Error("Learning state has an invalid attempt identity, reservation time or retry inventory.");
   }
 }
@@ -308,8 +308,8 @@ function validateSnapshot(snapshot) {
       !idPattern.test(snapshot.state) || typeof snapshot.paused !== "boolean" ||
       !snapshot.labels || typeof snapshot.labels !== "object" || Array.isArray(snapshot.labels) ||
       Object.keys(snapshot.labels).length > 32 || Object.entries(snapshot.labels).some(([name, value]) =>
-        // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in learner input.
-        !requestPattern.test(name) || typeof value !== "string" || !value.trim() || value.length > 256 || /[\u0000-\u001f\u007f]/u.test(value)) ||
+  // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in learner input.
+    !requestPattern.test(name) || typeof value !== "string" || !value.trim() || value.length > 256 || /[\u0000-\u001f\u007f]/u.test(value)) ||
       Buffer.byteLength(JSON.stringify(snapshot)) > 4096) {
     throw new Error("Save only a bounded semantic visual snapshot.");
   }

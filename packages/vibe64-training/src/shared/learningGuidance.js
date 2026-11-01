@@ -31,8 +31,11 @@ function learningGuidancePresentation(message) {
   if (lines[0] !== GUIDANCE_HEADING) return null;
   let evidence = null;
   const fact = lines.find(line => line.startsWith(FACT_PREFIX));
-  try { evidence = fact ? JSON.parse(fact.slice(FACT_PREFIX.length))?.evidence ?? null : null; }
-  catch { evidence = null; }
+  try {
+    evidence = fact ? JSON.parse(fact.slice(FACT_PREFIX.length))?.evidence ?? null : null;
+  } catch {
+    evidence = null;
+  }
   return { text: learningGuidanceSummary(evidence) };
 }
 

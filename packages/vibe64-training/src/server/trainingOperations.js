@@ -102,8 +102,10 @@ function createTrainingOperations({
         topicHash: topic.manifestHash,
         lessonCode: lesson.code,
         lessonHash: lesson.hash
-      }).then(read => read.steps || [],
-        error => error?.code === "VIBE64_TRAINING_LESSON_UNUSABLE" ? "unusable" : null));
+      }).then(
+        read => read.steps || [],
+        error => error?.code === "VIBE64_TRAINING_LESSON_UNUSABLE" ? "unusable" : null
+      ));
     }
     const steps = await pinnedSteps.get(key);
     // One this Vibe64 cannot teach is left out and named on its course.
@@ -130,10 +132,13 @@ function createTrainingOperations({
    */
   const announced = async (actor, operation, lessonAttemptId, changedAttemptId) => {
     let result;
-    try { result = await operation(); }
-    catch (error) {
-      await notifyLearner(actor, lessonAttemptId).catch(notifyError => logger.warn({ error: notifyError, attemptId: lessonAttemptId },
-        "The learner's tabs were not told about a failed lesson change; the failure is still reported."));
+    try {
+      result = await operation();
+    } catch (error) {
+      await notifyLearner(actor, lessonAttemptId).catch(notifyError => logger.warn(
+        { error: notifyError, attemptId: lessonAttemptId },
+        "The learner's tabs were not told about a failed lesson change; the failure is still reported."
+      ));
       throw error;
     }
     await notifyLearner(actor, changedAttemptId(result));
@@ -315,8 +320,12 @@ function createTrainingOperations({
   }
 
   async function finishLessonForLearner(input, actor) {
-    const result = await announced(actor, () => exercises.finishLesson({ actor, ...pick(input, ["attemptId", "expectedRevision"]) }),
-      input.attemptId, () => input.attemptId);
+    const result = await announced(
+      actor,
+      () => exercises.finishLesson({ actor, ...pick(input, ["attemptId", "expectedRevision"]) }),
+      input.attemptId,
+      () => input.attemptId
+    );
     return { ok: true, available: true, changed: result.closed === true };
   }
 

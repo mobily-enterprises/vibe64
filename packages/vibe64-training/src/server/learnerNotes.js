@@ -62,8 +62,12 @@ function createLearnerNotes({
     try {
       return notesProjection(await readNotesRecord(paths));
     } catch (cause) {
-      throw failure(`Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
-        "VIBE64_TRAINING_NOTES_STATE_INVALID", null, { cause });
+      throw failure(
+        `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
+        "VIBE64_TRAINING_NOTES_STATE_INVALID",
+        null,
+        { cause }
+      );
     }
   }
 
@@ -77,8 +81,11 @@ function createLearnerNotes({
     if (typeof value !== "string" || value.length > MAX_NOTES_CHARS || !validNotesText(value) ||
         !requestPattern.test(requestId || "") || !["colleague", "learner"].includes(updatedBy) ||
         (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0))) {
-      throw failure(`Save learner notes as text of at most ${MAX_NOTES_CHARS} characters without control characters, with an exact request ID.`,
-        "VIBE64_TRAINING_NOTES_INVALID", 400);
+      throw failure(
+        `Save learner notes as text of at most ${MAX_NOTES_CHARS} characters without control characters, with an exact request ID.`,
+        "VIBE64_TRAINING_NOTES_INVALID",
+        400
+      );
     }
     const textHash = sha256Hex(value);
     await createNamespace(paths);
@@ -92,8 +99,12 @@ function createLearnerNotes({
       try {
         record = await readNotesRecord(paths);
       } catch (cause) {
-        throw failure(`Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it; nothing was saved.`,
-          "VIBE64_TRAINING_NOTES_STATE_INVALID", null, { cause });
+        throw failure(
+          `Learner notes are invalid: ${cause.message} Keep the file and ask the owner to inspect it; nothing was saved.`,
+          "VIBE64_TRAINING_NOTES_STATE_INVALID",
+          null,
+          { cause }
+        );
       }
       const replay = record?.requests.find(request => request.requestId === requestId);
       if (replay) {
@@ -108,8 +119,11 @@ function createLearnerNotes({
       }
       const current = record?.revision || 0;
       if (expectedRevision !== undefined && expectedRevision !== current) {
-        throw failure("The notes changed since they were read. Read them again and save the combined summary; nothing was saved.",
-          TRAINING_NOTES_CHANGED_CODE, 409);
+        throw failure(
+          "The notes changed since they were read. Read them again and save the combined summary; nothing was saved.",
+          TRAINING_NOTES_CHANGED_CODE,
+          409
+        );
       }
       if (current === Number.MAX_SAFE_INTEGER) {
         throw failure("Learner notes reached their revision limit. Nothing was saved.", "VIBE64_TRAINING_NOTES_REVISION_LIMIT", null);
@@ -134,10 +148,12 @@ function createLearnerNotes({
       try {
         await writeJsonFileAtomic(paths.notes, validated, { directoryMode: 0o700, fileMode: 0o600 });
       } catch (cause) {
-        throw failure("The notes save was not confirmed; the atomic rename may have succeeded. Read the notes or retry the same request ID.",
+        throw failure(
+          "The notes save was not confirmed; the atomic rename may have succeeded. Read the notes or retry the same request ID.",
           "VIBE64_TRAINING_NOTES_SAVE_UNCONFIRMED",
           null,
-            { cause });
+          { cause }
+        );
       }
       return { notes: notesProjection(validated), replayed: false, changed: true };
     } finally {

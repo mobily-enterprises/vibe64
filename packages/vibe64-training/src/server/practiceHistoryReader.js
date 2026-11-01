@@ -412,10 +412,12 @@ function createPracticeHistoryReader({ systemRoot, content }) {
       }
       return { revision: record?.revision || 0, lessons: record?.lessons || [] };
     } catch (cause) {
-      throw failure(`Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
+      throw failure(
+        `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
         "VIBE64_TRAINING_STATE_INVALID",
         null,
-          { cause });
+        { cause }
+      );
     }
   }
 

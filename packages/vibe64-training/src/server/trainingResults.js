@@ -67,14 +67,16 @@ function boundedResult(result) {
  */
 function toTrainingOperationError(cause) {
   if (cause.code === "VIBE64_TRAINING_PREPARATION_BUSY") {
-    return Object.assign(new Error(
-      "This saved exercise is still busy preparing or finishing a command. Wait for it to finish, then retry the same attempt."
-    ),
+    return Object.assign(
+      new Error(
+        "This saved exercise is still busy preparing or finishing a command. Wait for it to finish, then retry the same attempt."
+      ),
       {
-      code: cause.code,
-      statusCode: 409,
-      cause
-    });
+        code: cause.code,
+        statusCode: 409,
+        cause
+      }
+    );
   }
   // Learner notes failures already carry notes-specific recovery text; the
   // generic attempt wording below would send the learner to the wrong place.
@@ -86,14 +88,16 @@ function toTrainingOperationError(cause) {
     });
   }
   const unconfirmed = String(cause.code || "").includes("SAVE_UNCONFIRMED");
-  return Object.assign(new Error(unconfirmed
-    ? "The learning save was not confirmed. Read or retry the same request/attempt before creating another exercise or claiming progress."
-    : "The training operation could not complete. Keep the saved attempt and ask the owner to inspect its exact content, state or preparation; no automatic repair was performed."),
+  return Object.assign(
+    new Error(unconfirmed
+      ? "The learning save was not confirmed. Read or retry the same request/attempt before creating another exercise or claiming progress."
+      : "The training operation could not complete. Keep the saved attempt and ask the owner to inspect its exact content, state or preparation; no automatic repair was performed."),
     {
       code: cause.code || "VIBE64_TRAINING_OPERATION_FAILED",
       ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
       cause
-    });
+    }
+  );
 }
 
 /**
@@ -102,14 +106,16 @@ function toTrainingOperationError(cause) {
  */
 function toCourseInstallError(cause) {
   if (/^VIBE64_TRAINING_(COURSE|CATALOGUE|AVAILABLE|TOPIC|SOURCE)_/u.test(cause.code || "")) return cause;
-  return Object.assign(new Error(
-    `The course could not be installed: ${String(cause.message || "unknown failure").slice(0, 300)} No course was enabled. Retry; if it fails again, ask the owner to inspect this server's installed learning content.`
-  ),
+  return Object.assign(
+    new Error(
+      `The course could not be installed: ${String(cause.message || "unknown failure").slice(0, 300)} No course was enabled. Retry; if it fails again, ask the owner to inspect this server's installed learning content.`
+    ),
     {
-    code: cause.code || "VIBE64_TRAINING_COURSE_INSTALL_FAILED",
-    ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
-    cause
-  });
+      code: cause.code || "VIBE64_TRAINING_COURSE_INSTALL_FAILED",
+      ...(cause.statusCode ? { statusCode: cause.statusCode } : {}),
+      cause
+    }
+  );
 }
 
 /**

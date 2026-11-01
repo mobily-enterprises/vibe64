@@ -16,11 +16,11 @@ import { createPracticeHistoryReader } from "./practiceHistoryReader.js";
 export async function upgradeLearningPracticeHistory({ systemRoot, backupRoot, apply, report }) {
   if (!path.isAbsolute(systemRoot || "") || path.resolve(systemRoot) !== systemRoot ||
       systemRoot === path.parse(systemRoot).root || backupRoot !== path.join(
-        systemRoot,
-        "upgrades",
-        "backups",
-        "20261008-learning-practice-history"
-      )) {
+    systemRoot,
+    "upgrades",
+    "backups",
+    "20261008-learning-practice-history"
+  )) {
     throw new Error("Practice history upgrade requires the candidate's exact installation and numbered backup root.");
   }
   const manifestPath = path.join(backupRoot, "manifest.json");
@@ -28,11 +28,14 @@ export async function upgradeLearningPracticeHistory({ systemRoot, backupRoot, a
   const manifestText = await readUpgradeFile(manifestPath);
   let manifest = null;
   if (manifestText !== null) {
-    try { manifest = JSON.parse(manifestText); }
-    catch (cause) { throw new Error(
-      "Practice history backup manifest is invalid. Inspect the original backup before retrying.",
-      { cause }
-    ); }
+    try {
+      manifest = JSON.parse(manifestText);
+    } catch (cause) {
+      throw new Error(
+        "Practice history backup manifest is invalid. Inspect the original backup before retrying.",
+        { cause }
+      );
+    }
     if (manifest?.version !== 1 || !Array.isArray(manifest.files) || !manifest.files.length ||
         new Set(manifest.files.map(value => value?.path)).size !== manifest.files.length) {
       throw new Error("Practice history backup manifest is unsupported. Inspect the original backup before retrying.");
@@ -59,8 +62,9 @@ export async function upgradeLearningPracticeHistory({ systemRoot, backupRoot, a
     const usersRoot = path.join(namespace.root, "training", "users");
     await verifyUpgradeParents(systemRoot, path.join(usersRoot, ".inventory"));
     let entries;
-    try { entries = await readdir(usersRoot, { withFileTypes: true }); }
-    catch (error) {
+    try {
+      entries = await readdir(usersRoot, { withFileTypes: true });
+    } catch (error) {
       if (error.code === "ENOENT") continue;
       throw error;
     }

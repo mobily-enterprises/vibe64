@@ -214,7 +214,7 @@ function validateCodeLedger(value) {
   if (!uuidPattern.test(ledger.attemptId) || new Set(ledger.steps.map(step => step.stepId)).size !== ledger.steps.length ||
       ledger.steps.some(step => !idPattern.test(step.stepId) || step.entryStart > ledger.entries.length) ||
       hashes.some(hash => !sha256Pattern.test(hash)) || baselines.some(files =>
-        new Set(files.map(file => file.path)).size !== files.length) ||
+    new Set(files.map(file => file.path)).size !== files.length) ||
       ledger.entries.some(entry => !tracked.has(entry.path) || !isoTime(entry.at))) {
     throw new Error("The code authorship ledger has an invalid identity, hash, file or record time.");
   }
@@ -339,10 +339,10 @@ function validateStepEntry(entry) {
   for (const receipt of entry.receipts || []) {
     if (!idPattern.test(receipt.stepId) || receiptSteps.has(receipt.stepId) || !idPattern.test(receipt.checkId) ||
         !requestPattern.test(receipt.observationId) || ![
-          receipt.instanceId,
-          receipt.interactionId,
-          receipt.requestId
-        ].every(id => uuidAnyPattern.test(id)) ||
+      receipt.instanceId,
+      receipt.interactionId,
+      receipt.requestId
+    ].every(id => uuidAnyPattern.test(id)) ||
         !validSessionId(receipt.sessionId) || !isoTime(receipt.observedAt)) {
       throw new Error("Step receipts have an invalid step, interaction identity, session or time.");
     }
@@ -366,7 +366,11 @@ function validateStepProgress(value, learnerId) {
  * with the attempt's own prepared session at use.
  */
 function validSessionId(sessionId) {
-  try { return assertValidVibe64SessionId(sessionId) === sessionId; } catch { return false; }
+  try {
+    return assertValidVibe64SessionId(sessionId) === sessionId;
+  } catch {
+    return false;
+  }
 }
 
 function lessonSteps(lesson) {
@@ -505,7 +509,7 @@ function validateAttempt(attempt) {
   const projectSlug = attempt.preparation ? practiceSlug(attempt.attemptId) : undefined;
   if (attempt.projectSlug !== projectSlug || !isoTime(attempt.createdAt) ||
       !attempt.requestIds.length || attempt.requestIds.some(id =>
-        !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
+    !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
     throw new Error("Learning state has an invalid attempt identity, reservation time or retry inventory.");
   }
 }

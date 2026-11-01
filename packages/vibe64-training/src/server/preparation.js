@@ -23,10 +23,14 @@ function trainingError(message, code) {
   return trainingFailure(message, code, { statusCode: 409 });
 }
 
-const revisionConflict = () => trainingError("Learning state changed. Read the current revision and retry.",
-  "VIBE64_TRAINING_STATE_REVISION_CONFLICT");
-const missingAttempt = () => Object.assign(trainingError("This is not your lesson in progress. Nothing was changed.",
-  "VIBE64_TRAINING_ATTEMPT_MISSING"), { statusCode: 404 });
+const revisionConflict = () => trainingError(
+  "Learning state changed. Read the current revision and retry.",
+  "VIBE64_TRAINING_STATE_REVISION_CONFLICT"
+);
+const missingAttempt = () => Object.assign(trainingError(
+  "This is not your lesson in progress. Nothing was changed.",
+  "VIBE64_TRAINING_ATTEMPT_MISSING"
+), { statusCode: 404 });
 
 // The session owner's refusals for an actor with no usable AI yet (none
 // connected, or no model routed). A practice session needs one, so the lesson
@@ -84,8 +88,10 @@ function createTrainingService({
       );
     }
     if (!lessonAvailableTo(taught, actor)) {
-      throw Object.assign(trainingError("This lesson needs screens this Vibe64 does not have for you, so it cannot start here. Nothing was changed.",
-        "VIBE64_TRAINING_LESSON_UNAVAILABLE_HERE"), { statusCode: 422 });
+      throw Object.assign(trainingError(
+        "This lesson needs screens this Vibe64 does not have for you, so it cannot start here. Nothing was changed.",
+        "VIBE64_TRAINING_LESSON_UNAVAILABLE_HERE"
+      ), { statusCode: 422 });
     }
   }
 
@@ -106,8 +112,10 @@ function createTrainingService({
     // A preview course is for the workspace owner to review before release;
     // its admitted attempt is otherwise an ordinary saved lesson.
     if (entry.course.status !== "released" && actor?.role !== "owner") {
-      throw Object.assign(trainingError("This preview course can be tried only by the workspace owner until it is released.",
-        "VIBE64_TRAINING_COURSE_PREVIEW"), { statusCode: 403 });
+      throw Object.assign(trainingError(
+        "This preview course can be tried only by the workspace owner until it is released.",
+        "VIBE64_TRAINING_COURSE_PREVIEW"
+      ), { statusCode: 403 });
     }
     const topic = entry.lock.topics.find(value =>
       value.lessons.some(lesson => lesson.code === lessonCode && lesson.status === "published"));
@@ -136,7 +144,8 @@ function createTrainingService({
         // An AppError: the HTTP error response carries only an AppError's details.
         throw new AppError(409, "Another lesson is in progress. Archive it to start this one, or continue it.", {
           code: TRAINING_LESSON_IN_PROGRESS_CODE,
-          details: { attemptId: current.attemptId, lessonTitle: await lessonTitle(content, current.pin) } });
+          details: { attemptId: current.attemptId, lessonTitle: await lessonTitle(content, current.pin) }
+        });
       }
       if (expectedRevision !== saved.revision) throw revisionConflict();
       await learningSpace.closeAttempt({ actor, attemptId: current.attemptId, archive: true, reason: "archived" });
@@ -210,8 +219,9 @@ function createTrainingService({
     if (setupFollowUps.has(attemptId)) return;
     const task = Promise.resolve(setupRun).catch(() => null).then(async () => {
       for (let tries = 1; ; tries++) {
-        try { return await prepareLesson({ actor, attemptId }); }
-        catch (error) {
+        try {
+          return await prepareLesson({ actor, attemptId });
+        } catch (error) {
           // A concurrent learning write may briefly hold the preparation barrier.
           if (error.code !== "VIBE64_TRAINING_PREPARATION_BUSY" || tries >= 3) throw error;
         }
@@ -247,8 +257,9 @@ function createTrainingService({
           try {
             await lstat(existing.projectContextRoot);
             exists = true;
+          } catch (error) {
+            if (error.code !== "ENOENT") throw error;
           }
-          catch (error) { if (error.code !== "ENOENT") throw error; }
           if (exists || Object.keys(existing.metadata).length) {
             if (!isDeepStrictEqual(existing.metadata.training, training) ||
                 existing.metadata.deletion ||
@@ -270,25 +281,27 @@ function createTrainingService({
               name: `Practice: ${attempt.pin.lesson.code}`,
               training,
               vibe64User: actor
-            }, { initializeProject: async ({ projectRoot }) => {
+            }, {
+              initializeProject: async ({ projectRoot }) => {
               // readExercise already verifies every byte against the installed pin.
               // The managed initializer keeps its Git commit and rollback.
-              for (const file of exercise.files) {
-                const relative = file.path;
-                if (!relative ||
+                for (const file of exercise.files) {
+                  const relative = file.path;
+                  if (!relative ||
                     relative.includes("\\") ||
                     path.posix.isAbsolute(relative) ||
                     relative.split("/").some(part => !part || part === "." || part === ".." || part === ".git")) {
-                  throw trainingError(
-                    "The verified exercise contains an invalid source path. Ask the owner to inspect its content release.",
-                    "VIBE64_TRAINING_EXERCISE_PATH_INVALID"
-                  );
+                    throw trainingError(
+                      "The verified exercise contains an invalid source path. Ask the owner to inspect its content release.",
+                      "VIBE64_TRAINING_EXERCISE_PATH_INVALID"
+                    );
+                  }
+                  const destination = path.join(projectRoot, relative);
+                  await mkdir(path.dirname(destination), { recursive: true });
+                  await writeFile(destination, file.bytes, { flag: "wx" });
                 }
-                const destination = path.join(projectRoot, relative);
-                await mkdir(path.dirname(destination), { recursive: true });
-                await writeFile(destination, file.bytes, { flag: "wx" });
               }
-            } }));
+            }));
           }
           stage = "session";
           // The initial practice session is an ordinary project session with no
@@ -296,8 +309,9 @@ function createTrainingService({
           const session = await project.runInProjectContext(attempt.projectSlug, async () => {
             const runtime = await project.createRuntimeWithoutSource();
             let current;
-            try { current = await runtime.getSessionWithoutSource(initialSessionId); }
-            catch (error) {
+            try {
+              current = await runtime.getSessionWithoutSource(initialSessionId);
+            } catch (error) {
               if (error.code !== "vibe64_session_not_found") throw error;
               if (attempt.preparation.phase === "ready") {
                 throw trainingError(

@@ -53,10 +53,12 @@ function createLearnerSteps({
       }
       return { ...entry, revision: record?.attemptId === attempt.attemptId ? record.revision : 0 };
     } catch (cause) {
-      throw failure(`Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
+      throw failure(
+        `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
         "VIBE64_TRAINING_STATE_INVALID",
         null,
-          { cause });
+        { cause }
+      );
     }
   }
 
@@ -88,8 +90,11 @@ function createLearnerSteps({
     if (before.progress.activeAttemptId !== attemptId) {
       throw failure("Continue this lesson before recording step results.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
     }
-    const release = await acquireRecordLock(paths.stepProgressLock, "VIBE64_TRAINING_STEP_PROGRESS_BUSY",
-      "Another step result for this learner is being saved. Retry the same request in a moment.");
+    const release = await acquireRecordLock(
+      paths.stepProgressLock,
+      "VIBE64_TRAINING_STEP_PROGRESS_BUSY",
+      "Another step result for this learner is being saved. Retry the same request in a moment."
+    );
     try {
       const state = await loadState(paths);
       const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
@@ -118,10 +123,12 @@ function createLearnerSteps({
       try {
         await writeJsonFileAtomic(paths.stepProgress, next, { directoryMode: 0o700, fileMode: 0o600 });
       } catch (cause) {
-        throw failure("The step result save was not confirmed; the atomic rename may have succeeded. Read or retry the same request ID.",
+        throw failure(
+          "The step result save was not confirmed; the atomic rename may have succeeded. Read or retry the same request ID.",
           "VIBE64_TRAINING_STEP_PROGRESS_SAVE_UNCONFIRMED",
           null,
-            { cause });
+          { cause }
+        );
       }
       return {
         revision: next.revision,
@@ -150,8 +157,12 @@ function createLearnerSteps({
       if (!state.progress.attempts.some(attempt => attempt.attemptId === reader.attemptId)) return null;
       return { attemptId: reader.attemptId, stepId: reader.stepId, scroll: reader.scroll };
     } catch (cause) {
-      throw failure(`Lesson reader position is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
-        "VIBE64_TRAINING_STATE_INVALID", null, { cause });
+      throw failure(
+        `Lesson reader position is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
+        "VIBE64_TRAINING_STATE_INVALID",
+        null,
+        { cause }
+      );
     }
   }
 

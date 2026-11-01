@@ -27,7 +27,9 @@ async function readDeclaredFiles(source, files) {
   for (const file of files) {
     const filename = path.join(source, ...file.split("/"));
     let stat;
-    try { stat = await lstat(filename); } catch (error) {
+    try {
+      stat = await lstat(filename);
+    } catch (error) {
       if (error.code === "ENOENT") {
         throw conflictFailure(`The lesson file ${file} is missing from your practice project.`, "VIBE64_TRAINING_CODE_FILE_MISSING");
       }

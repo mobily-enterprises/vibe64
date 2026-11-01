@@ -63,13 +63,17 @@ const oneLine = value => value.replace(/[\u0000-\u001f\u007f]+/gu, " ").replace(
  */
 function parseVerdict(text) {
   let value;
-  try { value = JSON.parse(String(text ?? "").trim()); } catch { value = null; }
+  try {
+    value = JSON.parse(String(text ?? "").trim());
+  } catch {
+    value = null;
+  }
   const keys = value && typeof value === "object" && !Array.isArray(value) ? Object.keys(value).sort().join() : "";
   const textOf = (field, limit, required) => typeof field === "string" && field.length <= limit && (!required || oneLine(field));
   const valid = keys === "comment,hint,points,verdict" && ["passed", "not-yet"].includes(value.verdict) &&
     textOf(value.comment, LIMITS.comment, true) && textOf(value.hint, LIMITS.hint, value.verdict === "not-yet") &&
     Array.isArray(value.points) && value.points.length <= LIMITS.points && value.points.every(point =>
-      point && typeof point === "object" && Object.keys(point).sort().join() === "met,text" &&
+    point && typeof point === "object" && Object.keys(point).sort().join() === "met,text" &&
       typeof point.met === "boolean" && textOf(point.text, LIMITS.point, true));
   if (!valid) throw reviewFailure("Your AI returned a review in an unexpected form. Nothing was recorded; check your work again.");
   const hint = oneLine(value.hint);

@@ -36,7 +36,9 @@ function createLearnerMode({
   async function learningModeView(paths, { includeTitle }) {
     const { progress } = await loadState(paths);
     let on;
-    try { on = await readMode(paths); } catch (cause) {
+    try {
+      on = await readMode(paths);
+    } catch (cause) {
       throw failure(
         `Learning mode is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
         "VIBE64_TRAINING_STATE_INVALID",

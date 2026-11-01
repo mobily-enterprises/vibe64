@@ -14,23 +14,25 @@ function registerTrainingVisualResourceRoutes(http) {
     surface: "app",
     wrapHandler: vibe64RouteHandler({ projectScoped: false })
   });
-  routes.serviceRoute("GET",
+  routes.serviceRoute(
+    "GET",
     "/attempts/:attemptId/visuals/:visualId",
     { summary: "Read the pinned lesson diagram" },
     async (request, reply) => {
-    reply.header("Cache-Control", "private, no-store");
-    try {
-      return await request.executeAction({
-        actionId: TRAINING_VISUAL_RESOURCE_ACTION,
-        input: { attemptId: request.params.attemptId, visualId: request.params.visualId }
-      });
-    } catch (error) {
-      return reply.code(Number.isInteger(error?.statusCode) ? error.statusCode : 400).send(vibe64ErrorResponse(error, {
-        fallbackCode: "VIBE64_TRAINING_VISUAL_RESOURCE_FAILED",
-        fallbackMessage: "The pinned lesson diagram could not be read."
-      }));
+      reply.header("Cache-Control", "private, no-store");
+      try {
+        return await request.executeAction({
+          actionId: TRAINING_VISUAL_RESOURCE_ACTION,
+          input: { attemptId: request.params.attemptId, visualId: request.params.visualId }
+        });
+      } catch (error) {
+        return reply.code(Number.isInteger(error?.statusCode) ? error.statusCode : 400).send(vibe64ErrorResponse(error, {
+          fallbackCode: "VIBE64_TRAINING_VISUAL_RESOURCE_FAILED",
+          fallbackMessage: "The pinned lesson diagram could not be read."
+        }));
+      }
     }
-  });
+  );
 }
 
 export { TRAINING_VISUAL_RESOURCE_API_PATH, registerTrainingVisualResourceRoutes };

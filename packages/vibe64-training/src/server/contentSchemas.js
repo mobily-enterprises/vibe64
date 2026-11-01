@@ -18,18 +18,24 @@ const assessment = createSchema({
   kind: { ...text, enum: ["answer", "practical"] },
   required: { type: "boolean", required: true },
   rubric: text,
-  evidence: { type: "object", required: false, schema: createSchema({
-    producer: { ...text, enum: ["workspace", "colleague", "exercise", "code"] },
-    operation: id,
-    check: { ...id, required: false },
-    explanationRequired: { type: "boolean", required: false },
-    // A code practical names the exercise files the learner edits (exercise-relative).
-    files: { ...list(text, 8), required: false, minLength: 1 }
-  }) }
+  evidence: {
+    type: "object",
+    required: false,
+    schema: createSchema({
+      producer: { ...text, enum: ["workspace", "colleague", "exercise", "code"] },
+      operation: id,
+      check: { ...id, required: false },
+      explanationRequired: { type: "boolean", required: false },
+      // A code practical names the exercise files the learner edits (exercise-relative).
+      files: { ...list(text, 8), required: false, minLength: 1 }
+    })
+  }
 });
 // Fields shared by every lesson format version.
 const lessonFields = {
-  code: id, title: text, prerequisites,
+  code: id,
+  title: text,
+  prerequisites,
   estimatedMinutes: { type: "integer", required: true, min: 1, max: 180 },
   visuals: list(createSchema({ id, descriptor: text }), 12),
   exercise: {
@@ -79,12 +85,16 @@ const stepSchema = createSchema({
   title: text,
   body: text,
   required: { type: "boolean", required: true },
-  visual: { type: "object", required: false, schema: createSchema({
-    id,
-    // Each entry's parameters are a flat name -> string map, checked against
-    // the visual's declared command by the bundler.
-    play: { ...list(createSchema({ name: id, parameters: { type: "object", required: true } }), 16), required: false }
-  }) },
+  visual: {
+    type: "object",
+    required: false,
+    schema: createSchema({
+      id,
+      // Each entry's parameters are a flat name -> string map, checked against
+      // the visual's declared command by the bundler.
+      play: { ...list(createSchema({ name: id, parameters: { type: "object", required: true } }), 16), required: false }
+    })
+  },
   guide: {
     type: "object",
     required: false,
@@ -95,19 +105,23 @@ const stepSchema = createSchema({
       caption: { ...text, required: false }
     })
   },
-  check: { type: "object", required: true, schema: createSchema({
-    kind: { ...text, enum: ["auto", "choice", "review", "self", "fact", "none"] },
-    check: { ...id, required: false },
-    // fact: the name of a server fact reader (learningFacts.js).
-    fact: { ...id, required: false },
-    files: { ...list(text, 8), required: false },
-    question: { ...text, required: false, maxLength: 2000 },
-    options: { ...list(text, 8), required: false },
-    answer: { ...list({ type: "integer", required: true, min: 0, max: 7 }, 8), required: false },
-    // review: what the work must show, and what the reviewer reads.
-    rubric: { ...text, required: false, maxLength: 600 },
-    evidence: { ...list({ ...text, enum: ["changes", "conversation"] }, 2), required: false }
-  }) }
+  check: {
+    type: "object",
+    required: true,
+    schema: createSchema({
+      kind: { ...text, enum: ["auto", "choice", "review", "self", "fact", "none"] },
+      check: { ...id, required: false },
+      // fact: the name of a server fact reader (learningFacts.js).
+      fact: { ...id, required: false },
+      files: { ...list(text, 8), required: false },
+      question: { ...text, required: false, maxLength: 2000 },
+      options: { ...list(text, 8), required: false },
+      answer: { ...list({ type: "integer", required: true, min: 0, max: 7 }, 8), required: false },
+      // review: what the work must show, and what the reviewer reads.
+      rubric: { ...text, required: false, maxLength: 600 },
+      evidence: { ...list({ ...text, enum: ["changes", "conversation"] }, 2), required: false }
+    })
+  }
 });
 // Lesson format v2 (retired like v1: authoring refuses it, installed
 // snapshots still validate, and its lessons cannot be started).

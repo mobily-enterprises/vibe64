@@ -170,10 +170,12 @@ function createInstalledTrainingCatalogue({ systemRoot }) {
       }
       return catalogue;
     } catch (cause) {
-      throw causedFailure(`Installed catalogue is invalid: ${cause.message} Keep existing state and ask the owner to restore the exact approved catalogue or pinned content. No automatic repair was performed.`,
+      throw causedFailure(
+        `Installed catalogue is invalid: ${cause.message} Keep existing state and ask the owner to restore the exact approved catalogue or pinned content. No automatic repair was performed.`,
         "VIBE64_TRAINING_CATALOGUE_INVALID",
         null,
-          cause);
+        cause
+      );
     }
   }
 

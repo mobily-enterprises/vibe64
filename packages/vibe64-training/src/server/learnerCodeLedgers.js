@@ -49,7 +49,9 @@ function createLearnerCodeLedgers({
 
   async function withLedgerLock(paths, operation) {
     await createNamespace(paths);
-    await mkdir(paths.codeLedgers, { mode: 0o700 }).catch(error => { if (error.code !== "EEXIST") throw error; });
+    await mkdir(paths.codeLedgers, { mode: 0o700 }).catch(error => {
+      if (error.code !== "EEXIST") throw error;
+    });
     await inspectPath(paths.codeLedgers, true);
     await inspectPath(paths.codeLedgerLock, false);
     const release = await tryAcquireExclusiveFileLock(paths.codeLedgerLock);
@@ -60,7 +62,11 @@ function createLearnerCodeLedgers({
         409
       );
     }
-    try { return await operation(); } finally { await release(); }
+    try {
+      return await operation();
+    } finally {
+      await release();
+    }
   }
 
   async function updateCodeLedger({ actor, attemptId }, operation) {

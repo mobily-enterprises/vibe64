@@ -195,9 +195,11 @@ function createTrainingDeclaredCheckOwner({
         cleanupSafe = Boolean(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(result?.execution?.id || "") &&
           ["finished", "rejected"].includes(result.execution.state) &&
           !["vibe64_execution_drain_failed", "vibe64_execution_cleanup_required"].includes(result.code));
-        if (!cleanupSafe) throw failure("The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+        if (!cleanupSafe) throw failure(
+          "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
           "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
-          { execution: result?.execution, scratch });
+          { execution: result?.execution, scratch }
+        );
         signal?.throwIfAborted();
         const current = await readAttempt(actor, input);
         const freshSession = await runtime.getSessionWithoutSource(input.sessionId);
@@ -241,12 +243,14 @@ function createTrainingDeclaredCheckOwner({
         return { checkResult: { check: checkId, observationId: input.observationId, outcome: "passed" } };
       } catch (error) {
         if (!cleanupSafe && error.code !== "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED") {
-          throw failure("The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.",
+          throw failure(
+            "The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.",
             "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
             {
-            cause: error,
-            scratch
-          });
+              cause: error,
+              scratch
+            }
+          );
         }
         throw error;
       } finally {
@@ -341,7 +345,7 @@ function createTrainingDeclaredCheckOwner({
           path: exerciseRelative(file.path),
           bytes: learnerBytes.get(file.path) ?? file.bytes
         })),
-          declared.file, ...declared.assets];
+        declared.file, ...declared.assets];
         for (const file of inputs) {
           const destination = path.join(scratch, ...safeRelative(file.path));
           await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
@@ -384,9 +388,11 @@ function createTrainingDeclaredCheckOwner({
         cleanupSafe = Boolean(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(run?.execution?.id || "") &&
           ["finished", "rejected"].includes(run.execution.state) &&
           !["vibe64_execution_drain_failed", "vibe64_execution_cleanup_required"].includes(run.code));
-        if (!cleanupSafe) throw failure("The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+        if (!cleanupSafe) throw failure(
+          "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
           "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
-          { execution: run?.execution, scratch });
+          { execution: run?.execution, scratch }
+        );
         signal?.throwIfAborted();
         if (!sameAttempt(await readAttempt(actor, input))) {
           throw failure("The lesson changed while its code check was running. Check your code again.", "VIBE64_TRAINING_CHECK_RUN_STALE");
@@ -403,7 +409,9 @@ function createTrainingDeclaredCheckOwner({
           throw failure("The declared code check did not return a bounded execution result.", run.code || "VIBE64_TRAINING_CHECK_FAILED");
         }
         let row = null;
-        try { row = JSON.parse(stdout.trim()); } catch { /* Learner code may crash the check before it reports. */ }
+        try {
+          row = JSON.parse(stdout.trim());
+        } catch { /* Learner code may crash the check before it reports. */ }
         const keys = row && typeof row === "object" && !Array.isArray(row) ? canonicalJson(Object.keys(row).sort()) : "";
         if (row && Object.hasOwn(row, "filesHash") && row.filesHash !== filesHash) {
           throw failure("The code check result does not belong to the files it was given.", "VIBE64_TRAINING_CHECK_RESULT_INVALID");
@@ -426,12 +434,14 @@ function createTrainingDeclaredCheckOwner({
         throw failure("The code check returned an unexpected result.", "VIBE64_TRAINING_CHECK_RESULT_INVALID");
       } catch (error) {
         if (!cleanupSafe && error.code !== "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED") {
-          throw failure("The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.",
+          throw failure(
+            "The check execution did not return scope-empty proof. Its private files are retained for the original execution cleanup owner.",
             "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
             {
-            cause: error,
-            scratch
-          });
+              cause: error,
+              scratch
+            }
+          );
         }
         throw error;
       } finally {

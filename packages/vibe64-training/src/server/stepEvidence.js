@@ -40,7 +40,11 @@ const nulList = text => String(text || "").split("\0").filter(Boolean);
 function sessionAgentWorking(session) {
   return (Array.isArray(session?.agentRuns) ? session.agentRuns : []).some(run => {
     if (run?.active === true) return true;
-    try { return vibe64AgentRunStateIsActive(run?.state); } catch { return false; }
+    try {
+      return vibe64AgentRunStateIsActive(run?.state);
+    } catch {
+      return false;
+    }
   });
 }
 
@@ -69,15 +73,23 @@ function createTrainingStepEvidence({
 }) {
   async function git(source, slug, args, options = {}) {
     const { maxBuffer = GIT_MAX_BUFFER } = options;
-    const result = await runCommand({ actor: "daemon", command: "git", args: ["-c", "core.quotePath=false", ...args],
+    const result = await runCommand({
+      actor: "daemon",
+      command: "git",
+      args: ["-c", "core.quotePath=false", ...args],
       // Optional locks off: reading never refreshes the clone's index.
       cwd: source,
       env: { GIT_OPTIONAL_LOCKS: "0" },
-        allowedRoots: [source],
-        gitSafeDirectories: [source],
-        envPolicy: "session",
-        purpose: "source",
-      runtimes: ["git"], mode: "capture", project: { slug }, timeout: GIT_TIMEOUT_MS, maxBuffer });
+      allowedRoots: [source],
+      gitSafeDirectories: [source],
+      envPolicy: "session",
+      purpose: "source",
+      runtimes: ["git"],
+      mode: "capture",
+      project: { slug },
+      timeout: GIT_TIMEOUT_MS,
+      maxBuffer
+    });
     if (result?.ok !== true) {
       throw evidenceFailure("Your practice project's changes could not be read. Nothing was recorded; try again in a moment.");
     }
@@ -227,8 +239,10 @@ function createTrainingStepEvidence({
       throw evidenceFailure("Wait until this lesson's practice project is ready, then try again.", "VIBE64_TRAINING_PRACTICE_NOT_READY");
     }
     if (!commitPattern.test(startCommit || "")) {
-      throw evidenceFailure("This lesson started before its work could be reviewed. Restart the lesson to have your work checked.",
-        "VIBE64_TRAINING_REVIEW_UNAVAILABLE");
+      throw evidenceFailure(
+        "This lesson started before its work could be reviewed. Restart the lesson to have your work checked.",
+        "VIBE64_TRAINING_REVIEW_UNAVAILABLE"
+      );
     }
     const sessionId = attempt.preparation.initialSessionId;
     const observed = await project.runInProjectContext(attempt.projectSlug, async () => {

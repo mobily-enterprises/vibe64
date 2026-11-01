@@ -142,7 +142,9 @@ function bundleAssessments(lesson, document, include, checks) {
  * are the topic's vocabulary: public's built-ins plus the names it declares.
  */
 function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
-  const fail = message => { throw new Error(`Lesson ${code}: ${message}`); };
+  const fail = message => {
+    throw new Error(`Lesson ${code}: ${message}`);
+  };
   if (lesson.schemaVersion === 3 && lesson.stage === "project" && !lesson.exercise) {
     fail("a project lesson needs its exercise (a practice project).");
   }
@@ -177,13 +179,21 @@ function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
     }
     if (step.guide) {
       const { caption, ...request } = step.guide;
-      try { trainingGuideRequest(request, vocabulary); } catch (error) { fail(`${label} guide: ${error.message}`); }
+      try {
+        trainingGuideRequest(request, vocabulary);
+      } catch (error) {
+        fail(`${label} guide: ${error.message}`);
+      }
       if (vocabulary.place(step.guide.target)?.scope === "project" && !lesson.exercise) {
         fail(`${label} guide ${step.guide.target} needs the lesson's exercise (a practice project).`);
       }
     }
     let beats = null;
-    try { ({ beats } = splitStepBeats(bodies.get(step.body), vocabulary)); } catch (error) { fail(`${label} beats: ${error.message}`); }
+    try {
+      ({ beats } = splitStepBeats(bodies.get(step.body), vocabulary));
+    } catch (error) {
+      fail(`${label} beats: ${error.message}`);
+    }
     if (beats) {
       if (step.guide) fail(`${label} has both beats and a guide; its beats replace the guide.`);
       const checkBeat = beats.find(beat => beat.kind === "check");
