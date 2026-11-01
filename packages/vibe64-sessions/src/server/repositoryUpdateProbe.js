@@ -60,7 +60,8 @@ function createRepositoryUpdateProbe({
     return entry;
   }
 
-  function schedule(slug, entry, { afterProbe = false } = {}) {
+  function schedule(slug, entry, options = {}) {
+    const { afterProbe = false } = options;
     if (closed || entry.running || entry.timer) return;
     const period = interval(entry);
     const elapsed = Math.max(0, now() - entry.lastStartedAt);

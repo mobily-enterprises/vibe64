@@ -150,7 +150,8 @@ function sessionTool(description) {
   return {
     description,
     output: sessionOutput,
-    transformResult(result, { input = {} } = {}) {
+    transformResult(result, options = {}) {
+      const { input = {} } = options;
       const offset = Number(input.sessionOffset || 0);
       return {
         ...sessionSummary(result),
@@ -427,7 +428,8 @@ function conversationOperationTool(description) {
   };
 }
 
-function renewalTool(description, { includeDraft = false } = {}) {
+function renewalTool(description, options = {}) {
+  const { includeDraft = false } = options;
   const strings = {
     ...limits(["sessionId", "renewalId", "operationKey", "status", "stage", "successorSessionId", "updatedAt",
       "draftHash", "draftOrigin", "code", "maintenanceStatus"]),

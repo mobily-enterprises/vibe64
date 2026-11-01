@@ -14,9 +14,10 @@ function sessionIsClosing(session = {}) {
   return Boolean(sessionClosingReason(session));
 }
 
-function sessionClosingMetadata(reason = "closing", {
-  closedAt = new Date().toISOString()
-} = {}) {
+function sessionClosingMetadata(reason = "closing", options = {}) {
+  const {
+    closedAt = new Date().toISOString()
+  } = options;
   return {
     [VIBE64_SESSION_CLOSING_AT_METADATA]: closedAt,
     [VIBE64_SESSION_CLOSING_REASON_METADATA]: normalizeText(reason) || "closing"

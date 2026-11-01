@@ -19,7 +19,8 @@ function projectContextRoot(project) {
  * @param {object} [options]
  * @param {() => object} [options.capture]
  */
-function createAgentCommandProjectBinding(projectService, errors, { capture = () => ({}) } = {}) {
+function createAgentCommandProjectBinding(projectService, errors, options = {}) {
+  const { capture = () => ({}) } = options;
   const bindings = new Map();
   const fail = ([message, code]) => vibe64Error(message, code);
 

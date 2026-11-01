@@ -97,9 +97,10 @@ function normalizeEnum(value = "", allowed = [], fallback = "", label = "value")
   return normalized;
 }
 
-function normalizeCommandArgs(args = [], {
-  mode = "capture"
-} = {}) {
+function normalizeCommandArgs(args = [], options = {}) {
+  const {
+    mode = "capture"
+  } = options;
   if (typeof args === "function") {
     if (mode !== "pty") {
       throw commandRequestError(
@@ -112,9 +113,10 @@ function normalizeCommandArgs(args = [], {
   return (Array.isArray(args) ? args : [args]).map((arg) => String(arg ?? ""));
 }
 
-function normalizeCommandEnv(envInput = {}, {
-  mode = "capture"
-} = {}) {
+function normalizeCommandEnv(envInput = {}, options = {}) {
+  const {
+    mode = "capture"
+  } = options;
   if (typeof envInput === "function") {
     if (mode !== "pty") {
       throw commandRequestError(
@@ -219,12 +221,13 @@ function normalizeExecutionIdentifier(value = "") {
   return normalized;
 }
 
-function normalizeExecutionDescriptor(value = {}, {
-  mode = "capture",
-  project = {},
-  purpose = "terminal",
-  session = {}
-} = {}) {
+function normalizeExecutionDescriptor(value = {}, options = {}) {
+  const {
+    mode = "capture",
+    project = {},
+    purpose = "terminal",
+    session = {}
+  } = options;
   const execution = recordValue(value);
   const kind = normalizeEnum(
     execution.kind,

@@ -9,10 +9,11 @@ import { record } from "./record.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
-function renewalPredecessorTerminalCleanupContext(session = {}, {
-  renewalId = "",
-  runtime = null
-} = {}) {
+function renewalPredecessorTerminalCleanupContext(session = {}, options = {}) {
+  const {
+    renewalId = "",
+    runtime = null
+  } = options;
   const sessionRecord = record(session);
   const normalizedRenewalId = String(renewalId || "").trim();
   const sessionId = String(sessionRecord.sessionId || "").trim();
@@ -48,10 +49,11 @@ function renewalPredecessorTerminalCleanupContext(session = {}, {
   };
 }
 
-function renewalSuccessorTerminalCleanupContext(session = {}, {
-  renewalId = "",
-  runtime = null
-} = {}) {
+function renewalSuccessorTerminalCleanupContext(session = {}, options = {}) {
+  const {
+    renewalId = "",
+    runtime = null
+  } = options;
   const sessionRecord = record(session);
   const normalizedRenewalId = String(renewalId || "").trim();
   const sessionId = String(sessionRecord.sessionId || "").trim();

@@ -168,14 +168,15 @@ function sessionSummaryPayload(full) {
 
 /** @param {RuntimeEvents} events */
 function createSessionChangedPublisher(events) {
-  return async function publishSessionChanged(sessionIdValue = "", {
-    operation = "updated",
-    originId: eventOriginId = "",
-    payload = null,
-    projectSlug: sessionProjectSlug = "",
-    reason = "",
-    session = null
-  } = {}) {
+  return async function publishSessionChanged(sessionIdValue = "", options = {}) {
+    const {
+      operation = "updated",
+      originId: eventOriginId = "",
+      payload = null,
+      projectSlug: sessionProjectSlug = "",
+      reason = "",
+      session = null
+    } = options;
     const id = String(sessionIdValue || "").trim();
     const reasonId = String(reason || "").trim();
     // A streamed delta carries only the conversation's live text, which its

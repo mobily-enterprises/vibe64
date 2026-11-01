@@ -220,12 +220,13 @@ const RENEWAL_ARCHIVE_RESET_METADATA_NAMES = Object.freeze([
   "renewal_rolled_back_at"
 ]);
 
-function renewalArchiveMetadata(fromMetadata = {}, {
-  archivedAt = "",
-  renewalId = "",
-  selectedBeforeArchive = "",
-  successorSessionId = ""
-} = {}) {
+function renewalArchiveMetadata(fromMetadata = {}, options = {}) {
+  const {
+    archivedAt = "",
+    renewalId = "",
+    selectedBeforeArchive = "",
+    successorSessionId = ""
+  } = options;
   return {
     renewal_acknowledged_at: normalizeText(fromMetadata.renewal_acknowledged_at),
     renewal_actor_display_name: normalizeText(fromMetadata.renewal_actor_display_name),
@@ -242,7 +243,8 @@ function renewalArchiveMetadata(fromMetadata = {}, {
   };
 }
 
-function assertRenewalSuccessorLink(metadata = {}, { renewalId = "", sourceSessionId = "", successorSessionId = "" } = {}) {
+function assertRenewalSuccessorLink(metadata = {}, options = {}) {
+  const { renewalId = "", sourceSessionId = "", successorSessionId = "" } = options;
   if (
     normalizeText(metadata.renewal_id) !== renewalId ||
     normalizeText(metadata.renewed_from) !== sourceSessionId
@@ -378,10 +380,11 @@ function normalizeSessionListOptions(options = {}) {
   };
 }
 
-function sessionStatusMatchesListOptions(status, {
-  statusGroup = "",
-  statuses = new Set()
-} = {}) {
+function sessionStatusMatchesListOptions(status, options = {}) {
+  const {
+    statusGroup = "",
+    statuses = new Set()
+  } = options;
   const normalizedStatus = normalizeText(status) || VIBE64_SESSION_STATUS.ACTIVE;
   if (HIDDEN_VIBE64_SESSION_STATUSES.has(normalizedStatus)) {
     return false;

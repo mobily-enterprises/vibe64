@@ -44,7 +44,8 @@ const conversationOutput = {
   })
 };
 
-function summary(result = {}, { includeMessages = true } = {}) {
+function summary(result = {}, options = {}) {
+  const { includeMessages = true } = options;
   const messages = Array.isArray(result.messages) ? result.messages : [];
   const selected = includeMessages ? messages.slice(-12) : [];
   let preferences;

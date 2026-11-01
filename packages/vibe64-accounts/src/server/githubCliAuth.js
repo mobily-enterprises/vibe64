@@ -25,10 +25,11 @@ function githubCliAccountFailureMessage(output = "") {
     : "GitHub CLI is not authenticated for this Vibe64 user. Reconnect GitHub to continue.";
 }
 
-function githubCliFailureDetails(result = {}, {
-  fallbackMessage = "GitHub command failed.",
-  fallbackStatusCode = 502
-} = {}) {
+function githubCliFailureDetails(result = {}, options = {}) {
+  const {
+    fallbackMessage = "GitHub command failed.",
+    fallbackStatusCode = 502
+  } = options;
   const output = githubCliCommandOutput(result);
   if (githubCliOutputRequiresReconnect(output)) {
     return {

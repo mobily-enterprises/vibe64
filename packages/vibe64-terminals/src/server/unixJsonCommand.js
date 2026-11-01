@@ -81,7 +81,8 @@ function shortCommandHash(value = "") {
     .slice(0, 16);
 }
 
-function unixCommandSocketPath(identity, { env = process.env } = {}) {
+function unixCommandSocketPath(identity, options = {}) {
+  const { env = process.env } = options;
   // readable-check: allow method-probe - platform object: process.getuid() exists only on POSIX
   const owner = typeof process.getuid === "function" ? process.getuid() : "user";
   const root = path.resolve(String(env.TMPDIR || "").trim() || tmpdir());
@@ -106,18 +107,19 @@ async function unixCommandSocketIsPresent(socketPath = "") {
 
 /**
  * @param {SessionCommandServerEntry} entry
- * @param {object} [probe]
- * @param {string} [probe.healthPath]
- * @param {string} [probe.sessionId]
- * @param {string} [probe.socketPath]
- * @param {number} [probe.timeoutMs]
+ * @param {object} [options]
+ * @param {string} [options.healthPath]
+ * @param {string} [options.sessionId]
+ * @param {string} [options.socketPath]
+ * @param {number} [options.timeoutMs]
  */
-async function unixJsonCommandServerIsHealthy(entry, {
-  healthPath = "",
-  sessionId = "",
-  socketPath = "",
-  timeoutMs = 2000
-} = {}) {
+async function unixJsonCommandServerIsHealthy(entry, options = {}) {
+  const {
+    healthPath = "",
+    sessionId = "",
+    socketPath = "",
+    timeoutMs = 2000
+  } = options;
   if (!entry.server || !await unixCommandSocketIsPresent(socketPath)) {
     return false;
   }
@@ -174,11 +176,12 @@ async function closeUnixJsonCommandServer(commandServers, socketPath = "", entry
   }
 }
 
-async function removeDeadUnixJsonCommandSocket(socketPath = "", {
-  healthPath = "",
-  ownerErrorMessage = "The Unix command socket is owned by an unverified listener.",
-  timeoutMs = 2000
-} = {}) {
+async function removeDeadUnixJsonCommandSocket(socketPath = "", options = {}) {
+  const {
+    healthPath = "",
+    ownerErrorMessage = "The Unix command socket is owned by an unverified listener.",
+    timeoutMs = 2000
+  } = options;
   if (!await unixCommandSocketIsPresent(socketPath)) {
     return;
   }
@@ -427,11 +430,12 @@ function requestUnixJsonCommand({
   });
 }
 
-async function readJsonCommandRequest(request, {
-  invalidJsonError = {},
-  maxBytes,
-  tooLargeError = {}
-} = {}) {
+async function readJsonCommandRequest(request, options = {}) {
+  const {
+    invalidJsonError = {},
+    maxBytes,
+    tooLargeError = {}
+  } = options;
   const chunks = [];
   let size = 0;
 

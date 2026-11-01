@@ -6,9 +6,10 @@ import process from "node:process";
  * Linux names the open file through /proc. Elsewhere the opened file must be
  * the same file that `filePath` resolves to now, and that resolved path is checked.
  */
-async function openedFileWithin(handle, filePath, within, {
-  platform = process.platform
-} = {}) {
+async function openedFileWithin(handle, filePath, within, options = {}) {
+  const {
+    platform = process.platform
+  } = options;
   if (platform === "linux") {
     return within(await realpath(`/proc/self/fd/${handle.fd}`));
   }

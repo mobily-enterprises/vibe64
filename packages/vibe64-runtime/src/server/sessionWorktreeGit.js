@@ -22,13 +22,14 @@ const RECOVERY_PATCH_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/worktree.patch`;
 const RECOVERY_UNTRACKED_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/untracked-files.tar.gz`;
 const RECOVERY_UNTRACKED_LIST_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/untracked-files.list`;
 
-async function runCommand(command, args = [], {
-  allowedRoots = [],
-  cwd = "",
-  maxBuffer = COMMAND_BUFFER_BYTES,
-  runtimes = [],
-  timeout = GIT_TIMEOUT_MS
-} = {}) {
+async function runCommand(command, args = [], options = {}) {
+  const {
+    allowedRoots = [],
+    cwd = "",
+    maxBuffer = COMMAND_BUFFER_BYTES,
+    runtimes = [],
+    timeout = GIT_TIMEOUT_MS
+  } = options;
   return runSourceCommand(command, args, {
     allowedRoots,
     cwd,

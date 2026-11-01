@@ -47,9 +47,10 @@ function parseNullSeparatedPaths(output = "") {
     .filter(Boolean);
 }
 
-async function gitOutput(root = "", args = [], {
-  runCommand = runVibe64Command
-} = {}) {
+async function gitOutput(root = "", args = [], options = {}) {
+  const {
+    runCommand = runVibe64Command
+  } = options;
   const result = await runCommand({
     actor: "daemon",
     allowedRoots: [root],

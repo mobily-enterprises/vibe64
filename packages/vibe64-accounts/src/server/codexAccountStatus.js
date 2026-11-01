@@ -202,10 +202,11 @@ function createCodexAccountStatus({
     }
   }
 
-  async function rememberCodexStatus(account = {}, {
-    reason = "",
-    rotateMarker = false
-  } = {}) {
+  async function rememberCodexStatus(account = {}, options = {}) {
+    const {
+      reason = "",
+      rotateMarker = false
+    } = options;
     const markerPath = codexAuthMarkerPath(access.systemRoot);
     const existingMarkerText = await readOptionalText(markerPath);
     let existingMarker = null;

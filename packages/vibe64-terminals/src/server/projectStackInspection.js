@@ -34,7 +34,8 @@ async function inspectCanonicalProjectStack({
   const scratch = await mkdtemp(path.join(temporaryRoot, "stack-inspection-"));
   const roots = [scratch, ...(source.mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT ? [source.source] : []),
     ...(source.mirrorPath ? [source.mirrorPath, path.dirname(source.mirrorPath)] : [])];
-  async function git(args, { cwd = scratch, auth = {} } = {}) {
+  async function git(args, options = {}) {
+    const { cwd = scratch, auth = {} } = options;
     signal?.throwIfAborted();
     const result = await runCommand({
       actor: "daemon",

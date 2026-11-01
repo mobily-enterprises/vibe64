@@ -54,10 +54,11 @@ function createSessionArchiveRecords({ state, storePaths }) {
     return sessionPaths;
   }
 
-  function sessionArchiveRecordFromJson(value = {}, {
-    archivePath = "",
-    metadataPath = ""
-  } = {}) {
+  function sessionArchiveRecordFromJson(value = {}, options = {}) {
+    const {
+      archivePath = "",
+      metadataPath = ""
+    } = options;
     if (
       !isPlainObject(value) ||
       value.kind !== SESSION_ARCHIVE_KIND ||
@@ -179,9 +180,10 @@ function createSessionArchiveRecords({ state, storePaths }) {
     return Object.fromEntries(entries);
   }
 
-  function sessionArchiveIndexFromSummary(summary = {}, {
-    sessionId = ""
-  } = {}) {
+  function sessionArchiveIndexFromSummary(summary = {}, options = {}) {
+    const {
+      sessionId = ""
+    } = options;
     const manifest = isPlainObject(summary.manifest) ? summary.manifest : {};
     const createdAt = normalizeText(summary.createdAt || manifest.createdAt);
     const updatedAt = normalizeText(summary.updatedAt || manifest.updatedAt || createdAt);

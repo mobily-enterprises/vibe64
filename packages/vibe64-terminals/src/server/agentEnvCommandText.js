@@ -30,10 +30,11 @@ function usageText() {
   ].join("\n") + "\n";
 }
 
-function responseError(message = "", code = "vibe64_agent_env_command_failed", {
-  exitCode = 1,
-  usage = false
-} = {}) {
+function responseError(message = "", code = "vibe64_agent_env_command_failed", options = {}) {
+  const {
+    exitCode = 1,
+    usage = false
+  } = options;
   return {
     code,
     error: message,
@@ -53,9 +54,10 @@ function assertOperationResult(result = {}, fallback = "Vibe64 Env operation fai
   return result;
 }
 
-function normalizeScope(value = "", {
-  allowAll = false
-} = {}) {
+function normalizeScope(value = "", options = {}) {
+  const {
+    allowAll = false
+  } = options;
   const normalized = normalizeText(value).toLowerCase();
   if (["dev", ENV_SCOPE_DEVELOPMENT].includes(normalized)) {
     return ENV_SCOPE_DEVELOPMENT;
@@ -238,9 +240,10 @@ function mutationStdout({
   return `${created ? "Created" : "Updated"} ${label} Env ${key}${emptyLabel}.\nStored by Vibe64 outside Git; the value was not printed.\n`;
 }
 
-function mutationPayload(input = {}, {
-  json = false
-} = {}) {
+function mutationPayload(input = {}, options = {}) {
+  const {
+    json = false
+  } = options;
   const payload = {
     action: input.action,
     changed: input.changed === true,

@@ -120,9 +120,10 @@ function previewPublicOriginForLaunch({
   return `${protocol}://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}.${workspace}.${baseDomain}`;
 }
 
-function studioHostMatchForPreview(hostname = "", {
-  publicUserDomain = ""
-} = {}) {
+function studioHostMatchForPreview(hostname = "", options = {}) {
+  const {
+    publicUserDomain = ""
+  } = options;
   const normalizedHostname = normalizePublicHostDomain(hostname);
   const normalizedUserDomain = normalizePublicHostDomain(publicUserDomain);
   if (normalizedUserDomain) {

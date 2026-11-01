@@ -105,13 +105,14 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
     return "failed";
   }
 
-  async function checkpointCodexAppServerTurn(sessionId = "", {
-    status = "completed",
-    turnOutcome = "",
-    outerTurnId: conversationOuterTurnId = "",
-    threadId = "",
-    turnId = ""
-  } = {}) {
+  async function checkpointCodexAppServerTurn(sessionId = "", options = {}) {
+    const {
+      status = "completed",
+      turnOutcome = "",
+      outerTurnId: conversationOuterTurnId = "",
+      threadId = "",
+      turnId = ""
+    } = options;
     if (conversationOuterTurnId) {
       await checkpointSessionTurn({
         projectService,

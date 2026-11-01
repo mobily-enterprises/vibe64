@@ -31,9 +31,10 @@ import {
  * @param {object} [options]
  * @param {StudioProjectContext} [options.projectContext]
  */
-function registerRoutes(http, {
-  projectContext
-} = {}) {
+function registerRoutes(http, options = {}) {
+  const {
+    projectContext
+  } = options;
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-sessions"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",

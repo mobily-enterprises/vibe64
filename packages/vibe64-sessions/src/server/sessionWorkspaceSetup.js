@@ -55,9 +55,10 @@ function createSessionWorkspaceSetup({
   publishSessionChanged,
   setupRunner
 }) {
-  function observeWorkspaceSetup(sessionId, completion, {
-    originId = ""
-  } = {}) {
+  function observeWorkspaceSetup(sessionId, completion, options = {}) {
+    const {
+      originId = ""
+    } = options;
     // readable-check: allow method-probe - data: a setup result carries its completion only once preparation started
     if (!completion || typeof completion.then !== "function") {
       return;

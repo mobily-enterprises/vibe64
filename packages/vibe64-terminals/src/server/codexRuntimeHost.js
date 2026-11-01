@@ -227,10 +227,11 @@ function createCodexRuntimeHost({
     });
   }
 
-  function codexAppServerPersistedRuntimeHost(session = {}, fallbackOptions = {}, {
-    preserveProcessExitProof = false,
-    verifyOwnerScope = false
-  } = {}) {
+  function codexAppServerPersistedRuntimeHost(session = {}, fallbackOptions = {}, options = {}) {
+    const {
+      preserveProcessExitProof = false,
+      verifyOwnerScope = false
+    } = options;
     const runtimeOptions = codexAppServerRuntimeOptionsFromSessionMetadata(session, fallbackOptions);
     if (!runtimeOptions) return null;
     return {
@@ -293,10 +294,11 @@ function createCodexSessionRuntimeHost({
     });
   }
 
-  function codexAppServerManagedThreadIdentity(session = {}, {
-    executionRoot = "",
-    workdir = ""
-  } = {}) {
+  function codexAppServerManagedThreadIdentity(session = {}, options = {}) {
+    const {
+      executionRoot = "",
+      workdir = ""
+    } = options;
     return {
       get executionRoot() { return trimmedText(executionRoot) || sessionSourcePath(session); },
       get workdir() { return trimmedText(workdir) || sessionSourcePath(session); }

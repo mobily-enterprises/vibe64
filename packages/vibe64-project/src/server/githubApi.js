@@ -19,18 +19,20 @@ export function requireGithubRepository(project, feature = "GitHub tools") {
   return fullName;
 }
 
-export function githubApi(input, {
-  env = process.env,
-  runCommand = runVibe64Command,
-  feature = "Pull requests",
-  failureCode = "vibe64_github_pull_requests_failed",
-  uncertainWriteMessage = ""
-} = {}) {
+export function githubApi(input, options = {}) {
+  const {
+    env = process.env,
+    runCommand = runVibe64Command,
+    feature = "Pull requests",
+    failureCode = "vibe64_github_pull_requests_failed",
+    uncertainWriteMessage = ""
+  } = options;
   const accountMode = normalizeGithubAccountMode(env[VIBE64_GITHUB_ACCOUNT_MODE_ENV], GITHUB_ACCOUNT_MODE_LOCAL);
   const identity = githubCredentialContext({ vibe64User: input.vibe64User }, { accountMode });
   if (!identity.ok) throw vibe64Error(identity.error, identity.code);
 
-  return async function api(endpoint, payload, method = "POST", { allowNotFound = false } = {}) {
+  return async function api(endpoint, payload, method = "POST", options = {}) {
+    const { allowNotFound = false } = options;
     const result = await runCommand({
       actor: accountMode === GITHUB_ACCOUNT_MODE_LOCAL ? "daemon" : "named-user",
       allowedRoots: [identity.home],

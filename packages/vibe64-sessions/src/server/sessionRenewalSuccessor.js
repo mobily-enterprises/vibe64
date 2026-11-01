@@ -326,9 +326,10 @@ function createRenewalSuccessorSession({
     return true;
   }
 
-  async function assertSuccessorCanonicalState(runtime, state, {
-    phase = "verification"
-  } = {}) {
+  async function assertSuccessorCanonicalState(runtime, state, options = {}) {
+    const {
+      phase = "verification"
+    } = options;
     const successorSessionId = normalizeText(state.successor?.sessionId);
     if (!successorSessionId) {
       throw renewalError(

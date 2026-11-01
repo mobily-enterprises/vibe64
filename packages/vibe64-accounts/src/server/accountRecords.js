@@ -156,7 +156,8 @@ function accountReadFailed(id, error) {
   };
 }
 
-function operatorCliAccount(id, { installed = false, observed = "" } = {}) {
+function operatorCliAccount(id, options = {}) {
+  const { installed = false, observed = "" } = options;
   const { install, title, detail, ...problem } = operatorCliProblem(id, { installed });
   return {
     ...accountDisconnected({ ...ACCOUNT_DEFINITIONS[id], ...problem, observed }),

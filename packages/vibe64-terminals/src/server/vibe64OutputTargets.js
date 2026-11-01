@@ -126,9 +126,10 @@ async function inspectVibe64ForContext(context = {}, inspect, unconfigured) {
   }
 }
 
-async function inspectVibe64OutputsForContext(context = {}, {
-  inspect = inspectVibe64Outputs
-} = {}) {
+async function inspectVibe64OutputsForContext(context = {}, options = {}) {
+  const {
+    inspect = inspectVibe64Outputs
+  } = options;
   const outputs = await inspectVibe64ForContext(context, inspect, {
     status: "unconfigured",
     targets: []
@@ -141,9 +142,10 @@ async function inspectVibe64OutputsForContext(context = {}, {
   return outputs;
 }
 
-async function inspectVibe64WorkspaceSetupForContext(context = {}, {
-  inspect = context.projectService?.inspectWorkspaceSetup?.bind(context.projectService) || inspectVibe64WorkspaceSetup
-} = {}) {
+async function inspectVibe64WorkspaceSetupForContext(context = {}, options = {}) {
+  const {
+    inspect = context.projectService?.inspectWorkspaceSetup?.bind(context.projectService) || inspectVibe64WorkspaceSetup
+  } = options;
   return inspectVibe64ForContext(context, inspect, {
     recipeHash: "",
     status: "unconfigured",
@@ -158,11 +160,12 @@ async function listVibe64OutputTargets(context = {}, options = {}) {
     .filter((target) => target.id && target.label);
 }
 
-function vibe64OutputCommand(argv = [], {
-  host = "127.0.0.1",
-  port = "",
-  parameters = {}
-} = {}) {
+function vibe64OutputCommand(argv = [], options = {}) {
+  const {
+    host = "127.0.0.1",
+    port = "",
+    parameters = {}
+  } = options;
   return (Array.isArray(argv) ? argv : [])
     .map((argument) => String(argument)
       .replace(/\{(host|port|parameter:([a-z0-9]+(?:-[a-z0-9]+)*))\}/gu, (_match, placeholder, id) => {
@@ -184,12 +187,13 @@ function outputResultsMarkerCommand(marker = "") {
   return `printf '\\n%s\\n' ${shellQuote(marker)}`;
 }
 
-function vibe64WebOutputDescriptor(target = {}, {
-  host = "127.0.0.1",
-  marker = "",
-  port,
-  worktreePath
-} = {}) {
+function vibe64WebOutputDescriptor(target = {}, options = {}) {
+  const {
+    host = "127.0.0.1",
+    marker = "",
+    port,
+    worktreePath
+  } = options;
   const runtime = vibe64RuntimePacks(target.runtimeRequirements);
   const previewIdentityRuntime = vibe64RuntimePacks(target.previewIdentity?.runtimes);
   const commands = (Array.isArray(target.steps) ? target.steps : []).flatMap((step) => {

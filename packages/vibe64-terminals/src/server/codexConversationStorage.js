@@ -44,9 +44,10 @@ function codexAppServerTurnState(session = {}) {
   return nativeCodexAppServerTurnState(session, normalizeVibe64AgentRunState);
 }
 
-function codexState(session = {}, {
-  codexTerminal = activeCodexTerminal(session)
-} = {}) {
+function codexState(session = {}, options = {}) {
+  const {
+    codexTerminal = activeCodexTerminal(session)
+  } = options;
   const workdir = nativeStateWorkdir(session);
   const codexConversationId = codexConversationIdForWorkdir(session, workdir);
   const codexThreadId = normalizeCodexThreadId(codexConversationId);

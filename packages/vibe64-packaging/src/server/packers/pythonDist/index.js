@@ -27,7 +27,8 @@ function distributionFileVersion(fileName) {
 /**
  * Checks the built file names: one sdist, one or more wheels, one project, one version.
  */
-function checkPythonDistributions(fileNames, { version = null } = {}) {
+function checkPythonDistributions(fileNames, options = {}) {
+  const { version = null } = options;
   const names = [...fileNames].sort();
   const files = names.map((name) => ({ name, ...distributionFileVersion(name) }));
   const unknown = files.filter((file) => !file.kind);

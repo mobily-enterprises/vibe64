@@ -166,10 +166,11 @@ function vibe64Driver(input = {}) {
     : normalized.stableContext;
 }
 
-async function vibe64DriverInputFromRegistry(request = {}, {
-  readRegistry = readFile,
-  workdir = ""
-} = {}) {
+async function vibe64DriverInputFromRegistry(request = {}, options = {}) {
+  const {
+    readRegistry = readFile,
+    workdir = ""
+  } = options;
   const value = record(request, "Vibe64 host resolver request");
   exactFields(value, ["data", "providerSessionId", "parentSessionIds", "scope"], "Vibe64 host resolver request");
   if (!["session", "turn"].includes(value.scope)) {

@@ -300,9 +300,10 @@ class Vibe64SessionRuntime {
     return this.sessionViewForRenewal(session);
   }
 
-  async discardRenewalSession(sessionId = "", {
-    renewalId = ""
-  } = {}) {
+  async discardRenewalSession(sessionId = "", options = {}) {
+    const {
+      renewalId = ""
+    } = options;
     const session = await this.store.readSessionForRenewal(sessionId);
     if (
       session.status !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
@@ -342,17 +343,19 @@ class Vibe64SessionRuntime {
     return this.promptEnvironment;
   }
 
-  async getSession(sessionId, {
-    inspectSource = this.inspectSourceByDefault
-  } = {}) {
+  async getSession(sessionId, options = {}) {
+    const {
+      inspectSource = this.inspectSourceByDefault
+    } = options;
     return this.sessionView(await this.store.readSession(sessionId), {
       inspectSource
     });
   }
 
-  async getSessionForRenewal(sessionId, {
-    inspectSource = this.inspectSourceByDefault
-  } = {}) {
+  async getSessionForRenewal(sessionId, options = {}) {
+    const {
+      inspectSource = this.inspectSourceByDefault
+    } = options;
     return this.sessionViewForRenewal(
       await this.store.readSessionForRenewal(sessionId),
       { inspectSource }
@@ -409,9 +412,10 @@ class Vibe64SessionRuntime {
     return this.store.restoreSessionAfterRenewalCancellation(options);
   }
 
-  async sessionView(session = {}, {
-    inspectSource = this.inspectSourceByDefault
-  } = {}) {
+  async sessionView(session = {}, options = {}) {
+    const {
+      inspectSource = this.inspectSourceByDefault
+    } = options;
     assertUsableSession(session);
     const sourceInspection = inspectSource
       ? await this.inspectSourceForSession(session)
@@ -422,9 +426,10 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async sessionViewForRenewal(session = {}, {
-    inspectSource = this.inspectSourceByDefault
-  } = {}) {
+  async sessionViewForRenewal(session = {}, options = {}) {
+    const {
+      inspectSource = this.inspectSourceByDefault
+    } = options;
     assertSupportedSession(session);
     const sourceInspection = inspectSource
       ? await inspectSessionSource(this, session)
@@ -450,7 +455,8 @@ class Vibe64SessionRuntime {
     return sessionSourcePath(session);
   }
 
-  async getNativeExecutionRoot(sessionId, { allowClosing = false } = {}) {
+  async getNativeExecutionRoot(sessionId, options = {}) {
+    const { allowClosing = false } = options;
     const session = assertUsableSession(await this.store.readSession(sessionId));
     if (!learningSessionBinding(session.metadata, this.learningScope, session.sessionId)) return requireSessionSourceRoot(session);
     if (session.archived || (sessionIsClosing(session) && allowClosing !== true) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
@@ -459,11 +465,12 @@ class Vibe64SessionRuntime {
     return this.learningScope.noExercise ? requireLearningNativeDirectory(session) : requireSessionSourceRoot(session);
   }
 
-  async renderPrompt(sessionId, {
-    input = {},
-    request = "",
-    task = "work"
-  } = {}) {
+  async renderPrompt(sessionId, options = {}) {
+    const {
+      input = {},
+      request = "",
+      task = "work"
+    } = options;
     const session = assertSupportedSession(await this.store.readSession(sessionId));
     const learning = learningSessionBinding(session.metadata, this.learningScope, session.sessionId);
     if (learning) {
@@ -505,9 +512,10 @@ class Vibe64SessionRuntime {
     };
   }
 
-  async archiveSessionSource(sessionOrId = {}, {
-    reason = "archive"
-  } = {}) {
+  async archiveSessionSource(sessionOrId = {}, options = {}) {
+    const {
+      reason = "archive"
+    } = options;
     const sessionId = normalizeText(typeof sessionOrId === "string"
       ? sessionOrId
       : sessionOrId.sessionId);
@@ -524,9 +532,10 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async prepareSessionSourceForRenewal(sessionId = "", {
-    renewalId = ""
-  } = {}) {
+  async prepareSessionSourceForRenewal(sessionId = "", options = {}) {
+    const {
+      renewalId = ""
+    } = options;
     return this.store.mutateSessionForRenewal(sessionId, async () => {
       const session = assertSupportedSession(
         await this.store.readSessionForRenewal(sessionId)
@@ -548,9 +557,10 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async stagePreparedSessionSourceForRenewal(sessionId = "", {
-    renewalId = ""
-  } = {}) {
+  async stagePreparedSessionSourceForRenewal(sessionId = "", options = {}) {
+    const {
+      renewalId = ""
+    } = options;
     return this.store.mutateSessionForRenewal(sessionId, async () => {
       const session = assertSupportedSession(
         await this.store.readSessionForRenewal(sessionId)
@@ -571,9 +581,10 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async restoreSessionSourceAfterRenewalFailure(sessionId = "", {
-    renewalId = ""
-  } = {}) {
+  async restoreSessionSourceAfterRenewalFailure(sessionId = "", options = {}) {
+    const {
+      renewalId = ""
+    } = options;
     return this.store.mutateSessionForRenewal(sessionId, async () => {
       const session = assertSupportedSession(
         await this.store.readSessionForRenewal(sessionId)
@@ -594,9 +605,10 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async commitRenewalSessionSourceRemoval(sessionId = "", {
-    renewalId = ""
-  } = {}) {
+  async commitRenewalSessionSourceRemoval(sessionId = "", options = {}) {
+    const {
+      renewalId = ""
+    } = options;
     return this.store.withPublishedRenewalSession(sessionId, async (publishedSession) => {
       const session = assertSupportedSession(publishedSession);
       if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) {
@@ -621,9 +633,10 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async markSessionClosing(sessionId = "", {
-    reason = "closing"
-  } = {}) {
+  async markSessionClosing(sessionId = "", options = {}) {
+    const {
+      reason = "closing"
+    } = options;
     return this.store.mutateSession(sessionId, async () => {
       await this.store.assertSessionNotPinned(sessionId);
       assertSupportedSession(await this.store.readSession(sessionId));
@@ -649,9 +662,10 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async archiveSession(sessionId = "", {
-    reason = "archived"
-  } = {}) {
+  async archiveSession(sessionId = "", options = {}) {
+    const {
+      reason = "archived"
+    } = options;
     const session = assertSupportedSession(await this.store.readSession(sessionId));
     if (archivedSessionStatus(session.status)) {
       return this.getSession(sessionId);

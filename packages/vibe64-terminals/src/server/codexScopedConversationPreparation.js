@@ -59,11 +59,12 @@ function codexAppServerExpiredEphemeralConversation(conversationId = "", input =
   };
 }
 
-function codexDetachedChatTurnError(error, {
-  agentSettings = {},
-  executionProfile = null,
-  status = ""
-} = {}) {
+function codexDetachedChatTurnError(error, options = {}) {
+  const {
+    agentSettings = {},
+    executionProfile = null,
+    status = ""
+  } = options;
   const profile = isRecord(executionProfile) ? executionProfile : null;
   const settings = profile || effectiveVibe64AgentExecutionSettings(agentSettings);
   const terminalStatus = ["failed", "interrupted"].includes(trimmedText(status))
@@ -169,11 +170,12 @@ function createCodexScopedConversationPreparation({
     };
   }
 
-  async function codexAppServerConversationPreparation(sessionId = "", input = {}, {
-    assistantScope = null,
-    runtime: resolvedRuntime = null,
-    session: resolvedSession = null
-  } = {}) {
+  async function codexAppServerConversationPreparation(sessionId = "", input = {}, options = {}) {
+    const {
+      assistantScope = null,
+      runtime: resolvedRuntime = null,
+      session: resolvedSession = null
+    } = options;
     if (assistantScope) {
       return codexAppServerEphemeralScopePreparation(sessionId, input, assistantScope);
     }

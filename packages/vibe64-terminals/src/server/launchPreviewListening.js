@@ -23,12 +23,13 @@ const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 
 const PREVIEW_PUBLIC_SOCKET_BASENAME_PATTERN = /^v64preview-[a-f0-9]{12}--[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:--p[0-9]{1,5})?\.sock$/u;
 
-async function listenOnPreviewPort(server, {
-  env = process.env,
-  host = previewProxyListenHost(env),
-  portEnd = undefined,
-  portStart = undefined
-} = {}) {
+async function listenOnPreviewPort(server, options = {}) {
+  const {
+    env = process.env,
+    host = previewProxyListenHost(env),
+    portEnd = undefined,
+    portStart = undefined
+  } = options;
   const configuredRange = previewProxyPortRange(env);
   const firstPort = portStart || configuredRange.start;
   const lastPort = portEnd || configuredRange.end;
@@ -124,10 +125,11 @@ async function pruneStalePreviewSockets({
   };
 }
 
-async function listenOnPreviewSocket(server, {
-  env = process.env,
-  publicOrigin = ""
-} = {}) {
+async function listenOnPreviewSocket(server, options = {}) {
+  const {
+    env = process.env,
+    publicOrigin = ""
+  } = options;
   const socketPath = previewPublicSocketPath(publicOrigin, env);
   await preparePreviewSocketDirectory(env);
   const listened = await tryListenOnPreviewSocket(server, socketPath);

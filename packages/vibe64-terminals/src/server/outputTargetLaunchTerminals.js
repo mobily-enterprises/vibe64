@@ -111,23 +111,25 @@ function launchTerminalIsReady(terminalSession = {}, readinessMarker = "") {
   return launchIsReady(terminalSession.metadata || {});
 }
 
-function launchTerminalCanBeReused(runningSession = {}, {
-  launchEnvHash = "",
-  outputTargetId = "",
-  spec = {}
-} = {}) {
+function launchTerminalCanBeReused(runningSession = {}, options = {}) {
+  const {
+    launchEnvHash = "",
+    outputTargetId = "",
+    spec = {}
+  } = options;
   return spec.reuseRunning !== false &&
     runningSession.metadata?.envHash === launchEnvHash &&
     runningSession.metadata?.outputTargetId === outputTargetId &&
     isDeepStrictEqual(runningSession.metadata?.outputParameters || {}, spec.metadata?.outputParameters || {});
 }
 
-function reusableLaunchTerminal(sessionId = "", {
-  launchEnvHash = "",
-  outputTargetId = "",
-  namespace = outputTargetTerminalNamespace(sessionId),
-  spec = {}
-} = {}) {
+function reusableLaunchTerminal(sessionId = "", options = {}) {
+  const {
+    launchEnvHash = "",
+    outputTargetId = "",
+    namespace = outputTargetTerminalNamespace(sessionId),
+    spec = {}
+  } = options;
   return listTerminalSessions({
     namespace,
     runningOnly: true

@@ -296,9 +296,10 @@ function createServiceAgentConversations({
     );
   }
 
-  function validateSessionRenewalHandover(handover = "", {
-    source = null
-  } = {}) {
+  function validateSessionRenewalHandover(handover = "", options = {}) {
+    const {
+      source = null
+    } = options;
     return defineSessionRenewalHandoverText(handover, {
       requireStructure: true,
       source

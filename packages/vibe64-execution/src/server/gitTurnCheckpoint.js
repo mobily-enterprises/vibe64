@@ -582,7 +582,8 @@ function checkpointDateEnv(timestamp = "") {
   };
 }
 
-async function zeroObjectId(runCommand, worktreePath, { project = {} } = {}) {
+async function zeroObjectId(runCommand, worktreePath, options = {}) {
+  const { project = {} } = options;
   const format = await optionalGitOutput(runCommand, worktreePath, [
     "rev-parse",
     "--show-object-format"
@@ -606,11 +607,12 @@ async function requiredGitOutput(runCommand, worktreePath, args, options = {}) {
   return String(result.stdout || "").trim();
 }
 
-function gitCommand(runCommand, worktreePath, args, {
-  env = {},
-  input,
-  project = {}
-} = {}) {
+function gitCommand(runCommand, worktreePath, args, options = {}) {
+  const {
+    env = {},
+    input,
+    project = {}
+  } = options;
   return runCommand({
     actor: "daemon",
     allowedRoots: [worktreePath],

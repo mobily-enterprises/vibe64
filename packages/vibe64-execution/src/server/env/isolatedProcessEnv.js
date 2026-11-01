@@ -32,15 +32,16 @@ function requiredAbsoluteDirectory(value = "", label = "directory") {
   return directory;
 }
 
-function isolatedProcessEnv(baseEnv = {}, {
-  cacheRoot = "",
-  configRoot = "",
-  dataRoot = "",
-  extraEnv = {},
-  homeRoot = "",
-  pathEntries = [],
-  stateRoot = ""
-} = {}) {
+function isolatedProcessEnv(baseEnv = {}, options = {}) {
+  const {
+    cacheRoot = "",
+    configRoot = "",
+    dataRoot = "",
+    extraEnv = {},
+    homeRoot = "",
+    pathEntries = [],
+    stateRoot = ""
+  } = options;
   const home = requiredAbsoluteDirectory(homeRoot, "home root");
   const cache = requiredAbsoluteDirectory(cacheRoot, "cache root");
   const config = requiredAbsoluteDirectory(configRoot, "config root");

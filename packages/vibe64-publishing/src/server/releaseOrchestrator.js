@@ -365,7 +365,8 @@ function createReleaseOrchestrator({
    * that signs in, plus local tool choices (which twine), which do not change
    * where it publishes.
    */
-  async function runtimeTarget(planTarget, { tag = null, notes = null } = {}) {
+  async function runtimeTarget(planTarget, options = {}) {
+    const { tag = null, notes = null } = options;
     const tools = await toolchains.registryTools();
     const settings = { ...(planTarget.settings || {}) };
     if (planTarget.destination === "pypi" && tools.twine) settings.twine = tools.twine;

@@ -16,9 +16,10 @@ import {
  * @param {ProjectSelection} dependencies.selection
  */
 function createProjectSessionWork({ environment, selection }) {
-  async function runSessionSourceWorkExclusive(input = {}, operation, operationName = "project-source-write", {
-    waitMs = 0
-  } = {}) {
+  async function runSessionSourceWorkExclusive(input = {}, operation, operationName = "project-source-write", options = {}) {
+    const {
+      waitMs = 0
+    } = options;
     if (typeof operation !== "function") {
       throw new TypeError("Session source work requires an operation.");
     }

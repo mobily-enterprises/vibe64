@@ -391,9 +391,10 @@ async function writeGithubAuthStatus(input = {}, status = {}) {
   return value;
 }
 
-async function markGithubReconnectRequired(input = {}, {
-  reason = "github-command"
-} = {}) {
+async function markGithubReconnectRequired(input = {}, options = {}) {
+  const {
+    reason = "github-command"
+  } = options;
   return writeGithubAuthStatus(input, {
     code: GITHUB_RECONNECT_REQUIRED_CODE,
     message: GITHUB_RECONNECT_REQUIRED_MESSAGE,

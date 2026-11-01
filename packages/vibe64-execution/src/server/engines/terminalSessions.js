@@ -101,10 +101,11 @@ function scheduleDetachedCleanup(session = {}, namespace = "default") {
   }, remainingMs);
 }
 
-function readTerminalSessionControlState(id, {
-  namespace = "default",
-  quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
-} = {}) {
+function readTerminalSessionControlState(id, options = {}) {
+  const {
+    namespace = "default",
+    quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
+  } = options;
   return terminalSessionControlSnapshot(readTerminalSession(id, {
     namespace
   }), {
@@ -112,10 +113,11 @@ function readTerminalSessionControlState(id, {
   });
 }
 
-async function writeTerminalSessionText(id, text = "", {
-  namespace = "default",
-  quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
-} = {}) {
+async function writeTerminalSessionText(id, text = "", options = {}) {
+  const {
+    namespace = "default",
+    quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
+  } = options;
   return terminalSessionControlSnapshot(writeTerminalSession(id, text, {
     namespace
   }), {
@@ -123,10 +125,11 @@ async function writeTerminalSessionText(id, text = "", {
   });
 }
 
-function writeTerminalSessionKey(id, key = "", {
-  namespace = "default",
-  quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
-} = {}) {
+function writeTerminalSessionKey(id, key = "", options = {}) {
+  const {
+    namespace = "default",
+    quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
+  } = options;
   const input = terminalKeyInput(key);
   if (!input) {
     return {
@@ -372,7 +375,8 @@ function startTerminalSession({
   return readTerminalSession(id, { namespace });
 }
 
-function readTerminalSession(id, { namespace = "default", outputLimit = 0 } = {}) {
+function readTerminalSession(id, options = {}) {
+  const { namespace = "default", outputLimit = 0 } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
@@ -384,7 +388,8 @@ function readTerminalSession(id, { namespace = "default", outputLimit = 0 } = {}
   });
 }
 
-function updateTerminalSessionMetadata(id, metadata = {}, { namespace = "default" } = {}) {
+function updateTerminalSessionMetadata(id, metadata = {}, options = {}) {
+  const { namespace = "default" } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
@@ -393,7 +398,8 @@ function updateTerminalSessionMetadata(id, metadata = {}, { namespace = "default
   return applySessionMetadata(session, metadata);
 }
 
-function subscribeTerminalSession(id, subscriber, { namespace = "default", outputLimit = 0 } = {}) {
+function subscribeTerminalSession(id, subscriber, options = {}) {
+  const { namespace = "default", outputLimit = 0 } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
@@ -423,7 +429,8 @@ function subscribeTerminalSession(id, subscriber, { namespace = "default", outpu
   };
 }
 
-function writeTerminalSession(id, data, { namespace = "default" } = {}) {
+function writeTerminalSession(id, data, options = {}) {
+  const { namespace = "default" } = options;
   const admissionFailure = terminalNamespaceAdmissionFailure(namespace);
   if (admissionFailure) {
     return admissionFailure;
@@ -451,7 +458,8 @@ function writeTerminalSession(id, data, { namespace = "default" } = {}) {
   return readTerminalSession(id, { namespace });
 }
 
-function resizeTerminalSession(id, size = {}, { namespace = "default" } = {}) {
+function resizeTerminalSession(id, size = {}, options = {}) {
+  const { namespace = "default" } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
@@ -485,7 +493,8 @@ function resizeTerminalSession(id, size = {}, { namespace = "default" } = {}) {
   return terminalSessionResponse(session);
 }
 
-function stopTerminalSession(id, { namespace = "default" } = {}) {
+function stopTerminalSession(id, options = {}) {
+  const { namespace = "default" } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
@@ -499,7 +508,8 @@ function stopTerminalSession(id, { namespace = "default" } = {}) {
   return terminalSessionResponse(session);
 }
 
-async function stopTerminalSessionAndWait(id, { namespace = "default" } = {}) {
+async function stopTerminalSessionAndWait(id, options = {}) {
+  const { namespace = "default" } = options;
   const session = sessionsForNamespace(namespace).get(id);
   if (!session) return terminalSessionNotFound();
   const stopped = await beginTerminalStop(session, "stop");
@@ -511,9 +521,10 @@ async function stopTerminalSessionAndWait(id, { namespace = "default" } = {}) {
   return terminalSessionResponse(session);
 }
 
-async function closeTerminalSession(id, {
-  namespace = "default"
-} = {}) {
+async function closeTerminalSession(id, options = {}) {
+  const {
+    namespace = "default"
+  } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {

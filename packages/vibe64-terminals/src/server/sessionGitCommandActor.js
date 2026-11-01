@@ -163,9 +163,10 @@ function sessionGitCommandActorFromMetadata(session = {}) {
  * @param {object} [options]
  * @param {string} [options.reason]
  */
-async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", metadata = {}, {
-  reason = ""
-} = {}) {
+async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", metadata = {}, options = {}) {
+  const {
+    reason = ""
+  } = options;
   if (!runtime) {
     return false;
   }

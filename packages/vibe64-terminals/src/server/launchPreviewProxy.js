@@ -47,9 +47,10 @@ import { createPreviewIdentityGrantConsumer } from "./launchPreviewIdentity.js";
 import { proxyPreviewRequest, proxyPreviewUpgrade } from "./launchPreviewForwarding.js";
 
 const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS";
-function normalizePreviewProxySocketIdleTimeoutMs(value = undefined, {
-  env = process.env
-} = {}) {
+function normalizePreviewProxySocketIdleTimeoutMs(value = undefined, options = {}) {
+  const {
+    env = process.env
+  } = options;
   const number = Number(value ?? env?.[PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV]);
   return Number.isSafeInteger(number) && number > 0
     ? number
@@ -314,10 +315,11 @@ function previewProxyRuntimeEnv(env = {}, hostEnv = process.env) {
   };
 }
 
-function previewProxyScope(input = {}, {
-  publicOrigin = "",
-  targetHref = ""
-} = {}) {
+function previewProxyScope(input = {}, options = {}) {
+  const {
+    publicOrigin = "",
+    targetHref = ""
+  } = options;
   if (input && typeof input === "object" && !Array.isArray(input)) {
     return {
       publicOrigin: String(publicOrigin || input.previewPublicOrigin || "").trim(),
@@ -381,13 +383,14 @@ function previewProxyIdentityMatches(left = {}, right = {}) {
 async function startLaunchPreviewProxy({
   connectUrl,
   targetUrl
-} = {}, scope = {}, {
-  env = process.env,
-  executePreviewIdentityCommand = null,
-  previewAuth = null,
-  publicOrigin = "",
-  socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS
-} = {}) {
+} = {}, scope = {}, options = {}) {
+  const {
+    env = process.env,
+    executePreviewIdentityCommand = null,
+    previewAuth = null,
+    publicOrigin = "",
+    socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS
+  } = options;
   const server = createServer();
   const tracker = createPreviewProxyConnectionTracker({
     socketIdleTimeoutMs
@@ -510,9 +513,10 @@ async function startLaunchPreviewProxy({
   };
 }
 
-function normalizePreviewAuth(value = {}, {
-  targetHref = ""
-} = {}) {
+function normalizePreviewAuth(value = {}, options = {}) {
+  const {
+    targetHref = ""
+  } = options;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }

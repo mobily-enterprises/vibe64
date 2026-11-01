@@ -20,9 +20,10 @@ function invalid(setupPath, message, line, details = {}) {
   invalidStackOperation(ERROR_CODE, setupPath, message, line, details);
 }
 
-function parseVibe64WorkspaceSetupLines(lines, {
-  path: setupPath = "genesis/stack.md#Workspace setup"
-} = {}) {
+function parseVibe64WorkspaceSetupLines(lines, options = {}) {
+  const {
+    path: setupPath = "genesis/stack.md#Workspace setup"
+  } = options;
   if (!Array.isArray(lines)) {
     invalid(setupPath, "Workspace setup must be supplied as exact Stack section lines.");
   }

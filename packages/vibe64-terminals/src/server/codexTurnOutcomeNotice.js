@@ -41,9 +41,10 @@ function codexAppServerResultDeliveryFailureMessage({
   return `Codex completed, but Vibe64 could not process its response: ${normalizedError}${punctuation}`;
 }
 
-function codexTurnOutcomeNoticeMessage(outcome = "", detail = "", {
-  usageLimitExceeded = false
-} = {}) {
+function codexTurnOutcomeNoticeMessage(outcome = "", detail = "", options = {}) {
+  const {
+    usageLimitExceeded = false
+  } = options;
   const normalizedOutcome = trimmedText(outcome);
   const message = CODEX_TURN_OUTCOME_MESSAGES[normalizedOutcome] ||
     "Codex could not finish. Saved file changes remain; send a message to continue.";

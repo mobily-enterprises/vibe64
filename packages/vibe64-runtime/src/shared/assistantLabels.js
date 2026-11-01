@@ -2,7 +2,8 @@ import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProv
 import { findVibe64AgentProvider, VIBE64_AGENT_PROVIDERS } from "./agentSettings.js";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "./assistantSelection.js";
 
-function vibe64AssistantSelectionLabel(selection, { includeThinking = true } = {}) {
+function vibe64AssistantSelectionLabel(selection, options = {}) {
+  const { includeThinking = true } = options;
   const engine = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === selection.engineId)?.label || selection.engineId;
   if (!includeThinking) return `${engine} (${selection.modelId})`;
   const thinking = selection.variantId === "" ? "default" : selection.variantId || "not recorded";

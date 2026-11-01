@@ -103,11 +103,12 @@ function createCodexLifecyclePreparation({
     };
   }
 
-  async function prepareCodexAppServerThreadUnsubscription(normalizedSessionId, {
-    providerOptions: providedProviderOptions = undefined,
-    runtime: providedRuntime = null,
-    session: providedSession = null
-  } = {}) {
+  async function prepareCodexAppServerThreadUnsubscription(normalizedSessionId, options = {}) {
+    const {
+      providerOptions: providedProviderOptions = undefined,
+      runtime: providedRuntime = null,
+      session: providedSession = null
+    } = options;
     const runtime = providedRuntime || await createRuntimeForSession();
     const session = providedSession || await runtime.getSession(normalizedSessionId);
     const providerOptions = providedProviderOptions ?? codexAppServerRuntimeOptionsFromSessionMetadata(session);
@@ -132,9 +133,10 @@ function createCodexLifecyclePreparation({
     };
   }
 
-  async function prepareCodexAppServerSessionReconciliation(normalizedSessionId, {
-    agentSettings = {}
-  } = {}) {
+  async function prepareCodexAppServerSessionReconciliation(normalizedSessionId, options = {}) {
+    const {
+      agentSettings = {}
+    } = options;
     const context = await codexConversationPreparation.context(normalizedSessionId);
     if (context.ok === false) {
       return { result: context };

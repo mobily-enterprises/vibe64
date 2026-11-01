@@ -24,9 +24,10 @@ function requireCodexAuthSystemRoot(systemRoot = "") {
   return path.resolve(normalizedRoot);
 }
 
-function codexAuthFilePath(systemRoot = "", {
-  relativePath = []
-} = {}) {
+function codexAuthFilePath(systemRoot = "", options = {}) {
+  const {
+    relativePath = []
+  } = options;
   return path.join(requireCodexAuthSystemRoot(systemRoot), ...relativePath);
 }
 
@@ -134,9 +135,10 @@ async function writeCodexAuthMarker(systemRoot = "", marker = {}) {
   return writeCodexAuthRecord(codexAuthMarkerPath(systemRoot), marker);
 }
 
-async function markCodexAuthReconnecting(systemRoot = "", {
-  reason = "codex-auth-change"
-} = {}) {
+async function markCodexAuthReconnecting(systemRoot = "", options = {}) {
+  const {
+    reason = "codex-auth-change"
+  } = options;
   const status = {
     code: CODEX_AUTH_RECONNECTING_CODE,
     generation: randomUUID(),
@@ -150,9 +152,10 @@ async function markCodexAuthReconnecting(systemRoot = "", {
   return status;
 }
 
-async function markCodexReconnectRequired(systemRoot = "", {
-  reason = "codex-command"
-} = {}) {
+async function markCodexReconnectRequired(systemRoot = "", options = {}) {
+  const {
+    reason = "codex-command"
+  } = options;
   return writeCodexAuthStatus(systemRoot, {
     code: CODEX_RECONNECT_REQUIRED_CODE,
     message: CODEX_RECONNECT_REQUIRED_MESSAGE,

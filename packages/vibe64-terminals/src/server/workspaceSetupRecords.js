@@ -48,17 +48,18 @@ async function persistInspectedState(runtime, sessionId, previous, value, renewa
     : persist(runtime, sessionId, next, renewal);
 }
 
-async function failed(runtime, sessionId, {
-  currentLabel = "",
-  diagnostic = "Workspace preparation failed.",
-  recipeHash = "",
-  redactionSecrets = [],
-  resourceAdmissionId = "",
-  renewal = false,
-  runtimes = [],
-  startedAt = "",
-  transcript = ""
-} = {}) {
+async function failed(runtime, sessionId, options = {}) {
+  const {
+    currentLabel = "",
+    diagnostic = "Workspace preparation failed.",
+    recipeHash = "",
+    redactionSecrets = [],
+    resourceAdmissionId = "",
+    renewal = false,
+    runtimes = [],
+    startedAt = "",
+    transcript = ""
+  } = options;
   const safeLabel = safeSetupLabel(currentLabel, redactionSecrets);
   const safeDiagnostic = sanitizeOperationText(diagnostic, redactionSecrets);
   return persist(runtime, sessionId, {

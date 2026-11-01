@@ -64,13 +64,14 @@ function environmentRecord(value = {}) {
     .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/u.test(key)));
 }
 
-function environmentRecords(environment = {}, {
-  editable = false,
-  owner = RUNTIME_CONFIG_OWNERS.SYSTEM,
-  secretKeys = new Set(),
-  source = "system",
-  sources = {}
-} = {}) {
+function environmentRecords(environment = {}, options = {}) {
+  const {
+    editable = false,
+    owner = RUNTIME_CONFIG_OWNERS.SYSTEM,
+    secretKeys = new Set(),
+    source = "system",
+    sources = {}
+  } = options;
   return Object.entries(environmentRecord(environment)).map(([key, value]) => ({
     editable,
     key,
@@ -136,9 +137,10 @@ function createProjectEnvironment({
     });
   }
 
-  async function resolvedProjectEnvironment(input = {}, userRecords = [], {
-    provisionResources = false
-  } = {}) {
+  async function resolvedProjectEnvironment(input = {}, userRecords = [], options = {}) {
+    const {
+      provisionResources = false
+    } = options;
     const source = await selection.sourceForInput(input);
     const sourceRoot = source.sourceRoot;
     const savedRecords = await savedEnvRecords(input);

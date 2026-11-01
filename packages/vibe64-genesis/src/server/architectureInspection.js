@@ -33,7 +33,8 @@ const ARCHITECTURE_INSPECTOR_FIELDS = Object.freeze({
 });
 const FIELD_LINE = new RegExp(`^- (${Object.keys(ARCHITECTURE_INSPECTOR_FIELDS).join("|")}): (.+)$`, "u");
 
-function parseVibe64ArchitectureInspectionLines(lines, { path: sectionPath = SECTION_PATH } = {}) {
+function parseVibe64ArchitectureInspectionLines(lines, options = {}) {
+  const { path: sectionPath = SECTION_PATH } = options;
   if (!Array.isArray(lines)) invalidStackOperation(ERROR_CODE, sectionPath, "Architecture inspection requires exact Stack section lines.");
   if (isExplicitlyEmptyStackSection(lines)) return [];
   const inspectors = [];

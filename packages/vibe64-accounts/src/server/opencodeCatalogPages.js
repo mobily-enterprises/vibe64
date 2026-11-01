@@ -6,7 +6,8 @@ import { aiConnectionError } from "./aiConnectionError.js";
  * the engine's providers. The first page's result, engine and provider are
  * returned for the caller's metadata.
  */
-async function readAllOpenCodeCapabilityRows(readCapabilities, { modelProviderId = "" } = {}) {
+async function readAllOpenCodeCapabilityRows(readCapabilities, options = {}) {
+  const { modelProviderId = "" } = options;
   const rows = [];
   const seenCursors = new Set();
   let cursor = "";

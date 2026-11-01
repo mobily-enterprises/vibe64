@@ -37,11 +37,12 @@ import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
-async function stopSourceEditorExplanation(context = {}, explanationId = "", {
-  explanationChats,
-  explanationTurns,
-  terminalService
-} = {}) {
+async function stopSourceEditorExplanation(context = {}, explanationId = "", options = {}) {
+  const {
+    explanationChats,
+    explanationTurns,
+    terminalService
+  } = options;
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
   if (pendingTurn) {
@@ -123,12 +124,13 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
-async function cleanupSourceEditorExplanations(context = {}, input = {}, {
-  all = false,
-  explanationChats,
-  explanationTurns,
-  terminalService
-} = {}) {
+async function cleanupSourceEditorExplanations(context = {}, input = {}, options = {}) {
+  const {
+    all = false,
+    explanationChats,
+    explanationTurns,
+    terminalService
+  } = options;
   const activeIds = sourceEditorCleanupActiveIds(input.activeExplanationIds);
   const originId = normalizeText(input.originId);
   const cleaned = [];
@@ -199,11 +201,12 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, {
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
-async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
-  explanationChats,
-  explanationTurns,
-  terminalService
-} = {}) {
+async function deleteSourceEditorExplanation(context = {}, explanationId = "", options = {}) {
+  const {
+    explanationChats,
+    explanationTurns,
+    terminalService
+  } = options;
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
   pendingTurn?.controller.abort();

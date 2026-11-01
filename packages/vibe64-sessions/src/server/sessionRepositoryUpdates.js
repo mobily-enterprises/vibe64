@@ -91,9 +91,10 @@ function createSessionRepositoryUpdates({
    * @param {object} [options]
    * @param {string} [options.originId]
    */
-  async function publishCanonicalChanged(runtime, sourceSessionId, canonicalCommit, {
-    originId = ""
-  } = {}) {
+  async function publishCanonicalChanged(runtime, sourceSessionId, canonicalCommit, options = {}) {
+    const {
+      originId = ""
+    } = options;
     const sessions = await runtime.listSessionSummaries({ statusGroup: "open" });
     const source = await runtime.getSession(sourceSessionId, { inspectSource: false });
     const currentProject = await project.readCurrentProject();
@@ -206,7 +207,8 @@ function createSessionRepositoryUpdates({
      * last failure published. A project nobody watches and no agent turn uses
      * is not read at all.
      */
-    async probeRepositoryUpdates(slug, { memory = new Map(), watched = false } = {}) {
+    async probeRepositoryUpdates(slug, options = {}) {
+      const { memory = new Map(), watched = false } = options;
       return project.runInProjectContext(slug, async () => {
         const runtime = await project.createRuntime({ inspectSource: false });
         const open = await runtime.listSessions({ statusGroup: "open" });

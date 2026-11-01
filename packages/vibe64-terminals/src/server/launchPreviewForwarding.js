@@ -48,11 +48,12 @@ function rejectPreviewRequest(response) {
   response.end("Launch preview token is missing or invalid.");
 }
 
-function rejectPreviewUpgrade(socket, {
-  message = "Launch preview token is missing or invalid.",
-  statusCode = 403,
-  statusMessage = "Forbidden"
-} = {}) {
+function rejectPreviewUpgrade(socket, options = {}) {
+  const {
+    message = "Launch preview token is missing or invalid.",
+    statusCode = 403,
+    statusMessage = "Forbidden"
+  } = options;
   socket.on("error", recordPreviewUpgradeSocketError("server.launchPreviewProxy.upgrade.rejectSocketError"));
   if (!socket.writable) {
     socket.destroy();
@@ -68,11 +69,12 @@ function rejectPreviewUpgrade(socket, {
   ].join("\r\n"));
 }
 
-function redirectPreviewTokenBootstrap(response, {
-  location = "",
-  proxyOrigin = "",
-  token = ""
-} = {}) {
+function redirectPreviewTokenBootstrap(response, options = {}) {
+  const {
+    location = "",
+    proxyOrigin = "",
+    token = ""
+  } = options;
   response.writeHead(302, {
     "Cache-Control": "no-store",
     "Connection": "close",
@@ -156,10 +158,11 @@ function previewStartingHtml() {
 </html>`;
 }
 
-function proxiedLoopbackHtml(html = "", {
-  proxyOrigin = "",
-  targetOrigin = ""
-} = {}) {
+function proxiedLoopbackHtml(html = "", options = {}) {
+  const {
+    proxyOrigin = "",
+    targetOrigin = ""
+  } = options;
   // A write presented on the loopback origin carries no forwarded host, so a
   // proxy-aware app names the loopback target in the page it returns. Translate
   // those absolute URLs back exactly like redirect Locations.

@@ -158,7 +158,8 @@ function createServiceGoals({
    * ordinary Cancel goal path and the chat says why. A Custom goal runs the
    * person's own model, and a paused goal is checked when it is resumed.
    */
-  async function cancelGoalIfMainAiChanged(sessionId, vibe64User = null, { activeOnly = false } = {}) {
+  async function cancelGoalIfMainAiChanged(sessionId, vibe64User = null, options = {}) {
+    const { activeOnly = false } = options;
     const context = await assistantContext.assistantSessionOptions(sessionId, { vibe64User });
     const pinned = assistantRoutingGoalFromMetadata(context.session.metadata);
     if (!pinned || pinned.mode === "custom") return false;
@@ -322,7 +323,8 @@ function createServiceGoals({
     };
   }
 
-  async function updateAgentGoal(sessionId, input = {}, { canonical = false, restartIntentId = null } = {}) {
+  async function updateAgentGoal(sessionId, input = {}, options = {}) {
+    const { canonical = false, restartIntentId = null } = options;
     if (input.action === "resume" && await cancelGoalIfMainAiChanged(sessionId, input.vibe64User || null)) {
       return { ok: false, code: "vibe64_goal_main_ai_changed", error: MAIN_AI_CHANGED_GOAL_NOTICE };
     }
@@ -518,7 +520,8 @@ function createServiceGoals({
    * previous account, so that runtime starts no further turn. Once it has
    * stopped, the goal resumes on the current account as the person who set it.
    */
-  async function continueGoalAfterAccountChange(sessionId, { threadId = "" } = {}) {
+  async function continueGoalAfterAccountChange(sessionId, options = {}) {
+    const { threadId = "" } = options;
     const context = await assistantContext.assistantSessionOptions(sessionId);
     const intent = readGoalIntent(context.session);
     if (!intent?.active || !threadId || intent.native?.threadId !== threadId || state.lifecycle.closing ||

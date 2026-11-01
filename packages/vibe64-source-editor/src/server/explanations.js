@@ -538,13 +538,14 @@ async function createCachedSourceEditorExplanation(
   input = {},
   explanationInput = {},
   template = {},
-  {
+  options = {}
+) {
+  const {
     cacheState = {},
     emit = null,
     explanationChats,
     isClosed = null
-  } = {}
-) {
+  } = options;
   const createdAt = new Date().toISOString();
   const explanationId = sourceEditorClientExplanationId(input.explanationId) || context.explanationId || sourceEditorExplanationId();
   const userMessageId = sourceEditorClientMessageId(input.userMessageId) || sourceEditorExplanationMessageId();
@@ -610,14 +611,15 @@ async function createCachedSourceEditorExplanation(
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
-async function streamSourceEditorExplanation(context = {}, input = {}, {
-  emit = null,
-  explanationChats,
-  explanationInput = null,
-  explanationTurns,
-  isClosed = null,
-  terminalService
-} = {}) {
+async function streamSourceEditorExplanation(context = {}, input = {}, options = {}) {
+  const {
+    emit = null,
+    explanationChats,
+    explanationInput = null,
+    explanationTurns,
+    isClosed = null,
+    terminalService
+  } = options;
   const preparedInput = explanationInput || await sourceEditorExplanationInput(context, input);
   const createdAt = new Date().toISOString();
   const explanationId = sourceEditorClientExplanationId(input.explanationId) || context.explanationId || sourceEditorExplanationId();

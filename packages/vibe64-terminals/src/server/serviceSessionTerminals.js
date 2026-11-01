@@ -429,7 +429,8 @@ function createServiceSessionTerminals({
   /**
    * Only a session's final close (archive or renewal successor discard) calls this.
    */
-  function removeSessionCommandHelpers(sessionId, { runtime = null } = {}) {
+  function removeSessionCommandHelpers(sessionId, options = {}) {
+    const { runtime = null } = options;
     return closeAgentSessionCommandEnvironment(sessionId, () => removeCodexGitCommandSession({
       env,
       sessionId,

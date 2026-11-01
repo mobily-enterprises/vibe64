@@ -132,10 +132,11 @@ function sessionAgentActive(session = {}) {
   });
 }
 
-function sessionStateForHints(session = {}, {
-  repositoryOperationActive = false,
-  sourceAvailable = false
-} = {}) {
+function sessionStateForHints(session = {}, options = {}) {
+  const {
+    repositoryOperationActive = false,
+    sourceAvailable = false
+  } = options;
   const workspaceSetupStatus = normalizeText(session.workspaceSetup?.status) || "unconfigured";
   return {
     agentActive: sessionAgentActive(session),
@@ -181,11 +182,12 @@ function samePromptHintBasis(left = null, right = null) {
   return JSON.stringify(left || null) === JSON.stringify(right || null);
 }
 
-function promptHintResponse(status = "unavailable", {
-  basis = null,
-  cached = false,
-  suggestions = []
-} = {}) {
+function promptHintResponse(status = "unavailable", options = {}) {
+  const {
+    basis = null,
+    cached = false,
+    suggestions = []
+  } = options;
   return {
     basis,
     cached,

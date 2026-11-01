@@ -161,7 +161,8 @@ function createTrainingCourseInstaller({
     }
   }
 
-  async function git(root, args, { maxBuffer = 1024 * 1024, timeout = 120_000 } = {}) {
+  async function git(root, args, options = {}) {
+    const { maxBuffer = 1024 * 1024, timeout = 120_000 } = options;
     // Hooks are disabled; no fetched file is executed. Install runs no authored code.
     const result = await runCommand({
       actor: "daemon",

@@ -35,9 +35,10 @@ function previewDiagnosticError(error = null) {
   };
 }
 
-async function writePreviewDiagnostic(session = {}, record = {}, {
-  append = true
-} = {}) {
+async function writePreviewDiagnostic(session = {}, record = {}, options = {}) {
+  const {
+    append = true
+  } = options;
   const sessionRoot = previewDiagnosticsSessionRoot(session);
   if (!sessionRoot) {
     return;

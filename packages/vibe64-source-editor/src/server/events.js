@@ -7,9 +7,10 @@ import {
 
 /** @param {RuntimeEvents} events */
 function createSourceEditorFileChangedPublisher(events) {
-  return async function publishSourceEditorEvent(result = {}, {
-    operation = "updated"
-  } = {}) {
+  return async function publishSourceEditorEvent(result = {}, options = {}) {
+    const {
+      operation = "updated"
+    } = options;
     const payload = sourceEditorFileRealtimePayload({ result });
     const sessionId = String(payload.sessionId || "").trim();
     const path = String(payload.path || "").trim();

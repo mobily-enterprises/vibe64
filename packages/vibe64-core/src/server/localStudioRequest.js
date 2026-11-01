@@ -88,9 +88,10 @@ function isLocalStudioRequest(request) {
   return isLoopbackAddress(remoteAddress) && isLoopbackAddress(host) && isLoopbackAddress(originHost);
 }
 
-function requireLocalStudioRequest(request, reply, {
-  message = "This Studio route only accepts loopback requests."
-} = {}) {
+function requireLocalStudioRequest(request, reply, options = {}) {
+  const {
+    message = "This Studio route only accepts loopback requests."
+  } = options;
   if (!isLocalStudioRequest(request)) {
     reply.code(403).send({
       ok: false,

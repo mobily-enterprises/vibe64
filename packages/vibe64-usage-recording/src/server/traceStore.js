@@ -432,7 +432,8 @@ function requestRow(id, fields, reader, plumbing) {
  * process's background work (kind "background", no method, path or status),
  * and Vibe64's launch readiness check (kind "readiness", likewise).
  */
-async function recordingRequestRows(directory, reader, { runLabel = null } = {}) {
+async function recordingRequestRows(directory, reader, options = {}) {
+  const { runLabel = null } = options;
   const plumbing = reader.plumbingKeys();
   const logged = await readRequestLog(directory);
   const rows = logged.map((row) => requestRow(row.id, row, reader, plumbing));
@@ -459,7 +460,8 @@ async function recordingRequestRows(directory, reader, { runLabel = null } = {})
     left.id.localeCompare(right.id));
 }
 
-function pageOf(items, { cursor = "", limit = 100, maxLimit = 200 } = {}) {
+function pageOf(items, options = {}) {
+  const { cursor = "", limit = 100, maxLimit = 200 } = options;
   const offset = /^[0-9]{1,7}$/u.test(String(cursor || "")) ? Number(cursor) : 0;
   const size = Math.min(Math.max(Number.parseInt(limit, 10) || 100, 1), maxLimit);
   return { items: items.slice(offset, offset + size), more: offset + size < items.length, next: String(offset + size) };

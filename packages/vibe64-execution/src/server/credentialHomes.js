@@ -111,9 +111,10 @@ function codexCredentialContext(options = {}) {
   return appCredentialContext(options);
 }
 
-function githubCredentialContext(input, {
-  accountMode = GITHUB_ACCOUNT_MODE_USER
-} = {}) {
+function githubCredentialContext(input, options = {}) {
+  const {
+    accountMode = GITHUB_ACCOUNT_MODE_USER
+  } = options;
   const resolvedAccountMode = normalizeGithubAccountMode(accountMode);
   if (resolvedAccountMode === GITHUB_ACCOUNT_MODE_LOCAL) {
     const local = currentUserCredentialContext();
@@ -273,10 +274,11 @@ function composeGithubTerminalHome(result = {}) {
 }
 
 /** @param {RuntimeLogger} logger */
-function logGithubCredentialHomeResolution(logger, result, {
-  operation = "",
-  terminalKind = ""
-} = {}) {
+function logGithubCredentialHomeResolution(logger, result, options = {}) {
+  const {
+    operation = "",
+    terminalKind = ""
+  } = options;
   const ok = result?.ok !== false;
   return logger[ok ? "info" : "warn"]({
     accountMode: normalizeText(result?.accountMode),

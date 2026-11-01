@@ -15,10 +15,11 @@ import {
  */
 function registerRoutes(
   http,
-  {
-    projectContext
-  } = {}
+  options = {}
 ) {
+  const {
+    projectContext
+  } = options;
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-system-graph"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",

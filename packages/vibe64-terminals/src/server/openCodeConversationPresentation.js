@@ -259,7 +259,8 @@ function createOpenCodeConversationPresentation({
     return entry.writing;
   }
 
-  async function projectReasoning(context, reasoning, { complete = false, flush = false } = {}) {
+  async function projectReasoning(context, reasoning, options = {}) {
+    const { complete = false, flush = false } = options;
     const state = turns.get(context.key)?.reasoning;
     if (!state || state.closed) return;
     for (const part of reasoning) {

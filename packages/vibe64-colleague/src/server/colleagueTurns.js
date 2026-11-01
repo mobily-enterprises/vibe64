@@ -145,7 +145,8 @@ function createColleagueTurns({
       await selecting;
       return records.snapshot(state);
     },
-    async send(input, context, { receiptOnly = false } = {}) {
+    async send(input, context, options = {}) {
+      const { receiptOnly = false } = options;
       const state = await threads.stateFor(context);
       const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
       const admitted = state.admission.then(async () => {

@@ -186,12 +186,13 @@ function browserCleanupFault(message = "The managed browser execution could not 
   });
 }
 
-async function stopRegisteredBrowserWorker(descriptor = {}, {
-  reason = "browser-stop",
-  skipStartWait = false,
-  stopExecution = stopVibe64Execution,
-  stopOwnedExecutions = stopVibe64OwnedExecutions
-} = {}) {
+async function stopRegisteredBrowserWorker(descriptor = {}, options = {}) {
+  const {
+    reason = "browser-stop",
+    skipStartWait = false,
+    stopExecution = stopVibe64Execution,
+    stopOwnedExecutions = stopVibe64OwnedExecutions
+  } = options;
   if (!skipStartWait && descriptor.startPromise) {
     await descriptor.startPromise.catch(() => null);
   }
@@ -520,12 +521,13 @@ function projectHasPlaywright(worktreePath = "") {
   }
 }
 
-async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
-  browserWorkers = new Map(),
-  runCommand = runVibe64Command,
-  stopExecution = stopVibe64Execution,
-  stopOwnedExecutions = stopVibe64OwnedExecutions
-} = {}) {
+async function startRegisteredBrowserWorker(sessionId = "", input = {}, options = {}) {
+  const {
+    browserWorkers = new Map(),
+    runCommand = runVibe64Command,
+    stopExecution = stopVibe64Execution,
+    stopOwnedExecutions = stopVibe64OwnedExecutions
+  } = options;
   const registered = registeredBrowserWorkerForInput(sessionId, input, browserWorkers);
   if (registered.error) {
     return registered.error;
@@ -655,11 +657,12 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
   }
 }
 
-async function stopRegisteredBrowserWorkerForInput(sessionId = "", input = {}, {
-  browserWorkers = new Map(),
-  stopExecution = stopVibe64Execution,
-  stopOwnedExecutions = stopVibe64OwnedExecutions
-} = {}) {
+async function stopRegisteredBrowserWorkerForInput(sessionId = "", input = {}, options = {}) {
+  const {
+    browserWorkers = new Map(),
+    stopExecution = stopVibe64Execution,
+    stopOwnedExecutions = stopVibe64OwnedExecutions
+  } = options;
   const normalizedSessionId = trimmedText(sessionId);
   const descriptor = browserWorkers
     .get(normalizedSessionId)

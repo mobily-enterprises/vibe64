@@ -195,10 +195,11 @@ function createCodexSessionEnvironment({
     });
   }
 
-  async function codexProjectTerminalEnvFailureResult(error = null, {
-    runtime,
-    sessionId = ""
-  } = {}) {
+  async function codexProjectTerminalEnvFailureResult(error = null, options = {}) {
+    const {
+      runtime,
+      sessionId = ""
+    } = options;
     if (trimmedText(error?.code) !== CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE) {
       return null;
     }

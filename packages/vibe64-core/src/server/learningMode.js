@@ -50,7 +50,8 @@ function registerLearningModeReader(reader, { onReadFailure = null } = {}) {
  * with L, so the switch never interrupts it. A request object (HTTP or
  * WebSocket) caches the one result for its lifetime.
  */
-async function readLearningModeFor(actor = null, { request = null, thread = "" } = {}) {
+async function readLearningModeFor(actor = null, options = {}) {
+  const { request = null, thread = "" } = options;
   if (!learningModeReader) return null;
   if (request && typeof request === "object" && requestModes.has(request)) return requestModes.get(request);
   let mode = DEVELOP_MODE;
@@ -76,7 +77,8 @@ async function readLearningModeFor(actor = null, { request = null, thread = "" }
  * caller without admission leaves it out, and then only the learner's current
  * practice project counts (with one lesson in progress, it is their only one).
  */
-function learningModeAllowsProject(mode = null, slug = "", { practice } = {}) {
+function learningModeAllowsProject(mode = null, slug = "", options = {}) {
+  const { practice } = options;
   if (!mode) return true;
   const isPractice = typeof practice === "boolean" ? practice
     : Boolean(mode.practiceSlug) && mode.practiceSlug === String(slug || "");

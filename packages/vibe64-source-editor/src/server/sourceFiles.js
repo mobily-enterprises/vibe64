@@ -156,9 +156,10 @@ async function runSourceEditorOperation(operation) {
   }
 }
 
-async function streamSourceEditorOperation(operation, {
-  emit = null
-} = {}) {
+async function streamSourceEditorOperation(operation, options = {}) {
+  const {
+    emit = null
+  } = options;
   try {
     await operation();
   } catch (error) {
@@ -350,11 +351,12 @@ async function resolveSourceEditorPath(context = {}, input = {}) {
   };
 }
 
-async function runRipgrepLines(args = [], {
-  cwd = "",
-  onLine = () => true,
-  timeoutMs = SOURCE_EDITOR_SEARCH_TIMEOUT_MS
-} = {}) {
+async function runRipgrepLines(args = [], options = {}) {
+  const {
+    cwd = "",
+    onLine = () => true,
+    timeoutMs = SOURCE_EDITOR_SEARCH_TIMEOUT_MS
+  } = options;
   const result = await runVibe64Command({
     actor: "app",
     allowedRoots: [
@@ -505,9 +507,10 @@ async function createSourceEditorFile(context = {}, input = {}) {
   return sourceEditorFilePayload(relativePath, savedBuffer, savedStats);
 }
 
-async function sourceEditorExistingFile(context = {}, relativePathValue = "", {
-  maxFileBytes = context.policy.maxFileBytes
-} = {}) {
+async function sourceEditorExistingFile(context = {}, relativePathValue = "", options = {}) {
+  const {
+    maxFileBytes = context.policy.maxFileBytes
+  } = options;
   const relativePath = normalizeSourceEditorRelativePath(relativePathValue);
   if (!relativePath) {
     throw sourceEditorError("Choose a file before editing.", "vibe64_invalid_source_editor_path");

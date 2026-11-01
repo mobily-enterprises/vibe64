@@ -100,10 +100,11 @@ async function readPreparedLaunchContext(projectService, sessionId, { ensureWork
   return launchContextFor(projectService, runtime, await runtime.getSession(sessionId), true);
 }
 
-async function listOutputTargets(context, {
-  inspectOutputs,
-  inspectWorkspaceSetup
-} = {}) {
+async function listOutputTargets(context, options = {}) {
+  const {
+    inspectOutputs,
+    inspectWorkspaceSetup
+  } = options;
   const [targets, setup] = await Promise.all([
     listVibe64OutputTargets(context, inspectOutputs ? { inspect: inspectOutputs } : {}),
     inspectVibe64WorkspaceSetupForContext(

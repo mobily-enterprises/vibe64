@@ -139,7 +139,8 @@ function createMainChatApprovals({
     });
   }
 
-  async function read(sessionId, { vibe64User = null } = {}) {
+  async function read(sessionId, options = {}) {
+    const { vibe64User = null } = options;
     const runtime = await project.createRuntime({ inspectSource: false });
     const approvals = parseApprovals(await runtime.store.readMetadataValue(sessionId, MAIN_CHAT_APPROVALS_METADATA));
     const team = await readWorkspaceTeam();

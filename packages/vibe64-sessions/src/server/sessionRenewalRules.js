@@ -42,11 +42,12 @@ const SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES = new Set([
   SESSION_RENEWAL_STAGE.SUCCESSOR_SETUP
 ]);
 
-function renewalError(message, code, {
-  details = null,
-  retryable = false,
-  statusCode = 409
-} = {}) {
+function renewalError(message, code, options = {}) {
+  const {
+    details = null,
+    retryable = false,
+    statusCode = 409
+  } = options;
   const error = vibe64Error(message, code);
   error.retryable = retryable;
   error.statusCode = statusCode;

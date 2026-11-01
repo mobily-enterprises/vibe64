@@ -56,10 +56,11 @@ function parseBacktickedArguments(source) {
   return matches.map((match) => match[1]);
 }
 
-function backtickedArguments(source, code, operationPath, label, line, {
-  count,
-  maximum = 64
-} = {}) {
+function backtickedArguments(source, code, operationPath, label, line, options = {}) {
+  const {
+    count,
+    maximum = 64
+  } = options;
   const values = parseBacktickedArguments(source);
   if (
     !values
@@ -103,9 +104,10 @@ function isCanonicalProjectPath(value = "") {
     && !value.split("/").some((part) => !part || part === "..");
 }
 
-function projectPath(value, code, operationPath, label, line, {
-  allowRoot = true
-} = {}) {
+function projectPath(value, code, operationPath, label, line, options = {}) {
+  const {
+    allowRoot = true
+  } = options;
   if (!isCanonicalProjectPath(value) || (!allowRoot && value === ".")) {
     invalidStackOperation(
       code,

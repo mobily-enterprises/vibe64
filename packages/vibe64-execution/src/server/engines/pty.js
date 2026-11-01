@@ -42,12 +42,13 @@ function ptyHelperPayloadPath(root = "") {
  * A terminal gets the env its caller resolved; only an env factory goes through
  * the gateway's resolver, once per terminal id, with the execution id stamp.
  */
-function terminalSessionInputForRequest(request = {}, {
-  actor,
-  cwd,
-  env: resolvedEnv,
-  resolveEnv
-} = {}) {
+function terminalSessionInputForRequest(request = {}, options = {}) {
+  const {
+    actor,
+    cwd,
+    env: resolvedEnv,
+    resolveEnv
+  } = options;
   const terminal = request.terminal || {};
   const env = request.envFactory ? resolveEnv : resolvedEnv;
   if (!realUserActorRequiresInstalledHelper(actor)) {
@@ -91,12 +92,13 @@ function terminalSessionInputForRequest(request = {}, {
   };
 }
 
-async function runPtyCommand(request = {}, {
-  actor,
-  cwd,
-  env,
-  resolveEnv
-} = {}) {
+async function runPtyCommand(request = {}, options = {}) {
+  const {
+    actor,
+    cwd,
+    env,
+    resolveEnv
+  } = options;
   try {
     const terminal = request.terminal || {};
     const executionId = request.execution?.id || "";

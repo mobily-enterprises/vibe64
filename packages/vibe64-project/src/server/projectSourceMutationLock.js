@@ -64,14 +64,15 @@ function sleep(durationMs) {
   return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
 
-async function acquireProjectOperationLock(projectRuntimeRoot, lockName, {
-  operation = "project-source-mutation",
-  rootErrorCode = "vibe64_project_source_lock_root_invalid",
-  rootErrorLabel = "Project source mutation locking",
-  timeoutErrorCode = "vibe64_project_source_lock_timeout",
-  timeoutErrorMessage = "Another project source operation is still running.",
-  timeoutMs = DEFAULT_LOCK_TIMEOUT_MS
-} = {}) {
+async function acquireProjectOperationLock(projectRuntimeRoot, lockName, options = {}) {
+  const {
+    operation = "project-source-mutation",
+    rootErrorCode = "vibe64_project_source_lock_root_invalid",
+    rootErrorLabel = "Project source mutation locking",
+    timeoutErrorCode = "vibe64_project_source_lock_timeout",
+    timeoutErrorMessage = "Another project source operation is still running.",
+    timeoutMs = DEFAULT_LOCK_TIMEOUT_MS
+  } = options;
   const root = text(projectRuntimeRoot);
   if (!path.isAbsolute(root)) {
     throw lockError(

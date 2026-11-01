@@ -183,8 +183,9 @@ async function refreshVerifiedGithubMirror(
   runCommand,
   context,
   verifiedCommit,
-  { commandOptions = {}, project = {} } = {}
+  options = {}
 ) {
+  const { commandOptions = {}, project = {} } = options;
   if (context.mode !== PROJECT_REPOSITORY_MODE_GITHUB) {
     return {
       attempted: false,

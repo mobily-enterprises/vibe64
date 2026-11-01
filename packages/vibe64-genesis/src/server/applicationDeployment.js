@@ -92,9 +92,10 @@ function emptyDeployment() {
   };
 }
 
-function parseVibe64DeploymentLines(lines, {
-  path: deploymentPath = "genesis/stack.md#Deployment"
-} = {}) {
+function parseVibe64DeploymentLines(lines, options = {}) {
+  const {
+    path: deploymentPath = "genesis/stack.md#Deployment"
+  } = options;
   if (!Array.isArray(lines)) {
     invalid(deploymentPath, "Deployment must be supplied as exact Stack section lines.");
   }

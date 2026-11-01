@@ -36,16 +36,17 @@ export function createCodexStartupHealth(publishSessionChanged) {
    * @param {string} [options.status]
    * @param {string} [options.terminalSessionId]
    */
-  async function writeCodexAppServerTaskEvent(runtime, sessionId, {
-    error = "",
-    healthAttempt = null,
-    kind = "",
-    message = "",
-    publishReason = "",
-    retryable = true,
-    status = "running",
-    terminalSessionId = ""
-  } = {}) {
+  async function writeCodexAppServerTaskEvent(runtime, sessionId, options = {}) {
+    const {
+      error = "",
+      healthAttempt = null,
+      kind = "",
+      message = "",
+      publishReason = "",
+      retryable = true,
+      status = "running",
+      terminalSessionId = ""
+    } = options;
     const normalizedStatus = trimmedText(status) || "running";
     const healthAttemptId = trimmedText(healthAttempt?.id);
     const healthAttemptStartedAt = trimmedText(healthAttempt?.startedAt);
@@ -88,12 +89,13 @@ export function createCodexStartupHealth(publishSessionChanged) {
     return task;
   }
 
-  async function writeCodexAppServerRunning(runtime, sessionId, {
-    healthAttempt = createCodexAppServerHealthAttempt(),
-    kind = "running",
-    message,
-    terminalSessionId = ""
-  } = {}) {
+  async function writeCodexAppServerRunning(runtime, sessionId, options = {}) {
+    const {
+      healthAttempt = createCodexAppServerHealthAttempt(),
+      kind = "running",
+      message,
+      terminalSessionId = ""
+    } = options;
     const task = await writeCodexAppServerTaskEvent(runtime, sessionId, {
       healthAttempt,
       kind,
@@ -114,9 +116,10 @@ export function createCodexStartupHealth(publishSessionChanged) {
    * @param {object} [options]
    * @param {object | null} [options.healthAttempt]
    */
-  async function writeCodexAppServerReady(runtime, sessionId, terminalSessionId, {
-    healthAttempt = null
-  } = {}) {
+  async function writeCodexAppServerReady(runtime, sessionId, terminalSessionId, options = {}) {
+    const {
+      healthAttempt = null
+    } = options;
     if (!healthAttempt && runtime) {
       const currentSession = await runtime.getSession(sessionId).catch(() => null);
       const currentTask = (Array.isArray(currentSession?.backgroundTasks)
@@ -142,10 +145,11 @@ export function createCodexStartupHealth(publishSessionChanged) {
     return task;
   }
 
-  async function writeCodexAppServerFailure(runtime, sessionId, result, {
-    healthAttempt = null,
-    terminalSessionId = ""
-  } = {}) {
+  async function writeCodexAppServerFailure(runtime, sessionId, result, options = {}) {
+    const {
+      healthAttempt = null,
+      terminalSessionId = ""
+    } = options;
     await writeCodexAppServerTaskEvent(runtime, sessionId, {
       error: errorMessage(result),
       healthAttempt,
@@ -158,9 +162,10 @@ export function createCodexStartupHealth(publishSessionChanged) {
     return result;
   }
 
-  async function writeCodexAppServerBlocked(runtime, sessionId, result, {
-    terminalSessionId = ""
-  } = {}) {
+  async function writeCodexAppServerBlocked(runtime, sessionId, result, options = {}) {
+    const {
+      terminalSessionId = ""
+    } = options;
     await writeCodexAppServerTaskEvent(runtime, sessionId, {
       error: errorMessage(result),
       kind: "blocked",

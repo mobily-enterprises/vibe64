@@ -93,9 +93,10 @@ function previewEndpoint(value = "") {
   }
 }
 
-function previewPageUrl(baseUrl = "", route = "", {
-  inheritBaseSearch = false
-} = {}) {
+function previewPageUrl(baseUrl = "", route = "", options = {}) {
+  const {
+    inheritBaseSearch = false
+  } = options;
   const normalizedBaseUrl = trimmedText(baseUrl);
   const normalizedRoute = trimmedText(route);
   if (!normalizedBaseUrl || !normalizedRoute.startsWith("/")) {
@@ -122,9 +123,10 @@ function previewPageUrl(baseUrl = "", route = "", {
   }
 }
 
-function previewInspectionUrl(status = {}, {
-  previewState = null
-} = {}) {
+function previewInspectionUrl(status = {}, options = {}) {
+  const {
+    previewState = null
+  } = options;
   const previewTarget = isRecord(status.previewTarget) ? status.previewTarget : {};
   const proxyUrl = previewReady(status) ? previewEndpoint(previewTarget.href)?.url || "" : "";
   const route = trimmedText(previewState?.route);
@@ -138,9 +140,10 @@ function previewInspectionUrl(status = {}, {
   return "";
 }
 
-function previewCurrentPage(previewState, {
-  browserUrl = ""
-} = {}) {
+function previewCurrentPage(previewState, options = {}) {
+  const {
+    browserUrl = ""
+  } = options;
   const route = trimmedText(previewState?.route);
   if (!route) {
     return null;
@@ -177,9 +180,10 @@ function previewDiagnostics(status = {}) {
   } : null;
 }
 
-function previewStatusSummary(status = {}, {
-  previewState = null
-} = {}) {
+function previewStatusSummary(status = {}, options = {}) {
+  const {
+    previewState = null
+  } = options;
   const lastOutputTarget = isRecord(status.lastOutputTarget) ? status.lastOutputTarget : {};
   const activeMetadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
   const openTarget = isRecord(status.openTarget) ? status.openTarget : {};
@@ -239,9 +243,10 @@ function previewSummaryLines(summary = {}) {
   ].filter(Boolean);
 }
 
-function statusStdout(summary = {}, {
-  json = false
-} = {}) {
+function statusStdout(summary = {}, options = {}) {
+  const {
+    json = false
+  } = options;
   return json
     ? JSON.stringify(summary, null, 2) + "\n"
     : previewSummaryLines(summary).join("\n") + "\n";
@@ -258,10 +263,11 @@ function previewLogTail(output = "", lines = DEFAULT_PREVIEW_LOG_LINES) {
   return tail && trailingNewline ? `${tail}\n` : tail;
 }
 
-function logsStdout(status = {}, {
-  json = false,
-  lines = DEFAULT_PREVIEW_LOG_LINES
-} = {}) {
+function logsStdout(status = {}, options = {}) {
+  const {
+    json = false,
+    lines = DEFAULT_PREVIEW_LOG_LINES
+  } = options;
   const output = previewLogTail(status.activeTerminal?.output, lines);
   const payload = {
     diagnostics: previewDiagnostics(status),
@@ -283,10 +289,11 @@ function logsStdout(status = {}, {
   return `${header}\n\n${output || "No managed preview server output is available."}${output.endsWith("\n") ? "" : "\n"}`;
 }
 
-function previewStartStdout(summary = {}, {
-  command = "ensure",
-  json = false
-} = {}) {
+function previewStartStdout(summary = {}, options = {}) {
+  const {
+    command = "ensure",
+    json = false
+  } = options;
   const payload = command === "restart"
     ? {
         ...summary,
@@ -311,11 +318,12 @@ function outputTargetIdFromStatus(status = {}) {
   return trimmedText(lastOutputTarget.id || activeMetadata.outputTargetId);
 }
 
-async function waitForPreviewReady(launchTarget, sessionId = "", {
-  terminalSessionId = "",
-  signal = null,
-  timeoutMs = DEFAULT_PREVIEW_WAIT_TIMEOUT_MS
-} = {}) {
+async function waitForPreviewReady(launchTarget, sessionId = "", options = {}) {
+  const {
+    terminalSessionId = "",
+    signal = null,
+    timeoutMs = DEFAULT_PREVIEW_WAIT_TIMEOUT_MS
+  } = options;
   const deadline = Date.now() + timeoutMs;
   let latestStatus = null;
   while (Date.now() <= deadline) {

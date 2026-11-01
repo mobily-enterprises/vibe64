@@ -268,7 +268,8 @@ function createTrainingLearnerState({
     return release;
   }
 
-  async function verifyInstalled(pin, { admissionOnly = false } = {}) {
+  async function verifyInstalled(pin, options = {}) {
+    const { admissionOnly = false } = options;
     // readable-check: allow method-probe - optional operation: content without admission reads is verified by its whole lesson read
     const read = admissionOnly && typeof installed.readAdmissionIdentity === "function"
       ? installed.readAdmissionIdentity : installed.readLesson;
@@ -285,7 +286,8 @@ function createTrainingLearnerState({
    * teach, never blocks it. Teaching, step results and finishing need the
    * lesson teachable; closing it (archive, delete) needs only its identity.
    */
-  async function verifyActiveLesson(progress, { admissionOnly = false } = {}) {
+  async function verifyActiveLesson(progress, options = {}) {
+    const { admissionOnly = false } = options;
     const attempt = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
     if (!attempt) return null;
     const lesson = await verifyInstalled(attempt.pin, { admissionOnly });

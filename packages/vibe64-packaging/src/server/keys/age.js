@@ -89,7 +89,8 @@ function wrapLines(text) {
   return lines.join("\n");
 }
 
-async function ageEncrypt(plaintext, passphrase, { workFactor = DEFAULT_WORK_FACTOR } = {}) {
+async function ageEncrypt(plaintext, passphrase, options = {}) {
+  const { workFactor = DEFAULT_WORK_FACTOR } = options;
   if (!Number.isInteger(workFactor) || workFactor < 10 || workFactor > MAX_WORK_FACTOR) {
     throw ageError("The scrypt work factor is out of range.");
   }

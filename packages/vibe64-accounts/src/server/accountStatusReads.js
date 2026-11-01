@@ -72,12 +72,13 @@ function createAccountStatusReads({
     };
   }
 
-  async function accountStatus(accountId, {
-    codexMarkerReason = "",
-    githubContext = null,
-    previousGithub = null,
-    rotateCodexMarker = false
-  } = {}) {
+  async function accountStatus(accountId, options = {}) {
+    const {
+      codexMarkerReason = "",
+      githubContext = null,
+      previousGithub = null,
+      rotateCodexMarker = false
+    } = options;
     authDebug("server.auth.account_status.start", {
       accountId,
       codexMarkerReason,

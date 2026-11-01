@@ -141,11 +141,12 @@ async function announceNoProjectChange() {
 function createVibe64ProjectChangedPublisher({ events }) {
   if (!events) return announceNoProjectChange;
 
-  return async function publishVibe64ProjectChanged(value = {}, {
-    actorId = null,
-    operation = "updated",
-    reason = ""
-  } = {}) {
+  return async function publishVibe64ProjectChanged(value = {}, options = {}) {
+    const {
+      actorId = null,
+      operation = "updated",
+      reason = ""
+    } = options;
     const catalogChange = operation === "deleted";
     const slug = catalogChange ? "" : projectSlug(value);
     return events.publish({

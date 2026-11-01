@@ -30,9 +30,10 @@ function nonNegativeInteger(value) {
   return Number.isSafeInteger(number) && number >= 0 ? number : null;
 }
 
-export function sessionContextUsageFromMetadata(metadata, {
-  expectedThreadId = ""
-} = {}) {
+export function sessionContextUsageFromMetadata(metadata, options = {}) {
+  const {
+    expectedThreadId = ""
+  } = options;
   const providerId = normalizeText(metadata?.agent_context_usage_provider);
   const threadId = normalizeText(metadata?.agent_context_usage_thread_id);
   const currentThreadId = normalizeText(expectedThreadId);
@@ -78,10 +79,11 @@ function contextCompactionKey({
  * @param {string} [options.at]
  * @param {string} [options.expectedThreadId]
  */
-async function recordCodexContextUsageSignal(store, sessionId = "", notification = {}, {
-  at = new Date().toISOString(),
-  expectedThreadId = ""
-} = {}) {
+async function recordCodexContextUsageSignal(store, sessionId = "", notification = {}, options = {}) {
+  const {
+    at = new Date().toISOString(),
+    expectedThreadId = ""
+  } = options;
   const id = normalizeText(sessionId);
   const usage = codexContextUsageFromNotification(notification);
   const threadId = normalizeText(expectedThreadId);
@@ -148,13 +150,14 @@ async function recordCodexContextUsageSignal(store, sessionId = "", notification
  * @param {string} [options.threadId]
  * @param {string} [options.turnId]
  */
-async function recordCodexContextRenewalSignal(store, sessionId = "", {
-  at = new Date().toISOString(),
-  eventId = "",
-  reason = "",
-  threadId = "",
-  turnId = ""
-} = {}) {
+async function recordCodexContextRenewalSignal(store, sessionId = "", options = {}) {
+  const {
+    at = new Date().toISOString(),
+    eventId = "",
+    reason = "",
+    threadId = "",
+    turnId = ""
+  } = options;
   const id = normalizeText(sessionId);
   const normalizedReason = normalizeText(reason);
   if (
@@ -212,11 +215,12 @@ async function recordCodexContextRenewalSignal(store, sessionId = "", {
  * @param {string} [options.threadId]
  * @param {string} [options.turnId]
  */
-async function writeCodexAppServerContextRefreshPending(store, sessionId = "", {
-  reason = "",
-  threadId = "",
-  turnId = ""
-} = {}) {
+async function writeCodexAppServerContextRefreshPending(store, sessionId = "", options = {}) {
+  const {
+    reason = "",
+    threadId = "",
+    turnId = ""
+  } = options;
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId || !store) {
     return null;
@@ -249,13 +253,14 @@ async function writeCodexAppServerContextRefreshPending(store, sessionId = "", {
  * @param {string} [options.threadId]
  * @param {string} [options.turnId]
  */
-async function clearCodexAppServerContextRefreshPending(store, sessionId = "", {
-  deliveredAt = new Date().toISOString(),
-  delivery = "prompt",
-  reason = "",
-  threadId = "",
-  turnId = ""
-} = {}) {
+async function clearCodexAppServerContextRefreshPending(store, sessionId = "", options = {}) {
+  const {
+    deliveredAt = new Date().toISOString(),
+    delivery = "prompt",
+    reason = "",
+    threadId = "",
+    turnId = ""
+  } = options;
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId || !store) {
     return false;
@@ -283,9 +288,10 @@ async function clearCodexAppServerContextRefreshPending(store, sessionId = "", {
 function createCodexContextRefreshMarker({ projectService, runOwner }) {
   const { readAgentRunForSession: readCodexAppServerAgentRunForSession } = runOwner;
 
-  async function markCodexAppServerContextRefreshPending(sessionId = "", threadId = "", notification = {}, {
-    reason = codexAppServerContextRefreshReason(notification)
-  } = {}) {
+  async function markCodexAppServerContextRefreshPending(sessionId = "", threadId = "", notification = {}, options = {}) {
+    const {
+      reason = codexAppServerContextRefreshReason(notification)
+    } = options;
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
     if (!reason || !normalizedSessionId || !normalizedThreadId) {

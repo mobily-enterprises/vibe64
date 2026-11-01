@@ -22,7 +22,8 @@ function workPlanPath(context) {
   return path.join(id ? path.join(paths.conversationsRoot, id) : paths.sessionRoot, "plans", "current.md");
 }
 
-async function readPlanFile(file, { plainText = false } = {}) {
+async function readPlanFile(file, options = {}) {
+  const { plainText = false } = options;
   let handle;
   try {
     if (!(await lstat(path.dirname(file))).isDirectory()) throw planError("The plan directory must not be a link.");
@@ -150,13 +151,14 @@ async function readWorkPlanHistoryUnlocked(context) {
   }
   return history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
 }
-async function readWorkPlanPageUnlocked(context, {
-  offset = 0,
-  limit = 16000,
-  expectedRevision = "",
-  expectedProgressRevision = "",
-  archiveId = ""
-} = {}) {
+async function readWorkPlanPageUnlocked(context, options = {}) {
+  const {
+    offset = 0,
+    limit = 16000,
+    expectedRevision = "",
+    expectedProgressRevision = "",
+    archiveId = ""
+  } = options;
   if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16000) {
     throw planError("Invalid plan page bounds.");
   }

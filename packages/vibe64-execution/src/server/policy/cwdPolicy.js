@@ -13,10 +13,11 @@ function resolveCommandCwd(cwd = "") {
  * resolveLinks: false keeps the check lexical, for a directory this process
  * cannot enter whose owner resolves it again (an application's area).
  */
-function assertCwdAllowed(cwd = "", {
-  allowedRoots = [],
-  resolveLinks = true
-} = {}) {
+function assertCwdAllowed(cwd = "", options = {}) {
+  const {
+    allowedRoots = [],
+    resolveLinks = true
+  } = options;
   const resolvedCwd = resolveCommandCwd(cwd);
   const roots = (Array.isArray(allowedRoots) ? allowedRoots : [allowedRoots])
     .map(normalizeAbsolutePath)

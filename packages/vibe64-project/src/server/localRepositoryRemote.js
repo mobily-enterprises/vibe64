@@ -29,11 +29,12 @@ function configurationId(value) {
  * @param {RuntimeLogger} options.logger
  * @param {typeof runProjectSourceExclusive} [options.runExclusive]
  */
-async function localRepositoryRemote(project, input = {}, {
-  runCommand = runVibe64Command,
-  logger,
-  runExclusive = runProjectSourceExclusive
-} = {}) {
+async function localRepositoryRemote(project, input = {}, options = {}) {
+  const {
+    runCommand = runVibe64Command,
+    logger,
+    runExclusive = runProjectSourceExclusive
+  } = options;
   const action = input.action || "status";
   if ((project?.repositoryMode || project?.repository?.mode) !== "local_source" ||
       !path.isAbsolute(project?.sourceRoot || "")) {
@@ -62,7 +63,8 @@ async function localRepositoryRemote(project, input = {}, {
       maxBuffer: 2 * 1024 * 1024
     });
   }
-  async function git(args, { optional = false } = {}) {
+  async function git(args, options = {}) {
+    const { optional = false } = options;
     const result = await runGit(args);
     if (result?.ok !== true) {
       const gitFailure = gitFailureError(result);
@@ -125,7 +127,8 @@ async function localRepositoryRemote(project, input = {}, {
     const configId = configurationId({ branch, remotes, upstream, push });
     return { branch, head, remotes, upstream, push, configId };
   }
-  async function observe(target, { allowMissing = false } = {}) {
+  async function observe(target, options = {}) {
+    const { allowMissing = false } = options;
     const remoteRef = `refs/heads/${target.branch}`;
     const observationRef = `refs/vibe64/remotes/${configurationId(target)}`;
     const listed = await git(["ls-remote", "--heads", "--", target.url, remoteRef]);

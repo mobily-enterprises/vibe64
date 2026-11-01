@@ -47,7 +47,8 @@ function currentPreferences(value = {}) {
  * Validate known native formats without translating their captured decisions.
  * Configuration snapshots omit schemaVersion; the enclosing request supplies it.
  */
-function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, preferences = false, request = false } = {}) {
+function validateAssistantRoutingUpgradeRecord(value, options = {}) {
+  const { schemaVersion = 4, preferences = false, request = false } = options;
   if (!isPlainObject(value) || ![3, 4].includes(schemaVersion) ||
       value.schemaVersion !== undefined && value.schemaVersion !== schemaVersion) {
     throw new Error("Saved routing has an unsupported format. Use the matching release.");

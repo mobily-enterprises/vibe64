@@ -6,7 +6,8 @@ import { createSessionChangedPublisher } from "@local/vibe64-core/server/session
 /** @param {RuntimeEvents} events */
 function createProjectRuntimeChangedPublisher(events) {
   const publishProjectChanged = createVibe64ProjectChangedPublisher({ events });
-  return async function publishProjectRuntimeChanged(result, { action = "", dormant = false } = {}) {
+  return async function publishProjectRuntimeChanged(result, options = {}) {
+    const { action = "", dormant = false } = options;
     const source = result || {};
     const projectSlug = String(source.projectSlug || "").trim();
     if (source.ok === false || !projectSlug || !source.runtime) {

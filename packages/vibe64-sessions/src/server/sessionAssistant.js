@@ -80,7 +80,8 @@ function createSessionAssistant({
    * setup). A renewal keeps the chat mode; a chosen model that isn't main
    * chat's own makes the chat Custom.
    */
-  async function resolveSessionStart(input = {}, { session = null, vibe64User = null, mode = "senior" } = {}) {
+  async function resolveSessionStart(input = {}, options = {}) {
+    const { session = null, vibe64User = null, mode = "senior" } = options;
     const direct = isAssistantRoutingOwner(vibe64User) || currentRequestIsPracticeProject();
     if (!direct && Object.keys(input.assistantSelection || {}).length) {
       throw Object.assign(new Error("Main chat runs on the workspace owner's AI. Team members can't choose its model."), {

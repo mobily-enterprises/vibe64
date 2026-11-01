@@ -144,10 +144,11 @@ function createOpenCodeConversationEvents({
     });
   }
 
-  async function writeOpenCodeFailureNotice(context = {}, turn = {}, {
-    message = "",
-    reason = "opencode-provider-failure"
-  } = {}) {
+  async function writeOpenCodeFailureNotice(context = {}, turn = {}, options = {}) {
+    const {
+      message = "",
+      reason = "opencode-provider-failure"
+    } = options;
     const written = await context.runtime.store.writeConversationSystemMessage(context.sessionId, {
       messageId: `${reason}-${fingerprint(
         context.sessionId,

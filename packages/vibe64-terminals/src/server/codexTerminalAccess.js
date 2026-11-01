@@ -50,10 +50,11 @@ function codexGitCommandShimDirs(codexRuntime) {
   );
 }
 
-function codexStartupScript(codexThreadId = "", {
-  agentSettings = {},
-  remoteEndpoint = ""
-} = {}) {
+function codexStartupScript(codexThreadId = "", options = {}) {
+  const {
+    agentSettings = {},
+    remoteEndpoint = ""
+  } = options;
   const normalizedThreadId = normalizeCodexThreadId(codexThreadId);
   const normalizedRemoteEndpoint = trimmedText(remoteEndpoint);
   const effectiveSettings = effectiveVibe64AgentSettings(agentSettings);

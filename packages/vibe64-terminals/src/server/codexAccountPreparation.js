@@ -69,10 +69,11 @@ function createCodexAccountPreparation({
     }
   }
 
-  async function codexReconnectTerminalFailureForError(error = null, {
-    reason = "codex-terminal",
-    toolHomeSource = ""
-  } = {}) {
+  async function codexReconnectTerminalFailureForError(error = null, options = {}) {
+    const {
+      reason = "codex-terminal",
+      toolHomeSource = ""
+    } = options;
     const reconnectFailure = codexReconnectTerminalFailure(error);
     if (!reconnectFailure) {
       return null;

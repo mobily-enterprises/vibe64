@@ -106,7 +106,8 @@ function createSessionDatabase({
     }
   }
 
-  async function currentSchema(context, { initialize = true } = {}) {
+  async function currentSchema(context, options = {}) {
+    const { initialize = true } = options;
     const schema = await readSchemaSnapshot(context.store, context.sessionId);
     const matchesConnection = schema &&
       schema.engine === context.readConnection.engine &&

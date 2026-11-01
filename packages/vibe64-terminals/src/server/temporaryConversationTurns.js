@@ -185,7 +185,8 @@ function createTemporaryConversationTurns({
    * Reuse the routing lifecycle with the temporary chat's existing metadata and
    * transcript scope. Native providers continue to receive the actual store.
    */
-  async function routingContext(ctx, conversationId, { cleanup = false } = {}) {
+  async function routingContext(ctx, conversationId, options = {}) {
+    const { cleanup = false } = options;
     const record = await chatRecords.recordFor(ctx, conversationId);
     if (record.state === "closing" && !cleanup) {
       throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
@@ -458,7 +459,8 @@ function createTemporaryConversationTurns({
       }
     },
     prepare: {
-      async continuity(sessionId, ctx, { remember = false } = {}) {
+      async continuity(sessionId, ctx, options = {}) {
+        const { remember = false } = options;
         requireCompletedConversationRewind(ctx.session);
         const engineId = sessionConversationKey(ctx.session);
         const store = ctx.runtime.store;

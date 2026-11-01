@@ -167,14 +167,15 @@ const vibe64ActionPolicy = Object.freeze({
  * @param {RuntimeEnv} [options.env]
  * @param {RuntimeLogger} options.logger
  */
-function registerVibe64ActionContext(actions, {
-  projectContext,
-  resolveUser,
-  authorizeProject,
-  admissionScope = "all",
-  env = {},
-  logger
-} = {}) {
+function registerVibe64ActionContext(actions, options = {}) {
+  const {
+    projectContext,
+    resolveUser,
+    authorizeProject,
+    admissionScope = "all",
+    env = {},
+    logger
+  } = options;
   if (!["all", "learning-only"].includes(admissionScope)) {
     throw new TypeError("Vibe64 action context admissionScope must be all or learning-only.");
   }

@@ -21,11 +21,12 @@ function terminalNamespaceAdmissionFailure(namespace = "default") {
   };
 }
 
-function freezeTerminalNamespaceAdmission(namespace = "default", {
-  code = "terminal_admission_frozen",
-  error = "Terminal input is temporarily unavailable.",
-  owner = ""
-} = {}) {
+function freezeTerminalNamespaceAdmission(namespace = "default", options = {}) {
+  const {
+    code = "terminal_admission_frozen",
+    error = "Terminal input is temporarily unavailable.",
+    owner = ""
+  } = options;
   const normalizedNamespace = normalizeNamespace(namespace);
   const normalizedOwner = String(owner || "").trim();
   if (!normalizedOwner) {
@@ -90,9 +91,10 @@ function beginTerminalNamespaceOperation(namespace = "default") {
   };
 }
 
-function thawTerminalNamespaceAdmission(namespace = "default", {
-  owner = ""
-} = {}) {
+function thawTerminalNamespaceAdmission(namespace = "default", options = {}) {
+  const {
+    owner = ""
+  } = options;
   const normalizedNamespace = normalizeNamespace(namespace);
   const normalizedOwner = String(owner || "").trim();
   if (!normalizedOwner) {

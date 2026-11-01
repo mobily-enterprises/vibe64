@@ -55,10 +55,11 @@ function usageText() {
   ].join("\n") + "\n";
 }
 
-function responseError(message = "", code = "vibe64_agent_database_command_failed", {
-  exitCode = 1,
-  usage = false
-} = {}) {
+function responseError(message = "", code = "vibe64_agent_database_command_failed", options = {}) {
+  const {
+    exitCode = 1,
+    usage = false
+  } = options;
   return {
     code,
     error: message,

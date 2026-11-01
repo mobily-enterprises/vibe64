@@ -8,7 +8,8 @@ import path from "node:path";
  * old file or the new one and never a partial write. The temporary file never
  * outlives the call. fileMode is applied exactly (not narrowed by umask).
  */
-async function writeFileAtomic(filePath, text, { directoryMode, fileMode } = {}) {
+async function writeFileAtomic(filePath, text, options = {}) {
+  const { directoryMode, fileMode } = options;
   const directory = path.dirname(filePath);
   await mkdir(directory, { recursive: true, mode: directoryMode });
   const temporaryPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);

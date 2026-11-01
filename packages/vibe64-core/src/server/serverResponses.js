@@ -1,7 +1,8 @@
-function vibe64ErrorResponse(error, {
-  fallbackCode = "vibe64_request_failed",
-  fallbackMessage = "Vibe64 request failed."
-} = {}) {
+function vibe64ErrorResponse(error, options = {}) {
+  const {
+    fallbackCode = "vibe64_request_failed",
+    fallbackMessage = "Vibe64 request failed."
+  } = options;
   const code = String(error?.code || fallbackCode);
   const message = String(error?.message || error || fallbackMessage);
   const details = vibe64ErrorDetails(error, code);
@@ -52,7 +53,8 @@ async function vibe64Result(operation, options = {}) {
   }
 }
 
-function vibe64StatusCode(response, { missingStatus = 404 } = {}) {
+function vibe64StatusCode(response, options = {}) {
+  const { missingStatus = 404 } = options;
   const code = response?.errors?.[0]?.code || response?.code || "";
   if (code === "vibe64_session_not_found") {
     return missingStatus;

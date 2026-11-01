@@ -191,8 +191,10 @@ const withArticle = (label) => `${/^[AEIOU]/u.test(label) ? "an" : "a"} ${label}
 /**
  * A temporary chat's Custom model is the person's own choice, not main chat.
  */
-const isMainChatPurpose = (purpose, { temporaryChat = false } = {}) =>
-  MAIN_CHAT_PURPOSES.includes(purpose) && !(temporaryChat && purpose === "custom");
+const isMainChatPurpose = (purpose, options = {}) => {
+  const { temporaryChat = false } = options;
+  return MAIN_CHAT_PURPOSES.includes(purpose) && !(temporaryChat && purpose === "custom");
+};
 
 /**
  * A team member's main chat waits for the owner, except in their own lesson:
@@ -261,7 +263,8 @@ function hasConnectedAssistantModels(engine) {
   return engine?.modelProviders?.some((provider) => provider.connected && provider.models?.length > 0) === true;
 }
 
-function routingModelChoices(engine, { purpose = "senior" } = {}) {
+function routingModelChoices(engine, options = {}) {
+  const { purpose = "senior" } = options;
   if (!engine) return [];
   return (engine.modelProviders || []).filter((provider) => provider.connected).flatMap((provider) =>
     (provider.models || []).filter((model) => model.status === "available").flatMap((model) => {
@@ -405,7 +408,8 @@ function recommendedRoutingAssignments({ catalogs = [], setup = "owner", values 
   return recommended;
 }
 
-function routingAssignmentSelection(engine, assignment, { purpose = "senior" } = {}) {
+function routingAssignmentSelection(engine, assignment, options = {}) {
+  const { purpose = "senior" } = options;
   // A saved role keeps its exact model when the catalogue refreshes. Validate
   // availability against the current catalogue instead of silently substituting.
   if (!assignment) throw routingError("Choose this model in Models first.");
@@ -634,7 +638,8 @@ function assistantRoutingPrompt({ message, messages = [], attachments = [], plan
   return render();
 }
 
-function assistantModePrompt(mode, message, { planInstructions = "", intent = "", browserReview = false } = {}) {
+function assistantModePrompt(mode, message, options = {}) {
+  let { planInstructions = "", intent = "", browserReview = false } = options;
   const direct = "Work directly from the user's request and conversation, answering questions or implementing changes as requested. You may edit application files when requested. Make ordinary local choices using established project patterns, ask about unresolved scope or design decisions, preserve unrelated work, and verify changes with relevant checks.";
   const instructions = {
     custom: direct,

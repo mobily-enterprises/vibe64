@@ -58,7 +58,8 @@ function certificateDigest(der) {
  * The SHA-256 of the certificate of `alias` in a PKCS#12 key store; keytool
  * writes the certificate into `cwd`, a private folder the caller removes.
  */
-async function exportCertificateSha256({ javaHome, keystore, alias, password, cwd }, { runCommand = spawnCommand } = {}) {
+async function exportCertificateSha256({ javaHome, keystore, alias, password, cwd }, options = {}) {
+  const { runCommand = spawnCommand } = options;
   const certificate = path.join(cwd, "certificate.der");
   await runKeytool(javaHome, [
     "-exportcert", "-keystore", keystore, "-storetype", "PKCS12", "-alias", alias, "-storepass:env", PASSWORD_VARIABLE, "-file", certificate
@@ -71,7 +72,8 @@ async function exportCertificateSha256({ javaHome, keystore, alias, password, cw
  * caller's sink { keystore, password, alias, certificateSha256 } (buffers it may
  * keep; they are zeroed after the sink returns). Returns only public facts.
  */
-async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.tmpdir() } = {}, { runCommand = spawnCommand } = {}) {
+async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.tmpdir() } = {}, options = {}) {
+  const { runCommand = spawnCommand } = options;
   if (typeof sink !== "function") throw keyError("Creating a key needs a sink that keeps it.");
   const directory = await mkdtemp(path.join(tempRoot, "vibe64-sideload-key-"));
   const password = Buffer.from(randomBytes(32).toString("base64url"), "utf8");

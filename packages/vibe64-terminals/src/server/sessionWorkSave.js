@@ -72,11 +72,12 @@ async function rememberPreparedSaveCommit(runCommand, context, operationId, comm
   return ref;
 }
 
-async function captureSessionWorkSaveCheckpoint(runCommand, context, {
-  commandOptions = {},
-  operationId,
-  project = {}
-} = {}) {
+async function captureSessionWorkSaveCheckpoint(runCommand, context, options = {}) {
+  const {
+    commandOptions = {},
+    operationId,
+    project = {}
+  } = options;
   await assertBranch(runCommand, context, { commandOptions, project });
   const checkpoint = await createGitTurnCheckpoint({
     outerTurnId: `save:${operationId}`,
@@ -149,11 +150,12 @@ async function prepareSessionWorkSaveMessageDirect({
   };
 }
 
-async function assertSessionWorkSaveCheckpoint(runCommand, context, checkpoint, {
-  commandOptions = {},
-  operationId,
-  project = {}
-} = {}) {
+async function assertSessionWorkSaveCheckpoint(runCommand, context, checkpoint, options = {}) {
+  const {
+    commandOptions = {},
+    operationId,
+    project = {}
+  } = options;
   const checkpointCommit = trimmedText(checkpoint?.checkpointCommit);
   const checkpointTree = trimmedText(checkpoint?.checkpointTree);
   if (
@@ -195,16 +197,17 @@ async function assertSessionWorkSaveCheckpoint(runCommand, context, checkpoint, 
   return checkpoint;
 }
 
-async function prepareSessionWorkSave(runCommand, context, {
-  checkpoint = {},
-  commandOptions = {},
-  connectedWorkSnapshots: workSnapshots = [],
-  derivedArtifactPaths = [],
-  message = "",
-  operationId,
-  project = {},
-  refreshDerivedArtifacts = null
-} = {}) {
+async function prepareSessionWorkSave(runCommand, context, options = {}) {
+  const {
+    checkpoint = {},
+    commandOptions = {},
+    connectedWorkSnapshots: workSnapshots = [],
+    derivedArtifactPaths = [],
+    message = "",
+    operationId,
+    project = {},
+    refreshDerivedArtifacts = null
+  } = options;
   const checkpointTree = trimmedText(checkpoint.checkpointTree);
   const [canonical, sessionHead] = await Promise.all([
     readCanonical(runCommand, context, operationId, { commandOptions, project }),
@@ -300,13 +303,14 @@ async function prepareSessionWorkSave(runCommand, context, {
   };
 }
 
-async function publishPreparedSessionWorkSave(runCommand, context, {
-  commandOptions = {},
-  connectedWorkSnapshots: workSnapshots = [],
-  onPublicationAttempt,
-  prepared = {},
-  project = {}
-} = {}) {
+async function publishPreparedSessionWorkSave(runCommand, context, options = {}) {
+  const {
+    commandOptions = {},
+    connectedWorkSnapshots: workSnapshots = [],
+    onPublicationAttempt,
+    prepared = {},
+    project = {}
+  } = options;
   return publishSaveCommit(
     runCommand,
     context,

@@ -38,9 +38,10 @@ function publicRuntimeProfile(profile = {}) {
   };
 }
 
-function assertSafeLocalModeListenTarget(profile = {}, listenTarget = {}, {
-  env = process.env
-} = {}) {
+function assertSafeLocalModeListenTarget(profile = {}, listenTarget = {}, options = {}) {
+  const {
+    env = process.env
+  } = options;
   if (profile.mode !== VIBE64_RUNTIME_MODE_LOCAL || listenTarget.transport !== "tcp") {
     return;
   }

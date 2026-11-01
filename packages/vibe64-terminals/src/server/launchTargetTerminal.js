@@ -279,13 +279,14 @@ function commandWithHttpReadiness({
   ].join("\n");
 }
 
-function addReadinessMarkerToLaunchCommands(commands = [], {
-  expectedStatus = 200,
-  href = "",
-  marker = "",
-  method = "GET",
-  waitForReadiness = true
-} = {}) {
+function addReadinessMarkerToLaunchCommands(commands = [], options = {}) {
+  const {
+    expectedStatus = 200,
+    href = "",
+    marker = "",
+    method = "GET",
+    waitForReadiness = true
+  } = options;
   if (!waitForReadiness || !marker || !href) {
     return {
       commands,

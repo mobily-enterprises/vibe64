@@ -37,13 +37,14 @@ function stripUsageRecordingHeaders(headers) {
   return headers;
 }
 
-function proxyRequestHeaders(headers = {}, targetUrl, {
-  clientAddress = "",
-  freshDocument = false,
-  proxyOrigin = "",
-  targetHost = "",
-  usageRequestId = ""
-} = {}) {
+function proxyRequestHeaders(headers = {}, targetUrl, options = {}) {
+  const {
+    clientAddress = "",
+    freshDocument = false,
+    proxyOrigin = "",
+    targetHost = "",
+    usageRequestId = ""
+  } = options;
   const nextHeaders = stripUsageRecordingHeaders({ ...headers });
   if (usageRequestId) {
     nextHeaders[USAGE_RECORDING_REQUEST_HEADER] = usageRequestId;
@@ -69,11 +70,12 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   return nextHeaders;
 }
 
-function proxyUpgradeHeaders(headers = {}, targetUrl, {
-  clientAddress = "",
-  proxyOrigin = "",
-  targetHost = ""
-} = {}) {
+function proxyUpgradeHeaders(headers = {}, targetUrl, options = {}) {
+  const {
+    clientAddress = "",
+    proxyOrigin = "",
+    targetHost = ""
+  } = options;
   const nextHeaders = stripUsageRecordingHeaders({ ...headers });
   const cookie = stripPreviewTokenCookie(nextHeaders.cookie, { proxyOrigin });
   if (cookie) {
@@ -176,18 +178,20 @@ function tokenMatches(token = "", expectedHash = "", scope = {}) {
   return tokenHash.length === expected.length && crypto.timingSafeEqual(tokenHash, expected);
 }
 
-function previewRequestToken(request, requestUrl, {
-  proxyOrigin = ""
-} = {}) {
+function previewRequestToken(request, requestUrl, options = {}) {
+  const {
+    proxyOrigin = ""
+  } = options;
   const cookies = parseCookies(request.headers?.cookie || "");
   return requestUrl.searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM) ||
     cookies[previewTokenCookieName(proxyOrigin)] ||
     "";
 }
 
-function previewRequestTokenDiagnostics(request, requestUrl, {
-  proxyOrigin = ""
-} = {}) {
+function previewRequestTokenDiagnostics(request, requestUrl, options = {}) {
+  const {
+    proxyOrigin = ""
+  } = options;
   const cookieName = previewTokenCookieName(proxyOrigin);
   const cookies = parseCookies(request.headers?.cookie || "");
   return {
@@ -212,9 +216,10 @@ function previewTokenCookieName(proxyOrigin = "") {
   }
 }
 
-function previewTokenCookie(token = "", {
-  proxyOrigin = ""
-} = {}) {
+function previewTokenCookie(token = "", options = {}) {
+  const {
+    proxyOrigin = ""
+  } = options;
   const https = previewOriginUsesHttps(proxyOrigin);
   // The Preview is same-site with its editor, so Lax suffices; a foreign site
   // that frames the Preview gets no token cookie and so no application page.
@@ -233,9 +238,10 @@ function previewOriginUsesHttps(value = "") {
 /**
  * The app sees the browser's cookies without this proxy's token cookie.
  */
-function stripPreviewTokenCookie(header = "", {
-  proxyOrigin = ""
-} = {}) {
+function stripPreviewTokenCookie(header = "", options = {}) {
+  const {
+    proxyOrigin = ""
+  } = options;
   const cookieName = previewTokenCookieName(proxyOrigin);
   return String(header || "")
     .split(";")
@@ -252,11 +258,12 @@ function cookiePairName(part = "") {
   return (separatorIndex < 0 ? part : part.slice(0, separatorIndex)).trim();
 }
 
-function responseHeaders(response, {
-  injected = false,
-  proxyOrigin = "",
-  targetOrigin = ""
-} = {}) {
+function responseHeaders(response, options = {}) {
+  const {
+    injected = false,
+    proxyOrigin = "",
+    targetOrigin = ""
+  } = options;
   const headers = {};
   for (const [key, value] of Object.entries(response.headers || {})) {
     if (value !== undefined) {
@@ -333,10 +340,11 @@ function cleanPreviewTokenRedirectLocation(requestUrl) {
   return redirectUrl.toString();
 }
 
-function proxiedLocation(location = "", {
-  proxyOrigin = "",
-  targetOrigin = ""
-} = {}) {
+function proxiedLocation(location = "", options = {}) {
+  const {
+    proxyOrigin = "",
+    targetOrigin = ""
+  } = options;
   const text = String(location || "").trim();
   if (!text || !proxyOrigin || !targetOrigin) {
     return text;

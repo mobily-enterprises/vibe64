@@ -55,7 +55,8 @@ function upgradeHelperProfiles(value) {
   return next;
 }
 
-function routingRecord(value, { preferences = false, history = false } = {}) {
+function routingRecord(value, options = {}) {
+  const { preferences = false, history = false } = options;
   if (!isPlainObject(value)) throw new Error("Saved routing must be an object.");
   const previousConfiguration = value.configuration?.schemaVersion === 3 ||
     Object.values(value.configuration?.orchestrators || {}).some(roles => Object.hasOwn(roles, "intern"));

@@ -23,7 +23,8 @@ function registerLearningFact({ id, read } = {}) {
 /**
  * One bounded answer; a reader that fails or is missing answers "not yet".
  */
-async function readLearningFact(id, { actor, projectSlug = "", context = {} } = {}) {
+async function readLearningFact(id, options = {}) {
+  const { actor, projectSlug = "", context = {} } = options;
   const read = readers.get(id);
   if (!read) return { holds: false, reason: "This installation cannot check this yet." };
   try {

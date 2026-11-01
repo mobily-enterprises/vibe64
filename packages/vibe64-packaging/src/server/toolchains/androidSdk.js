@@ -157,7 +157,8 @@ async function installAndroidSdk({
   baseEnvironment = process.env,
   repositoryUrl,
   signal
-} = {}, { fetchImpl = fetch, runCommand = spawnCommand } = {}) {
+} = {}, options = {}) {
+  const { fetchImpl = fetch, runCommand = spawnCommand } = options;
   if (typeof directory !== "string" || !path.isAbsolute(directory)) {
     throw toolchainError("The Android SDK needs an absolute install folder.");
   }

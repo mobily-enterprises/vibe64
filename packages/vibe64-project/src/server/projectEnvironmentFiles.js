@@ -43,10 +43,11 @@ async function optionalFile(filePath = "") {
   }
 }
 
-async function assertProjectionPath(sourceRoot = "", relativePath = "", {
-  label = "Environment file",
-  code = "vibe64_environment_file"
-} = {}) {
+async function assertProjectionPath(sourceRoot = "", relativePath = "", options = {}) {
+  const {
+    label = "Environment file",
+    code = "vibe64_environment_file"
+  } = options;
   const root = path.resolve(sourceRoot);
   const target = path.resolve(root, relativePath);
   if (!target.startsWith(`${root}${path.sep}`)) {
@@ -98,10 +99,11 @@ function gitExcludePattern(relativePath = "") {
     .join("")}`;
 }
 
-async function managedGitExcludeProjection(sourceRoot = "", relativePaths = [], {
-  section = "environment",
-  atomicJson = false
-} = {}) {
+async function managedGitExcludeProjection(sourceRoot = "", relativePaths = [], options = {}) {
+  const {
+    section = "environment",
+    atomicJson = false
+  } = options;
   const beginMarker = `# BEGIN Vibe64 managed ${section} files`;
   const endMarker = `# END Vibe64 managed ${section} files`;
   const gitDirectory = path.join(path.resolve(sourceRoot), ".git");

@@ -94,7 +94,8 @@ async function writePreviewStopState(store, sessionId, { stopped, error = "" }) 
  * @param {object} [options]
  * @param {boolean} [options.preserveSelection]
  */
-async function clearLaunchMetadata(store, sessionId = "", { preserveSelection = false } = {}) {
+async function clearLaunchMetadata(store, sessionId = "", options = {}) {
+  const { preserveSelection = false } = options;
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId || !store) {
     return false;

@@ -104,13 +104,14 @@ function managedOnlyRequestError(request) {
   return null;
 }
 
-async function runLocalVibe64Command(request, {
-  actor,
-  cwd,
-  env,
-  requiresHelper,
-  resolveEnv
-} = {}) {
+async function runLocalVibe64Command(request, options = {}) {
+  let {
+    actor,
+    cwd,
+    env,
+    requiresHelper,
+    resolveEnv
+  } = options;
   const managedOnly = managedOnlyRequestError(request);
   if (managedOnly) {
     return managedOnly;

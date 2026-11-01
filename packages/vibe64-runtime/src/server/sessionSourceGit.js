@@ -15,9 +15,10 @@ const GIT_REPACK_TIMEOUT_MS = 60_000;
 const MAX_REMEMBERED_MERGE_STATES = 256;
 const mergeStatesByIndex = new Map();
 
-async function runGit(sourceRoot = "", args = [], {
-  timeout = GIT_TIMEOUT_MS
-} = {}) {
+async function runGit(sourceRoot = "", args = [], options = {}) {
+  const {
+    timeout = GIT_TIMEOUT_MS
+  } = options;
   return runSourceCommand("git", ["-C", sourceRoot, ...args], {
     cwd: sourceRoot,
     gitSafeDirectories: [sourceRoot],
@@ -133,9 +134,10 @@ async function inspectSessionSourceMergeState(sourceRoot = "") {
   return merge;
 }
 
-async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", {
-  runExclusive = null
-} = {}) {
+async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", options = {}) {
+  const {
+    runExclusive = null
+  } = options;
   const normalizedSourceRoot = normalizeText(sourceRoot) ? path.resolve(sourceRoot) : "";
   if (!normalizedSourceRoot) {
     throw vibe64Error(

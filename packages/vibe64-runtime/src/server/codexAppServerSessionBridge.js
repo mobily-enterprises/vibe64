@@ -180,10 +180,11 @@ async function writeCodexAppServerIdentityMetadata({
     : metadata;
 }
 
-function persistedCodexSessionRenewalThreadBaseline(session = {}, {
-  operationId = "",
-  workdir = ""
-} = {}) {
+function persistedCodexSessionRenewalThreadBaseline(session = {}, options = {}) {
+  const {
+    operationId = "",
+    workdir = ""
+  } = options;
   const metadata = isPlainRecord(session.metadata) ? session.metadata : {};
   const rawBaseline = normalizeAgentText(
     metadata[CODEX_SESSION_RENEWAL_BASELINE_METADATA]
@@ -219,10 +220,11 @@ function persistedCodexSessionRenewalThreadBaseline(session = {}, {
   });
 }
 
-function persistedCodexSessionRenewalThreadClaim(session = {}, {
-  operationId = "",
-  workdir = ""
-} = {}) {
+function persistedCodexSessionRenewalThreadClaim(session = {}, options = {}) {
+  const {
+    operationId = "",
+    workdir = ""
+  } = options;
   const metadata = isPlainRecord(session.metadata) ? session.metadata : {};
   const rawClaim = normalizeAgentText(
     metadata[CODEX_SESSION_RENEWAL_THREAD_CLAIM_METADATA]

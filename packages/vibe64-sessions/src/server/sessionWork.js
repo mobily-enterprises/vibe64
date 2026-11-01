@@ -41,11 +41,12 @@ function createSessionWork({
 }) {
   const activeWorkInspections = new Map();
 
-  async function inspectSessionWork(sessionId, requestContext = {}, {
-    includeConnected = true,
-    inspectContributionPublication = false,
-    knownSubmittedCommit = ""
-  } = {}) {
+  async function inspectSessionWork(sessionId, requestContext = {}, options = {}) {
+    const {
+      includeConnected = true,
+      inspectContributionPublication = false,
+      knownSubmittedCommit = ""
+    } = options;
     return sessionResult(async () => {
       const runtime = await project.createRuntime({
         inspectSource: false

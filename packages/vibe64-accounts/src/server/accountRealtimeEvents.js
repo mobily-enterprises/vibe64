@@ -171,14 +171,15 @@ function vibe64ConnectionsChangedActionEvent({ operation = "updated" } = {}) {
  * @param {RuntimeEvents} dependencies.events
  */
 function createVibe64AccountsChangedPublisher({ events }) {
-  return async function publishVibe64AccountsChanged(accountId = "", {
-    actorId = null,
-    account = null,
-    authSessionId = "",
-    operation = "updated",
-    reason = "",
-    status = ""
-  } = {}) {
+  return async function publishVibe64AccountsChanged(accountId = "", options = {}) {
+    const {
+      actorId = null,
+      account = null,
+      authSessionId = "",
+      operation = "updated",
+      reason = "",
+      status = ""
+    } = options;
     const normalizedAccountId = normalizeAccountValue(accountId) || accountIdFromResult({ account });
     if (!normalizedAccountId) {
       return null;
@@ -228,12 +229,13 @@ function createVibe64AccountsChangedPublisher({ events }) {
  * @param {RuntimeEvents} dependencies.events
  */
 function createVibe64ConnectionsChangedPublisher({ events }) {
-  return async function publishVibe64ConnectionsChanged(connectionId = "", {
-    connected,
-    operation = "updated",
-    reason = "",
-    status = ""
-  } = {}) {
+  return async function publishVibe64ConnectionsChanged(connectionId = "", options = {}) {
+    const {
+      connected,
+      operation = "updated",
+      reason = "",
+      status = ""
+    } = options;
     const normalizedConnectionId = normalizeAccountValue(connectionId);
     if (!normalizedConnectionId) {
       return null;
@@ -258,11 +260,12 @@ function createVibe64ConnectionsChangedPublisher({ events }) {
  * @param {RuntimeEvents} dependencies.events
  */
 function createVibe64AccountAuthSessionChangedPublisher({ events }) {
-  return async function publishVibe64AccountAuthSessionChanged(session = {}, {
-    actorId = "",
-    operation = "updated",
-    reason = ""
-  } = {}) {
+  return async function publishVibe64AccountAuthSessionChanged(session = {}, options = {}) {
+    const {
+      actorId = "",
+      operation = "updated",
+      reason = ""
+    } = options;
     const payload = vibe64AccountAuthSessionRealtimePayload(session);
     const normalizedActorId = normalizeAccountValue(actorId);
     if (!payload.sessionId) {

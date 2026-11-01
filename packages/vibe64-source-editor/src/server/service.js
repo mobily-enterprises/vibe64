@@ -87,11 +87,12 @@ function createService({
   const searchIndex = createSourceEditorSearchIndex();
   let fileSaveOwner = null;
 
-  async function sourceEditorContext(sessionId = "", {
-    agentOperation = false,
-    runtime: existingRuntime = null,
-    vibe64User = null
-  } = {}) {
+  async function sourceEditorContext(sessionId = "", options = {}) {
+    const {
+      agentOperation = false,
+      runtime: existingRuntime = null,
+      vibe64User = null
+    } = options;
     const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
@@ -166,9 +167,10 @@ function createService({
     };
   }
 
-  async function runSourceEditorWriteExclusive(input = {}, operation, {
-    agentOperation = false
-  } = {}) {
+  async function runSourceEditorWriteExclusive(input = {}, operation, options = {}) {
+    const {
+      agentOperation = false
+    } = options;
     const sessionId = normalizeText(input.sessionId);
     if (!sessionId) {
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");

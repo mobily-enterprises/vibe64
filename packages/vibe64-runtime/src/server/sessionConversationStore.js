@@ -473,7 +473,8 @@ function createSessionConversationStore({
     });
   }
 
-  async function readConversationTail(sessionId, { userLimit = 2 } = {}) {
+  async function readConversationTail(sessionId, options = {}) {
+    const { userLimit = 2 } = options;
     return withConversationTransaction(sessionId, async (transaction) => {
       const turns = [];
       let users = 0;

@@ -352,11 +352,12 @@ async function resolveExpectedSourceCommit({
  * upgrade of existing sessions both decide with this proof; git runs one Git
  * command in the session source, and a Git failure throws.
  */
-async function clonedDefaultBranchProof(git, {
-  baselineCommit = "",
-  clonedBranch = "",
-  sessionBranch = ""
-} = {}) {
+async function clonedDefaultBranchProof(git, options = {}) {
+  const {
+    baselineCommit = "",
+    clonedBranch = "",
+    sessionBranch = ""
+  } = options;
   const localRef = `refs/heads/${clonedBranch}`;
   const head = await git(["rev-parse", "--symbolic-full-name", "HEAD"]);
   if (head === "HEAD") return { outcome: "kept_head_detached" };

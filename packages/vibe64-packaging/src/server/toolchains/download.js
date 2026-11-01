@@ -24,7 +24,8 @@ async function exists(file) {
 /**
  * archive: { url, file, size, sha256 | sha1 }. Returns the verified local path.
  */
-async function downloadVerified(archive, directory, { fetchImpl = fetch, signal } = {}) {
+async function downloadVerified(archive, directory, options = {}) {
+  const { fetchImpl = fetch, signal } = options;
   const algorithm = archive.sha256 ? "sha256" : "sha1";
   const expected = archive.sha256 || archive.sha1;
   if (!/^[0-9a-f]{40,64}$/u.test(expected || "") || !archive.file || !archive.url) {
@@ -132,7 +133,8 @@ async function extractZip(archiveFile, directory) {
  * Unpacks an archive into `<destination>` atomically; `inner` names the one top
  * folder of the archive whose contents become the destination.
  */
-async function unpackInto(archiveFile, destination, { inner, kind, baseEnvironment, runCommand } = {}) {
+async function unpackInto(archiveFile, destination, options = {}) {
+  const { inner, kind, baseEnvironment, runCommand } = options;
   if (await exists(destination)) return destination;
   const staging = `${destination}.staging-${randomUUID()}`;
   await mkdir(staging, { recursive: true });

@@ -1,9 +1,10 @@
 import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-async function executableFileState(filePath = "", {
-  mode = 0o755
-} = {}) {
+async function executableFileState(filePath = "", options = {}) {
+  const {
+    mode = 0o755
+  } = options;
   try {
     const [content, stats] = await Promise.all([
       readFile(filePath, "utf8"),
@@ -26,9 +27,10 @@ async function executableFileState(filePath = "", {
   }
 }
 
-async function writeExecutableFileIfChanged(filePath = "", content = "", {
-  mode = 0o755
-} = {}) {
+async function writeExecutableFileIfChanged(filePath = "", content = "", options = {}) {
+  const {
+    mode = 0o755
+  } = options;
   const resolvedPath = path.resolve(String(filePath || ""));
   await mkdir(path.dirname(resolvedPath), {
     recursive: true

@@ -59,14 +59,15 @@ function createServiceWorkspacePreparation({
     return exclusive.value;
   }
 
-  async function prepareWorkspaceSetupInsideAgentWrite(sessionId = "", {
-    publish = false,
-    renewal = false,
-    rerunFailed = false,
-    retry = false,
-    runtime: existingRuntime = null,
-    session: existingSession = null
-  } = {}) {
+  async function prepareWorkspaceSetupInsideAgentWrite(sessionId = "", options = {}) {
+    const {
+      publish = false,
+      renewal = false,
+      rerunFailed = false,
+      retry = false,
+      runtime: existingRuntime = null,
+      session: existingSession = null
+    } = options;
     const requestContext = captureProjectRequestContext();
     const runtime = existingRuntime || await projectService.createRuntime({
       inspectSource: false

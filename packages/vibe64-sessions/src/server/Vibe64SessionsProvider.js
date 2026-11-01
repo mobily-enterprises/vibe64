@@ -111,7 +111,8 @@ function createSessionRenewalRecoveryTask({ recover, logger }) {
  * @param {object} [options]
  * @param {AbortSignal} options.signal
  */
-async function resumeInterruptedSessionWork(sessions, { signal } = {}) {
+async function resumeInterruptedSessionWork(sessions, options = {}) {
+  const { signal } = options;
   const failures = [];
   for (const [step, resume] of [
     ["archive", () => sessions.resumeSessionArchives({ signal })],

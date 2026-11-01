@@ -16,7 +16,8 @@ async function readJsonFile(file, fallback) {
   }
 }
 
-async function writeJsonFile(file, value, { mode = 0o600, directoryMode = 0o700 } = {}) {
+async function writeJsonFile(file, value, options = {}) {
+  const { mode = 0o600, directoryMode = 0o700 } = options;
   await mkdir(path.dirname(file), { recursive: true, mode: directoryMode });
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${randomUUID()}.tmp`);
   try {

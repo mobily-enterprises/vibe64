@@ -82,13 +82,14 @@ function sourceEditorHelperFollowupThread(explanation = {}) {
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
-async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
-  emit = null,
-  explanationChats,
-  explanationTurns,
-  isClosed = null,
-  terminalService
-} = {}) {
+async function streamSourceEditorExplanationFollowup(context = {}, input = {}, options = {}) {
+  const {
+    emit = null,
+    explanationChats,
+    explanationTurns,
+    isClosed = null,
+    terminalService
+  } = options;
   const message = sourceEditorExplanationFollowupMessage(input.message);
   const baseExplanation = await readSourceEditorExplanation(context, input.explanationId, {
     explanationChats

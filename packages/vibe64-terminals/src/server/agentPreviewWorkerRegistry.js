@@ -86,7 +86,8 @@ function createAgentPreviewWorkerRegistry({
    * Interrupts a pending browser test, stops every registered worker and
    * closes the session's command servers; returns the worker count.
    */
-  async function teardownSession(sessionId = "", { forget = false, reason = "" } = {}) {
+  async function teardownSession(sessionId = "", options = {}) {
+    const { forget = false, reason = "" } = options;
     const normalizedSessionId = trimmedText(sessionId);
     const pending = state.browserTestRuns.get(normalizedSessionId);
     pending?.interrupt();

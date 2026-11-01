@@ -87,10 +87,11 @@ function sourceEditorFailureWithRejectedThread(error = null, rejectedThread = nu
   return failure;
 }
 
-function sourceEditorStructuredAnswer(value = "", {
-  code = "vibe64_source_explanation_agent_invalid",
-  maxChars = SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS
-} = {}) {
+function sourceEditorStructuredAnswer(value = "", options = {}) {
+  const {
+    code = "vibe64_source_explanation_agent_invalid",
+    maxChars = SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS
+  } = options;
   let envelope = value;
   if (typeof value === "string") {
     try {
@@ -270,18 +271,19 @@ function emitSourceEditorExplanationEvent(emit = null, isClosed = null, type = "
  * @param {object} [options]
  * @param {TerminalsService} options.terminalService
  */
-async function streamSourceEditorAgentTurn(context = {}, {
-  onText = null,
-  onExecutionProfile = null,
-  onThread = null,
-  onTurn = null,
-  prompt = "",
-  promptLabel = "",
-  terminalService,
-  threadId = "",
-  outputSchema = SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA,
-  answerMaxChars = SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS
-} = {}) {
+async function streamSourceEditorAgentTurn(context = {}, options = {}) {
+  const {
+    onText = null,
+    onExecutionProfile = null,
+    onThread = null,
+    onTurn = null,
+    prompt = "",
+    promptLabel = "",
+    terminalService,
+    threadId = "",
+    outputSchema = SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA,
+    answerMaxChars = SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS
+  } = options;
   let latestText = "";
   let latestExecutionProfile = null;
   let latestThreadId = normalizeText(threadId);
@@ -454,12 +456,13 @@ function sourceEditorAgentStreamHandlers({
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
  */
-function createSourceEditorExplanationStreamState(context = {}, initialExplanation = {}, {
-  assistantMessageId = "",
-  emit = null,
-  explanationChats,
-  isClosed = null
-} = {}) {
+function createSourceEditorExplanationStreamState(context = {}, initialExplanation = {}, options = {}) {
+  const {
+    assistantMessageId = "",
+    emit = null,
+    explanationChats,
+    isClosed = null
+  } = options;
   let explanation = initialExplanation;
   let writeQueue = Promise.resolve(explanation);
   const currentExplanation = () => explanation;
@@ -549,16 +552,17 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminalService
  */
-async function runTrackedSourceEditorAgentTurn(context = {}, {
-  assistantMessageId = "",
-  currentExplanation = () => ({}),
-  emitEvent = () => {},
-  explanationChats,
-  fallbackError = "Source explanation failed.",
-  remember = async () => ({}),
-  run = async () => ({}),
-  terminalService
-} = {}) {
+async function runTrackedSourceEditorAgentTurn(context = {}, options = {}) {
+  const {
+    assistantMessageId = "",
+    currentExplanation = () => ({}),
+    emitEvent = () => {},
+    explanationChats,
+    fallbackError = "Source explanation failed.",
+    remember = async () => ({}),
+    run = async () => ({}),
+    terminalService
+  } = options;
   const finishStoppedExplanation = async (executionProfile = null) => {
     let stopped = await readStoppedSourceEditorExplanation(context, currentExplanation().id, {
       explanationChats
@@ -665,9 +669,10 @@ async function runTrackedSourceEditorAgentTurn(context = {}, {
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
  */
-async function readSourceEditorExplanation(context = {}, explanationId = "", {
-  explanationChats
-} = {}) {
+async function readSourceEditorExplanation(context = {}, explanationId = "", options = {}) {
+  const {
+    explanationChats
+  } = options;
   return withSourceEditorExplanationFreshness(
     context,
     await readSourceEditorExplanationRecord(context, explanationId, {

@@ -9,7 +9,8 @@ import { DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, validateDataOverview } fro
  * MySQL's schema qualifier is the selected database, unlike PostgreSQL's
  * application-owned schemas. Only the overview's persisted references omit it.
  */
-export function dataOverviewReference(schema, reference, { qualified = false } = {}) {
+export function dataOverviewReference(schema, reference, options = {}) {
+  const { qualified = false } = options;
   if (schema.engine !== "mysql") return reference;
   const prefix = `${schema.database}.`;
   if (qualified) return `${prefix}${reference}`;

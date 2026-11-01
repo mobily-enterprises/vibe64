@@ -56,11 +56,12 @@ async function sessionChangeFiles(runCommand, context, canonicalCommit, worktree
   return changedFileRecords(statusResult.stdout || statusResult.output, statResult.stdout || statResult.output);
 }
 
-async function sessionChangeDiff(runCommand, context, work, requestedPath, {
-  commandOptions = {},
-  lineLimit = DEFAULT_CHANGE_DIFF_LINE_LIMIT,
-  project = {}
-} = {}) {
+async function sessionChangeDiff(runCommand, context, work, requestedPath, options = {}) {
+  const {
+    commandOptions = {},
+    lineLimit = DEFAULT_CHANGE_DIFF_LINE_LIMIT,
+    project = {}
+  } = options;
   const filePath = safeChangePath(requestedPath);
   if (!work.changedPaths.includes(filePath)) {
     throw saveError("That file is not part of the current saved-work difference.", "vibe64_session_change_not_found");

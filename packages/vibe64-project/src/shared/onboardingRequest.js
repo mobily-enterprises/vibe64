@@ -1,4 +1,5 @@
-function projectOnboardingRequest(kind, { purpose = "", diagnostic = "", nextAction = "" } = {}) {
+function projectOnboardingRequest(kind, options = {}) {
+  const { purpose = "", diagnostic = "", nextAction = "" } = options;
   const description = String(purpose).trim();
   const previewIdentitySetup = " If this application has authenticated web pages, inspect its existing authentication and Preview identity support, then start a conversation about managed preview access. Ask which existing development users should represent administrator and other relevant roles, using their email, login or user ID, and which should be the default. Reuse answers already supplied; do not ask for passwords or infer privileges from an account name. Offer to configure the existing Vibe64 Preview identity protocol and named identities, and wait for the user's choices before doing so. Do not create users, change roles or weaken production authentication as part of import. If the user defers, leave this explicitly pending; public or non-web projects do not need identity setup.";
   const requests = {

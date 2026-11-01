@@ -204,9 +204,10 @@ function normalizedState(value = null) {
   };
 }
 
-function connectionModelAccess(connection = {}, id = "", {
-  activeZenCheck = false
-} = {}) {
+function connectionModelAccess(connection = {}, id = "", options = {}) {
+  const {
+    activeZenCheck = false
+  } = options;
   if (id === OPENCODE_ZEN_PROVIDER_ID) {
     const mode = ZEN_MODEL_ACCESS_MODES.has(trimmedText(connection.zenModelAccessMode))
       ? trimmedText(connection.zenModelAccessMode)

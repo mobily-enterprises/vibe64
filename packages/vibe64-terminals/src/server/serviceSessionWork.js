@@ -231,7 +231,8 @@ function createServiceSessionWork({
    * A write that records commits (Save, Update, Merge contribution) passes
    * `createsCommits`, so its commands carry the author's own Git name and email.
    */
-  async function sessionWorkExecution(sessionId, input = {}, reason = "session-work", { createsCommits = false } = {}) {
+  async function sessionWorkExecution(sessionId, input = {}, reason = "session-work", options = {}) {
+    const { createsCommits = false } = options;
     const normalizedSessionId = String(sessionId || "").trim();
     const read = await sessionAccess.sessionContext(normalizedSessionId, input);
     const { runtime } = read;

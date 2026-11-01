@@ -46,10 +46,11 @@ function containsControlCharacter(value = "") {
   });
 }
 
-function boundedIdentifier(value, field, {
-  allowEmpty = false,
-  maxLength = 512
-} = {}) {
+function boundedIdentifier(value, field, options = {}) {
+  const {
+    allowEmpty = false,
+    maxLength = 512
+  } = options;
   const normalized = normalizeAgentText(value);
   if (
     (!normalized && !allowEmpty) ||
@@ -115,9 +116,10 @@ function serializeVibe64AssistantSelection(value = {}) {
   return JSON.stringify(defineVibe64AssistantSelection(value));
 }
 
-function vibe64AssistantSelectionFromMetadata(metadata = {}, {
-  required = true
-} = {}) {
+function vibe64AssistantSelectionFromMetadata(metadata = {}, options = {}) {
+  const {
+    required = true
+  } = options;
   const raw = normalizeAgentText(record(metadata)[VIBE64_ASSISTANT_SELECTION_METADATA]);
   if (!raw && required !== true) {
     return null;
@@ -433,9 +435,10 @@ function resolveVibe64AssistantSelection(capabilitiesValue = {}, requestedValue 
   });
 }
 
-function assertVibe64AssistantSelectionUpdate(currentValue = {}, nextValue = {}, {
-  turnActive = false
-} = {}) {
+function assertVibe64AssistantSelectionUpdate(currentValue = {}, nextValue = {}, options = {}) {
+  const {
+    turnActive = false
+  } = options;
   defineVibe64AssistantSelection(currentValue);
   const next = defineVibe64AssistantSelection(nextValue);
   if (turnActive === true) {

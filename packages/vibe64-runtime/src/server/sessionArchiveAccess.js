@@ -42,7 +42,8 @@ function createSessionArchiveAccess({
   recordFiles,
   archiveRecords
 }) {
-  async function withExtractedSessionArchive(record, operation, { temporaryRoot = "" } = {}) {
+  async function withExtractedSessionArchive(record, operation, options = {}) {
+    const { temporaryRoot = "" } = options;
     const extractionRoot = path.join(
       temporaryRoot || path.join(storePaths.paths().sessionsRoot, ".archive-read"),
       `${record.sessionId}-${randomUUID()}`
@@ -154,7 +155,8 @@ function createSessionArchiveAccess({
     });
   }
 
-  async function withArchivedSession(sessionId, operation, { beforeWork } = {}) {
+  async function withArchivedSession(sessionId, operation, options = {}) {
+    const { beforeWork } = options;
     if (typeof operation !== "function") {
       throw new TypeError("Archived session work requires an operation.");
     }
@@ -256,7 +258,8 @@ function createSessionArchiveAccess({
             return { ok: true, paths: [...published].sort() };
           });
         };
-        const pruneArtifacts = async (relativePaths, { beforePrune } = {}) => {
+        const pruneArtifacts = async (relativePaths, options = {}) => {
+          const { beforePrune } = options;
           const requested = artifactExpiryRequest(relativePaths, beforePrune);
           return change(() => pruneExtractedArtifacts(archived, requested, { beforePrune, beforeWork }));
         };
@@ -270,7 +273,8 @@ function createSessionArchiveAccess({
     });
   }
 
-  async function archivedArtifactPath(session, relativePath, { createParents = false } = {}) {
+  async function archivedArtifactPath(session, relativePath, options = {}) {
+    const { createParents = false } = options;
     if (!(await lstat(session.sessionRoot)).isDirectory() || await realpath(session.sessionRoot) !== path.resolve(session.sessionRoot)) {
       throw new Error("Archived artifact root must be a regular directory without symlink parents.");
     }
@@ -295,7 +299,8 @@ function createSessionArchiveAccess({
     return target;
   }
 
-  async function publishExtractedSessionArchive(session, { beforePublish, beforeWork } = {}) {
+  async function publishExtractedSessionArchive(session, options = {}) {
+    const { beforePublish, beforeWork } = options;
     await beforeWork?.({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
     const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
     try {
@@ -385,13 +390,15 @@ function createSessionArchiveAccess({
     return { ok: true, attachmentIds: removed.sort() };
   }
 
-  async function pruneArchivedSessionArtifacts(sessionId, { relativePaths, beforePrune, beforeWork } = {}) {
+  async function pruneArchivedSessionArtifacts(sessionId, options = {}) {
+    const { relativePaths, beforePrune, beforeWork } = options;
     artifactExpiryRequest(relativePaths, beforePrune);
     return withArchivedSession(sessionId, (_session, { pruneArtifacts }) => pruneArtifacts(relativePaths, { beforePrune }),
       { beforeWork });
   }
 
-  async function pruneArchivedSessionAttachments(sessionId, { beforePrune, beforeWork } = {}) {
+  async function pruneArchivedSessionAttachments(sessionId, options = {}) {
+    const { beforePrune, beforeWork } = options;
     if (typeof beforePrune !== "function") throw new TypeError("Attachment expiry requires a host callback.");
     return withArchivedSession(sessionId, (_session, { pruneAttachments }) => pruneAttachments({ beforePrune }),
       { beforeWork });

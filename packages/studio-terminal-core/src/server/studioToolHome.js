@@ -74,9 +74,10 @@ function studioUserCommand(commandArgs = []) {
   return (normalizedArgs.length ? normalizedArgs : ["bash"]).map(shellQuote).join(" ");
 }
 
-function studioUserStartupScript(commandArgs = ["bash"], {
-  setupLines = []
-} = {}) {
+function studioUserStartupScript(commandArgs = ["bash"], options = {}) {
+  const {
+    setupLines = []
+  } = options;
   const startupCommand = studioUserCommand(commandArgs);
   return [
     "set -e",

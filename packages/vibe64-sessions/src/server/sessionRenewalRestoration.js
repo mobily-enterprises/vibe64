@@ -38,9 +38,10 @@ function createRenewalRestoration({
    * @param {object} [options]
    * @param {boolean} [options.thawAdmission]
    */
-  async function restorePreAcknowledgementSource(runtime, state, {
-    thawAdmission = true
-  } = {}) {
+  async function restorePreAcknowledgementSource(runtime, state, options = {}) {
+    const {
+      thawAdmission = true
+    } = options;
     if (!SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES.has(state?.stage)) {
       return false;
     }

@@ -217,7 +217,8 @@ function createAgeStore({
     return Boolean(current()?.entries.has(id));
   }
 
-  function put(id, { value, kind, label, meta = {} } = {}) {
+  function put(id, options = {}) {
+    const { value, kind, label, meta = {} } = options;
     return exclusive(async () => {
       if (!ENTRY_ID.test(id || "")) throw storeError("That key name is not valid.", "vibe64_publishing_key_invalid");
       const state = requireUnlocked();

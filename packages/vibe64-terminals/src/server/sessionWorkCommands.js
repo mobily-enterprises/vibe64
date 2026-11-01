@@ -27,10 +27,11 @@ function commandProject(context = {}, project = {}) {
   };
 }
 
-function scopedSessionWorkCommand(runCommand, context = {}, project = {}, {
-  label = "Session repository work",
-  operationId = crypto.randomUUID()
-} = {}) {
+function scopedSessionWorkCommand(runCommand, context = {}, project = {}, options = {}) {
+  const {
+    label = "Session repository work",
+    operationId = crypto.randomUUID()
+  } = options;
   if (runCommand?.[SESSION_WORK_COMMAND_SCOPE]) {
     return runCommand;
   }
@@ -65,14 +66,15 @@ function scopedSessionWorkCommand(runCommand, context = {}, project = {}, {
   return scoped;
 }
 
-async function saveCommand(runCommand, context, command, args, {
-  additionalAllowedRoots = [],
-  commandOptions = {},
-  cwd = context.worktreePath,
-  env = {},
-  input,
-  project = {}
-} = {}) {
+async function saveCommand(runCommand, context, command, args, options = {}) {
+  const {
+    additionalAllowedRoots = [],
+    commandOptions = {},
+    cwd = context.worktreePath,
+    env = {},
+    input,
+    project = {}
+  } = options;
   const allowedRoots = [
     context.worktreePath,
     path.dirname(context.worktreePath),

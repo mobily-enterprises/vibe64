@@ -28,10 +28,11 @@ function agentSpecList() {
   ].join("\n");
 }
 
-async function runAgentSpecCli(args = [], {
-  write = (text) => process.stdout.write(`${text.trimEnd()}\n`),
-  writeError = (text) => process.stderr.write(`${text.trimEnd()}\n`)
-} = {}) {
+async function runAgentSpecCli(args = [], options = {}) {
+  const {
+    write = (text) => process.stdout.write(`${text.trimEnd()}\n`),
+    writeError = (text) => process.stderr.write(`${text.trimEnd()}\n`)
+  } = options;
   const [name] = args;
   if (!name || name === "--help" || name === "-h") {
     write(agentSpecList());

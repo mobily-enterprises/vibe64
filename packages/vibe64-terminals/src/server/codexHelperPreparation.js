@@ -23,11 +23,12 @@ function createCodexHelperPreparation({
   } = runOwner.runtimeLifecycle;
   const { ownershipError: codexAppServerHelperOwnershipError } = runOwner.helperThreads;
 
-  function prepareCodexAppServerHelperThreadRestore(record = {}, {
-    ledger = null,
-    runtime = null,
-    session = null
-  } = {}) {
+  function prepareCodexAppServerHelperThreadRestore(record = {}, options = {}) {
+    const {
+      ledger = null,
+      runtime = null,
+      session = null
+    } = options;
     const projectRuntimeRoot = trimmedText(runtime?.stateRoot);
     if (
       !projectRuntimeRoot ||

@@ -110,7 +110,8 @@ function createProjectArchiveService({
    * The namespace of a slug: the catalogue's, or inside the matching practice
    * scope the learning-space one. Everything else is refused before any write.
    */
-  async function projectNamespace(slug, { archiveRoot = defaultArchiveRoot } = {}) {
+  async function projectNamespace(slug, options = {}) {
+    const { archiveRoot = defaultArchiveRoot } = options;
     // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
     const scope = projectContext.currentPracticeProjectScope?.() || null;
     if (scope?.slug === slug) {

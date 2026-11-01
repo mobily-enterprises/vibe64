@@ -92,9 +92,10 @@ function attachmentLockCwd(directory) {
   return path.dirname(path.dirname(path.dirname(path.resolve(directory))));
 }
 
-async function acquireAttachmentDirectoryLock(directory, {
-  waitMs = 0
-} = {}) {
+async function acquireAttachmentDirectoryLock(directory, options = {}) {
+  const {
+    waitMs = 0
+  } = options;
   const lockPath = path.join(directory, ATTACHMENT_LEASE_LOCK_FILE);
   const deadline = Date.now() + Math.max(0, waitMs);
   while (true) {

@@ -162,10 +162,11 @@ function sanitizeOperationText(value = "", secrets = []) {
   return output;
 }
 
-function redactLogValue(value, {
-  field = "",
-  seen = new WeakSet()
-} = {}) {
+function redactLogValue(value, options = {}) {
+  const {
+    field = "",
+    seen = new WeakSet()
+  } = options;
   if (shouldRedactLogField(field)) {
     return VIBE64_LOG_REDACTED_VALUE;
   }

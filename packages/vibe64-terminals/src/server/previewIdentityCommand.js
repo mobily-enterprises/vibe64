@@ -36,10 +36,11 @@ function commandRequestSubject(selection = {}) {
   };
 }
 
-function previewIdentityCommandRequest(selection = {}, {
-  requestId = randomUUID(),
-  targetHref = ""
-} = {}) {
+function previewIdentityCommandRequest(selection = {}, options = {}) {
+  const {
+    requestId = randomUUID(),
+    targetHref = ""
+  } = options;
   const normalizedSelection = normalizePreviewIdentitySelection(selection);
   const href = String(targetHref || "").trim();
   const target = new URL(href);
@@ -115,10 +116,11 @@ function normalizeCommandIdentity(value = null) {
   return Object.values(identity).some(Boolean) ? identity : null;
 }
 
-function normalizePreviewIdentityCommandResponse(value = {}, {
-  operation = PREVIEW_IDENTITY_LOGIN_OPERATION,
-  requestId = ""
-} = {}) {
+function normalizePreviewIdentityCommandResponse(value = {}, options = {}) {
+  const {
+    operation = PREVIEW_IDENTITY_LOGIN_OPERATION,
+    requestId = ""
+  } = options;
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw previewIdentityCommandError(
       "Application preview identity command returned invalid JSON.",

@@ -177,15 +177,16 @@ function createSourceEditorExplanationCache({
     return record.template;
   };
 
-  const run = async (key = "", {
-    completedCache = true,
-    force = false,
-    generate,
-    reuse,
-    validateCompleted = null,
-    readCompleted = null,
-    writeCompleted = null
-  } = {}) => {
+  const run = async (key = "", options = {}) => {
+    const {
+      completedCache = true,
+      force = false,
+      generate,
+      reuse,
+      validateCompleted = null,
+      readCompleted = null,
+      writeCompleted = null
+    } = options;
     if (closed) {
       throw sourceEditorError(
         "Source explanation cache is closed.",

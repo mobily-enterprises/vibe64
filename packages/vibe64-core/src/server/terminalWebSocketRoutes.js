@@ -39,7 +39,9 @@ function publicTerminalSnapshot(session) {
  */
 function registerTerminalWebSocketRoute(
   fastify,
-  {
+  options = {}
+) {
+  const {
     projectContext,
     projectScoped = true,
     routePath,
@@ -48,8 +50,7 @@ function registerTerminalWebSocketRoute(
     serviceUnavailableMessage,
     subscribe,
     write
-  } = {}
-) {
+  } = options;
   if (!service || typeof service !== "object") {
     throw new Error(serviceUnavailableMessage || "Terminal service is unavailable.");
   }

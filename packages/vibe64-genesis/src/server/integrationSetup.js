@@ -12,9 +12,10 @@ const VIBE64_INTEGRATION_SETUP_SECTION = "Integration setup";
 const ERROR_CODE = "VIBE64_INTEGRATION_SETUP_INVALID";
 const INTEGRATION_SETUP_ENTRY_FORM = "- Command with `runtime` in `workdir`: `command` `argument`...";
 
-function parseVibe64IntegrationSetupLines(lines, {
-  path: setupPath = "genesis/stack.md#Integration setup"
-} = {}) {
+function parseVibe64IntegrationSetupLines(lines, options = {}) {
+  const {
+    path: setupPath = "genesis/stack.md#Integration setup"
+  } = options;
   if (!Array.isArray(lines)) {
     invalidStackOperation(ERROR_CODE, setupPath, "Integration setup requires exact Stack section lines.");
   }

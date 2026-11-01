@@ -487,9 +487,10 @@ function normalizeTarget(draft, outputsPath) {
   };
 }
 
-function parseVibe64OutputsLines(lines, {
-  path: outputsPath = "genesis/stack.md#Outputs"
-} = {}) {
+function parseVibe64OutputsLines(lines, options = {}) {
+  const {
+    path: outputsPath = "genesis/stack.md#Outputs"
+  } = options;
   if (!Array.isArray(lines)) {
     invalid(outputsPath, "Outputs must be supplied as exact Stack section lines.");
   }
@@ -583,7 +584,8 @@ function parseVibe64OutputsLines(lines, {
  * needs the variable to set and where, or, while the host is still preparing
  * the resource it supplies, that Vibe64 is on it.
  */
-function resourceReason(diagnostic, { resourcesPreparing = false } = {}) {
+function resourceReason(diagnostic, options = {}) {
+  const { resourcesPreparing = false } = options;
   const details = diagnostic.details || {};
   const missing = Array.isArray(details.missing) ? details.missing : [];
   // Each alternative by the names still missing from it (defaults may fill the rest).

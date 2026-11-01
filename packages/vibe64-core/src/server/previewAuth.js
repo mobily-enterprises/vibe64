@@ -277,10 +277,11 @@ function previewIdentityGrantSignature(payloadText = "") {
     .digest("base64url");
 }
 
-function createPreviewIdentityGrant(previewAuth = {}, selection = {}, {
-  nowSeconds = Math.floor(Date.now() / 1000),
-  ttlSeconds = PREVIEW_IDENTITY_GRANT_TTL_SECONDS
-} = {}) {
+function createPreviewIdentityGrant(previewAuth = {}, selection = {}, options = {}) {
+  const {
+    nowSeconds = Math.floor(Date.now() / 1000),
+    ttlSeconds = PREVIEW_IDENTITY_GRANT_TTL_SECONDS
+  } = options;
   if (!previewAuthIdentityAvailable(previewAuth)) {
     throw previewIdentityError(
       "This preview does not support identity switching.",
@@ -312,9 +313,10 @@ function createPreviewIdentityGrant(previewAuth = {}, selection = {}, {
   return `${PREVIEW_IDENTITY_GRANT_PREFIX}.${payloadText}.${previewIdentityGrantSignature(payloadText)}`;
 }
 
-function verifyPreviewIdentityGrant(grant = "", previewAuth = {}, {
-  nowSeconds = Math.floor(Date.now() / 1000)
-} = {}) {
+function verifyPreviewIdentityGrant(grant = "", previewAuth = {}, options = {}) {
+  const {
+    nowSeconds = Math.floor(Date.now() / 1000)
+  } = options;
   const [prefix, payloadText, signature, extra] = String(grant || "").trim().split(".");
   if (prefix !== PREVIEW_IDENTITY_GRANT_PREFIX || !payloadText || !signature || extra) {
     throw invalidPreviewIdentityGrant();

@@ -9,7 +9,8 @@ import path from "node:path";
 import { publishError } from "../errors.js";
 import { COMMIT_ID, releaseGit } from "../git.js";
 
-function git(projectRoot, args, env = {}, { workTree = null } = {}) {
+function git(projectRoot, args, env = {}, options = {}) {
+  const { workTree = null } = options;
   return releaseGit(projectRoot, [...(workTree ? [`--work-tree=${workTree}`] : []), ...args], {
     code: "VIBE64_PUBLISH_EXPORT_FAILED",
     env,

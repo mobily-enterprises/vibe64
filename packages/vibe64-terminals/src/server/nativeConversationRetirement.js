@@ -9,7 +9,8 @@ export function isNativeConversationBindingKey(name) {
  * Only saved main bindings and acknowledged replacements are eligible here.
  * Temporary conversations retain their existing explicit-close lifecycle.
  */
-export function nativeConversationBindings(session, { retiredOnly = false } = {}) {
+export function nativeConversationBindings(session, options = {}) {
+  const { retiredOnly = false } = options;
   const metadata = session.metadata || {};
   const state = JSON.parse(metadata.assistant_changeover || "null");
   const bindings = (state?.retiredConversations || []).map((binding) => ({

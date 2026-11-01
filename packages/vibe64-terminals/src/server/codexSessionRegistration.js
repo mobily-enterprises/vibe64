@@ -484,8 +484,9 @@ function createCodexSessionRegistration({
     turnId = "",
     outcome = CODEX_TURN_OUTCOME.PROVIDER_FAILURE,
     detail = "",
-    { usageLimitExceeded = false } = {}
+    options = {}
   ) {
+    const { usageLimitExceeded = false } = options;
     return writeCodexTurnOutcomeNotice({
       detail,
       outcome,

@@ -79,9 +79,10 @@ function createSessionRecords({
     return nextManifest;
   }
 
-  async function mutateSessionRecord(sessionId, operation, {
-    renewal = false
-  } = {}) {
+  async function mutateSessionRecord(sessionId, operation, options = {}) {
+    const {
+      renewal = false
+    } = options;
     const requestedPaths = storePaths.paths(sessionId);
     const key = requestedPaths.sessionRoot;
     const inheritedContext = state.sessionMutationContext.getStore();
@@ -154,12 +155,13 @@ function createSessionRecords({
     });
   }
 
-  async function runSessionExclusiveRecord(sessionId, operationName, operation, {
-    expectedRefusal = false,
-    operation: diagnosticOperation = "",
-    renewal = false,
-    waitMs = 0
-  } = {}) {
+  async function runSessionExclusiveRecord(sessionId, operationName, operation, options = {}) {
+    const {
+      expectedRefusal = false,
+      operation: diagnosticOperation = "",
+      renewal = false,
+      waitMs = 0
+    } = options;
     if (typeof operation !== "function") {
       throw new TypeError("Exclusive Vibe64 session work requires an operation.");
     }
@@ -256,7 +258,8 @@ function createSessionRecords({
     });
   }
 
-  async function writeSessionLabel(sessionId, sessionLabel, { onlyIfUnnamed = false } = {}) {
+  async function writeSessionLabel(sessionId, sessionLabel, options = {}) {
+    const { onlyIfUnnamed = false } = options;
     return mutateSession(sessionId, async (sessionPaths) => {
       const sessionName = typeof sessionLabel === "string" ? sessionLabel.trim() : "";
       if (!sessionName || sessionName.length > SESSION_LABEL_MAX_LENGTH || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(sessionName)) {
@@ -362,10 +365,11 @@ function createSessionRecords({
     return archiveAccess.withReadableSessionPaths(sessionId, recordFiles.readAgentRunsFromPaths);
   }
 
-  async function writeAgentRunEvent(sessionId, runId, {
-    event = {},
-    patch = {}
-  } = {}) {
+  async function writeAgentRunEvent(sessionId, runId, options = {}) {
+    const {
+      event = {},
+      patch = {}
+    } = options;
     return mutateSession(sessionId, async (sessionPaths) => {
       const normalizedRunId = assertSafeAgentRunId(runId);
       const previous = await recordFiles.readAgentRunFromPath(sessionPaths, normalizedRunId) || {
@@ -393,12 +397,13 @@ function createSessionRecords({
     return archiveAccess.withReadableSessionPaths(sessionId, recordFiles.readBackgroundTasksFromPaths);
   }
 
-  async function writeBackgroundTaskEvent(sessionId, taskId, {
-    event = {},
-    patch = {},
-    reset = false,
-    shouldWrite = null
-  } = {}) {
+  async function writeBackgroundTaskEvent(sessionId, taskId, options = {}) {
+    const {
+      event = {},
+      patch = {},
+      reset = false,
+      shouldWrite = null
+    } = options;
     return mutateSession(sessionId, async (sessionPaths) => {
       const normalizedTaskId = assertSafeBackgroundTaskId(taskId);
       const previous = reset === true

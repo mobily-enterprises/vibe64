@@ -29,7 +29,8 @@ function createManagedProjectRepositoryService({
   /**
    * Internal preparation options are separate from action and HTTP input.
    */
-  async function createManagedGitProject(input, { initializeProject } = {}) {
+  async function createManagedGitProject(input, options = {}) {
+    const { initializeProject } = options;
     assertProjectEffectAdmission();
     const slug = normalizeProjectSlug(input?.slug || projectSlugFromName(input?.name || "New Project"));
     // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
@@ -90,7 +91,8 @@ function createManagedProjectRepositoryService({
    * Internal preparation: callers supply verified exercise bytes, not paths.
    * Release this source lock before session creation acquires policy/source locks.
    */
-  async function verifyTrainingProjectSource({ slug, training }, { files } = {}) {
+  async function verifyTrainingProjectSource({ slug, training }, options = {}) {
+    const { files } = options;
     assertProjectSessionAuthority(projectService, { requireSourceLock: true });
     return projectService.runInProjectContext(slug, () => projectService.runProjectSourceExclusive(async () => {
       const record = await projectContext.readWorkspaceProjectState({ slug });
@@ -155,9 +157,10 @@ function assertProjectRepositoryMode(project = {}, mode = "", message = "Project
  * @param {object} [options]
  * @param {boolean} [options.requireSourceLock]
  */
-function assertProjectSessionAuthority(projectService = null, {
-  requireSourceLock = false
-} = {}) {
+function assertProjectSessionAuthority(projectService = null, options = {}) {
+  const {
+    requireSourceLock = false
+  } = options;
   // readable-check: allow method-probe - optional operation: without the project service repository changes answer session_authority_unavailable
   if (typeof projectService?.runInProjectContext !== "function" || typeof projectService?.createRuntime !== "function" ||
     // readable-check: allow method-probe - optional operation: without the project service repository changes answer session_authority_unavailable

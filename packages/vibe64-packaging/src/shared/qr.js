@@ -646,7 +646,8 @@ function penaltyScore(matrix) {
 /**
  * The module matrix (true = dark) for `text` (UTF-8, byte mode).
  */
-function qrMatrix(text, { level = "M" } = {}) {
+function qrMatrix(text, options = {}) {
+  const { level = "M" } = options;
   const ecl = LEVELS[level];
   if (!ecl) throw new RangeError("QR error correction is L, M, Q or H.");
   const bytes = [...new TextEncoder().encode(String(text))];
@@ -674,7 +675,8 @@ function escapeAttribute(value) {
  * as given (defaults follow the surrounding text colour on a white tile, so it
  * stays scannable in dark themes).
  */
-function qrSvg(text, { level = "M", margin = 4, dark = "#000000", light = "#ffffff", title = "" } = {}) {
+function qrSvg(text, options = {}) {
+  const { level = "M", margin = 4, dark = "#000000", light = "#ffffff", title = "" } = options;
   const { size, modules } = qrMatrix(text, { level });
   const extent = size + margin * 2;
   const parts = [];

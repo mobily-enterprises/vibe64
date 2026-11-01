@@ -81,7 +81,8 @@ async function sendSourceEditorNdjsonStream(reply, run) {
  * An inline image keeps its real type so the browser can show it in place;
  * the policy stops an SVG opened directly from running script or loading anything.
  */
-async function sendFileDownload(reply, result, { inline = false } = {}) {
+async function sendFileDownload(reply, result, options = {}) {
+  const { inline = false } = options;
   if (!result.ok) {
     return result;
   }

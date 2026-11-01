@@ -487,11 +487,12 @@ function scheduleAttachmentSessionCleanup(
   attachmentSessionCleanupTimers.set(timerKey, timer);
 }
 
-async function scanAttachmentSession(projectKey, sessionKey, {
-  env = process.env,
-  lockWaitMs = ATTACHMENT_RENEW_LOCK_WAIT_MS,
-  now = Date.now()
-} = {}) {
+async function scanAttachmentSession(projectKey, sessionKey, options = {}) {
+  const {
+    env = process.env,
+    lockWaitMs = ATTACHMENT_RENEW_LOCK_WAIT_MS,
+    now = Date.now()
+  } = options;
   const sessionDirectory = path.join(attachmentFilesRoot({ env }), projectKey, sessionKey);
   if (!await attachmentDirectoryExists(sessionDirectory)) {
     clearScheduledTimer(

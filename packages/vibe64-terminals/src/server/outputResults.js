@@ -132,10 +132,11 @@ async function writeAll(fileHandle, buffer, length, position) {
   }
 }
 
-async function snapshotRegularFile(sourcePath = "", destinationPath = "", {
-  maxBytes = OUTPUT_RESULT_MAX_BYTES,
-  sourceRoot = ""
-} = {}) {
+async function snapshotRegularFile(sourcePath = "", destinationPath = "", options = {}) {
+  const {
+    maxBytes = OUTPUT_RESULT_MAX_BYTES,
+    sourceRoot = ""
+  } = options;
   const sourceFlags = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | (fsConstants.O_CLOEXEC || 0);
   const destinationFlags = fsConstants.O_WRONLY |
     fsConstants.O_CREAT |

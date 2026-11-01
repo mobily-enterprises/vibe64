@@ -70,10 +70,11 @@ function plainManifest(manifest = {}) {
   };
 }
 
-function plainSessionView(session = {}, {
-  sourceInspection = null,
-  learningScope = null
-} = {}) {
+function plainSessionView(session = {}, options = {}) {
+  const {
+    sourceInspection = null,
+    learningScope = null
+  } = options;
   const learning = learningSessionBinding(session.metadata, learningScope, session.sessionId);
   const sourcePath = sessionSourcePath(session);
   const workspaceSetup = workspaceSetupStateFromMetadata(session.metadata);

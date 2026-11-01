@@ -284,7 +284,8 @@ function createAiConnectionStore({
       .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
   }
 
-  async function assistantAccess(value = "", { modelId = "" } = {}) {
+  async function assistantAccess(value = "", options = {}) {
+    const { modelId = "" } = options;
     const id = providerId(value);
     const state = await readState();
     const connection = stateConnection(state, id);
@@ -363,7 +364,8 @@ function createAiConnectionStore({
     };
   }
 
-  async function upsertConnection(input = {}, { provider = null } = {}) {
+  async function upsertConnection(input = {}, options = {}) {
+    const { provider = null } = options;
     const id = providerId(input.modelProviderId || input.providerId || input.id);
     const key = apiKey(input.apiKey);
     const revision = providerRevision(input.providerRevision);

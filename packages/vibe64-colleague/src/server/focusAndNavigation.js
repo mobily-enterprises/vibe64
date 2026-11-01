@@ -32,7 +32,8 @@ function createColleagueFocusAndNavigation({ threads }) {
     return { ok: true, focus: focused || {} };
   }
 
-  async function reportFocus(input, context, { browserBinding } = {}) {
+  async function reportFocus(input, context, options = {}) {
+    const { browserBinding } = options;
     const state = await threads.stateFor(context);
     if (browserBinding && !browserBinding.current()) throw failure("This browser focus update is no longer current.");
     const connection = state.connections.get(input.clientId) || { clientId: input.clientId };

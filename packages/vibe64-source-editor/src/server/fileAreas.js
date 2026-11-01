@@ -150,7 +150,8 @@ function createFileArea(projectService, { repoChanged }) {
        * Repo writes take the same exclusive source write as the source editor;
        * a move or copy refuses rather than waits while it is held.
        */
-      const run = async (perform, { waitMs = 0 } = {}) => {
+      const run = async (perform, options = {}) => {
+        const { waitMs = 0 } = options;
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           await removeStaleStaging(writeContext);
           try {
@@ -217,7 +218,8 @@ function createFileArea(projectService, { repoChanged }) {
    * Every Files request enters here inside the trusted project request context.
    * Operations receive resolved roots; neither HTTP bodies nor callers select them.
    */
-  async function fileArea(input, operation, { readUpload = null } = {}) {
+  async function fileArea(input, operation, options = {}) {
+    const { readUpload = null } = options;
     return runSourceEditorOperation(async () => {
       const requestContext = currentProjectRequestContext();
       if (!requestContext) {
@@ -520,7 +522,8 @@ async function resolveTarget(context, destination, folder, name, conflict = "fai
  * checked free. Replacing sets the old item aside in the staging folder until
  * the new one is in place.
  */
-async function publishStaged(context, staging, staged, target, { replace = false, directory = false } = {}) {
+async function publishStaged(context, staging, staged, target, options = {}) {
+  const { replace = false, directory = false } = options;
   if (!replace) {
     if (directory) {
       if (await pathExists(target)) throw existsError(path.basename(target));

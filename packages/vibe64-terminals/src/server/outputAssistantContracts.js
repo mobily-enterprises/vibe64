@@ -34,7 +34,8 @@ function terminalSummary(terminal) {
   }));
 }
 
-export function outputTerminalTool(description, { log = false } = {}) {
+export function outputTerminalTool(description, options = {}) {
+  const { log = false } = options;
   return {
     description,
     output: {

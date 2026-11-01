@@ -400,7 +400,8 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
  * installed reads an installed snapshot: a lesson that breaks the teaching
  * rules is returned with its problem instead of failing the whole topic.
  */
-async function validateTopic(directory, { authoring = false, installed = false } = {}) {
+async function validateTopic(directory, options = {}) {
+  const { authoring = false, installed = false } = options;
   const reader = await createTopicReader(directory);
   const packageFile = await reader.json("package.json");
   if (!/^learn-[a-z0-9-]+$/u.test(packageFile.value.name || "") || !/^\d+\.\d+\.\d+$/u.test(packageFile.value.version || "")) {

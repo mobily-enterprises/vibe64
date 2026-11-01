@@ -14,7 +14,8 @@ const ARCHITECTURE_LAYOUT_KINDS = Object.freeze(["layer", "libraries", "support"
  * Vibe64 owns this presentation grammar. Genesis transports the exact section;
  * declarations neither discover subsystems nor change their source ownership.
  */
-function parseVibe64ArchitectureLayoutLines(lines, { path = "genesis/stack.md#Architecture layout" } = {}) {
+function parseVibe64ArchitectureLayoutLines(lines, options = {}) {
+  const { path = "genesis/stack.md#Architecture layout" } = options;
   if (!Array.isArray(lines)) invalidStackOperation(ERROR_CODE, path, "Expected exact Stack section lines.");
   if (isExplicitlyEmptyStackSection(lines)) return [];
   const groups = [];

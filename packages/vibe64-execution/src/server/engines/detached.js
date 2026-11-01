@@ -73,10 +73,11 @@ async function waitForDetachedSpawn(child) {
   });
 }
 
-async function runDetachedCommand(request = {}, {
-  cwd = "",
-  env = {}
-} = {}) {
+async function runDetachedCommand(request = {}, options = {}) {
+  const {
+    cwd = "",
+    env = {}
+  } = options;
   let logHandle = null;
   try {
     logHandle = await openDetachedLog(request.logPath);
@@ -194,10 +195,11 @@ async function waitForProcessGroupEmpty(processGroupId = null, timeoutMs = 0) {
   return !processGroupExists(processGroupId);
 }
 
-async function drainProcessGroup(processGroupId = null, {
-  killTimeoutMs = DEFAULT_STOP_KILL_MS,
-  termTimeoutMs = DEFAULT_STOP_TERM_MS
-} = {}) {
+async function drainProcessGroup(processGroupId = null, options = {}) {
+  const {
+    killTimeoutMs = DEFAULT_STOP_KILL_MS,
+    termTimeoutMs = DEFAULT_STOP_TERM_MS
+  } = options;
   signalProcessGroup(processGroupId, "SIGTERM");
   let empty = await waitForProcessGroupEmpty(processGroupId, termTimeoutMs);
   if (!empty) {
@@ -207,10 +209,11 @@ async function drainProcessGroup(processGroupId = null, {
   return empty;
 }
 
-async function stopDetachedExecution(executionId = "", {
-  killTimeoutMs = DEFAULT_STOP_KILL_MS,
-  termTimeoutMs = DEFAULT_STOP_TERM_MS
-} = {}) {
+async function stopDetachedExecution(executionId = "", options = {}) {
+  const {
+    killTimeoutMs = DEFAULT_STOP_KILL_MS,
+    termTimeoutMs = DEFAULT_STOP_TERM_MS
+  } = options;
   const normalizedExecutionId = String(executionId || "").trim();
   const execution = detachedExecutions.get(normalizedExecutionId);
   if (!execution) {

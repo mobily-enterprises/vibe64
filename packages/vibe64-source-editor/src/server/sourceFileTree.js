@@ -15,11 +15,12 @@ import { sourceEditorResultLimit, sourceEditorResultOffset } from "./sourceFileM
 // folders that reveal one file.
 const SOURCE_EDITOR_TREE_PAGE_LIMIT = 20;
 
-async function sourceEditorDirectoryPage(context = {}, {
-  limit = SOURCE_EDITOR_TREE_PAGE_LIMIT,
-  offset = 0,
-  path: relativePathValue = ""
-} = {}) {
+async function sourceEditorDirectoryPage(context = {}, options = {}) {
+  const {
+    limit = SOURCE_EDITOR_TREE_PAGE_LIMIT,
+    offset = 0,
+    path: relativePathValue = ""
+  } = options;
   const {
     policy,
     sourceRoot

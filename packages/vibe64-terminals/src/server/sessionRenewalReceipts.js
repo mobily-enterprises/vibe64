@@ -63,9 +63,10 @@ function sessionRenewalErrorWithIdentity(error, identity = {}) {
  * @param {object} [options]
  * @param {boolean} [options.renewalInternal]
  */
-async function writeSessionRenewalMetadata(runtime, sessionId = "", values = {}, {
-  renewalInternal = false
-} = {}) {
+async function writeSessionRenewalMetadata(runtime, sessionId = "", values = {}, options = {}) {
+  const {
+    renewalInternal = false
+  } = options;
   const entries = Object.entries(isRecord(values) ? values : {})
     .map(([name, value]) => [trimmedText(name), trimmedText(value)])
     .filter(([name]) => name.startsWith("agent_renewal_"));
@@ -523,10 +524,11 @@ function createCodexSessionRenewalPreparation({
     return codexAgentSettingsFromSession(session);
   }
 
-  function prepareCodexRenewalHandover(sessionId = "", input = {}, {
-    runtime: resolvedRuntime = null,
-    session: resolvedSession = null
-  } = {}) {
+  function prepareCodexRenewalHandover(sessionId = "", input = {}, options = {}) {
+    const {
+      runtime: resolvedRuntime = null,
+      session: resolvedSession = null
+    } = options;
     const { operationId, source, clientMessageId } = prepareSessionRenewalHandoverRequest(input);
     return {
       context: { runtime: resolvedRuntime, session: resolvedSession },
@@ -594,10 +596,11 @@ function createCodexSessionRenewalPreparation({
     };
   }
 
-  function prepareCodexRenewalSeed(sessionId = "", input = {}, {
-    runtime: resolvedRuntime = null,
-    session: resolvedSession = null
-  } = {}) {
+  function prepareCodexRenewalSeed(sessionId = "", input = {}, options = {}) {
+    const {
+      runtime: resolvedRuntime = null,
+      session: resolvedSession = null
+    } = options;
     const { operationId, approved, oldThreadId, clientMessageId } = prepareSessionRenewalSeedRequest(input);
     return {
       context: { runtime: resolvedRuntime, session: resolvedSession },

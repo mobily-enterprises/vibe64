@@ -172,9 +172,10 @@ function createSessionArchivePublishing({
     );
   }
 
-  async function publishSessionArchiveExclusive(sessionId, {
-    retainSessionRoot = false
-  } = {}) {
+  async function publishSessionArchiveExclusive(sessionId, options = {}) {
+    const {
+      retainSessionRoot = false
+    } = options;
     const rootPaths = storePaths.paths();
     const sessionPaths = storePaths.closingSessionPaths(sessionId);
     if (!await pathExists(sessionPaths.manifestPath)) {

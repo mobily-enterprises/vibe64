@@ -17,10 +17,11 @@ function codexAppServerModelCatalogDeadlineError(timeoutMs = 0) {
   return error;
 }
 
-async function withCodexAppServerModelCatalogDeadline(operation, {
-  signal = null,
-  timeoutMs = CODEX_APP_SERVER_MODEL_CATALOG_TIMEOUT_MS
-} = {}) {
+async function withCodexAppServerModelCatalogDeadline(operation, options = {}) {
+  const {
+    signal = null,
+    timeoutMs = CODEX_APP_SERVER_MODEL_CATALOG_TIMEOUT_MS
+  } = options;
   const boundedTimeoutMs = Number.isSafeInteger(Number(timeoutMs)) && Number(timeoutMs) > 0
     ? Math.min(Number(timeoutMs), CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS)
     : CODEX_APP_SERVER_MODEL_CATALOG_TIMEOUT_MS;
@@ -85,13 +86,14 @@ function createCodexAssistantCatalog({
   const { restoration: prepareCodexAppServerHelperRestoration } = helperPreparation;
   const codexAppServerRunOwner = runOwner;
 
-  async function codexAppServerExecutionProfileModelCatalog(sessionId = "", {
-    assistantScope = null,
-    agentSettings = {},
-    runtime: resolvedRuntime = null,
-    session: resolvedSession = null,
-    signal = null
-  } = {}) {
+  async function codexAppServerExecutionProfileModelCatalog(sessionId = "", options = {}) {
+    const {
+      assistantScope = null,
+      agentSettings = {},
+      runtime: resolvedRuntime = null,
+      session: resolvedSession = null,
+      signal = null
+    } = options;
     const context = assistantScope
       ? await codexAppServerRunOwner.readExecutionProfileModelCatalog(sessionId, { assistantScope, agentSettings, signal })
       : await codexConversationPreparation.context(sessionId, { runtime: resolvedRuntime, session: resolvedSession });
@@ -126,10 +128,11 @@ function createCodexAssistantCatalog({
     });
   }
 
-  async function describeCodexAppServerProvider(sessionId = "", {
-    runtime: resolvedRuntime = null,
-    session: resolvedSession = null
-  } = {}) {
+  async function describeCodexAppServerProvider(sessionId = "", options = {}) {
+    const {
+      runtime: resolvedRuntime = null,
+      session: resolvedSession = null
+    } = options;
     const context = await codexConversationPreparation.context(sessionId, {
       runtime: resolvedRuntime,
       session: resolvedSession

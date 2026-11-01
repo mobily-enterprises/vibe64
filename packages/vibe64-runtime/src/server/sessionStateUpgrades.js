@@ -372,7 +372,8 @@ function createSessionStateUpgrades({
     const files = [];
     let found = false;
     let currentArchive = null;
-    const validateMetadata = (metadata, { archived = false } = {}) => {
+    const validateMetadata = (metadata, options = {}) => {
+      const { archived = false } = options;
       if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA)) learningSessionBinding(metadata, scope, id);
       if (!explicitPathIsManagedSessionSource({ sessionId: id, metadata }, metadata.source_path)) {
         throw new Error(`Practice session ${id} has no valid original managed source descriptor. Inspect it before upgrading.`);

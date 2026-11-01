@@ -164,7 +164,8 @@ function thisComputerToolFamily({ env = process.env, platform = process.platform
  * The one command to show for a tool on this computer, or null when only
  * "Other ways" can help. `mise` says whether mise already runs here.
  */
-function localToolInstall(id = "", { family = "", mise = false, xcode = true } = {}) {
+function localToolInstall(id = "", options = {}) {
+  const { family = "", mise = false, xcode = true } = options;
   const tool = LOCAL_TOOLS[localToolId(id)];
   if (!tool) return null;
   // Apple's command line tools come first: without them compilers, Git and Make are stubs.
@@ -181,7 +182,8 @@ function localToolInstall(id = "", { family = "", mise = false, xcode = true } =
 }
 
 /** Where "Other ways" goes for a tool: this computer's setup guide when it covers the tool. */
-function localToolGuideUrl(id = "", { platform = process.platform } = {}) {
+function localToolGuideUrl(id = "", options = {}) {
+  const { platform = process.platform } = options;
   const tool = LOCAL_TOOLS[localToolId(id)];
   if (!tool) return "";
   if (!tool.setup) return tool.guideUrl;

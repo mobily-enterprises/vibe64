@@ -98,9 +98,10 @@ function createSessionStoreLocks({ state, storePaths }) {
     }, operation);
   }
 
-  async function runSessionRenewalWorkflowExclusive(sessionId = "", operation, {
-    waitMs = 0
-  } = {}) {
+  async function runSessionRenewalWorkflowExclusive(sessionId = "", operation, options = {}) {
+    const {
+      waitMs = 0
+    } = options;
     if (typeof operation !== "function") {
       throw new TypeError("Session renewal workflow requires an operation.");
     }

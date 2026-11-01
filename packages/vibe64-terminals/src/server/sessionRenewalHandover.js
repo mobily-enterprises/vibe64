@@ -49,9 +49,10 @@ function normalizeSessionRenewalHandoverDraft(value = "") {
   return { characterCount, handover, problem };
 }
 
-function sessionRenewalProtocolError(code, message, details = {}, {
-  retryable = false
-} = {}) {
+function sessionRenewalProtocolError(code, message, details = {}, options = {}) {
+  const {
+    retryable = false
+  } = options;
   const error = new Error(message);
   error.code = code;
   error.details = {
@@ -62,12 +63,13 @@ function sessionRenewalProtocolError(code, message, details = {}, {
   return error;
 }
 
-function assertBoundedPlainText(value = "", {
-  code,
-  label,
-  maxCharacters,
-  required = true
-} = {}) {
+function assertBoundedPlainText(value = "", options = {}) {
+  const {
+    code,
+    label,
+    maxCharacters,
+    required = true
+  } = options;
   const text = normalizeText(value);
   const characterCount = Array.from(text).length;
   if ((required && !text) || characterCount > maxCharacters || textHasDisallowedControlCharacter(text)) {
@@ -199,10 +201,11 @@ function defineSessionRenewalHandoverHash(value = "") {
   return hash;
 }
 
-function defineSessionRenewalHandoverText(value = "", {
-  requireStructure = false,
-  source = null
-} = {}) {
+function defineSessionRenewalHandoverText(value = "", options = {}) {
+  const {
+    requireStructure = false,
+    source = null
+  } = options;
   // Draft review preserves the exact approved text. In particular, leading or
   // trailing whitespace is part of the frozen SHA-256 and must not be trimmed
   // while the handover crosses the provider boundary.
@@ -277,11 +280,12 @@ function defineSessionRenewalHandoverText(value = "", {
   return handover;
 }
 
-function parseStructuredJson(rawOutput = "", {
-  code,
-  label,
-  maxCharacters = SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS * 2
-} = {}) {
+function parseStructuredJson(rawOutput = "", options = {}) {
+  const {
+    code,
+    label,
+    maxCharacters = SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS * 2
+  } = options;
   const raw = assertBoundedPlainText(rawOutput, {
     code,
     label,
@@ -308,9 +312,10 @@ function parseStructuredJson(rawOutput = "", {
   };
 }
 
-function parseSessionRenewalHandoverOutput(rawOutput = "", {
-  source = null
-} = {}) {
+function parseSessionRenewalHandoverOutput(rawOutput = "", options = {}) {
+  const {
+    source = null
+  } = options;
   const handover = defineSessionRenewalHandoverText(rawOutput, {
     requireStructure: true,
     source
@@ -464,10 +469,11 @@ function sessionRenewalSeedPrompt(input = {}) {
   ].join("\n");
 }
 
-function parseSessionRenewalAcknowledgement(rawOutput = "", {
-  handoverHash = "",
-  source = null
-} = {}) {
+function parseSessionRenewalAcknowledgement(rawOutput = "", options = {}) {
+  const {
+    handoverHash = "",
+    source = null
+  } = options;
   const canonical = defineSessionRenewalSourceEnvelope(source);
   const expectedHash = defineSessionRenewalHandoverHash(handoverHash);
   const { parsed, raw } = parseStructuredJson(rawOutput, {

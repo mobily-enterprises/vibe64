@@ -97,9 +97,10 @@ function publicSessionMetadata(metadata = {}) {
  * @param {object} [options]
  * @param {boolean} [options.renewal]
  */
-async function writeWorkspaceSetupState(store, sessionId = "", value = {}, {
-  renewal = false
-} = {}) {
+async function writeWorkspaceSetupState(store, sessionId = "", value = {}, options = {}) {
+  const {
+    renewal = false
+  } = options;
   const state = workspaceSetupState(value);
   const writeMetadataValue = renewal
     ? store.writeMetadataValueForRenewal

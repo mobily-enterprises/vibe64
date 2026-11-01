@@ -19,10 +19,11 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
-function publicProject(project = {}, {
-  context = null,
-  selected = false
-} = {}) {
+function publicProject(project = {}, options = {}) {
+  const {
+    context = null,
+    selected = false
+  } = options;
   const projectRoot = context?.targetRoot || project.projectRoot || project.path || "";
   const slug = context?.slug || project.slug || project.name || path.basename(projectRoot);
   return {
@@ -268,10 +269,11 @@ function createProjectSelection({ logger, projectContext }) {
       : source;
   }
 
-  async function runInProjectContext(slug = "", operation, {
-    allowDeleting = false,
-    vibe64User = null
-  } = {}) {
+  async function runInProjectContext(slug = "", operation, options = {}) {
+    const {
+      allowDeleting = false,
+      vibe64User = null
+    } = options;
     return runWithResolvedProjectRequestContext({
       projectContext,
       request: {

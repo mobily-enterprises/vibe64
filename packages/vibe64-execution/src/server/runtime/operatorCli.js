@@ -43,7 +43,8 @@ function operatorCliSearchDirs(env = process.env) {
  * installation (and its existing login) is found again on every call, so
  * "Check again" sees a CLI installed a moment ago.
  */
-function resolveOperatorCli(tool = "", { env = process.env } = {}) {
+function resolveOperatorCli(tool = "", options = {}) {
+  const { env = process.env } = options;
   if (!Object.hasOwn(OPERATOR_CLIS, tool)) throw new TypeError(`Unknown operator CLI: ${tool}`);
   const override = tool === "claude" ? String(env.VIBE64_CLAUDE_COMMAND || "").trim() : "";
   const root = runtimePackRoot();
@@ -87,7 +88,8 @@ function operatorCliInstall(tool = "") {
  * without it the sentence stays general. A host with runtime packs always has
  * its CLIs, so this never applies there.
  */
-function operatorCliProblem(tool = "", { installed = false, purpose = "" } = {}) {
+function operatorCliProblem(tool = "", options = {}) {
+  const { installed = false, purpose = "" } = options;
   const { name, guideUrl } = OPERATOR_CLIS[tool];
   const use = purpose ? `Vibe64 uses it to work with ${purpose}.` : "Vibe64 uses it to run your AI.";
   const problem = installed

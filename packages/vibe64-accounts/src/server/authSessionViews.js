@@ -86,7 +86,8 @@ function createAuthSessionViews({
    * A finished sign-in is kept so readers can see how it ended, until the same
    * account changes again: a later sign-in finishes, or it signs out.
    */
-  async function forgetFinishedAuthSessions(accountId = "", userKey = "", { except = "" } = {}) {
+  async function forgetFinishedAuthSessions(accountId = "", userKey = "", options = {}) {
+    const { except = "" } = options;
     for (const [sessionId, metadata] of state.authSessions) {
       if (sessionId === except || metadata.accountId !== accountId || (accountId === "github" && metadata.userKey !== userKey)) continue;
       const terminal = readTerminalSession(sessionId, { namespace: ACCOUNT_AUTH_NAMESPACE });

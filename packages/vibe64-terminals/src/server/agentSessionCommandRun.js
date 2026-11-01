@@ -280,10 +280,11 @@ async function readBoundedFile(filePath = "", maxBytes = AGENT_SESSION_COMMAND_O
   }
 }
 
-async function waitForCommandResult(resultPath = "", {
-  signal = null,
-  timeoutMs = AGENT_SESSION_COMMAND_TIMEOUT_MS
-} = {}) {
+async function waitForCommandResult(resultPath = "", options = {}) {
+  const {
+    signal = null,
+    timeoutMs = AGENT_SESSION_COMMAND_TIMEOUT_MS
+  } = options;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (signal?.aborted) {

@@ -12,10 +12,11 @@ function documentReadyForScreenshot(browserDocument = globalThis.document) {
   );
 }
 
-function pngVisualMetrics(pngBytes, inflatePng, {
-  darkPixelThreshold = 0.1,
-  maximumSampledPixels = 250_000
-} = {}) {
+function pngVisualMetrics(pngBytes, inflatePng, options = {}) {
+  const {
+    darkPixelThreshold = 0.1,
+    maximumSampledPixels = 250_000
+  } = options;
   if (typeof inflatePng !== "function") {
     throw new Error("Managed preview screenshot PNG inflater is unavailable.");
   }

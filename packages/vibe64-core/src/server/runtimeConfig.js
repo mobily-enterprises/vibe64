@@ -255,9 +255,10 @@ function runtimeConfigRecordMatchesTarget(record = {}, target = "") {
   return targets.length === 0 || targets.includes(normalizedTarget);
 }
 
-function runtimeConfigRecordsForScope(records = [], scope = RUNTIME_CONFIG_SCOPES.DEV, {
-  target = ""
-} = {}) {
+function runtimeConfigRecordsForScope(records = [], scope = RUNTIME_CONFIG_SCOPES.DEV, options = {}) {
+  const {
+    target = ""
+  } = options;
   const normalizedScope = normalizeRuntimeConfigScope(scope);
   return mergeRuntimeConfigRecords(records)
     .filter((record) => (
@@ -266,21 +267,23 @@ function runtimeConfigRecordsForScope(records = [], scope = RUNTIME_CONFIG_SCOPE
     ));
 }
 
-function runtimeConfigEnv(records = [], {
-  scope = RUNTIME_CONFIG_SCOPES.DEV,
-  target = ""
-} = {}) {
+function runtimeConfigEnv(records = [], options = {}) {
+  const {
+    scope = RUNTIME_CONFIG_SCOPES.DEV,
+    target = ""
+  } = options;
   return Object.fromEntries(runtimeConfigRecordsForScope(records, scope, {
     target
   })
     .map((record) => [record.key, record.value]));
 }
 
-function missingRuntimeConfigRecords(records = [], {
-  phases = [],
-  scope = RUNTIME_CONFIG_SCOPES.DEV,
-  target = ""
-} = {}) {
+function missingRuntimeConfigRecords(records = [], options = {}) {
+  const {
+    phases = [],
+    scope = RUNTIME_CONFIG_SCOPES.DEV,
+    target = ""
+  } = options;
   const requiredPhases = new Set(normalizeRuntimeConfigPhases(phases));
   if (requiredPhases.size === 0) {
     return [];
@@ -311,9 +314,10 @@ function redactRuntimeConfigValue(record = {}) {
   return record.secret ? REDACTED_RUNTIME_CONFIG_VALUE : record.value;
 }
 
-function runtimeConfigViewRecord(record = {}, {
-  missingKeys = new Set()
-} = {}) {
+function runtimeConfigViewRecord(record = {}, options = {}) {
+  const {
+    missingKeys = new Set()
+  } = options;
   const normalizedRecord = normalizeRuntimeConfigRecord(record);
   return {
     editable: normalizedRecord.editable,

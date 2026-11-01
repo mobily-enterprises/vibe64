@@ -341,7 +341,8 @@ async function readResourceEvidence(bundlePath = "", slug = "") {
   return evidence;
 }
 
-async function readArchiveLifecycle(bundlePath = "", { createdAt = "", slug = "" } = {}) {
+async function readArchiveLifecycle(bundlePath = "", options = {}) {
+  const { createdAt = "", slug = "" } = options;
   const existing = await readJsonIfExists(path.join(bundlePath, PROJECT_ARCHIVE_LIFECYCLE));
   if (existing) {
     if (

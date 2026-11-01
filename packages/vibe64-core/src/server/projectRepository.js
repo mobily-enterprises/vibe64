@@ -127,10 +127,11 @@ function normalizeProjectGithubRepository(value = {}) {
   };
 }
 
-function normalizeProjectRepository(value = {}, {
-  fallbackDefaultBranch = "",
-  fallbackMode = ""
-} = {}) {
+function normalizeProjectRepository(value = {}, options = {}) {
+  const {
+    fallbackDefaultBranch = "",
+    fallbackMode = ""
+  } = options;
   const input = isPlainObject(value) ? value : {};
   const repositoryGithub = normalizeProjectGithubRepository(input.github);
   const github = repositoryGithub;
@@ -162,9 +163,10 @@ function normalizeProjectRepository(value = {}, {
   };
 }
 
-function projectRepositoryView(metadata = {}, {
-  fallbackMode = ""
-} = {}) {
+function projectRepositoryView(metadata = {}, options = {}) {
+  const {
+    fallbackMode = ""
+  } = options;
   const input = isPlainObject(metadata) ? metadata : {};
   const repository = normalizeProjectRepository(input.repository, {
     fallbackMode
@@ -183,10 +185,11 @@ function projectRepositoryView(metadata = {}, {
   };
 }
 
-function projectRepositoryMetadataFromInput(input = {}, {
-  defaultBranch = "",
-  defaultMode = ""
-} = {}) {
+function projectRepositoryMetadataFromInput(input = {}, options = {}) {
+  const {
+    defaultBranch = "",
+    defaultMode = ""
+  } = options;
   const source = isPlainObject(input) ? input : {};
   if (
     Object.hasOwn(source.repository?.github || {}, "defaultBranch") ||
@@ -308,7 +311,8 @@ function serializeSessionConnectedSources(sources) {
   return serialized;
 }
 
-function sessionRepositoryProject(project = {}, session, { sourcePreparation = false } = {}) {
+function sessionRepositoryProject(project = {}, session, options = {}) {
+  const { sourcePreparation = false } = options;
   const contribution = sessionConnectedContribution(session);
   if (contribution) {
     const repository = normalizeText(project.githubRepository?.fullName || project.repository?.github?.fullName).toLowerCase();

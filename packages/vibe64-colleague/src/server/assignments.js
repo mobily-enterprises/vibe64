@@ -15,7 +15,8 @@ const fail = (message) => Object.assign(new Error(message), { statusCode: 409, c
  * An open assignment that cannot proceed waits for the person, optionally
  * with its watches paused.
  */
-function suspendAssignment(record, assignmentId, summary, { pauseWatches = false } = {}) {
+function suspendAssignment(record, assignmentId, summary, options = {}) {
+  const { pauseWatches = false } = options;
   const assignment = record.assignments?.find((item) => item.assignmentId === assignmentId);
   if (!assignment || !["active", "waiting"].includes(assignment.status)) return;
   assignment.status = "needs-user";

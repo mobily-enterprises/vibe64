@@ -64,10 +64,11 @@ const SESSION_RENEWAL_MAINTENANCE_STEPS = Object.freeze(
   Object.values(SESSION_RENEWAL_MAINTENANCE_STEP)
 );
 
-function renewalStateError(message, code, {
-  details = null,
-  statusCode = 409
-} = {}) {
+function renewalStateError(message, code, options = {}) {
+  const {
+    details = null,
+    statusCode = 409
+  } = options;
   const error = vibe64Error(message, code);
   error.statusCode = statusCode;
   if (details) {
@@ -100,9 +101,10 @@ function renewalOperationKey(value = "") {
   return key;
 }
 
-function renewalHandoverText(value = "", {
-  allowEmpty = true
-} = {}) {
+function renewalHandoverText(value = "", options = {}) {
+  const {
+    allowEmpty = true
+  } = options;
   const { characterCount, handover, problem } = normalizeSessionRenewalHandoverDraft(value);
   const details = { characterCount, maximumCharacters: SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS };
   if (problem === "control_character") {
@@ -135,9 +137,10 @@ function renewalHandoverHash(value = "") {
     .digest("hex");
 }
 
-function renewalDraft(value = {}, {
-  allowEmpty = true
-} = {}) {
+function renewalDraft(value = {}, options = {}) {
+  const {
+    allowEmpty = true
+  } = options;
   const draft = isPlainObject(value) ? value : {};
   const handover = renewalHandoverText(draft.text, { allowEmpty });
   const revision = Number(draft.revision);
@@ -178,10 +181,11 @@ function renewalActor(value = null) {
   return actor.id || actor.name ? actor : null;
 }
 
-function renewalCommit(value = null, {
-  sessionId = "",
-  successorSessionId = ""
-} = {}) {
+function renewalCommit(value = null, options = {}) {
+  const {
+    sessionId = "",
+    successorSessionId = ""
+  } = options;
   if (!isPlainObject(value)) {
     return null;
   }
@@ -249,9 +253,10 @@ function renewalMaintenance(value = null, commit = null) {
   };
 }
 
-function normalizeSessionRenewalState(value = {}, {
-  expectedSessionId = ""
-} = {}) {
+function normalizeSessionRenewalState(value = {}, options = {}) {
+  const {
+    expectedSessionId = ""
+  } = options;
   if (
     !isPlainObject(value) ||
     value.kind !== SESSION_RENEWAL_KIND ||
@@ -443,11 +448,12 @@ function createSessionRenewalState({
   }, { expectedSessionId: sessionId });
 }
 
-function createSessionRenewalDraft(text = "", {
-  at = new Date().toISOString(),
-  origin = "manual",
-  revision = 1
-} = {}) {
+function createSessionRenewalDraft(text = "", options = {}) {
+  const {
+    at = new Date().toISOString(),
+    origin = "manual",
+    revision = 1
+  } = options;
   const handover = renewalHandoverText(text);
   return renewalDraft({
     hash: renewalHandoverHash(handover),
@@ -474,10 +480,11 @@ function assertSessionRenewalOperation(state = {}, operationKey = "") {
   return state;
 }
 
-function assertSessionRenewalDraftVersion(state = {}, {
-  expectedHash = "",
-  expectedRevision = 0
-} = {}) {
+function assertSessionRenewalDraftVersion(state = {}, options = {}) {
+  const {
+    expectedHash = "",
+    expectedRevision = 0
+  } = options;
   const revision = Number(expectedRevision);
   const hash = normalizeText(expectedHash);
   if (

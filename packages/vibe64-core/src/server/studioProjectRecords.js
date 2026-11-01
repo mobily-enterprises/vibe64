@@ -336,10 +336,11 @@ function projectMetadataPath(projectRecordPath = "") {
   return normalizedRecordPath ? path.resolve(normalizedRecordPath) : "";
 }
 
-function projectMetadataFromInput(input = {}, {
-  defaultRepositoryBranch = "",
-  defaultRepositoryMode = ""
-} = {}) {
+function projectMetadataFromInput(input = {}, options = {}) {
+  const {
+    defaultRepositoryBranch = "",
+    defaultRepositoryMode = ""
+  } = options;
   if (Object.hasOwn(input, "allowSharedDatabaseSessions") && typeof input.allowSharedDatabaseSessions !== "boolean") {
     const error = new Error("Shared database session override must be a boolean.");
     error.code = "vibe64_project_metadata_invalid";
@@ -463,11 +464,12 @@ async function workspaceProjectRecordForPath({
   });
 }
 
-async function projectMetadataWithGitRemote(projectPath = "", {
-  projectRecordPath = "",
-  repositoryModeFallback = "",
-  writeDerivedMetadata = false
-} = {}) {
+async function projectMetadataWithGitRemote(projectPath = "", options = {}) {
+  const {
+    projectRecordPath = "",
+    repositoryModeFallback = "",
+    writeDerivedMetadata = false
+  } = options;
   const metadata = await readProjectMetadata({
     projectRecordPath
   });
@@ -539,9 +541,10 @@ function githubRepositoryFromRemoteUrl(remoteUrl = "") {
   };
 }
 
-async function runGitCommand(cwd = "", args = [], {
-  timeout = 5000
-} = {}) {
+async function runGitCommand(cwd = "", args = [], options = {}) {
+  const {
+    timeout = 5000
+  } = options;
   const resolvedCwd = normalizeRoot(cwd);
   return runVibe64Command({
     actor: "daemon",

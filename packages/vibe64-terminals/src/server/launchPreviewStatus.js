@@ -177,9 +177,10 @@ function outputStatusResponseFromPreviewStatus({
   };
 }
 
-function launchTerminalStatus(terminal = {}, {
-  previewTarget = null
-} = {}) {
+function launchTerminalStatus(terminal = {}, options = {}) {
+  const {
+    previewTarget = null
+  } = options;
   const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
     ? terminal.metadata
     : {};

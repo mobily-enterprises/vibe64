@@ -54,9 +54,10 @@ function rejectCallerEnvPolicy(env = {}) {
   }
 }
 
-function commandCallerEnv(env = {}, {
-  envPolicy = "session"
-} = {}) {
+function commandCallerEnv(env = {}, options = {}) {
+  const {
+    envPolicy = "session"
+  } = options;
   const callerEnv = envRecord(env);
   rejectCallerEnvPolicy(callerEnv);
   const passthrough = Object.fromEntries(Object.entries(callerEnv)

@@ -335,9 +335,10 @@ function normalizePackage(draft, packagingPath) {
   };
 }
 
-function parseVibe64PackagingLines(lines, {
-  path: packagingPath = "genesis/stack.md#Packaging"
-} = {}) {
+function parseVibe64PackagingLines(lines, options = {}) {
+  const {
+    path: packagingPath = "genesis/stack.md#Packaging"
+  } = options;
   if (!Array.isArray(lines)) invalid(packagingPath, "Packaging must be supplied as exact Stack section lines.");
   if (isExplicitlyEmptyStackSection(lines)) return { version: 1, packages: [] };
   const drafts = [];
@@ -389,9 +390,10 @@ function environmentDefaultValue(environmentDefaults, name, packagingPath, label
  * Schemes and app-link domains are runtime facts the server also reads; Packaging
  * only names their variables, and the packer reads the same normalized values.
  */
-function resolveVibe64PackagingEnvironment(packaging, environmentDefaults = [], {
-  path: packagingPath = "genesis/stack.md#Packaging"
-} = {}) {
+function resolveVibe64PackagingEnvironment(packaging, environmentDefaults = [], options = {}) {
+  const {
+    path: packagingPath = "genesis/stack.md#Packaging"
+  } = options;
   return {
     ...packaging,
     packages: packaging.packages.map((entry) => {

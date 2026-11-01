@@ -67,7 +67,8 @@ function createTrainingStepEvidence({
   actions,
   runCommand = runVibe64Command
 }) {
-  async function git(source, slug, args, { maxBuffer = GIT_MAX_BUFFER } = {}) {
+  async function git(source, slug, args, options = {}) {
+    const { maxBuffer = GIT_MAX_BUFFER } = options;
     const result = await runCommand({ actor: "daemon", command: "git", args: ["-c", "core.quotePath=false", ...args],
       // Optional locks off: reading never refreshes the clone's index.
       cwd: source,

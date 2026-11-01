@@ -270,9 +270,10 @@ function normalizedConnectionEndpoint(value = {}, kind = "") {
   return normalized;
 }
 
-function normalizeDatabaseToolEnvironment(value = {}, {
-  requireDistinctReader = false
-} = {}) {
+function normalizeDatabaseToolEnvironment(value = {}, options = {}) {
+  const {
+    requireDistinctReader = false
+  } = options;
   const environment = objectRecord(value);
   const kind = text(environment?.kind);
   if (
@@ -318,10 +319,11 @@ function normalizeDatabaseToolEnvironment(value = {}, {
   });
 }
 
-function normalizeResourceEnvironment(resources = [], provided, {
-  allowUnprepared = false,
-  requireDatabaseTool = true
-} = {}) {
+function normalizeResourceEnvironment(resources = [], provided, options = {}) {
+  const {
+    allowUnprepared = false,
+    requireDatabaseTool = true
+  } = options;
   if (
     provided?.contract !== RESOURCE_ENVIRONMENT_CONTRACT ||
     (provided.prepared !== undefined && typeof provided.prepared !== "boolean") ||
@@ -493,7 +495,8 @@ function trimmedValue(environment = {}, name = "") {
  * appear, only whether they are set. `endpoint` (server-side only) is what a
  * connection check uses: null until every required name has a value.
  */
-function localDatabaseServerDeclarations(resources = [], { environment = {} } = {}) {
+function localDatabaseServerDeclarations(resources = [], options = {}) {
+  const { environment = {} } = options;
   return (Array.isArray(resources) ? resources : [])
     .filter(({ resource }) => LOCAL_DATABASE_SERVER_KINDS.has(resource?.kind))
     .map(({ component, resource }) => {

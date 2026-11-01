@@ -4,7 +4,8 @@ import {
 
 const FILE_LOCK_ERROR_CODE = "vibe64_execution_file_lock_failed";
 
-function tryAcquireExclusiveFileLock(lockPath = "", { cwd = "" } = {}) {
+function tryAcquireExclusiveFileLock(lockPath = "", options = {}) {
+  const { cwd = "" } = options;
   return acquireExclusiveFileLock(lockPath, { cwd, errorCode: FILE_LOCK_ERROR_CODE });
 }
 

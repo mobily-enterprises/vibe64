@@ -71,13 +71,14 @@ function createParsedFileCache(limit) {
   return Object.freeze({ remember, read });
 }
 
-async function runCommand(command, args = [], {
-  allowedRoots = [],
-  cwd = "",
-  execution,
-  maxBuffer = COMMAND_BUFFER_BYTES,
-  timeout = SESSION_ARCHIVE_TIMEOUT_MS
-} = {}) {
+async function runCommand(command, args = [], options = {}) {
+  const {
+    allowedRoots = [],
+    cwd = "",
+    execution,
+    maxBuffer = COMMAND_BUFFER_BYTES,
+    timeout = SESSION_ARCHIVE_TIMEOUT_MS
+  } = options;
   return runSourceCommand(command, args, {
     allowedRoots,
     cwd: cwd || process.cwd(),

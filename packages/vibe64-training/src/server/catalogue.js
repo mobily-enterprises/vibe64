@@ -6,7 +6,8 @@ import { sha256Hex } from "./sha256Hex.js";
 
 async function readPinnedTopic(directory) {
   const root = await realpath(directory);
-  const git = async (args, outputEncoding = "utf8", { input, maxBuffer = 1024 * 1024 } = {}) => {
+  const git = async (args, outputEncoding = "utf8", options = {}) => {
+    const { input, maxBuffer = 1024 * 1024 } = options;
     const result = await runVibe64Command({
       actor: "daemon",
       allowedRoots: [root],

@@ -270,7 +270,8 @@ async function readErdLayout(store, sessionId = "") {
  * @param {object} [options]
  * @param {number} [options.expectedRevision]
  */
-async function saveErdLayout(store, sessionId = "", layout = {}, { expectedRevision } = {}) {
+async function saveErdLayout(store, sessionId = "", layout = {}, options = {}) {
+  const { expectedRevision } = options;
   const normalized = normalizedLayout(layout);
   if (Buffer.byteLength(JSON.stringify(normalized)) > ERD_LAYOUT_MAX_BYTES) {
     throw vibe64Error("The ERD layout is too large.", "vibe64_database_erd_layout_too_large");

@@ -154,9 +154,10 @@ function normalizeText(value = "") {
   return String(value || "").trim();
 }
 
-function assertGenesisPromptTask(value, {
-  required = false
-} = {}) {
+function assertGenesisPromptTask(value, options = {}) {
+  const {
+    required = false
+  } = options;
   const task = normalizeText(value);
   if (!task && !required) {
     return "";

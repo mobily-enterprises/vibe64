@@ -81,10 +81,11 @@ function assertPresenceInput(input = {}) {
   });
 }
 
-function presencePayload(input = {}, {
-  expiresAt = 0,
-  now = Date.now()
-} = {}) {
+function presencePayload(input = {}, options = {}) {
+  const {
+    expiresAt = 0,
+    now = Date.now()
+  } = options;
   const presence = assertPresenceInput(input);
   return Object.freeze({
     ...presence,

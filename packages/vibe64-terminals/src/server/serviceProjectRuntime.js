@@ -356,7 +356,8 @@ function createServiceProjectRuntime({
     };
   }
 
-  async function closeProjectRuntime(input, { dormant = false } = {}) {
+  async function closeProjectRuntime(input, options = {}) {
+    const { dormant = false } = options;
     const startedAtMs = Date.now();
     const context = sessionAccess.projectRuntimeContext();
     const projectScope = currentProjectScopeKey();

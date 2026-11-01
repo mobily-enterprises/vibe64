@@ -7,9 +7,10 @@ function startupBrowserPath({
   return slug ? `/app/project/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app";
 }
 
-function startupRedirectPathForRequest(requestUrl = "", {
-  startupSlug = ""
-} = {}) {
+function startupRedirectPathForRequest(requestUrl = "", options = {}) {
+  const {
+    startupSlug = ""
+  } = options;
   const path = startupBrowserPath({
     startupSlug
   });

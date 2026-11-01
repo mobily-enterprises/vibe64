@@ -28,7 +28,8 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 const MAIN_CONVERSATION_STATE_KEY = "assistant_changeover";
 const STATE_KEY = MAIN_CONVERSATION_STATE_KEY;
 
-function requireCompletedNativeConversationReplacement(session, { requireBriefing = false } = {}) {
+function requireCompletedNativeConversationReplacement(session, options = {}) {
+  const { requireBriefing = false } = options;
   const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
   if (state?.replacement?.status === "preparing") {
     throw Object.assign(new Error("Native conversation replacement is unfinished. Retry that operation before starting assistant work."),
@@ -50,7 +51,8 @@ function requireCompletedNativeConversationReplacement(session, { requireBriefin
  * @param {object} [options]
  * @param {boolean} [options.allowClosing]
  */
-async function learningSessionExecutionRoot(runtime, sessionId, { allowClosing = false } = {}) {
+async function learningSessionExecutionRoot(runtime, sessionId, options = {}) {
+  const { allowClosing = false } = options;
   if (!runtime?.learningScope) return "";
   const executionRoot = await runtime.getNativeExecutionRoot(sessionId, { allowClosing });
   return runtime.learningScope.noExercise === true ? executionRoot : "";

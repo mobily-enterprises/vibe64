@@ -16,10 +16,11 @@ import {
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { createPreviewIdentityCommandRunner } from "./previewIdentityCommand.js";
 
-function previewAuthForLaunchTerminal(terminal = {}, {
-  sessionId = "",
-  targetHref = ""
-} = {}) {
+function previewAuthForLaunchTerminal(terminal = {}, options = {}) {
+  const {
+    sessionId = "",
+    targetHref = ""
+  } = options;
   const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
     ? terminal.metadata
     : {};
@@ -107,9 +108,10 @@ function previewIdentityCapability({
   };
 }
 
-function previewIdentitySelection(input = {}, {
-  identities = []
-} = {}) {
+function previewIdentitySelection(input = {}, options = {}) {
+  const {
+    identities = []
+  } = options;
   const mode = String(input.mode || "identity").trim();
   if (!["identity", "guest"].includes(mode)) {
     const error = new Error("Preview identity mode is invalid.");

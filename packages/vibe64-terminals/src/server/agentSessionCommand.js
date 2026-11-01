@@ -200,7 +200,8 @@ function createAgentSessionCommandService({
   const sessionExecutions = new Map();
   const sessionRuns = new Map();
 
-  async function bindSession(sessionId = "", { wrapperHostDir = "" } = {}) {
+  async function bindSession(sessionId = "", options = {}) {
+    const { wrapperHostDir = "" } = options;
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
     if (!normalizedSessionId || !normalizedWrapperHostDir) {

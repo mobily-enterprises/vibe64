@@ -197,12 +197,13 @@ function normalizeAttachmentMultipartError(error) {
  */
 function registerRoutes(
   http,
-  {
+  options = {}
+) {
+  const {
     fastify,
     projectContext,
     terminals
-  } = {}
-) {
+  } = options;
   if (!terminals || typeof terminals !== "object") {
     throw new TypeError(VIBE64_TERMINALS_UNAVAILABLE);
   }
@@ -616,7 +617,8 @@ function terminalInputFor(prefix) {
     : terminalRouteInput;
 }
 
-function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext } = {}) {
+function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, options = {}) {
+  const { projectContext } = options;
   registerTerminalWebSocketRoute(fastify, {
     projectContext,
     routePath: `${routes.routeBase}/codex-terminal/:terminalSessionId/ws`,

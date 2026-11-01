@@ -33,10 +33,11 @@ function learningSpaceSlugFromTargetRoot(targetRoot, learningSpaceRoot) {
  * A caller that names its projectsRoot names its learning space too; only the
  * default (no roots) reads the configured context's learning space.
  */
-function catalogProjectSlugFromTargetRoot(targetRoot = "", {
-  projectsRoot = "",
-  learningSpaceRoot = projectsRoot ? "" : getStudioProjectContext()?.learningSpaceRoot
-} = {}) {
+function catalogProjectSlugFromTargetRoot(targetRoot = "", options = {}) {
+  const {
+    projectsRoot = "",
+    learningSpaceRoot = projectsRoot ? "" : getStudioProjectContext()?.learningSpaceRoot
+  } = options;
   const resolvedTargetRoot = path.resolve(String(targetRoot || "").trim() || process.cwd());
   const practiceSlug = String(learningSpaceRoot || "").trim()
     ? learningSpaceSlugFromTargetRoot(resolvedTargetRoot, path.resolve(learningSpaceRoot)) : "";

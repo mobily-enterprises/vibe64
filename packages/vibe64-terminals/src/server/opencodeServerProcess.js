@@ -232,21 +232,22 @@ function openCodeInlineConfig({
   });
 }
 
-function safeOpenCodeEnvironment(baseEnv = {}, {
-  cacheRoot = "",
-  canonicalUrl = "",
-  dbPath = "",
-  hostContextResolver = "",
-  managedEnv,
-  modelProviderId = "",
-  outputTokenMax = 0,
-  packageInstalls = true,
-  password = "",
-  privateRoot = "",
-  providerConnections = [],
-  sessionEnvironmentRegistry = "",
-  shimDirs = []
-} = {}) {
+function safeOpenCodeEnvironment(baseEnv = {}, options = {}) {
+  const {
+    cacheRoot = "",
+    canonicalUrl = "",
+    dbPath = "",
+    hostContextResolver = "",
+    managedEnv,
+    modelProviderId = "",
+    outputTokenMax = 0,
+    packageInstalls = true,
+    password = "",
+    privateRoot = "",
+    providerConnections = [],
+    sessionEnvironmentRegistry = "",
+    shimDirs = []
+  } = options;
   const homeRoot = path.join(privateRoot, "home");
   const effectiveCacheRoot = cacheRoot || path.join(privateRoot, "cache");
   const managed = Object.fromEntries(Object.entries(managedEnv || {})

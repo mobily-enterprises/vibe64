@@ -71,13 +71,14 @@ async function finishVibe64Workflow(workflowId, options = {}) {
   return installedProvider.finishWorkflow(workflowId, options);
 }
 
-function vibe64CapacityRejectedResult(execution = {}, {
-  code = "vibe64_capacity_rejected",
-  estimatedMemoryBytes = 0,
-  message = "This work cannot start while available memory is this low.",
-  retryable = false,
-  safelyAvailableMemoryBytes = 0
-} = {}) {
+function vibe64CapacityRejectedResult(execution = {}, options = {}) {
+  const {
+    code = "vibe64_capacity_rejected",
+    estimatedMemoryBytes = 0,
+    message = "This work cannot start while available memory is this low.",
+    retryable = false,
+    safelyAvailableMemoryBytes = 0
+  } = options;
   return commandErrorResult(message, code, {
     execution: {
       estimatedMemoryBytes: Math.max(0, Number(estimatedMemoryBytes) || 0),

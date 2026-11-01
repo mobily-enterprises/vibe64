@@ -130,7 +130,8 @@ function createSessionAttachments({ projectService, env = process.env }) {
     return { ok: true, attachmentId: input.attachmentId };
   }
 
-  async function prepareMessage(context, input, { durable = true, conversationId = "" } = {}) {
+  async function prepareMessage(context, input, options = {}) {
+    const { durable = true, conversationId = "" } = options;
     const ids = [...new Set(Array.isArray(input.attachmentIds) ? input.attachmentIds : [])];
     if (ids.length > 10) throw Object.assign(new Error("A message can include at most 10 attachments."), { statusCode: 400 });
     const attachments = [];

@@ -79,9 +79,10 @@ function normalizeOutputLimit(value = 0) {
   return Number.isFinite(limit) && limit > 0 ? limit : 0;
 }
 
-function terminalSessionOutput(output = "", {
-  outputLimit = 0
-} = {}) {
+function terminalSessionOutput(output = "", options = {}) {
+  const {
+    outputLimit = 0
+  } = options;
   const normalizedOutput = String(output || "");
   const limit = normalizeOutputLimit(outputLimit);
   if (!limit || normalizedOutput.length <= limit) {
@@ -120,10 +121,11 @@ function terminalSessionResponse(session, options = {}) {
   };
 }
 
-function normalizeTerminalDimension(value, {
-  max,
-  min
-} = {}) {
+function normalizeTerminalDimension(value, options = {}) {
+  const {
+    max,
+    min
+  } = options;
   const dimension = Math.floor(Number(value));
   if (!Number.isFinite(dimension) || dimension < min) {
     return null;
@@ -197,10 +199,11 @@ function clearDetachedCleanupTimer(session = {}) {
   session.detachedCleanupTimer = null;
 }
 
-function terminalMovementState(snapshot = {}, {
-  now = Date.now(),
-  quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
-} = {}) {
+function terminalMovementState(snapshot = {}, options = {}) {
+  const {
+    now = Date.now(),
+    quietThresholdMs = DEFAULT_QUIET_THRESHOLD_MS
+  } = options;
   const threshold = normalizeQuietThresholdMs(quietThresholdMs);
   const candidates = [
     {

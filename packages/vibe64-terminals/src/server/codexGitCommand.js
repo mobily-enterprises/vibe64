@@ -83,9 +83,10 @@ const commandServers = createSessionCommandServers({
   healthTimeoutMs: CODEX_GIT_COMMAND_HEALTH_TIMEOUT_MS
 });
 
-function noGithubGitCommandActorFromSession(session = {}, {
-  command = ""
-} = {}) {
+function noGithubGitCommandActorFromSession(session = {}, options = {}) {
+  const {
+    command = ""
+  } = options;
   if (["gh", "vibe64-github"].includes(normalizeText(command))) {
     return responseError(
       "GitHub commands are only available for GitHub repository sessions.",
@@ -117,9 +118,10 @@ function noGithubGitCommandActorFromSession(session = {}, {
   };
 }
 
-function gitCommandActorFromSession(session = {}, {
-  command = ""
-} = {}) {
+function gitCommandActorFromSession(session = {}, options = {}) {
+  const {
+    command = ""
+  } = options;
   if (!sessionRequiresGithubActor(session)) {
     return noGithubGitCommandActorFromSession(session, {
       command
@@ -373,7 +375,8 @@ function createCodexGitCommandService({
       // rejection drops it as a rejected Git command's does. Behind a proxy
       // this process's fetch would not use, there is none and Git reads.
       ...(fetchReachesGithubAsGit(env) ? {
-        readRemoteHeads: async (remoteUrl, refs, { timeoutMs } = {}) => {
+        readRemoteHeads: async (remoteUrl, refs, options = {}) => {
+          const { timeoutMs } = options;
           try {
             return await listGithubRemoteHeads({ fetch: fetchRemote, refs, remoteUrl, timeoutMs, token: githubToken.token });
           } catch (error) {

@@ -6,10 +6,11 @@ import { previewTokenCookie } from "./launchPreviewHeaders.js";
 const PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
 const consumedPreviewIdentityGrantNonces = new Map();
 
-async function readStreamBuffer(stream, {
-  maxBytes = 0,
-  tooLargeError = () => new Error("Stream is too large.")
-} = {}) {
+async function readStreamBuffer(stream, options = {}) {
+  const {
+    maxBytes = 0,
+    tooLargeError = () => new Error("Stream is too large.")
+  } = options;
   const chunks = [];
   let totalBytes = 0;
   for await (const chunk of stream) {
@@ -76,9 +77,10 @@ function previewIdentityProxyError(message, code, statusCode = 400) {
   return error;
 }
 
-function previewIdentityErrorPayload(error = {}, {
-  signedOut = false
-} = {}) {
+function previewIdentityErrorPayload(error = {}, options = {}) {
+  const {
+    signedOut = false
+  } = options;
   return {
     code: String(error.code || "vibe64_preview_identity_exchange_failed"),
     error: String(error.message || error || "Preview identity exchange failed."),
@@ -149,13 +151,14 @@ function createPreviewIdentityGrantConsumer(previewAuth = {}) {
   };
 }
 
-async function proxyPreviewIdentityExchange(request, response, {
-  consumeIdentityGrant,
-  executePreviewIdentityCommand = null,
-  previewAuth = null,
-  proxyOrigin = "",
-  token = ""
-} = {}) {
+async function proxyPreviewIdentityExchange(request, response, options = {}) {
+  const {
+    consumeIdentityGrant,
+    executePreviewIdentityCommand = null,
+    previewAuth = null,
+    proxyOrigin = "",
+    token = ""
+  } = options;
   const setCookie = [];
   let signedOut = false;
   try {

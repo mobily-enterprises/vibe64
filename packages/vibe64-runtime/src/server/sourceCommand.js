@@ -7,15 +7,16 @@ import { runVibe64Command } from "@local/vibe64-execution/server";
  * the command never reached its own verdict (refused, timed out or undrained);
  * a command that ran and failed has none.
  */
-async function runSourceCommand(command, args = [], {
-  allowedRoots = [],
-  cwd = "",
-  execution,
-  gitSafeDirectories,
-  maxBuffer,
-  runtimes,
-  timeout
-} = {}) {
+async function runSourceCommand(command, args = [], options = {}) {
+  const {
+    allowedRoots = [],
+    cwd = "",
+    execution,
+    gitSafeDirectories,
+    maxBuffer,
+    runtimes,
+    timeout
+  } = options;
   const result = await runVibe64Command({
     actor: "daemon",
     allowedRoots: [

@@ -62,11 +62,12 @@ function createSessionCreation({
   /**
    * Only an internal caller may supply a server-reserved identity.
    */
-  async function createSession(input = {}, {
-    sessionId,
-    expectedCommit,
-    connectedContribution
-  } = {}) {
+  async function createSession(input = {}, options = {}) {
+    const {
+      sessionId,
+      expectedCommit,
+      connectedContribution
+    } = options;
     return sessionResult(async () => {
       assertProjectEffectAdmission();
       if (sessionId !== undefined) assertValidVibe64SessionId(sessionId);
