@@ -183,10 +183,10 @@ function createService({
     const skipped = reason => `Automatic save didn't run: ${reason}`;
     // Connected Save needs the person's authenticated request to each project.
     if (sessionConnectedSources(session).length) return skipped("this session has connected repositories. Choose Save yourself.");
-    const work = await service.inspectSessionWork(sessionId, {}, { includeConnected: false });
-    if (work?.ok === false) return skipped(text(work.error) || "this session's work could not be inspected.");
-    if (!work.unsaved) return "Automatic save: nothing new to save.";
-    const saved = await service.saveSessionWork(sessionId, { destinationReview: work.destination, vibe64User: submittedBy });
+    const inspection = await service.inspectSessionWork(sessionId, {}, { includeConnected: false });
+    if (inspection?.ok === false) return skipped(text(inspection.error) || "this session's work could not be inspected.");
+    if (!inspection.unsaved) return "Automatic save: nothing new to save.";
+    const saved = await service.saveSessionWork(sessionId, { destinationReview: inspection.destination, vibe64User: submittedBy });
     return saved?.ok === false ? skipped(text(saved.error) || "Save was refused.") : "Saved automatically after completing the plan.";
   });
   // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
