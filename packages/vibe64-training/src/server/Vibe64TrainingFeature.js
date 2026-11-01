@@ -33,6 +33,9 @@ import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js"
 // capabilities, so the releases are kept beside the training service they belong to.
 const slotReleases = new WeakMap();
 
+// Without Colleague no teacher thread is running, so there is nothing to release.
+const NO_LEARN_THREADS = Object.freeze({ releaseLearnThread: doNothing });
+
 const Vibe64TrainingFeature = defineFeature({
   id: "vibe64.training",
   domain: "vibe64-training",
@@ -99,8 +102,7 @@ const Vibe64TrainingFeature = defineFeature({
       terminals,
       // The built-in fact readers, then any a host provides.
       facts: createLearningFacts([aiReadyFact({ terminals }), ...(learningFacts ?? [])]),
-      // Without Colleague no teacher thread is running, so there is nothing to release.
-      releaseLearnThread: colleague ? colleague.releaseLearnThread : doNothing
+      learnThreads: colleague ?? NO_LEARN_THREADS
     });
     registerVibe64ActionContext(actionCatalogue, {
       env,

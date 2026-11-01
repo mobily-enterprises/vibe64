@@ -10,6 +10,7 @@
 /** @typedef {ReturnType<typeof import("./learningSpace.js").createTrainingLearningSpace>} TrainingLearningSpace */
 /** @typedef {ReturnType<typeof import("./courseInstaller.js").createTrainingCourseInstaller>} TrainingCourseInstaller */
 /** @typedef {ReturnType<typeof import("./preparation.js").createTrainingService>} TrainingExercises */
+/** @typedef {{ releaseLearnThread: import("@local/vibe64-colleague/server/types").ColleagueService["releaseLearnThread"] }} LearnThreadOwner */
 /** @typedef {ReturnType<typeof import("./stepChecks.js").createTrainingStepChecks>} TrainingStepChecks */
 /** @typedef {ReturnType<typeof import("./trainingOperations.js").createTrainingOperations>} TrainingOperations */
 /** @typedef {ReturnType<typeof import("./stepOperations.js").createTrainingStepOperations>} TrainingStepOperations */

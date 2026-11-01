@@ -26,6 +26,7 @@ import { createTrainingOperations } from "./trainingOperations.js";
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").LearningFacts} LearningFacts */
+/** @typedef {import("./types.js").LearnThreadOwner} LearnThreadOwner */
 
 /**
  * The training capability of this computer: its installed catalogue and content, the learners' state, exercise
@@ -41,7 +42,7 @@ import { createTrainingOperations } from "./trainingOperations.js";
  * @param {SessionsService} dependencies.sessions
  * @param {TerminalsService} dependencies.terminals
  * @param {LearningFacts} dependencies.facts
- * @param {(thread: { learnerKey: string, attemptId: string }) => Promise<void> | void} dependencies.releaseLearnThread
+ * @param {LearnThreadOwner} dependencies.learnThreads
  */
 function createTraining({
   actionCatalogue,
@@ -53,7 +54,7 @@ function createTraining({
   sessions,
   terminals,
   facts,
-  releaseLearnThread
+  learnThreads
 }) {
   const systemRoot = projectContext.systemRoot;
   const catalogue = createInstalledTrainingCatalogue({ systemRoot });
@@ -105,7 +106,7 @@ function createTraining({
     content,
     projectContext,
     projectArchive,
-    releaseLearnThread
+    learnThreads
   });
   const exercises = createTrainingService({
     catalogue,

@@ -11,6 +11,7 @@ import { conflictFailure } from "./errors.js";
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
 /** @typedef {ReturnType<typeof import("@local/vibe64-project/server/project-archive").createProjectArchiveService>} ProjectArchiveService */
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
+/** @typedef {import("./types.js").LearnThreadOwner} LearnThreadOwner */
 
 const MAX_ARCHIVES = 20;
 // Archives keep their record and conversation; only the newest few keep their
@@ -40,8 +41,8 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a
  * @param {InstalledTrainingContent} dependencies.content
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {ProjectArchiveService} dependencies.projectArchive
- * @param {(thread: { learnerKey: string, attemptId: string }) => Promise<void> | void} dependencies.releaseLearnThread
- *   Colleague's, or a no-op where no Colleague is composed
+ * @param {LearnThreadOwner} dependencies.learnThreads
+ *   Colleague, or a stand-in with nothing to release where no Colleague is composed
  * @param {string} [dependencies.systemRoot]
  * @param {number} [dependencies.keptArchivedProjects]
  * @param {typeof rm} [dependencies.removePath]
@@ -51,7 +52,7 @@ function createTrainingLearningSpace({
   content,
   projectContext,
   projectArchive,
-  releaseLearnThread,
+  learnThreads,
   systemRoot = projectContext.systemRoot,
   keptArchivedProjects = KEPT_ARCHIVED_PROJECTS,
   removePath = rm
@@ -209,7 +210,7 @@ function createTrainingLearningSpace({
   async function closeThread(actor, attemptId, archive) {
     const learnerKey = learnerIdentity(actor).key;
     const file = learnThreadFile({ systemRoot, learnerKey, attemptId });
-    await releaseLearnThread({ learnerKey, attemptId });
+    await learnThreads.releaseLearnThread({ learnerKey, attemptId });
     if (!archive) return removePath(file, { force: true });
     if (!await lstat(file).then(() => true, missingAsFalse)) return;
     const destination = path.join(bundleRoot(actor, attemptId), "conversation.json");

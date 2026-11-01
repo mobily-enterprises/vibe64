@@ -75,7 +75,7 @@ async function fixture(t, { headroom = async () => {}, release = async () => {},
       closed.push(slug);
       return { ok: true };
     } });
-  const space = createTrainingLearningSpace({ learners: store, content, projectContext, projectArchive, releaseLearnThread, keptArchivedProjects });
+  const space = createTrainingLearningSpace({ learners: store, content, projectContext, projectArchive, learnThreads: { releaseLearnThread }, keptArchivedProjects });
 
   let starts = 0;
   // A lesson in progress as preparation leaves it: with its practice project
