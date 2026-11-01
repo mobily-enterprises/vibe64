@@ -65,7 +65,7 @@ test("ordinary archival has no preparation policy unless a host registers it", a
   const f = archiveFixture();
   assert.equal((await f.service.archiveSession("session-a")).ok, true);
   assert.deepEqual(f.calls, ["stop", "resources", "archive"]);
-  assert.throws(() => Vibe64SessionsProvider.setup({ archivePreparation: {} }, {}), /function or null/u);
+  await assert.rejects(() => Vibe64SessionsProvider.setup({ archivePreparation: {} }, {}), /function or null/u);
 });
 
 test("preparation sees stopped, current session state before resource and source removal", async () => {

@@ -200,7 +200,7 @@ test("project and sessions register routes and captured actions during setup", a
 
   assert.equal(typeof sessionOutputs.sessions.createSession, "function");
   assert.deepEqual(templateObservers.map((observer) => typeof observer), ["function"], "applying a starter prepares its session workspace");
-  assert.throws(
+  await assert.rejects(
     () => Vibe64SessionsProvider.setup({ renewalActorResolver: {} }, {}),
     /must be a function or null/u
   );
@@ -379,7 +379,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   });
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.throws(
+  await assert.rejects(
     () => Vibe64SessionsProvider.setup({
       project: {},
       renewalActorResolver: {},
