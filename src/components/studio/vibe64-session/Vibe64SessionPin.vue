@@ -8,7 +8,7 @@ import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID, vibe64SessionPath } from
 const props = defineProps({
   session: { type: Object, required: true },
   sessionsApiPath: { type: String, required: true },
-  refresh: Function,
+  refresh: { type: Function, default: null },
   // Session actions lists the pin when the header has no room for it.
   listItem: Boolean
 });

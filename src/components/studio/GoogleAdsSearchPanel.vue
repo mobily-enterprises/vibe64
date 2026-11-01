@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { validateGoogleAdsSearchPlan } from "@jskit-ai/connectors-catalog/shared/google-ads-search";
 
-const props = defineProps({ modelValue: Object, integrationId: String, disabled: Boolean, managementDisabled: Boolean, result: Object, error: String, loading: Boolean, applicationPublicUrl: String, canPrepare: Boolean });
+const props = defineProps({ modelValue: { type: Object, required: true }, integrationId: { type: String, required: true }, disabled: Boolean, managementDisabled: Boolean, result: { type: Object, default: null }, error: { type: String, default: "" }, loading: Boolean, applicationPublicUrl: { type: String, default: "" }, canPrepare: Boolean });
 const emit = defineEmits(["update:modelValue", "manage", "prepare"]);
 const saved = computed(() => props.modelValue.extensions?.googleAdsSearch?.[props.integrationId]);
 const draft = ref({});

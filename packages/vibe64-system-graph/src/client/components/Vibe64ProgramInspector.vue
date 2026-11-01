@@ -20,7 +20,7 @@
 <script setup>
 import { computed, ref, useId, watch } from 'vue';
 import Vibe64SubsystemTreeBranch from './Vibe64SubsystemTreeBranch.vue';
-const props = defineProps({ program: { type: Object, required: true }, architecture: { type: Object, required: true }, owner: Object, active: { type: Boolean, default: true } });
+const props = defineProps({ program: { type: Object, required: true }, architecture: { type: Object, required: true }, owner: { type: Object, default: null }, active: { type: Boolean, default: true } });
 defineEmits(['inspect']);
 const filesElement = ref(null);
 const explanationOpen = ref(false);

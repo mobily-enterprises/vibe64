@@ -8,7 +8,7 @@ vi.mock("../../packages/vibe64-accounts/src/client/composables/useVibe64Accounts
 }));
 // Each child stands for the install notice it would show for its CLI account.
 const notice = (prop) => defineComponent({
-  props: { cliAccount: Object, accountRows: Array, modelValue: String },
+  props: { cliAccount: { type: Object, default: null }, accountRows: { type: Array, default: null }, modelValue: { type: String, default: "" } },
   setup: (props) => () => h("i", {}, (prop === "cliAccount" ? [props.cliAccount] : props.accountRows || [])
     .filter((account) => account?.status === "not_installed").map(() => "notice"))
 });

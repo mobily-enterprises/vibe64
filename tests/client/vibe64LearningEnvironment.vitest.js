@@ -1729,7 +1729,7 @@ function mountStepBar(learning, accounts = { aiOnboardingAvailable: Vue.ref(true
   const root = { children: [] };
   const app = uiRenderer().createApp({ render: () => Vue.h(bar) });
   for (const tag of WIDGETS) app.component(tag, widget);
-  app.component("v-tooltip", tooltip);
+  app.component("VTooltip", tooltip);
   app.mount(root);
   return { root, app };
 }

@@ -153,7 +153,7 @@ import Vibe64SubsystemInspector from './Vibe64SubsystemInspector.vue';
 import Vibe64ProgramInspector from './Vibe64ProgramInspector.vue';
 import { architectureOverview, subsystemOutline } from '../architectureModel.js';
 
-const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 }, openProgramRequest: Object, restoreRequest: Object, usageOpenRequest: Object });
+const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 }, openProgramRequest: { type: Object, default: null }, restoreRequest: { type: Object, default: null }, usageOpenRequest: { type: Object, default: null } });
 const { architecture, error, loading, refreshing, refreshProgress, refreshOutput, refresh, reload, cancelRefresh } = useVibe64SystemGraph({
   active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), reloadVersion: toRef(props, 'reloadVersion')
 });

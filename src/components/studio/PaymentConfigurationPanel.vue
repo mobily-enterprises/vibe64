@@ -4,7 +4,7 @@ import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
 import { validatePaymentConfiguration } from "@jskit-ai/payments-core/shared";
 import { integrationCallbackUrl } from "@/lib/integrationCallbackUrl.js";
 
-const props = defineProps({ modelValue: { type: Object, required: true }, integrationId: { type: String, required: true }, disabled: Boolean, applicationPublicUrl: String, management: Object, managementError: String, managementOperation: String, managementLoading: Boolean, managementDisabled: Boolean, canPrepare: Boolean });
+const props = defineProps({ modelValue: { type: Object, required: true }, integrationId: { type: String, required: true }, disabled: Boolean, applicationPublicUrl: { type: String, default: "" }, management: { type: Object, default: null }, managementError: { type: String, default: "" }, managementOperation: { type: String, default: "" }, managementLoading: Boolean, managementDisabled: Boolean, canPrepare: Boolean });
 const emit = defineEmits(["update:modelValue", "set-env", "manage", "prepare"]);
 const paymentSetups = Object.fromEntries(connectorDefinitions.filter((provider) => provider.paymentSetup).map((provider) => [provider.id, provider.paymentSetup]));
 const payments = computed(() => props.modelValue.extensions?.payments);
