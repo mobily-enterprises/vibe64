@@ -3,6 +3,7 @@ import { mkdir, mkdtemp } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { createConversationRuntime, createConversationStreams } from "@jskit-ai/assistant-core/server/conversation";
 import os from "node:os";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import path from "node:path";
 import { serializeVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/index.js";
 import { startTerminalSession } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
@@ -53,6 +54,7 @@ async function controllerHarness({
   beforeReadSession = null,
   beforeDeleteSession = null,
   listConversationChildren = async () => [],
+  logger = silentLogger,
   readConversationStorage = null,
   readConversationStoragePage = async () => ({ data: [], nextCursor: null }),
   catalogProviders = providerResult,
@@ -387,6 +389,7 @@ async function controllerHarness({
 
   const controllerOptions = {
     getAssistantManager: () => null,
+    logger,
     env: {
       ...process.env,
       VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-providers")

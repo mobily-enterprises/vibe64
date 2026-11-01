@@ -3,6 +3,7 @@ import { access, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -55,7 +56,7 @@ test("agent command helpers prepared with a curated environment use the process'
     const stateRoot = path.join(root, "daemon-state", "attachments");
     await withProcessRoot(stateRoot, async () => {
       const prepared = await prepareCodexGitCommand({
-        commandService: { run: async () => ({ ok: true }) },
+        commandService: { logger: silentLogger, run: async () => ({ ok: true }) },
         env: { VIBE64_SYSTEM_ROOT: path.join(root, "daemon-state") },
         sessionId: "session-a",
         stateRoot: path.join(root, "project-runtime")
@@ -73,7 +74,7 @@ test("removing an ended session's command helpers deletes only its directory and
   await withTemporaryRoot(async (root) => {
     const stateRoot = path.join(root, "daemon-state", "attachments");
     await withProcessRoot(stateRoot, async () => {
-      const commandService = { run: async () => ({ ok: true }) };
+      const commandService = { logger: silentLogger, run: async () => ({ ok: true }) };
       const prepare = (sessionId) => prepareCodexGitCommand({
         commandService, env: {}, sessionId, stateRoot: path.join(root, "project-runtime")
       });

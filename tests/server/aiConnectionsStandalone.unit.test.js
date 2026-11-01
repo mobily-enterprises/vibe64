@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createAiConnectionRuntime, configureAiConnectionRuntime } from "../../packages/vibe64-accounts/src/server/aiConnectionRuntime.js";
 import { createAiConnectionService } from "../../packages/vibe64-accounts/src/server/aiConnectionService.js";
 import { createConnections } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js";
@@ -62,7 +63,7 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
   // Vibe64 includes no AI of its own: nothing is connected until the person adds a provider.
   assert.deepEqual(await configured.listConnections(), []);
 
-  const service = createAiConnectionService({ aiConnections, readAssistantCapabilities: terminals.listAssistantCapabilities });
+  const service = createAiConnectionService({ aiConnections, logger: silentLogger, readAssistantCapabilities: terminals.listAssistantCapabilities });
   const app = testRouteApp();
   registerRoutes(app.http, { accounts: { subscribeAuthTerminal() {} }, fastify: app.fastify, requireAiManagement: () => null,
     aiConnectionService: service, projectScoped: false, routeSurface: "app", routeRelativePath: "vibe64/accounts" });
@@ -110,7 +111,7 @@ test("connecting OpenCode initializes routing after saving and keeps connection 
   const owner = { role: "owner", username: "owner" };
   let saved = false;
   let inspected = 0;
-  const service = createAiConnectionService({
+  const service = createAiConnectionService({ logger: silentLogger,
     aiConnections: { async upsertConnection() { saved = true; return { id: "deepseek", connected: true }; } },
     async readAssistantCapabilities() { return { engines: [{ engineId: "opencode", modelProviders: [provider] }] }; },
     async initializeModelRouting(input) {

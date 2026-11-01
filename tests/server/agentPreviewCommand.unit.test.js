@@ -1128,7 +1128,7 @@ test("agent preview wrapper forwards command input over the private session sock
   try {
     let receivedInput = null;
     const prepared = await prepareAgentPreviewCommand({
-      commandService: {
+      commandService: { logger: silentLogger,
         registerBrowserWorker() {},
         async run(input) {
           receivedInput = input;
@@ -2440,7 +2440,7 @@ test("agent preview command preparation does not rewrite an unchanged wrapper fi
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-command-"));
   try {
     const options = {
-      commandService: {
+      commandService: { logger: silentLogger,
         registerBrowserWorker() {},
         async run() {
           return {
