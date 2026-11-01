@@ -141,10 +141,7 @@ function createSessionKnex(connection = {}) {
   });
 }
 
-async function withSessionKnex(endpoint = {}, operation) {
-  if (typeof operation !== "function") {
-    throw new TypeError("withSessionKnex requires an operation.");
-  }
+async function withSessionKnex(endpoint, operation) {
   const connection = resolveDatabaseConnection(endpoint);
   const knex = createSessionKnex(connection);
   try {

@@ -120,9 +120,6 @@ function serializeWrite(key, operation) {
  * @param {(workspace: object) => object | Promise<object>} operation
  */
 async function mutateWorkspace(store, sessionId, vibe64User, operation) {
-  if (typeof operation !== "function") {
-    throw new TypeError("mutateWorkspace requires an operation.");
-  }
   const path = workspaceArtifactPath(vibe64User);
   return serializeWrite(`${sessionId}\u0000${path}`, async () => {
     const workspace = await readWorkspace(store, sessionId, vibe64User);

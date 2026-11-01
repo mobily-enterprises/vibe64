@@ -75,10 +75,7 @@ async function searchDatabaseLookup({
   relationshipId = "",
   schema = {},
   search = ""
-} = {}) {
-  if (!knex) {
-    throw new TypeError("searchDatabaseLookup requires Knex.");
-  }
+}) {
   const relation = relationship(schema, relationshipId);
   const table = schemaTable(schema, relation.referencedTable);
   const selectedDisplayColumn = displayColumn(table);

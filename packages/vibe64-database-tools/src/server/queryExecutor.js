@@ -356,10 +356,7 @@ async function executeDatabaseQuery({
   schema = {},
   sql = "",
   signal
-} = {}) {
-  if (!knex) {
-    throw new TypeError("executeDatabaseQuery requires Knex.");
-  }
+}) {
   const statement = assertSingleStatement(sql, descriptor.engine);
   signal?.throwIfAborted();
   const normalizedId = normalizeQueryId(queryId);
