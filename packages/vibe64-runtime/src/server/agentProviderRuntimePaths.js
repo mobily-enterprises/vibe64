@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { isPlainObject } from "./isPlainObject.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /**
@@ -12,8 +12,8 @@ function hasOwn(object = {}, property = "") {
 }
 
 function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
-  const primaryEnv = isPlainObject(env) ? env : {};
-  const fallbackEnv = isPlainObject(hostEnv) ? hostEnv : {};
+  const primaryEnv = isRecord(env) ? env : {};
+  const fallbackEnv = isRecord(hostEnv) ? hostEnv : {};
   return toText(hasOwn(primaryEnv, name) ? primaryEnv[name] : fallbackEnv[name]);
 }
 
