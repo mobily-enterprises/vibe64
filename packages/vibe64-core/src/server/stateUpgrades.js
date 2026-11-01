@@ -368,8 +368,9 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
               current.ctimeMs !== original.ctimeMs) throw new Error("upgrade_backup_changed");
         }
         result.eligibleBytes += bytes;
-        if (dryRun) result.retainedBytes += bytes;
-        else {
+        if (dryRun) {
+          result.retainedBytes += bytes;
+        } else {
           await rm(target, { recursive: true });
           result.reclaimedBytes += bytes;
         }

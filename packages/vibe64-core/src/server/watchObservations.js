@@ -58,16 +58,20 @@ function watchUpdate(watch, observation) {
   };
   if (JSON.stringify(previous) === JSON.stringify(cursor)) return { cursor, reason: "" };
   if (observation.attention) return { cursor, reason: "attention" };
-  if (watch.condition === "reply" && observation.answered && observation.answerId !== previous?.answerId) return {
-    cursor,
-    reason: "reply"
-  };
+  if (watch.condition === "reply" && observation.answered && observation.answerId !== previous?.answerId) {
+    return {
+      cursor,
+      reason: "reply"
+    };
+  }
   if (watch.condition === "finished" &&
       observation.settled &&
-      (previous ? working.has(previous.status) || previous.runId !== observation.runId : observation.answered)) return {
-    cursor,
-    reason: "finished"
-  };
+      (previous ? working.has(previous.status) || previous.runId !== observation.runId : observation.answered)) {
+    return {
+      cursor,
+      reason: "finished"
+    };
+  }
   return { cursor, reason: "" };
 }
 
