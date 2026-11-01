@@ -20,7 +20,7 @@ import { answerPendingNavigation } from "./colleaguePresentation.js";
  * @param {ColleagueThreads} dependencies.threads
  */
 function createColleagueFocusAndNavigation({ threads }) {
-  async function readContext(_input, context = {}) {
+  async function readContext(_input, context) {
     const state = await threads.stateFor(context);
     threads.assertCurrentConversation(state, context.colleague?.conversationId);
     if (context.colleague?.userKey && context.colleague.userKey !== state.userKey) {

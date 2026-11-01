@@ -33,7 +33,7 @@ function createColleagueTurns({
   conversations,
   worker
 }) {
-  async function read(input = {}, context = {}) {
+  async function read(input, context) {
     const state = await threads.stateFor(context);
     state.requestContext = context;
     worker.scheduleWatches(state);
