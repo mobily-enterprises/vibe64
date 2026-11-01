@@ -609,7 +609,7 @@ component through the project's Preview locator, or `null`.
 under Architecture inspection as that inspection reads it (a regular project
 `.js` file of at most 64 KiB, no symlinks) and parses it without running it. The
 proxy inlines it as its own classic script, which defines
-`globalThis.__vibe64LocateElement(element) → { file, name? } | null`; any
+`globalThis.__jskitLocateElement(element) → { file, name? } | null`; any
 failure only leaves Pick without component information. The editor turns the
 file into a source-relative path, finds that file's component (or page) usage
 entry and emits `open-usage` for Usage › Calls there.

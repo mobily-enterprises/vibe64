@@ -74,7 +74,7 @@ document.getElementById("add").addEventListener("click", async () => {
 });
 </script>
 </body></html>`;
-const LOCATOR = `globalThis.__vibe64LocateElement = (element) => {
+const LOCATOR = `globalThis.__jskitLocateElement = (element) => {
   const host = element && element.closest ? element.closest("[data-component]") : null;
   const file = host ? host.getAttribute("data-component") : "";
   return file ? { file: ${JSON.stringify(`${sourcePath}/`)} + file, name: file.split("/").pop().replace(/\\.vue$/u, "") } : null;

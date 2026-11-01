@@ -8,7 +8,7 @@ import { readPreviewLocatorSource } from "../../packages/vibe64-terminals/src/se
 
 // The locator the Preview bridge inlines: read only as Architecture inspection
 // declares it, parsed but never run, and "" whenever it cannot be used.
-const LOCATOR = "globalThis.__vibe64LocateElement = (element) => element ? { file: \"src/App.vue\" } : null;\n";
+const LOCATOR = "globalThis.__jskitLocateElement = (element) => element ? { file: \"src/App.vue\" } : null;\n";
 
 async function sessionProject(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-locator-"));
@@ -90,7 +90,7 @@ test("path escape, symlinks, size, extension and unparsable scripts are refused"
   await project.write("locator.ts", LOCATOR);
   await mkdir(path.join(project.sourceRoot, "folder.js"));
   await project.write("module.js", "export default function locate() { return null; }\n");
-  await project.write("broken.js", "globalThis.__vibe64LocateElement = (element => {\n");
+  await project.write("broken.js", "globalThis.__jskitLocateElement = (element => {\n");
 
   const read = (locatorPath) => readPreviewLocatorSource(project.session, { inspect: declaring(locatorPath) });
   assert.equal(await read("locator.js"), LOCATOR);

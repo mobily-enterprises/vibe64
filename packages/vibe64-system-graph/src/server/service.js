@@ -167,7 +167,7 @@ async function inspectorCacheDirectory(current, realSourceRoot, inspector) {
 
 function architectureInspectionRequest(architecture, inspection, cacheDirectory = "") {
   const request = `${JSON.stringify({
-    schema: "vibe64.architecture-inspection-input.v1",
+    schema: "jskit.architecture-inspection-input.v1",
     files: architecture.files.map(file => ({ path: file.path, hash: file.hash })),
     packages: (architecture.packages || []).map(({ id, name, manifest, declarations, root, opaque, entryPoints }) => ({
       id, name, manifest, declarations, root, opaque,

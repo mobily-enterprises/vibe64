@@ -10,7 +10,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 // The Preview locator is a technology-owned script, declared per inspector in
 // `## Architecture inspection` as `- Preview locator:`, that the Preview bridge
 // runs to map an element to its component file. It is a classic script (no
-// import or export) that defines globalThis.__vibe64LocateElement(element) →
+// import or export) that defines globalThis.__jskitLocateElement(element) →
 // { file, name? } | null and reads no text or values.
 //
 // readPreviewLocatorSource(session) → Promise<string>: the first declared

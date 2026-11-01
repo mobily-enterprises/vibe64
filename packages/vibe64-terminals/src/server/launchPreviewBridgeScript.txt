@@ -395,8 +395,8 @@
   // The project's locator maps an element to the component the dev build names.
   function locateComponent(element) {
     try {
-      const located = typeof globalThis.__vibe64LocateElement === "function"
-        ? globalThis.__vibe64LocateElement(element)
+      const located = typeof globalThis.__jskitLocateElement === "function"
+        ? globalThis.__jskitLocateElement(element)
         : null;
       const file = typeof located?.file === "string" ? located.file.trim().slice(0, 1024) : "";
       const name = typeof located?.name === "string" ? located.name.trim().slice(0, 80) : "";

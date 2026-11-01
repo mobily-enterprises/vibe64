@@ -162,7 +162,7 @@ function bridgePage({ locatorSource = "", parentOrigins = [EDITOR_ORIGIN], recor
 }
 
 const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
-const locator = `globalThis.__vibe64LocateElement = (element) => {
+const locator = `globalThis.__jskitLocateElement = (element) => {
   for (let node = element; node; node = node.parentNode) {
     if (node.vueFile) return { file: node.vueFile, name: node.vueName };
   }
@@ -401,12 +401,12 @@ test("labels use role or tag and a visible label, never values, and a password f
 
 test("the locator runs as its own script, cannot close the bridge's element, and a broken one leaves the bridge working", () => {
   const html = injectLaunchPreviewBridge("<head></head>", {
-    locatorSource: "globalThis.__vibe64LocateElement = () => ({ file: \"</script><script>alert(1)</script>\" }); // <!-- x",
+    locatorSource: "globalThis.__jskitLocateElement = () => ({ file: \"</script><script>alert(1)</script>\" }); // <!-- x",
     parentOrigins: [EDITOR_ORIGIN]
   });
   assert.equal(html.match(/<\/script>/giu).length, 2, "only the bridge and locator elements close");
   assert.doesNotMatch(html, /<!--/u);
-  const page = bridgePage({ locatorSource: "globalThis.__vibe64LocateElement = () => ({ file: \"</SCRIPT>\" });" });
+  const page = bridgePage({ locatorSource: "globalThis.__jskitLocateElement = () => ({ file: \"</SCRIPT>\" });" });
   const button = el("button", {}, ["Go"]);
   page.body.append(button);
   page.post({ type: PREVIEW_PICK_START_MESSAGE_TYPE });

@@ -427,7 +427,7 @@ test('configured architecture inspection uses managed execution and publishes on
         assert.equal(input.cwd, root); assert.deepEqual(input.allowedRoots, [root]); assert.equal(input.command, 'node'); assert.deepEqual(input.args, ['inspect.mjs']);
         assert.deepEqual(input.runtimes, ['fixture-node']); assert.equal(input.timeout, 1000); assert.equal(input.maxBuffer, 4096); assert.ok(input.signal instanceof AbortSignal);
         const request = JSON.parse(input.input);
-        assert.equal(request.schema, 'vibe64.architecture-inspection-input.v1'); assert.deepEqual(request.files, [{ path: 'src/catalog.js', hash: 'catalog-hash' }]);
+        assert.equal(request.schema, 'jskit.architecture-inspection-input.v1'); assert.deepEqual(request.files, [{ path: 'src/catalog.js', hash: 'catalog-hash' }]);
         assert.equal(Object.hasOwn(request, 'cacheDirectory'), false, 'without a session folder the inspector runs cold');
         return { ok: true, stdout: JSON.stringify(emptyObservations()) };
       }
