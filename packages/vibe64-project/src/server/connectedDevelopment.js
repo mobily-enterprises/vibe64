@@ -33,8 +33,10 @@ function connectedPackageType(connection, inspection) {
   return type;
 }
 
-// The caller holds the originating session/source admission and supplies only
-// freshly authorized receiving sessions. This projection grants no access.
+/**
+ * The caller holds the originating session/source admission and supplies only
+ * freshly authorized receiving sessions. This projection grants no access.
+ */
 async function readConnectedDevelopmentInputs({ session, projects, inspection, env,
   runCommand = runVibe64Command } = {}) {
   const sourceRoot = sessionSourcePath(session);
@@ -70,8 +72,10 @@ async function readConnectedDevelopmentInputs({ session, projects, inspection, e
     result: { sourcesFile: relativePath, recipeHash: inspection.recipeHash, status: "inputs-prepared" } };
 }
 
-// Reading a projection never grants access to its paths. Execution separately
-// resolves each receiving session through the original authenticated action.
+/**
+ * Reading a projection never grants access to its paths. Execution separately
+ * resolves each receiving session through the original authenticated action.
+ */
 async function readConnectedSourceProjection({ sourceRoot, sessionId, relativePath, env,
   runCommand = runVibe64Command }) {
   if (typeof relativePath !== "string" || !relativePath || path.isAbsolute(relativePath) || relativePath.includes("\\") ||

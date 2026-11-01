@@ -187,7 +187,9 @@ const VIBE64_INTERACTIVE_RUNTIME_PACKS = Object.freeze([
   "playwright"
 ]);
 
-// "" when the host has no packs: commands then come from the person's PATH.
+/**
+ * "" when the host has no packs: commands then come from the person's PATH.
+ */
 function runtimePackRoot({ root = "" } = {}) {
   return normalizeAbsolutePath(root || vibe64Host().runtimePackRoot);
 }

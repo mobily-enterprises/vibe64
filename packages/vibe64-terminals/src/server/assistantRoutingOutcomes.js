@@ -42,7 +42,9 @@ function createAssistantRoutingOutcomes({
   publish,
   onPlanCompleted
 }) {
-  // The active agent declares an outcome; this does not dispatch while its turn runs.
+  /**
+   * The active agent declares an outcome; this does not dispatch while its turn runs.
+   */
   async function recordOutcome(sessionId, input, options) {
     return exclusive(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);

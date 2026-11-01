@@ -72,7 +72,9 @@ function createSessionRepositoryReads({ project, terminals }) {
       }), "Incoming changes could not be read. Refresh before acting.");
     },
 
-    // A review reads the same contributions with their diffs.
+    /**
+     * A review reads the same contributions with their diffs.
+     */
     async reviewIncomingContribution(sessionId, input) {
       return reads.inspectIncomingContributions(sessionId, { ...input, includeDiff: true });
     },

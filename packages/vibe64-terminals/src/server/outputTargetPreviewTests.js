@@ -17,8 +17,10 @@ import {
 /** @typedef {ReturnType<typeof import("./outputTargetLaunchStart.js").createOutputTargetLaunchStart>} OutputTargetLaunchStart */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
-// A test run's own start of its target, and its state observer, when the
-// caller passes none.
+/**
+ * A test run's own start of its target, and its state observer, when the
+ * caller passes none.
+ */
 const startTargetNow = (start) => start();
 const ignoreTestRunState = () => {};
 

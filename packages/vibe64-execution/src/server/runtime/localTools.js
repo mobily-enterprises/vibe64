@@ -82,8 +82,10 @@ function localToolFamily({ platform = process.platform, aptGet = false } = {}) {
   return aptGet ? "apt" : "";
 }
 
-// Commands run with the system folders after the person's PATH, so apt-get is
-// looked up the same way.
+/**
+ * Commands run with the system folders after the person's PATH, so apt-get is
+ * looked up the same way.
+ */
 function aptGetOnPath(env = process.env, systemPath = DEFAULT_SYSTEM_PATH) {
   return [...String(env.PATH || "").split(path.delimiter), ...String(systemPath || "").split(path.delimiter)]
     .some((directory) => path.isAbsolute(directory) && existsSync(path.join(directory, "apt-get")));

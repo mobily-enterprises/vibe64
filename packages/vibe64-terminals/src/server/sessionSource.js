@@ -341,15 +341,17 @@ async function resolveExpectedSourceCommit({
   return resolved;
 }
 
-// The clone leaves a local copy of the branch it cloned. Nothing advances that
-// copy, so it soon trails the authority and misleads people and assistants in
-// the session; session work, Save and Update use the session branch, recorded
-// commits and explicit remote refs instead. Git proves the copy can go only
-// when HEAD is the session branch and every commit on it is also on
-// origin/<branch> or the recorded baseline: then this returns its objectId.
-// Otherwise the outcome says why it stays. Source creation and the one-time
-// upgrade of existing sessions both decide with this proof; git runs one Git
-// command in the session source, and a Git failure throws.
+/**
+ * The clone leaves a local copy of the branch it cloned. Nothing advances that
+ * copy, so it soon trails the authority and misleads people and assistants in
+ * the session; session work, Save and Update use the session branch, recorded
+ * commits and explicit remote refs instead. Git proves the copy can go only
+ * when HEAD is the session branch and every commit on it is also on
+ * origin/<branch> or the recorded baseline: then this returns its objectId.
+ * Otherwise the outcome says why it stays. Source creation and the one-time
+ * upgrade of existing sessions both decide with this proof; git runs one Git
+ * command in the session source, and a Git failure throws.
+ */
 async function clonedDefaultBranchProof(git, {
   baselineCommit = "",
   clonedBranch = "",
@@ -373,15 +375,19 @@ async function clonedDefaultBranchProof(git, {
   return { objectId: refs.get(localRef) };
 }
 
-// -d makes Git refuse again unless the copy is merged into its upstream (or
-// HEAD); it also removes the copy's branch.<name>.* configuration.
+/**
+ * -d makes Git refuse again unless the copy is merged into its upstream (or
+ * HEAD); it also removes the copy's branch.<name>.* configuration.
+ */
 function deleteClonedDefaultBranch(git, clonedBranch = "") {
   return git(["branch", "-d", "--", clonedBranch]);
 }
 
-// The new clone is not attached yet, so nothing else moves its refs. This is
-// local-only and best effort: a failed step leaves the copy, as before, rather
-// than blocking a source that could then not be created again.
+/**
+ * The new clone is not attached yet, so nothing else moves its refs. This is
+ * local-only and best effort: a failed step leaves the copy, as before, rather
+ * than blocking a source that could then not be created again.
+ */
 async function removeClonedDefaultBranch({
   allowedRoots = [],
   baselineCommit = "",

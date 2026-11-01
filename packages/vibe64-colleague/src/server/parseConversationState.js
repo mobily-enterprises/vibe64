@@ -1,5 +1,7 @@
-// A saved Colleague conversation state as an object, or an error that never
-// repeats its private contents.
+/**
+ * A saved Colleague conversation state as an object, or an error that never
+ * repeats its private contents.
+ */
 function parseConversationState(source) {
   try {
     const value = JSON.parse(source);

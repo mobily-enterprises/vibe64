@@ -29,8 +29,10 @@ const CODEX_STATE_METADATA_NAMES = Object.freeze([
   "agent_identity_workdir"
 ]);
 
-// Presentation of an admitted native descriptor is separate from source access.
-// Starting/reacquiring execution still validates the active root through Runtime.
+/**
+ * Presentation of an admitted native descriptor is separate from source access.
+ * Starting/reacquiring execution still validates the active root through Runtime.
+ */
 function nativeStateWorkdir(session) {
   return session?.purpose === "learning" ? session.nativeExecutionRoot || "" : sessionSourcePath(session);
 }

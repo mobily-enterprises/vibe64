@@ -21,8 +21,10 @@ function learningGuidanceSummary(evidence) {
   return `Watching: you are in ${pane}${workspace.ready === false ? " (still loading)" : ""}.`;
 }
 
-// Recognizes only a delivered guidance wake: its server-owned message ID and
-// the exact heading this module writes. Returns null for every other message.
+/**
+ * Recognizes only a delivered guidance wake: its server-owned message ID and
+ * the exact heading this module writes. Returns null for every other message.
+ */
 function learningGuidancePresentation(message) {
   if (message?.role !== "user" || !String(message.messageId || "").startsWith(LEARNING_GUIDANCE_MESSAGE_PREFIX)) return null;
   const lines = String(message.text || "").split("\n");

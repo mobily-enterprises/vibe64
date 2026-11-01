@@ -4,7 +4,9 @@ export const ERD_ROW_HEIGHT = 28;
 export const ERD_FOOTER_HEIGHT = 28;
 export const ERD_LAYOUT_MAX_BYTES = 4 * 1024 * 1024;
 
-// The browser and agent inspection use the same table rectangles and field ports.
+/**
+ * The browser and agent inspection use the same table rectangles and field ports.
+ */
 export function createErdNodes(schema, layout) {
   const records = new Map((layout.nodes || []).map((node) => [node.table, node]));
   const nodes = (schema.tables || []).map((table) => {
@@ -93,8 +95,10 @@ export function erdSearch(tables = [], search = "") {
   ]).slice(0, 40);
 }
 
-// A bounded, deterministic modularity pass finds neighbourhoods without letting
-// a shared users table pull the entire database into one very tall layer.
+/**
+ * A bounded, deterministic modularity pass finds neighbourhoods without letting
+ * a shared users table pull the entire database into one very tall layer.
+ */
 export function erdLayoutGroups(nodes, relationships) {
   const ids = new Set(nodes.map((node) => node.id));
   const neighbours = new Map(nodes.map((node) => [node.id, []]));

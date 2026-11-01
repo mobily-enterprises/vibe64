@@ -7,13 +7,17 @@ import { passthroughEnvironment } from "../stages.js";
 
 const run = promisify(execFile);
 
-// The package's declared Prepare then Build argv, run in its Workdir.
+/**
+ * The package's declared Prepare then Build argv, run in its Workdir.
+ */
 function recipeSteps(entry, packageRoot) {
   return [...entry.prepare, ...entry.build].map((step) => ({ label: step.label, argv: [...step.argv], cwd: packageRoot }));
 }
 
-// The declared build Environment, plus SOURCE_DATE_EPOCH (the saved commit's time)
-// so tools that honour it write reproducible archives.
+/**
+ * The declared build Environment, plus SOURCE_DATE_EPOCH (the saved commit's time)
+ * so tools that honour it write reproducible archives.
+ */
 function sourceDateEnvironment(entry, commitTime) {
   const environment = entry.environment.map((item) => ({ ...item }));
   if (commitTime !== null && commitTime !== undefined && !environment.some((item) => item.name === "SOURCE_DATE_EPOCH")) {
@@ -23,7 +27,9 @@ function sourceDateEnvironment(entry, commitTime) {
   return environment;
 }
 
-// A tool's version for the plan's toolchain record, or "missing".
+/**
+ * A tool's version for the plan's toolchain record, or "missing".
+ */
 async function toolVersion(argv, baseEnvironment = process.env) {
   try {
     const { stdout, stderr } = await run(argv[0], argv.slice(1), { env: passthroughEnvironment(baseEnvironment), timeout: 30_000 });

@@ -1,5 +1,7 @@
-// This client uses the existing session control socket and identity. Plan writes
-// stay in the server owner, where the admitted model role is available.
+/**
+ * This client uses the existing session control socket and identity. Plan writes
+ * stay in the server owner, where the admitted model role is available.
+ */
 function planCommandSource(controlEnvironmentName) {
   return `#!/usr/bin/env node
 import http from "node:http";

@@ -27,9 +27,11 @@ function nextStep(operation, record) {
   return `Choose Fix it with AI on the ${notice}, or fix the cause and ${operation === "update" ? "update" : "save"} again.`;
 }
 
-// `operation` and `updateOperation` are the session's stored Save and Update
-// records, as session work inspection returns them. When both failed, the
-// later failure is the one shown.
+/**
+ * `operation` and `updateOperation` are the session's stored Save and Update
+ * records, as session work inspection returns them. When both failed, the
+ * later failure is the one shown.
+ */
 function sessionWorkProblem({ operation = null, updateOperation = null } = {}) {
   const save = failed(operation) && trimmedText(operation.code) !== SAVE_UPDATE_REQUIRED_CODE ? operation : null;
   const update = failed(updateOperation) ? updateOperation : null;

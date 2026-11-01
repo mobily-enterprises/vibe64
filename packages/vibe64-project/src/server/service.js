@@ -169,8 +169,10 @@ function createService({
     return developmentDatabase.currentDevelopmentDatabasePolicy(input);
   }
 
-  // Every learner's practice project slug. Practice projects live in the
-  // learning space, outside the catalogue that listProjects reads.
+  /**
+   * Every learner's practice project slug. Practice projects live in the
+   * learning space, outside the catalogue that listProjects reads.
+   */
   async function listPracticeProjectSlugs() {
     // readable-check: allow method-probe - optional operation: a project context without a learning space lists no practice projects
     if (typeof projectContext.listLearningSpaceProjects !== "function") return [];
@@ -194,7 +196,9 @@ function createService({
     return selection.currentProjectState();
   }
 
-  // The current project's slug without listing projects, for hot paths.
+  /**
+   * The current project's slug without listing projects, for hot paths.
+   */
   function currentProjectSlug() {
     return selection.currentProjectSlug();
   }

@@ -188,9 +188,11 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
         const requireExclusive = () => {
           if (!available || publishing) throw new Error("Archived artifact publication is outside its exclusive operation.");
         };
-        // Each change inside this extraction publishes at once. A failed one
-        // leaves it unavailable, so a retry never publishes a partly modified
-        // extraction.
+        /**
+         * Each change inside this extraction publishes at once. A failed one
+         * leaves it unavailable, so a retry never publishes a partly modified
+         * extraction.
+         */
         const change = async (work) => {
           requireExclusive();
           publishing = true;

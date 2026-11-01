@@ -109,8 +109,10 @@ const Vibe64TrainingProvider = defineFeature({
     // Version 2 step results; the action layer supplies the action executor.
     const steps = createTrainingStepChecks({ learners, content, checks, authorship: codeAuthorship, actions: actionCatalogue,
       evidence: createTrainingStepEvidence({ project, actions: actionCatalogue }), reviewer: createTrainingStepReviewer({ learners, terminals }) });
-    // A browser-supplied actor is never local authority. Retain the original
-    // transport check without a host's signed-in-user alternative.
+    /**
+     * A browser-supplied actor is never local authority. Retain the original
+     * transport check without a host's signed-in-user alternative.
+     */
     const localActor = request => {
       if (!request || !isLocalStudioRequest(Object.assign(Object.create(request), { vibe64User: null }))) return null;
       const actor = currentOsUser();

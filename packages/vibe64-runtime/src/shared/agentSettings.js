@@ -128,8 +128,10 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
   })
 ]);
 
-// The provider an engine id names, or null. Unlike agentProviderDefinition it
-// neither defaults an empty id nor throws, so a UI can branch on it directly.
+/**
+ * The provider an engine id names, or null. Unlike agentProviderDefinition it
+ * neither defaults an empty id nor throws, so a UI can branch on it directly.
+ */
 function findVibe64AgentProvider(engineId = "") {
   const normalizedEngineId = normalizeAgentSettingText(engineId);
   return VIBE64_AGENT_PROVIDERS.find((candidate) => candidate.id === normalizedEngineId) || null;

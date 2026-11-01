@@ -9,8 +9,10 @@ const BASE_SOURCE_EDITOR_EXCLUDE_PATTERNS = Object.freeze([
   ".git/**"
 ]);
 
-// The one source-editor path policy. The tree, file finder, reads, writes and
-// the content-search worker all decide exclusion through sourceEditorPathExcluded.
+/**
+ * The one source-editor path policy. The tree, file finder, reads, writes and
+ * the content-search worker all decide exclusion through sourceEditorPathExcluded.
+ */
 function normalizePolicyPath(value = "") {
   return String(value ?? "")
     .trim()
@@ -69,8 +71,10 @@ function pathMatchesPolicyPattern(relativePath = "", pattern = "") {
   return wildcardPattern(normalizedPattern).test(normalizedPath);
 }
 
-// Protected names also match in any letter case: a case-insensitive
-// filesystem opens `.GIT/hooks` as `.git/hooks`.
+/**
+ * Protected names also match in any letter case: a case-insensitive
+ * filesystem opens `.GIT/hooks` as `.git/hooks`.
+ */
 function sourceEditorPathExcluded(policy = {}, relativePath = "") {
   const spellings = [relativePath, String(relativePath ?? "").toLowerCase()];
   if (policy.protectSourceContract !== false && spellings.some(sourceEditorSourceContractPathExcluded)) {

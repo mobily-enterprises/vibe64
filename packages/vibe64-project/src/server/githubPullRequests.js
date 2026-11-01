@@ -208,7 +208,9 @@ export async function githubPullRequests(project, input = {}, options = {}) {
   return { ok: true, message: `Merged into ${review.baseBranch}. Archive your session when you have finished with it.` };
 }
 
-// Only the server-resolved PR supplies the session's repository authority.
+/**
+ * Only the server-resolved PR supplies the session's repository authority.
+ */
 export function pullRequestSessionSource(pullRequest) {
   if (pullRequest.unavailableReason) {
     throw vibe64Error(pullRequest.unavailableReason, "vibe64_pull_request_unavailable");

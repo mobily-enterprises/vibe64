@@ -48,8 +48,10 @@ async function atomicCopy(source, destination) {
   } finally { await rm(temporary, { force: true }); }
 }
 
-// A single upgrade-owned manifest retains both sides of every file replacement.
-// This is intentionally separate from the general runner's lock and ledger.
+/**
+ * A single upgrade-owned manifest retains both sides of every file replacement.
+ * This is intentionally separate from the general runner's lock and ledger.
+ */
 export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates }) {
   const manifestPath = path.join(backupRoot, "manifest.json");
   await verifyUpgradeParents(systemRoot, manifestPath);

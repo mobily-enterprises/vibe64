@@ -31,8 +31,10 @@ function requireResult(result, failure) {
   return result;
 }
 
-// Invoke the step's declared exercise response check for one learner-origin
-// App interaction in the exact ready App run.
+/**
+ * Invoke the step's declared exercise response check for one learner-origin
+ * App interaction in the exact ready App run.
+ */
 async function runExerciseResponseCheck({ actions, checks, context, actor, target,
   attemptId, observationId, exercise, checkId, stepId }) {
   // readable-check: allow method-probe - optional operation: an installation without exercise checks answers CHECK_UNDECLARED
@@ -53,8 +55,10 @@ async function runExerciseResponseCheck({ actions, checks, context, actor, targe
   return checked;
 }
 
-// Invoke the step's declared code check and accept only its bounded
-// authorship-qualified result.
+/**
+ * Invoke the step's declared code check and accept only its bounded
+ * authorship-qualified result.
+ */
 async function runCodeCheckObservation({ checks, context, actor, attemptId, sessionId, observationId, checkId, stepId }) {
   // readable-check: allow method-probe - optional operation: an installation without code checks answers CHECK_UNDECLARED
   if (typeof checks?.runCodeCheck !== "function") {
@@ -69,10 +73,12 @@ async function runCodeCheckObservation({ checks, context, actor, attemptId, sess
   return checked;
 }
 
-// The learner's own browser reaches Learning only through the api channel;
-// Colleague's tools run on the automation channel and every server-side
-// re-entry on internal. The origin is derived here from the admitted action
-// context, never from caller input.
+/**
+ * The learner's own browser reaches Learning only through the api channel;
+ * Colleague's tools run on the automation channel and every server-side
+ * re-entry on internal. The origin is derived here from the admitted action
+ * context, never from caller input.
+ */
 function stepCheckTrigger(context) {
   return context?.channel === "api" ? "learner" : "assistant";
 }
@@ -147,11 +153,13 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       ...(result.review ? { review: structuredClone(result.review) } : {}) };
   }
 
-  // Append-only. A request ID replays its original result; a step that already
-  // passed in this attempt keeps that pass and records nothing further.
-  // Capacity for one pass of every step not yet passed is always
-  // reserved: a not-yet-passed result that would eat into it is returned but
-  // not saved, so retries never block the learner's real pass.
+  /**
+   * Append-only. A request ID replays its original result; a step that already
+   * passed in this attempt keeps that pass and records nothing further.
+   * Capacity for one pass of every step not yet passed is always
+   * reserved: a not-yet-passed result that would eat into it is returned but
+   * not saved, so retries never block the learner's real pass.
+   */
   async function record({ actor, attemptId, requestId, result, receipt, same, lesson }) {
     const checkable = (lessonSteps(lesson) || []).map(step => step.id);
     const { value } = await learners.updateStepProgress({ actor, attemptId }, async entry => {
@@ -178,12 +186,16 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     return value;
   }
 
-  // A saved reason is one bounded line; check output never adds control characters.
+  /**
+   * A saved reason is one bounded line; check output never adds control characters.
+   */
   // eslint-disable-next-line no-control-regex -- Deliberately replace control characters in check output.
   const boundedReason = reason => String(reason ?? "").replace(/[\u0000-\u001f\u007f]+/gu, " ").trim().slice(0, 256) || undefined;
 
-  // Browser only: the learner pressed the App's own control in visible Preview.
-  // The receipt is learner-origin evidence; its declared check decides at once.
+  /**
+   * Browser only: the learner pressed the App's own control in visible Preview.
+   * The receipt is learner-origin evidence; its declared check decides at once.
+   */
   async function observe({ actor, attemptId, stepId, observation, context = {} } = {}) {
     requireLearnerChannel(context, "record an App interaction");
     if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
@@ -212,8 +224,10 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       receipt: { stepId, checkId: check.id, observationId, ...input.exercise, sessionId: target.sessionId, observedAt: new Date().toISOString() } });
   }
 
-  // A fact check: its registered reader answers for this learner (and the
-  // attempt's practice project). Recorded like an automatic result.
+  /**
+   * A fact check: its registered reader answers for this learner (and the
+   * attempt's practice project). Recorded like an automatic result.
+   */
   async function runFactCheck({ actor, attempt, lesson, step, requestId, trigger, context }) {
     const previous = (await savedEntry(actor, attempt)).results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, step.id);
@@ -228,9 +242,11 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       result: { stepId: step.id, kind: "fact", outcome, evidence: { fact: step.check.fact }, origin: "check", ...(reason ? { reason } : {}) } });
   }
 
-  // Runs the step's declared check. The trigger is derived from the admitted
-  // action channel: the learner's own browser press, or anything else
-  // (Colleague included), which only ever gets a diagnostic.
+  /**
+   * Runs the step's declared check. The trigger is derived from the admitted
+   * action channel: the learner's own browser press, or anything else
+   * (Colleague included), which only ever gets a diagnostic.
+   */
   async function runCheck({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     const trigger = stepCheckTrigger(context);
     if (!requestPattern.test(requestId || "")) {
@@ -274,8 +290,10 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       result: { stepId, kind: "auto", outcome, evidence: checkEvidence, origin: "check", ...(reason ? { reason } : {}) } });
   }
 
-  // The server comparator: the only reader of a choice step's answer, which
-  // never appears in readLesson (contract C1).
+  /**
+   * The server comparator: the only reader of a choice step's answer, which
+   * never appears in readLesson (contract C1).
+   */
   async function answer({ actor, attemptId, stepId, selected, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "answer a question");
     if (!requestPattern.test(requestId || "")) throw stepFailure("Answer with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
@@ -298,9 +316,11 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       result: { stepId, kind: "choice", outcome, evidence: { selected: chosen }, origin: "learner" } });
   }
 
-  // The learner's own self-check, or their "read" mark on a reading step
-  // (check "none"): a learner-origin pass. Automatic and choice steps are
-  // proven only by their checks.
+  /**
+   * The learner's own self-check, or their "read" mark on a reading step
+   * (check "none"): a learner-origin pass. Automatic and choice steps are
+   * proven only by their checks.
+   */
   async function done({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "mark a step done");
     if (!requestPattern.test(requestId || "")) throw stepFailure("Mark a step done with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
@@ -319,14 +339,18 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     return evidence;
   }
 
-  // The step's review evidence: changes always, the coding conversation only
-  // when the step's review declares it.
+  /**
+   * The step's review evidence: changes always, the coding conversation only
+   * when the step's review declares it.
+   */
   const reviewsConversation = step => step.check?.kind === "review" && (step.check.evidence || []).includes("conversation");
 
-  // Browser only: the learner's "Check my work". Their own AI reviews the
-  // practice work against the step's rubric. Nothing runs while the coding
-  // agent works or when there is nothing to review; the same evidence returns
-  // its saved review without asking again; a failed review records nothing.
+  /**
+   * Browser only: the learner's "Check my work". Their own AI reviews the
+   * practice work against the step's rubric. Nothing runs while the coding
+   * agent works or when there is nothing to review; the same evidence returns
+   * its saved review without asking again; a failed review records nothing.
+   */
   async function review({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "ask for a review of your work");
     if (!requestPattern.test(requestId || "")) throw stepFailure("Ask for a review with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
@@ -360,8 +384,10 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     return saved.alreadyPassed ? saved : { ...saved, review: structuredClone(feedback) };
   }
 
-  // Read-only, for Colleague's "I'm stuck" help: the same bounded evidence a
-  // review reads, and the step's last saved review. It never passes a step.
+  /**
+   * Read-only, for Colleague's "I'm stuck" help: the same bounded evidence a
+   * review reads, and the step's last saved review. It never passes a step.
+   */
   async function readEvidence({ actor, attemptId, stepId, context = {} } = {}) {
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     if (!lesson.lesson.exercise) throw stepFailure("This lesson has no practice project to read.", "VIBE64_TRAINING_CHECK_UNDECLARED");
@@ -373,8 +399,10 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       lastReview: last ? { outcome: last.outcome, recordedAt: last.recordedAt, ...structuredClone(last.review) } : null };
   }
 
-  // The saved step results of this attempt and the steps passed in them (which
-  // is what completion counts). An ended attempt's results went with it.
+  /**
+   * The saved step results of this attempt and the steps passed in them (which
+   * is what completion counts). An ended attempt's results went with it.
+   */
   async function read({ actor, attemptId } = {}) {
     if (!uuidPattern.test(attemptId || "")) throw stepFailure("Use an exact saved attempt ID.", "ACTION_VALIDATION_FAILED", 400);
     const { entry, revision, attempt } = await learners.readStepProgress({ actor, attemptId });
@@ -390,16 +418,20 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
         passed: required.filter(id => passed.has(id)).length, completed: required.every(id => passed.has(id)) } };
   }
 
-  // Entering a code step records its authorship baseline once; every later
-  // entry keeps it. Other steps, ended attempts and absent practice record none.
+  /**
+   * Entering a code step records its authorship baseline once; every later
+   * entry keeps it. Other steps, ended attempts and absent practice record none.
+   */
   async function enterStep({ actor, attemptId, stepId } = {}) {
     // readable-check: allow method-probe - optional operation: without code authorship a step records no baseline
     if (typeof authorship?.recordStepBaseline !== "function") return { recorded: false };
     return authorship.recordStepBaseline({ actor, attemptId, stepId });
   }
 
-  // Last write wins. The baseline is attempted after the position is saved; a
-  // baseline failure is reported without losing the position.
+  /**
+   * Last write wins. The baseline is attempted after the position is saved; a
+   * baseline failure is reported without losing the position.
+   */
   async function saveReader({ actor, attemptId, stepId, scroll } = {}) {
     const reader = await learners.saveReader({ actor, attemptId, stepId, scroll });
     let baseline;

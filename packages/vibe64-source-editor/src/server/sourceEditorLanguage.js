@@ -1,6 +1,8 @@
 import path from "node:path";
 
-// The editor language of a file, from its name.
+/**
+ * The editor language of a file, from its name.
+ */
 function sourceEditorLanguageForPath(filePath = "") {
   const basename = path.posix.basename(String(filePath || "")).toLowerCase();
   const extension = path.posix.extname(basename);

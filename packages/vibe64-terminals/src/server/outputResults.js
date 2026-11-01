@@ -359,8 +359,10 @@ function outputRunBytes(run = {}) {
     .reduce((total, result) => total + Math.max(0, Number(result?.size) || 0), 0);
 }
 
-// Splits newest-first runs into the newest ones within the retention bounds
-// and every older one, which is dropped.
+/**
+ * Splits newest-first runs into the newest ones within the retention bounds
+ * and every older one, which is dropped.
+ */
 function retainedOutputRuns(runs = []) {
   const kept = [];
   const dropped = [];

@@ -1,6 +1,8 @@
 import { createConversationStorage, prepareConversationRuntimeCopy } from "@jskit-ai/assistant-core/server/conversation";
 
-// The product record owns chat identities; JSKIT still owns every canonical turn.
+/**
+ * The product record owns chat identities; JSKIT still owns every canonical turn.
+ */
 export function validateColleagueConversationRecord(record, ownerKey) {
   const invalid = () => { throw new Error("Colleague history has an unsupported shape. Inspect it before upgrading."); };
   const chat = value => {

@@ -147,8 +147,10 @@ function createVibe64SessionsFeature() {
     if (!task) {
       task = createSessionRenewalRecoveryTask({
         logger,
-        // Startup has no request: recovery runs in the project this server
-        // holds, so its reads and session changes belong to that project.
+        /**
+         * Startup has no request: recovery runs in the project this server
+         * holds, so its reads and session changes belong to that project.
+         */
         recover: (options) => project.runInProjectContext(project.currentProjectSlug(),
           () => resumeInterruptedSessionWork(sessions, options))
       });

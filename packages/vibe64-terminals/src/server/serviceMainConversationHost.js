@@ -64,7 +64,9 @@ function createServiceMainConversationHost({
     const authority = context.browserAuthority;
     if (!authority) return true; // Existing, already-authorized manager callers.
     if (!actions || authority.sessionId !== conversationId) return false;
-    // Delayed publications retain CONTROL identity, never a cached access grant.
+    /**
+     * Delayed publications retain CONTROL identity, never a cached access grant.
+     */
     const readGrant = () => actions.execute({
       actionId: "vibe64.sessions.conversation.context.read",
       input: { projectSlug: authority.projectSlug, sessionId: conversationId },

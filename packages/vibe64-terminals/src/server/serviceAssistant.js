@@ -48,9 +48,11 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 
 
-// The runtime proved this message never reached the assistant. Say so in the
-// response, so the browser shows the failure instead of an uncertain receipt.
-// Only Vibe64's own coded failures keep their message; internal ones do not.
+/**
+ * The runtime proved this message never reached the assistant. Say so in the
+ * response, so the browser shows the failure instead of an uncertain receipt.
+ * Only Vibe64's own coded failures keep their message; internal ones do not.
+ */
 function notSentDeliveryError(error, messageId) {
   const delivery = { status: "not-sent", messageId };
   const status = Number(error.status || error.statusCode);
@@ -103,7 +105,9 @@ function createServiceAssistant({
   sessionNaming,
   sessionPromptHints
 }) {
-  // A temporary send refused before admission uses Main's definite rejection.
+  /**
+   * A temporary send refused before admission uses Main's definite rejection.
+   */
   async function startTemporaryConversationTurn(sessionId, input = {}, options = {}) {
     try {
       return await sessionConversations.startTemporaryConversationTurn(sessionId, input, options);
@@ -242,7 +246,9 @@ function createServiceAssistant({
     return sessionAgent.resolveExecutionProfile(sessionId, input, options);
   }
 
-  // Cancel of one unsent or unconfirmed Main message; it always succeeds.
+  /**
+   * Cancel of one unsent or unconfirmed Main message; it always succeeds.
+   */
   function cancelAgentMessage(sessionId, input = {}, options = {}) {
     return assistantRouting.cancelMessage(sessionId, { messageId: input.messageId }, options);
   }
@@ -486,7 +492,9 @@ function createServiceAssistant({
         browserProjectContext: captureProjectRequestContext() };
       const conversation = await mainConversations.open({ id: sessionId, context: current });
       completed = true;
-      // A cancelled message is never offered for recovery and has no other receipt.
+      /**
+       * A cancelled message is never offered for recovery and has no other receipt.
+       */
       return Object.freeze({ ...conversation, async read(...args) {
         const conversationState = await conversation.read(...args);
         if (!conversationState?.pendingRequest || !await assistantRouting.isCancelled(sessionId, conversationState.pendingRequest.messageId, current)) return conversationState;

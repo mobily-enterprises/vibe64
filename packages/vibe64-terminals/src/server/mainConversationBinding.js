@@ -58,20 +58,26 @@ function synchronousConversationHost(provider, sessionId, context, purpose, labe
   return host;
 }
 
-// Project cleanup has no conversation identity. This returns configured native
-// facilities synchronously; the shared owner retains its original preparation.
+/**
+ * Project cleanup has no conversation identity. This returns configured native
+ * facilities synchronously; the shared owner retains its original preparation.
+ */
 export function prepareProjectConversationCleanup(provider, context, input) {
   const host = synchronousConversationHost(provider, undefined, context, "projectCleanup", "Project cleanup");
   return { engine: provider.id, native: host.native, context, input };
 }
 
-// Account cleanup preserves the native owner's synchronous closing fence.
+/**
+ * Account cleanup preserves the native owner's synchronous closing fence.
+ */
 export function prepareConversationRuntimeInvalidation(provider, context, input) {
   const host = synchronousConversationHost(provider, undefined, context, "invalidation", "Runtime invalidation");
   return { engine: provider.id, native: host.native, context, input };
 }
 
-// Startup uses the same configured native owner without creating a Main binding.
+/**
+ * Startup uses the same configured native owner without creating a Main binding.
+ */
 export function prepareConversationReconciliation(provider, context, sessions, options) {
   const host = synchronousConversationHost(provider, undefined, context, "reconciliation", "Reconciliation");
   return { engine: provider.id, native: host.native, context, sessions, options };
@@ -82,8 +88,10 @@ export function prepareConversationSubscriptionReset(provider, context, sessions
   return { engine: provider.id, native: host.native, context, sessions };
 }
 
-// Explicit readiness prepares the selected host facilities without opening a
-// retained binding. Native readiness decisions belong to the common driver.
+/**
+ * Explicit readiness prepares the selected host facilities without opening a
+ * retained binding. Native readiness decisions belong to the common driver.
+ */
 export async function prepareSessionConversationReadiness(provider, sessionId, context) {
   const request = provider.prepareConversationRequest("ensureSession", context);
   const host = await provider.prepareConversationHost(sessionId, context, "readiness");
@@ -95,23 +103,29 @@ export async function prepareSessionConversationSettings(provider, sessionId, co
   return { sessionId, engine: provider.id, native: host.native, context };
 }
 
-// Creation has no retained native identity. The same admitted application owner
-// prepares its input and native facilities without constructing a Main binding.
+/**
+ * Creation has no retained native identity. The same admitted application owner
+ * prepares its input and native facilities without constructing a Main binding.
+ */
 export async function prepareSessionConversationCreation(provider, sessionId, context, input) {
   const request = provider.prepareConversationRequest("createConversation", context, input);
   const host = await provider.prepareConversationHost(sessionId, context, "create");
   return { sessionId, engine: provider.id, native: host.native, input: request.input, context: request.context };
 }
 
-// Activity reads the selected inventory without opening a retained conversation.
+/**
+ * Activity reads the selected inventory without opening a retained conversation.
+ */
 export async function prepareSessionConversationActivity(provider, sessionId, context) {
   const host = await provider.prepareConversationHost(sessionId, context, "activity");
   return { sessionId, engine: provider.id, native: host.native,
     context: Object.hasOwn(host, "context") ? host.context : context };
 }
 
-// Renewal proof cleanup uses its original trusted lifecycle authority. Facilities
-// are synchronous; native owners retain the close/release order and lazy reads.
+/**
+ * Renewal proof cleanup uses its original trusted lifecycle authority. Facilities
+ * are synchronous; native owners retain the close/release order and lazy reads.
+ */
 export function prepareSessionConversationRenewalProof(provider, sessionId, context, input, method) {
   const request = provider.prepareConversationRequest(method, context, input);
   const host = synchronousConversationHost(provider, sessionId, context, "renewalProof", "Renewal proof release");
@@ -120,43 +134,55 @@ export function prepareSessionConversationRenewalProof(provider, sessionId, cont
     input: Object.hasOwn(request, "input") ? request.input : input };
 }
 
-// Renewal supplies the original native owner without reading or opening a Main binding.
+/**
+ * Renewal supplies the original native owner without reading or opening a Main binding.
+ */
 export async function prepareSessionConversationRenewal(provider, sessionId, context, input) {
   const host = await provider.prepareConversationHost(sessionId, context, "renewal");
   return { sessionId, engine: provider.id, native: host.native, context, input };
 }
 
-// Uncached cleanup prepares resource ownership without opening a Main record.
+/**
+ * Uncached cleanup prepares resource ownership without opening a Main record.
+ */
 export async function prepareSessionConversationDisposal(provider, sessionId, context, options) {
   const host = await provider.prepareConversationHost(sessionId, context, "dispose");
   return { sessionId, namespace: host.namespace, engine: provider.id, native: host.native, context,
     options: Object.hasOwn(host, "cleanupOptions") ? host.cleanupOptions : options };
 }
 
-// Historical source records retain native IDs without the later scoped identity.
-// Keep the original provider request codec; no retained binding is constructed.
+/**
+ * Historical source records retain native IDs without the later scoped identity.
+ * Keep the original provider request codec; no retained binding is constructed.
+ */
 export async function prepareSessionDetachedConversationCleanup(provider, sessionId, context, input, method) {
   const request = provider.prepareConversationRequest(method, context, input);
   const host = await provider.prepareConversationHost(sessionId, context, "detachedCleanup");
   return { sessionId, engine: provider.id, native: host.native, input: request.input, context: request.context };
 }
 
-// Detached execution retains admitted context separately from the original
-// provider-specific native options, without opening a Main binding.
+/**
+ * Detached execution retains admitted context separately from the original
+ * provider-specific native options, without opening a Main binding.
+ */
 export async function prepareSessionDetachedConversationRun(provider, sessionId, context, input, options) {
   const host = await provider.prepareConversationHost(sessionId, context, "detached", input);
   return { sessionId, engine: provider.id, native: host.native, context, input, options };
 }
 
-// Storage authority and engine selection come from the saved binding, independently
-// of the current assistant. The caller retains preservation and writer exclusion.
+/**
+ * Storage authority and engine selection come from the saved binding, independently
+ * of the current assistant. The caller retains preservation and writer exclusion.
+ */
 export async function prepareSessionConversationStorage(provider, sessionId, context, binding) {
   const host = await provider.prepareConversationHost(sessionId, context, "storage");
   return { sessionId, engine: provider.id, native: host.native, binding, context };
 }
 
-// The provider contributes its existing native owner and historical state projection.
-// Application binding, admission and transcript ownership are assembled only here.
+/**
+ * The provider contributes its existing native owner and historical state projection.
+ * Application binding, admission and transcript ownership are assembled only here.
+ */
 export async function createSessionConversationBinding(provider, sessionId, options = {}) {
   const { prepareInput, ...openingContext } = options;
   const engine = provider.id;
@@ -184,9 +210,11 @@ export async function createSessionConversationBinding(provider, sessionId, opti
     } : prepareInput,
     ...(host.readContextUsage ? {
       async maximumHistoryBytes({ context, signal, input, handover, setPhase }) {
-        // Count UTF-8 bytes conservatively instead of assuming English text's
-        // usual characters/token ratio. Keep normal model settings unchanged.
-        // The window already ends at the native auto-compaction point.
+        /**
+         * Count UTF-8 bytes conservatively instead of assuming English text's
+         * usual characters/token ratio. Keep normal model settings unchanged.
+         * The window already ends at the native auto-compaction point.
+         */
         const room = async () => {
           const { usedTokens, windowTokens } = await host.readContextUsage({ context, signal, input });
           if (!Number.isSafeInteger(usedTokens) || usedTokens < 0 ||

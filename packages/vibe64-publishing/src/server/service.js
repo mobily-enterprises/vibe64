@@ -54,7 +54,9 @@ function publishingRoots(env = process.env) {
   };
 }
 
-// A result shape the routes and assistant contracts share.
+/**
+ * A result shape the routes and assistant contracts share.
+ */
 async function publishingResult(operation) {
   try {
     return { ok: true, ...await operation() };
@@ -68,8 +70,10 @@ async function publishingResult(operation) {
   }
 }
 
-// The Python publishing tools install through Vibe64's command gateway, with
-// the Python Vibe64 finds for project commands.
+/**
+ * The Python publishing tools install through Vibe64's command gateway, with
+ * the Python Vibe64 finds for project commands.
+ */
 async function installTool(toolchainsRoot, command, args, timeout, runCommand) {
   await mkdir(toolchainsRoot, { recursive: true });
   const result = await runCommand({
@@ -111,7 +115,9 @@ function createPublishingToolchains({ baseToolchains, pythonTools }) {
   });
 }
 
-// The packaging operations releases use, from @local/vibe64-packaging.
+/**
+ * The packaging operations releases use, from @local/vibe64-packaging.
+ */
 function createPublishingPackaging() {
   return Object.freeze({
     androidTemplate: CAPACITOR_SHELL_TEMPLATE,
@@ -264,8 +270,10 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     return { checks: await verification.status(baseline.commit) };
   });
 
-  // The release needs the saved work on the remote; the person pushes it from
-  // the Release dialog instead of hunting for the branch menu.
+  /**
+   * The release needs the saved work on the remote; the person pushes it from
+   * the Release dialog instead of hunting for the branch menu.
+   */
   const pushSavedWork = () => publishingResult(async () => {
     const baseline = await repository.baseline();
     if (!baseline.supported) throw publishingError(baseline.message, "vibe64_publishing_repository_unavailable");

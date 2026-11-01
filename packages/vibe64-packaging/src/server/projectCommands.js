@@ -49,7 +49,9 @@ function projectCommandRequest({ command, args = [], cwd, env = {}, signal = nul
   };
 }
 
-// Stage 1's runner: { command, args, cwd, env, signal } -> { ok, exitCode, stdout, stderr, error }.
+/**
+ * Stage 1's runner: { command, args, cwd, env, signal } -> { ok, exitCode, stdout, stderr, error }.
+ */
 async function runStageCommand({ command, args, cwd, env, signal, projectSlug } = {}, { runCommand = runVibe64Command } = {}) {
   const result = await runCommand(projectCommandRequest({ command, args, cwd, env, signal, projectSlug, operationId: "publish-build" }));
   return {
@@ -61,8 +63,10 @@ async function runStageCommand({ command, args, cwd, env, signal, projectSlug } 
   };
 }
 
-// A Genesis `processRunner` for checks on the saved commit: resolves on success,
-// throws with the command's output otherwise, as Genesis's own runner does.
+/**
+ * A Genesis `processRunner` for checks on the saved commit: resolves on success,
+ * throws with the command's output otherwise, as Genesis's own runner does.
+ */
 function checkCommandRunner({ projectSlug = "", runCommand = runVibe64Command } = {}) {
   return async (command, args, { cwd, env = {}, signal, timeoutMs, code = "VERIFICATION_FAILED" } = {}) => {
     const result = await runCommand(projectCommandRequest({ command, args, cwd, env, signal, projectSlug, operationId: "publish-check", timeout: timeoutMs }));

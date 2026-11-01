@@ -31,9 +31,11 @@ async function requireToolchains(toolchains = {}) {
   return { javaHome: jdk.javaHome, androidHome: sdk.androidHome };
 }
 
-// context: { sourceRoot, entry, content (its web-bundle entry), contentArtifacts
-// (that package's Stage 1 result), version, versionCode, toolchains: { javaHome,
-// androidHome }, cacheDirectory }.
+/**
+ * context: { sourceRoot, entry, content (its web-bundle entry), contentArtifacts
+ * (that package's Stage 1 result), version, versionCode, toolchains: { javaHome,
+ * androidHome }, cacheDirectory }.
+ */
 async function capacitorRecipe({
   sourceRoot,
   entry,

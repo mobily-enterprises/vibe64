@@ -64,7 +64,9 @@ async function run(argv, { cwd, home, failure, code = "VIBE64_PUBLISH_SIGN_FAILE
   return result;
 }
 
-// apksigner's own verdict and the signer's certificate digest.
+/**
+ * apksigner's own verdict and the signer's certificate digest.
+ */
 async function verifySigned(tools, apk, home) {
   const result = await run([...tools.apksigner, "verify", "--print-certs", "--min-sdk-version", "24", apk], {
     cwd: home,
@@ -77,7 +79,9 @@ async function verifySigned(tools, apk, home) {
   return digests[0];
 }
 
-// package name, versionCode, versionName and targetSdk from the APK's manifest.
+/**
+ * package name, versionCode, versionName and targetSdk from the APK's manifest.
+ */
 async function badging(tools, apk, home) {
   const { stdout } = await run([tools.aapt2, "dump", "badging", apk], { cwd: home, home, failure: "The APK's manifest could not be read." });
   const value = (pattern) => pattern.exec(stdout)?.[1] ?? null;
@@ -103,8 +107,10 @@ async function readProof(directory) {
   }
 }
 
-// Stage 3: the stored signed APK still has the recorded bytes, verifies, and was
-// made from exactly this build.
+/**
+ * Stage 3: the stored signed APK still has the recorded bytes, verifies, and was
+ * made from exactly this build.
+ */
 async function readBack({ target, artifacts, toolchains }) {
   const directory = publishedDirectory(artifacts, target);
   const proof = await readProof(directory);
@@ -136,8 +142,10 @@ async function readBack({ target, artifacts, toolchains }) {
   };
 }
 
-// Stage 2: zipalign (16 KB pages) and sign with apksigner, check the result,
-// then store the signed APK and its proof atomically.
+/**
+ * Stage 2: zipalign (16 KB pages) and sign with apksigner, check the result,
+ * then store the signed APK and its proof atomically.
+ */
 async function upload({ target, version, artifacts, credentials, toolchains }) {
   const { certificateSha256: expected, keyAlias } = sideloadSettings(target);
   const keystore = credentials?.files?.[KEYSTORE.id];
@@ -199,7 +207,9 @@ async function upload({ target, version, artifacts, credentials, toolchains }) {
   });
 }
 
-// Read-only: is it signed already, and does the key open and match?
+/**
+ * Read-only: is it signed already, and does the key open and match?
+ */
 async function dryRun({ target, version, artifacts, credentials, toolchains }) {
   const apk = unsignedApk(artifacts);
   const before = await readBack({ target, artifacts, toolchains });
@@ -213,7 +223,9 @@ async function dryRun({ target, version, artifacts, credentials, toolchains }) {
   };
 }
 
-// Opens the key store with its password and compares the key with the one phones trust.
+/**
+ * Opens the key store with its password and compares the key with the one phones trust.
+ */
 async function verifyCredential({ target, credentials, toolchains }) {
   const keystore = credentials?.files?.[KEYSTORE.id];
   const password = credentials?.files?.[KEY_PASSWORD.id];

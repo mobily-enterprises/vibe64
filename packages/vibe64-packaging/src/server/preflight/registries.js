@@ -56,7 +56,9 @@ const credentialsValid = definePreflightCheck({
 const REGISTRY_CHECKS = Object.freeze([releaseTagsFree, verificationPassed, credentialsValid]);
 const VIBE64_REGISTRY_PREFLIGHT_CHECKS = Object.freeze([...VIBE64_PREFLIGHT_CHECKS, ...REGISTRY_CHECKS]);
 
-// targets: the plan's targets with their settings; obtainCredential as for Stage 2.
+/**
+ * targets: the plan's targets with their settings; obtainCredential as for Stage 2.
+ */
 async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot, toolchains = {} } = {}) {
   const facts = {};
   for (const target of targets) {

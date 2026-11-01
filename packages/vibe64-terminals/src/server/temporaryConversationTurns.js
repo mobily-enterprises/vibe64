@@ -58,8 +58,10 @@ function createTemporaryConversationTurns({
     throw new TypeError("Temporary conversations require the assistant routing lock wait.");
   }
 
-  // All state transitions, including transcript reconciliation, use the existing
-  // session write coordinator so a late read cannot recreate a closed record.
+  /**
+   * All state transitions, including transcript reconciliation, use the existing
+   * session write coordinator so a late read cannot recreate a closed record.
+   */
   const write = (sessionId, options, operation) => runAgentWrite(sessionId, options, operation, {
     operation: "temporary-conversation",
     waitMs: options.lockWaitMs ?? 10_000,
@@ -167,8 +169,10 @@ function createTemporaryConversationTurns({
     }
   });
 
-  // Reuse the routing lifecycle with the temporary chat's existing metadata and
-  // transcript scope. Native providers continue to receive the actual store.
+  /**
+   * Reuse the routing lifecycle with the temporary chat's existing metadata and
+   * transcript scope. Native providers continue to receive the actual store.
+   */
   async function routingContext(ctx, conversationId, { cleanup = false } = {}) {
     const record = await chatRecords.recordFor(ctx, conversationId);
     if (record.state === "closing" && !cleanup) throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
@@ -178,8 +182,10 @@ function createTemporaryConversationTurns({
     const scope = { sessionId: ctx.session.sessionId, conversationId };
     const scopedStore = { ...store,
       readMetadataValue: async (_id, key) => (await chatRecords.recordFor(ctx, conversationId)).routingMetadata?.[key],
-      // Completion recovery can share the selection update's outer write lease.
-      // Read and replace this field together inside the existing store mutation.
+      /**
+       * Completion recovery can share the selection update's outer write lease.
+       * Read and replace this field together inside the existing store mutation.
+       */
       writeMetadataValue: async (_id, key, value) => store.mutateSession(ctx.session.sessionId, async () => {
         const current = await chatRecords.recordFor(ctx, conversationId);
         if (current.state === "closing" && !(cleanup && key === "assistant_routing_request")) throw new Error("This conversation is closing.");
@@ -218,8 +224,10 @@ function createTemporaryConversationTurns({
   }
 
   const routing = createAssistantRouting({ systemRoot, allowAuto: false, agent: routingAgent, publish: publishSessionChanged,
-    // A send waits behind a sibling chat's slow assistant startup, as Main does,
-    // instead of refusing after the shorter default wait.
+    /**
+     * A send waits behind a sibling chat's slow assistant startup, as Main does,
+     * instead of refusing after the shorter default wait.
+     */
     exclusive: async (id, options, operation) => {
       const result = await write(id, { ...options, lockWaitMs: options.lockWaitMs ?? routingWaitMs },
         async (ctx) => operation(await routingContext(ctx, options.conversationId, { cleanup: options.routingCleanup === true })));
@@ -227,7 +235,9 @@ function createTemporaryConversationTurns({
     },
     open: async (id, options) => routingContext(await readSessionContext(id, options), options.conversationId,
       { cleanup: options.routingCleanup === true }),
-    // Stop's interrupt of this chat's native turn.
+    /**
+     * Stop's interrupt of this chat's native turn.
+     */
     async interrupt(id, ctx) {
       const record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
       return conversationRuntime.stopPersistentConversation(persistentConversationOptions(ctx.conversationContext, record));
@@ -431,10 +441,12 @@ function createTemporaryConversationTurns({
     });
   }
 
-  // What a person sees of a chat. Only work that may still produce output or
-  // change its goal is read from its assistant; a settled chat's saved
-  // transcript and record are its answer, so showing it starts no assistant
-  // process. Send, Stop and the turn's idle completion still read the assistant.
+  /**
+   * What a person sees of a chat. Only work that may still produce output or
+   * change its goal is read from its assistant; a settled chat's saved
+   * transcript and record are its answer, so showing it starts no assistant
+   * process. Send, Stop and the turn's idle completion still read the assistant.
+   */
   async function displaySnapshot(ctx, record, transcriptQuery) {
     if (record.providerConversationId && record.state !== "closing" &&
         (["starting", "inProgress"].includes(record.status) || assistantGoalIsActive(record.goal))) {

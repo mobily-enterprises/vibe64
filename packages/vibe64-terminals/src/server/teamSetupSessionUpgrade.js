@@ -12,8 +12,10 @@ function parsed(raw, label) {
   return value;
 }
 
-// Chat preferences no longer name a workflow tool; a merge repair chat runs on
-// Fix it with AI unless it chose a Custom model.
+/**
+ * Chat preferences no longer name a workflow tool; a merge repair chat runs on
+ * Fix it with AI unless it chose a Custom model.
+ */
 function preferences(raw, repair) {
   if (!raw) return raw;
   const saved = parsed(raw, "chat mode");
@@ -25,8 +27,10 @@ function preferences(raw, repair) {
   return current ? raw : JSON.stringify(value);
 }
 
-// A retained request or goal keeps its v4 snapshot's workflow block as the
-// owner setup, and its Helper role as Quick helper. Nothing is replayed.
+/**
+ * A retained request or goal keeps its v4 snapshot's workflow block as the
+ * owner setup, and its Helper role as Quick helper. Nothing is replayed.
+ */
 function snapshot(raw, label) {
   if (!raw) return raw;
   const value = parsed(raw, label);
@@ -61,8 +65,10 @@ function teamSetupSessionChanges({ metadata = {}, conversations = [], renewal })
   return result;
 }
 
-// 20261023: sessions, temporary chats and renewals move to the owner/team
-// setups. Retained requests keep their delivery; nothing is replayed.
+/**
+ * 20261023: sessions, temporary chats and renewals move to the owner/team
+ * setups. Retained requests keep their delivery; nothing is replayed.
+ */
 async function upgradeTeamSetupSessions(context) {
   return publishStateUpgradeFiles({ ...context, prepareUpdates: async (temporaryRoot) => {
     const updates = [];

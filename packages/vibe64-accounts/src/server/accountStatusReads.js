@@ -159,10 +159,12 @@ function createAccountStatusReads({ access, accountRuntime, codexStatus, env, lo
       }
       throw new Error(`Unknown account: ${accountId}`);
     }
-    // Each account is read on its own: one that cannot be read becomes its own
-    // error row instead of hiding every other account.
-    // A Codex sign-in change that could not finish stays "reconnecting", with
-    // the reason it is still unfinished.
+    /**
+     * Each account is read on its own: one that cannot be read becomes its own
+     * error row instead of hiding every other account.
+     * A Codex sign-in change that could not finish stays "reconnecting", with
+     * the reason it is still unfinished.
+     */
     async function failedAccountRow(accountId, error) {
       logOperationalEvent(logger, "warn", { component: "vibe64-accounts", event: "vibe64.accounts.status_failed",
         accountId, code: String(error?.code || ""), error: String(error?.message || error || "") },

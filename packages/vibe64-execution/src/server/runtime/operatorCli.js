@@ -21,8 +21,10 @@ function executable(file = "") {
   }
 }
 
-// PATH plus the official installers' own locations: a server started outside
-// a login shell may lack these on PATH.
+/**
+ * PATH plus the official installers' own locations: a server started outside
+ * a login shell may lack these on PATH.
+ */
 function operatorCliSearchDirs(env = process.env) {
   const home = String(env.HOME || os.homedir() || "");
   const homeDirs = home ? [".local/bin", ".claude/local", ".opencode/bin"].map((dir) => path.join(home, dir)) : [];
@@ -67,8 +69,10 @@ function operatorCliCommand(tool = "", options = {}) {
   return resolveOperatorCli(tool, options).command;
 }
 
-// The official install line. Vibe64 runs on macOS and Linux (Windows through
-// WSL), so one shell line serves every computer it runs on.
+/**
+ * The official install line. Vibe64 runs on macOS and Linux (Windows through
+ * WSL), so one shell line serves every computer it runs on.
+ */
 function operatorCliInstall(tool = "") {
   return OPERATOR_CLIS[tool].install;
 }

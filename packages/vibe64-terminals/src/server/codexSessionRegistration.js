@@ -268,7 +268,9 @@ function createCodexSessionRegistration({
     providerConnections,
     env,
     logger,
-    // The native owner consumes these preparations only after construction.
+    /**
+     * The native owner consumes these preparations only after construction.
+     */
     get runOwner() { return codexAppServerRunOwner; }
   });
   const {

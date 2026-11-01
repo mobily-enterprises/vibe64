@@ -105,10 +105,12 @@ async function inspectApplicationIntegrationSetup(context, input) {
   return { setup, runtime, baseHash, paymentAccountId };
 }
 
-// Called only with a source root and execution context selected by the host.
-// A host that runs the application under its own account reads the committed
-// configuration from sourceRoot and runs the command as applicationAccount in
-// the application's executionRoot.
+/**
+ * Called only with a source root and execution context selected by the host.
+ * A host that runs the application under its own account reads the committed
+ * configuration from sourceRoot and runs the command as applicationAccount in
+ * the application's executionRoot.
+ */
 async function runApplicationIntegrationSetup({
   sourceRoot, executionRoot = sourceRoot, applicationAccount, env, releaseEnvironmentFile, project, session, selection,
   runCommand = runVibe64Command
@@ -389,8 +391,10 @@ function applyIntegrationConfigurationChanges(configuration, changes) {
   if (!records.length || records.length > 50 || records.some((id) => !/^[a-z][a-z0-9-]*$/u.test(id) || ["constructor", "prototype"].includes(id))) {
     throw sourceEditorError("Supply between 1 and 50 named integration or registration changes.", "vibe64_integration_changes_invalid", {}, 422);
   }
-  // JSON merge-patch semantics: omissions preserve values, null removes, arrays
-  // replace. Work on a detached copy; final provider validation precedes writing.
+  /**
+   * JSON merge-patch semantics: omissions preserve values, null removes, arrays
+   * replace. Work on a detached copy; final provider validation precedes writing.
+   */
   const merge = (target, patch) => {
     let result = target && typeof target === "object" && !Array.isArray(target) ? { ...target } : {};
     for (const [key, value] of Object.entries(patch)) {

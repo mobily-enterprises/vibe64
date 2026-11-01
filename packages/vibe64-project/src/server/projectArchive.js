@@ -106,8 +106,10 @@ function createProjectArchiveService({
     }).readPinnedSessionId();
   }
 
-  // The namespace of a slug: the catalogue's, or inside the matching practice
-  // scope the learning-space one. Everything else is refused before any write.
+  /**
+   * The namespace of a slug: the catalogue's, or inside the matching practice
+   * scope the learning-space one. Everything else is refused before any write.
+   */
   async function projectNamespace(slug, { archiveRoot = defaultArchiveRoot } = {}) {
     // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
     const scope = projectContext.currentPracticeProjectScope?.() || null;
@@ -141,10 +143,12 @@ function createProjectArchiveService({
     return { practice: false, projectContextRoot };
   }
 
-  // A catalogue project named like a practice project (created before the
-  // name was reserved) is still archived, resumed and replayed; a practice
-  // record never is. The record decides; once it is gone (a completed
-  // archive), the catalogue's own lifecycle journal for the slug does.
+  /**
+   * A catalogue project named like a practice project (created before the
+   * name was reserved) is still archived, resumed and replayed; a practice
+   * record never is. The record decides; once it is gone (a completed
+   * archive), the catalogue's own lifecycle journal for the slug does.
+   */
   async function catalogueProjectNamedLikePractice({ archiveRoot, slug }) {
     const { metadata = {} } = await projectContext.readWorkspaceProjectState({ slug });
     if (Object.keys(metadata).length) return !metadata.training;
@@ -167,7 +171,9 @@ function createProjectArchiveService({
     });
   }
 
-  // The final deletion steps shared by archival and removeProject.
+  /**
+   * The final deletion steps shared by archival and removeProject.
+   */
   async function removeProjectNamespaceAndState({ completed, markComplete, namespace, projectRuntimeRoot, slug, metadata }) {
     const { projectContextRoot } = namespace;
     if (!completed("source-removed")) {
@@ -426,9 +432,11 @@ function createProjectArchiveService({
     });
   }
 
-  // The refusals of removeProject before any side effect: a completed removal
-  // (missing record), a project outside its practice scope or not practice,
-  // or a pinned session. Read-only; removeProject repeats it under the lock.
+  /**
+   * The refusals of removeProject before any side effect: a completed removal
+   * (missing record), a project outside its practice scope or not practice,
+   * or a pinned session. Read-only; removeProject repeats it under the lock.
+   */
   async function removalPreflight(input = {}) {
     const slug = normalizeProjectSlug(input.slug || input.projectSlug || "");
     if (!PRACTICE_SLUG_PATTERN.test(slug)) throw notPractice();
@@ -467,9 +475,11 @@ function createProjectArchiveService({
     return { slug, namespace, existingState, projectRuntimeRoot };
   }
 
-  // Read-only presence check: a project whose removal completed (no record,
-  // no storage) no longer exists; one whose removal stopped part-way keeps its
-  // record and still exists for the retry.
+  /**
+   * Read-only presence check: a project whose removal completed (no record,
+   * no storage) no longer exists; one whose removal stopped part-way keeps its
+   * record and still exists for the retry.
+   */
   async function projectExists(input = {}) {
     const slug = normalizeProjectSlug(input.slug || input.projectSlug || "");
     const existingState = await projectContext.readWorkspaceProjectState({ slug });
@@ -490,10 +500,12 @@ function createProjectArchiveService({
     }
   }
 
-  // Light deletion of a practice project: the archive lifecycle above minus
-  // its archive steps. It shares the per-slug lock, pinned-session refusal,
-  // persisted deletion marker and resumable steps, then removes host
-  // resources, namespace and runtime state exactly as archival does.
+  /**
+   * Light deletion of a practice project: the archive lifecycle above minus
+   * its archive steps. It shares the per-slug lock, pinned-session refusal,
+   * persisted deletion marker and resumable steps, then removes host
+   * resources, namespace and runtime state exactly as archival does.
+   */
   async function removeProject(input = {}) {
     const slug = normalizeProjectSlug(input.slug || input.projectSlug || "");
     return withProjectDeletionLock(`${systemRoot}\0${slug}`, async () => {

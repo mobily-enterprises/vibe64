@@ -8,15 +8,19 @@ export function sessionConversationKey(session) {
 
 export { requireCompletedNativeConversationReplacement, requireCompletedConversationRewind, requireMainConversationAdmission };
 
-// A changeover ends the previous assistant's use of the session. Its native
-// conversation stays saved for a later return; nothing is retained in memory.
+/**
+ * A changeover ends the previous assistant's use of the session. Its native
+ * conversation stays saved for a later return; nothing is retained in memory.
+ */
 export function closeAssistantForChangeover(agent, sessionId, context) {
   return agent.closeSession(sessionId, { ...context, changeover: true, forgetConversationBinding: true });
 }
 
-// The caller holds the main agent-write lock and has checked access, idle work,
-// routing and goals. No provider history is removed by this operation. The next
-// ordinary Send delivers the briefing through the existing admission receipt.
+/**
+ * The caller holds the main agent-write lock and has checked access, idle work,
+ * routing and goals. No provider history is removed by this operation. The next
+ * ordinary Send delivers the briefing through the existing admission receipt.
+ */
 export async function replaceNativeConversation(sessionId, input, context, agent, conversation) {
   const { store } = context.runtime;
   const engineId = sessionConversationKey(context.session);
@@ -60,8 +64,10 @@ export async function rememberAssistantBeforeChangeover({ runtime, session }, en
   await changeoverFor(runtime.store, session.sessionId).remember({ engineId, messages });
 }
 
-// Cancel drops the message's pending native attempt, so no later send replays it
-// or waits on its receipt. The caller holds the agent-write lock.
+/**
+ * Cancel drops the message's pending native attempt, so no later send replays it
+ * or waits on its receipt. The caller holds the agent-write lock.
+ */
 export function discardAssistantChangeoverMessage(sessionId, messageId, context) {
   return changeoverFor(context.runtime.store, sessionId, { context }).discard({ messageId });
 }

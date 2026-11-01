@@ -51,9 +51,11 @@ function createServiceSessionWorkInspection({ sessionAccess, sessionWork, codexG
     });
   }
 
-  // The update probe's head read for the current project's open sessions. It
-  // uses each session's recorded Git actor as stored; it never records one,
-  // because no person asked for this read.
+  /**
+   * The update probe's head read for the current project's open sessions. It
+   * uses each session's recorded Git actor as stored; it never records one,
+   * because no person asked for this read.
+   */
   async function readRepositoryAuthorityHeads({ sessions = [] } = {}) {
     return readManagedSessionAuthorityHeads({
       executionFor: (session) => codexGitCommand.sessionWorkSaveContext({ session }),
@@ -82,8 +84,10 @@ function createServiceSessionWorkInspection({ sessionAccess, sessionWork, codexG
     };
   }
 
-  // Read-only Git evidence on whether a failed Update still describes the
-  // session's checkout; the sessions service decides and records the result.
+  /**
+   * Read-only Git evidence on whether a failed Update still describes the
+   * session's checkout; the sessions service decides and records the result.
+   */
   async function inspectSessionUpdateFailure(sessionId, input = {}) {
     const { session } = await sessionAccess.sessionContext(String(sessionId || "").trim(), input);
     return inspectManagedSessionUpdateFailure({

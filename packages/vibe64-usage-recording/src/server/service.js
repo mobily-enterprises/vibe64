@@ -70,25 +70,31 @@ const ASSET_PATH = /\.(?:[cm]?[jt]sx?|vue|svelte|css|scss|sass|less|map|png|jpe?
 
 const newRecordingId = () => `rec_${[...randomBytes(20)].map((byte) => BASE32[byte & 31]).join("")}`;
 
-// Without Fetch Metadata, a source module or asset is known by its extension.
+/**
+ * Without Fetch Metadata, a source module or asset is known by its extension.
+ */
 function isAssetLoad(requestPath = "", fetchDest = "") {
   const destination = String(fetchDest || "").toLowerCase();
   return ASSET_FETCH_DESTINATIONS.has(destination) || DEV_SERVER_PATH.test(requestPath) ||
     (!destination && ASSET_PATH.test(requestPath));
 }
 
-// highestInteraction is the number of the highest interaction recorded so far
-// (i_0007 → 7, 0 before the first): a Preview page continues after it.
-// requestLog counts the asset loads not listed, and says when the Preview
-// request log reached its limit and later requests were not recorded.
+/**
+ * highestInteraction is the number of the highest interaction recorded so far
+ * (i_0007 → 7, 0 before the first): a Preview page continues after it.
+ * requestLog counts the asset loads not listed, and says when the Preview
+ * request log reached its limit and later requests were not recorded.
+ */
 function storedRecording(value) {
   return value?.schema === USAGE_RECORDING_SCHEMA && USAGE_RECORDING_ID_PATTERN.test(String(value.id || "")) ? value : null;
 }
 
-// The Machine City's architecture.sourceHash: the scan a recording runs
-// against, so results can say when the source has changed since. Genesis sorts
-// keys and the City can be tens of MiB, so this streams it and follows only
-// strings, nesting and the key at each level until it reaches that one field.
+/**
+ * The Machine City's architecture.sourceHash: the scan a recording runs
+ * against, so results can say when the source has changed since. Genesis sorts
+ * keys and the City can be tens of MiB, so this streams it and follows only
+ * strings, nesting and the key at each level until it reaches that one field.
+ */
 async function readSourceIdentity(sourceRoot) {
   const target = ["architecture", "sourceHash"];
   const keys = [];
@@ -234,8 +240,10 @@ function createService({
     }
   }
 
-  // Runs after the person has been told the recording is stopping: tracers get
-  // a moment to write their last hits and their idle line.
+  /**
+   * Runs after the person has been told the recording is stopping: tracers get
+   * a moment to write their last hits and their idle line.
+   */
   async function finish(entry, reason) {
     const deadline = now() + times.stopIdleMs;
     try {
@@ -265,8 +273,10 @@ function createService({
     }
   }
 
-  // Stop always agrees: the first call tells the tracers to stop and returns at
-  // once; later calls return the same recording.
+  /**
+   * Stop always agrees: the first call tells the tracers to stop and returns at
+   * once; later calls return the same recording.
+   */
   async function stopEntry(entry, reason) {
     if (!entry.stopRequested) {
       entry.stopRequested = true;
@@ -279,8 +289,10 @@ function createService({
     return entry.record;
   }
 
-  // A launch that could not start, or a recorder that never loaded, ends the
-  // recording without results.
+  /**
+   * A launch that could not start, or a recorder that never loaded, ends the
+   * recording without results.
+   */
   async function endWithoutResults(entry, state, reason) {
     if (entry.stopRequested) return;
     entry.stopRequested = true;
@@ -335,10 +347,12 @@ function createService({
         .catch((error) => logger.warn({ error, recordingId: record.id }, "Usage recording could not append a line."));
       return entry.writes;
     };
-    // A launched target inherits this server's environment beneath the
-    // launch's own variables, so a prepended value joins the one the process
-    // would otherwise see, such as a PHP_INI_SCAN_DIR the server was started
-    // with or a person's own PYTHONPATH.
+    /**
+     * A launched target inherits this server's environment beneath the
+     * launch's own variables, so a prepended value joins the one the process
+     * would otherwise see, such as a PHP_INI_SCAN_DIR the server was started
+     * with or a person's own PYTHONPATH.
+     */
     const recorderEnvironment = (environment = {}) => {
       const result = usageRecordingEnvironment({ recordingDirectory: directory, sourceRoot: context.sourceRoot, targetKind: target.kind });
       const inherited = { ...process.env, ...environment };
@@ -427,8 +441,10 @@ function createService({
     return entry;
   }
 
-  // Keeps the newest recordings within the session's count and size budget
-  // and deletes those older than the age limit. Running recordings stay.
+  /**
+   * Keeps the newest recordings within the session's count and size budget
+   * and deletes those older than the age limit. Running recordings stay.
+   */
   async function applyRetention(directory) {
     const recordings = [];
     for (const id of (await readdir(directory).catch(() => [])).filter((name) => USAGE_RECORDING_ID_PATTERN.test(name))) {
@@ -636,8 +652,10 @@ function createService({
     return { recordings: (await storedRecordings(context)).slice(0, USAGE_RECORDING_RETENTION.maxRecordings).map(publicRecording) };
   }
 
-  // Oldest first unless order is "newest"; total counts every matching row.
-  // A requestId reads that one row, whatever the other filters say.
+  /**
+   * Oldest first unless order is "newest"; total counts every matching row.
+   * A requestId reads that one row, whatever the other filters say.
+   */
   async function readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false, order = "oldest", requestId = "" }) {
     const context = await sessionContext(sessionId);
     const { directory, entry, record } = await recordingFor(context, recordingId);

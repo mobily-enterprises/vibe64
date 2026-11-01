@@ -27,9 +27,11 @@ function beatFailure(message) {
   return Object.assign(new Error(message), { code: "VIBE64_TRAINING_BEATS_INVALID" });
 }
 
-// A place that can complete a `do` beat: one the learner can be at, or one
-// whose page activity completes it. A topic's declared names are trusted by
-// name; the host that registers them owns their meaning.
+/**
+ * A place that can complete a `do` beat: one the learner can be at, or one
+ * whose page activity completes it. A topic's declared names are trusted by
+ * name; the host that registers them owns their meaning.
+ */
 const doable = (target, vocabulary) => Boolean(vocabulary.activity(target) || vocabulary.place(target)?.event ||
   trainingPlaceShown(target, {}, vocabulary) !== null || vocabulary.declared(target));
 const knownPlace = (target, vocabulary) => Boolean(vocabulary.place(target) || vocabulary.declaredPlace(target));
@@ -65,8 +67,10 @@ function parseBeat(source, number, vocabulary) {
   return beat;
 }
 
-// Splits a step's Markdown into its readable body and its beats (null when it
-// has no beats block). Throws VIBE64_TRAINING_BEATS_INVALID with the reason.
+/**
+ * Splits a step's Markdown into its readable body and its beats (null when it
+ * has no beats block). Throws VIBE64_TRAINING_BEATS_INVALID with the reason.
+ */
 function splitStepBeats(markdown, vocabulary = learningVocabulary) {
   const source = String(markdown ?? "");
   const start = fence.exec(source);
@@ -83,17 +87,21 @@ function splitStepBeats(markdown, vocabulary = learningVocabulary) {
   return { body: source.slice(0, start.index).replace(/\s+$/u, "\n"), beats };
 }
 
-// The place a beat points at (an activity's place), or "" (a check, or an
-// activity with no place).
+/**
+ * The place a beat points at (an activity's place), or "" (a check, or an
+ * activity with no place).
+ */
 function beatPlace(beat, vocabulary = learningVocabulary) {
   if (!beat || beat.kind === "check") return "";
   const activity = vocabulary.activity(beat.target);
   return activity ? activity.place || "" : beat.target;
 }
 
-// A beat that only exists in a practice project: one at a project place, or
-// an auto or review check (both read the practice project). Declared names
-// are the registering host's; their scope is not known to the bundler.
+/**
+ * A beat that only exists in a practice project: one at a project place, or
+ * an auto or review check (both read the practice project). Declared names
+ * are the registering host's; their scope is not known to the bundler.
+ */
 function beatNeedsPracticeProject(beat, vocabulary = learningVocabulary) {
   if (beat.kind === "check") return beat.target === "auto" || beat.target === "review";
   const place = vocabulary.place(beatPlace(beat, vocabulary));

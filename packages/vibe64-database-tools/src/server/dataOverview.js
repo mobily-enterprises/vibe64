@@ -5,8 +5,10 @@ import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, validateDataOverview } from "../shared/dataOverview.js";
 
-// MySQL's schema qualifier is the selected database, unlike PostgreSQL's
-// application-owned schemas. Only the overview's persisted references omit it.
+/**
+ * MySQL's schema qualifier is the selected database, unlike PostgreSQL's
+ * application-owned schemas. Only the overview's persisted references omit it.
+ */
 export function dataOverviewReference(schema, reference, { qualified = false } = {}) {
   if (schema.engine !== "mysql") return reference;
   const prefix = `${schema.database}.`;

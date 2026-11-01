@@ -3,8 +3,10 @@ import path from "node:path";
 import { normalizeAgentText } from "./agentProviders.js";
 import { isPlainObject } from "./isPlainObject.js";
 
-// Existing runtime path policy moved without change so the offline upgrade
-// can inventory the same native owners without loading execution/Genesis.
+/**
+ * Existing runtime path policy moved without change so the offline upgrade
+ * can inventory the same native owners without loading execution/Genesis.
+ */
 function hasOwn(object = {}, property = "") {
   return Object.prototype.hasOwnProperty.call(object, property);
 }

@@ -22,7 +22,9 @@ function runtimeProfileIsLocal(runtimeProfile) {
   return runtimeProfile?.local === true || mode === "local" || mode === "local-editor";
 }
 
-// The person's own state folder: XDG on Linux, Application Support on macOS.
+/**
+ * The person's own state folder: XDG on Linux, Application Support on macOS.
+ */
 function resolveDefaultLocalEditorSystemRoot(home = os.homedir(), platform = process.platform) {
   const homeRoot = home || process.cwd();
   if (platform === "darwin") {
@@ -32,12 +34,16 @@ function resolveDefaultLocalEditorSystemRoot(home = os.homedir(), platform = pro
   return normalizeRoot(path.join(stateHome || path.join(homeRoot, ".local", "state"), "vibe64"));
 }
 
-// The hosted project catalogue lives in a folder in the service account's home.
+/**
+ * The hosted project catalogue lives in a folder in the service account's home.
+ */
 function resolveDefaultProjectsRoot(home = os.homedir()) {
   return normalizeRoot(path.join(home || process.cwd(), VIBE64_DEFAULT_PROJECTS_DIR));
 }
 
-// Project sources Vibe64 creates live in a visible folder in the person's home.
+/**
+ * Project sources Vibe64 creates live in a visible folder in the person's home.
+ */
 function resolveDefaultManagedSourceRoot({ home = os.homedir() } = {}) {
   return normalizeRoot(path.join(home || process.cwd(), VIBE64_MANAGED_SOURCE_DIR));
 }

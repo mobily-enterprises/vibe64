@@ -15,10 +15,12 @@ import { sha256Hex } from "./sha256Hex.js";
  * @param {(actor: object) => object} dependencies.userPaths
  */
 function createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, userPaths }) {
-  // Learner notes (contract C7): the teacher's private summary of this one
-  // learner, in that learner's own Learning state with its own lock. The
-  // authenticated actor alone selects the file, so no caller can name another
-  // learner. Notes never take part in admission, step results or completion.
+  /**
+   * Learner notes (contract C7): the teacher's private summary of this one
+   * learner, in that learner's own Learning state with its own lock. The
+   * authenticated actor alone selects the file, so no caller can name another
+   * learner. Notes never take part in admission, step results or completion.
+   */
   async function readNotesRecord(paths) {
     await inspectDirectoryChain(systemRoot);
     for (const directory of paths.directories) await inspectPath(directory, true);
@@ -48,9 +50,11 @@ function createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, us
     }
   }
 
-  // Replaces the whole summary (clearing is the empty text). The same request
-  // ID with the same text replays the saved result; expectedRevision, when
-  // given, refuses to overwrite a newer change by the learner or Colleague.
+  /**
+   * Replaces the whole summary (clearing is the empty text). The same request
+   * ID with the same text replays the saved result; expectedRevision, when
+   * given, refuses to overwrite a newer change by the learner or Colleague.
+   */
   async function saveTeacherNotes({ actor, text: value, requestId, updatedBy, expectedRevision } = {}) {
     const paths = userPaths(actor);
     if (typeof value !== "string" || value.length > MAX_NOTES_CHARS || !validNotesText(value) ||

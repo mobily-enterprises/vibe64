@@ -132,8 +132,10 @@ function createConnections({
   return Object.freeze({ getStatus });
 }
 
-// Plain words in the terminal, and only when no AI tool runs Vibe64 at all:
-// one tool is enough, so a missing second one is not worth a warning.
+/**
+ * Plain words in the terminal, and only when no AI tool runs Vibe64 at all:
+ * one tool is enough, so a missing second one is not worth a warning.
+ */
 function warnMissingOperatorClis(write = (line) => process.stderr.write(`${line}\n`)) {
   if (Object.keys(OPERATOR_CLIS).some((tool) => resolveOperatorCli(tool).installed)) return;
   write([

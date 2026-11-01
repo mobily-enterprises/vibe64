@@ -100,18 +100,22 @@ function previewLocatorPath(value, operationPath, line) {
   return value;
 }
 
-// A package folder that node resolution reaches through a link:
-// node_modules/<name> or node_modules/@scope/<name>.
+/**
+ * A package folder that node resolution reaches through a link:
+ * node_modules/<name> or node_modules/@scope/<name>.
+ */
 function isPackageSegment(parts, index) {
   return (parts[index - 1] === "node_modules" && !parts[index].startsWith("@"))
     || (parts[index - 2] === "node_modules" && parts[index - 1].startsWith("@"));
 }
 
-// Reads a recipe's Preview locator for the Preview page: a regular .js file of
-// at most 64 KiB in the source root (node_modules included). The only symlink it
-// may pass is one linked package folder, as node resolution follows it; below
-// that package's real folder, and anywhere else, symlinks are refused, so the
-// file stays inside the project or the linked package.
+/**
+ * Reads a recipe's Preview locator for the Preview page: a regular .js file of
+ * at most 64 KiB in the source root (node_modules included). The only symlink it
+ * may pass is one linked package folder, as node resolution follows it; below
+ * that package's real folder, and anywhere else, symlinks are refused, so the
+ * file stays inside the project or the linked package.
+ */
 async function readArchitecturePreviewLocator(sourceRoot, locatorPath) {
   previewLocatorPath(locatorPath, SECTION_PATH);
   const refuse = (problem) => invalidStackOperation(ERROR_CODE, SECTION_PATH, `Preview locator \`${locatorPath}\` ${problem}.`);

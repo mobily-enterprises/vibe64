@@ -163,8 +163,10 @@ function isSafeBackgroundTaskId(taskId) {
   return BACKGROUND_TASK_ID_PATTERN.test(normalizeText(taskId));
 }
 
-// A session id that is not one of this project's sessions: every caller
-// answers the same clean 404, whichever operation looked it up.
+/**
+ * A session id that is not one of this project's sessions: every caller
+ * answers the same clean 404, whichever operation looked it up.
+ */
 function unknownSessionError(sessionId) {
   return Object.assign(vibe64Error(`Unknown vibe64 session: ${sessionId}`, "vibe64_session_not_found"), { statusCode: 404 });
 }
@@ -407,10 +409,12 @@ function sessionListMayIncludeArchived({
   );
 }
 
-// The saved practice binding (noExercise:false) that the published, immutable
-// 20261008-learning-practice-* upgrades write and verify. This constructor
-// contract validates identity and preserves that opaque exact pin; it grants
-// no Training/content authority and never accepts a browser purpose flag.
+/**
+ * The saved practice binding (noExercise:false) that the published, immutable
+ * 20261008-learning-practice-* upgrades write and verify. This constructor
+ * contract validates identity and preserves that opaque exact pin; it grants
+ * no Training/content authority and never accepts a browser purpose flag.
+ */
 function validateLearningSessionScope(value) {
   if (value === undefined || value === null) return null;
   const invalid = () => vibe64Error("Learning sessions require an authorized learner, exact attempt/pin and exercise scope.",
@@ -441,8 +445,10 @@ function learningSessionBinding(metadata, learningScope, sessionId) {
   return binding;
 }
 
-// A Working (unscoped) list leaves out a genuine lesson binding: its Learning
-// list owns that session. Malformed claims still reach the refusing reader.
+/**
+ * A Working (unscoped) list leaves out a genuine lesson binding: its Learning
+ * list owns that session. Malformed claims still reach the refusing reader.
+ */
 function genuineLearningBinding(raw, sessionId) {
   let binding;
   try { binding = JSON.parse(raw); } catch { return false; }

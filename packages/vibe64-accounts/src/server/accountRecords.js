@@ -135,7 +135,9 @@ function accountConnected({
   };
 }
 
-// A CLI that is missing or did not start is not a signed-out account.
+/**
+ * A CLI that is missing or did not start is not a signed-out account.
+ */
 function accountReadFailed(id, error) {
   const definition = ACCOUNT_DEFINITIONS[id] || { id, label: id };
   return { ...accountDisconnected({ ...definition,

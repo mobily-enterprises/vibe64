@@ -17,8 +17,10 @@ import { text } from "./trimmedText.js";
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
 function createSessionWorkRecovery({ terminals, workOperations, workspaceSetup }) {
-  // Once a Save's outcome is recorded, its prepared ref is no longer recovery
-  // evidence. Retiring is best effort: a later recovery still reads the record.
+  /**
+   * Once a Save's outcome is recorded, its prepared ref is no longer recovery
+   * evidence. Retiring is best effort: a later recovery still reads the record.
+   */
   async function retireRecordedSave(sessionId, operationId, context) {
     if (!text(operationId)) return;
     try {
@@ -243,7 +245,9 @@ function createSessionWorkRecovery({ terminals, workOperations, workspaceSetup }
         retryable: false,
         status: "ready"
       },
-      // Only the failure that was inspected; a newer Update keeps its own record.
+      /**
+       * Only the failure that was inspected; a newer Update keeps its own record.
+       */
       shouldWrite: ({ previous }) => previous.status === "failed" &&
         text(previous.operationId) === text(task.operationId)
     });

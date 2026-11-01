@@ -30,8 +30,10 @@ import {
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
  */
 function createWorkspaceSetupMigration({ projectService, runCommand, runnerState }) {
-  // Runs `genesis migrate` for a retried outdated project, then reinspects it.
-  // Returns { state } when the migration or reinspection failed.
+  /**
+   * Runs `genesis migrate` for a retried outdated project, then reinspects it.
+   * Returns { state } when the migration or reinspection failed.
+   */
   async function runGenesisMigration({ runtime, session, sessionId, sourcePath, previous, renewal }) {
     const currentLabel = "Migrate Genesis project";
     const migrationStartedAt = new Date().toISOString();

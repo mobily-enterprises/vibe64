@@ -56,9 +56,11 @@ function readSessionArchiveOperation(metadata) {
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  */
 function createSessionArchive({ archivePreparation, project, terminals, setupRunner, publishSessionChanged }) {
-  // Stopping: preview, AI turns and remaining tools stop before anything is removed.
-  // The session's live conversations also leave memory: once its source is gone
-  // they cannot be reopened, and a later account change would fail on them.
+  /**
+   * Stopping: preview, AI turns and remaining tools stop before anything is removed.
+   * The session's live conversations also leave memory: once its source is gone
+   * they cannot be reopened, and a later account change would fail on them.
+   */
   async function stopSessionWork(runtime, session) {
     const { sessionId } = session;
     await terminals.closeSessionTerminals(sessionId, { session, forgetConversationBinding: true });
@@ -88,7 +90,9 @@ function createSessionArchive({ archivePreparation, project, terminals, setupRun
     }
   }
 
-  // Resources: the project releases what it holds for the session.
+  /**
+   * Resources: the project releases what it holds for the session.
+   */
   async function releaseSessionResources(sessionId) {
     const released = await project.releaseSessionResources({ sessionId });
     if (released?.ok === false) {

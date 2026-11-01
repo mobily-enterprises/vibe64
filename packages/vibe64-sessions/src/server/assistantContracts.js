@@ -6,8 +6,10 @@ import { sessionWorkProblem } from "@local/vibe64-terminals/shared/sessionWorkPr
 
 const shortText = { type: "string", maxLength: 256, required: false };
 
-// Each projection declares its string limits once, as { key: maxLength }; the
-// same map builds the output schema and cuts the copied values.
+/**
+ * Each projection declares its string limits once, as { key: maxLength }; the
+ * same map builds the output schema and cuts the copied values.
+ */
 const limits = (keys, maxLength = 256) => Object.fromEntries(keys.map((key) => [key, maxLength]));
 const stringFields = (limitMap, extra = {}) => Object.fromEntries(Object.entries(limitMap)
   .map(([key, maxLength]) => [key, { ...shortText, maxLength, ...extra }]));
@@ -325,8 +327,10 @@ function renewalTool(description, { includeDraft = false } = {}) {
   };
 }
 
-// Saved versions and their changed file names only; diff text stays in the
-// person's Git history view or a coding conversation.
+/**
+ * Saved versions and their changed file names only; diff text stays in the
+ * person's Git history view or a coding conversation.
+ */
 function repositoryHistoryTool() {
   const strings = { ...resultStrings(["code", "historySnapshotCommit"]), nextCursor: 512 };
   const versionStrings = { ...limits(["commit", "shortCommit", "author", "committedAt"]), message: 512 };

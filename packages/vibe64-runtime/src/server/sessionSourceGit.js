@@ -72,8 +72,10 @@ async function sessionSourceGitAlternatesPath(sourceRoot = "") {
   return resolveGitPath(normalizedSourceRoot, gitPathResult.stdout || gitPathResult.output);
 }
 
-// Git records unmerged paths only in the index, and every index write replaces
-// the file. An unchanged index file therefore has the same conflicts.
+/**
+ * Git records unmerged paths only in the index, and every index write replaces
+ * the file. An unchanged index file therefore has the same conflicts.
+ */
 async function indexRevision(sourceRoot = "") {
   const entry = await stat(path.join(sourceRoot, ".git", "index"), { bigint: true }).catch(() => null);
   return entry?.isFile() ? `${entry.dev}:${entry.ino}:${entry.size}:${entry.mtimeNs}:${entry.ctimeNs}` : "";

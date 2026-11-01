@@ -196,8 +196,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
-  // Preserve existing state/permissions. Create only this explicit operation's
-  // private namespace.
+  /**
+   * Preserve existing state/permissions. Create only this explicit operation's
+   * private namespace.
+   */
   async function createNamespace(paths) {
     if (!await inspectDirectoryChain(systemRoot)) {
       throw new Error("Prepare the server-owned system root before reserving a lesson.");
@@ -233,10 +235,12 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return lesson;
   }
 
-  // Learner operations act on the lesson in progress only, so only its pin is
-  // verified: an ended attempt's lesson, which a later Vibe64 may no longer
-  // teach, never blocks it. Teaching, step results and finishing need the
-  // lesson teachable; closing it (archive, delete) needs only its identity.
+  /**
+   * Learner operations act on the lesson in progress only, so only its pin is
+   * verified: an ended attempt's lesson, which a later Vibe64 may no longer
+   * teach, never blocks it. Teaching, step results and finishing need the
+   * lesson teachable; closing it (archive, delete) needs only its identity.
+   */
   async function verifyActiveLesson(progress, { admissionOnly = false } = {}) {
     const attempt = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
     if (!attempt) return null;
@@ -275,9 +279,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
-  // completion is the in-progress attempt's; lessonCompletions lists every
-  // completed lesson content and the one in progress. A completed lesson that
-  // is not in progress reports no step counts (its results went with its attempt).
+  /**
+   * completion is the in-progress attempt's; lessonCompletions lists every
+   * completed lesson content and the one in progress. A completed lesson that
+   * is not in progress reports no step counts (its results went with its attempt).
+   */
   async function readState({ actor, includeCompletion = false } = {}) {
     const paths = userPaths(actor);
     const state = await loadState(paths);
@@ -298,8 +304,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return { ...state, completion, lessonCompletions };
   }
 
-  // The in-progress attempt with this ID when it has a practice project, else
-  // null. Code saves and host store selection resolve their attempt here.
+  /**
+   * The in-progress attempt with this ID when it has a practice project, else
+   * null. Code saves and host store selection resolve their attempt here.
+   */
   async function activeAttemptForProject({ actor, attemptId } = {}) {
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "")) throw new Error("Use an exact attempt ID.");
@@ -308,11 +316,13 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return attempt?.attemptId === attemptId && attempt.projectSlug ? structuredClone(attempt) : null;
   }
 
-  // One lesson is in progress at a time. The same request ID replays its
-  // reservation; the same lesson pin returns the attempt in progress; another
-  // lesson in progress is refused with its identity, so the caller can offer to
-  // archive it first. At the attempt cap (or the record's byte bound) the oldest
-  // ended attempts are pruned; completion stays in completedLessons.
+  /**
+   * One lesson is in progress at a time. The same request ID replays its
+   * reservation; the same lesson pin returns the attempt in progress; another
+   * lesson in progress is refused with its identity, so the caller can offer to
+   * archive it first. At the attempt cap (or the record's byte bound) the oldest
+   * ended attempts are pruned; completion stays in completedLessons.
+   */
   async function reserveAttempt({ actor, requestId, expectedRevision, pin: inputPin } = {}) {
     const paths = userPaths(actor);
     if (typeof requestId !== "string" || !requestPattern.test(requestId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
@@ -378,12 +388,14 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
-  // Finishing (finished), archiving (archived, also by restart) and deleting
-  // (deleted) end the attempt in progress. Finished requires every required
-  // step passed and records the lesson content in completedLessons. Its step
-  // results and code ledger then go: the archive bundle already copied what it
-  // keeps (readAttemptRecord). The admitted host runs this inside
-  // runPreparationExclusive; no project or session effect happens here.
+  /**
+   * Finishing (finished), archiving (archived, also by restart) and deleting
+   * (deleted) end the attempt in progress. Finished requires every required
+   * step passed and records the lesson content in completedLessons. Its step
+   * results and code ledger then go: the archive bundle already copied what it
+   * keeps (readAttemptRecord). The admitted host runs this inside
+   * runPreparationExclusive; no project or session effect happens here.
+   */
   async function endAttempt({ actor, attemptId, requestId, expectedRevision, reason } = {}) {
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "") || !requestPattern.test(requestId || "") ||
@@ -480,11 +492,13 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
-  // The admitted server owner holds this across effects. Typed state writes
-  // acquire only their short state.lock, so they remain usable inside it.
-  // Preparation verifies the teachable lesson first; a close (archive or
-  // delete) needs only its identity, so a lesson this Vibe64 can no longer
-  // teach can still be closed.
+  /**
+   * The admitted server owner holds this across effects. Typed state writes
+   * acquire only their short state.lock, so they remain usable inside it.
+   * Preparation verifies the teachable lesson first; a close (archive or
+   * delete) needs only its identity, so a lesson this Vibe64 can no longer
+   * teach can still be closed.
+   */
   async function runPreparationExclusive({ actor, attemptId, closing = false } = {}, operation) {
     const paths = userPaths(actor);
     if (typeof attemptId !== "string" || !uuidPattern.test(attemptId) || typeof operation !== "function") {
@@ -515,8 +529,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
-  // These typed operations record observations from an admitted server owner.
-  // They never create/inspect projects, sessions or running applications.
+  /**
+   * These typed operations record observations from an admitted server owner.
+   * They never create/inspect projects, sessions or running applications.
+   */
   async function writePreparation(input, operation, failureInput) {
     const { actor, attemptId, expectedRevision, initialSessionId } = input;
     const paths = userPaths(actor);
@@ -590,8 +606,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
   }
 
-  // Step progress and the reader position use their own short locks so they
-  // never contend with progress.json writers or the preparation barrier.
+  /**
+   * Step progress and the reader position use their own short locks so they
+   * never contend with progress.json writers or the preparation barrier.
+   */
   async function acquireRecordLock(lockPath, code, message) {
     const existing = await inspectPath(lockPath, false);
     if (existing && existing.size !== 0) throw new Error("Learning state lock contains unexplained data; inspect it before retrying.");
@@ -604,9 +622,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return release;
   }
 
-  // What an archive bundle keeps of the attempt in progress: its record, its
-  // step results and its lesson's title. Archiving needs only the lesson's
-  // identity, so a lesson this Vibe64 can no longer teach is still archived.
+  /**
+   * What an archive bundle keeps of the attempt in progress: its record, its
+   * step results and its lesson's title. Archiving needs only the lesson's
+   * identity, so a lesson this Vibe64 can no longer teach is still archived.
+   */
   async function readAttemptRecord({ actor, attemptId } = {}) {
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "")) throw new Error("Use an exact attempt ID.");
@@ -631,8 +651,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision }, "failure", { stage, code, message });
   }
 
-  // The verified exercise commit, recorded just before the practice session
-  // is created from it.
+  /**
+   * The verified exercise commit, recorded just before the practice session
+   * is created from it.
+   */
   async function recordPreparationStart({ actor, attemptId, initialSessionId, expectedRevision, startCommit } = {}) {
     if (typeof startCommit !== "string" || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(startCommit)) {
       throw new Error("Record the practice session's start commit as an exact Git object ID.");

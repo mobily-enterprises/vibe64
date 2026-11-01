@@ -73,7 +73,9 @@ const aiConnectionsListTool = Object.freeze({
       modelAccessMode: { type: "string", maxLength: 64, nullable: true, required: true }
     }) }
   }) },
-  // Only facts about each connection: never its key, key hint or fingerprint.
+  /**
+   * Only facts about each connection: never its key, key hint or fingerprint.
+   */
   transformResult(result) {
     if (result.ok !== true) return {
       ok: false, unavailable: false, connections: [],
@@ -243,7 +245,9 @@ function createAccountsActions({ accounts }) {
  * @param {AccountsRequireAiManagement} dependencies.requireAiManagement
  */
 function createAiConnectionActions({ aiConnectionService, requireAiManagement }) {
-  // Every AI connection operation is the AI manager's alone.
+  /**
+   * Every AI connection operation is the AI manager's alone.
+   */
   async function manageAiConnection(operation, input) {
     const denied = await requireAiManagement({ vibe64User: input.vibe64User });
     if (denied) return { ...denied, statusCode: 403 };

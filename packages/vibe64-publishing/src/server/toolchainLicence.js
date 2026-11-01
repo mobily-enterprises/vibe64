@@ -71,7 +71,9 @@ function createToolchainManager({
     };
   }
 
-  // { javaHome, androidHome } when both are ready, else null.
+  /**
+   * { javaHome, androidHome } when both are ready, else null.
+   */
   async function androidToolchains() {
     const current = await status();
     return current.java.ready && current.androidSdk.ready
@@ -91,7 +93,9 @@ function createToolchainManager({
     return record;
   }
 
-  // Downloads the JDK and SDK in the background after the recorded acceptance.
+  /**
+   * Downloads the JDK and SDK in the background after the recorded acceptance.
+   */
   async function installAndroid() {
     if (install?.status === "running") return { ...install };
     const recorded = (await acceptances()).find((entry) => entry.id?.startsWith("android-sdk"));

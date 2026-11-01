@@ -58,8 +58,10 @@ function createSessionListing({
     })));
   }
 
-  // Publishes each archived session left unpublished. One that cannot be
-  // published is reported and stays for the next attempt; the others go on.
+  /**
+   * Publishes each archived session left unpublished. One that cannot be
+   * published is reported and stays for the next attempt; the others go on.
+   */
   async function recoverSessionArchives() {
     const recovered = [];
     const failures = [];

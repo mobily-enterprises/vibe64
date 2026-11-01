@@ -10,7 +10,9 @@ const maxGuideCharacters = 24000;
 function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppRoot(), "docs/colleague-usage") } = {}) {
   const warned = new Set();
 
-  // measured receives the guide's size as it is read, for the topic list's warning.
+  /**
+   * measured receives the guide's size as it is read, for the topic list's warning.
+   */
   async function readGuide(topicId, measured = {}) {
     if (!topicPattern.test(topicId)) throw new Error("Choose a topic ID returned by the usage topic list.");
     let file;

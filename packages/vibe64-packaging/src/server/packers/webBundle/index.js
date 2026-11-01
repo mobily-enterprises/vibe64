@@ -7,7 +7,9 @@ import { publishError } from "../../errors.js";
 import { pathWithin } from "../../paths.js";
 import { recipeSteps, sourceDateEnvironment, toolVersion } from "../registryRecipe.js";
 
-// context: { sourceRoot: the exported saved commit, entry, commitTime }.
+/**
+ * context: { sourceRoot: the exported saved commit, entry, commitTime }.
+ */
 async function buildRecipe({ sourceRoot, entry, commitTime = null } = {}) {
   if (typeof sourceRoot !== "string" || !path.isAbsolute(sourceRoot)) {
     throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The web-bundle packer needs the exported source folder.");
@@ -24,7 +26,9 @@ async function buildRecipe({ sourceRoot, entry, commitTime = null } = {}) {
   };
 }
 
-// The built folder: exactly one folder with an index.html at its top.
+/**
+ * The built folder: exactly one folder with an index.html at its top.
+ */
 function webRoot(artifacts) {
   const files = artifacts.manifest.files.map((file) => file.path);
   const roots = [...new Set(files.map((file) => file.split("/")[0]))];

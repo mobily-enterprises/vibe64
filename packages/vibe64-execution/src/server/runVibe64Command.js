@@ -50,8 +50,10 @@ import {
   vibe64ManagedExecutionRequired
 } from "./managedExecution.js";
 
-// This installation's recorder runtime: the usage recording package installed
-// beside this one, or in a node_modules folder above this file.
+/**
+ * This installation's recorder runtime: the usage recording package installed
+ * beside this one, or in a node_modules folder above this file.
+ */
 function usageRecordingRuntimeRoots(fromFile) {
   const candidates = [path.resolve(path.dirname(fromFile), "../../../vibe64-usage-recording/runtime/node")];
   for (let directory = path.dirname(fromFile); ; directory = path.dirname(directory)) {
@@ -67,9 +69,11 @@ function usageRecordingRuntimeRoots(fromFile) {
   });
 }
 
-// The only NODE_OPTIONS a launch receives from Vibe64: the usage recorder's
-// preload, accepted as a regular file reached through no symbolic link inside
-// this installation's recorder runtime. The host helper keeps its own copy.
+/**
+ * The only NODE_OPTIONS a launch receives from Vibe64: the usage recorder's
+ * preload, accepted as a regular file reached through no symbolic link inside
+ * this installation's recorder runtime. The host helper keeps its own copy.
+ */
 function usageRecordingNodeOptions(preload = "", fromFile = fileURLToPath(import.meta.url)) {
   try {
     if (path.resolve(preload) === preload && realpathSync(preload) === preload && statSync(preload).isFile() &&
@@ -84,8 +88,10 @@ function usageRecordingNodeOptions(preload = "", fromFile = fileURLToPath(import
   });
 }
 
-// Release environments and application accounts exist only on a managed host,
-// whose helper loads the file and switches to the account.
+/**
+ * Release environments and application accounts exist only on a managed host,
+ * whose helper loads the file and switches to the account.
+ */
 function managedOnlyRequestError(request) {
   if (request.releaseEnvironmentFile) {
     return commandErrorResult("Release environment execution requires a managed host.",

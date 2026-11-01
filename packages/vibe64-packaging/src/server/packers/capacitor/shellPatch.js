@@ -34,7 +34,9 @@ function xmlText(value) {
   return String(value).replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;").replace(/"/gu, "&quot;");
 }
 
-// Android string resources: XML-escaped, with aapt's own quote and backslash escapes.
+/**
+ * Android string resources: XML-escaped, with aapt's own quote and backslash escapes.
+ */
 function resourceText(value) {
   const escaped = String(value).replace(/\\/gu, "\\\\").replace(/'/gu, "\\'").replace(/"/gu, "\\\"")
     .replace(/&/gu, "&amp;").replace(/</gu, "&lt;").replace(/>/gu, "&gt;");
@@ -155,7 +157,9 @@ async function applyShellPatch(shellRoot) {
   await rewrite(path.join(android, "gradle", "wrapper", "gradle-wrapper.properties"), patchWrapperProperties);
 }
 
-// Copies Gradle's unsigned APK to `out/<package>-<version>-unsigned.apk`.
+/**
+ * Copies Gradle's unsigned APK to `out/<package>-<version>-unsigned.apk`.
+ */
 async function collectApk(shellRoot) {
   const spec = await readSpec(shellRoot);
   await mkdir(path.join(shellRoot, "out"), { recursive: true });

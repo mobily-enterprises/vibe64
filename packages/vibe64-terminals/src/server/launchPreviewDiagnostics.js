@@ -76,8 +76,10 @@ async function writePreviewDiagnostic(session = {}, record = {}, {
   }
 }
 
-// The session's latest launch record, or null when there is none or it cannot
-// be read.
+/**
+ * The session's latest launch record, or null when there is none or it cannot
+ * be read.
+ */
 async function readLatestPreviewDiagnostic(session) {
   const latestPath = previewLastPath(session);
   return latestPath ? await readFile(latestPath, "utf8")

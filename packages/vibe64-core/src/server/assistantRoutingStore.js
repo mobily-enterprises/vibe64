@@ -12,9 +12,11 @@ const followingRoles = ["colleague", "fix", "explain"];
 // eslint-disable-next-line no-control-regex -- Routing identifiers must exclude ASCII control characters.
 const controlCharacters = /[\x00-\x1f\x7f]/u;
 
-// Schema 5: the owner's setup (main chat and the owner's helpers) and the team
-// setup (everyone else's helpers). A role is absent, null (off), a selection,
-// or { follows } naming another role of the same setup, one level deep.
+/**
+ * Schema 5: the owner's setup (main chat and the owner's helpers) and the team
+ * setup (everyone else's helpers). A role is absent, null (off), a selection,
+ * or { follows } naming another role of the same setup, one level deep.
+ */
 function validateAssistantRoutingConfiguration(value) {
   const invalid = () => { throw new Error("Saved model routing has an unsupported shape. Restore or repair the settings before changing them."); };
   if (!isPlainObject(value) || value.schemaVersion !== 5 || !Number.isSafeInteger(value.revision) || value.revision < 0 ||

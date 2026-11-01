@@ -186,8 +186,10 @@ function createTemporaryConversationLifecycle({
     return result;
   }
 
-  // Archive: once its source is gone a session's temporary chats cannot
-  // reopen, so their open runtime entries leave memory with it.
+  /**
+   * Archive: once its source is gone a session's temporary chats cannot
+   * reopen, so their open runtime entries leave memory with it.
+   */
   async function retireTemporaryConversations(sessionId, options = {}) {
     const { runtime } = await readSessionContext(sessionId, options);
     for (const record of await runtime.store.listSessionConversations(sessionId)) {

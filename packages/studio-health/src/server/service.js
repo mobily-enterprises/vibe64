@@ -101,7 +101,9 @@ async function commandCheck({
     : failedCheck(check);
 }
 
-// The Node.js major version Vibe64 declares in its package.json engines field.
+/**
+ * The Node.js major version Vibe64 declares in its package.json engines field.
+ */
 async function requiredNodeMajor(studioRoot) {
   try {
     const { engines } = JSON.parse(await readFile(path.join(studioRoot, "package.json"), "utf8"));
@@ -130,8 +132,10 @@ function notInstalledVerb(name = "") {
   return /s$/u.test(name) ? "aren't" : "isn't";
 }
 
-// A tool from the shared check, as a Health row: what was found, or one
-// sentence and the command that installs it.
+/**
+ * A tool from the shared check, as a Health row: what was found, or one
+ * sentence and the command that installs it.
+ */
 function localToolRow(tool, { group, id = tool.id, need, explanation }) {
   const found = [tool.version && `${tool.name} ${tool.version}`, tool.path].filter(Boolean).join(" · ");
   const observed = {
@@ -148,7 +152,9 @@ function localToolRow(tool, { group, id = tool.id, need, explanation }) {
   };
 }
 
-// Without packs: Node, Git and one AI tool are needed; everything else is optional.
+/**
+ * Without packs: Node, Git and one AI tool are needed; everything else is optional.
+ */
 async function inspectLocalTools({ nodeMajor, runCommand, studioRoot }) {
   const { tools } = await checkLocalTools(["node", "git", ...AI_TOOLS, "gh", "ripgrep"], { cwd: studioRoot, runCommand });
   const byId = Object.fromEntries(tools.map((tool) => [tool.id, tool]));
@@ -176,9 +182,11 @@ async function inspectLocalTools({ nodeMajor, runCommand, studioRoot }) {
   return [...rows.slice(0, 2), aiRow, ...rows.slice(2), ...aiRows];
 }
 
-// The name and email commits actually get here: git reports the identity the
-// command env resolved. Nothing is blocked on a stand-in; the person is told how
-// to set their own. A missing Git is already the Git row's failure.
+/**
+ * The name and email commits actually get here: git reports the identity the
+ * command env resolved. Nothing is blocked on a stand-in; the person is told how
+ * to set their own. A missing Git is already the Git row's failure.
+ */
 async function gitIdentityCheck({ runCommand, studioRoot }) {
   const result = await runCommand({
     actor: "app",
@@ -283,7 +291,9 @@ async function inspectAccounts({ connectionsService, input, packs = true }) {
   }
 }
 
-// The pinned runtime packs' own tools, checked only when the packs exist.
+/**
+ * The pinned runtime packs' own tools, checked only when the packs exist.
+ */
 function packCommandChecks(check, { runCommand, studioRoot }) {
   return [
     check({
@@ -460,7 +470,9 @@ function createService({
     };
   }
 
-  // The rows a screen shows for named tools: run now, nothing remembered.
+  /**
+   * The rows a screen shows for named tools: run now, nothing remembered.
+   */
   async function checkTools(input) {
     const ids = String(input.ids || "").split(",").map((id) => id.trim()).filter(Boolean);
     return checkLocalTools(ids, { cwd: studioRoot, runCommand });

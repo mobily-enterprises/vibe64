@@ -81,8 +81,10 @@ function checkPrerequisiteCycles(lessons) {
   for (const lesson of lessons) visit(lesson.code);
 }
 
-// Lesson format v1 (retired; only installed snapshots still verify it): rubric
-// anchors in the teaching document and assessment producers.
+/**
+ * Lesson format v1 (retired; only installed snapshots still verify it): rubric
+ * anchors in the teaching document and assessment producers.
+ */
 function bundleAssessments(lesson, document, include, checks) {
   include(document);
   const documentText = document.bytes.toString("utf8");
@@ -108,12 +110,14 @@ function bundleAssessments(lesson, document, include, checks) {
   }
 }
 
-// Lesson format v2/v3 step rules. Checks decide alone: auto runs a declared
-// check, choice compares with the authored answer, review asks the learner's
-// own AI to judge their practice work against the rubric, fact asks a
-// registered fact reader (v3), self is the learner's own tick and none
-// records nothing, so it can never be required. Places, activities and facts
-// are the topic's vocabulary: public's built-ins plus the names it declares.
+/**
+ * Lesson format v2/v3 step rules. Checks decide alone: auto runs a declared
+ * check, choice compares with the authored answer, review asks the learner's
+ * own AI to judge their practice work against the rubric, fact asks a
+ * registered fact reader (v3), self is the learner's own tick and none
+ * records nothing, so it can never be required. Places, activities and facts
+ * are the topic's vocabulary: public's built-ins plus the names it declares.
+ */
 function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
   const fail = message => { throw new Error(`Lesson ${code}: ${message}`); };
   if (lesson.schemaVersion === 3 && lesson.stage === "project" && !lesson.exercise) fail("a project lesson needs its exercise (a practice project).");
@@ -329,10 +333,12 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
   return { lesson, manifest, hash: sha256Hex(canonicalJson(manifest)), descriptorPath: descriptor.relative, served, ...(problem ? { problem } : {}) };
 }
 
-// authoring refuses retired v1 lessons: author commands never produce them,
-// while installed v1 snapshots still verify for the published upgrades.
-// installed reads an installed snapshot: a lesson that breaks the teaching
-// rules is returned with its problem instead of failing the whole topic.
+/**
+ * authoring refuses retired v1 lessons: author commands never produce them,
+ * while installed v1 snapshots still verify for the published upgrades.
+ * installed reads an installed snapshot: a lesson that breaks the teaching
+ * rules is returned with its problem instead of failing the whole topic.
+ */
 async function validateTopic(directory, { authoring = false, installed = false } = {}) {
   const reader = await createTopicReader(directory);
   const packageFile = await reader.json("package.json");

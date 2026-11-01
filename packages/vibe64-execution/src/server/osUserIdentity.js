@@ -54,8 +54,10 @@ function parsePasswdLine(line = "") {
   return osUserRecord([parts[0], parts[2], parts[3], parts[4], parts[5], parts[6]]);
 }
 
-// macOS has no getent: `dscacheutil -q user` prints "key: value" lines for
-// each user, with a blank line between users.
+/**
+ * macOS has no getent: `dscacheutil -q user` prints "key: value" lines for
+ * each user, with a blank line between users.
+ */
 function parseDscacheutilUsers(text = "") {
   return String(text || "")
     .split(/\r?\n[\t ]*\r?\n/u)

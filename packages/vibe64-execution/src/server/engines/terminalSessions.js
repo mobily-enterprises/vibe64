@@ -54,8 +54,10 @@ import {
 
 const stores = new Map();
 const requirePty = createRequire(import.meta.url);
-// Reading a namespace never creates it. Only a started terminal does, and the
-// namespace is forgotten with its last closed terminal.
+/**
+ * Reading a namespace never creates it. Only a started terminal does, and the
+ * namespace is forgotten with its last closed terminal.
+ */
 function sessionsForNamespace(namespace) {
   return stores.get(normalizeNamespace(namespace)) || NO_SESSIONS;
 }

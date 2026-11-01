@@ -40,9 +40,11 @@ const GOAL_STOP_REQUEST = "assistant_goal_stop_request";
 const MAIN_AI_CHANGED_GOAL_NOTICE = "Goal cancelled because the main AI changed in AI setup. The work done so far is kept. " +
   "To continue, choose Goal → Set goal and start it again; it will run on the new main AI.";
 
-// A goal stop recorded by Cancel without the goal settings lock. Every reader
-// already treats the intent it names as stopped; the next change made under
-// that lock saves the stop and clears the request.
+/**
+ * A goal stop recorded by Cancel without the goal settings lock. Every reader
+ * already treats the intent it names as stopped; the next change made under
+ * that lock saves the stop and clears the request.
+ */
 const goalStopRequestFor = session => {
   try { return JSON.parse(session.metadata?.[GOAL_STOP_REQUEST] || "null")?.intentId || ""; } catch { return ""; }
 };
@@ -102,8 +104,10 @@ function createServiceGoals({
     if (!result.acquired) throw new Error("Goal continuation settings are busy. Try the control again.");
   }
 
-  // Cancel answers without waiting for the goal settings lock: it stops a goal
-  // admission at once, records the stop, and saves it under that lock afterwards.
+  /**
+   * Cancel answers without waiting for the goal settings lock: it stops a goal
+   * admission at once, records the stop, and saves it under that lock afterwards.
+   */
   async function requestGoalStop(sessionId, context) {
     const intent = readGoalIntent(await context.runtime.getSession(sessionId, { inspectSource: false }));
     if (!intent?.active) return;
@@ -141,10 +145,12 @@ function createServiceGoals({
     });
   }
 
-  // A goal never continues on a main AI the owner has since replaced in AI
-  // setup: the next time it would continue, it is cancelled through the
-  // ordinary Cancel goal path and the chat says why. A Custom goal runs the
-  // person's own model, and a paused goal is checked when it is resumed.
+  /**
+   * A goal never continues on a main AI the owner has since replaced in AI
+   * setup: the next time it would continue, it is cancelled through the
+   * ordinary Cancel goal path and the chat says why. A Custom goal runs the
+   * person's own model, and a paused goal is checked when it is resumed.
+   */
   async function cancelGoalIfMainAiChanged(sessionId, vibe64User = null, { activeOnly = false } = {}) {
     const context = await assistantContext.assistantSessionOptions(sessionId, { vibe64User });
     const pinned = assistantRoutingGoalFromMetadata(context.session.metadata);
@@ -428,9 +434,11 @@ function createServiceGoals({
     return canonical ? result : completeResult(result);
   }
 
-  // A Codex account change pauses a goal whose turn is still running on the
-  // previous account, so that runtime starts no further turn. Once it has
-  // stopped, the goal resumes on the current account as the person who set it.
+  /**
+   * A Codex account change pauses a goal whose turn is still running on the
+   * previous account, so that runtime starts no further turn. Once it has
+   * stopped, the goal resumes on the current account as the person who set it.
+   */
   async function continueGoalAfterAccountChange(sessionId, { threadId = "" } = {}) {
     const context = await assistantContext.assistantSessionOptions(sessionId);
     const intent = readGoalIntent(context.session);
@@ -454,8 +462,10 @@ function createServiceGoals({
     }
   }
 
-  // Run once per daemon after all host admission and execution facilities are
-  // configured. This is continuation of saved intent, never history repair.
+  /**
+   * Run once per daemon after all host admission and execution facilities are
+   * configured. This is continuation of saved intent, never history repair.
+   */
   function recoverActiveGoals() {
     if (state.lifecycle.goalRecovery) return state.lifecycle.goalRecovery;
     state.lifecycle.goalRecovery = (async () => {
@@ -466,8 +476,10 @@ function createServiceGoals({
         logOperationalEvent(logger, "warn", { ...result, event: "vibe64.agent_goal.recovery_failed",
           component: "vibe64.agent_goal" }, "An active goal needs attention after server restart.");
       };
-      // A failure names its project and the person who set the goal: session
-      // IDs repeat across projects, so the operator needs both.
+      /**
+       * A failure names its project and the person who set the goal: session
+       * IDs repeat across projects, so the operator needs both.
+       */
       const recoverCurrentProject = async projectSlug => {
         for (const session of await sessionAccess.listOpenProjectRuntimeSessions()) {
           if (state.lifecycle.closing) break;

@@ -9,8 +9,10 @@ function resolveCommandCwd(cwd = "") {
   return normalizeAbsolutePath(cwd || process.cwd());
 }
 
-// resolveLinks: false keeps the check lexical, for a directory this process
-// cannot enter whose owner resolves it again (an application's area).
+/**
+ * resolveLinks: false keeps the check lexical, for a directory this process
+ * cannot enter whose owner resolves it again (an application's area).
+ */
 function assertCwdAllowed(cwd = "", {
   allowedRoots = [],
   resolveLinks = true

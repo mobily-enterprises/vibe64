@@ -24,8 +24,10 @@ async function setTimes(root, seconds) {
   await utimes(root, seconds, seconds);
 }
 
-// `exclude` names top-level-relative paths (folders or files) left out of the
-// export, such as the project's Genesis and agent files for a package build.
+/**
+ * `exclude` names top-level-relative paths (folders or files) left out of the
+ * export, such as the project's Genesis and agent files for a package build.
+ */
 async function exportSavedCommit({ projectRoot, commit, directory, exclude = [] } = {}) {
   if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) {
     throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "The project root must be an absolute path.");

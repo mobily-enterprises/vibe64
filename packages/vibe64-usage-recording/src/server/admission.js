@@ -3,8 +3,10 @@
 // refusal's reason verbatim.
 const USAGE_RECORDING_ADMISSION_TOKEN = "vibe64.usage-recording.admission";
 
-// async ({ sessionId, projectSlug, targetKind, runtimes })
-//   → { admitted: true } | { admitted: false, reason }
+/**
+ * async ({ sessionId, projectSlug, targetKind, runtimes })
+ *   → { admitted: true } | { admitted: false, reason }
+ */
 async function admitUsageRecording() {
   return { admitted: true };
 }

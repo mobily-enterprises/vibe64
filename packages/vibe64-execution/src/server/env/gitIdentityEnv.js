@@ -122,7 +122,9 @@ async function existingDirectory(value = "") {
   return directory && await stat(directory).then((entry) => entry.isDirectory(), () => false) ? directory : "";
 }
 
-// Every scope is listed from lowest to highest priority; the last value wins.
+/**
+ * Every scope is listed from lowest to highest priority; the last value wins.
+ */
 function gitConfigIdentityValues(stdout = "") {
   const values = {};
   for (const line of String(stdout || "").split("\n")) {
@@ -141,16 +143,20 @@ function gitConfigReadOptions(cwd, env) {
   };
 }
 
-// Exit 1 means no user.name or user.email is set. Any other failure yields null.
+/**
+ * Exit 1 means no user.name or user.email is set. Any other failure yields null.
+ */
 function readGitConfigIdentitySync(cwd, env) {
   const result = spawnSync("git", GIT_CONFIG_IDENTITY_ARGS, { ...gitConfigReadOptions(cwd, env), encoding: "utf8" });
   if (result.error || (result.status !== 0 && result.status !== 1)) return null;
   return gitConfigIdentityValues(result.stdout);
 }
 
-// The same read without holding the server's thread. `transient` marks a read
-// that never finished (git missing, a spawn error, the timeout), which a memo
-// must not keep.
+/**
+ * The same read without holding the server's thread. `transient` marks a read
+ * that never finished (git missing, a spawn error, the timeout), which a memo
+ * must not keep.
+ */
 function readGitConfigIdentity(cwd, env) {
   return new Promise((resolve) => {
     let stdout = "";
@@ -183,14 +189,18 @@ function gitConfigIdentity(values = null) {
   };
 }
 
-// Runs with the command's env, but finds git on the server's own PATH: an
-// agent PATH can start with Vibe64's git shim, which this process serves.
+/**
+ * Runs with the command's env, but finds git on the server's own PATH: an
+ * agent PATH can start with Vibe64's git shim, which this process serves.
+ */
 function gitConfigReadEnv(env = {}) {
   return { ...env, PATH: process.env.PATH || env.PATH };
 }
 
-// The files `git config --global` writes. A change to any of them is seen on
-// the next command, so Health and the next Save follow Save Git identity at once.
+/**
+ * The files `git config --global` writes. A change to any of them is seen on
+ * the next command, so Health and the next Save follow Save Git identity at once.
+ */
 function globalGitConfigPaths(env = {}) {
   if (Object.hasOwn(env, "GIT_CONFIG_GLOBAL")) return [String(env.GIT_CONFIG_GLOBAL)];
   const home = absoluteDirectory(env.HOME);
@@ -216,7 +226,9 @@ function gitConfigReadKey(repositoryDirectory, homeDirectory, env) {
   return createHash("sha256").update(JSON.stringify([repositoryDirectory, homeDirectory, entries])).digest("hex");
 }
 
-// The repository's view (its own config wins there), else the HOME's view.
+/**
+ * The repository's view (its own config wins there), else the HOME's view.
+ */
 async function readPersonGitConfigValues(repositoryDirectory, homeDirectory, env) {
   const repository = repositoryDirectory ? await readGitConfigIdentity(repositoryDirectory, env) : null;
   if (repository?.values) return repository;
@@ -224,9 +236,11 @@ async function readPersonGitConfigValues(repositoryDirectory, homeDirectory, env
   return { transient: Boolean(repository?.transient || home.transient), values: home.values };
 }
 
-// One read answers every command with the same directories and env (the full
-// env, so include and GIT_CONFIG_* overrides keep their effect) until the TTL
-// ends or the global config file changes. Concurrent commands share one read.
+/**
+ * One read answers every command with the same directories and env (the full
+ * env, so include and GIT_CONFIG_* overrides keep their effect) until the TTL
+ * ends or the global config file changes. Concurrent commands share one read.
+ */
 async function memoizedPersonGitConfigValues(repositoryDirectory, homeDirectory, env) {
   const key = gitConfigReadKey(repositoryDirectory, homeDirectory, env);
   const revision = await globalGitConfigRevision(env);
@@ -247,16 +261,20 @@ async function memoizedPersonGitConfigValues(repositoryDirectory, homeDirectory,
   return outcome.values;
 }
 
-// The person's own Git configuration, read by git itself so global, XDG,
-// include and repository-local rules all apply.
+/**
+ * The person's own Git configuration, read by git itself so global, XDG,
+ * include and repository-local rules all apply.
+ */
 async function personGitConfigIdentity({ cwd = "", env = null } = {}) {
   if (!env || typeof env !== "object") return null;
   const [repositoryDirectory, homeDirectory] = await Promise.all([existingDirectory(cwd), existingDirectory(env.HOME)]);
   return gitConfigIdentity(await memoizedPersonGitConfigValues(repositoryDirectory, homeDirectory, gitConfigReadEnv(env)));
 }
 
-// The same identity read while the caller waits. Only a builder that must stay
-// synchronous uses it (the Codex runtime context); commands use the read above.
+/**
+ * The same identity read while the caller waits. Only a builder that must stay
+ * synchronous uses it (the Codex runtime context); commands use the read above.
+ */
 function personGitConfigIdentitySync({ cwd = "", env = null } = {}) {
   if (!env || typeof env !== "object") return null;
   const readEnv = gitConfigReadEnv(env);
@@ -265,10 +283,12 @@ function personGitConfigIdentitySync({ cwd = "", env = null } = {}) {
     readGitConfigIdentitySync(existingDirectorySync(env.HOME), readEnv));
 }
 
-// The person's Git identity read as that person, supplied by a caller whose
-// command runs under another Unix identity (such as a Save run by the
-// workspace service for a signed-in person), where reading the command's own
-// HOME would find someone else's settings.
+/**
+ * The person's Git identity read as that person, supplied by a caller whose
+ * command runs under another Unix identity (such as a Save run by the
+ * workspace service for a signed-in person), where reading the command's own
+ * HOME would find someone else's settings.
+ */
 function suppliedPersonGitIdentity(value = {}) {
   const record = recordValue(value);
   const name = normalizeText(record.name);
@@ -287,9 +307,11 @@ function isFallbackGitIdentityEmail(email = "") {
   return normalizeText(email).toLowerCase().endsWith(FALLBACK_EMAIL_DOMAIN);
 }
 
-// Order: explicit project/session identity, the person's Git config (as read
-// for them by the caller, else by git with the command's own env), the
-// connected GitHub account, then a clearly marked stand-in.
+/**
+ * Order: explicit project/session identity, the person's Git config (as read
+ * for them by the caller, else by git with the command's own env), the
+ * connected GitHub account, then a clearly marked stand-in.
+ */
 function explicitGitIdentity({
   env = process.env,
   personGitIdentity = null,
@@ -362,7 +384,9 @@ function gitIdentityEnvSync(options = {}) {
   return identityEnv(resolveGitIdentitySync(options));
 }
 
-// Nothing is blocked on a stand-in identity; the person is told how to set theirs.
+/**
+ * Nothing is blocked on a stand-in identity; the person is told how to set theirs.
+ */
 async function gitIdentityReadiness(options = {}) {
   const identity = await resolveGitIdentity(options);
   const fallback = identity.source === "fallback";

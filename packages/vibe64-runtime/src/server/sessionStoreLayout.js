@@ -41,10 +41,12 @@ async function readTextIfExists(filePath) {
 }
 
 
-// Parsed files reused while their identity is unchanged. Every writer here
-// publishes by rename, which gives the file a new inode; another writer
-// changes at least its size or modification time. Callers must not mutate the
-// shared parsed value.
+/**
+ * Parsed files reused while their identity is unchanged. Every writer here
+ * publishes by rename, which gives the file a new inode; another writer
+ * changes at least its size or modification time. Callers must not mutate the
+ * shared parsed value.
+ */
 function createParsedFileCache(limit) {
   const entries = new Map();
   function remember(filePath, identity, value) {
@@ -92,8 +94,10 @@ const ARCHIVE_EXECUTIONS = Object.freeze({
   write: Object.freeze({ operationId: "session-archive-write", label: "Writing a session archive" })
 });
 
-// Only a tar that ran and failed says something about the archive. A refused,
-// timed-out or undrained run keeps its own code and whether to retry.
+/**
+ * Only a tar that ran and failed says something about the archive. A refused,
+ * timed-out or undrained run keeps its own code and whether to retry.
+ */
 function archiveCommandError(result, message, code) {
   if (!result.code) return vibe64Error(message, code);
   return Object.assign(vibe64Error(message, result.code), result.retryable ? { retryable: true } : {});
@@ -252,8 +256,10 @@ function resolveVibe64SessionPaths({
   });
 }
 
-// One metadata value of every active session, read without a store instance so
-// project lists never start a project runtime.
+/**
+ * One metadata value of every active session, read without a store instance so
+ * project lists never start a project runtime.
+ */
 async function readActiveSessionMetadataValues({ projectRuntimeRoot = "", name = "" } = {}) {
   const { activeSessionsRoot } = resolveVibe64SessionPaths({ projectRuntimeRoot });
   const entries = await readdir(activeSessionsRoot, { withFileTypes: true }).catch((error) => {
@@ -269,7 +275,9 @@ async function readActiveSessionMetadataValues({ projectRuntimeRoot = "", name =
   return values;
 }
 
-// The time now, for a store composed without its own clock.
+/**
+ * The time now, for a store composed without its own clock.
+ */
 function systemClock() {
   return new Date();
 }

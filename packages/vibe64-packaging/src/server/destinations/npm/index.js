@@ -42,7 +42,9 @@ function npmSettings(target) {
   };
 }
 
-// npm's per-registry config key: `//host[:port]/path/`.
+/**
+ * npm's per-registry config key: `//host[:port]/path/`.
+ */
 function registryKey(registry) {
   const url = new URL(registry);
   return `//${url.host}${url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`}`;
@@ -77,7 +79,9 @@ function integrityOf(buffer) {
   return `sha512-${createHash("sha512").update(buffer).digest("base64")}`;
 }
 
-// What the registry reports for an identical tarball: its sha512 integrity.
+/**
+ * What the registry reports for an identical tarball: its sha512 integrity.
+ */
 function expectedChecksum(artifacts) {
   return integrityOf(readFileSync(tarballOf(artifacts).path));
 }
@@ -114,7 +118,9 @@ async function credentialToken(credentials, registry) {
   return { file, token: registryToken(userconfig, registry) };
 }
 
-// Runs the npm CLI with only the given user config, a private cache and no
+/**
+ * Runs the npm CLI with only the given user config, a private cache and no
+ */
 // global or project config, from an empty folder.
 async function runNpm(args, { npm = ["npm"], userconfig = null, secrets = [], failureMessage }) {
   return withToolHome(async (home) => {
@@ -177,8 +183,10 @@ async function upload({ target, version, artifacts, credentials }) {
   return { output: result.output.slice(-2000) };
 }
 
-// `npm publish --dry-run` on the exact tarball, plus what changes compared with
-// the version the channel serves today.
+/**
+ * `npm publish --dry-run` on the exact tarball, plus what changes compared with
+ * the version the channel serves today.
+ */
 async function dryRun({ target, version, artifacts, credentials }) {
   const { registry, access, channel, npm } = npmSettings(target);
   const { file, bytes, entries, manifest } = await tarballDetails(artifacts);
@@ -225,7 +233,9 @@ async function dryRun({ target, version, artifacts, credentials }) {
   };
 }
 
-// A read-only proof that the sign-in works: the registry's whoami.
+/**
+ * A read-only proof that the sign-in works: the registry's whoami.
+ */
 async function verifyCredential({ target, credentials }) {
   const { registry } = npmSettings(target);
   const { token } = await credentialToken(credentials, registry);

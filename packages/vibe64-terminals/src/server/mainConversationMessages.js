@@ -22,9 +22,11 @@ import { learningSessionExecutionRoot, readSessionConversationContext } from "./
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
 
-// Main message policy runs at the existing native owner's preparation and
-// completion phases. Native context/startup and failure health remain host
-// facilities; this binding owns actor admission, Genesis rendering and receipts.
+/**
+ * Main message policy runs at the existing native owner's preparation and
+ * completion phases. Native context/startup and failure health remain host
+ * facilities; this binding owns actor admission, Genesis rendering and receipts.
+ */
 function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
   async function prepareMessage(input, prepared, { starting, selected }) {
     const { runtime, executionRoot, workdir, messageId, actorContext: vibe64User } = prepared;
@@ -193,8 +195,10 @@ function sessionBriefingIsDelivered(session = {}) {
   return trimmedText(session.metadata?.agent_briefing_delivered) === "yes";
 }
 
-// A session opens with its briefing until it was delivered, unless a renewal
-// handover already started the conversation. Engines add their own conditions.
+/**
+ * A session opens with its briefing until it was delivered, unless a renewal
+ * handover already started the conversation. Engines add their own conditions.
+ */
 function sessionNeedsOpeningPrompt(session = {}) {
   return !sessionBriefingIsDelivered(session) &&
     !trimmedText(session.metadata?.renewal_handover_delivered_at);

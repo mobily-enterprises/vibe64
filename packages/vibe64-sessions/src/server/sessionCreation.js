@@ -52,7 +52,9 @@ function sessionCreationLimitError(policy) {
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
 function createSessionCreation({ assistant, project, publishSessionChanged, setupRunner, terminals, workspaceSetup }) {
-  // Only an internal caller may supply a server-reserved identity.
+  /**
+   * Only an internal caller may supply a server-reserved identity.
+   */
   async function createSession(input = {}, { sessionId, expectedCommit, connectedContribution } = {}) {
     return sessionResult(async () => {
       assertProjectEffectAdmission();

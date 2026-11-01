@@ -115,16 +115,20 @@ function createColleagueConversations({ actions, accounts, terminals, serviceSta
     finally { observer.attaching = null; }
   }
 
-  // The person's routed Colleague: the owner's or the team setup's Colleague
-  // role. For the owner, recommendations are saved first as session creation
-  // does, so an AI connected outside the in-app sign-in is usable without a
-  // manual Save; a team member's send never writes a setup.
+  /**
+   * The person's routed Colleague: the owner's or the team setup's Colleague
+   * role. For the owner, recommendations are saved first as session creation
+   * does, so an AI connected outside the in-app sign-in is usable without a
+   * manual Save; a team member's send never writes a setup.
+   */
   async function routedColleague(user) {
     await accounts.initializeModelRouting({ vibe64User: user });
     return terminals.resolveAssistantPurpose({ purpose: "colleague" }, { vibe64User: user });
   }
 
-  // An exact selection, or the routed Colleague.
+  /**
+   * An exact selection, or the routed Colleague.
+   */
   async function chooseSelection(context, selection) {
     const user = authenticatedVibe64User(context);
     if (selection) {
@@ -137,10 +141,12 @@ function createColleagueConversations({ actions, accounts, terminals, serviceSta
     return decision.effectiveSelection;
   }
 
-  // Read-only: says whether a send could choose a model now. An unset
-  // Colleague role counts when an AI is connected, because a send saves the
-  // recommended setup first. Only a definite answer counts; a failed read
-  // is left to the send.
+  /**
+   * Read-only: says whether a send could choose a model now. An unset
+   * Colleague role counts when an AI is connected, because a send saves the
+   * recommended setup first. Only a definite answer counts; a failed read
+   * is left to the send.
+   */
   async function selectionAvailable(context) {
     try {
       const user = authenticatedVibe64User(context);

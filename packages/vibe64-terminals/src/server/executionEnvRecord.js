@@ -1,4 +1,6 @@
-// An Env record with trimmed names and text values; names that are empty are dropped.
+/**
+ * An Env record with trimmed names and text values; names that are empty are dropped.
+ */
 function executionEnvRecord(env = {}) {
   if (!env || typeof env !== "object" || Array.isArray(env)) {
     return {};

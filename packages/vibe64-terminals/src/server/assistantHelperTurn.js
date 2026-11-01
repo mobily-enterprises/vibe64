@@ -174,7 +174,9 @@ async function runAssistantHelperTurn({
   return { executionProfile, text: result.text };
 }
 
-// The record a session background task keeps for its helper.
+/**
+ * The record a session background task keeps for its helper.
+ */
 function backgroundTaskHelperRecord(agentContext = {}, taskId = "") {
   const { runtime, session } = agentContext;
   const sessionId = session.sessionId;

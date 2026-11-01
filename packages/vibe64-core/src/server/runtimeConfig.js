@@ -130,7 +130,9 @@ function runtimeConfigKeyIsVibe64Reserved(key = "") {
   return normalizeText(key).startsWith(RUNTIME_CONFIG_VIBE64_RESERVED_PREFIX);
 }
 
-// A display-only provenance line a host may give a record it supplies.
+/**
+ * A display-only provenance line a host may give a record it supplies.
+ */
 function normalizeRuntimeConfigLabel(label) {
   if (label === undefined || label === null || label === "") return "";
   if (typeof label !== "string" || label.length > RUNTIME_CONFIG_LABEL_MAX_LENGTH || /[\r\n]/u.test(label)) {
@@ -364,9 +366,11 @@ function runtimeConfigEnvViewModel(config = {}) {
   };
 }
 
-// A .env value that npm dotenv, Node's parseEnv and Docker Compose read alike:
-// bare when plain; otherwise single-quoted, which every reader keeps literally;
-// only a value holding ' or a line break is double-quoted, with \n for breaks.
+/**
+ * A .env value that npm dotenv, Node's parseEnv and Docker Compose read alike:
+ * bare when plain; otherwise single-quoted, which every reader keeps literally;
+ * only a value holding ' or a line break is double-quoted, with \n for breaks.
+ */
 function runtimeConfigDotenvValue(value = "") {
   const text = String(value ?? "");
   if (!text || DOTENV_PLAIN_VALUE_PATTERN.test(text)) {
@@ -381,9 +385,11 @@ function dotenvComment(text = "") {
   return `# ${String(text ?? "").replace(/[\r\n]+/gu, " ")}`;
 }
 
-// The whole environment as one plain .env file: a short header, then the
-// person's values and the system values in the Env panel's grouping, each
-// record with its real value (KEY= when it has none).
+/**
+ * The whole environment as one plain .env file: a short header, then the
+ * person's values and the system values in the Env panel's grouping, each
+ * record with its real value (KEY= when it has none).
+ */
 function runtimeConfigDotenvFile({
   downloadedAt = new Date(),
   environment = "",

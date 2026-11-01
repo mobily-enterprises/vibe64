@@ -151,7 +151,9 @@ function createClaudeConversationHost({
   const { queries: accountQueries, queryFailure: accountQueryFailure } = accounts;
   const turnEvents = createClaudeConversationEvents({ projectService, storage: conversationStorage,
     messagePolicy, owner: conversations, accountQueries, publishSessionChanged, logger });
-  // The owner calls back into its accounts and turn events, which are built from it.
+  /**
+   * The owner calls back into its accounts and turn events, which are built from it.
+   */
   function prepareAccount(entry) { return accounts.prepareAccount(entry); }
   function publishTurnEvent(entry, event) { return turnEvents(entry, event); }
   const terminalAccess = createTerminalAccess(conversations, recordGitActor);
@@ -190,8 +192,10 @@ function createClaudeConversationHost({
       terminal: listTerminalSessions({ namespace: claudeTerminalNamespace(context.sessionId), runningOnly: true })[0] || null };
   }
 
-  // Cleanup reaches the owner's retained work by session key; a conversation it
-  // reopens gets its full context from the owner's own preparation.
+  /**
+   * Cleanup reaches the owner's retained work by session key; a conversation it
+   * reopens gets its full context from the owner's own preparation.
+   */
   const ownerContextFor = context => readClaudeConversationOwnerContext(projectService, context.sessionId, context);
   const cleanupApplication = {
     readContext: context => ownerContextFor({ ...context, allowClosing: true }),

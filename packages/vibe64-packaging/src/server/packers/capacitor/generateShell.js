@@ -30,8 +30,10 @@ async function readJson(file) {
   }
 }
 
-// The Content package's package.json and the nearest package-lock.json at or
-// above it (a workspace keeps one lockfile at its root), never outside the source.
+/**
+ * The Content package's package.json and the nearest package-lock.json at or
+ * above it (a workspace keeps one lockfile at its root), never outside the source.
+ */
 async function readContentDependencies({ sourceRoot, content }) {
   const root = path.resolve(sourceRoot, content.workdir || ".");
   if (!pathWithin(sourceRoot, root, { allowRoot: true })) throw shellError(`Package ${content.id} Workdir leaves the project.`);
@@ -53,9 +55,11 @@ function lockEntry(lockfile, workspaceKey, name) {
   return nested || lockfile.packages[`node_modules/${name}`] || null;
 }
 
-// The native plugins the app really installed: its direct dependencies whose
-// lockfile entry is a Capacitor plugin (it peers on @capacitor/core). Problems
-// are reported, not repaired; preflight shows them and the packer refuses them.
+/**
+ * The native plugins the app really installed: its direct dependencies whose
+ * lockfile entry is a Capacitor plugin (it peers on @capacitor/core). Problems
+ * are reported, not repaired; preflight shows them and the packer refuses them.
+ */
 function nativePlugins({ manifest, lockfile, workspaceKey = "" }) {
   const problems = [];
   if (!manifest || typeof manifest !== "object") {
@@ -108,7 +112,9 @@ function assertVersionCode(versionCode) {
   }
 }
 
-// The shell's files as text, keyed by shell-relative path.
+/**
+ * The shell's files as text, keyed by shell-relative path.
+ */
 function shellFiles({ entry, plugins, version, versionCode }) {
   assertVersionCode(versionCode);
   if (!EXACT_VERSION.test(version || "")) throw shellError(`Package ${entry.id} needs its release version, such as 1.5.0.`);
@@ -150,7 +156,9 @@ function shellFiles({ entry, plugins, version, versionCode }) {
   };
 }
 
-// Reads the source facts, refuses problems, and returns the shell files.
+/**
+ * Reads the source facts, refuses problems, and returns the shell files.
+ */
 async function generateShell({ sourceRoot, entry, content, version, versionCode }) {
   if (entry?.packer !== "capacitor") throw shellError("Only a capacitor package has a native shell.");
   if (content?.packer !== "web-bundle" || content.id !== entry.content) throw shellError(`Package ${entry.id} needs its web-bundle Content package.`);
@@ -161,8 +169,10 @@ async function generateShell({ sourceRoot, entry, content, version, versionCode 
   return { files: shellFiles({ entry, plugins: found.plugins, version, versionCode }), plugins: found.plugins, core: found.core };
 }
 
-// Writes the shell into an empty throwaway folder: its files, the built web
-// content as `www`, and the app icon.
+/**
+ * Writes the shell into an empty throwaway folder: its files, the built web
+ * content as `www`, and the app icon.
+ */
 async function writeShell({ shellRoot, files, webRoot, iconFile }) {
   await mkdir(shellRoot, { recursive: false });
   for (const [name, text] of Object.entries(files)) await writeFile(path.join(shellRoot, name), text, { flag: "wx" });

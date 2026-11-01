@@ -66,8 +66,10 @@ function createSessionRecordFiles({ state, storePaths }) {
     return metadata;
   }
 
-  // Offline upgrades validate a supported old record before adding its binding.
-  // Ordinary readers always pass through readMetadataFromPaths above.
+  /**
+   * Offline upgrades validate a supported old record before adding its binding.
+   * Ordinary readers always pass through readMetadataFromPaths above.
+   */
   async function readUnboundMetadataFromPaths(sessionPaths) {
     const names = sortedFileNames(
       await readDirectoryEntries(sessionPaths.metadataRoot),

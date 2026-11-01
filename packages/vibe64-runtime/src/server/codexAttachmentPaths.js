@@ -10,11 +10,13 @@ function configuredRoot(env = {}) {
   return String(env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] || "").trim();
 }
 
-// Live session state: each session's agent command helpers, their runs and
-// pending uploads. Agents keep these paths for their whole lifetime, so the
-// root is daemon state, never temporary space that a host may age out. The
-// server sets it below its system root at startup; a caller's environment may
-// name another root, and a process without a server uses the local state root.
+/**
+ * Live session state: each session's agent command helpers, their runs and
+ * pending uploads. Agents keep these paths for their whole lifetime, so the
+ * root is daemon state, never temporary space that a host may age out. The
+ * server sets it below its system root at startup; a caller's environment may
+ * name another root, and a process without a server uses the local state root.
+ */
 function codexAttachmentHostRoot({
   env = process.env
 } = {}) {

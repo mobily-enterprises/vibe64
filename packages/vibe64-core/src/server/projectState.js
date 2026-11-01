@@ -28,8 +28,10 @@ function normalizeProjectSlug(value = "") {
 
 const EXTERNAL_PROJECT_LOCAL_ROOTS_DIR = "projects";
 
-// Offline maintenance inventories runtime state, including closed/deleting and
-// standalone projects, without creating directories or recovering project state.
+/**
+ * Offline maintenance inventories runtime state, including closed/deleting and
+ * standalone projects, without creating directories or recovering project state.
+ */
 async function listProjectRuntimeRoots(systemRoot) {
   if (!path.isAbsolute(systemRoot || "") || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("Project state inventory requires an absolute, non-root system directory.");

@@ -100,8 +100,10 @@ function createService({
     };
   }
 
-  // A host that supplies resources (a managed database) may not have prepared
-  // them yet; Preview then says Vibe64 is on it rather than asking for values.
+  /**
+   * A host that supplies resources (a managed database) may not have prepared
+   * them yet; Preview then says Vibe64 is on it rather than asking for values.
+   */
   async function resourcesBeingPrepared(input) {
     try {
       return (await projectService.projectEnvironmentStatus({ scope: "dev", sessionId: input.sessionId })).status === "not-prepared";

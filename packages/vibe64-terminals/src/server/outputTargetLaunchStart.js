@@ -106,8 +106,10 @@ function createOutputTargetLaunchStart({
   finishWorkflow,
   setWorkflowPhase
 }) {
-  // An ended launch terminal gives up its Preview proxy and the session's
-  // launch record; a cleared record is announced.
+  /**
+   * An ended launch terminal gives up its Preview proxy and the session's
+   * launch record; a cleared record is announced.
+   */
   async function releaseEndedLaunchTerminal(context, sessionId, terminalSessionId) {
     await state.launchPreviewProxies.close({
       sessionId,
@@ -207,7 +209,9 @@ function createOutputTargetLaunchStart({
           outputTargetId,
           sessionId
         };
-        // A start refused before its terminal runs records why, then says so.
+        /**
+         * A start refused before its terminal runs records why, then says so.
+         */
         const refuseStart = async (reason, message, record = {}) => {
           await writePreviewDiagnostic(context.session, { ...diagnosticBase, ...record, message, reason, status: "failed" });
           return { ok: false, error: message };

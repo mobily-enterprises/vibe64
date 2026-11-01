@@ -24,10 +24,12 @@ function missingAsNull(error) {
   throw error;
 }
 
-// The branch's branch.<name>.* entries from `git config --list -z`: each entry
-// is the key, a newline and its value (a valueless key has neither). A
-// variable name has no dot, so another branch whose name starts with this one
-// is not mistaken for it.
+/**
+ * The branch's branch.<name>.* entries from `git config --list -z`: each entry
+ * is the key, a newline and its value (a valueless key has neither). A
+ * variable name has no dot, so another branch whose name starts with this one
+ * is not mistaken for it.
+ */
 function branchConfig(listing = "", branch = "") {
   const prefix = `branch.${branch}.`;
   return listing.split("\0").filter(Boolean).map((entry) => {
@@ -36,8 +38,10 @@ function branchConfig(listing = "", branch = "") {
   }).filter(({ key }) => key.startsWith(prefix) && !key.slice(prefix.length).includes("."));
 }
 
-// One private file per removed ref. An existing file is an earlier attempt at
-// the same removal: it must match exactly and is never replaced.
+/**
+ * One private file per removed ref. An existing file is an earlier attempt at
+ * the same removal: it must match exactly and is never replaced.
+ */
 async function backUpClonedBranch(backupPath, label, record) {
   if (await readFile(backupPath, "utf8").catch(missingAsNull) === null) {
     await writeJsonFileAtomic(backupPath, record, { directoryMode: 0o700, fileMode: 0o600 });
@@ -78,9 +82,11 @@ async function sessionCheckout(store, sessionId) {
   };
 }
 
-// Applies the creation proof to one checkout and records its outcome as
-// creation does. Git failures stay with this session; a backup that cannot be
-// written or verified stops the upgrade before anything is removed.
+/**
+ * Applies the creation proof to one checkout and records its outcome as
+ * creation does. Git failures stay with this session; a backup that cannot be
+ * written or verified stops the upgrade before anything is removed.
+ */
 async function upgradeSessionCheckout({ apply, backupPath, checkout, label, project, report, runCommand, sessionId, store }) {
   const { clonedBranch, sourcePath } = checkout;
   const git = (args) => runGit(sourcePath, args, [sourcePath], { runCommand });
@@ -135,11 +141,13 @@ async function upgradeSessionCheckout({ apply, backupPath, checkout, label, proj
   return record("removed");
 }
 
-// 20261030: session checkouts created before source creation removed it keep
-// a local copy of the branch they cloned (usually main) that nothing advances.
-// Each active session clone gets the creation proof and records its outcome in
-// source_default_branch_local. The checkout is wherever source_path says;
-// archived sessions have none.
+/**
+ * 20261030: session checkouts created before source creation removed it keep
+ * a local copy of the branch they cloned (usually main) that nothing advances.
+ * Each active session clone gets the creation proof and records its outcome in
+ * source_default_branch_local. The checkout is wherever source_path says;
+ * archived sessions have none.
+ */
 async function removeSessionClonedDefaultBranches({
   apply,
   backupRoot,

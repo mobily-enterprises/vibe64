@@ -71,7 +71,9 @@ const renewalConfirmationFields = {
   }
 };
 
-// Route bodies choose their mode: a patch accepts any subset of its fields.
+/**
+ * Route bodies choose their mode: a patch accepts any subset of its fields.
+ */
 function patchSchema(fields) {
   return deepFreeze({
     schema: createSchema(fields),
@@ -86,7 +88,9 @@ function requiredInputSchema(fields) {
   });
 }
 
-// An action always validates its complete input; action() supplies the mode.
+/**
+ * An action always validates its complete input; action() supplies the mode.
+ */
 function actionInput(fields) {
   return deepFreeze({ schema: createSchema(fields) });
 }

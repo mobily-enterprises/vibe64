@@ -37,8 +37,10 @@ function currentPreferences(value = {}) {
   return value;
 }
 
-// Validate known native formats without translating their captured decisions.
-// Configuration snapshots omit schemaVersion; the enclosing request supplies it.
+/**
+ * Validate known native formats without translating their captured decisions.
+ * Configuration snapshots omit schemaVersion; the enclosing request supplies it.
+ */
 function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, preferences = false, request = false } = {}) {
   if (!isPlainObject(value) || ![3, 4].includes(schemaVersion) ||
       value.schemaVersion !== undefined && value.schemaVersion !== schemaVersion) {
@@ -94,7 +96,9 @@ function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, prefe
   return value;
 }
 
-// Frozen preference validation for the published V2 migration.
+/**
+ * Frozen preference validation for the published V2 migration.
+ */
 function assistantRoutingPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || !modes.has(value.mode)) {
     throw Object.assign(new Error("Choose Plan, Code, Economy, or Auto."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
@@ -235,8 +239,10 @@ function upgradeMetadata(metadata, currentSelection, label) {
   return Object.fromEntries(Object.entries(changes).filter(([key, value]) => metadata[key] !== value));
 }
 
-// Used only by the stopped-service upgrade. The session store owns discovery,
-// archive extraction and staging; this transform owns routing fields alone.
+/**
+ * Used only by the stopped-service upgrade. The session store owns discovery,
+ * archive extraction and staging; this transform owns routing fields alone.
+ */
 function upgradeAssistantRoutingSession({ sessionId, metadata, conversations, renewal = null }) {
   if (renewal && (renewal.kind !== "vibe64.session_renewal" || renewal.schemaVersion !== 1)) {
     throw new Error(`Renewal of ${sessionId} has an unsupported format. Inspect it before upgrading routing.`);

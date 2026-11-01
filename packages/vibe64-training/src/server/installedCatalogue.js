@@ -241,8 +241,10 @@ function createInstalledTrainingCatalogue({ systemRoot }) {
     }
   }
 
-  // Disabling blocks new starts; removing also frees the release's place.
-  // Either way installed topic content and saved attempts keep their pins.
+  /**
+   * Disabling blocks new starts; removing also frees the release's place.
+   * Either way installed topic content and saved attempts keep their pins.
+   */
   async function changeEntry({ courseId, release: courseRelease, expectedRevision } = {}, remove) {
     requireRevision(expectedRevision);
     if (typeof courseId !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(courseId) || typeof courseRelease !== "string" || !/^\d+\.\d+\.\d+$/u.test(courseRelease)) {

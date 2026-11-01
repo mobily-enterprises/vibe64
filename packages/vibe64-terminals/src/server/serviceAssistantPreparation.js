@@ -45,8 +45,10 @@ function createServiceAssistantPreparation({
   projectService,
   sessionAgent
 }) {
-  // Called inside the selection writer's existing session lock. Closing a
-  // controller stops observation/execution, never deletes native history.
+  /**
+   * Called inside the selection writer's existing session lock. Closing a
+   * controller stops observation/execution, never deletes native history.
+   */
   async function prepareAssistantChangeover(sessionId, context) {
     requireCompletedConversationRewind(context.session);
     const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;

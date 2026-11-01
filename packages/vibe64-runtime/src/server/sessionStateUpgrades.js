@@ -180,7 +180,9 @@ function createSessionStateUpgrades({
     return prepareSessionStateUpgrade({ temporaryRoot, inspectSession, transformRenewal: transform });
   }
 
-  // Stage through the session/archive owner. The offline publisher owns backups.
+  /**
+   * Stage through the session/archive owner. The offline publisher owns backups.
+   */
   async function prepareSessionStateUpgrade({ temporaryRoot, inspectSession, transformRenewal, transformArchiveRecord }) {
     const relativeScratch = path.relative(state.normalizedStateRoot, temporaryRoot || state.normalizedStateRoot);
     if (!path.isAbsolute(temporaryRoot || "") || typeof inspectSession !== "function" ||
@@ -277,9 +279,11 @@ function createSessionStateUpgrades({
     return updates;
   }
 
-  // Typed stopped-writer upgrade preparation; this never publishes files or
-  // weakens the ordinary immutable binding writer. Training supplies the exact
-  // saved learner/pin and maps only the original publisher's frozen after files.
+  /**
+   * Typed stopped-writer upgrade preparation; this never publishes files or
+   * weakens the ordinary immutable binding writer. Training supplies the exact
+   * saved learner/pin and maps only the original publisher's frozen after files.
+   */
   async function prepareLearningSessionBindingUpgrade({ temporaryRoot, sessionId, learningScope,
     preparedReplacements = [] } = {}) {
     const scope = validateLearningSessionScope(learningScope);
@@ -405,8 +409,10 @@ function createSessionStateUpgrades({
     return { found, files, updates };
   }
 
-  // Offline message-data repair uses the same active/closing/archive inventory.
-  // The feature owner supplies proven data only; content and receipts stay here.
+  /**
+   * Offline message-data repair uses the same active/closing/archive inventory.
+   * The feature owner supplies proven data only; content and receipts stay here.
+   */
   async function prepareConversationMessageDataUpgrade({ temporaryRoot, transform }) {
     if (typeof transform !== "function") throw new Error("Conversation data upgrade requires a transform.");
     return prepareSessionStateUpgrade({ temporaryRoot, async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {

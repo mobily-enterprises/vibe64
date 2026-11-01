@@ -51,7 +51,9 @@ function boundedText(value = "", maximum = 0) {
   return Array.from(text).slice(0, maximum).join("");
 }
 
-// A prompt hint request's own identifiers are checked before any work starts.
+/**
+ * A prompt hint request's own identifiers are checked before any work starts.
+ */
 function promptHintRequestError(message, code) {
   const error = new Error(message);
   error.code = code;

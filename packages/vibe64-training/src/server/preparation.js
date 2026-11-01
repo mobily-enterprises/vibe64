@@ -58,8 +58,10 @@ function requireSuccess(result) {
  * @param {TerminalsService} dependencies.terminals
  */
 function createTrainingService({ catalogue, content, learners, learningSpace, projectContext, projectRepositoryService, project, sessions, terminals }) {
-  // A lesson starts only in the current lesson format and when this learner
-  // can take every required step here (its places exist and are open to them).
+  /**
+   * A lesson starts only in the current lesson format and when this learner
+   * can take every required step here (its places exist and are open to them).
+   */
   async function requireStartable(actor, pin) {
     const taught = await content.readLesson(pinnedLessonKey(pin));
     if (taught.lesson.schemaVersion !== 3) {
@@ -71,9 +73,11 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
     }
   }
 
-  // Rev 4 (H4): one lesson in progress at a time. A different lesson in
-  // progress refuses once with its title (the client's one confirmation);
-  // archiveCurrent archives it first, under the same admitted revision.
+  /**
+   * Rev 4 (H4): one lesson in progress at a time. A different lesson in
+   * progress refuses once with its title (the client's one confirmation);
+   * archiveCurrent archives it first, under the same admitted revision.
+   */
   async function startLesson({ actor, courseId, release, lessonCode, requestId, expectedRevision, archiveCurrent = false } = {}) {
     const approved = await catalogue.readCatalogue();
     const entry = approved.courses.find(value => value.course.courseId === courseId && value.course.release === release);
@@ -120,10 +124,12 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
     return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
   }
 
-  // Restart (H5): archive this attempt, then a new attempt of the same pinned
-  // lesson with a fresh project, teacher and results. A retry with the same
-  // request finishes a stopped restart: the close is resumable and the
-  // reservation replays.
+  /**
+   * Restart (H5): archive this attempt, then a new attempt of the same pinned
+   * lesson with a fresh project, teacher and results. A retry with the same
+   * request finishes a stopped restart: the close is resumable and the
+   * reservation replays.
+   */
   async function restartLesson({ actor, attemptId, requestId, expectedRevision } = {}) {
     const saved = await learners.readState({ actor });
     const attempt = saved.progress.attempts.find(value => value.attemptId === attemptId);
@@ -139,8 +145,10 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
     return reserveAndPrepare({ actor, requestId, expectedRevision: (await learners.readState({ actor })).revision, pin: attempt.pin });
   }
 
-  // Completing the lesson archives the attempt as one bundle (H5); the
-  // learner store keeps the completion. Refused unless every required step passed.
+  /**
+   * Completing the lesson archives the attempt as one bundle (H5); the
+   * learner store keeps the completion. Refused unless every required step passed.
+   */
   async function finishLesson({ actor, attemptId, expectedRevision } = {}) {
     const saved = await learners.readState({ actor, includeCompletion: true });
     const attempt = saved.progress.attempts.find(value => value.attemptId === attemptId);
@@ -154,7 +162,9 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
     return requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "finished" });
   }
 
-  // Delete (H5): the project and the teacher conversation go, with no archive.
+  /**
+   * Delete (H5): the project and the teacher conversation go, with no archive.
+   */
   async function deleteLesson({ actor, attemptId } = {}) {
     return requireCloser().closeAttempt({ actor, attemptId, archive: false, reason: "deleted" });
   }

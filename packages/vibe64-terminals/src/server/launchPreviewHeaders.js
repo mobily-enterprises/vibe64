@@ -27,8 +27,10 @@ function normalizePreviewTargetHref(value = "") {
   return url;
 }
 
-// The proxy alone names recorded requests: a client's own recording headers
-// never reach the application.
+/**
+ * The proxy alone names recorded requests: a client's own recording headers
+ * never reach the application.
+ */
 function stripUsageRecordingHeaders(headers) {
   delete headers[USAGE_RECORDING_REQUEST_HEADER];
   delete headers[USAGE_RECORDING_INTERACTION_HEADER];
@@ -195,8 +197,10 @@ function previewRequestTokenDiagnostics(request, requestUrl, {
   };
 }
 
-// HTTPS Preview gates use a __Host- cookie: Secure, Path=/ and no Domain, so a
-// sibling host under the same parent domain cannot set or replace it.
+/**
+ * HTTPS Preview gates use a __Host- cookie: Secure, Path=/ and no Domain, so a
+ * sibling host under the same parent domain cannot set or replace it.
+ */
 function previewTokenCookieName(proxyOrigin = "") {
   try {
     const url = new URL(proxyOrigin);
@@ -226,7 +230,9 @@ function previewOriginUsesHttps(value = "") {
   }
 }
 
-// The app sees the browser's cookies without this proxy's token cookie.
+/**
+ * The app sees the browser's cookies without this proxy's token cookie.
+ */
 function stripPreviewTokenCookie(header = "", {
   proxyOrigin = ""
 } = {}) {
@@ -238,7 +244,9 @@ function stripPreviewTokenCookie(header = "", {
     .join("; ");
 }
 
-// The name of one `name=value` cookie pair; a bare token is all name.
+/**
+ * The name of one `name=value` cookie pair; a bare token is all name.
+ */
 function cookiePairName(part = "") {
   const separatorIndex = part.indexOf("=");
   return (separatorIndex < 0 ? part : part.slice(0, separatorIndex)).trim();
@@ -399,8 +407,10 @@ function previewResponseHeaders(response, options = {}) {
   return headers;
 }
 
-// An editor origin is the scheme, host and port of the page that shows the
-// Preview; anything else cannot name a page that frames it.
+/**
+ * An editor origin is the scheme, host and port of the page that shows the
+ * Preview; anything else cannot name a page that frames it.
+ */
 function normalizePreviewEditorOrigin(value = "") {
   try {
     const url = new URL(String(value || "").trim());

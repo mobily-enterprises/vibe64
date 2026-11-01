@@ -299,8 +299,10 @@ function createExplanationOperations({
     });
   }
 
-  // Every explanation helper is closed on its own; one that cannot close
-  // keeps its record for the next close, is logged and is named here.
+  /**
+   * Every explanation helper is closed on its own; one that cannot close
+   * keeps its record for the next close, is logged and is named here.
+   */
   async function closeExplanationsForSession(sessionId) {
     const runtime = await projectService.createRuntime({ sessionId });
     const result = await cleanupSourceEditorExplanations({ runtime, sessionId,

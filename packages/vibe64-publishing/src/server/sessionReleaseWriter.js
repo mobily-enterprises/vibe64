@@ -33,9 +33,11 @@ function createSessionReleaseWriter({ project, sourceEditor, today = () => new D
     return writerError(`${file.path} changed after the release was prepared. Prepare it again.`, "VIBE64_PUBLISH_PREPARE_STALE");
   }
 
-  // The change was built from the text read when it was prepared. Every file
-  // is checked against that text before any is written, so an edit made since
-  // is never overwritten and the session is never left half-changed.
+  /**
+   * The change was built from the text read when it was prepared. Every file
+   * is checked against that text before any is written, so an edit made since
+   * is never overwritten and the session is never left half-changed.
+   */
   async function baseHashes({ sessionId, files, user }) {
     const hashes = new Map();
     for (const file of files) {

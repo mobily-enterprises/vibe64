@@ -33,9 +33,11 @@ import {
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 let practiceRequestActor = null;
 
-// A host whose person requests carry no vibe64User (the local transport)
-// supplies the person here: resolve({request}) returns the actor or null.
-// Returns the unregister function.
+/**
+ * A host whose person requests carry no vibe64User (the local transport)
+ * supplies the person here: resolve({request}) returns the actor or null.
+ * Returns the unregister function.
+ */
 // readable-check: allow module-registry - cycle: vibe64.training requires vibe64.core, whose practice requests it names
 function registerPracticeRequestActor(resolve) {
   if (typeof resolve !== "function") throw new TypeError("Practice request actor requires a resolver.");
@@ -64,11 +66,13 @@ async function resolveProjectRequestContext({
     (projectContext.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
   ).trim();
   const vibe64User = request.vibe64User || null;
-  // A person's own page or session request (HTTP or WebSocket, which carry
-  // headers) opens only the projects of their mode, once admission has said
-  // whether the slug is one of their practice projects: Learn opens only
-  // those, Develop refuses them. A team member also needs the team AI setup.
-  // Internal work is never limited.
+  /**
+   * A person's own page or session request (HTTP or WebSocket, which carry
+   * headers) opens only the projects of their mode, once admission has said
+   * whether the slug is one of their practice projects: Learn opens only
+   * those, Develop refuses them. A team member also needs the team AI setup.
+   * Internal work is never limited.
+   */
   const assertMode = async isPractice => {
     if (!request.headers) return;
     await assertLearningModeAllowsProject({ actor: vibe64User, slug, request, practice: isPractice });
@@ -163,9 +167,11 @@ async function resolveProjectRequestContext({
   });
 }
 
-// A practice project opens as an ordinary project to its learner, with full
-// write, through the one learning-space admission; null when the learning
-// space has no such project.
+/**
+ * A practice project opens as an ordinary project to its learner, with full
+ * write, through the one learning-space admission; null when the learning
+ * space has no such project.
+ */
 async function admitPracticeRequest({ projectContext, request, slug, vibe64User }) {
   const person = Boolean(request?.headers);
   const actor = vibe64User || (person && practiceRequestActor ? await practiceRequestActor({ request }) : null);
@@ -222,16 +228,20 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
   });
 }
 
-// Retained only for fresh action dispatch. This is the original request, not
-// the prior action's authorization result, and must never become saved state.
+/**
+ * Retained only for fresh action dispatch. This is the original request, not
+ * the prior action's authorization result, and must never become saved state.
+ */
 function currentProjectActionRequestMeta() {
   const context = currentProjectRequestContext();
   if (context?.[practiceScopeKey]) return null;
   return context?.[actionRequestMetaKey] || null;
 }
 
-// Work in a learner's own practice project. Admission opens one only to its
-// learner, so any person acting here is that learner.
+/**
+ * Work in a learner's own practice project. Admission opens one only to its
+ * learner, so any person acting here is that learner.
+ */
 function currentRequestIsPracticeProject() {
   return Boolean(currentProjectRequestContext()?.[practiceScopeKey]);
 }

@@ -114,11 +114,13 @@ function createProjectSessionEnvironment({ environment, resourceEnvironmentProvi
       };
     },
 
-    // The MySQL/MariaDB or PostgreSQL servers this project's Stack declares
-    // and the person runs themselves: the exact Env names, the values that
-    // apply now (Env over Stack defaults; never the shell), and the endpoint
-    // the connection check uses. Secrets leave only as "set or not". A host
-    // that supplies its own databases answers `managed` with nothing to do.
+    /**
+     * The MySQL/MariaDB or PostgreSQL servers this project's Stack declares
+     * and the person runs themselves: the exact Env names, the values that
+     * apply now (Env over Stack defaults; never the shell), and the endpoint
+     * the connection check uses. Secrets leave only as "set or not". A host
+     * that supplies its own databases answers `managed` with nothing to do.
+     */
     async localDatabaseServers(input = {}) {
       if (managesProjectResources(resourceEnvironmentProvider)) return { managed: true, databases: [] };
       const resolved = await environment.resolvedProjectEnvironment(input, await environment.userEnvRecords());

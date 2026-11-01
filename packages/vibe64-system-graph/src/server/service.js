@@ -43,9 +43,11 @@ import { releaseCallWeb } from "./usageService.js";
 // The largest inspection request an inspector receives on standard input.
 const ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES = 4 * 1024 * 1024;
 
-// Genesis writes the call web only where Git ignores it. The session clone's
-// own exclude file ignores it, so no project file changes. When that cannot be
-// written, Genesis reports CALL_WEB_NOT_IGNORED and Usage explains the fix.
+/**
+ * Genesis writes the call web only where Git ignores it. The session clone's
+ * own exclude file ignores it, so no project file changes. When that cannot be
+ * written, Genesis reports CALL_WEB_NOT_IGNORED and Usage explains the fix.
+ */
 async function excludeCallWeb(sourceRoot) {
   try {
     await writeManagedGitExcludes(sourceRoot, [CALL_WEB_PATH], { section: "Genesis call web" });
@@ -126,7 +128,9 @@ function inspectorRuntime(inspector, runtimeReader) {
   return runtime;
 }
 
-// The inspector's workdir and each ancestor must be a real project directory.
+/**
+ * The inspector's workdir and each ancestor must be a real project directory.
+ */
 async function assertInspectorWorkdir(sourceRoot, inspector) {
   const ancestors = inspector.workdir === "." ? [] : inspector.workdir.split("/").map((_, index, parts) => parts.slice(0, index + 1).join("/"));
   for (const directory of ["", ...ancestors]) {
@@ -135,7 +139,9 @@ async function assertInspectorWorkdir(sourceRoot, inspector) {
   }
 }
 
-// Prerequisites are explicit consumer facts, not command/language guesses.
+/**
+ * Prerequisites are explicit consumer facts, not command/language guesses.
+ */
 async function assertInspectorPrerequisites(sourceRoot, realSourceRoot, inspector, runtimeReader) {
   inspectorRuntime(inspector, runtimeReader);
   await assertInspectorWorkdir(sourceRoot, inspector);
@@ -150,8 +156,10 @@ async function assertInspectorPrerequisites(sourceRoot, realSourceRoot, inspecto
   }
 }
 
-// Each inspector's own cache sits beside the session, outside its source, and is
-// prepared before every run. It is optional input: without it the inspector runs cold.
+/**
+ * Each inspector's own cache sits beside the session, outside its source, and is
+ * prepared before every run. It is optional input: without it the inspector runs cold.
+ */
 async function inspectorCacheDirectory(current, realSourceRoot, inspector) {
   const sessionRoot = normalizeText(current.session?.sessionRoot);
   if (!sessionRoot) return "";
@@ -182,7 +190,9 @@ function architectureInspectionRequest(architecture, inspection, cacheDirectory 
   return request;
 }
 
-// Runs one declared inspector and returns its parsed observation document.
+/**
+ * Runs one declared inspector and returns its parsed observation document.
+ */
 async function runArchitectureInspector({ inspector, request, current, signal, progress, runCommand, projectService, runtimeReader }) {
   if (signal.aborted) throw architectureCancelled();
   const runtime = inspectorRuntime(inspector, runtimeReader);
@@ -213,7 +223,9 @@ async function runArchitectureInspector({ inspector, request, current, signal, p
   try { return JSON.parse(execution.stdout); } catch { throw systemError(`${inspector.title} must return one JSON observation document.`, "vibe64_architecture_output_invalid"); }
 }
 
-// readArchitecture's view needs file ownership, public interfaces and source edges.
+/**
+ * readArchitecture's view needs file ownership, public interfaces and source edges.
+ */
 function fileView(file, sourceMetrics) {
   const metrics = sourceMetrics.get(file.id);
   const lines = metrics?.hash === file.hash && Number.isSafeInteger(metrics.lines) && metrics.lines >= 0 ? metrics.lines : null;

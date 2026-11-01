@@ -34,8 +34,10 @@ function createAgentCommandProjectBinding(projectService, errors, { capture = ()
     return binding;
   }
 
-  // Runs operation(binding, project) in the bound project, refusing when the
-  // project at that slug is no longer the one that was bound.
+  /**
+   * Runs operation(binding, project) in the bound project, refusing when the
+   * project at that slug is no longer the one that was bound.
+   */
   async function run(sessionId = "", operation) {
     const binding = bindings.get(normalizeText(sessionId));
     if (!binding?.projectSlug) throw fail(errors.unbound);
@@ -51,7 +53,9 @@ function createAgentCommandProjectBinding(projectService, errors, { capture = ()
     });
   }
 
-  // Removes the session's binding and returns it, or null when none existed.
+  /**
+   * Removes the session's binding and returns it, or null when none existed.
+   */
   function forget(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
     const binding = bindings.get(normalizedSessionId) || null;

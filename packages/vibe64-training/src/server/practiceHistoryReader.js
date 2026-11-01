@@ -141,28 +141,36 @@ function validateStepProgress(value, learnerId) {
   return record;
 }
 
-// The saved step results of one lesson content, or an empty entry.
+/**
+ * The saved step results of one lesson content, or an empty entry.
+ */
 function lessonStepEntry(lessons, lesson) {
   const key = canonicalJson({ code: lesson.code, hash: lesson.hash });
   return lessons.find(entry => canonicalJson(entry.lesson) === key) || { lesson: { code: lesson.code, hash: lesson.hash }, results: [] };
 }
 
-// Only a version 1 lesson has assessments, rubrics and a teaching document.
-// Every reader of that data checks this first, so a version 2 lesson never
-// reaches an assessment path.
+/**
+ * Only a version 1 lesson has assessments, rubrics and a teaching document.
+ * Every reader of that data checks this first, so a version 2 lesson never
+ * reaches an assessment path.
+ */
 function assessmentLesson(lesson) {
   return lesson?.lesson?.schemaVersion === 1;
 }
 
-// The practice project an attempt works in: its own, or the continued one.
+/**
+ * The practice project an attempt works in: its own, or the continued one.
+ */
 function attemptPracticeId(attempt) {
   return attempt.practiceId ?? attempt.attemptId;
 }
 
 const practiceSlugFor = practiceId => normalizeProjectSlug(`training-${practiceId.replaceAll("-", "")}`);
 
-// An attempt prepares the practice project's own session, or (continuing a
-// project whose session is gone) a new session named after the attempt.
+/**
+ * An attempt prepares the practice project's own session, or (continuing a
+ * project whose session is gone) a new session named after the attempt.
+ */
 function preparationSessionIds(attempt) {
   return new Set([`training-${attemptPracticeId(attempt)}`, `training-${attempt.attemptId}`]);
 }
@@ -471,8 +479,10 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     return lesson;
   }
 
-  // Each distinct pinned lesson is verified once per read, however many
-  // attempts (every leave and continue adds one) share it.
+  /**
+   * Each distinct pinned lesson is verified once per read, however many
+   * attempts (every leave and continue adds one) share it.
+   */
   async function verifyProgressLessons(progress) {
     const lessons = new Map();
     const verified = new Map();
@@ -509,8 +519,10 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     return { ...state, completion: lessonCompletion(attempt, lessons.get(attempt.attemptId), state.progress.attempts, stepLessons), lessonCompletions };
   }
 
-  // The exact bundled exercise of a saved attempt, with the original refusal
-  // precedence: installed pin, no exercise, inactive work, unavailable reader.
+  /**
+   * The exact bundled exercise of a saved attempt, with the original refusal
+   * precedence: installed pin, no exercise, inactive work, unavailable reader.
+   */
   async function readAttemptExercise(state, attempt, access) {
     const active = state.progress.activeAttemptId === attempt.attemptId && !attempt.ended;
     const workInactive = (access === "write" || access === "create") && (!active || !state.activeSummaryCurrent);
@@ -557,8 +569,10 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     };
   }
 
-  // The upgrade compares the result with a version 1 project marker: one
-  // attempt, its own project and the version 1 marker.
+  /**
+   * The upgrade compares the result with a version 1 project marker: one
+   * attempt, its own project and the version 1 marker.
+   */
   async function readExerciseProjectScope({ actor, attemptId, access = "observe" } = {}) {
     if (!["observe", "control", "write", "create"].includes(access)) {
       throw new TypeError("Use an explicit practice operation scope.");
@@ -578,8 +592,10 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
       attemptId, pin: structuredClone(attempt.pin), exercise: { kind: "bundled", sourcePath } } });
   }
 
-  // v2 completes when every required step has passed for this lesson content.
-  // v1 (read only, for published upgrades) counts its saved assessment passes.
+  /**
+   * v2 completes when every required step has passed for this lesson content.
+   * v1 (read only, for published upgrades) counts its saved assessment passes.
+   */
   function lessonCompletion(attempt, lesson, attempts = [attempt], stepLessons = []) {
     const steps = lessonSteps(lesson);
     let required;
@@ -617,10 +633,12 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     }
   }
 
-  // An exercise lesson's attempt names its practice project and preparation;
-  // any other attempt names none. Read only: vibe64 0.1.35 reserved a project
-  // for every lesson, and the published 20261008-learning-practice-history
-  // upgrade still reads that progress.
+  /**
+   * An exercise lesson's attempt names its practice project and preparation;
+   * any other attempt names none. Read only: vibe64 0.1.35 reserved a project
+   * for every lesson, and the published 20261008-learning-practice-history
+   * upgrade still reads that progress.
+   */
   function validateLessonPractice(attempt, lesson) {
     if (lesson.lesson.exercise ? !attempt.preparation : attempt.preparation && attempt.preparation.phase !== "reserved") {
       throw new Error("An attempt names a practice project exactly when its lesson declares an exercise.");
@@ -648,7 +666,9 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     return value ? validateStepProgress(value, paths.learner.id) : null;
   }
 
-  // Entries of retained lesson content are checked against that pinned lesson.
+  /**
+   * Entries of retained lesson content are checked against that pinned lesson.
+   */
   async function readLessonStepProgress(paths, progress, lessons) {
     try {
       const record = await readStepProgressRecord(paths);

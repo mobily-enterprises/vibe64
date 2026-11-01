@@ -13,11 +13,13 @@ import { failure, MAX_MODE_BYTES, modeSchema, readRecord } from "./learnerRecord
  * @param {(pin: object, options?: { admissionOnly?: boolean }) => Promise<object>} dependencies.verifyInstalled
  */
 function createLearnerMode({ createNamespace, loadState, userPaths, verifyInstalled }) {
-  // Learn mode (Rev 4 H1): a saved per-learner flag, independent of any
-  // lesson; absent means Develop. The current lesson is the attempt in
-  // progress, which may stay paused while Learn mode is off. practiceSlug
-  // names its practice project once preparation began. includeTitle adds the
-  // lesson's title for the shell (admission needs no content read).
+  /**
+   * Learn mode (Rev 4 H1): a saved per-learner flag, independent of any
+   * lesson; absent means Develop. The current lesson is the attempt in
+   * progress, which may stay paused while Learn mode is off. practiceSlug
+   * names its practice project once preparation began. includeTitle adds the
+   * lesson's title for the shell (admission needs no content read).
+   */
   async function readMode(paths) {
     const value = await readRecord(paths.mode, MAX_MODE_BYTES);
     if (!value) return false;
@@ -52,7 +54,9 @@ function createLearnerMode({ createNamespace, loadState, userPaths, verifyInstal
     return learningModeView(userPaths(actor), { includeTitle });
   }
 
-  // Last write wins: switching mode never touches a lesson.
+  /**
+   * Last write wins: switching mode never touches a lesson.
+   */
   async function setLearningMode({ actor, on } = {}) {
     const paths = userPaths(actor);
     if (typeof on !== "boolean") throw failure("VIBE64_TRAINING_MODE_INVALID", "Set Learn mode on or off.", 400);

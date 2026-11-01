@@ -89,10 +89,12 @@ function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalog
     };
   }
 
-  // Startup maintenance, never a read: removes the runtime root of every
-  // catalogue project whose record survives but whose project directory is
-  // gone (a removal that stopped part-way). Practice runtimes of the learning
-  // space are kept. Returns the removed slugs, one at a time, for the caller's log.
+  /**
+   * Startup maintenance, never a read: removes the runtime root of every
+   * catalogue project whose record survives but whose project directory is
+   * gone (a removal that stopped part-way). Practice runtimes of the learning
+   * space are kept. Returns the removed slugs, one at a time, for the caller's log.
+   */
   async function sweepOrphanProjectRuntimeRoots() {
     if (!projectCatalogEnabled) {
       return [];
@@ -132,7 +134,9 @@ function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalog
     return removed;
   }
 
-  // The catalogue serves its own projects; without it only practice access does.
+  /**
+   * The catalogue serves its own projects; without it only practice access does.
+   */
   function catalogueOrPracticeScope() {
     const scope = paths.practiceScope();
     if (!projectCatalogEnabled && !scope) {

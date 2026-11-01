@@ -107,7 +107,9 @@ async function ageEncrypt(plaintext, passphrase, { workFactor = DEFAULT_WORK_FAC
   return Buffer.concat([Buffer.from(`${header} ${encode(mac)}\n`, "utf8"), nonce, ...chunks]);
 }
 
-// Reads the header: exactly one scrypt stanza, then the MAC line.
+/**
+ * Reads the header: exactly one scrypt stanza, then the MAC line.
+ */
 function parseHeader(bytes) {
   const lines = [];
   let offset = 0;

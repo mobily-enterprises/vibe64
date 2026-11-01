@@ -26,8 +26,10 @@ async function readPromptHintSubsystems(sourceRoot = "") {
   return readPromptHintGenesisFile(sourceRoot, GENESIS_SUBSYSTEMS_PATH, PROMPT_HINT_SUBSYSTEMS_MAX_CHARACTERS);
 }
 
-// Reads one bounded Genesis document from the session source without following
-// links out of it. Blueprint safety errors also cover the subsystems map.
+/**
+ * Reads one bounded Genesis document from the session source without following
+ * links out of it. Blueprint safety errors also cover the subsystems map.
+ */
 async function readPromptHintGenesisFile(sourceRoot = "", relativePath = "", maxCharacters = 0) {
   const normalizedSourceRoot = normalizeText(sourceRoot);
   if (!normalizedSourceRoot) {

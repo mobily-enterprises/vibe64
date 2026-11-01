@@ -3,9 +3,11 @@ import path from "node:path";
 
 import { PHP_USAGE_INI_NAME, phpUsageBuildCommand, phpUsageScanDirectory } from "../../../runtime/php/module.js";
 
-// PHP records through a small extension (runtime/php/ext) built once per PHP
-// API version by runtime/php/build.mjs. A recorded process loads it from a
-// scan directory prepended to PHP_INI_SCAN_DIR; see tracers/index.js.
+/**
+ * PHP records through a small extension (runtime/php/ext) built once per PHP
+ * API version by runtime/php/build.mjs. A recorded process loads it from a
+ * scan directory prepended to PHP_INI_SCAN_DIR; see tracers/index.js.
+ */
 function prepare() {
   const scanDirectory = phpUsageScanDirectory();
   if (scanDirectory.includes(path.delimiter)) {

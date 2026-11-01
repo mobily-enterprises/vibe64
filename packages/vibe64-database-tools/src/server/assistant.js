@@ -202,7 +202,9 @@ function executionProfileSnapshot(value = null) {
   }
 }
 
-// A caller that does not follow the assistant's events receives none.
+/**
+ * A caller that does not follow the assistant's events receives none.
+ */
 async function ignoreAssistantEvent() {}
 
 async function runDatabaseAssistant({

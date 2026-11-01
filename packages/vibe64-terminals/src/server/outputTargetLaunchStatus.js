@@ -26,8 +26,10 @@ import { readLaunchContext, listOutputTargets } from "./outputTargetLaunchContex
  * @param {ProjectService} dependencies.projectService
  */
 function createOutputTargetLaunchStatus({ state, launchCoordination, projectService }) {
-  // The launch status of the session's outputs; launchStatus reads it under
-  // the start lock and the session's admission.
+  /**
+   * The launch status of the session's outputs; launchStatus reads it under
+   * the start lock and the session's admission.
+   */
   async function readLaunchStatus(sessionId, options) {
     const context = await readLaunchContext(projectService, sessionId);
     const unavailable = launchCoordination.launchAdmissionFailure(sessionId, context.session);
@@ -110,8 +112,10 @@ function createOutputTargetLaunchStatus({ state, launchCoordination, projectServ
     });
   }
 
-  // The Output targets a usage recording may launch, with their declared
-  // runtimes, and which web target a Preview restart runs.
+  /**
+   * The Output targets a usage recording may launch, with their declared
+   * runtimes, and which web target a Preview restart runs.
+   */
   async function usageRecordingTargets(sessionId) {
     return vibe64Result(async () => {
       const context = await readLaunchContext(projectService, sessionId);

@@ -34,7 +34,9 @@ function publicFacts(meta) {
   return facts;
 }
 
-// One writer at a time inside this process.
+/**
+ * One writer at a time inside this process.
+ */
 function serialized() {
   let tail = Promise.resolve();
   return (operation) => {
@@ -113,7 +115,9 @@ function createAgeStore({
     }
   }
 
-  // Temporary file + rename, so a crash never leaves half a file behind.
+  /**
+   * Temporary file + rename, so a crash never leaves half a file behind.
+   */
   async function writePrivate(target, bytes) {
     await mkdir(directory, { recursive: true, mode: 0o700 });
     await chmod(directory, 0o700);
@@ -192,8 +196,10 @@ function createAgeStore({
     return Boolean(current());
   }
 
-  // Internal: the decrypted value of one entry, for one Stage 2 operation.
-  // Callers copy it into the stage's private file; never into a response.
+  /**
+   * Internal: the decrypted value of one entry, for one Stage 2 operation.
+   * Callers copy it into the stage's private file; never into a response.
+   */
   function read(id) {
     const state = requireUnlocked();
     const value = state.entries.get(id);
@@ -242,7 +248,9 @@ function createAgeStore({
     });
   }
 
-  // Internal, for the recovery kit: every entry with its index facts.
+  /**
+   * Internal, for the recovery kit: every entry with its index facts.
+   */
   function snapshot() {
     const state = requireUnlocked();
     return [...state.entries].map(([id, value]) => ({ id, value: Buffer.from(value) }));

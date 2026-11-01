@@ -577,10 +577,12 @@ function parseVibe64OutputsLines(lines, {
   return { version: 1, targets };
 }
 
-// Why Preview cannot start, in the words of the page it shows on. Genesis's
-// STACK_RESOURCE_MISSING names the Stack component and resource; the person
-// needs the variable to set and where, or, while the host is still preparing
-// the resource it supplies, that Vibe64 is on it.
+/**
+ * Why Preview cannot start, in the words of the page it shows on. Genesis's
+ * STACK_RESOURCE_MISSING names the Stack component and resource; the person
+ * needs the variable to set and where, or, while the host is still preparing
+ * the resource it supplies, that Vibe64 is on it.
+ */
 function resourceReason(diagnostic, { resourcesPreparing = false } = {}) {
   const details = diagnostic.details || {};
   const missing = Array.isArray(details.missing) ? details.missing : [];

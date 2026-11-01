@@ -38,9 +38,11 @@ function prepareCopiedSessionConversation(record) {
 const TITLE_MAX_LENGTH = 80;
 const LEGACY_DEFAULT_TITLE = /^Temporary \d+$/;
 
-// A chat's number is assigned once, at creation. Chats saved before that kept
-// the browser's "Temporary N" title, which restarted at 1 on every page load;
-// they are numbered by creation order (they always predate numbered chats).
+/**
+ * A chat's number is assigned once, at creation. Chats saved before that kept
+ * the browser's "Temporary N" title, which restarted at 1 on every page load;
+ * they are numbered by creation order (they always predate numbered chats).
+ */
 function numberedConversations(records) {
   let highest = 0;
   return records.map((record) => {
@@ -123,7 +125,9 @@ function routingRequest(record) {
   return assistantRoutingRequestFromMetadata(record.routingMetadata);
 }
 
-// A native changeover keeps its own record of a prompt it attempted.
+/**
+ * A native changeover keeps its own record of a prompt it attempted.
+ */
 function attemptedChangeover(record) {
   return Object.values(JSON.parse(record.routingMetadata?.assistant_changeover || "null")?.engines || {})
     .map(value => value.pending).find(value => value?.attempted);

@@ -173,11 +173,13 @@ const WAIT_SUFFIX = /^(.*?)[ \t]+when `([^`\r\n]+)` exists$/u;
 const SKIP_SUFFIX = /^(.*?)[ \t]+if `([^`\r\n]+)` exists$/u;
 const WORKDIR_SUFFIX = /^(.*?)[ \t]+in `([^`\r\n]+)`$/u;
 
-// The command an entry runs, from the text after its label:
-// with `runtime`... [in `workdir`] [when|if `path` exists]: `command` `argument`...
-// Errors name the caller's label ("Workspace setup command") and, for an
-// unreadable entry, the caller's own entry form. A condition is returned for
-// the caller to accept or refuse.
+/**
+ * The command an entry runs, from the text after its label:
+ * with `runtime`... [in `workdir`] [when|if `path` exists]: `command` `argument`...
+ * Errors name the caller's label ("Workspace setup command") and, for an
+ * unreadable entry, the caller's own entry form. A condition is returned for
+ * the caller to accept or refuse.
+ */
 function stackCommand(source, code, operationPath, label, line, { form, observed = source }) {
   const entry = String(source || "").match(COMMAND_TAIL);
   if (!entry) {

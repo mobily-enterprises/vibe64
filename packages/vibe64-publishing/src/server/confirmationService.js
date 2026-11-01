@@ -19,8 +19,10 @@ const CONFIRMATIONS_CONTRACT = "vibe64.publishing-confirmations.v1";
 const PLAN_HASH = /^sha256:[0-9a-f]{64}$/u;
 const KEEP = 20;
 
-// Who is acting, from the execution context: only a person's own page request
-// is a person. Colleague turns, automation and internal calls never are.
+/**
+ * Who is acting, from the execution context: only a person's own page request
+ * is a person. Colleague turns, automation and internal calls never are.
+ */
 function confirmingActor({ channel, assistant, user }) {
   if (assistant || channel !== "api") {
     return { kind: "assistant", id: "assistant" };
@@ -53,8 +55,10 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
     return (await read()).pendingRequest || null;
   }
 
-  // An assistant (or the person) asks for the confirmation prompt to open for
-  // this plan and its targets. Nothing runs; the Publish page shows the request.
+  /**
+   * An assistant (or the person) asks for the confirmation prompt to open for
+   * this plan and its targets. Nothing runs; the Publish page shows the request.
+   */
   function request({ planHash, targetIds, requestedBy = "assistant" } = {}) {
     return exclusive(async () => {
       if (!PLAN_HASH.test(planHash || "")) throw publishingError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
@@ -83,8 +87,10 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
     });
   }
 
-  // The person opens the confirmation for one plan: a one-shot token for this
-  // page only, bound to the plan hash and to them.
+  /**
+   * The person opens the confirmation for one plan: a one-shot token for this
+   * page only, bound to the plan hash and to them.
+   */
   function open({ planHash, actor } = {}) {
     return exclusive(async () => {
       const { token, record } = issuePublishConfirmation({ planHash, actor, now: now(), ...(ttlMs ? { ttlMs } : {}) });
@@ -95,7 +101,9 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
     });
   }
 
-  // Redeems and persists the used record before anything irreversible runs.
+  /**
+   * Redeems and persists the used record before anything irreversible runs.
+   */
   function redeem({ planHash, token, actor } = {}) {
     return exclusive(async () => {
       if (actor?.kind !== "person") {

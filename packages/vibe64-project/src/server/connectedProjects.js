@@ -91,7 +91,9 @@ async function readConnectedProjects(sourceRoot) {
   }
 }
 
-// The project service holds the session write lock and project source lock.
+/**
+ * The project service holds the session write lock and project source lock.
+ */
 async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   const normalized = normalizeConnectedProjects(value);
   const current = await readConnectedProjects(sourceRoot);
@@ -107,7 +109,9 @@ async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   return readConnectedProjects(sourceRoot);
 }
 
-// The owner/name of a normalized connected repository URL.
+/**
+ * The owner/name of a normalized connected repository URL.
+ */
 function githubRepositoryFullName(repository) {
   return repository.slice(GITHUB_REPOSITORY_URL_PREFIX.length);
 }

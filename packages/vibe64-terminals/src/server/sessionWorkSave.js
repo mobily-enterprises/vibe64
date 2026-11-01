@@ -391,10 +391,12 @@ async function deletePreparedSaveRef(runCommand, context, operationId, options =
   }
 }
 
-// Called once the caller has durably recorded a completed or recovered Save.
-// Its prepared ref is then no longer recovery evidence. Left behind, it would
-// pin its commit and make a later absent contribution branch look like a lost
-// publication.
+/**
+ * Called once the caller has durably recorded a completed or recovered Save.
+ * Its prepared ref is then no longer recovery evidence. Left behind, it would
+ * pin its commit and make a later absent contribution branch look like a lost
+ * publication.
+ */
 async function retireSessionWorkSave({
   commandOptions = {},
   operationId = "",

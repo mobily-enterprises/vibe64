@@ -86,8 +86,10 @@ function githubLocalObserved({
   ].join(" ");
 }
 
-// A disconnected GitHub row that keeps the remembered identity, so the card
-// can offer to reconnect the account it was previously linked to.
+/**
+ * A disconnected GitHub row that keeps the remembered identity, so the card
+ * can offer to reconnect the account it was previously linked to.
+ */
 function githubDisconnected(previousGithub, fields) {
   const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
   return accountDisconnected({
@@ -187,8 +189,10 @@ async function readGithubStoredStatus({
   });
 }
 
-// The person's current Git name and email, read as that person in their tool
-// home, so a hosted card shows what their next Save will use.
+/**
+ * The person's current Git name and email, read as that person in their tool
+ * home, so a hosted card shows what their next Save will use.
+ */
 async function readPersonGitIdentity(runHostToolCommand, githubContext) {
   const options = hostCommandOptionsForCredentialContext(githubContext);
   const [nameResult, emailResult] = await Promise.all(["user.name", "user.email"].map((key) =>

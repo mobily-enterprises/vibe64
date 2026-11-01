@@ -5,9 +5,11 @@ import path from "node:path";
 
 import { vibe64Driver } from "./promptContext.js";
 
-// One Vibe64 process can share a native agent process across several projects.
-// Keep its hook bindings together; project-local hooks supply the native ID.
-// Retain bindings across transport stops, including an attached native terminal.
+/**
+ * One Vibe64 process can share a native agent process across several projects.
+ * Keep its hook bindings together; project-local hooks supply the native ID.
+ * Retain bindings across transport stops, including an attached native terminal.
+ */
 export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
   const directory = runtimeDirectory || await mkdtemp(path.join(os.tmpdir(), "vibe64-genesis-context-"));
   await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -25,8 +27,10 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
   let pending = Promise.resolve();
   let closed = false;
 
-  // A unique temporary name: processes sharing one runtime directory never
-  // write or rename each other's partial registry.
+  /**
+   * A unique temporary name: processes sharing one runtime directory never
+   * write or rename each other's partial registry.
+   */
   async function save(next) {
     const temporary = path.join(directory, `.sessions.${process.pid}.${randomUUID()}.tmp`);
     try {

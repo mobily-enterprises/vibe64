@@ -89,11 +89,13 @@ function codexLoginIdFromMarker(text = "") {
 
 const codexLoginGenerations = new Map();
 
-// Each Codex sign-in starts a new login generation. A running app-server keeps
-// the credentials it started with, so the runtime identity includes it: new
-// work starts beside a previous account's runtime instead of replacing it.
-// Runtime identities are computed synchronously; one stat confirms the cached
-// marker, whose atomic rewrite on every sign-in replaces its inode.
+/**
+ * Each Codex sign-in starts a new login generation. A running app-server keeps
+ * the credentials it started with, so the runtime identity includes it: new
+ * work starts beside a previous account's runtime instead of replacing it.
+ * Runtime identities are computed synchronously; one stat confirms the cached
+ * marker, whose atomic rewrite on every sign-in replaces its inode.
+ */
 function currentCodexLoginGeneration(systemRoot = "") {
   const markerPath = codexAuthMarkerPath(systemRoot);
   let stats;

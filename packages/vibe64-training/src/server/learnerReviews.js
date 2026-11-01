@@ -11,9 +11,11 @@ import { byteSize, failure, inspectPath, MAX_REVIEW_HELPER_BYTES, readRecord } f
  * @param {(actor: object) => object} dependencies.userPaths
  */
 function createLearnerReviews({ createNamespace, userPaths }) {
-  // One AI review at a time per learner. The review owner keeps its retained
-  // Helper below its own root, and the Helper's receipt in this learner's
-  // record, so a review that stopped part-way is cleaned before the next.
+  /**
+   * One AI review at a time per learner. The review owner keeps its retained
+   * Helper below its own root, and the Helper's receipt in this learner's
+   * record, so a review that stopped part-way is cleaned before the next.
+   */
   async function readReviewHelperRecord(paths) {
     const value = await readRecord(paths.reviewHelper, MAX_REVIEW_HELPER_BYTES);
     if (!value) return null;

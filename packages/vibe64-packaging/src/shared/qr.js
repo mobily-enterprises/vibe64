@@ -307,7 +307,9 @@ function penaltyScore(matrix) {
   return result + k * PENALTY_N4;
 }
 
-// The module matrix (true = dark) for `text` (UTF-8, byte mode).
+/**
+ * The module matrix (true = dark) for `text` (UTF-8, byte mode).
+ */
 function qrMatrix(text, { level = "M" } = {}) {
   const ecl = LEVELS[level];
   if (!ecl) throw new RangeError("QR error correction is L, M, Q or H.");
@@ -331,9 +333,11 @@ function escapeAttribute(value) {
   return String(value).replace(/&/gu, "&amp;").replace(/"/gu, "&quot;").replace(/</gu, "&lt;");
 }
 
-// A crisp, scalable SVG: one path, a quiet zone of `margin` modules, colours
-// as given (defaults follow the surrounding text colour on a white tile, so it
-// stays scannable in dark themes).
+/**
+ * A crisp, scalable SVG: one path, a quiet zone of `margin` modules, colours
+ * as given (defaults follow the surrounding text colour on a white tile, so it
+ * stays scannable in dark themes).
+ */
 function qrSvg(text, { level = "M", margin = 4, dark = "#000000", light = "#ffffff", title = "" } = {}) {
   const { size, modules } = qrMatrix(text, { level });
   const extent = size + margin * 2;

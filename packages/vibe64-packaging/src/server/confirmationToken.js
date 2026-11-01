@@ -57,8 +57,10 @@ function issuePublishConfirmation({ planHash, actor, now = Date.now(), ttlMs = D
   };
 }
 
-// Whether `token` is the one this record was issued for (constant-time hash
-// comparison). It says nothing about expiry, use, plan or person.
+/**
+ * Whether `token` is the one this record was issued for (constant-time hash
+ * comparison). It says nothing about expiry, use, plan or person.
+ */
 function publishConfirmationTokenMatches(record, token) {
   if (record?.contract !== VIBE64_PUBLISH_CONFIRMATION_CONTRACT || typeof token !== "string" || !token) return false;
   const expected = Buffer.from(String(record.tokenHash || "").replace(/^sha256:/u, ""), "hex");
@@ -66,8 +68,10 @@ function publishConfirmationTokenMatches(record, token) {
   return expected.length === supplied.length && timingSafeEqual(expected, supplied);
 }
 
-// Returns the redeemed record; the caller must persist it (usedAt set) before the
-// irreversible step, so a second redemption of the same record is refused.
+/**
+ * Returns the redeemed record; the caller must persist it (usedAt set) before the
+ * irreversible step, so a second redemption of the same record is refused.
+ */
 function redeemPublishConfirmation({ token, planHash, actor, record, now = Date.now() } = {}) {
   const id = personId(actor);
   if (!publishConfirmationTokenMatches(record, token)) {

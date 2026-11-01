@@ -230,13 +230,17 @@ function createCodexGitCommandService({
     });
   }
 
-  // Returns the result unchanged; a GitHub rejection only drops the cached token.
+  /**
+   * Returns the result unchanged; a GitHub rejection only drops the cached token.
+   */
   function dropRejectedCredentials(credentialKey, result) {
     if (githubAuthenticationRejected(result)) actorCredentials.drop(credentialKey);
     return result;
   }
 
-  // Resolved per call: the project service may install its hook after construction.
+  /**
+   * Resolved per call: the project service may install its hook after construction.
+   */
   function actorAccessAuthorizer() {
     if (typeof authorizeActorAccess === "function") {
       return authorizeActorAccess;
@@ -266,10 +270,12 @@ function createCodexGitCommandService({
     );
   }
 
-  // `createsCommits` marks a write that records commits (Save, Update, Merge
-  // contribution), whose options then carry their author: a GitHub session's
-  // Git actor, whose credential publishes them, or for any other session
-  // `vibe64User`, the person asking. Checks and probes read nobody's identity.
+  /**
+   * `createsCommits` marks a write that records commits (Save, Update, Merge
+   * contribution), whose options then carry their author: a GitHub session's
+   * Git actor, whose credential publishes them, or for any other session
+   * `vibe64User`, the person asking. Checks and probes read nobody's identity.
+   */
   async function sessionWorkSaveContext({
     createsCommits = false,
     session: suppliedSession = null,
@@ -659,11 +665,13 @@ async function prepareCodexGitCommand({
   };
 }
 
-// A session's final close (its archive, or the discard of a renewal successor
-// that never went live) stops its Git control and removes its helper
-// directory, which holds every agent command wrapper of the session.
-// Renewal, changeover and project runtime closes keep both: the same session
-// reconnects and its helpers are rewritten in place.
+/**
+ * A session's final close (its archive, or the discard of a renewal successor
+ * that never went live) stops its Git control and removes its helper
+ * directory, which holds every agent command wrapper of the session.
+ * Renewal, changeover and project runtime closes keep both: the same session
+ * reconnects and its helpers are rewritten in place.
+ */
 async function removeCodexGitCommandSession({
   env = process.env,
   sessionId = "",

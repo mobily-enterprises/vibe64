@@ -7,8 +7,10 @@ import { claudeConfigRoot } from "./claudeCodeProcess.js";
 import { readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 
-// Stopped-service repair only. Exact native UUID and output bytes establish
-// command identity; visible wording never establishes management provenance.
+/**
+ * Stopped-service repair only. Exact native UUID and output bytes establish
+ * command identity; visible wording never establishes management provenance.
+ */
 export async function upgradeClaudeCommandMessages(context) {
   const configRoot = claudeConfigRoot();
   return publishStateUpgradeFiles({ ...context, async prepareUpdates(temporaryRoot) {

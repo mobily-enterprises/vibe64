@@ -31,11 +31,13 @@ function textHasDisallowedControlCharacter(value = "") {
   });
 }
 
-// The one handover text rule: CR and CRLF become LF, tab and LF are the only
-// control characters, and the text holds at most
-// SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS characters. Whitespace is kept, since
-// it is part of the approved handover's hash. problem is "" when the text
-// passes, else "control_character" or "too_long"; callers choose their errors.
+/**
+ * The one handover text rule: CR and CRLF become LF, tab and LF are the only
+ * control characters, and the text holds at most
+ * SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS characters. Whitespace is kept, since
+ * it is part of the approved handover's hash. problem is "" when the text
+ * passes, else "control_character" or "too_long"; callers choose their errors.
+ */
 function normalizeSessionRenewalHandoverDraft(value = "") {
   const handover = String(value ?? "")
     .replaceAll("\r\n", "\n")
@@ -163,7 +165,9 @@ function defineSessionRenewalSourceEnvelope(value = {}) {
   });
 }
 
-// The canonical source facts a handover must carry, in their written order.
+/**
+ * The canonical source facts a handover must carry, in their written order.
+ */
 function sessionRenewalSavedSourceFields(canonical) {
   return [
     ["Authority", canonical.authority],
@@ -173,7 +177,9 @@ function sessionRenewalSavedSourceFields(canonical) {
   ];
 }
 
-// The exact lines under `## Saved source`.
+/**
+ * The exact lines under `## Saved source`.
+ */
 function sessionRenewalSavedSourceLines(canonical) {
   return sessionRenewalSavedSourceFields(canonical).map(([label, value]) => `- ${label}: ${value}`);
 }

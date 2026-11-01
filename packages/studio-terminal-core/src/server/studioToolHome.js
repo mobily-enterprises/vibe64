@@ -18,8 +18,10 @@ function requiredLine(name) {
   return `[ -n "\${${name}:-}" ] || { printf '%s\\n' 'Vibe64 command ${name} is required.' >&2; exit 1; }`;
 }
 
-// Pinned tool packs come with their own npm prefix, cache and browsers; the
-// person's own tools need none of them.
+/**
+ * Pinned tool packs come with their own npm prefix, cache and browsers; the
+ * person's own tools need none of them.
+ */
 function studioToolHomeSetupLines() {
   const home = "[ -n \"$HOME\" ] || { printf '%s\\n' 'Vibe64 command HOME is required.' >&2; exit 1; }";
   if (!runtimePackRoot()) {

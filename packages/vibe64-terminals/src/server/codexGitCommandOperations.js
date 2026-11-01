@@ -142,7 +142,9 @@ const ACTOR_CREDENTIAL_TTL_MS = 5 * 60_000;
 function createActorCredentialCache({ now = Date.now, ttlMs = ACTOR_CREDENTIAL_TTL_MS } = {}) {
   const entries = new Map();
 
-  // load() returns { cacheable, value }; only a settled answer is kept.
+  /**
+   * load() returns { cacheable, value }; only a settled answer is kept.
+   */
   async function read(actorKey, load) {
     const at = now();
     for (const [key, entry] of entries) {

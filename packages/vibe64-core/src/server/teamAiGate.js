@@ -26,16 +26,20 @@ async function readTeamAiReady({ actor = null } = {}) {
   return !readiness || await readiness({ actor }) === true;
 }
 
-// For the owner's project lists: whether team members can open projects.
-// Nothing for anyone else.
+/**
+ * For the owner's project lists: whether team members can open projects.
+ * Nothing for anyone else.
+ */
 async function readTeamAiStatus({ actor = null } = {}) {
   if (actor?.role !== "owner") return null;
   const team = await readWorkspaceTeam();
   return { ...team, ready: team.available && await readTeamAiReady({ actor }) };
 }
 
-// Callers apply it to a person's own work only (a request with headers, or
-// their Colleague); internal work is never gated.
+/**
+ * Callers apply it to a person's own work only (a request with headers, or
+ * their Colleague); internal work is never gated.
+ */
 async function assertTeamAiAllowsProject({ actor = null } = {}) {
   if (!isTeamMember(actor) || await readTeamAiReady({ actor })) return;
   const { ownerName } = await readWorkspaceTeam();

@@ -28,12 +28,14 @@ function recordingUnavailableReason(runtimes = []) {
   return `Recording not available for ${runtimes.map((runtime) => `\`${runtime}\``).join(", ")}`;
 }
 
-// A tracer's prependEnvironment value goes before any existing value. Neither
-// side is trimmed: an unset or empty existing value leaves the tracer's value
-// as given, a value already ending in the separator is followed directly by
-// the existing one, and any other value is joined with one separator. So PHP's
-// "<ours>:" keeps its trailing empty segment (the default scan directory), and
-// a person's own leading empty segment is kept too.
+/**
+ * A tracer's prependEnvironment value goes before any existing value. Neither
+ * side is trimmed: an unset or empty existing value leaves the tracer's value
+ * as given, a value already ending in the separator is followed directly by
+ * the existing one, and any other value is joined with one separator. So PHP's
+ * "<ours>:" keeps its trailing empty segment (the default scan directory), and
+ * a person's own leading empty segment is kept too.
+ */
 function mergePrependEnvironment(prepend, environment, separator = path.delimiter) {
   const merged = {};
   for (const [name, value] of Object.entries(prepend || {})) {

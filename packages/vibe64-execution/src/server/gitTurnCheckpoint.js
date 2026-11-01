@@ -131,9 +131,11 @@ async function createGitTurnCheckpointAsOneJob({
   })));
 }
 
-// The child reports its checkpoint or its own failure as JSON. Anything else,
-// including a job the host refused, killed or could not drain, fails the
-// checkpoint with the host's message and code, as a failed git step did.
+/**
+ * The child reports its checkpoint or its own failure as JSON. Anything else,
+ * including a job the host refused, killed or could not drain, fails the
+ * checkpoint with the host's message and code, as a failed git step did.
+ */
 function checkpointJobValue(result = {}) {
   let response = null;
   try {
@@ -316,8 +318,10 @@ async function writeGitWorktreeTreeUnlocked({
   }
 }
 
-// A killed run (a job timeout, an out-of-memory kill, a restart) never reaches
-// its cleanup. The next tree write removes what such runs left behind.
+/**
+ * A killed run (a job timeout, an out-of-memory kill, a restart) never reaches
+ * its cleanup. The next tree write removes what such runs left behind.
+ */
 async function removeStaleTemporaryTrees(checkpointRoot = "") {
   const now = Date.now();
   const entries = await readdir(checkpointRoot, { withFileTypes: true });

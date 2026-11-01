@@ -37,7 +37,9 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
     };
   }
 
-  // The patch is derived from the conversation as saved, inside its write lock.
+  /**
+   * The patch is derived from the conversation as saved, inside its write lock.
+   */
   async function saveWith(ctx, record, patchFor, { lifecycle = false, requireOpen = false } = {}) {
     let patch;
     const saved = await ctx.runtime.store.mutateSession(ctx.session.sessionId, async () => {

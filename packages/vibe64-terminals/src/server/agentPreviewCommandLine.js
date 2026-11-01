@@ -45,7 +45,9 @@ function logPreviewCommandResult(logger, result = {}, fields = {}) {
   }, "Vibe64 agent preview command finished.");
 }
 
-// A status read that failed, as the command's result with its error on stderr.
+/**
+ * A status read that failed, as the command's result with its error on stderr.
+ */
 function failedStatusResult(status, fallbackError) {
   return {
     ...status,
@@ -98,8 +100,10 @@ function createAgentPreviewCommandLine({
     });
   }
 
-  // Managed app identities belong to the project; the session's bound project
-  // and source scope every read and save, never a caller-supplied target.
+  /**
+   * Managed app identities belong to the project; the session's bound project
+   * and source scope every read and save, never a caller-supplied target.
+   */
   async function previewIdentities(sessionId = "", args = [], stdin = "") {
     const words = (Array.isArray(args) ? args : []).map(trimmedText).filter(Boolean);
     const subcommand = words[1] || "";
@@ -145,7 +149,9 @@ function createAgentPreviewCommandLine({
     });
   }
 
-  // The Preview state the session's editor last synced.
+  /**
+   * The Preview state the session's editor last synced.
+   */
   function previewState(sessionId = "") {
     return readSessionUiState(sessionId)?.preview || null;
   }

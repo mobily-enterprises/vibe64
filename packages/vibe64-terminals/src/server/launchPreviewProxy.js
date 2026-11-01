@@ -232,7 +232,9 @@ function createLaunchPreviewProxyRegistry({
     }
   }
 
-  // Pending starts are marked so their starter closes the proxy it opens.
+  /**
+   * Pending starts are marked so their starter closes the proxy it opens.
+   */
   async function closeMatching(matches, debugEvent, debugDetails = {}) {
     const closeEntries = [...proxies.entries()].filter(([, proxy]) => matches(proxy.scope));
     const pendingCloseEntries = [...pendingStarts.entries()].filter(([, pending]) => matches(pending.scope));

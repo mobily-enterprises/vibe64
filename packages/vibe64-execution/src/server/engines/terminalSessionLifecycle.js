@@ -1,8 +1,10 @@
 import { drainProcessGroup } from "./detached.js";
 import { byteLength, terminalSessionResponse, trimBuffer } from "./terminalSessionViews.js";
 
-// A terminal session's input and output records, write failures, lifecycle
-// hooks and the steps that stop and close it.
+/**
+ * A terminal session's input and output records, write failures, lifecycle
+ * hooks and the steps that stop and close it.
+ */
 function applySessionMetadata(session, metadata = {}) {
   if (!session || !metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return terminalSessionResponse(session);
@@ -107,7 +109,9 @@ function appendTerminalFailure(session, message, chunkMessage = message) {
   });
 }
 
-// Runs a stop or close hook once; resolves to null, or the hook's failure.
+/**
+ * Runs a stop or close hook once; resolves to null, or the hook's failure.
+ */
 async function runLifecycleHook(session, {
   code,
   flag,

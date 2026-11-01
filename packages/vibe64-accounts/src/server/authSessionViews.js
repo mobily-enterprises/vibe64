@@ -18,9 +18,11 @@ import { ACCOUNT_AUTH_NAMESPACE, parseAuthOutput, publicAuthSession } from "./au
 /** @typedef {import("./types.js").AccountAccess} AccountAccess */
 /** @typedef {ReturnType<typeof createAuthSessionState>} AuthSessionState */
 
-// The sign-in sessions this process started or found, shared by their readers
-// and their terminals: each session's metadata, a Claude session's browser
-// handoff file, and the sessions being cancelled or already finalized for Codex.
+/**
+ * The sign-in sessions this process started or found, shared by their readers
+ * and their terminals: each session's metadata, a Claude session's browser
+ * handoff file, and the sessions being cancelled or already finalized for Codex.
+ */
 function createAuthSessionState() {
   return Object.freeze({
     authSessions: new Map(),
@@ -75,8 +77,10 @@ function createAuthSessionViews({ access, notifications, state, statusReads }) {
     return metadata;
   }
 
-  // A finished sign-in is kept so readers can see how it ended, until the same
-  // account changes again: a later sign-in finishes, or it signs out.
+  /**
+   * A finished sign-in is kept so readers can see how it ended, until the same
+   * account changes again: a later sign-in finishes, or it signs out.
+   */
   async function forgetFinishedAuthSessions(accountId = "", userKey = "", { except = "" } = {}) {
     for (const [sessionId, metadata] of state.authSessions) {
       if (sessionId === except || metadata.accountId !== accountId || (accountId === "github" && metadata.userKey !== userKey)) continue;

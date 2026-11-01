@@ -208,7 +208,9 @@ function createService({
     projectService, sourceEditorContext, temporaryRoot, terminalService
   });
 
-  // Moves and copies into or out of Repo refresh its file and search indexes.
+  /**
+   * Moves and copies into or out of Repo refresh its file and search indexes.
+   */
   function invalidateRepoIndexes(sourceRoot) {
     fileIndex.invalidate(sourceRoot);
     searchIndex.invalidate(sourceRoot);

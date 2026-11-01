@@ -80,7 +80,9 @@ async function restoreRecoveryKit({ store, bytes, passphrase } = {}) {
   return { restored: restored.sort(), createdAt: kit.createdAt };
 }
 
-// Whether the last downloaded kit holds this key (created after the key).
+/**
+ * Whether the last downloaded kit holds this key (created after the key).
+ */
 function recoveryKitCovers(status, entryId) {
   const kit = status?.recoveryKit;
   const entry = (status?.entries || []).find((candidate) => candidate.id === entryId);

@@ -34,10 +34,12 @@ function createSessionAgentLifecycle({
   conversationOperations,
   providerCalls
 }) {
-  // The terminal store owns each native PTY's lifetime; a binding records only
-  // the connection the PTY opened with. A PTY closed outside this manager (a
-  // native runtime release, Remove AI) is forgotten, and an exited one holds no
-  // connection. Each running PTY reports its own session.
+  /**
+   * The terminal store owns each native PTY's lifetime; a binding records only
+   * the connection the PTY opened with. A PTY closed outside this manager (a
+   * native runtime release, Remove AI) is forgotten, and an exited one holds no
+   * connection. Each running PTY reports its own session.
+   */
   function runningNativeTerminals(engineId = "") {
     const stored = listTerminalSessions({ namespacePrefix: `vibe64-${engineId}:` });
     const storedIds = new Set(stored.map(({ id }) => id));
@@ -92,7 +94,9 @@ function createSessionAgentLifecycle({
     return result;
   }
 
-  // A released renewal predecessor or successor no longer holds its session binding.
+  /**
+   * A released renewal predecessor or successor no longer holds its session binding.
+   */
   async function releaseAndForgetBinding(method, sessionId = "", input = {}, options = {}) {
     const id = normalizeText(sessionId);
     const result = await providerCalls.callSessionProvider(method, id, input, options);
@@ -112,9 +116,11 @@ function createSessionAgentLifecycle({
     return releaseAndForgetBinding("releaseRenewalSuccessorProcessExitProof", sessionId, input, options);
   }
 
-  // Local storage work is explicitly invoked by trusted host code. It neither
-  // selects the current assistant nor authorizes a model inference.
-  // One native history operation of the binding's engine, refused with its own message when the engine has none.
+  /**
+   * Local storage work is explicitly invoked by trusted host code. It neither
+   * selects the current assistant nor authorizes a model inference.
+   * One native history operation of the binding's engine, refused with its own message when the engine has none.
+   */
   function callNativeHistoryOperation(method, unavailableMessage, sessionId, binding, options) {
     const provider = state.providerById.get(binding.engineId);
     const operation = provider && conversationOperations.providerOperation(provider, method);

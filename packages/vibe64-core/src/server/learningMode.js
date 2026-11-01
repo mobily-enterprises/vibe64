@@ -21,8 +21,10 @@ let learningModeReader = null;
 let learningModeReadFailure = null;
 const requestModes = new WeakMap();
 
-// Returns the unregister function. null also clears the reader, which hosts'
-// existing test cleanup still relies on.
+/**
+ * Returns the unregister function. null also clears the reader, which hosts'
+ * existing test cleanup still relies on.
+ */
 // readable-check: allow module-registry - cycle: vibe64.training requires vibe64.project, whose request gate reads it
 function registerLearningModeReader(reader, { onReadFailure = null } = {}) {
   if (reader !== null && typeof reader !== "function") throw new TypeError("Learning mode needs its Training reader.");
@@ -36,11 +38,13 @@ function registerLearningModeReader(reader, { onReadFailure = null } = {}) {
   };
 }
 
-// The learner's mode: { on, currentAttemptId, lessonCode, practiceSlug }, or
-// null when no reader is registered. A Colleague turn passes its `thread`
-// ("learn" or "develop"): the turn keeps that thread's mode after a switch
-// with L, so the switch never interrupts it. A request object (HTTP or
-// WebSocket) caches the one result for its lifetime.
+/**
+ * The learner's mode: { on, currentAttemptId, lessonCode, practiceSlug }, or
+ * null when no reader is registered. A Colleague turn passes its `thread`
+ * ("learn" or "develop"): the turn keeps that thread's mode after a switch
+ * with L, so the switch never interrupts it. A request object (HTTP or
+ * WebSocket) caches the one result for its lifetime.
+ */
 async function readLearningModeFor(actor = null, { request = null, thread = "" } = {}) {
   if (!learningModeReader) return null;
   if (request && typeof request === "object" && requestModes.has(request)) return requestModes.get(request);
@@ -61,10 +65,12 @@ async function readLearningModeFor(actor = null, { request = null, thread = "" }
   return mode;
 }
 
-// Learn allows only practice projects; Develop refuses them. `practice` is
-// whether practice admission found a learning-space project for `slug`; a
-// caller without admission leaves it out, and then only the learner's current
-// practice project counts (with one lesson in progress, it is their only one).
+/**
+ * Learn allows only practice projects; Develop refuses them. `practice` is
+ * whether practice admission found a learning-space project for `slug`; a
+ * caller without admission leaves it out, and then only the learner's current
+ * practice project counts (with one lesson in progress, it is their only one).
+ */
 function learningModeAllowsProject(mode = null, slug = "", { practice } = {}) {
   if (!mode) return true;
   const isPractice = typeof practice === "boolean" ? practice
@@ -82,7 +88,9 @@ function refusal(mode = null) {
   };
 }
 
-// The refusal for opening `slug` in this mode, or null.
+/**
+ * The refusal for opening `slug` in this mode, or null.
+ */
 function learningModeProjectBlock(mode = null, slug = "", options = {}) {
   return learningModeAllowsProject(mode, slug, options) ? null : refusal(mode);
 }

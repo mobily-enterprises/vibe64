@@ -19,7 +19,9 @@ function createCodexAppServerHealthAttempt() {
   };
 }
 
-// Original application health-task projection; native readiness stays in JSKIT.
+/**
+ * Original application health-task projection; native readiness stays in JSKIT.
+ */
 export function createCodexStartupHealth(publishSessionChanged) {
   /**
    * @param {Vibe64SessionRuntime} runtime

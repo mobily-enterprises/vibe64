@@ -32,7 +32,9 @@ function helperConfiguration(value) {
   return next;
 }
 
-// Only visit owned profile fields; authored messages, prompts and model IDs are opaque.
+/**
+ * Only visit owned profile fields; authored messages, prompts and model IDs are opaque.
+ */
 function upgradeHelperProfiles(value) {
   if (Array.isArray(value)) return value.map(upgradeHelperProfiles);
   if (!isPlainObject(value)) return value;

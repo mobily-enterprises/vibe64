@@ -363,8 +363,10 @@ function environmentDefaultValue(environmentDefaults, name, packagingPath, label
   return entry.value.trim();
 }
 
-// Schemes and app-link domains are runtime facts the server also reads; Packaging
-// only names their variables, and the packer reads the same normalized values.
+/**
+ * Schemes and app-link domains are runtime facts the server also reads; Packaging
+ * only names their variables, and the packer reads the same normalized values.
+ */
 function resolveVibe64PackagingEnvironment(packaging, environmentDefaults = [], {
   path: packagingPath = "genesis/stack.md#Packaging"
 } = {}) {

@@ -9,8 +9,10 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { createInstalledTrainingContent } from "./installedContent.js";
 import { createPracticeHistoryReader } from "./practiceHistoryReader.js";
 
-// Candidate CLI only, with original writers stopped. Durable preparation owns
-// this narrow historical adoption; project names and browser context do not.
+/**
+ * Candidate CLI only, with original writers stopped. Durable preparation owns
+ * this narrow historical adoption; project names and browser context do not.
+ */
 export async function upgradeLearningPracticeHistory({ systemRoot, backupRoot, apply, report }) {
   if (!path.isAbsolute(systemRoot || "") || path.resolve(systemRoot) !== systemRoot ||
       systemRoot === path.parse(systemRoot).root || backupRoot !== path.join(systemRoot, "upgrades", "backups", "20261008-learning-practice-history")) {

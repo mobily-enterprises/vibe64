@@ -182,7 +182,9 @@ async function archiveCurrent(context, current) {
   if (!previous) await writePlan(pairPath(context, id), JSON.stringify({ ...record, archivedAt: new Date().toISOString() }) + "\n");
 }
 
-// Retain only current/archived document references, not a second progress journal.
+/**
+ * Retain only current/archived document references, not a second progress journal.
+ */
 async function retireUnreferencedDocuments(context) {
   const current = await readWorkPlanUnlocked(context);
   const history = await readWorkPlanHistoryUnlocked(context);
@@ -225,7 +227,9 @@ function readWorkPlanPage(context, options) {
   return withWorkPlan(context, () => readWorkPlanPageUnlocked(context, options));
 }
 
-// The helper derives role from the admitted turn, never from command payloads.
+/**
+ * The helper derives role from the admitted turn, never from command payloads.
+ */
 async function manageWorkPlan(context, input, role) {
   return withWorkPlan(context, async () => {
     const { operation, expectedRevision = "", expectedProgressRevision = "", archiveId = "", archiveCurrent: acknowledgeArchive = false } = input;
@@ -317,7 +321,9 @@ function workPlanInstructions(role) {
   return common + " You are Senior and own the plan's scope and lifecycle. Read all pages of BOTH current Plan and Progress first. If none exists, use new. If a current plan exists and the user has not clearly chosen, ask whether to update it or archive it and start a new plan; wait for their answer before replacing it. Use write for an agreed update, reopen for an agreed return to a completed plan, archive when requested, and complete ONLY when every required acceptance item is supported by evidence. Before new or reopening an archived plan replaces a current plan, identify the plan that will be archived and explain that it remains accessible. Pass archiveCurrent:true only after the user authorizes that replacement; an explicit instruction to archive and replace already counts, so do not ask again. Reopening an archive moves it back to current as active, removing that entry from History while retaining the exact Plan and Progress pair. Replacement archives BOTH old documents and begins fresh Progress. During review, verify each agreed acceptance requirement against actual implementation and evidence. Reconcile checklist ticks against the evidence, unticking unsupported claims. Record missing verification and blockers in Progress without rewriting scope; fix in-scope defects and verify them. If review or checks remain unfinished, leave the plan active and continue authorised review. In Auto, report continue through the workflow outcome command. For substantial necessary rework within the agreed outcome, update the Technical details and Progress, then report handoff so Junior implements and Senior reviews and deslops again. Ask only when a genuinely changed product requirement or required decision blocks progress. Explicit pauses and Stops remain respected. Never invent requirements or mark unverified work completed. Direct modes retain their direct behaviour and do not start automatic handoffs.";
 }
 
-// Pure stopped-writer conversion; the original Runtime inventory/publisher owns paths and backups.
+/**
+ * Pure stopped-writer conversion; the original Runtime inventory/publisher owns paths and backups.
+ */
 function planProgressUpgradeChanges(files) {
   const saved = new Map(files.map(file => [file.name, file]));
   const changes = new Map();

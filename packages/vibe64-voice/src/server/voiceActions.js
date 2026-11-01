@@ -29,8 +29,10 @@ const voiceCatalogueTool = Object.freeze({
  * @param {VoiceService} dependencies.voice
  */
 function createVoiceActions({ actions, voice }) {
-  // The Colleague read must authorize the original request afresh. Its
-  // contributor rejects a resolved grant carried over from this action.
+  /**
+   * The Colleague read must authorize the original request afresh. Its
+   * contributor rejects a resolved grant carried over from this action.
+   */
   async function readCatalogueForColleague(context) {
     const recheckContext = { ...context };
     delete recheckContext.vibe64Action;

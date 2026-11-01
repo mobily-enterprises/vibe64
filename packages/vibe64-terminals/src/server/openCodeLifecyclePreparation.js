@@ -69,7 +69,9 @@ function createOpenCodeLifecyclePreparation({
     const id = safeSessionId(sessionId);
     return {
       sessionId: id,
-      // Helpers retain the original warm shared-service policy.
+      /**
+       * Helpers retain the original warm shared-service policy.
+       */
       options: { get retainSharedProcess() { return Boolean(options.assistantScope); } },
       application: {
         ...processRelease,

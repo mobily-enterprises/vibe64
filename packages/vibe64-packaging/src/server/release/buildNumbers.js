@@ -7,8 +7,10 @@ import { nextVersionCode } from "../packers/capacitor/generateShell.js";
 // Statuses of a release that did not finish and can be retried.
 const UNFINISHED_RELEASE_STATUSES = Object.freeze(["failed", "partial", "interrupted"]);
 
-// `releases` are the history's records, a run that is no longer live already
-// shown as "interrupted"; `packages` are the plan's packages with their version.
+/**
+ * `releases` are the history's records, a run that is no longer live already
+ * shown as "interrupted"; `packages` are the plan's packages with their version.
+ */
 function nextBuildNumbers({ releases = [], packages = [], savedCommit = "" } = {}) {
   const used = releases.filter((record) => record.kind === "release");
   const numbers = {};

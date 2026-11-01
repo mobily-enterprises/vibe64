@@ -14,8 +14,10 @@ function normalizeAbsolutePath(value = "") {
   return normalized ? path.resolve(normalized) : "";
 }
 
-// Whether candidate is root or inside it. A child named like "..cache" is
-// inside; only ".." itself or a "../" prefix leaves the root.
+/**
+ * Whether candidate is root or inside it. A child named like "..cache" is
+ * inside; only ".." itself or a "../" prefix leaves the root.
+ */
 function pathInsideOrEqual(root = "", candidate = "") {
   const normalizedRoot = normalizeAbsolutePath(root);
   const normalizedCandidate = normalizeAbsolutePath(candidate);
@@ -53,7 +55,9 @@ function uniqueStrings(values = []) {
   return output;
 }
 
-// Milliseconds since the epoch for a stored timestamp; 0 when it is empty or unreadable.
+/**
+ * Milliseconds since the epoch for a stored timestamp; 0 when it is empty or unreadable.
+ */
 function timestampMs(value) {
   const ms = Date.parse(String(value || "").trim());
   return Number.isFinite(ms) ? ms : 0;

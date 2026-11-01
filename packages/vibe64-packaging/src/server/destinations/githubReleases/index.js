@@ -63,7 +63,9 @@ function apiHeaders(token) {
   return { authorization: `Bearer ${token}`, "x-github-api-version": "2022-11-28" };
 }
 
-// Drafts have no public tag yet, so the release is found in the list by tag name.
+/**
+ * Drafts have no public tag yet, so the release is found in the list by tag name.
+ */
 async function findRelease({ api, repository, tag, token }) {
   for (let page = 1; page <= 10; page += 1) {
     const response = await httpJson(new URL(`repos/${repository}/releases?per_page=100&page=${page}`, api).href, {
@@ -80,7 +82,9 @@ async function findRelease({ api, repository, tag, token }) {
   return null;
 }
 
-// GitHub reports `digest: "sha256:..."` for assets; older assets without one are hashed.
+/**
+ * GitHub reports `digest: "sha256:..."` for assets; older assets without one are hashed.
+ */
 async function assetDigest(asset, token) {
   if (/^sha256:[0-9a-f]{64}$/u.test(asset.digest || "")) return asset.digest;
   const response = await httpRequest(asset.url, { accept: "application/octet-stream", headers: apiHeaders(token) });
@@ -150,8 +154,10 @@ function channelFlags(channel) {
   return ["--latest"];
 }
 
-// Creates the release on the existing tag with every file, or, resuming, attaches
-// only the files it still lacks (never `--clobber`).
+/**
+ * Creates the release on the existing tag with every file, or, resuming, attaches
+ * only the files it still lacks (never `--clobber`).
+ */
 async function upload({ target, version, artifacts, credentials }) {
   const settings = releaseSettings(target, version);
   const token = await credentialToken(credentials);
@@ -180,7 +186,9 @@ async function upload({ target, version, artifacts, credentials }) {
   });
 }
 
-// What would be attached, and whether the tag and release exist already.
+/**
+ * What would be attached, and whether the tag and release exist already.
+ */
 async function dryRun({ target, version, artifacts, credentials }) {
   const settings = releaseSettings(target, version);
   const token = await credentialToken(credentials);
@@ -206,7 +214,9 @@ async function dryRun({ target, version, artifacts, credentials }) {
   };
 }
 
-// A read-only proof that the sign-in can see the repository and write to it.
+/**
+ * A read-only proof that the sign-in can see the repository and write to it.
+ */
 async function verifyCredential({ target, credentials }) {
   const settings = releaseSettings(target, "0.0.0");
   let token;

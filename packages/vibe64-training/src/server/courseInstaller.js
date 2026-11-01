@@ -227,7 +227,9 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
     return reading;
   }
 
-  // The catalogue entry is the exact descriptor/lock pair for enableCourse.
+  /**
+   * The catalogue entry is the exact descriptor/lock pair for enableCourse.
+   */
   function installState(installed, { course, lock }) {
     const entry = installed.courses.find(value => value.course.courseId === course.courseId && value.course.release === course.release);
     if (!entry) return "not-installed";
@@ -270,9 +272,11 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
     }
   }
 
-  // After a newer release is enabled, older releases of the same course are
-  // removed from the catalogue, freeing their places. Saved attempts keep their
-  // pinned lesson content and still resume; only new starts use the newer one.
+  /**
+   * After a newer release is enabled, older releases of the same course are
+   * removed from the catalogue, freeing their places. Saved attempts keep their
+   * pinned lesson content and still resume; only new starts use the newer one.
+   */
   async function retireOlderReleases(course) {
     const retired = [];
     for (let attempt = 0; ; attempt += 1) {

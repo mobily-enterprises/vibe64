@@ -60,8 +60,10 @@ async function withCodexAppServerModelCatalogDeadline(operation, {
   }
 }
 
-// Application discovery budgets and authorized account/runtime preparation.
-// Native catalogue caching, provider reuse and cleanup stay in the existing owner.
+/**
+ * Application discovery budgets and authorized account/runtime preparation.
+ * Native catalogue caching, provider reuse and cleanup stay in the existing owner.
+ */
 function createCodexAssistantCatalog({
   accountPreparation, runtimeHost, sessionRuntimeHost, conversationPreparation, helperPreparation,
   providerOwner, runOwner, providerFactory

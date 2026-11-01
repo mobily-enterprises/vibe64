@@ -23,20 +23,26 @@ function assertLearnerKey(learnerKey) {
   if (!LEARNER_KEY_PATTERN.test(String(learnerKey || ""))) throw new TypeError("A Learn thread needs its learner key.");
 }
 
-// <sys>/colleague/<learnerKey>/learn/<attemptId>.json, or learn/lobby.json.
+/**
+ * <sys>/colleague/<learnerKey>/learn/<attemptId>.json, or learn/lobby.json.
+ */
 function learnThreadFile({ systemRoot, learnerKey, attemptId = "" } = {}) {
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("A Learn thread needs the application system root.");
   assertLearnerKey(learnerKey);
   return path.join(systemRoot, "colleague", learnerKey, "learn", `${learnThreadName(attemptId)}.json`);
 }
 
-// The learner key Training uses for the person: their actor, or on the local
-// editor (no signed-in person) this computer's user.
+/**
+ * The learner key Training uses for the person: their actor, or on the local
+ * editor (no signed-in person) this computer's user.
+ */
 function learnThreadLearnerKey(actor = null) {
   return practiceLearnerKey(actor || currentOsUser());
 }
 
-// One releaser per process; the returned function unregisters it.
+/**
+ * One releaser per process; the returned function unregisters it.
+ */
 // readable-check: allow module-registry - cycle: vibe64.colleague requires vibe64.core, whose Learn threads it releases
 function registerLearnThreadReleaser(releaser) {
   if (typeof releaser !== "function") throw new TypeError("A Learn thread releaser must be a function.");
@@ -44,7 +50,9 @@ function registerLearnThreadReleaser(releaser) {
   return () => { if (learnThreadReleaser === releaser) learnThreadReleaser = null; };
 }
 
-// No-op when no assistant registered a releaser.
+/**
+ * No-op when no assistant registered a releaser.
+ */
 async function releaseLearnThread({ learnerKey, attemptId } = {}) {
   assertLearnerKey(learnerKey);
   learnThreadName(attemptId);

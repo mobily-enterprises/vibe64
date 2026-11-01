@@ -21,8 +21,10 @@ const pinSchema = createSchema({
   topicHash: { ...text, maxLength: 64 }
 });
 
-// A choice answer is read only by the server comparator. Every other
-// projection of a lesson descriptor goes through this.
+/**
+ * A choice answer is read only by the server comparator. Every other
+ * projection of a lesson descriptor goes through this.
+ */
 function withoutAnswers(lesson) {
   if (!lessonHasSteps(lesson)) return lesson;
   return { ...lesson, steps: lesson.steps.map(step => {
@@ -32,8 +34,10 @@ function withoutAnswers(lesson) {
   }) };
 }
 
-// The choice comparator: the selection passes only when it names exactly the
-// authored answer indexes. Order is irrelevant; duplicates or non-integers fail.
+/**
+ * The choice comparator: the selection passes only when it names exactly the
+ * authored answer indexes. Order is irrelevant; duplicates or non-integers fail.
+ */
 function compareChoiceAnswer(answer, selected) {
   if (!Array.isArray(answer) || !Array.isArray(selected) || !selected.every(Number.isSafeInteger) ||
       new Set(selected).size !== selected.length) return false;
@@ -91,8 +95,10 @@ async function inventory(directory) {
   return files.sort();
 }
 
-// Only the composing server may admit drafts for an isolated author preview.
-// Read inputs cannot change this choice; ordinary learner readers refuse drafts.
+/**
+ * Only the composing server may admit drafts for an isolated author preview.
+ * Read inputs cannot change this choice; ordinary learner readers refuse drafts.
+ */
 function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false } = {}) {
   if (typeof systemRoot !== "string" || !systemRoot || !path.isAbsolute(systemRoot)) {
     throw new Error("Installed teaching content needs an absolute server-owned system root.");
@@ -103,7 +109,9 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
   }
   const pendingTopics = new Map();
 
-  // An installed lesson this Vibe64 cannot teach (see validateTopic installed).
+  /**
+   * An installed lesson this Vibe64 cannot teach (see validateTopic installed).
+   */
   function unusableLesson(bundle) {
     return Object.assign(new Error(`Lesson ${bundle.lesson.code} ("${bundle.lesson.title}") cannot be taught by this version of Vibe64: ${bundle.problem} Update the course in Courses, or ask its authors for a fixed release.`),
       { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 });
@@ -197,8 +205,10 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     return { path: relative, bytes };
   }
 
-  // Conversation admission reads identity, not teaching bytes. Re-read the
-  // trusted manifest and selected descriptor each time; never cache authority.
+  /**
+   * Conversation admission reads identity, not teaching bytes. Re-read the
+   * trusted manifest and selected descriptor each time; never cache authority.
+   */
   async function readAdmissionIdentity({ topicId, commit, topicHash, lessonCode, lessonHash } = {}) {
     if (typeof topicId !== "string" || !idPattern.test(topicId) || typeof commit !== "string" || !commitPattern.test(commit) ||
         typeof topicHash !== "string" || !hashPattern.test(topicHash) || typeof lessonCode !== "string" || !idPattern.test(lessonCode) ||
@@ -306,8 +316,10 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     };
   }
 
-  // Server-only comparator input: the authored answer of one v2 choice step.
-  // Never return this to a browser or assistant projection.
+  /**
+   * Server-only comparator input: the authored answer of one v2 choice step.
+   * Never return this to a browser or assistant projection.
+   */
   async function readChoiceAnswer({ stepId, ...input } = {}) {
     if (typeof stepId !== "string" || !idPattern.test(stepId)) throw new Error("Choose a declared step ID.");
     const { pin, lesson, hash } = await readVerifiedLessonIdentity(input);
@@ -394,7 +406,9 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
   return Object.freeze({ readTopic, readLesson, readAdmissionIdentity, readVisual, readCheck, readExercise, readChoiceAnswer });
 }
 
-// The content key the readers below take for an attempt's pinned lesson.
+/**
+ * The content key the readers below take for an attempt's pinned lesson.
+ */
 const pinnedLessonKey = pin => ({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
 
 export { compareChoiceAnswer, createInstalledTrainingContent, pinnedLessonKey, validateInstalledTopicPin };

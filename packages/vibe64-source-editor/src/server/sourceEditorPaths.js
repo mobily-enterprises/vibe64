@@ -3,8 +3,10 @@ import path from "node:path";
 
 import { normalizeText, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 
-// A session source path the editor may use: relative, inside the source and
-// never through a symbolic link, with the editor's coded errors.
+/**
+ * A session source path the editor may use: relative, inside the source and
+ * never through a symbolic link, with the editor's coded errors.
+ */
 function sourceEditorError(message, code, details = {}, statusCode = 400) {
   const error = vibe64Error(message, code);
   error.details = details;

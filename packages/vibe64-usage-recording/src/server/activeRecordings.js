@@ -28,7 +28,9 @@ function activeUsageRecording(projectScope, sessionId) {
   return active.get(entryKey(projectScope, sessionId)) || null;
 }
 
-// A session that closes ends its recording.
+/**
+ * A session that closes ends its recording.
+ */
 async function stopActiveUsageRecording(projectScope, sessionId, reason = "session-ended") {
   await activeUsageRecording(projectScope, sessionId)?.stop(reason);
 }

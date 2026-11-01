@@ -239,8 +239,10 @@ function createSignalShutdownHandler({
   };
 }
 
-// Sets these process env values (undefined deletes) while fn runs, then
-// restores what was there before.
+/**
+ * Sets these process env values (undefined deletes) while fn runs, then
+ * restores what was there before.
+ */
 async function withProcessEnv(values, fn) {
   const previous = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
   const assign = (entries) => {

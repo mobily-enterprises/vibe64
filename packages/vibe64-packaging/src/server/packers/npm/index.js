@@ -8,7 +8,9 @@ import { listNpmTarball, npmTarballManifest } from "../../destinations/npm/tarba
 import { publishError } from "../../errors.js";
 import { recipeSteps, sourceDateEnvironment, toolVersion } from "../registryRecipe.js";
 
-// npm's own tarball name: `@scope/name` 1.2.0 -> scope-name-1.2.0.tgz.
+/**
+ * npm's own tarball name: `@scope/name` 1.2.0 -> scope-name-1.2.0.tgz.
+ */
 function npmTarballName(name, version) {
   return `${name.replace(/^@/u, "").replace(/\//gu, "-")}-${version}.tgz`;
 }
@@ -29,9 +31,11 @@ async function readManifest(packageRoot) {
   return manifest;
 }
 
-// context: { sourceRoot: the exported saved commit, entry: the Packaging package,
-// version: the planned version (null accepts the source's own), commitTime: the
-// saved commit's time in seconds }.
+/**
+ * context: { sourceRoot: the exported saved commit, entry: the Packaging package,
+ * version: the planned version (null accepts the source's own), commitTime: the
+ * saved commit's time in seconds }.
+ */
 async function buildRecipe({ sourceRoot, entry, version = null, commitTime = null } = {}) {
   if (typeof sourceRoot !== "string" || !path.isAbsolute(sourceRoot)) {
     throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The npm packer needs the exported source folder.");
@@ -66,7 +70,9 @@ const npmPacker = Object.freeze({
   label: "npm package",
   produces: Object.freeze(["npm tarball"]),
   buildRecipe,
-  // After Stage 1: exactly one tarball whose package.json has the planned version.
+  /**
+   * After Stage 1: exactly one tarball whose package.json has the planned version.
+   */
   checkArtifacts: async ({ artifacts, version = null }) => {
     const files = artifacts.manifest.files.filter((file) => file.path.endsWith(".tgz"));
     if (files.length !== 1 || artifacts.manifest.files.length !== 1) {

@@ -3,17 +3,19 @@ import { learnerIdentity } from "./learnerState.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 
-// Publishes vibe64.training.learner.changed with its reason (see
-// shared/learnerEvents.js): "learning-mode" after a switch between Learn and
-// Develop, "lesson" after a lesson starts, restarts, resumes, finishes or is
-// deleted, "steps" after a step result or reader position, "practice" after
-// an archived lesson is deleted and "notes" after a teacher notes change
-// (the last two without an attempt). The event goes to every connected
-// client like the session notices; each host's realtime authorization admits
-// it only for the learner it names. A notification failure never changes or
-// repeats the saved operation.
-// Without runtime events a saved change goes unannounced; readers see it on
-// their next read.
+/**
+ * Publishes vibe64.training.learner.changed with its reason (see
+ * shared/learnerEvents.js): "learning-mode" after a switch between Learn and
+ * Develop, "lesson" after a lesson starts, restarts, resumes, finishes or is
+ * deleted, "steps" after a step result or reader position, "practice" after
+ * an archived lesson is deleted and "notes" after a teacher notes change
+ * (the last two without an attempt). The event goes to every connected
+ * client like the session notices; each host's realtime authorization admits
+ * it only for the learner it names. A notification failure never changes or
+ * repeats the saved operation.
+ * Without runtime events a saved change goes unannounced; readers see it on
+ * their next read.
+ */
 async function announceNoLearnerChange() {}
 
 /** @param {RuntimeEvents | null} events */

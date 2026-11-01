@@ -43,8 +43,10 @@ const OUTPUT_SCHEMA = {
  */
 function createAssistantRoutingDecisions({ records, agent, exclusive }) {
   async function classify(sessionId, context, state, task, options) {
-    // Parent metadata owns the reference. Each write merges only this helper's
-    // fields under the normal lock, so a late native callback cannot undo Stop.
+    /**
+     * Parent metadata owns the reference. Each write merges only this helper's
+     * fields under the normal lock, so a late native callback cannot undo Stop.
+     */
     async function retainHelper(helper) {
       await exclusive(sessionId, options, async (current) => {
         const persisted = await read(current.runtime.store, sessionId);

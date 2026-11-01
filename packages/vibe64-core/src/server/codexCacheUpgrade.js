@@ -5,8 +5,10 @@ import path from "node:path";
 import { CURATED_CODEX_PROVIDERS } from "../shared/curatedCodexProviders.js";
 import { codexProviderPaths } from "./codexProviderConnections.js";
 
-// A home is reached only through real directories below its trusted root; a
-// link on the way is reported and left alone.
+/**
+ * A home is reached only through real directories below its trusted root; a
+ * link on the way is reported and left alone.
+ */
 async function homeState(root, home) {
   let current = root;
   for (const part of path.relative(root, home).split(path.sep)) {
@@ -21,12 +23,14 @@ async function homeState(root, home) {
   return "directory";
 }
 
-// Codex synced plugin and app catalogues into every home it ran in, and a
-// removed provider connection kept its diagnostic logs and temporary files.
-// Neither is read again: the managed home and connected providers lose only the
-// plugin and app caches; a provider home without a connection also loses its
-// runtime-only data. Which entries those are is JSKIT's Codex owner's answer.
-// These are regenerable caches and logs, not saved state, so there is no backup.
+/**
+ * Codex synced plugin and app catalogues into every home it ran in, and a
+ * removed provider connection kept its diagnostic logs and temporary files.
+ * Neither is read again: the managed home and connected providers lose only the
+ * plugin and app caches; a provider home without a connection also loses its
+ * runtime-only data. Which entries those are is JSKIT's Codex owner's answer.
+ * These are regenerable caches and logs, not saved state, so there is no backup.
+ */
 async function removeUnusedCodexCaches({ systemRoot, apply, report, home = os.homedir() }) {
   if (!path.isAbsolute(systemRoot || "") || !path.isAbsolute(home || "")) {
     throw new Error("Codex cache removal requires absolute state and home directories.");

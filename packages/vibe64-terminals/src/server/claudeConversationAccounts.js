@@ -97,8 +97,10 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
     return `sha256:${sha256Hex(JSON.stringify([configRoot, account.authMethod, email]))}`;
   }
 
-  // A session's main and temporary chats follow the workspace's current account
-  // and keep their history; scoped helpers stay bound to their request's account.
+  /**
+   * A session's main and temporary chats follow the workspace's current account
+   * and keep their history; scoped helpers stay bound to their request's account.
+   */
   function prepareAccount(entry) {
     return {
       identity: accountIdentity(entry.context),

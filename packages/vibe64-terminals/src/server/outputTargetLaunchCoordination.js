@@ -38,8 +38,10 @@ function createOutputTargetLaunchCoordination({
 }) {
   const launchStarts = createKeyedQueue();
 
-  // The environment, project and command runner a Preview status read or
-  // proxy start runs with, after the caller's own options.
+  /**
+   * The environment, project and command runner a Preview status read or
+   * proxy start runs with, after the caller's own options.
+   */
   function launchCommandOptions(options = {}) {
     return {
       ...options,
@@ -204,8 +206,10 @@ function createOutputTargetLaunchCoordination({
     };
   }
 
-  // Runs one launch operation inside the session's output terminal admission,
-  // refusing it while the session is frozen for renewal or closing.
+  /**
+   * Runs one launch operation inside the session's output terminal admission,
+   * refusing it while the session is frozen for renewal or closing.
+   */
   async function withLaunchAdmission(sessionId, operation) {
     const admission = beginTerminalNamespaceOperation(outputTargetTerminalNamespace(sessionId));
     if (admission.ok === false) {

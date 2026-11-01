@@ -315,9 +315,11 @@ function publicColumns(columns = []) {
   return columns.map(({ source: _source, ...column }) => column);
 }
 
-// A result set's command is the driver's own when it reports one (PostgreSQL);
-// otherwise it is read from the executed statement, so a row-returning write
-// such as INSERT ... RETURNING or CALL is never mistaken for a SELECT.
+/**
+ * A result set's command is the driver's own when it reports one (PostgreSQL);
+ * otherwise it is read from the executed statement, so a row-returning write
+ * such as INSERT ... RETURNING or CALL is never mistaken for a SELECT.
+ */
 function normalizeRawResponse(raw, schema = {}, connection = {}, sql = "") {
   const dialect = databaseDialect(connection.engine);
   const resultSet = dialect.resultSet(raw);

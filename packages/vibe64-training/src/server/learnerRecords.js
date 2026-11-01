@@ -240,8 +240,10 @@ function validateStepEvidence(result) {
     (evidence.filesHash === undefined || sha256Pattern.test(evidence.filesHash));
 }
 
-// The results and receipts of one lesson content; shared with the frozen
-// practice-history reader, whose version 2 record keeps one entry per lesson.
+/**
+ * The results and receipts of one lesson content; shared with the frozen
+ * practice-history reader, whose version 2 record keeps one entry per lesson.
+ */
 function validateStepEntry(entry) {
   if (!idPattern.test(entry.lesson.code) || !sha256Pattern.test(entry.lesson.hash)) {
     throw new Error("Step progress names an invalid lesson content identity.");
@@ -279,8 +281,10 @@ function validateStepProgress(value, learnerId) {
   return record;
 }
 
-// Receipts bound only the session ID's format: the check runner compares it
-// with the attempt's own prepared session at use.
+/**
+ * Receipts bound only the session ID's format: the check runner compares it
+ * with the attempt's own prepared session at use.
+ */
 function validSessionId(sessionId) {
   try { return assertValidVibe64SessionId(sessionId) === sessionId; } catch { return false; }
 }
@@ -289,11 +293,15 @@ function lessonSteps(lesson) {
   return lessonHasSteps(lesson.lesson) && Array.isArray(lesson.lesson.steps) ? lesson.lesson.steps : null;
 }
 
-// The result kind a step's declared check records: a reading step (check
-// "none") records the learner's own "read" mark.
+/**
+ * The result kind a step's declared check records: a reading step (check
+ * "none") records the learner's own "read" mark.
+ */
 const resultKind = step => step.check?.kind === "none" ? "read" : step.check?.kind;
 
-// Saved step results must match the exact pinned version 2 lesson.
+/**
+ * Saved step results must match the exact pinned version 2 lesson.
+ */
 function validateLessonStepResults(entry, lesson) {
   const steps = lessonSteps(lesson);
   if (!steps) throw new Error("Step results belong only to a version 2 lesson.");
@@ -343,7 +351,9 @@ function validatePin(value) {
   return { course: { ...pin.course }, topic: { ...pin.topic }, lesson: { ...pin.lesson } };
 }
 
-// The single session an attempt with a practice project prepares.
+/**
+ * The single session an attempt with a practice project prepares.
+ */
 const attemptSessionId = attemptId => `training-${attemptId}`;
 
 function validatePreparation(preparation, attemptId) {
@@ -483,22 +493,28 @@ async function readRecord(filename, limit = MAX_RECORD_BYTES) {
   return value;
 }
 
-// Markdown text: line breaks and tabs, no other control characters.
+/**
+ * Markdown text: line breaks and tabs, no other control characters.
+ */
 function validNotesText(value) {
   // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in learner notes.
   return typeof value === "string" && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value);
 }
 
-// The saved results of this attempt, or a fresh empty entry: a record left by
-// an earlier attempt belongs to nobody now.
+/**
+ * The saved results of this attempt, or a fresh empty entry: a record left by
+ * an earlier attempt belongs to nobody now.
+ */
 function attemptStepEntry(record, attempt) {
   return record?.attemptId === attempt.attemptId
     ? { lesson: record.lesson, results: record.results, receipts: record.receipts }
     : { lesson: { code: attempt.pin.lesson.code, hash: attempt.pin.lesson.hash }, results: [], receipts: [] };
 }
 
-// A step lesson completes when every required step available to the learner
-// here (lessonAvailability.js) has passed in this attempt.
+/**
+ * A step lesson completes when every required step available to the learner
+ * here (lessonAvailability.js) has passed in this attempt.
+ */
 function lessonCompletion(lesson, entry, available) {
   const steps = lessonSteps(lesson);
   if (!steps) throw new Error(`Lesson ${lesson.lesson.code} uses an unsupported format.`);

@@ -10,8 +10,10 @@ const ICON_PROGRAM = fileURLToPath(new URL("./ShellIcons.java", import.meta.url)
 // PNG colour types: 4 (grey + alpha) and 6 (RGBA) carry an alpha channel.
 const ALPHA_COLOR_TYPES = new Set([4, 6]);
 
-// Reads the PNG header and chunk list (never the pixels): size, colour type and
-// whether any transparency is possible.
+/**
+ * Reads the PNG header and chunk list (never the pixels): size, colour type and
+ * whether any transparency is possible.
+ */
 function inspectPng(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length < 33 || !buffer.subarray(0, 8).equals(PNG_SIGNATURE)) {
     return { png: false };

@@ -215,8 +215,10 @@ function registerRoutes(http, {
   });
 }
 
-// Derive HTTP fields from the action contract. URL identities take precedence;
-// actor, repository and operation are never caller inputs.
+/**
+ * Derive HTTP fields from the action contract. URL identities take precedence;
+ * actor, repository and operation are never caller inputs.
+ */
 function githubActionInput(method, validator) {
   return function buildGithubActionInput(request) {
     const data = { ...(method === "GET" ? requestQuery(request) : requestBody(request)), ...request.params };

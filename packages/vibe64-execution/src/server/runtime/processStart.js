@@ -5,9 +5,11 @@ import { promisify } from "node:util";
 
 const execFile = promisify(execFileCallback);
 
-// The fields after the command name in /proc/<pid>/stat: state, ppid, pgrp, ...
-// and the start time in clock ticks at index 19. Any state letter is accepted
-// (tracing stop is lower-case "t"); callers decide which states they trust.
+/**
+ * The fields after the command name in /proc/<pid>/stat: state, ppid, pgrp, ...
+ * and the start time in clock ticks at index 19. Any state letter is accepted
+ * (tracing stop is lower-case "t"); callers decide which states they trust.
+ */
 function parseLinuxProcessStat(statText = "") {
   const text = String(statText || "").trim();
   const commandEnd = text.lastIndexOf(")");
@@ -27,8 +29,10 @@ function parseLinuxProcessStat(statText = "") {
   };
 }
 
-// One `ps -o pgid=,stat=,lstart=` line. lstart ("Tue Oct 21 10:00:00 2026")
-// becomes whole seconds since the epoch, so it compares like Linux ticks.
+/**
+ * One `ps -o pgid=,stat=,lstart=` line. lstart ("Tue Oct 21 10:00:00 2026")
+ * becomes whole seconds since the epoch, so it compares like Linux ticks.
+ */
 function parsePsProcessLine(line = "") {
   const match = /^\s*(\d+)\s+(\S+)\s+(\S.*\S)\s*$/u.exec(String(line || ""));
   const startedAt = match ? Date.parse(match[3]) : Number.NaN;
@@ -46,8 +50,10 @@ function psEnv() {
   return { ...process.env, LC_ALL: "C" };
 }
 
-// Reads a process's start identity: { status: "exact" | "absent" | "ambiguous",
-// groupId, state, startTimeTicks }. Linux reads /proc; macOS asks ps.
+/**
+ * Reads a process's start identity: { status: "exact" | "absent" | "ambiguous",
+ * groupId, state, startTimeTicks }. Linux reads /proc; macOS asks ps.
+ */
 async function readProcessStart(pid, {
   execFileFn = execFile,
   platform = process.platform,
@@ -84,7 +90,9 @@ async function readProcessStart(pid, {
   }
 }
 
-// True when any non-zombie process still belongs to the process group.
+/**
+ * True when any non-zombie process still belongs to the process group.
+ */
 async function processGroupHasLiveMember(groupId, {
   execFileFn = execFile,
   platform = process.platform,
@@ -123,7 +131,9 @@ async function processGroupHasLiveMember(groupId, {
   }
 }
 
-// The tag stored next to a start identity, so a reader compares like with like.
+/**
+ * The tag stored next to a start identity, so a reader compares like with like.
+ */
 function processStartIdentityPlatform(platform = process.platform) {
   if (platform === "linux") return "linux-proc";
   if (platform === "darwin") return "darwin-ps";

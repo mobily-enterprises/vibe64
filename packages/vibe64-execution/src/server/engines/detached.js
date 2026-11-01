@@ -14,8 +14,10 @@ const DEFAULT_STOP_KILL_MS = 1000;
 const reaperPath = fileURLToPath(new URL("./detachedReaper.js", import.meta.url));
 let reaper = null;
 
-// The reaper holds every running group of this server, so none outlives it.
-// Every running group is listed again when a replacement reaper starts.
+/**
+ * The reaper holds every running group of this server, so none outlives it.
+ * Every running group is listed again when a replacement reaper starts.
+ */
 function holdProcessGroup(processGroupId) {
   if (process.platform === "win32") return;
   if (!reaper) {
@@ -164,8 +166,10 @@ function signalProcessGroup(processGroupId = null, signal = "SIGTERM") {
   }
 }
 
-// The processes still in a group, to name in a failed drain. Only Linux lists
-// them; elsewhere, and for a group that has ended, the list is empty.
+/**
+ * The processes still in a group, to name in a failed drain. Only Linux lists
+ * them; elsewhere, and for a group that has ended, the list is empty.
+ */
 async function processGroupMembers(processGroupId = null, limit = 10) {
   const normalized = Number(processGroupId);
   if (process.platform !== "linux" || !Number.isSafeInteger(normalized) || normalized <= 0) return [];

@@ -10,10 +10,12 @@ const MAX_LISTING_BYTES = 1024 * 1024;
 const FLUSH_PACKET = "0000";
 const DELIMITER_PACKET = "0001";
 
-// Git sends a github.com request through https_proxy, else all_proxy (either
-// case). Node's fetch uses HTTPS_PROXY only when the server started with
-// NODE_USE_ENV_PROXY=1, and never ALL_PROXY. Where it would not take the proxy
-// Git takes, the heads are read with Git; this is decided before any read.
+/**
+ * Git sends a github.com request through https_proxy, else all_proxy (either
+ * case). Node's fetch uses HTTPS_PROXY only when the server started with
+ * NODE_USE_ENV_PROXY=1, and never ALL_PROXY. Where it would not take the proxy
+ * Git takes, the heads are read with Git; this is decided before any read.
+ */
 function fetchReachesGithubAsGit(env = process.env) {
   const setting = (name) => String(env[name.toLowerCase()] || env[name] || "").trim();
   if (setting("HTTPS_PROXY")) return String(env.NODE_USE_ENV_PROXY || "").trim() === "1";
@@ -53,7 +55,9 @@ function invalidListing() {
   return remoteHeadsError("The repository returned invalid branch evidence.", "vibe64_session_update_refs_invalid");
 }
 
-// `<object-id> <refname>[ <attribute>...]` lines, ended by a flush packet.
+/**
+ * `<object-id> <refname>[ <attribute>...]` lines, ended by a flush packet.
+ */
 function parseLsRefsResponse(bytes) {
   const listing = [];
   let offset = 0;
@@ -103,9 +107,11 @@ function failedStatusError(status) {
     "vibe64_session_update_check_failed");
 }
 
-// Returns `[{ head, ref }]` for the refs GitHub lists under the requested
-// prefixes; the caller keeps only exact names, as it does for `ls-remote`.
-// The whole read, answer included, ends within `timeoutMs`.
+/**
+ * Returns `[{ head, ref }]` for the refs GitHub lists under the requested
+ * prefixes; the caller keeps only exact names, as it does for `ls-remote`.
+ * The whole read, answer included, ends within `timeoutMs`.
+ */
 async function listGithubRemoteHeads({
   fetch: fetchRemote = globalThis.fetch,
   refs = [],

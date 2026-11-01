@@ -46,8 +46,10 @@ function createWorkspaceSetupStart({
   setupExecution,
   setupMigration
 }) {
-  // `rerunFailed` is an explicit start (Preview Start, ensure or restart): it
-  // runs a failed recipe again instead of reporting the stored failure.
+  /**
+   * `rerunFailed` is an explicit start (Preview Start, ensure or restart): it
+   * runs a failed recipe again instead of reporting the stored failure.
+   */
   async function start({ renewal = false, rerunFailed = false, retry = false, runtime, session } = {}) {
     const sessionId = normalizeText(session?.sessionId);
     if (!sessionId || !runtime?.store) {

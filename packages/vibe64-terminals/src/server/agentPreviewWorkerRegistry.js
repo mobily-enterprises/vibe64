@@ -33,9 +33,11 @@ function createAgentPreviewWorkerRegistry({
   stopManagedExecution,
   stopOwnedExecutions
 }) {
-  // The project that prepared the session's assistant commands. A browser
-  // test's changes name it, because its command can arrive outside any
-  // request, as after a restart.
+  /**
+   * The project that prepared the session's assistant commands. A browser
+   * test's changes name it, because its command can arrive outside any
+   * request, as after a restart.
+   */
   function sessionProjectSlug(sessionId) {
     const project = [...(state.browserWorkers.get(sessionId)?.values() || [])][0]?.project;
     return trimmedText(project?.slug || project?.name);
@@ -80,8 +82,10 @@ function createAgentPreviewWorkerRegistry({
     return true;
   }
 
-  // Interrupts a pending browser test, stops every registered worker and
-  // closes the session's command servers; returns the worker count.
+  /**
+   * Interrupts a pending browser test, stops every registered worker and
+   * closes the session's command servers; returns the worker count.
+   */
   async function teardownSession(sessionId = "", { forget = false, reason = "" } = {}) {
     const normalizedSessionId = trimmedText(sessionId);
     const pending = state.browserTestRuns.get(normalizedSessionId);

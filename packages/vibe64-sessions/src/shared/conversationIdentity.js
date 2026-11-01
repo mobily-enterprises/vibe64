@@ -7,8 +7,10 @@ function invalidConversation(kind) {
   });
 }
 
-// A transport selector for the existing project/session pair, never a stored
-// identity or native thread identifier.
+/**
+ * A transport selector for the existing project/session pair, never a stored
+ * identity or native thread identifier.
+ */
 function mainConversationId({ projectSlug, sessionId } = {}) {
   if (typeof projectSlug !== "string" || !projectSlug.trim() ||
       typeof sessionId !== "string" || !sessionId.trim()) {

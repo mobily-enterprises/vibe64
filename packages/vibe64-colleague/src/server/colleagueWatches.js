@@ -36,8 +36,10 @@ function createColleagueWatches({ events, watchSources, watchDebounceMs, service
     return admitted;
   }
 
-  // A teacher watches only the practice project of its own lesson attempt;
-  // the watch ends with the attempt (its thread is released).
+  /**
+   * A teacher watches only the practice project of its own lesson attempt;
+   * the watch ends with the attempt (its thread is released).
+   */
   async function assertLearnWatchTarget(state, context, projectSlug) {
     const mode = await readLearningModeFor(authenticatedVibe64User(context), { thread: "learn" });
     if (!state.thread.attemptId || mode?.currentAttemptId !== state.thread.attemptId || !mode.practiceSlug ||
@@ -84,11 +86,15 @@ function createColleagueWatches({ events, watchSources, watchDebounceMs, service
 
   const watches = Object.freeze({
     changeWatches,
-    // Owners extend what Colleague can watch (watchSources.js).
+    /**
+     * Owners extend what Colleague can watch (watchSources.js).
+     */
     registerConversationSource(name, read) { watchSources.registerConversation(name, read); },
     registerWatchSource(source) { watchSources.register(source); },
     listWatchSources() { return { ok: true, sources: watchSources.list() }; },
-    // The assistant's watch.source.create: registered state sources only.
+    /**
+     * The assistant's watch.source.create: registered state sources only.
+     */
     async watchState(input, context) {
       if (watchSources.get(input.source)?.kind !== "state") {
         throw failure("Colleague cannot watch that. watch.sources.read lists what it can watch here.", "vibe64_colleague_failed", 422);
@@ -106,9 +112,11 @@ function createColleagueWatches({ events, watchSources, watchDebounceMs, service
         return result;
       });
     },
-    // A conversation watch names its project, session and conversation (and
-    // an owner's conversation source); a state watch names its registered
-    // source and that source's input.
+    /**
+     * A conversation watch names its project, session and conversation (and
+     * an owner's conversation source); a state watch names its registered
+     * source and that source's input.
+     */
     async watch(input, context) {
       const state = await threads.stateFor(context);
       return changeWatches(state, async () => {

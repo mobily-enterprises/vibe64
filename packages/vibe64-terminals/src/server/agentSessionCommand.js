@@ -344,8 +344,10 @@ function createAgentSessionCommandService({
     });
   }
 
-  // Runs the session's complete declared setup again, like Retry on its card.
-  // It returns once preparation starts; session status reports the result.
+  /**
+   * Runs the session's complete declared setup again, like Retry on its card.
+   * It returns once preparation starts; session status reports the result.
+   */
   async function retrySetup(sessionId) {
     return runInSessionProject(sessionId, async () => {
       const setup = await retryWorkspaceSetup(sessionId);

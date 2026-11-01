@@ -16,7 +16,9 @@ import { runLoggedAccountChange } from "./accountChangeLog.js";
  * @param {RuntimeLogger} dependencies.logger
  */
 function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting, logger }) {
-  // OpenCode connection changes are account changes too: one line each.
+  /**
+   * OpenCode connection changes are account changes too: one line each.
+   */
   function connectionChange(operation, { modelProviderId, vibe64User } = {}, work) {
     return runLoggedAccountChange(logger, operation,
       { actor: String(vibe64User?.username || ""), engineId: "opencode", modelProviderId: String(modelProviderId || "") }, work);

@@ -120,11 +120,13 @@ function createAssistantRoutingCancellation({
     }
   }
 
-  // Cancel means cancel, and it never waits for the agent-write lock. It records
-  // the message as cancelled, stops its routing and classifier, interrupts a
-  // turn the message may own through Stop's interrupt, and answers. The cleanup
-  // that needs the lock (the routing helper and the native attempt) settles
-  // afterwards, or at the next admission.
+  /**
+   * Cancel means cancel, and it never waits for the agent-write lock. It records
+   * the message as cancelled, stops its routing and classifier, interrupts a
+   * turn the message may own through Stop's interrupt, and answers. The cleanup
+   * that needs the lock (the routing helper and the native attempt) settles
+   * afterwards, or at the next admission.
+   */
   async function cancelMessage(sessionId, { messageId }, options) {
     const context = await open(sessionId, options);
     const store = context.runtime.store;
@@ -165,8 +167,10 @@ function createAssistantRoutingCancellation({
     return { ok: true, cancelled: true, messageId, interrupted };
   }
 
-  // Cancel's lock-held cleanup: the native attempt, and the routing helper
-  // unless the message's own routing task is still closing it.
+  /**
+   * Cancel's lock-held cleanup: the native attempt, and the routing helper
+   * unless the message's own routing task is still closing it.
+   */
   async function settle(sessionId, context) {
     const store = context.runtime.store;
     const key = records.keyFor(sessionId, context);

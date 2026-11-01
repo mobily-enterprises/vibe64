@@ -3,7 +3,9 @@ import { localToolInstall, thisComputerToolFamily } from "./runtime/localTools.j
 // Plain words for the Git failures a person can fix on their own computer.
 // Anything else keeps git's own message.
 
-// The install line is the same one Health shows for Git.
+/**
+ * The install line is the same one Health shows for Git.
+ */
 function gitInstallCommand({ env, platform, systemPath } = {}) {
   return localToolInstall("git", { family: thisComputerToolFamily({ env, platform, systemPath }) })?.command || "";
 }
@@ -42,8 +44,10 @@ function describeGitFailure(result = {}, options = {}) {
   return null;
 }
 
-// The same failure as an error a route can return; the install command travels
-// in details so a screen can offer it with a copy button.
+/**
+ * The same failure as an error a route can return; the install command travels
+ * in details so a screen can offer it with a copy button.
+ */
 function gitFailureError(result = {}, options = {}) {
   const failure = describeGitFailure(result, options);
   if (!failure) return null;

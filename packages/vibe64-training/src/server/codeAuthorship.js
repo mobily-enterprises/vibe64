@@ -15,8 +15,10 @@ const MAX_FILE_BYTES = 1024 * 1024;
 // one slot stays free so a save that cannot extend the previous entry fits.
 const MAX_SEPARATE_ENTRIES = 255;
 
-// Reads the bytes of declared exercise-relative files from the live session
-// source. Paths come from the pinned lesson, never from a request.
+/**
+ * Reads the bytes of declared exercise-relative files from the live session
+ * source. Paths come from the pinned lesson, never from a request.
+ */
 async function readDeclaredFiles(source, files) {
   if (!path.isAbsolute(source || "") || await realpath(source) !== source) {
     throw conflictFailure("VIBE64_TRAINING_CODE_SOURCE_UNSAFE", "The lesson session source is not its original canonical directory.");
@@ -38,11 +40,13 @@ async function readDeclaredFiles(source, files) {
   return result;
 }
 
-// A declared file counts as the learner's only when every byte change since the
-// entered step's baseline arrived through this learner's own editor saves, and
-// those saves changed every declared file after the step was first entered:
-// code already present at entry (from the coding agent, Colleague, Git or an
-// earlier step) is the starting point, never the learner's work for this step.
+/**
+ * A declared file counts as the learner's only when every byte change since the
+ * entered step's baseline arrived through this learner's own editor saves, and
+ * those saves changed every declared file after the step was first entered:
+ * code already present at entry (from the coding agent, Colleague, Git or an
+ * earlier step) is the starting point, never the learner's work for this step.
+ */
 function verifyStepAuthorship(ledger, stepId, files) {
   const step = ledger?.steps?.find(value => value.stepId === stepId);
   const verified = verifyLedgerChain(step?.baseline, ledger?.entries.slice(step?.entryStart), files);
@@ -69,14 +73,18 @@ function verifyLedgerChain(baselineFiles, entries, files) {
   return { intact: broken.length === 0, files: broken };
 }
 
-// Paths whose saves the ledger records: the files of every code step entered
-// so far in this attempt.
+/**
+ * Paths whose saves the ledger records: the files of every code step entered
+ * so far in this attempt.
+ */
 function trackedPaths(ledger) {
   return new Set(ledger.steps.flatMap(step => step.baseline).map(file => file.path));
 }
 
-// The code step of a step lesson: an automatic step whose declared check is a
-// code check. Its files are the step's declared exercise-relative files.
+/**
+ * The code step of a step lesson: an automatic step whose declared check is a
+ * code check. Its files are the step's declared exercise-relative files.
+ */
 function codeStepOf(lesson, stepId) {
   if (!lessonHasSteps(lesson?.lesson)) return null;
   const step = lesson.lesson.steps?.find(value => value.id === stepId);
@@ -114,9 +122,11 @@ function createTrainingCodeAuthorship({ learners, content, project }) {
     return code ? { attempt, lesson, ...code } : null;
   }
 
-  // Called when the learner enters a code step. Each code step keeps the
-  // baseline of its first entry in this attempt: returning to it or moving
-  // between code steps never adopts intervening edits as its start.
+  /**
+   * Called when the learner enters a code step. Each code step keeps the
+   * baseline of its first entry in this attempt: returning to it or moving
+   * between code steps never adopts intervening edits as its start.
+   */
   async function recordStepBaseline({ actor, attemptId, stepId } = {}) {
     const { progress } = await learners.readState({ actor });
     const active = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
@@ -134,9 +144,11 @@ function createTrainingCodeAuthorship({ learners, content, project }) {
     return { recorded: true, step: { stepId, enteredRevision: step.enteredRevision }, baseline: structuredClone(step.baseline) };
   }
 
-  // The admitted learning save in an attempt's practice project. `save` is the
-  // generic editor save already bound to this learner's practice session; it
-  // enforces baseHash itself. Unless that attempt is in progress, it is a plain save.
+  /**
+   * The admitted learning save in an attempt's practice project. `save` is the
+   * generic editor save already bound to this learner's practice session; it
+   * enforces baseHash itself. Unless that attempt is in progress, it is a plain save.
+   */
   async function saveLearnerFile({ actor, attemptId, input, save } = {}) {
     if (typeof save !== "function") throw new TypeError("A learner code save requires the original editor save.");
     if (!await learners.activeAttemptForProject({ actor, attemptId })) return save();

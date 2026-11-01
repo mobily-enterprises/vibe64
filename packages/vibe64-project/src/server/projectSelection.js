@@ -74,8 +74,10 @@ function createProjectSelection({ logger, projectContext }) {
     return projectContext.requireSelectedTargetRoot();
   }
 
-  // The project's address: the request's slug, else the selected project's
-  // (a local directory's name normalized, never the raw directory name).
+  /**
+   * The project's address: the request's slug, else the selected project's
+   * (a local directory's name normalized, never the raw directory name).
+   */
   function currentProjectSlug() {
     return String(currentProjectRequestContext()?.slug || projectContext.selectedProject?.slug || "").trim();
   }
@@ -170,10 +172,12 @@ function createProjectSelection({ logger, projectContext }) {
     };
   }
 
-  // Internal orchestration may already hold a session record obtained
-  // through a narrower capability than the public store reader (for
-  // example, a renewal successor before it becomes visible). Reuse only an
-  // exact-id record; ordinary callers still cross the public read boundary.
+  /**
+   * Internal orchestration may already hold a session record obtained
+   * through a narrower capability than the public store reader (for
+   * example, a renewal successor before it becomes visible). Reuse only an
+   * exact-id record; ordinary callers still cross the public read boundary.
+   */
   async function sessionForInput(input = {}, sessionId = "") {
     const providedSessionId = String(input.session?.sessionId || "").trim();
     return providedSessionId === sessionId
@@ -235,8 +239,10 @@ function createProjectSelection({ logger, projectContext }) {
     };
   }
 
-  // A settings write without a session or standalone source targets the
-  // current session's source.
+  /**
+   * A settings write without a session or standalone source targets the
+   * current session's source.
+   */
   async function settingsSourceInput(input = {}) {
     if (String(input.sessionId || "").trim() || selectedSourceRoot()) {
       return input;

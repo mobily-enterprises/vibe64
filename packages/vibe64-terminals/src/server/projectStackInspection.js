@@ -12,8 +12,10 @@ function inspectionError(code, message) {
   return Object.assign(new Error(message), { code });
 }
 
-// Caller holds the existing project source lock, so conversion cannot change
-// repository identity between source selection and inspection.
+/**
+ * Caller holds the existing project source lock, so conversion cannot change
+ * repository identity between source selection and inspection.
+ */
 async function inspectCanonicalProjectStack({ project, temporaryRoot, vibe64User = null,
   env = process.env, signal, runCommand = runVibe64Command } = {}) {
   const source = canonicalProjectSource(project, project?.sourceRoot);

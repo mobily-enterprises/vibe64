@@ -73,11 +73,15 @@ function createAssistantRoutingRecords({ routingState, agent, publish }) {
     }
     await rm(root, { recursive: true, force: true });
   }
-  // Closes the routing helper and saves the request without it.
+  /**
+   * Closes the routing helper and saves the request without it.
+   */
   async function releaseHelper(context, state) {
     await cleanupHelper(context, state); state.helper = null; delete state.error; await save(context, state);
   }
-  // The saved routing settings: their revision and the owner's and non-owners' assignments.
+  /**
+   * The saved routing settings: their revision and the owner's and non-owners' assignments.
+   */
   function readRoutingSettings() {
     return createAssistantRoutingStore({ systemRoot: routingState.systemRoot }).read();
   }

@@ -243,7 +243,9 @@ function sessionConnectedContribution(session) {
   return { ...value, repository: value.repository.toLowerCase(), baseCommit: value.baseCommit.toLowerCase() };
 }
 
-// Validates an in-memory contribution binding exactly as its saved metadata.
+/**
+ * Validates an in-memory contribution binding exactly as its saved metadata.
+ */
 function parseSessionConnectedContribution(value) {
   return sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(value) } });
 }
@@ -288,14 +290,18 @@ function sessionConnectedSources(session = {}) {
   });
 }
 
-// The saved connected_submissions text, validated before it is written.
+/**
+ * The saved connected_submissions text, validated before it is written.
+ */
 function serializeSessionConnectedSubmissions(submissions) {
   const serialized = JSON.stringify({ schemaVersion: 1, submissions });
   sessionConnectedSubmissions({ metadata: { connected_submissions: serialized } });
   return serialized;
 }
 
-// The saved connected_sources text, validated before it is written.
+/**
+ * The saved connected_sources text, validated before it is written.
+ */
 function serializeSessionConnectedSources(sources) {
   const serialized = JSON.stringify({ schemaVersion: 1, sources });
   sessionConnectedSources({ metadata: { connected_sources: serialized } });

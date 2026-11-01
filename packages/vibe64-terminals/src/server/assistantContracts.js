@@ -68,8 +68,10 @@ function summary(result = {}, { includeMessages = true } = {}) {
   };
 }
 
-// Native conversation records contain provider bindings, preferences and
-// attachments. Tools return only the public identity, state and bounded text.
+/**
+ * Native conversation records contain provider bindings, preferences and
+ * attachments. Tools return only the public identity, state and bounded text.
+ */
 function temporaryConversationTool(description) {
   return {
     description,
@@ -111,7 +113,9 @@ function workPlanTool() {
   };
 }
 
-// Archive and Make current return the paired plan's identity, never its text.
+/**
+ * Archive and Make current return the paired plan's identity, never its text.
+ */
 function workPlanChangeTool(description) {
   const strings = ["sessionId", "code", "title", "status", "revision", "progressRevision", "notice"];
   return {

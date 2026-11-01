@@ -28,8 +28,10 @@ import { record } from "./record.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
-// Original application renewal receipt, error and completion policy. This module
-// consumes the existing session store and native result; it never invokes a provider.
+/**
+ * Original application renewal receipt, error and completion policy. This module
+ * consumes the existing session store and native result; it never invokes a provider.
+ */
 function errorMessage(value, fallback = "Codex could not be prepared.") {
   return trimmedText(value?.error || value?.message || value) || fallback;
 }
@@ -143,7 +145,9 @@ function codexSessionRenewalTurnError(reason, details = {}, providerMessage) {
   );
 }
 
-// The renewed conversation's acknowledgement also delivers its session briefing.
+/**
+ * The renewed conversation's acknowledgement also delivers its session briefing.
+ */
 function sessionRenewalSeedAcknowledgementMetadata({ acknowledgedAt, handoverHash, operationId, threadId, transport, turnId }) {
   return {
     agent_briefing_delivered: "yes",
@@ -406,8 +410,10 @@ function createOpenCodeSessionRenewalSeedReceipt({ operationId, approved, client
 
 const CODEX_SESSION_RENEWAL_TURN_TIMEOUT_MS = 10 * 60_000;
 
-// The existing application facilities are captured once; session/native facts,
-// metadata and result writers are still evaluated at their original lazy phases.
+/**
+ * The existing application facilities are captured once; session/native facts,
+ * metadata and result writers are still evaluated at their original lazy phases.
+ */
 function createCodexSessionRenewalPreparation({ runtimeHost, sessionRuntimeHost, sessionEnvironment }) {
   const { codexAppServerRuntimeOptionsFromSessionMetadata, codexAppServerPersistedRuntimeHost } = runtimeHost;
   const { codexAppServerRuntimeOptionsForSession } = sessionRuntimeHost;

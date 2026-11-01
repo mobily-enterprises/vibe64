@@ -11,8 +11,10 @@ import { createAssistantRoutingGoals } from "./assistantRoutingGoals.js";
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
-// Main routing reports send timing and follows a completed plan (automatic
-// save); a sibling chat's routing does neither.
+/**
+ * Main routing reports send timing and follows a completed plan (automatic
+ * save); a sibling chat's routing does neither.
+ */
 function followNoCompletedPlan() {
   return "";
 }

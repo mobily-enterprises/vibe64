@@ -101,7 +101,9 @@ async function createTarArchive({
   await rename(temporaryPath, archivePath);
 }
 
-// Lists the archive and checks its root: the listing's evidence.
+/**
+ * Lists the archive and checks its root: the listing's evidence.
+ */
 async function tarListingEvidence({
   archivePath = "",
   expectedPrefix = "",
@@ -150,8 +152,10 @@ async function validateTarArchive(options = {}) {
   };
 }
 
-// Host resource artifacts: the generic checks (inside the bundle, unique,
-// non-empty, digest) here; each kind's own evidence comes from its host.
+/**
+ * Host resource artifacts: the generic checks (inside the bundle, unique,
+ * non-empty, digest) here; each kind's own evidence comes from its host.
+ */
 async function resourceEvidenceForArtifacts({
   artifactKinds = {},
   artifacts = [],
@@ -419,8 +423,10 @@ function sha256Text(value = "") {
   return createHash("sha256").update(String(value || "")).digest("hex");
 }
 
-// Each disposable path is relative to the archived root (already carrying any
-// session-source prefix); tar leaves out that path and its contents.
+/**
+ * Each disposable path is relative to the archived root (already carrying any
+ * session-source prefix); tar leaves out that path and its contents.
+ */
 function tarExcludeArgs(slug = "", disposablePaths = []) {
   return disposablePaths.flatMap((entry) => ["--exclude", `${slug}/${entry}`, "--exclude", `${slug}/${entry}/*`]);
 }

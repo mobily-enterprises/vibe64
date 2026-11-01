@@ -47,8 +47,10 @@ function createSessionStoreLocks({ state, storePaths }) {
     });
   }
 
-  // Serialize in-process writers on queueKey, then hold the cross-process
-  // session lock for the operation.
+  /**
+   * Serialize in-process writers on queueKey, then hold the cross-process
+   * session lock for the operation.
+   */
   function withQueuedSessionLock(queueKey, sessionPaths, lockName, { timeoutMessage, timeoutCode }, operation) {
     return enqueueSessionMutation(queueKey, async () => {
       const release = await acquireStoreSessionLock(sessionPaths, lockName, {
@@ -118,8 +120,10 @@ function createSessionStoreLocks({ state, storePaths }) {
     }, operation);
   }
 
-  // Run operation under lockPath. A caller already inside that lock joins the
-  // existing lease; otherwise acquire() takes the lock or names the rejection.
+  /**
+   * Run operation under lockPath. A caller already inside that lock joins the
+   * existing lease; otherwise acquire() takes the lock or names the rejection.
+   */
   async function runReentrantExclusive(lockPath, acquire, operation, beforeOperation = null) {
     const activeLocks = sessionExclusiveContext.getStore();
     const inheritedContext = activeLocks?.get(lockPath);

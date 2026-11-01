@@ -9,9 +9,11 @@ import { createAiConnectionStore } from "./aiConnectionStore.js";
 const ENGINE_LABELS = { claude: "Claude Code", codex: "Codex", opencode: "OpenCode" };
 const ROLE_LABELS = { senior: "Senior", junior: "Junior", router: "Router", helper: "Helper", sharedBackup: "Shared backup" };
 
-// Offline, without live access: a plan sign-in is personal, and so is any
-// provider or saved OpenCode connection marked for its owner. Codex with
-// OpenAI counts as personal because offline can't prove API-key sign-in.
+/**
+ * Offline, without live access: a plan sign-in is personal, and so is any
+ * provider or saved OpenCode connection marked for its owner. Codex with
+ * OpenAI counts as personal because offline can't prove API-key sign-in.
+ */
 function offlinePersonal(selection, openCodeConnections) {
   if (selection.engineId === "claude" && selection.modelProviderId === "anthropic") return true;
   if (selection.engineId === "codex" && selection.modelProviderId === "openai") return true;

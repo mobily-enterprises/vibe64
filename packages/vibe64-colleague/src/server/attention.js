@@ -4,8 +4,10 @@ import { assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/
 const working = new Set(["starting", "inProgress", "working", "preparing"]);
 const attention = new Set(["failed", "interrupted", "cancelled", "closing", "archived", "uncertain", "waiting"]);
 
-// These reads use ordinary actions and their current actor/project authority.
-// Provider records, credentials and session metadata never enter the observation.
+/**
+ * These reads use ordinary actions and their current actor/project authority.
+ * Provider records, credentials and session metadata never enter the observation.
+ */
 async function readWatchedConversation(actions, watch, context) {
   const execute = async (actionId, input) => {
     const result = await actions.execute({ actionId, input, context: { ...context, projectSlug: watch.projectSlug } });

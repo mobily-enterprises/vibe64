@@ -26,9 +26,11 @@ import {
 } from "./sessionWorkGit.js";
 import { trimmedText } from "./trimmedText.js";
 
-// Returns the canonical commit with the authority evidence it was read from.
-// For a connected contribution, `contribution` records the published head and
-// how the contribution's remote branches were found; it is null otherwise.
+/**
+ * Returns the canonical commit with the authority evidence it was read from.
+ * For a connected contribution, `contribution` records the published head and
+ * how the contribution's remote branches were found; it is null otherwise.
+ */
 async function readRemoteCanonical(runCommand, context, operationId, options) {
   await git(runCommand, context, ["remote", "set-url", "origin", context.remoteUrl], options);
   let contribution = null;
@@ -166,13 +168,15 @@ async function assertLocalAuthority(runCommand, context, options) {
   });
 }
 
-// Reads the named branch heads of one authority repository (the GitHub remote,
-// the managed bare repository or the local project folder). A GitHub remote
-// is asked by `readRemoteHeads`, the session's Git actor's in-process ls-refs
-// request (codexGitCommand.js), within the command timeout; any other
-// authority with one `git ls-remote`. Either way it fetches no objects and
-// changes no checkout, so it needs no source lock; a moved head is then read
-// by the ordinary update check.
+/**
+ * Reads the named branch heads of one authority repository (the GitHub remote,
+ * the managed bare repository or the local project folder). A GitHub remote
+ * is asked by `readRemoteHeads`, the session's Git actor's in-process ls-refs
+ * request (codexGitCommand.js), within the command timeout; any other
+ * authority with one `git ls-remote`. Either way it fetches no objects and
+ * changes no checkout, so it needs no source lock; a moved head is then read
+ * by the ordinary update check.
+ */
 async function readAuthorityBranchHeads(runCommand, context, branches, options, readRemoteHeads = null) {
   const refs = [...new Set(branches.map(trimmedText).filter(Boolean))].map((branch) => `refs/heads/${branch}`);
   const listing = typeof readRemoteHeads === "function" && githubHttpsRemote(context.remoteUrl)

@@ -111,8 +111,10 @@ function validateAdsSelection(operation, values) {
   return structuredClone(values);
 }
 
-// Payment management uses the same app-owned command and execution policy.
-// Only bounded, explicitly selected display data crosses back into the editor.
+/**
+ * Payment management uses the same app-owned command and execution policy.
+ * Only bounded, explicitly selected display data crosses back into the editor.
+ */
 function parsePaymentManagementResponse(result, request) {
   const record = (value, keys) => value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).every((key) => keys.includes(key));
   const text = (value, max = 200) => typeof value === "string" && value.trim() && value.length <= max && !/[\p{Cc}\p{Cf}]/u.test(value);
@@ -213,8 +215,10 @@ function createIntegrationSetupRequest(selection) {
   return request;
 }
 
-// The caller supplies an inspected command, authorized project scope and resolved
-// environment. This function never accepts an executable from a browser request.
+/**
+ * The caller supplies an inspected command, authorized project scope and resolved
+ * environment. This function never accepts an executable from a browser request.
+ */
 async function runIntegrationSetupCommand({
   runCommand, command, sourceRoot, applicationAccount, runtimes, env, releaseEnvironmentFile, project, session, selection
 }) {

@@ -25,9 +25,11 @@ function isMissingPathError(error) {
   return error?.code === "ENOENT" || error?.code === "ENOTDIR";
 }
 
-// The path from root to candidate, both resolved, when candidate is root or
-// inside it; null otherwise or for an empty input. A child named `..cache`
-// is inside; `..`, `../x` and another drive are not.
+/**
+ * The path from root to candidate, both resolved, when candidate is root or
+ * inside it; null otherwise or for an empty input. A child named `..cache`
+ * is inside; `..`, `../x` and another drive are not.
+ */
 function relativePathInside(rootPath = "", candidatePath = "") {
   const root = normalizeText(rootPath);
   const candidate = normalizeText(candidatePath);
@@ -40,7 +42,9 @@ function pathInsideOrEqual(rootPath = "", candidatePath = "") {
   return relativePathInside(rootPath, candidatePath) !== null;
 }
 
-// Strictly inside: root itself is not.
+/**
+ * Strictly inside: root itself is not.
+ */
 function pathInside(rootPath = "", candidatePath = "") {
   return Boolean(relativePathInside(rootPath, candidatePath));
 }

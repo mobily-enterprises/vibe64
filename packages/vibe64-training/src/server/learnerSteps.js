@@ -20,7 +20,9 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
     return value ? validateStepProgress(value, paths.learner.id) : null;
   }
 
-  // The attempt's own step results, checked against its pinned lesson.
+  /**
+   * The attempt's own step results, checked against its pinned lesson.
+   */
   async function readAttemptSteps(paths, attempt, lesson) {
     try {
       const record = await readStepProgressRecord(paths);
@@ -36,8 +38,10 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
     }
   }
 
-  // Read-only: the saved step results of one retained attempt (the one in
-  // progress unless attemptId names another). An ended attempt has none here.
+  /**
+   * Read-only: the saved step results of one retained attempt (the one in
+   * progress unless attemptId names another). An ended attempt has none here.
+   */
   async function readStepProgress({ actor, attemptId } = {}) {
     const paths = userPaths(actor);
     const state = await loadState(paths);
@@ -48,9 +52,11 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
     return { revision: stepRevision, entry, attempt, progress: state.progress };
   }
 
-  // The admitted step owner supplies the operation; it decides what may pass.
-  // This store only serializes, validates against the pinned lesson and saves
-  // the results of the attempt in progress.
+  /**
+   * The admitted step owner supplies the operation; it decides what may pass.
+   * This store only serializes, validates against the pinned lesson and saves
+   * the results of the attempt in progress.
+   */
   async function updateStepProgress({ actor, attemptId } = {}, operation) {
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "") || typeof operation !== "function") {
@@ -92,7 +98,9 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
     }
   }
 
-  // A position in an attempt that was since pruned reads as no position.
+  /**
+   * A position in an attempt that was since pruned reads as no position.
+   */
   async function readReader({ actor } = {}) {
     const paths = userPaths(actor);
     const state = await loadState(paths);
@@ -112,7 +120,9 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
     }
   }
 
-  // Last write wins. Any retained attempt of this learner may be read again.
+  /**
+   * Last write wins. Any retained attempt of this learner may be read again.
+   */
   async function saveReader({ actor, attemptId, stepId, scroll } = {}) {
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "") || !idPattern.test(stepId || "") ||

@@ -28,11 +28,13 @@ import {
 
 const ENGINE = "claude";
 
-// Interactive Claude asks first-run setup (including a login choice) and
-// whether to trust the folder until its settings record both. Headless chat
-// never records them, so a signed-in session would otherwise open the terminal
-// at those prompts instead of the conversation. Vibe64 already admitted the
-// session's folder, so the terminal records the same decisions.
+/**
+ * Interactive Claude asks first-run setup (including a login choice) and
+ * whether to trust the folder until its settings record both. Headless chat
+ * never records them, so a signed-in session would otherwise open the terminal
+ * at those prompts instead of the conversation. Vibe64 already admitted the
+ * session's folder, so the terminal records the same decisions.
+ */
 async function markClaudeTerminalReady(env, credentialHome, workdir) {
   const file = env?.CLAUDE_CONFIG_DIR
     ? path.join(env.CLAUDE_CONFIG_DIR, ".claude.json")
@@ -186,7 +188,9 @@ function createClaudeConversationEnvironment({
       get systemPrompt() { return vibe64ConversationInstructions({ workdir: ctx.workdir, promptContext: sessionGuidance(entry) }); },
       get model() { return configuration.model; },
       get effort() { return ctx.selection.variantId; },
-      // The terminal opens in Vibe64's bypass mode; skip Claude's warning for it.
+      /**
+       * The terminal opens in Vibe64's bypass mode; skip Claude's warning for it.
+       */
       get settings() { return { ...claudeFlagSettings(), skipDangerousModePermissionPrompt: true }; },
       permissionMode: "bypassPermissions",
       get env() { return { ...guidanceEnvironment, ...configuration.env }; }

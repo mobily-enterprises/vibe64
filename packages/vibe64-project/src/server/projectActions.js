@@ -125,8 +125,10 @@ function projectRealtimePayload(value = {}) {
   };
 }
 
-// Without runtime events a project change goes unannounced; readers see it
-// on their next read.
+/**
+ * Without runtime events a project change goes unannounced; readers see it
+ * on their next read.
+ */
 async function announceNoProjectChange() {
   return null;
 }

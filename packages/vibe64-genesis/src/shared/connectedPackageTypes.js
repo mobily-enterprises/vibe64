@@ -29,8 +29,10 @@ function isConnectedPackageType(value) {
   return typeof value === "string" && CONNECTED_PACKAGE_TYPE_VALUES.includes(value);
 }
 
-// Every listed type except custom is treated by the project's declared Verify
-// command and cannot carry a per-connection script.
+/**
+ * Every listed type except custom is treated by the project's declared Verify
+ * command and cannot carry a per-connection script.
+ */
 function connectedPackageTypeUsesScript(type) {
   return type === CONNECTED_CUSTOM_PACKAGE_TYPE;
 }

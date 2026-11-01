@@ -33,8 +33,10 @@ function pickFields(input, fields) {
   return Object.fromEntries(Object.keys(fields).filter(key => Object.hasOwn(input || {}, key)).map(key => [key, input[key]]));
 }
 
-// Main's original browser acknowledges the product operation. A native turn ID
-// is not an authored transcript receipt.
+/**
+ * Main's original browser acknowledges the product operation. A native turn ID
+ * is not an authored transcript receipt.
+ */
 function operationResult(result) {
   const fields = { delivered: "boolean", duplicate: "boolean", messageId: "string", deliveryMode: "string",
     code: "string", error: "string", status: "string", interrupted: "boolean", routingCancelled: "boolean",
@@ -108,7 +110,9 @@ function createMainBrowserConversations({ actions, terminals }) {
         return operationResult(await execute(ACTION_UPDATE_ASSISTANT_SELECTION, pickFields(input, selectionFields)));
       },
       async inspectDelivery(input) { return withConversation(conversation => conversation.inspectDelivery(input)); },
-      // Cancel of one message never opens the native conversation or waits for its lock.
+      /**
+       * Cancel of one message never opens the native conversation or waits for its lock.
+       */
       async cancelDelivery(input) {
         return withTerminals(options => temporary
           ? terminals.cancelTemporaryConversationMessage(target.sessionId, { conversationId: target.conversationId, messageId: input.messageId }, options)

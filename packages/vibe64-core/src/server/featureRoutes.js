@@ -66,10 +66,12 @@ function routeOptions({ actionId, body, bodyLimit, meta = {}, params, query, sum
   };
 }
 
-// The wrapHandler of a Vibe64 scope: only loopback Studio requests, the
-// project request context (with its Learn, team AI and practice admission)
-// for routes under VIBE64_PROJECT_ROUTE_BASE, project errors as JSON, and the
-// route's status code for the response.
+/**
+ * The wrapHandler of a Vibe64 scope: only loopback Studio requests, the
+ * project request context (with its Learn, team AI and practice admission)
+ * for routes under VIBE64_PROJECT_ROUTE_BASE, project errors as JSON, and the
+ * route's status code for the response.
+ */
 function vibe64RouteHandler({
   localRequestMessage = "Vibe64 routes only accept loopback Studio requests.",
   projectContext,

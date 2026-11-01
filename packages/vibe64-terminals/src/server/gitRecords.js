@@ -95,8 +95,10 @@ function parseGitNumstatZ(value = "") {
   return stats;
 }
 
-// Merges `diff-tree -M --name-status -z` and `--numstat -z` output of the same
-// comparison into path-sorted file records with line stats.
+/**
+ * Merges `diff-tree -M --name-status -z` and `--numstat -z` output of the same
+ * comparison into path-sorted file records with line stats.
+ */
 function changedFileRecords(statusOutput = "", numstatOutput = "") {
   const stats = parseGitNumstatZ(numstatOutput);
   return [...parseGitNameStatusZ(statusOutput).values()]

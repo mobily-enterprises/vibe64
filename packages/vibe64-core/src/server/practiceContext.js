@@ -24,8 +24,10 @@ function currentPracticeProjectScope(owner) {
   return grant.scope;
 }
 
-// Core calls this with its exact derived scope. The private token survives only
-// inside the original ALS callback; ordinary request/context fields cannot grant it.
+/**
+ * Core calls this with its exact derived scope. The private token survives only
+ * inside the original ALS callback; ordinary request/context fields cannot grant it.
+ */
 async function runWithPracticeProjectContext(owner, scope, operation) {
   if (typeof operation !== "function") throw new TypeError("Practice access requires an owning callback.");
   let active = true;
@@ -39,18 +41,22 @@ async function runWithPracticeProjectContext(owner, scope, operation) {
   }
 }
 
-// Existing accepted-work owners retain only this exact observation/control
-// projection. Fresh effects must re-enter the saved-attempt request admission.
-// A practice project admitted as an ordinary project (admitPracticeRequest)
-// keeps its write: that admission depends only on the learner's ownership, not
-// on lesson activity, so later work (agent turns, helpers) behaves as in any project.
+/**
+ * Existing accepted-work owners retain only this exact observation/control
+ * projection. Fresh effects must re-enter the saved-attempt request admission.
+ * A practice project admitted as an ordinary project (admitPracticeRequest)
+ * keeps its write: that admission depends only on the learner's ownership, not
+ * on lesson activity, so later work (agent turns, helpers) behaves as in any project.
+ */
 function captureProjectRequestContext() {
   const grant = currentProjectRequestContext()?.[practiceScopeKey];
   return retainPracticeContext(grant?.ordinary === true ? "write" : "control");
 }
 
-// The retained projection outlives the owning callback. Only core's practice
-// admission retains write; every other caller retains control.
+/**
+ * The retained projection outlives the owning callback. Only core's practice
+ * admission retains write; every other caller retains control.
+ */
 function retainPracticeContext(access) {
   const context = currentProjectRequestContext();
   const grant = context?.[practiceScopeKey];

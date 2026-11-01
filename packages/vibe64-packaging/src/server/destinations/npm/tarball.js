@@ -40,8 +40,10 @@ function stripPackageRoot(name) {
   return slash === -1 ? name : name.slice(slash + 1);
 }
 
-// [{ path, size, sha256 }] for every regular file, with npm's leading
-// `package/` folder removed, sorted by path.
+/**
+ * [{ path, size, sha256 }] for every regular file, with npm's leading
+ * `package/` folder removed, sorted by path.
+ */
 function listNpmTarball(tarball) {
   let tar;
   try {
@@ -92,7 +94,9 @@ function npmTarballManifest(files) {
   }
 }
 
-// What changes between the published contents and this release's contents.
+/**
+ * What changes between the published contents and this release's contents.
+ */
 function diffFileLists(previous = [], next = []) {
   const before = new Map(previous.map((file) => [file.path, file]));
   const after = new Map(next.map((file) => [file.path, file]));

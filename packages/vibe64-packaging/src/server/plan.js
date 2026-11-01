@@ -34,8 +34,10 @@ function versionMap(values, label) {
   }));
 }
 
-// `v1.5.0` for a project with one versioned package; `<package>@1.5.0` when
-// several packages version independently.
+/**
+ * `v1.5.0` for a project with one versioned package; `<package>@1.5.0` when
+ * several packages version independently.
+ */
 function releaseTagName({ packageId, version, independent }) {
   if (!isSemver(version)) invalid(`Version ${version} is not a semantic version such as 1.5.0.`);
   if (!isReleaseVersion(version)) invalid(`Version ${version} has build metadata (+…), which a release tag such as v1.5.0 cannot hold. Choose a version without it.`);
@@ -91,7 +93,9 @@ function targetSettings(settings, id) {
   return Object.fromEntries(Object.entries(settings).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-// Content packages build before the app packages that consume them; each builds once.
+/**
+ * Content packages build before the app packages that consume them; each builds once.
+ */
 function buildOrder(targets, packages) {
   const order = [];
   const visit = (id) => {
@@ -104,8 +108,10 @@ function buildOrder(targets, packages) {
   return order;
 }
 
-// App builds carry a build number (Android versionCode) that only ever grows; it
-// is never in source, so the caller supplies it (its last one + 1).
+/**
+ * App builds carry a build number (Android versionCode) that only ever grows; it
+ * is never in source, so the caller supplies it (its last one + 1).
+ */
 function appBuildNumber(value, id) {
   if (!Number.isInteger(value) || value < 1 || value > 2_100_000_000) {
     invalid(`App package ${id} needs its build number, a whole number from 1 to 2,100,000,000.`);
@@ -171,7 +177,9 @@ function publishPlanHash(plan) {
   return sha256(canonicalJson(plan));
 }
 
-// The short form people see next to the plan, such as "plan #c41d".
+/**
+ * The short form people see next to the plan, such as "plan #c41d".
+ */
 function publishPlanDisplayId(planHash) {
   const match = /^sha256:([0-9a-f]{4})[0-9a-f]{60}$/u.exec(planHash || "");
   if (!match) invalid("Not a publish plan hash.");

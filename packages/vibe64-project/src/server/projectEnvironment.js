@@ -115,9 +115,11 @@ function createProjectEnvironment({ env, inspectEnvironment, resourceEnvironment
     })).records;
   }
 
-  // Values the host supplies because the person linked a saved value to a
-  // Development Env variable. A failing provider fails the read instead of
-  // silently dropping values.
+  /**
+   * Values the host supplies because the person linked a saved value to a
+   * Development Env variable. A failing provider fails the read instead of
+   * silently dropping values.
+   */
   async function savedEnvRecords(input = {}) {
     const scope = envScope(input);
     if (!offersSavedValues(savedEnvValues) || scope !== RUNTIME_CONFIG_SCOPES.DEV) return [];
@@ -345,7 +347,9 @@ function createProjectEnvironment({ env, inspectEnvironment, resourceEnvironment
     };
   }
 
-  // Every record Env shows, secrets included, as one .env file for the owner.
+  /**
+   * Every record Env shows, secrets included, as one .env file for the owner.
+   */
   async function downloadEnvState(input = {}) {
     assertEnvOwner(input, "Only the Vibe64 owner can download development Env.");
     const { config } = await envConfig(input);

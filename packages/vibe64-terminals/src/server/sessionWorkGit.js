@@ -283,8 +283,10 @@ async function commitIsAncestor(runCommand, context, ancestor, descendant, optio
   return result?.ok === true;
 }
 
-// A session that rewrote and published the saved history itself (HEAD contains
-// the new saved tip and no longer contains its old base) has nothing to replay.
+/**
+ * A session that rewrote and published the saved history itself (HEAD contains
+ * the new saved tip and no longer contains its old base) has nothing to replay.
+ */
 async function savedHistoryRewritten(runCommand, context, canonicalCommit, sessionHead, options = {}) {
   if (await commitIsAncestor(runCommand, context, context.baseCommit, canonicalCommit, options)) {
     return false;

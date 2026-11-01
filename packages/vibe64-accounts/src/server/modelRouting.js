@@ -62,10 +62,12 @@ function createModelRouting({ access, inspectRoutingConfiguration, notifications
   const sameRoutingSelection = (left, right) => ["engineId", "agentId", "modelProviderId", "modelId", "variantId"]
     .every((key) => left?.[key] === right?.[key]);
 
-  // Internal setup used after connection setup, explicit session creation and
-  // the team card. It accepts no values: it fills only the setup's absent roles
-  // from recommendations; user-directed changes stay on owner-only Save. Only
-  // the owner's own actions fill a setup; a team member's never writes.
+  /**
+   * Internal setup used after connection setup, explicit session creation and
+   * the team card. It accepts no values: it fills only the setup's absent roles
+   * from recommendations; user-directed changes stay on owner-only Save. Only
+   * the owner's own actions fill a setup; a team member's never writes.
+   */
   async function initializeModelRouting(input = {}) {
     return accountsResult(async () => {
       if (access.aiManagementError(input)) return { ok: true, initialized: [] };
@@ -94,7 +96,9 @@ function createModelRouting({ access, inspectRoutingConfiguration, notifications
     });
   }
 
-  // A draft names whole role values per setup; omitted roles keep their saved value.
+  /**
+   * A draft names whole role values per setup; omitted roles keep their saved value.
+   */
   async function routingDraft(input) {
     const saved = await routingStore().read();
     if (input.revision !== saved.revision) throw Object.assign(new Error("Models changed in another tab. Reload and review the current choices."), {

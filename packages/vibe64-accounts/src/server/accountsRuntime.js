@@ -49,18 +49,24 @@ function normalizeCodexAuthModes(modes = ALL_CODEX_AUTH_MODES) {
   );
 }
 
-// What an account runtime adds to an account change's log line: nothing by default.
+/**
+ * What an account runtime adds to an account change's log line: nothing by default.
+ */
 function noDebugInput() {
   return {};
 }
 
-// The GitHub identity a person linked before: a host may remember one.
+/**
+ * The GitHub identity a person linked before: a host may remember one.
+ */
 function noPreviousGithub() {
   return null;
 }
 
-// Who may manage AI here: Claude and Codex sign-in, saved provider keys, model
-// access and model routing. By default only the workspace owner may.
+/**
+ * Who may manage AI here: Claude and Codex sign-in, saved provider keys, model
+ * access and model routing. By default only the workspace owner may.
+ */
 function ownerManagesAi(input = {}) {
   return isAssistantRoutingOwner(input.vibe64User) ? null
     : authError("vibe64_owner_required", "Only the workspace owner can manage AI connections and models.");
@@ -159,7 +165,9 @@ function createAccountsRuntime({
     return previousGithub(input);
   }
 
-  // The one answer to who may manage AI here; a host may override it.
+  /**
+   * The one answer to who may manage AI here; a host may override it.
+   */
   function checkAiManagement(input = {}) {
     return requireAiManagement(input);
   }

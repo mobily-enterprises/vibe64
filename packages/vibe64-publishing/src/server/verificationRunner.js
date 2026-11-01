@@ -18,7 +18,9 @@ const VERIFICATION_CONTRACT = "vibe64.publishing-verification.v1";
 const KEEP = 10;
 const OUTPUT_TAIL = 4000;
 
-// The end of a failed command's output, so the person sees why without a terminal.
+/**
+ * The end of a failed command's output, so the person sees why without a terminal.
+ */
 function failureOutput(outcome, home) {
   const details = (outcome?.diagnostics || []).find((entry) => entry?.details)?.details || {};
   const text = [details.stdout, details.stderr].map((value) => String(value || "").trimEnd()).filter(Boolean).join("\n");
@@ -63,7 +65,9 @@ function createVerificationRunner({
     return (await results()).find((entry) => entry.commit === commit) || null;
   }
 
-  // Runs the checks once per commit at a time; resolves with the result.
+  /**
+   * Runs the checks once per commit at a time; resolves with the result.
+   */
   function run({ repositoryRoot, commit }) {
     if (running.has(commit)) return running.get(commit);
     const startedAt = now();

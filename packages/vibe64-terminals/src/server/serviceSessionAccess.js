@@ -127,8 +127,10 @@ function createServiceSessionAccess({ logger, projectService, publishSessionChan
     return exclusive.value;
   }
 
-  // The project runtime and session a call works on: the caller's runtime and
-  // session when given (the session only when it is this one), else fresh reads.
+  /**
+   * The project runtime and session a call works on: the caller's runtime and
+   * session when given (the session only when it is this one), else fresh reads.
+   */
   async function sessionContext(sessionId = "", input = {}) {
     const runtime = input.runtime || await projectService.createRuntime({ inspectSource: false });
     const session = input.session?.sessionId === sessionId

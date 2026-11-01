@@ -266,7 +266,9 @@ function createCodexSessionAgentProvider({
   const nativeSessionResult = result => Object.hasOwn(result, "session")
     ? withCodexState(result.value, result.session) : result.value;
 
-  // A streamed turn always carries its onEvent option; a plain run carries it only when it is callable.
+  /**
+   * A streamed turn always carries its onEvent option; a plain run carries it only when it is callable.
+   */
   async function runDetachedTurn(context, input, eventOptions) {
     const executionProfile = emitVibe64AgentExecutionProfile(context, input.executionProfile);
     const result = await runNativeDetachedConversation({

@@ -13,8 +13,10 @@ export async function upgradeSessionConversations(context) {
   } });
 }
 
-// Removing Undo must not strand a partially applied native rewind. Inspect via
-// the existing session/archive owner; completed markers and history stay intact.
+/**
+ * Removing Undo must not strand a partially applied native rewind. Inspect via
+ * the existing session/archive owner; completed markers and history stay intact.
+ */
 export async function inspectConversationUndoRetirement(context) {
   return publishStateUpgradeFiles({ ...context, async prepareUpdates(temporaryRoot) {
     const inspectMetadata = (metadata, label) => {

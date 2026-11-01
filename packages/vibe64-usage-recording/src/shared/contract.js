@@ -80,7 +80,9 @@ const isText = (value) => typeof value === "string" && value.length > 0;
 const isPoint = (value) => Boolean(value) && Number.isSafeInteger(value.line) && value.line > 0 &&
   Number.isSafeInteger(value.column) && value.column > 0;
 
-// Source-root-relative POSIX path that never leaves the root or enters node_modules.
+/**
+ * Source-root-relative POSIX path that never leaves the root or enters node_modules.
+ */
 function isTraceSourcePath(value) {
   if (!isText(value) || value.startsWith("/") || value.includes("\\") || value.includes("\0")) return false;
   const parts = value.split("/");
@@ -104,8 +106,10 @@ const LINE_CHECKS = Object.freeze({
   truncated: (line) => isText(line.reason)
 });
 
-// Returns "" for a well-formed `vibe64.usage-trace.v1` line, otherwise why it
-// is not. Readers skip and count malformed lines; they never evaluate them.
+/**
+ * Returns "" for a well-formed `vibe64.usage-trace.v1` line, otherwise why it
+ * is not. Readers skip and count malformed lines; they never evaluate them.
+ */
 function usageTraceLineProblem(line) {
   if (!line || typeof line !== "object" || Array.isArray(line)) return "Trace line must be an object.";
   const check = LINE_CHECKS[line.type];

@@ -162,9 +162,11 @@ function createSessionDatabase({ logger, projectService, withKnex }) {
     }
   }
 
-  // The database server this session's project needs and the person runs:
-  // its Env names, current values, a real sign-in check and the commands for
-  // this computer. Nothing when the Stack declares none or the host supplies it.
+  /**
+   * The database server this session's project needs and the person runs:
+   * its Env names, current values, a real sign-in check and the commands for
+   * this computer. Nothing when the Stack declares none or the host supplies it.
+   */
   async function checkServer(input) {
     const sessionId = normalizeText(input.sessionId);
     if (!sessionId) {

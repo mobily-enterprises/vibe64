@@ -1,8 +1,10 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server";
 
-// Resolve the recipient at acceptance; native delivery runs independently
-// of the sender's command socket. There is no mailbox for a closed project.
+/**
+ * Resolve the recipient at acceptance; native delivery runs independently
+ * of the sender's command socket. There is no mailbox for a closed project.
+ */
 async function sendProjectMessage(input, { projectService, authorize, assertOpen, prepare, send, reportFailure, publish }) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(input.projectSlug) || !input.message) {
     throw vibe64Error("A project slug and message are required.", "vibe64_project_message_input_required");
@@ -96,9 +98,11 @@ async function sendProjectMessage(input, { projectService, authorize, assertOpen
   }, { vibe64User: actor });
 }
 
-// Another project's Preview is read with the same authority as messaging it.
-// Resolve it on every call: a restart may move the Preview to a new address.
-// Never start or wait indefinitely for another project's Preview.
+/**
+ * Another project's Preview is read with the same authority as messaging it.
+ * Resolve it on every call: a restart may move the Preview to a new address.
+ * Never start or wait indefinitely for another project's Preview.
+ */
 async function readProjectPreview(input, { projectService, authorize, assertOpen, launchTarget, waitMs = 10000, pollMs = 500 }) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(input.projectSlug)) {
     throw vibe64Error("A project slug is required.", "vibe64_project_preview_input_required");

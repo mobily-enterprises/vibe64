@@ -143,9 +143,11 @@ function createService({
   let assistantRouting;
   let sessionConversations;
 
-  // The one Claude Code account status read, with the inputs Claude
-  // conversations run with. Accounts and readiness read it too, so one
-  // account costs one status read per cache period.
+  /**
+   * The one Claude Code account status read, with the inputs Claude
+   * conversations run with. Accounts and readiness read it too, so one
+   * account costs one status read per cache period.
+   */
   const readClaudeAccountStatus = () => readClaudeCodeAuthStatus({ env });
   const state = createServiceState({ readClaudeAccountStatus });
   /**
@@ -424,14 +426,18 @@ function createService({
     publish: publishAgentSessionChanged,
     prepareSelection: assistantPreparation.prepareRoutingSelection,
     open: (sessionId, options) => sessionAccess.readAssistantSession(sessionId, options),
-    // Cancel's interrupt: goal continuation pauses, then the native turn stops.
-    // The pause never waits for the goal settings lock (requestGoalStop).
+    /**
+     * Cancel's interrupt: goal continuation pauses, then the native turn stops.
+     * The pause never waits for the goal settings lock (requestGoalStop).
+     */
     async interrupt(sessionId, context) {
       await goals.requestGoalStop(sessionId, context).catch(() => {});
       return sessionAgent.interruptTurn(sessionId, { reason: "cancel-message" }, context);
     },
     discardPending: discardAssistantChangeoverMessage,
-    // The Save owner supplies what follows a completed plan (automatic save).
+    /**
+     * The Save owner supplies what follows a completed plan (automatic save).
+     */
     // readable-check: allow optional-call - cycle: vibe64.sessions requires vibe64.terminals
     onPlanCompleted: (sessionId, input) => state.slots.planCompleted?.(sessionId, input) || "",
     onTiming(event) {
@@ -463,7 +469,9 @@ function createService({
     runAgentWrite: sessionAccess.runMainAgentWrite,
     // A temporary chat's routing waits for a sibling's assistant startup as long as Main chat does.
     routingWaitMs: AGENT_WRITE_WAIT_MS,
-    // Always rereads the session; a conversation's caller may hold an older copy.
+    /**
+     * Always rereads the session; a conversation's caller may hold an older copy.
+     */
     readSessionContext: async (sessionId, options = {}) => ({
       ...options, ...await sessionAccess.sessionContext(sessionId, { runtime: options.runtime })
     }),

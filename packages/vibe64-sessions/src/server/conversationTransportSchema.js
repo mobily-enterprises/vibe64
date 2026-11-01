@@ -12,7 +12,9 @@ const openObject = (field) => field.type === "object" && field.additionalPropert
 const LOWER_BOUNDS = ["minLength", "minItems", "min"];
 const UPPER_BOUNDS = ["maxLength", "maxItems", "max"];
 
-// A bound only one product declares does not bind the union.
+/**
+ * A bound only one product declares does not bind the union.
+ */
 function looserBound(key, left, right) {
   if (!Object.hasOwn(left, key) || !Object.hasOwn(right, key)) return {};
   return { [key]: (LOWER_BOUNDS.includes(key) ? Math.min : Math.max)(left[key], right[key]) };
@@ -23,10 +25,12 @@ function withoutDefaults({ required: _required, ...field }) {
   return field;
 }
 
-// The union of two products' definitions of one field: an input either product
-// accepts passes. Enums and nested fields combine, length bounds loosen, and an
-// open object absorbs a closed one. Any other difference is refused when the
-// transport is set up, so no product's definition silently replaces another's.
+/**
+ * The union of two products' definitions of one field: an input either product
+ * accepts passes. Enums and nested fields combine, length bounds loosen, and an
+ * open object absorbs a closed one. Any other difference is refused when the
+ * transport is set up, so no product's definition silently replaces another's.
+ */
 function unionField(left, right, path) {
   const required = left.required === true && right.required === true;
   const a = withoutDefaults(left);
@@ -46,9 +50,11 @@ function unionField(left, right, path) {
     ...(a.schema ? { schema: unionSchemas([nestedSchema(a), nestedSchema(b)], path) } : {}) };
 }
 
-// One transport schema that accepts each product's own envelope. A field is
-// required only where every product requires it; each product's original
-// action still validates its complete input strictly.
+/**
+ * One transport schema that accepts each product's own envelope. A field is
+ * required only where every product requires it; each product's original
+ * action still validates its complete input strictly.
+ */
 function unionSchemas(schemas, path = "") {
   const present = schemas.filter(Boolean);
   if (present.length === 1) return present[0];

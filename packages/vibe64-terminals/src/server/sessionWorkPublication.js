@@ -158,7 +158,9 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
   );
 }
 
-// The saved-but-stale clone cache result that a later session or Save retries.
+/**
+ * The saved-but-stale clone cache result that a later session or Save retries.
+ */
 function retryableMirrorMaintenance(context, verifiedCommit, code, reason, attempted) {
   return {
     attempted,

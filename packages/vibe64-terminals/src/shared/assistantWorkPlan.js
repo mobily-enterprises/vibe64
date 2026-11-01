@@ -1,4 +1,6 @@
-// Keep checklist recognition identical in stored progress and the plan viewer.
+/**
+ * Keep checklist recognition identical in stored progress and the plan viewer.
+ */
 function parseWorkPlanLines(text, { markTechnicalDetails = false } = {}) {
   let fence = "";
   return text.split("\n").map((line) => {
@@ -16,7 +18,9 @@ function parseWorkPlanLines(text, { markTechnicalDetails = false } = {}) {
   });
 }
 
-// Compare the agreed content while allowing checklist progress and completion.
+/**
+ * Compare the agreed content while allowing checklist progress and completion.
+ */
 function workPlanScope(text) {
   const lines = text.replace(/^Status: completed\r?$/mu, "Status: active").split("\n");
   return parseWorkPlanLines(lines.join("\n")).map((item, index) => item.checked === undefined

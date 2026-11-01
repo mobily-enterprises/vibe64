@@ -20,7 +20,9 @@ const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
 const PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE = "vibe64:preview-resource-failure";
 const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
 
-// Diagnostic URLs retain the module path, never credentials, query values or fragments.
+/**
+ * Diagnostic URLs retain the module path, never credentials, query values or fragments.
+ */
 function previewDiagnosticUrl(value) {
   try {
     const url = new URL(String(value || ""));

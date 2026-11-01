@@ -16,8 +16,10 @@ import { failure, inspectPath, MAX_CODE_LEDGER_BYTES, readRecord, uuidPattern, v
  * @param {(actor: object) => object} dependencies.userPaths
  */
 function createLearnerCodeLedgers({ activeAttemptForProject, createNamespace, loadState, userPaths }) {
-  // Code ledgers: one private record per attempt in progress, so autosaves
-  // never advance the learning revision. Ending the attempt removes it.
+  /**
+   * Code ledgers: one private record per attempt in progress, so autosaves
+   * never advance the learning revision. Ending the attempt removes it.
+   */
   function ledgerPath(paths, attemptId) {
     if (!uuidPattern.test(attemptId || "")) throw new Error("Use an exact attempt ID.");
     return path.join(paths.codeLedgers, `${attemptId}.json`);

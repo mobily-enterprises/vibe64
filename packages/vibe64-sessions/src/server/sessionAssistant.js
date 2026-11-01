@@ -70,9 +70,11 @@ function createSessionAssistant({ initializeModelRouting, project, publishSessio
     return defineVibe64AssistantSelection(await terminals.resolveAssistantSelection(record(input), { vibe64User }));
   }
 
-  // Main chat starts on the owner's setup (a team member's lesson: the team
-  // setup). A renewal keeps the chat mode; a chosen model that isn't main
-  // chat's own makes the chat Custom.
+  /**
+   * Main chat starts on the owner's setup (a team member's lesson: the team
+   * setup). A renewal keeps the chat mode; a chosen model that isn't main
+   * chat's own makes the chat Custom.
+   */
   async function resolveSessionStart(input = {}, { session = null, vibe64User = null, mode = "senior" } = {}) {
     const direct = isAssistantRoutingOwner(vibe64User) || currentRequestIsPracticeProject();
     if (!direct && Object.keys(input.assistantSelection || {}).length) {

@@ -36,7 +36,9 @@ function hostPlatform(platform = process.platform, arch = process.arch) {
   return `${platform}-${arch}`;
 }
 
-// `java -version` of one Java home: { ok, javaHome, version, major, message }.
+/**
+ * `java -version` of one Java home: { ok, javaHome, version, major, message }.
+ */
 async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, { runCommand = spawnCommand } = {}) {
   if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) return { ok: false, javaHome: null, message: "No Java home given." };
   const java = path.join(javaHome, "bin", "java");
@@ -52,7 +54,9 @@ async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, { r
   return { ok: true, javaHome, version, major, message: `Java ${version}.` };
 }
 
-// The Java home of `java` on PATH, read from the JVM itself.
+/**
+ * The Java home of `java` on PATH, read from the JVM itself.
+ */
 async function javaHomeOnPath({ baseEnvironment = process.env } = {}, { runCommand = spawnCommand } = {}) {
   const result = await runCommand({
     command: "java",
@@ -64,7 +68,9 @@ async function javaHomeOnPath({ baseEnvironment = process.env } = {}, { runComma
   return result?.ok === true && match ? match[1].trim() : null;
 }
 
-// The first usable JDK: Vibe64's own install in `directory`, then JAVA_HOME, then PATH.
+/**
+ * The first usable JDK: Vibe64's own install in `directory`, then JAVA_HOME, then PATH.
+ */
 async function findJdk({ directory = null, baseEnvironment = process.env, platform = hostPlatform() } = {}, dependencies = {}) {
   const candidates = [];
   const pinned = PINNED_JDKS[platform];
@@ -81,7 +87,9 @@ async function findJdk({ directory = null, baseEnvironment = process.env, platfo
   return { ok: false, javaHome: null, message: tried.length ? tried.join(" ") : `No Java ${REQUIRED_JAVA} found.`, installable: Boolean(pinned) };
 }
 
-// Installs the pinned Temurin JDK into `directory` (idempotent) and returns it.
+/**
+ * Installs the pinned Temurin JDK into `directory` (idempotent) and returns it.
+ */
 async function installJdk({ directory, platform = hostPlatform(), baseEnvironment = process.env, signal } = {}, dependencies = {}) {
   if (typeof directory !== "string" || !path.isAbsolute(directory)) throw toolchainError("The JDK needs an absolute install folder.");
   const pinned = PINNED_JDKS[platform];

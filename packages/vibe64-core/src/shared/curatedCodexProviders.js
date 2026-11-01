@@ -1,6 +1,8 @@
 import { nativeAiModel, nativeAiProvider } from "@jskit-ai/assistant-core/shared/native-providers";
 
-// Product choices and presentation. JSKIT owns native routes and capabilities.
+/**
+ * Product choices and presentation. JSKIT owns native routes and capabilities.
+ */
 const curatedModel = (providerId, id, label, defaultThinking) => {
   const { modelProviderId: _provider, ...definition } = nativeAiModel(id, providerId);
   return Object.freeze({ ...definition, label, defaultThinking });

@@ -151,8 +151,10 @@ function createService({
     await rm(root, { recursive: true, force: true });
   }
 
-  // Each person's receipt is closed on its own: one that cannot close is kept
-  // for the next close and named, and never stops the others.
+  /**
+   * Each person's receipt is closed on its own: one that cannot close is kept
+   * for the next close and named, and never stops the others.
+   */
   async function closeAssistantsForSession(sessionId, options = {}) {
     const scope = currentProjectScopeKey();
     const tasks = [...activeAssistants].filter((task) => task.sessionId === sessionId && task.projectScope === scope);

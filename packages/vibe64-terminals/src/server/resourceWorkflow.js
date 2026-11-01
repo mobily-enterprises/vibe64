@@ -74,8 +74,10 @@ async function runtimePathIdentity(file, optional = false) {
   }
 }
 
-// Fingerprint the pack as well as its tools: an aggregate pack can change
-// while its first command still points at an unchanged shared binary.
+/**
+ * Fingerprint the pack as well as its tools: an aggregate pack can change
+ * while its first command still points at an unchanged shared binary.
+ */
 async function packRuntimeIdentity(name, pack) {
   const bins = runtimePackBinPaths(name);
   const directories = await Promise.all(bins.map((bin) => runtimePathIdentity(bin)));
@@ -86,7 +88,9 @@ async function packRuntimeIdentity(name, pack) {
   return { directories, commands, installed };
 }
 
-// Without packs, each command is whichever one the person's PATH finds first.
+/**
+ * Without packs, each command is whichever one the person's PATH finds first.
+ */
 async function installedRuntimeIdentity(pack, env) {
   const directories = String(env.PATH || "").split(":").filter((directory) => path.isAbsolute(directory));
   const commands = await Promise.all(pack.managedCommands.map(async (command) => {

@@ -27,8 +27,10 @@ import {
 // The usage service answers usage queries for one session's source, from its
 // Genesis snapshot and its parsed call web.
 
-// One parsed call web per session source, at most two sessions, released after
-// two idle minutes and replaced when the Machine City names another identity.
+/**
+ * One parsed call web per session source, at most two sessions, released after
+ * two idle minutes and replaced when the Machine City names another identity.
+ */
 function createCallWebCache(options = {}) {
   return createSnapshotCache({ capacity: CALL_WEB_CACHE_SESSIONS, ...options });
 }

@@ -66,8 +66,10 @@ async function verifySourcePin(sourceRoot, pin) {
   requireMatchingPin({ schemaVersion: 1, topicId, release, repository, commit, topicHash }, pin);
 }
 
-// Only an admitted owner operation supplies these paths and pins. This service
-// does not authenticate callers, select content, enable courses or run exercises.
+/**
+ * Only an admitted owner operation supplies these paths and pins. This service
+ * does not authenticate callers, select content, enable courses or run exercises.
+ */
 function createTrainingContentInstaller({ systemRoot } = {}) {
   const root = absoluteDirectory(systemRoot, "Training system root");
   const reader = createInstalledTrainingContent({ systemRoot: root });

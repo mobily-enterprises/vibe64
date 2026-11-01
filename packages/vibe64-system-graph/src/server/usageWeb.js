@@ -40,9 +40,11 @@ function layoutGroups(layout) {
   return (layout?.groups || []).map((group) => ({ id: group.id, title: group.title, kind: group.kind, roots: group.subsystems.map((member) => member.root) }));
 }
 
-// Machine City links each page or component to the components its template
-// renders. Calls follows them as "renders" steps between files, keeping the
-// link's certainty: a tag resolved through its import is exact.
+/**
+ * Machine City links each page or component to the components its template
+ * renders. Calls follows them as "renders" steps between files, keeping the
+ * link's certainty: a tag resolved through its import is exact.
+ */
 function renderLinks(ui) {
   const fileOf = new Map([...(ui?.pages || []), ...(ui?.components || [])].filter((record) => record.file).map((record) => [record.id, record.file]));
   const uses = new Map((ui?.componentUses || []).map((use) => [use.id, use]));
@@ -70,8 +72,10 @@ function renderLinks(ui) {
   return { rendersFrom: grouped("from"), rendersInto: grouped("to") };
 }
 
-// One index per validated Machine City object. City reads share that object
-// while its file is unchanged, so this is built once per snapshot.
+/**
+ * One index per validated Machine City object. City reads share that object
+ * while its file is unchanged, so this is built once per snapshot.
+ */
 function buildSnapshotIndex(record, layout) {
   const machine = requireGenesisCity(record, "machine");
   const architecture = machine.architecture;
@@ -142,7 +146,9 @@ function buildSnapshotIndex(record, layout) {
   };
 }
 
-// Longest declared root owning a path that the snapshot never indexed.
+/**
+ * Longest declared root owning a path that the snapshot never indexed.
+ */
 function subsystemForPath(index, filePath) {
   const indexed = index.fileByPath.get(filePath);
   if (indexed) return indexed.subsystemId ?? null;
@@ -207,8 +213,10 @@ function bridgeCallee(bridge) {
   return [key.method, key.operation].filter(Boolean).join(" ") || "request";
 }
 
-// Every edge leaving a function that the traversal may follow. Probable calls
-// with several candidates contribute one edge per candidate.
+/**
+ * Every edge leaving a function that the traversal may follow. Probable calls
+ * with several candidates contribute one edge per candidate.
+ */
 function forEachEdge(callIndex, from, allowed, visit) {
   for (const position of callIndex.outCalls[from]) {
     const call = callIndex.calls[position];
@@ -221,7 +229,9 @@ function forEachEdge(callIndex, from, allowed, visit) {
   }
 }
 
-// Render steps leaving a file's anchor: to each rendered component's anchor.
+/**
+ * Render steps leaving a file's anchor: to each rendered component's anchor.
+ */
 function forEachRender(index, callIndex, from, allowed, visit) {
   const filePath = callIndex.files[callIndex.functions[from].file].path;
   if (callIndex.anchorByPath.get(filePath) !== from) return;
@@ -231,9 +241,11 @@ function forEachRender(index, callIndex, from, allowed, visit) {
   }
 }
 
-// What Calls follows from one function: its calls and requests, and, from a
-// file's anchor, the components that file renders. A rendered component is
-// reached whole, like an entry's own file.
+/**
+ * What Calls follows from one function: its calls and requests, and, from a
+ * file's anchor, the components that file renders. A rendered component is
+ * reached whole, like an entry's own file.
+ */
 function followSteps(index, callIndex, allowed) {
   return (from, reach) => {
     forEachEdge(callIndex, from, allowed, reach);
@@ -278,7 +290,9 @@ function responseBytes(response) {
   return Buffer.byteLength(JSON.stringify(response));
 }
 
-// Removes nodes from the end (deepest first) until the response fits 1 MiB.
+/**
+ * Removes nodes from the end (deepest first) until the response fits 1 MiB.
+ */
 function fitResponse(response, nodesKey, edgeEnds) {
   while (responseBytes(response) > USAGE_QUERY_LIMITS.responseBytes) {
     response.truncated = true;

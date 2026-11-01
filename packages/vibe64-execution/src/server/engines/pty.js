@@ -38,8 +38,10 @@ function ptyHelperPayloadPath(root = "") {
   return path.join(payloadRoot, `${process.pid}-${Date.now()}-${randomUUID()}.json`);
 }
 
-// A terminal gets the env its caller resolved; only an env factory goes through
-// the gateway's resolver, once per terminal id, with the execution id stamp.
+/**
+ * A terminal gets the env its caller resolved; only an env factory goes through
+ * the gateway's resolver, once per terminal id, with the execution id stamp.
+ */
 function terminalSessionInputForRequest(request = {}, {
   actor,
   cwd,

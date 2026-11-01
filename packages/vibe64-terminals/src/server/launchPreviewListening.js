@@ -44,8 +44,10 @@ async function listenOnPreviewPort(server, {
   throw new Error(`No launch preview proxy port is available in ${firstPort}-${lastPort}.`);
 }
 
-// The shared temporary directory is writable by every account, so the private
-// parent must already belong to this user before sockets go inside it.
+/**
+ * The shared temporary directory is writable by every account, so the private
+ * parent must already belong to this user before sockets go inside it.
+ */
 async function assertPrivateFallbackSocketParent(socketDir = "") {
   const parent = path.dirname(socketDir);
   await mkdir(parent, { mode: 0o700, recursive: true });
@@ -259,8 +261,10 @@ function previewProxySocketDir(env = process.env) {
   return fallbackPreviewProxySocketDir();
 }
 
-// A Unix socket path holds at most 107 bytes, and TMPDIR may name a long
-// folder (macOS gives each user one), so the fallback is always under /tmp.
+/**
+ * A Unix socket path holds at most 107 bytes, and TMPDIR may name a long
+ * folder (macOS gives each user one), so the fallback is always under /tmp.
+ */
 function fallbackPreviewProxySocketDir() {
   // readable-check: allow optional-call - platform object: process.getuid() exists only on POSIX
   return path.join("/tmp", `vibe64-${process.getuid?.() ?? os.userInfo().username}`, "apps");

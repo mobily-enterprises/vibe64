@@ -39,7 +39,9 @@ const resultOutput = {
   })
 };
 
-// Records may omit optional parts; a missing part projects as {}.
+/**
+ * Records may omit optional parts; a missing part projects as {}.
+ */
 function pick(value = {}, fields) {
   return Object.fromEntries(fields.filter(field => Object.hasOwn(value, field)).map(field => [field, value[field]]));
 }
@@ -104,11 +106,13 @@ function installError(cause) {
   });
 }
 
-// A practice project exists only once preparation began for an exercise lesson.
-// The learning space says whether it still exists; a deleted or archived one
-// is left out (learning.read lists attempts with their slug). A presence check
-// that fails keeps the project listed instead of failing the whole read: one
-// bad record must not hide the learner's progress.
+/**
+ * A practice project exists only once preparation began for an exercise lesson.
+ * The learning space says whether it still exists; a deleted or archived one
+ * is left out (learning.read lists attempts with their slug). A presence check
+ * that fails keeps the project listed instead of failing the whole read: one
+ * bad record must not hide the learner's progress.
+ */
 async function practiceSlug({ attempt, actor, learningSpace }) {
   const slug = attempt.projectSlug;
   if (!attempt.preparation || attempt.preparation.phase === "reserved") return "";
@@ -222,9 +226,11 @@ function createTrainingOperations({ catalogue, learners, content, exercises, cou
   const notifyLearner = async (actor, lessonAttemptId, reason = "lesson") => {
     await publishLearnerChanged({ actor, attemptId: lessonAttemptId, reason });
   };
-  // Starting, restarting, resuming or finishing a lesson changes the current
-  // lesson. A failure may already have changed it (the mode set, the old
-  // attempt archived), so every tab rereads either way.
+  /**
+   * Starting, restarting, resuming or finishing a lesson changes the current
+   * lesson. A failure may already have changed it (the mode set, the old
+   * attempt archived), so every tab rereads either way.
+   */
   const announced = async (actor, operation, lessonAttemptId = "") => {
     let result;
     try { result = await operation(); }

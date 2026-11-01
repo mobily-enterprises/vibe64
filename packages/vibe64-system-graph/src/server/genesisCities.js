@@ -63,8 +63,10 @@ function cityDefinition(kind) {
   return definition;
 }
 
-// Genesis owns the City document formats and their validation; Vibe64 only
-// maps its rejection onto the System Graph error contract.
+/**
+ * Genesis owns the City document formats and their validation; Vibe64 only
+ * maps its rejection onto the System Graph error contract.
+ */
 function validateGenesisCity(city, kind) {
   const definition = cityDefinition(kind);
   try {
@@ -113,7 +115,9 @@ async function readGenesisCity(projectRoot, kind) {
   });
 }
 
-// A scan replaces both Cities, so their loaded copies have no further use.
+/**
+ * A scan replaces both Cities, so their loaded copies have no further use.
+ */
 function releaseGenesisCities(projectRoot) {
   for (const definition of Object.values(CITY_DEFINITIONS)) cityReads.delete(path.resolve(projectRoot, definition.path));
 }

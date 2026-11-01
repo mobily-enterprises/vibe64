@@ -18,9 +18,11 @@ function processMatchesActor(actor = {}) {
     (current.uid === actor.user?.uid && current.gid === actor.user?.gid);
 }
 
-// A host that provisions its own machines declares a privileged helper in its
-// host profile. Such a host is managed: it never borrows the launching shell's
-// PATH, and every real-user command goes through the helper.
+/**
+ * A host that provisions its own machines declares a privileged helper in its
+ * host profile. Such a host is managed: it never borrows the launching shell's
+ * PATH, and every real-user command goes through the helper.
+ */
 function hostIsManaged() {
   return Boolean(vibe64Host().execHelperPath);
 }

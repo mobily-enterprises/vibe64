@@ -27,9 +27,11 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
     return Buffer.from(String(user?.uid ?? user?.username ?? "local")).toString("base64url");
   }
   const learnThreadKey = ({ learnerKey, attemptId }) => `${learnerKey}:learn${attemptId ? `:${attemptId}` : ""}`;
-  // The thread is decided on the server only: Develop's one conversation, or
-  // in Learn mode the current attempt's teacher thread (the lobby without one,
-  // or while Training is closing the attempt after releasing its thread).
+  /**
+   * The thread is decided on the server only: Develop's one conversation, or
+   * in Learn mode the current attempt's teacher thread (the lobby without one,
+   * or while Training is closing the attempt after releasing its thread).
+   */
   async function threadFor(context) {
     const user = authenticatedVibe64User(context);
     const mode = await readLearningModeFor(user);
@@ -65,9 +67,11 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
     return state;
   }
 
-  // The thread a person's request resolves to becomes the visible one. The
-  // thread it replaces keeps its running turn; its live handle is released
-  // only after that turn settles, and its watch observations wait.
+  /**
+   * The thread a person's request resolves to becomes the visible one. The
+   * thread it replaces keeps its running turn; its live handle is released
+   * only after that turn settles, and its watch observations wait.
+   */
   function showThread(state) {
     const previous = serviceState.visible.get(state.userKey);
     if (previous === state) return;
@@ -89,9 +93,11 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
     state.host = null;
   }
 
-  // Training closes a lesson attempt: stop using its thread (a running turn
-  // is stopped, not awaited, since it may be the very call closing the
-  // attempt), then Training moves or removes the thread file.
+  /**
+   * Training closes a lesson attempt: stop using its thread (a running turn
+   * is stopped, not awaited, since it may be the very call closing the
+   * attempt), then Training moves or removes the thread file.
+   */
   async function releaseLearnThread({ learnerKey, attemptId }) {
     const file = learnThreadFile({ systemRoot, learnerKey, attemptId });
     const key = learnThreadKey({ learnerKey, attemptId });

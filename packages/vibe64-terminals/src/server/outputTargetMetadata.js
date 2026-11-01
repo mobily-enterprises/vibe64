@@ -131,7 +131,9 @@ async function clearLaunchMetadataForTerminal(store, sessionId = "", terminalSes
   return clearLaunchMetadata(store, sessionId, { preserveSelection });
 }
 
-// The application URL the agent's own checks use, beside the browser-facing Preview.
+/**
+ * The application URL the agent's own checks use, beside the browser-facing Preview.
+ */
 function launchAgentHref(metadata = {}) {
   return String(
     metadata.agentTargetHref ||

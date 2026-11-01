@@ -93,9 +93,11 @@ function createColleagueFocusAndNavigation({ threads }) {
     return state.navigation.begin(connection, command);
   }
 
-  // Point at one place of this installation's vocabulary, or open it first:
-  // a studio page by its route, Courses, or a project view in the project
-  // and session the person has open (the browser's own focus).
+  /**
+   * Point at one place of this installation's vocabulary, or open it first:
+   * a studio page by its route, Courses, or a project view in the project
+   * and session the person has open (the browser's own focus).
+   */
   async function guide(input, context) {
     const state = await threads.stateFor(context);
     let guided;

@@ -594,7 +594,9 @@ function terminalRouteInput(request) {
   return { ...sessionInput(request), terminalSessionId: request.params.terminalSessionId };
 }
 
-// Global terminals belong to no session.
+/**
+ * Global terminals belong to no session.
+ */
 function terminalInputFor(prefix) {
   return prefix === "global-terminal"
     ? (request) => ({ terminalSessionId: request.params.terminalSessionId })

@@ -209,7 +209,9 @@ function createServiceSessionWork({
     return throwIfAgentWriteBusy(result);
   }
 
-  // The Git actor an earlier Save already recorded, for its recovery or retirement.
+  /**
+   * The Git actor an earlier Save already recorded, for its recovery or retirement.
+   */
   async function saveExecution(session, sessionId, purpose) {
     const execution = await codexGitCommand.sessionWorkSaveContext({
       session,
@@ -223,8 +225,10 @@ function createServiceSessionWork({
     return execution;
   }
 
-  // A write that records commits (Save, Update, Merge contribution) passes
-  // `createsCommits`, so its commands carry the author's own Git name and email.
+  /**
+   * A write that records commits (Save, Update, Merge contribution) passes
+   * `createsCommits`, so its commands carry the author's own Git name and email.
+   */
   async function sessionWorkExecution(sessionId, input = {}, reason = "session-work", { createsCommits = false } = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
     const read = await sessionAccess.sessionContext(normalizedSessionId, input);
@@ -347,8 +351,10 @@ function createServiceSessionWork({
     }, operation);
   }
 
-  // Internal server facility: callbacks are never accepted by an action or
-  // model. Snapshot validation/installation remains with its content owner.
+  /**
+   * Internal server facility: callbacks are never accepted by an action or
+   * model. Snapshot validation/installation remains with its content owner.
+   */
   async function runConnectedSourcePreparation(sessionId, input, operation) {
     if (typeof operation !== "function") throw new TypeError("Connected preparation requires an internal source operation.");
     return runSessionRepositoryWrite(sessionId, input, { operation: "prepare-connected-sources" }, operation);
@@ -524,10 +530,12 @@ function createServiceSessionWork({
     });
   }
 
-  // Retiring deletes only a Vibe64-internal ref and never touches the
-  // worktree, so it takes the write lock (serialising with Save and its
-  // recovery) without waiting for an assistant turn the person may already
-  // have started after Save finished.
+  /**
+   * Retiring deletes only a Vibe64-internal ref and never touches the
+   * worktree, so it takes the write lock (serialising with Save and its
+   * recovery) without waiting for an assistant turn the person may already
+   * have started after Save finished.
+   */
   async function retireSessionWorkSave(sessionId, input = {}) {
     const result = await sessionAccess.runMainAgentWrite(sessionId, input, async ({ session }) => {
       const execution = await saveExecution(session, sessionId, "retiring this Save");

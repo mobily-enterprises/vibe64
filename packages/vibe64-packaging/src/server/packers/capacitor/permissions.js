@@ -25,8 +25,10 @@ const ANDROID_PERMISSIONS = Object.freeze({
   vibration: Object.freeze({ label: "Vibration", android: Object.freeze(["android.permission.VIBRATE"]) })
 });
 
-// Every Android permission the declared ids add, sorted and without duplicates.
-// Unknown ids are skipped here; preflight reports them.
+/**
+ * Every Android permission the declared ids add, sorted and without duplicates.
+ * Unknown ids are skipped here; preflight reports them.
+ */
 function androidPermissionNames(permissions = []) {
   const names = new Set(["android.permission.INTERNET"]);
   for (const { id } of permissions) {

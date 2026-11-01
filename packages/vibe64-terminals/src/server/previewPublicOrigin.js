@@ -16,11 +16,13 @@ const VIBE64_WORKSPACE_ENV = "VIBE64_WORKSPACE";
 
 const DEFAULT_PUBLIC_PROTOCOL = "https";
 
-// The editor that asked for the Preview is the page that frames it. The
-// browser names its own origin; routing headers can be rewritten on the way
-// (a dev container's Host, for one), so they are only the fallback for callers
-// that send none. A configured public protocol wins for public hosts there, as
-// it does for the Preview's own origin.
+/**
+ * The editor that asked for the Preview is the page that frames it. The
+ * browser names its own origin; routing headers can be rewritten on the way
+ * (a dev container's Host, for one), so they are only the fallback for callers
+ * that send none. A configured public protocol wins for public hosts there, as
+ * it does for the Preview's own origin.
+ */
 function previewEditorOrigin({
   editorOrigin = "",
   env = process.env,

@@ -77,8 +77,10 @@ async function sendSourceEditorNdjsonStream(reply, run) {
   }
 }
 
-// An inline image keeps its real type so the browser can show it in place;
-// the policy stops an SVG opened directly from running script or loading anything.
+/**
+ * An inline image keeps its real type so the browser can show it in place;
+ * the policy stops an SVG opened directly from running script or loading anything.
+ */
 async function sendFileDownload(reply, result, { inline = false } = {}) {
   if (!result.ok) {
     return result;
@@ -131,9 +133,11 @@ function registerRoutes(http, {
     const { q, ...rest } = query;
     return sourceInput(request, { ...rest, ...(Object.hasOwn(query, "q") ? { query: q } : {}) });
   };
-  // Files areas: session routes reach every area, so project areas can be
-  // destinations; project routes reach only the project's areas. Identity,
-  // area and session come from the authenticated request and route.
+  /**
+   * Files areas: session routes reach every area, so project areas can be
+   * destinations; project routes reach only the project's areas. Identity,
+   * area and session come from the authenticated request and route.
+   */
   const areaInput = (request, data = {}) => {
     const { vibe64User: _ignoredUser, sessionId: _ignoredSession, ...rest } = data;
     return { ...rest, area: request.params.area, ...(request.params.sessionId ? { sessionId: request.params.sessionId } : {}) };
@@ -279,8 +283,10 @@ function registerRoutes(http, {
   });
 
 
-  // Streams validate the same selection fields an action would, before the
-  // reply is hijacked, so a malformed request is an ordinary 400 response.
+  /**
+   * Streams validate the same selection fields an action would, before the
+   * reply is hijacked, so a malformed request is an ordinary 400 response.
+   */
   const streamInput = (request, schema, input) => ({
     ...validateSchemaPayload({ schema, mode: "create" }, sourceInput(request, input), {
       context: "Source explanation stream", statusCode: 400

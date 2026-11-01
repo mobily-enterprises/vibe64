@@ -42,10 +42,12 @@ function versionedEntries(directory = "", pattern = /^$/u) {
   }
 }
 
-// Without packs, the person's own installs come first: ~/.local/bin, mise's
-// shims and the folders the Claude Code, opencode, rustup and Bun installers
-// use, so `mise use -g python@3.13` beats the system's /usr/bin/python3 and a
-// fresh install is found even when no shell profile activated it yet.
+/**
+ * Without packs, the person's own installs come first: ~/.local/bin, mise's
+ * shims and the folders the Claude Code, opencode, rustup and Bun installers
+ * use, so `mise use -g python@3.13` beats the system's /usr/bin/python3 and a
+ * fresh install is found even when no shell profile activated it yet.
+ */
 function installedToolFront(env = process.env) {
   if (runtimePackRoot()) return [];
   const home = String(env.HOME || os.homedir() || "");
@@ -56,10 +58,12 @@ function installedToolFront(env = process.env) {
     ...[".claude/local", ".opencode/bin", ".cargo/bin", ".bun/bin"].map((folder) => path.join(home, folder))]);
 }
 
-// Without packs, commands come from the tools installed for the person running
-// Vibe64, so the server's own PATH stays reachable, followed by the places
-// Homebrew and Debian/Ubuntu keep programs off PATH (the newest PostgreSQL's
-// initdb and pg_config, Homebrew's keg-only database programs).
+/**
+ * Without packs, commands come from the tools installed for the person running
+ * Vibe64, so the server's own PATH stays reachable, followed by the places
+ * Homebrew and Debian/Ubuntu keep programs off PATH (the newest PostgreSQL's
+ * initdb and pg_config, Homebrew's keg-only database programs).
+ */
 function installedToolPath() {
   if (runtimePackRoot()) return [];
   const brew = ["/opt/homebrew", "/usr/local"];
@@ -76,8 +80,10 @@ function installedToolPath() {
   ];
 }
 
-// Order: session shims, packs, the caller's own PATH entries, the person's
-// own installs (no packs), then the inherited PATH and the system folders.
+/**
+ * Order: session shims, packs, the caller's own PATH entries, the person's
+ * own installs (no packs), then the inherited PATH and the system folders.
+ */
 function resolveRuntimePath({
   env = process.env,
   existingPath = "",

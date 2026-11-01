@@ -19,8 +19,10 @@ const LOCAL_HOST_PROFILE = Object.freeze({
   sharedGroupAccess: false
 });
 
-// Group sharing needs a group-writable umask for every file this process
-// writes; resetting the profile puts the process umask back.
+/**
+ * Group sharing needs a group-writable umask for every file this process
+ * writes; resetting the profile puts the process umask back.
+ */
 function setHostUmask(shared) {
   if (!isMainThread) return;
   if (shared && !(HOST_UMASK_KEY in globalThis)) {

@@ -19,8 +19,10 @@ function lastOpenedSessionPath(stateRoot, vibe64User) {
   return path.join(stateRoot, LAST_OPENED_SESSIONS_DIR, `${key}.json`);
 }
 
-// A missing, damaged or unreadable record is no record: the project then
-// opens its default session.
+/**
+ * A missing, damaged or unreadable record is no record: the project then
+ * opens its default session.
+ */
 async function readLastOpenedSessionId(stateRoot, vibe64User) {
   try {
     const record = JSON.parse(await readFile(lastOpenedSessionPath(stateRoot, vibe64User), "utf8"));
@@ -30,7 +32,9 @@ async function readLastOpenedSessionId(stateRoot, vibe64User) {
   }
 }
 
-// Writes only a change, one write at a time per person and project.
+/**
+ * Writes only a change, one write at a time per person and project.
+ */
 async function rememberLastOpenedSessionId(stateRoot, vibe64User, sessionId) {
   const filePath = lastOpenedSessionPath(stateRoot, vibe64User);
   return serializeByKey(pendingWrites, filePath, async () => {

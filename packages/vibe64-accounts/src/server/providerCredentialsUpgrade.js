@@ -14,8 +14,10 @@ function parse(source, label) {
   throw new Error(`${label} is invalid. Inspect or restore it before clearing saved provider credentials.`);
 }
 
-// Accounts owns this explicit offline policy. The existing publisher owns private
-// before/after copies and exact-byte retry; no normal reader invokes this code.
+/**
+ * Accounts owns this explicit offline policy. The existing publisher owns private
+ * before/after copies and exact-byte retry; no normal reader invokes this code.
+ */
 export async function upgradeIndependentProviderCredentials({ systemRoot, apply, backupRoot, report,
   env = process.env, home = os.homedir() }) {
   const storePath = path.join(systemRoot, "ai-connections", "connections.json");

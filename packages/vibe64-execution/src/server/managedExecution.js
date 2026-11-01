@@ -130,12 +130,14 @@ async function stopVibe64Execution(executionId = "", options = {}) {
   return stopPtyExecution(normalizedExecutionId, options);
 }
 
-// Stops a detached service whose owner keeps only its execution ID, such as a
-// Claude chat or a conversation helper. Without a provider, a restored ID this
-// server does not hold came from an earlier server, whose reaper stopped that
-// service's process group when the server ended. An owner that also keeps the
-// process's own identity (Codex) stops with stopVibe64Execution instead, where
-// such an ID stays not found, so that owner's stronger identity proof still runs.
+/**
+ * Stops a detached service whose owner keeps only its execution ID, such as a
+ * Claude chat or a conversation helper. Without a provider, a restored ID this
+ * server does not hold came from an earlier server, whose reaper stopped that
+ * service's process group when the server ended. An owner that also keeps the
+ * process's own identity (Codex) stops with stopVibe64Execution instead, where
+ * such an ID stays not found, so that owner's stronger identity proof still runs.
+ */
 async function stopVibe64RestoredService(executionId = "", options = {}) {
   const result = await stopVibe64Execution(executionId, options);
   if (installedProvider || result?.code !== "vibe64_execution_not_found" ||

@@ -3,8 +3,10 @@ import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-// Session files are published by rename from a private temporary file, so a
-// reader sees either the old or the new whole file.
+/**
+ * Session files are published by rename from a private temporary file, so a
+ * reader sees either the old or the new whole file.
+ */
 async function writeTextFile(filePath, text) {
   const directory = path.dirname(filePath);
   const tempPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);

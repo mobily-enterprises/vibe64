@@ -104,7 +104,9 @@ function appendWorkspaceSetupTranscript(transcript = "", ...entries) {
   ].map((entry) => String(entry ?? "").trim()).filter(Boolean).join("\n"));
 }
 
-// One transcript line per connected checkout: updated, current or why not.
+/**
+ * One transcript line per connected checkout: updated, current or why not.
+ */
 function connectedUpdateLine({ repository = "", update = null } = {}) {
   const name = `[Connected] ${normalizeText(repository).split("/").pop()}`;
   if (update?.status === "updated") return `${name} updated to ${normalizeText(update.commit).slice(0, 7)}.`;
@@ -117,9 +119,11 @@ function stepStatus(label = "", status = "", secrets = []) {
   return `[${safeSetupLabel(label, secrets) || "Workspace preparation"}] ${status}.`;
 }
 
-// A long failure keeps its opening (where most tools state the error) and its
-// end, joined by a visible marker; the tail starts on a whole line, never
-// mid-word.
+/**
+ * A long failure keeps its opening (where most tools state the error) and its
+ * end, joined by a visible marker; the tail starts on a whole line, never
+ * mid-word.
+ */
 function boundedDiagnostic(output = "", maxLength = WORKSPACE_SETUP_DIAGNOSTIC_LENGTH) {
   if (output.length <= maxLength) return output;
   const half = Math.floor((maxLength - DIAGNOSTIC_OMISSION_MARKER.length) / 2);
@@ -149,8 +153,10 @@ function commandDiagnostic(result = {}, label = "", secrets = []) {
   return `${safeLabel} exited with code ${Number(result.exitCode) || 1}.`;
 }
 
-// The cached run still matches the host resources only when both name the same
-// resource preparation, or neither has one.
+/**
+ * The cached run still matches the host resources only when both name the same
+ * resource preparation, or neither has one.
+ */
 function resourceIdentityMatches(state = {}, environmentStatus = {}) {
   return Object.hasOwn(environmentStatus, "resourcePreparation")
     ? Boolean(state.resourceIdentity && state.resourceIdentity === environmentStatus.resourcePreparation?.identity)

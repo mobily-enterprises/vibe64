@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-// Keep filename discovery out of the typing loop. Root-tree refreshes and editor
-// creates invalidate immediately; the age limit also picks up external writers.
-// An index without a snapshot file keeps its names only in memory.
+/**
+ * Keep filename discovery out of the typing loop. Root-tree refreshes and editor
+ * creates invalidate immediately; the age limit also picks up external writers.
+ * An index without a snapshot file keeps its names only in memory.
+ */
 function keepNamesInMemory() {
   return "";
 }

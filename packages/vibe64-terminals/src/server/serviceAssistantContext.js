@@ -17,7 +17,9 @@ function createServiceAssistantContext({ sessionAccess, actions }) {
   const mainToolCatalog = actions ? createServiceToolCatalog(actions, {
     // Discovery adds an identity envelope to each bounded result.
     maxToolResultBytes: 128 * 1024 + 1024,
-    // Main's application tools are Claude goal control only.
+    /**
+     * Main's application tools are Claude goal control only.
+     */
     isActionAvailable: ({ actionId, context }) => [ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL].includes(actionId) &&
       Boolean(!context.runtime?.learningScope && context.assistantSelection?.engineId === "claude" &&
         (context.browserAuthority || context.mainGoalControl) && !context.temporaryConversationId &&

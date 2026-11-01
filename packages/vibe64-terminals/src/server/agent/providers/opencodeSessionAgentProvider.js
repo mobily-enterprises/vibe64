@@ -118,7 +118,9 @@ function createOpenCodeSessionAgentProvider({
     };
     if (mode === "invalidation") return {
       native: { owner: sharedRuntime, preparation: {
-        // A connection change gives the running server every saved connection.
+        /**
+         * A connection change gives the running server every saved connection.
+         */
         connections: () => configuredConnections(),
         get release() { return {
           ...processRelease,
@@ -139,7 +141,9 @@ function createOpenCodeSessionAgentProvider({
       if (mode === "dispose") return {
         namespace: opencodeTerminalNamespace(sessionId),
         native: { owner: sharedRuntime, preparation: {
-          // Preserve the original uncached provider's field projection.
+          /**
+           * Preserve the original uncached provider's field projection.
+           */
           cleanup: current => prepareSessionCleanup(sessionId, {
             assistantScope: current.assistantScope, runtime: current.runtime, session: current.session,
             renewalCleanup: current.renewalCleanup

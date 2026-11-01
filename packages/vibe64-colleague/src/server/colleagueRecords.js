@@ -160,8 +160,10 @@ function createColleagueRecords({ actions, terminals, events, serviceState }) {
     return operation;
   }
 
-  // Product changes are invalidations, not another conversation transcript.
-  // Navigation data is read through the original initiating-browser operation.
+  /**
+   * Product changes are invalidations, not another conversation transcript.
+   * Navigation data is read through the original initiating-browser operation.
+   */
   function publishBrowserChange(state) {
     for (const observer of state.browserObservers) {
       // Product invalidation may announce a changed active identity. It grants

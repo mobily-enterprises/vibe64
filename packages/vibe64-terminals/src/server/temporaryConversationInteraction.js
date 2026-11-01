@@ -244,7 +244,9 @@ function createTemporaryConversationInteraction({
     });
   }
 
-  // Cancel of one unsent or unconfirmed message in this chat; it always succeeds.
+  /**
+   * Cancel of one unsent or unconfirmed message in this chat; it always succeeds.
+   */
   function cancelTemporaryConversationMessage(sessionId, input = {}, options = {}) {
     return routing.cancelMessage(sessionId, { messageId: input.messageId }, { ...options, conversationId: input.conversationId });
   }

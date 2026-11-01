@@ -29,7 +29,9 @@ function absolute(value, label) {
   return path.resolve(value);
 }
 
-// The fixed variables every Vibe64-run tool inherits from its base environment.
+/**
+ * The fixed variables every Vibe64-run tool inherits from its base environment.
+ */
 function passthroughEnvironment(baseEnvironment = process.env) {
   const environment = {};
   for (const name of BUILD_ENVIRONMENT_PASSTHROUGH) {
@@ -38,8 +40,10 @@ function passthroughEnvironment(baseEnvironment = process.env) {
   return environment;
 }
 
-// Stage 1 environment: a fixed passthrough (PATH and locale), a fresh credential-free
-// HOME, and the package's declared non-secret build Environment. Nothing else.
+/**
+ * Stage 1 environment: a fixed passthrough (PATH and locale), a fresh credential-free
+ * HOME, and the package's declared non-secret build Environment. Nothing else.
+ */
 function buildStageEnvironment({ baseEnvironment = process.env, declared = [], home, cacheDirectory = "" } = {}) {
   const environment = passthroughEnvironment(baseEnvironment);
   Object.assign(environment, {
@@ -67,9 +71,11 @@ function buildStageEnvironment({ baseEnvironment = process.env, declared = [], h
   return environment;
 }
 
-// Runs Vibe64's own pinned tools (signing, upload, toolchain setup) without a
-// shell, with exactly the given environment. The project's own code never runs
-// through this: Stage 1 goes through the command gateway (projectCommands.js).
+/**
+ * Runs Vibe64's own pinned tools (signing, upload, toolchain setup) without a
+ * shell, with exactly the given environment. The project's own code never runs
+ * through this: Stage 1 goes through the command gateway (projectCommands.js).
+ */
 function spawnCommand({ command, args, cwd, env, stdin = null, signal }) {
   return new Promise((resolve) => {
     const child = spawn(command, args, { cwd, env, signal, stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"] });
@@ -104,7 +110,9 @@ async function listFiles(root, prefix = "") {
   return files;
 }
 
-// One digest names a whole artifact set: every file's path and checksum.
+/**
+ * One digest names a whole artifact set: every file's path and checksum.
+ */
 function artifactsDigest(manifest) {
   return sha256(manifest.files.map(({ path: file, sha256: checksum }) => `${checksum}  ${file}\n`).join(""));
 }
@@ -124,7 +132,9 @@ async function readArtifacts(directory) {
   return { directory, manifest, digest: artifactsDigest(manifest) };
 }
 
-// Re-hashes the stored bytes so Stage 2 signs and uploads exactly what Stage 1 built.
+/**
+ * Re-hashes the stored bytes so Stage 2 signs and uploads exactly what Stage 1 built.
+ */
 async function verifyArtifacts(artifacts) {
   const filesRoot = path.join(artifacts.directory, "files");
   const present = await listFiles(filesRoot);
@@ -140,7 +150,9 @@ async function verifyArtifacts(artifacts) {
   return artifacts;
 }
 
-// A completed, still-intact build of this plan and package, or null.
+/**
+ * A completed, still-intact build of this plan and package, or null.
+ */
 async function storedArtifacts({ resultStore, planHash, packageId }) {
   const directory = resultDirectory(resultStore, planHash, packageId);
   if (!await stat(path.join(directory, "manifest.json")).catch(() => null)) return null;
@@ -216,9 +228,11 @@ async function runBuildStage({
   }
 }
 
-// Credentials exist only for the duration of one Stage 2 operation: files are 0600
-// in a private 0700 directory, stdin values are buffers, and both are removed or
-// zeroed whatever happens.
+/**
+ * Credentials exist only for the duration of one Stage 2 operation: files are 0600
+ * in a private 0700 directory, stdin values are buffers, and both are removed or
+ * zeroed whatever happens.
+ */
 async function withStageCredentials({ credentials = [], obtainCredential, tempRoot = os.tmpdir() } = {}, operation) {
   if (typeof operation !== "function") throw new TypeError("withStageCredentials requires an operation.");
   if (credentials.length && typeof obtainCredential !== "function") {
@@ -259,18 +273,22 @@ function expectedChecksum(destination, artifacts) {
   return typeof destination.expectedChecksum === "function" ? destination.expectedChecksum(artifacts) : artifacts.digest;
 }
 
-// A destination's credential specs may depend on the target (for example a
-// private package that needs a sign-in even to be read back).
+/**
+ * A destination's credential specs may depend on the target (for example a
+ * private package that needs a sign-in even to be read back).
+ */
 function credentialSpecs(destination, field, target) {
   // readable-check: allow method-probe - data: a destination definition's credential specs are a list or a function of the target
   const specs = typeof destination[field] === "function" ? destination[field](target) : destination[field];
   return Array.isArray(specs) ? specs : [];
 }
 
-// Stage 3 alone: what the destination reports for this target and version. A
-// destination that cannot read without signing in declares readBackCredentials.
-// `toolchains` (such as { javaHome, androidHome }) passes through to destinations
-// that run local signing tools; registry destinations ignore it.
+/**
+ * Stage 3 alone: what the destination reports for this target and version. A
+ * destination that cannot read without signing in declares readBackCredentials.
+ * `toolchains` (such as { javaHome, androidHome }) passes through to destinations
+ * that run local signing tools; registry destinations ignore it.
+ */
 async function readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains = {} }) {
   const credentials = credentialSpecs(destination, "readBackCredentials", target);
   const result = credentials.length
@@ -290,8 +308,10 @@ async function readBackTarget({ destination, target, version, artifacts, obtainC
   return { ...result, expected };
 }
 
-// Stage 2 + 3 for one target, resumable and idempotent: the same version and
-// checksum already published is success; a different checksum is an error.
+/**
+ * Stage 2 + 3 for one target, resumable and idempotent: the same version and
+ * checksum already published is success; a different checksum is an error.
+ */
 async function publishTarget({
   destination,
   target,

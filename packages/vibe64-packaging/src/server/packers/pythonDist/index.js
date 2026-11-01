@@ -9,7 +9,9 @@ import { readSourceVersion } from "../../release/prepareChange.js";
 import { pep440FromSemver } from "../../release/version.js";
 import { recipeSteps, sourceDateEnvironment, toolVersion } from "../registryRecipe.js";
 
-// PEP 503 normalized project name, and the file-name form of it (PEP 625/427).
+/**
+ * PEP 503 normalized project name, and the file-name form of it (PEP 625/427).
+ */
 function normalizeProjectName(name) {
   return String(name).toLowerCase().replace(/[-_.]+/gu, "-");
 }
@@ -22,7 +24,9 @@ function distributionFileVersion(fileName) {
   return null;
 }
 
-// Checks the built file names: one sdist, one or more wheels, one project, one version.
+/**
+ * Checks the built file names: one sdist, one or more wheels, one project, one version.
+ */
 function checkPythonDistributions(fileNames, { version = null } = {}) {
   const names = [...fileNames].sort();
   const files = names.map((name) => ({ name, ...distributionFileVersion(name) }));
@@ -46,7 +50,9 @@ function checkPythonDistributions(fileNames, { version = null } = {}) {
   return { project: [...projects][0], version: built, files: names };
 }
 
-// context: { sourceRoot, entry, version (semver, or null), commitTime }; see the npm packer.
+/**
+ * context: { sourceRoot, entry, version (semver, or null), commitTime }; see the npm packer.
+ */
 async function buildRecipe({ sourceRoot, entry, version = null, commitTime = null } = {}) {
   if (typeof sourceRoot !== "string" || !path.isAbsolute(sourceRoot)) {
     throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The python-dist packer needs the exported source folder.");
@@ -79,7 +85,9 @@ const pythonDistPacker = Object.freeze({
   label: "Python distributions",
   produces: Object.freeze(["sdist", "wheel"]),
   buildRecipe,
-  // After Stage 1: the stored artifacts are one release of one project.
+  /**
+   * After Stage 1: the stored artifacts are one release of one project.
+   */
   checkArtifacts: async ({ artifacts, version = null }) => checkPythonDistributions(
     artifacts.manifest.files.map((file) => path.posix.basename(file.path)),
     { version }

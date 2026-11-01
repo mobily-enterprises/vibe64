@@ -63,7 +63,9 @@ function routingError(message, code = "vibe64_assistant_routing_invalid") {
 const upgradeRequired = () => routingError("This saved request predates the current AI setup. The administrator must run the state upgrade.",
   "vibe64_assistant_routing_upgrade_required");
 
-// Only Senior, Junior and Auto chats carry Deslop and automatic save choices.
+/**
+ * Only Senior, Junior and Auto chats carry Deslop and automatic save choices.
+ */
 const choosesAutomation = (mode) => !["custom", "fix"].includes(mode);
 
 function assistantRoutingPreferences(value = {}) {
@@ -79,9 +81,11 @@ function assistantRoutingPreferences(value = {}) {
     ...(value.override && !["auto", "fix"].includes(value.mode) ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
 }
 
-// The Auto automation a chat's preferences choose. Each is on unless the owner
-// turned it off; Custom and Fix it with AI carry no choice, so returning to
-// Auto from them starts with both on.
+/**
+ * The Auto automation a chat's preferences choose. Each is on unless the owner
+ * turned it off; Custom and Fix it with AI carry no choice, so returning to
+ * Auto from them starts with both on.
+ */
 function assistantRoutingAutomation(value) {
   const chosen = value && choosesAutomation(value.mode) ? value : {};
   return { review: chosen.review !== false, autoSave: chosen.autoSave !== false };
@@ -92,8 +96,10 @@ function assistantRoutingFromMetadata(metadata = {}) {
     ? assistantRoutingPreferences(JSON.parse(metadata[ASSISTANT_ROUTING_METADATA])) : null;
 }
 
-// The pinned goal and the latest routed request a session's metadata records.
-// A pin that is not a record is refused with one coded error, wherever it is read.
+/**
+ * The pinned goal and the latest routed request a session's metadata records.
+ * A pin that is not a record is refused with one coded error, wherever it is read.
+ */
 function assistantRoutingGoalFromMetadata(metadata) {
   const raw = metadata?.assistant_routing_goal;
   if (!raw) return null;
@@ -107,13 +113,17 @@ function assistantRoutingGoalFromMetadata(metadata) {
   return goal;
 }
 const assistantRoutingRequestFromMetadata = (metadata) => JSON.parse(metadata?.assistant_routing_request || "null");
-// Views and summaries show an unreadable saved request as none; guards use the
-// strict reader above and refuse to act on it.
+/**
+ * Views and summaries show an unreadable saved request as none; guards use the
+ * strict reader above and refuse to act on it.
+ */
 function assistantRoutingRequestForDisplay(metadata = {}) {
   try { return assistantRoutingRequestFromMetadata(metadata); } catch { return null; }
 }
 
-// Engines report a finished goal as either "complete" or "completed".
+/**
+ * Engines report a finished goal as either "complete" or "completed".
+ */
 const goalStatusIsComplete = (status) => status === "complete" || status === "completed";
 const assistantGoalIsActive = (goal) => Boolean(goal) && !goalStatusIsComplete(goal.status);
 
@@ -122,20 +132,28 @@ const ASSISTANT_WORKFLOW_STATUSES = Object.freeze(["working", "waiting", "comple
 const ASSISTANT_WORKFLOW_DELIVERIES = Object.freeze(["routing", "pending", "sending", "uncertain", "accepted", "failed"]);
 const assistantWorkflowStateIsSupported = (request) =>
   ASSISTANT_WORKFLOW_STATUSES.includes(request?.status) && ASSISTANT_WORKFLOW_DELIVERIES.includes(request?.delivery);
-// Senior reviews an automatic follow-up; otherwise the routed role works.
+/**
+ * Senior reviews an automatic follow-up; otherwise the routed role works.
+ */
 const assistantWorkflowRole = (request) => request.stage === "review" && request.followup ? "senior" : request.resolvedMode;
-// The routed message and its automatic follow-up, the turns this request sent.
+/**
+ * The routed message and its automatic follow-up, the turns this request sent.
+ */
 const assistantWorkflowMessageIds = (request) => [request?.messageId, request?.followup?.messageId].filter(Boolean);
 
 const isAssistantRoutingOwner = (actor) => !actor || actor.role === "owner";
 const withArticle = (label) => `${/^[AEIOU]/u.test(label) ? "an" : "a"} ${label}`;
 
-// A temporary chat's Custom model is the person's own choice, not main chat.
+/**
+ * A temporary chat's Custom model is the person's own choice, not main chat.
+ */
 const isMainChatPurpose = (purpose, { temporaryChat = false } = {}) =>
   MAIN_CHAT_PURPOSES.includes(purpose) && !(temporaryChat && purpose === "custom");
 
-// A team member's main chat waits for the owner, except in their own lesson:
-// a practice project is private to its learner, so it runs on the team setup.
+/**
+ * A team member's main chat waits for the owner, except in their own lesson:
+ * a practice project is private to its learner, so it runs on the team setup.
+ */
 const needsMainChatApproval = (purpose, actor, { practice = false, ...options } = {}) =>
   isMainChatPurpose(purpose, options) && !isAssistantRoutingOwner(actor) && !practice;
 
@@ -143,8 +161,10 @@ function assistantRoutingSetupFor(purpose, actor, options = {}) {
   return isAssistantRoutingOwner(actor) || needsMainChatApproval(purpose, actor, options) ? "owner" : "nonOwner";
 }
 
-// The values a purpose resolves against. A lesson's main chat on the team
-// setup uses Colleague as Senior and Junior, and Quick helper as Router.
+/**
+ * The values a purpose resolves against. A lesson's main chat on the team
+ * setup uses Colleague as Senior and Junior, and Quick helper as Router.
+ */
 function assistantRoutingSetupValues(configuration, purpose, actor, options = {}) {
   const setup = assistantRoutingSetupFor(purpose, actor, options);
   const values = configuration?.[setup] || {};
@@ -153,15 +173,19 @@ function assistantRoutingSetupValues(configuration, purpose, actor, options = {}
     senior: { follows: "colleague" }, junior: { follows: "colleague" }, router: { follows: "quickHelper" } };
 }
 
-// A role's saved value after one level of "Same as".
+/**
+ * A role's saved value after one level of "Same as".
+ */
 function assistantSetupRoleValue(setupValues = {}, role) {
   const value = setupValues[role];
   return value?.follows ? { value: setupValues[value.follows] ?? null, followedRole: value.follows }
     : { value: value ?? null, followedRole: "" };
 }
 
-// The main AI is the owner's Senior and Junior tool and model; a thinking
-// level change alone keeps it, and a first setup replaces nothing.
+/**
+ * The main AI is the owner's Senior and Junior tool and model; a thinking
+ * level change alone keeps it, and a first setup replaces nothing.
+ */
 function assistantMainAiChanged(previousOwner, nextOwner) {
   return ["senior", "junior"].some((role) => {
     const before = assistantSetupRoleValue(previousOwner, role).value;
@@ -174,7 +198,9 @@ function assistantRoutingStatusIsPending(request) {
   return request?.status !== "complete" && ["routing", "pending", "sending", "uncertain"].includes(request?.delivery);
 }
 
-// Delivery belongs to the original message and assistant, independently of stage.
+/**
+ * Delivery belongs to the original message and assistant, independently of stage.
+ */
 function assistantRoutingRequestCanBeReplaced(request, selection) {
   if (request?.helper) return false;
   const previous = request?.deliverySelection || request?.observedSelection;
@@ -205,9 +231,11 @@ function routingModelChoices(engine, { purpose = "senior" } = {}) {
     }));
 }
 
-// One row per model and billing: a subscription runs only in its own tool
-// (structurally, only Claude Code and Codex produce these endpoints), while a
-// key-based model may run in each tool where its provider is connected.
+/**
+ * One row per model and billing: a subscription runs only in its own tool
+ * (structurally, only Claude Code and Codex produce these endpoints), while a
+ * key-based model may run in each tool where its provider is connected.
+ */
 function routingRunsInChoices(models = []) {
   const groups = new Map();
   for (const model of models) {
@@ -230,8 +258,10 @@ function routingModelScore(selection, role) {
   return (routingScoreRow(selection)?.scores || routingScores.providerDefaultScores[selection.modelProviderId] || routingScores.defaultScores)[role];
 }
 
-// The catalogue may name a model's recommended thinking per role; otherwise
-// background roles think low and the rest think high.
+/**
+ * The catalogue may name a model's recommended thinking per role; otherwise
+ * background roles think low and the rest think high.
+ */
 function routingRecommendedEffort(selection, role) {
   return routingScoreRow(selection)?.efforts?.[role] || (["quickHelper", "router"].includes(role) ? "low" : "high");
 }
@@ -243,9 +273,11 @@ function routingConnectionAccess(selection, connections = []) {
 
 const isRoutingSelection = (value) => Boolean(value?.schema);
 
-// One recommended value per role of the setup. Team members' choices exclude
-// personal connections; preferProvider keeps a role on that provider and tool
-// when it offers a valid choice, otherwise on the role's current value.
+/**
+ * One recommended value per role of the setup. Team members' choices exclude
+ * personal connections; preferProvider keeps a role on that provider and tool
+ * when it offers a valid choice, otherwise on the role's current value.
+ */
 function recommendedRoutingAssignments({ catalogs = [], setup = "owner", values = {}, connectionAccess = [], preferProvider = null } = {}) {
   const recommended = {};
   const sameRoute = (left, right) => ["engineId", "modelProviderId", "modelId", "agentId"].every((key) => left?.[key] === right?.[key]);
@@ -586,7 +618,9 @@ function assistantRoutingStatusLabel(request) {
   return `${stage} · ${recipient}`;
 }
 
-// Offline conversion only. Existing requests never gain authority to replay or continue.
+/**
+ * Offline conversion only. Existing requests never gain authority to replay or continue.
+ */
 function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) {
   function convert(raw) {
     if (!raw) return raw;

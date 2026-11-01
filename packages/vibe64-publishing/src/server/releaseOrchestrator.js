@@ -44,7 +44,9 @@ function releaseError(message, code, details) {
   return Object.assign(new Error(message), { code, ...(details ? { details } : {}) });
 }
 
-// A phone target's install key as preflight and the page judge it.
+/**
+ * A phone target's install key as preflight and the page judge it.
+ */
 function installKey(target, keys) {
   const entryId = sideloadKeyEntryId(target);
   return {
@@ -91,9 +93,11 @@ const githubRepositoryMatches = definePreflightCheck({
 const LOCAL_CHECKS = Object.freeze([publishingKeysUnlocked, sideloadKeyReady, githubRepositoryMatches]);
 const RELEASE_CHECKS = Object.freeze([...VIBE64_PREFLIGHT_CHECKS, ...REGISTRY_CHECKS, ...ANDROID_CHECKS, ...LOCAL_CHECKS]);
 
-// The part of a long tool output that says why: tools such as npm name the
-// problem first and then print usage, while others such as Gradle sum up at
-// the end, so a long output keeps its start and its end.
+/**
+ * The part of a long tool output that says why: tools such as npm name the
+ * problem first and then print usage, while others such as Gradle sum up at
+ * the end, so a long output keeps its start and its end.
+ */
 function outputExcerpt(output, limit = 1800) {
   if (output.length <= limit) return output;
   const head = output.slice(0, Math.floor(limit / 3)).replace(/\n[^\n]*$/u, "");
@@ -101,9 +105,11 @@ function outputExcerpt(output, limit = 1800) {
   return `${head}\n…\n${rest.replace(/^[^\n]*\n/u, "")}`;
 }
 
-// A failure's log lines: the message, then the tool's own output (builds run
-// without credentials; upload output is already redacted) so the person can
-// see why, with the home folder shortened.
+/**
+ * A failure's log lines: the message, then the tool's own output (builds run
+ * without credentials; upload output is already redacted) so the person can
+ * see why, with the home folder shortened.
+ */
 function failureLog(targetId, error, at) {
   const lines = [{ at, level: "error", message: `${targetId ? `${targetId}: ` : ""}${String(error?.message || error).slice(0, 1000)}` }];
   const output = String(error?.details?.output || "").trim();
@@ -111,7 +117,9 @@ function failureLog(targetId, error, at) {
   return lines;
 }
 
-// The CHANGELOG section of one version, used as release notes.
+/**
+ * The CHANGELOG section of one version, used as release notes.
+ */
 function changelogSection(text, version) {
   if (!text) return null;
   const lines = text.split("\n");
@@ -271,7 +279,9 @@ function createReleaseOrchestrator({
     };
   }
 
-  // What the Release dialog offers before anything is written.
+  /**
+   * What the Release dialog offers before anything is written.
+   */
   async function suggestRelease() {
     const baseline = await repository.baseline();
     const release = await savedRelease(baseline);
@@ -293,8 +303,10 @@ function createReleaseOrchestrator({
     };
   }
 
-  // Writes the version bump and changelog into the session as an ordinary
-  // change. Nothing is saved, tagged or published.
+  /**
+   * Writes the version bump and changelog into the session as an ordinary
+   * change. Nothing is saved, tagged or published.
+   */
   async function prepareRelease({ sessionId, versions = {}, notes, user = null }) {
     const baseline = await repository.baseline();
     const release = await savedRelease(baseline);
@@ -320,9 +332,11 @@ function createReleaseOrchestrator({
     return nextBuildNumbers({ releases, packages, savedCommit });
   }
 
-  // The runtime form of a plan target: plan settings and the confirmed account
-  // that signs in, plus local tool choices (which twine), which do not change
-  // where it publishes.
+  /**
+   * The runtime form of a plan target: plan settings and the confirmed account
+   * that signs in, plus local tool choices (which twine), which do not change
+   * where it publishes.
+   */
   async function runtimeTarget(planTarget, { tag = null, notes = null } = {}) {
     const tools = await toolchains.registryTools();
     const settings = { ...(planTarget.settings || {}) };
@@ -330,7 +344,9 @@ function createReleaseOrchestrator({
     return { ...planTarget, account: planTarget.account || null, settings, ...(tag ? { tag } : {}), ...(notes ? { notes } : {}) };
   }
 
-  // Builds the current plan for the saved commit and runs preflight on it.
+  /**
+   * Builds the current plan for the saved commit and runs preflight on it.
+   */
   async function plan({ targetIds = null, acknowledged = [] } = {}) {
     const baseline = await repository.baseline();
     if (!baseline.supported) throw releaseError(baseline.message, "vibe64_publishing_repository_unavailable");
@@ -403,7 +419,9 @@ function createReleaseOrchestrator({
     };
   }
 
-  // The plan as the confirmation and history show it: no secrets, no local paths.
+  /**
+   * The plan as the confirmation and history show it: no secrets, no local paths.
+   */
   function planSummary(current) {
     const { plan: publishPlan } = current;
     return {
@@ -432,7 +450,9 @@ function createReleaseOrchestrator({
     return current;
   }
 
-  // Stage 1 for every package in the plan, once each, into the result store.
+  /**
+   * Stage 1 for every package in the plan, once each, into the result store.
+   */
   async function buildAll(current, recordId) {
     const built = {};
     for (const entry of current.plan.packages) {
@@ -472,7 +492,9 @@ function createReleaseOrchestrator({
     });
   }
 
-  // The plan's own steps as the record tracks them; a dry run never tags.
+  /**
+   * The plan's own steps as the record tracks them; a dry run never tags.
+   */
   function stepsFor(publishPlan, kind) {
     const stepId = (entry) => {
       if (entry.kind === "build") return `build:${entry.package}`;
@@ -521,8 +543,10 @@ function createReleaseOrchestrator({
     return changelogSection(changelog, version);
   }
 
-  // Dry run: build once, then ask each destination what would happen. Nothing
-  // is tagged, signed for distribution or uploaded.
+  /**
+   * Dry run: build once, then ask each destination what would happen. Nothing
+   * is tagged, signed for distribution or uploaded.
+   */
   async function dryRun({ planHash, targetIds = [], acknowledged = [] }) {
     const current = await requireCurrentPlan({ planHash, targetIds, acknowledged });
     if (current.preflight.blocked) {
@@ -572,14 +596,18 @@ function createReleaseOrchestrator({
     return { releaseId: record.id, kind: "dry-run" };
   }
 
-  // An assistant (or the page) asks for the confirmation prompt for this plan.
+  /**
+   * An assistant (or the page) asks for the confirmation prompt for this plan.
+   */
   async function requestPublish({ planHash, targetIds = [], requestedBy = "assistant" }) {
     const current = await requireCurrentPlan({ planHash, targetIds });
     const request = await confirmations.request({ planHash: current.planHash, targetIds: current.plan.targets.map(({ id }) => id), requestedBy });
     return { pendingConfirmation: request, planId: current.planId, message: "The person confirms this plan on the Publish page. Nothing is published until they do." };
   }
 
-  // The person opens the confirmation on the Publish page.
+  /**
+   * The person opens the confirmation on the Publish page.
+   */
   async function openConfirmation({ planHash, targetIds = [], acknowledged = [], actor }) {
     if (actor?.kind !== "person") {
       throw releaseError("Only the person can open a publish confirmation, on the Publish page.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
@@ -590,7 +618,9 @@ function createReleaseOrchestrator({
     return { token, expiresAt, plan: planSummary(current) };
   }
 
-  // The person confirmed: redeem, then release in the background.
+  /**
+   * The person confirmed: redeem, then release in the background.
+   */
   async function confirmRelease({ planHash, token, targetIds = [], acknowledged = [], actor }) {
     const current = await requireCurrentPlan({ planHash, targetIds, acknowledged });
     assertPreflightAllowsRelease(current.preflight, acknowledged);
@@ -696,7 +726,9 @@ function createReleaseOrchestrator({
     return (await history.list({ limit })).map(interruptedOr).map(summarizeRelease);
   }
 
-  // Waits for a background run (tests and the CLI-like callers).
+  /**
+   * Waits for a background run (tests and the CLI-like callers).
+   */
   function settle(id) {
     return active.get(id) || Promise.resolve();
   }

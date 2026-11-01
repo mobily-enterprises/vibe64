@@ -34,7 +34,9 @@ function fileStamp(stats) {
   return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}`;
 }
 
-// Index only what the editor may show: the same policy as the tree and reads.
+/**
+ * Index only what the editor may show: the same policy as the tree and reads.
+ */
 async function* discoverFiles(sourceRoot, policy, directory = "") {
   let entries;
   try {
@@ -55,8 +57,10 @@ async function* discoverFiles(sourceRoot, policy, directory = "") {
   }
 }
 
-// Split at line boundaries where possible. Overlap long lines so even a
-// maximum-length query crossing a chunk boundary is discoverable.
+/**
+ * Split at line boundaries where possible. Overlap long lines so even a
+ * maximum-length query crossing a chunk boundary is discoverable.
+ */
 async function indexText(handle, insert, fileId) {
   let pending = "";
   let line = 1;

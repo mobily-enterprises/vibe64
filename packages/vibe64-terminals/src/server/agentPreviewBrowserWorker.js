@@ -671,7 +671,9 @@ async function stopRegisteredBrowserWorkerForInput(sessionId = "", input = {}, {
   });
 }
 
-// Streams the browser-test output as NDJSON frames, ending with its result.
+/**
+ * Streams the browser-test output as NDJSON frames, ending with its result.
+ */
 async function streamPlaywrightRun({ commandService, input, response, sessionId }) {
   const cancellation = new AbortController();
   response.once("close", () => {

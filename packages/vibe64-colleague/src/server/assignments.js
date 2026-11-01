@@ -11,8 +11,10 @@ const assignmentCommands = new Set([
 const openStatuses = new Set(["active", "waiting", "needs-user"]);
 const fail = (message) => Object.assign(new Error(message), { statusCode: 409, code: "vibe64_colleague_assignment_conflict" });
 
-// An open assignment that cannot proceed waits for the person, optionally
-// with its watches paused.
+/**
+ * An open assignment that cannot proceed waits for the person, optionally
+ * with its watches paused.
+ */
 function suspendAssignment(record, assignmentId, summary, { pauseWatches = false } = {}) {
   const assignment = record.assignments?.find((item) => item.assignmentId === assignmentId);
   if (!assignment || !["active", "waiting"].includes(assignment.status)) return;

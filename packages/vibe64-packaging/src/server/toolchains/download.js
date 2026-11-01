@@ -21,7 +21,9 @@ async function exists(file) {
   return Boolean(await stat(file).catch(() => null));
 }
 
-// archive: { url, file, size, sha256 | sha1 }. Returns the verified local path.
+/**
+ * archive: { url, file, size, sha256 | sha1 }. Returns the verified local path.
+ */
 async function downloadVerified(archive, directory, { fetchImpl = fetch, signal } = {}) {
   const algorithm = archive.sha256 ? "sha256" : "sha1";
   const expected = archive.sha256 || archive.sha1;
@@ -77,8 +79,10 @@ async function runOrFail(argv, { cwd, env, label, runCommand = spawnCommand }) {
   return result;
 }
 
-// Extracts a (non-zip64) zip into `directory`, keeping Unix file modes and
-// relative symlinks. Entries that would land outside `directory` are refused.
+/**
+ * Extracts a (non-zip64) zip into `directory`, keeping Unix file modes and
+ * relative symlinks. Entries that would land outside `directory` are refused.
+ */
 async function extractZip(archiveFile, directory) {
   const zip = await readFile(archiveFile);
   const name = path.basename(archiveFile);
@@ -122,8 +126,10 @@ async function extractZip(archiveFile, directory) {
   }
 }
 
-// Unpacks an archive into `<destination>` atomically; `inner` names the one top
-// folder of the archive whose contents become the destination.
+/**
+ * Unpacks an archive into `<destination>` atomically; `inner` names the one top
+ * folder of the archive whose contents become the destination.
+ */
 async function unpackInto(archiveFile, destination, { inner, kind, baseEnvironment, runCommand } = {}) {
   if (await exists(destination)) return destination;
   const staging = `${destination}.staging-${randomUUID()}`;

@@ -251,23 +251,27 @@ async function checkSessionUpdates({
 // probe reports it and retries inside the product's 60 s limit.
 const AUTHORITY_HEAD_READ_TIMEOUT_MS = 20_000;
 
-// The branches whose heads decide a session's canonical commit: its branch, or
-// for a connected contribution its published, discarded and integration
-// branches (readRemoteCanonical in sessionWorkAuthority.js).
+/**
+ * The branches whose heads decide a session's canonical commit: its branch, or
+ * for a connected contribution its published, discarded and integration
+ * branches (readRemoteCanonical in sessionWorkAuthority.js).
+ */
 function authorityBranches(context) {
   return context.contribution
     ? [context.branch, `${context.branch}_discarded`, context.contribution.integrationBranch]
     : [context.branch];
 }
 
-// The update probe's read, with one head read per authority repository
-// however many sessions share it, made as the first of those sessions whose
-// recorded Git actor can read it: an in-process ls-refs request to GitHub, or
-// `git ls-remote` for a managed or local authority. Each session gets its
-// canonical branch `head`, or for a connected contribution an opaque
-// `authority` of its branch heads, or `{ code, error }`. A session absent from
-// the result was not read: its authority has no recorded Git actor yet (a
-// person's first check of the session records one).
+/**
+ * The update probe's read, with one head read per authority repository
+ * however many sessions share it, made as the first of those sessions whose
+ * recorded Git actor can read it: an in-process ls-refs request to GitHub, or
+ * `git ls-remote` for a managed or local authority. Each session gets its
+ * canonical branch `head`, or for a connected contribution an opaque
+ * `authority` of its branch heads, or `{ code, error }`. A session absent from
+ * the result was not read: its authority has no recorded Git actor yet (a
+ * person's first check of the session records one).
+ */
 async function readSessionAuthorityHeads({
   executionFor,
   project = {},
@@ -655,12 +659,14 @@ const UNFINISHED_GIT_OPERATIONS = [
   ["cherry-pick or revert", "sequencer"]
 ];
 
-// What the session's checkout says about a failed Update, whoever changed it
-// since (an assistant or a person using Git directly): whether HEAD contains
-// the saved version the Update was trying to reach (`targetCommit`, from its
-// conflict recovery), whether Update still has anything to apply (the check's
-// own rule), and whether a Git operation is unfinished or any file is
-// conflicted. It only reads.
+/**
+ * What the session's checkout says about a failed Update, whoever changed it
+ * since (an assistant or a person using Git directly): whether HEAD contains
+ * the saved version the Update was trying to reach (`targetCommit`, from its
+ * conflict recovery), whether Update still has anything to apply (the check's
+ * own rule), and whether a Git operation is unfinished or any file is
+ * conflicted. It only reads.
+ */
 async function inspectSessionUpdateFailureDirect({
   commandOptions = {},
   project = {},

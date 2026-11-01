@@ -350,8 +350,10 @@ function createSessionAgentProviderCalls({
     });
   }
 
-  // An ephemeral assistant scope runs outside any session, routing
-  // conversation or project runtime.
+  /**
+   * An ephemeral assistant scope runs outside any session, routing
+   * conversation or project runtime.
+   */
   function callEphemeralScope(method, assistantScope, input = {}, options = {}) {
     return callSessionProvider(method, assistantScope.id, input, {
       ...options,

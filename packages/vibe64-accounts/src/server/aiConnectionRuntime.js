@@ -29,9 +29,11 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
         throw new Error(result?.failed?.[0]?.error || "Close OpenCode native terminals, then retry this connection change.");
       }
     },
-    // Credential changes already reached the running OpenCode server inside
-    // withConnectionChange, which stops no turn. Model access is admission
-    // policy, checked again on every turn, so it stops no running work either.
+    /**
+     * Credential changes already reached the running OpenCode server inside
+     * withConnectionChange, which stops no turn. Model access is admission
+     * policy, checked again on every turn, so it stops no running work either.
+     */
     async onConnectionChanged(change) {
       const removed = change.reason === "removed";
       await publishConnectionChanged(change.modelProviderId, {

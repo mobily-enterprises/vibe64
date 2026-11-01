@@ -36,15 +36,19 @@ function uploadAddress(address) {
   return `${url.origin}${url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`}`;
 }
 
-// The PyPI instance whose upload address this is, or null for another index.
+/**
+ * The PyPI instance whose upload address this is, or null for another index.
+ */
 function pypiInstanceForAddress(address = "") {
   if (!address) return "pypi";
   const repository = uploadAddress(address);
   return Object.keys(INSTANCES).find((id) => INSTANCES[id].repository === repository) || null;
 }
 
-// Target settings for a PyPI account's upload address: one of INSTANCES, or a
-// private index whose simple index sits next to its upload address.
+/**
+ * Target settings for a PyPI account's upload address: one of INSTANCES, or a
+ * private index whose simple index sits next to its upload address.
+ */
 function pypiSettingsForAddress(address = "") {
   const instance = pypiInstanceForAddress(address);
   if (instance) return { instance };
@@ -81,7 +85,9 @@ function pypiSettings(target) {
   };
 }
 
-// The release's files, its one project and its PEP 440 version.
+/**
+ * The release's files, its one project and its PEP 440 version.
+ */
 function distributions(artifacts, version) {
   const files = artifactFiles(artifacts).map((file) => ({ ...file, ...distributionFileVersion(file.name) }));
   const projects = new Set(files.map((file) => file.project));
@@ -100,8 +106,10 @@ function unescapeHtml(value) {
   return value.replace(/&lt;/gu, "<").replace(/&gt;/gu, ">").replace(/&quot;/gu, "\"").replace(/&#39;/gu, "'").replace(/&amp;/gu, "&");
 }
 
-// PEP 691 JSON when the index speaks it, otherwise PEP 503 HTML anchors whose
-// URL fragment carries the file's sha256.
+/**
+ * PEP 691 JSON when the index speaks it, otherwise PEP 503 HTML anchors whose
+ * URL fragment carries the file's sha256.
+ */
 function indexFiles(response) {
   if (Array.isArray(response.json?.files)) {
     return response.json.files.map((file) => ({
@@ -161,7 +169,9 @@ async function readBack({ target, version, artifacts }) {
   };
 }
 
-// twine reads the token only from a private config file in a throwaway home.
+/**
+ * twine reads the token only from a private config file in a throwaway home.
+ */
 async function runTwine(settings, args, { token = "", failureMessage }) {
   return withToolHome(async (home) => {
     const argv = [...settings.twine, ...args];
@@ -210,7 +220,9 @@ async function upload({ target, version, artifacts, credentials }) {
   return { files: pending.map((file) => file.name), output: result.output.slice(-2000) };
 }
 
-// `twine check --strict` on the exact files, and what the index already holds.
+/**
+ * `twine check --strict` on the exact files, and what the index already holds.
+ */
 async function dryRun({ target, version, artifacts }) {
   const settings = pypiSettings(target);
   const release = distributions(artifacts, version);
@@ -232,7 +244,9 @@ async function dryRun({ target, version, artifacts }) {
   };
 }
 
-// PyPI offers no read-only way to test an upload token; say so honestly.
+/**
+ * PyPI offers no read-only way to test an upload token; say so honestly.
+ */
 async function verifyCredential({ credentials }) {
   const token = await credentialToken(credentials);
   if (!token) return { ok: false, message: "No PyPI token is saved for this target." };

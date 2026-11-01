@@ -129,8 +129,10 @@ function absoluteRuntimeRoot(projectRuntimeRoot = "") {
   return path.resolve(input);
 }
 
-// An empty canonical repository for a runtime root, for a caller that fills it
-// itself (for example by fetching existing history into it). Returns its path.
+/**
+ * An empty canonical repository for a runtime root, for a caller that fills it
+ * itself (for example by fetching existing history into it). Returns its path.
+ */
 async function createEmptyCanonicalRepository({
   defaultBranch = "main",
   projectRuntimeRoot = "",
@@ -328,9 +330,11 @@ async function initializeManagedProject({
   return result.materialization;
 }
 
-// Caller holds the existing project source lock, rereads project identity, and
-// has established that its initial session is absent. This does not create or
-// recover a session; existing session source must retain the learner's edits.
+/**
+ * Caller holds the existing project source lock, rereads project identity, and
+ * has established that its initial session is absent. This does not create or
+ * recover a session; existing session source must retain the learner's edits.
+ */
 async function verifyManagedProjectSource({
   branch = "",
   files,

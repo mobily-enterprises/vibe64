@@ -30,7 +30,9 @@ function createRepositoryUpdateProbe({
     return entry.failed ? REPOSITORY_UPDATE_PROBE_RETRY_MS : REPOSITORY_UPDATE_PROBE_INTERVAL_MS;
   }
 
-  // An idle project's record only remembers when it was last probed.
+  /**
+   * An idle project's record only remembers when it was last probed.
+   */
   function pruneIdle() {
     for (const [slug, entry] of projects) {
       if (!entry.viewers && !entry.timer && !entry.running &&
@@ -85,8 +87,10 @@ function createRepositoryUpdateProbe({
     }
   }
 
-  // Returns the release for this viewer. The project's next probe stops
-  // when nobody watches it and no agent turn runs in it.
+  /**
+   * Returns the release for this viewer. The project's next probe stops
+   * when nobody watches it and no agent turn runs in it.
+   */
   function watch(slugValue) {
     const slug = String(slugValue || "").trim();
     if (closed || !slug) return () => {};
@@ -101,7 +105,9 @@ function createRepositoryUpdateProbe({
     };
   }
 
-  // An agent turn started: probe the project if it is idle.
+  /**
+   * An agent turn started: probe the project if it is idle.
+   */
   function wake(slugValue) {
     const slug = String(slugValue || "").trim();
     if (closed || !slug) return;

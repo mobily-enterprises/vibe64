@@ -33,12 +33,16 @@ function reviewFailure(message, code = "VIBE64_TRAINING_REVIEW_FAILED") {
   return trainingFailure(code, message, { statusCode: 409 });
 }
 
-// One line of saved text: the learner store refuses control characters.
+/**
+ * One line of saved text: the learner store refuses control characters.
+ */
 // eslint-disable-next-line no-control-regex -- Deliberately replace control characters in model output.
 const oneLine = value => value.replace(/[\u0000-\u001f\u007f]+/gu, " ").replace(/ {2,}/gu, " ").trim();
 
-// The fixed output schema, checked again here: a reply that does not match it
-// is a failed review, never a verdict.
+/**
+ * The fixed output schema, checked again here: a reply that does not match it
+ * is a failed review, never a verdict.
+ */
 function parseVerdict(text) {
   let value;
   try { value = JSON.parse(String(text ?? "").trim()); } catch { value = null; }
@@ -61,8 +65,10 @@ function parseVerdict(text) {
  * @param {TerminalsService} dependencies.terminals
  */
 function createTrainingStepReviewer({ learners, terminals }) {
-  // One review at a time per learner; the learner store holds the lock, the
-  // Helper's private root and its receipt.
+  /**
+   * One review at a time per learner; the learner store holds the lock, the
+   * Helper's private root and its receipt.
+   */
   async function review({ actor, lesson, step, evidence, context = {} } = {}) {
     // readable-check: allow method-probe - optional operation: an installation without an AI Helper answers CHECK_UNDECLARED
     if (["resolveAssistantPurpose", "resolveEphemeralAgentExecutionProfile", "runEphemeralAgentChatTurn", "deleteEphemeralAgentConversation"]

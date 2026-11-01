@@ -22,7 +22,9 @@ const DEFAULT_MANAGED_GIT_BRANCH = "main";
  */
 function createManagedProjectRepositoryService({ initializeManagedProject = initializePublicManagedProject,
   projectContext, projectService, configureProject }) {
-  // Internal preparation options are separate from action and HTTP input.
+  /**
+   * Internal preparation options are separate from action and HTTP input.
+   */
   async function createManagedGitProject(input, { initializeProject } = {}) {
     assertProjectEffectAdmission();
     const slug = normalizeProjectSlug(input?.slug || projectSlugFromName(input?.name || "New Project"));
@@ -80,8 +82,10 @@ function createManagedProjectRepositoryService({ initializeManagedProject = init
     }
   }
 
-  // Internal preparation: callers supply verified exercise bytes, not paths.
-  // Release this source lock before session creation acquires policy/source locks.
+  /**
+   * Internal preparation: callers supply verified exercise bytes, not paths.
+   * Release this source lock before session creation acquires policy/source locks.
+   */
   async function verifyTrainingProjectSource({ slug, training }, { files } = {}) {
     assertProjectSessionAuthority(projectService, { requireSourceLock: true });
     return projectService.runInProjectContext(slug, () => projectService.runProjectSourceExclusive(async () => {

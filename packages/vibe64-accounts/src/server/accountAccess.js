@@ -27,7 +27,9 @@ function createAccountAccess({ accountRuntime, logger, notifications, runHostToo
 
   const aiManagementError = (input = {}) => accountRuntime.requireAiManagement(input);
 
-  // A sign-in, logout or provider key change is logged once it settles.
+  /**
+   * A sign-in, logout or provider key change is logged once it settles.
+   */
   function accountChange(operation, input = {}, fields = {}, work) {
     return runLoggedAccountChange(logger, operation, { ...fields, actor: String(input.vibe64User?.username || "") },
       () => accountsResult(work));

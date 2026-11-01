@@ -22,7 +22,9 @@ const roles = ["plan", "code", "economy", "router", "sharedBackup"];
 const routeKey = (value) => JSON.stringify([value.engineId, value.modelProviderId, value.modelId]);
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 
-// Keep this published migration's ranking independent of live role names.
+/**
+ * Keep this published migration's ranking independent of live role names.
+ */
 function routingModelScore(selection, role) {
   const row = routingScores.models.find((candidate) => ["engineId", "modelProviderId", "modelId"]
     .every((key) => candidate[key] === selection[key]));
@@ -205,9 +207,11 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
   return { updates, retired, configuration };
 }
 
-// At this upgrade's release the store always supplied OpenCode Zen's free Big
-// Pickle: an included row without a key, and the recommended model of a keyed
-// Zen row. The store no longer offers it, so restate that original inventory.
+/**
+ * At this upgrade's release the store always supplied OpenCode Zen's free Big
+ * Pickle: an included row without a key, and the recommended model of a keyed
+ * Zen row. The store no longer offers it, so restate that original inventory.
+ */
 function historicalOpenCodeConnections(saved) {
   const rows = saved.map((row) => ({ ...row, builtIn: false }));
   const included = { configurable: false, enabledModelIds: ["big-pickle"], mode: "recommended", recommendedModelId: "big-pickle" };

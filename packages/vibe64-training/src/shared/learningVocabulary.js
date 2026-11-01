@@ -112,16 +112,20 @@ function defineActivity(value) {
   return Object.freeze({ id: value.id, event: value.event, ...(value.place ? { place: value.place } : {}) });
 }
 
-// An installation's vocabulary declares no names of its own.
+/**
+ * An installation's vocabulary declares no names of its own.
+ */
 function declaresNothing() {
   return false;
 }
 
-// One vocabulary: the built-ins plus what a host registers. The same names
-// are registered identically on a host's server and in its browser; a name
-// registered twice must mean the same thing. Only a topic's bundler
-// vocabulary declares names: here declared, declaredPlace and
-// declaredActivity answer false.
+/**
+ * One vocabulary: the built-ins plus what a host registers. The same names
+ * are registered identically on a host's server and in its browser; a name
+ * registered twice must mean the same thing. Only a topic's bundler
+ * vocabulary declares names: here declared, declaredPlace and
+ * declaredActivity answer false.
+ */
 function createLearningVocabulary({
   places: initialPlaces = BUILT_IN_PLACES,
   activities: initialActivities = BUILT_IN_ACTIVITIES,
@@ -164,7 +168,9 @@ function createLearningVocabulary({
     return [...placeMap.values()];
   }
 
-  // Every page activity a view may report: activity events and place events.
+  /**
+   * Every page activity a view may report: activity events and place events.
+   */
   function events() {
     return new Set([...[...activityMap.values()].map(value => value.event),
       ...[...placeMap.values()].filter(value => value.event).map(value => value.event)]);
@@ -188,9 +194,11 @@ function createLearningVocabulary({
 const learningVocabulary = createLearningVocabulary({ facts: [] });
 const registerLearningVocabulary = value => learningVocabulary.register(value);
 
-// The bundler's vocabulary for one topic: the built-ins, plus the names the
-// topic declares (`places`, `activities`, `facts`), accepted by name only and
-// checked against a host's registry by that host's own drift test.
+/**
+ * The bundler's vocabulary for one topic: the built-ins, plus the names the
+ * topic declares (`places`, `activities`, `facts`), accepted by name only and
+ * checked against a host's registry by that host's own drift test.
+ */
 function declaredLearningVocabulary({ places = [], activities = [], facts = [] } = {}) {
   const vocabulary = createLearningVocabulary();
   const known = new Set(vocabulary.places().map(value => value.id));
@@ -239,9 +247,11 @@ function guideFailure(message) {
 
 const placeOpens = place => Boolean(place?.open);
 
-// Normalize one guide request (a teacher's navigation.guide, a lesson step's
-// guide). Throws a 422 for a request that cannot be honoured. navigate opens
-// the place first; highlight rings it (both default to: point only).
+/**
+ * Normalize one guide request (a teacher's navigation.guide, a lesson step's
+ * guide). Throws a 422 for a request that cannot be honoured. navigate opens
+ * the place first; highlight rings it (both default to: point only).
+ */
 function trainingGuideRequest(input = {}, vocabulary = learningVocabulary) {
   const place = typeof input.target === "string" ? vocabulary.place(input.target) : null;
   const declared = !place && vocabulary.declaredPlace(input.target);
@@ -280,10 +290,12 @@ function trainingGuideSteps(request, vocabulary = learningVocabulary) {
   return steps;
 }
 
-// The browser command for one normalized request. A point-only command changes
-// no view; its receipt carries only what the overlay actually drew. Opening
-// shows the real place: a project view in the exact project/session, a studio
-// page by its route, or Courses for the learning place.
+/**
+ * The browser command for one normalized request. A point-only command changes
+ * no view; its receipt carries only what the overlay actually drew. Opening
+ * shows the real place: a project view in the exact project/session, a studio
+ * page by its route, or Courses for the learning place.
+ */
 function trainingGuideCommand(request, { id, projectSlug = "", sessionId = "" }, vocabulary = learningVocabulary) {
   const place = vocabulary.place(request.target);
   const steps = trainingGuideSteps(request, vocabulary);
@@ -297,9 +309,11 @@ function trainingGuideCommand(request, { id, projectSlug = "", sessionId = "" },
     ...(place.open.databaseView ? { databaseView: place.open.databaseView } : {}), ...highlighted, status: "pending" };
 }
 
-// The single matcher for "the learner is at this place now", from a host's
-// page focus (Colleague's focus shape; chatVisible: the coding chat is on
-// screen; learningOpen: Courses is open). null: the place has no view to be at.
+/**
+ * The single matcher for "the learner is at this place now", from a host's
+ * page focus (Colleague's focus shape; chatVisible: the coding chat is on
+ * screen; learningOpen: Courses is open). null: the place has no view to be at.
+ */
 function trainingPlaceShown(target, focus = {}, vocabulary = learningVocabulary) {
   const place = vocabulary.place(target);
   if (!place?.shown.length) return null;
@@ -308,13 +322,17 @@ function trainingPlaceShown(target, focus = {}, vocabulary = learningVocabulary)
     : focus[key] === value));
 }
 
-// Whether this person may see a place: owner places only for the workspace owner.
+/**
+ * Whether this person may see a place: owner places only for the workspace owner.
+ */
 function learningPlaceOpenTo(place, viewer = {}) {
   return place.who !== "owner" || viewer.owner === true;
 }
 
-// The vocabulary one lesson step names: the places, activities and facts of
-// its beats, guide and check. step is an installed reader step (beats parsed).
+/**
+ * The vocabulary one lesson step names: the places, activities and facts of
+ * its beats, guide and check. step is an installed reader step (beats parsed).
+ */
 function lessonStepNeeds(step, vocabulary = learningVocabulary) {
   const places = new Set();
   const activities = new Set();
@@ -332,9 +350,11 @@ function lessonStepNeeds(step, vocabulary = learningVocabulary) {
   return { places: [...places], activities: [...activities], facts: [...facts] };
 }
 
-// The availability rule: a step is available here when every place, activity
-// and fact it names is registered by this installation and its places are
-// open to this viewer ({ owner }). Unavailable steps are simply absent.
+/**
+ * The availability rule: a step is available here when every place, activity
+ * and fact it names is registered by this installation and its places are
+ * open to this viewer ({ owner }). Unavailable steps are simply absent.
+ */
 function lessonStepAvailable(step, { vocabulary = learningVocabulary, viewer = {} } = {}) {
   const needs = lessonStepNeeds(step, vocabulary);
   return needs.places.every(id => {
@@ -343,7 +363,9 @@ function lessonStepAvailable(step, { vocabulary = learningVocabulary, viewer = {
   }) && needs.activities.every(id => Boolean(vocabulary.activity(id))) && needs.facts.every(id => vocabulary.hasFact(id));
 }
 
-// A lesson is available when all its required steps are.
+/**
+ * A lesson is available when all its required steps are.
+ */
 function lessonAvailable(steps, options) {
   return steps.every(step => !step.required || lessonStepAvailable(step, options));
 }

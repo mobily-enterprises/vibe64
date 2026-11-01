@@ -53,14 +53,18 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
   const learnerArchiveRoot = actor => path.join(archivesRoot, learnerIdentity(actor).key);
   const bundleRoot = (actor, attemptId) => path.join(learnerArchiveRoot(actor), attemptId);
 
-  // This learner's practice project of an attempt, or null (none, or another learner's).
+  /**
+   * This learner's practice project of an attempt, or null (none, or another learner's).
+   */
   async function findRecord(actor, attemptId) {
     const record = await projectContext.readLearningSpaceProject(practiceSlug(attemptId));
     return record?.learnerKey === learnerIdentity(actor).key ? record : null;
   }
 
-  // An archived attempt's `attempt.json`, or null when it is missing or
-  // damaged (that entry is left out, never the whole list).
+  /**
+   * An archived attempt's `attempt.json`, or null when it is missing or
+   * damaged (that entry is left out, never the whole list).
+   */
   async function readBundle(directory, attemptId) {
     let record;
     try { record = JSON.parse(await readFile(path.join(directory, "attempt.json"), "utf8")); }
@@ -71,8 +75,10 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     return valid ? record : null;
   }
 
-  // The lesson in progress (with its practice project, if any) and the
-  // archived attempts, newest first.
+  /**
+   * The lesson in progress (with its practice project, if any) and the
+   * archived attempts, newest first.
+   */
   async function list(actor) {
     const state = await learners.readState({ actor });
     const active = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
@@ -88,8 +94,10 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     return { current, archived };
   }
 
-  // This learner's archived attempts, newest first, without the attempt in
-  // progress: a close that stopped part-way keeps it in progress, not archived.
+  /**
+   * This learner's archived attempts, newest first, without the attempt in
+   * progress: a close that stopped part-way keeps it in progress, not archived.
+   */
   async function readArchives(actor, activeAttemptId) {
     const archives = [];
     const root = learnerArchiveRoot(actor);
@@ -103,9 +111,11 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     return archives.sort((left, right) => right.record.archivedAt.localeCompare(left.record.archivedAt));
   }
 
-  // The disk limit: past the newest keptArchivedProjects, an archive loses its
-  // practice project and keeps its record and conversation. Only this learner's
-  // archive root is touched, never the lesson in progress or a working project.
+  /**
+   * The disk limit: past the newest keptArchivedProjects, an archive loses its
+   * practice project and keeps its record and conversation. Only this learner's
+   * archive root is touched, never the lesson in progress or a working project.
+   */
   async function pruneArchivedProjects(actor) {
     const { progress } = await learners.readState({ actor });
     const withProject = (await readArchives(actor, progress.activeAttemptId)).filter(archive => archive.hasProject);
@@ -118,7 +128,9 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     return Boolean(await findRecord(actor, attemptId));
   }
 
-  // Only a folder holding a valid attempt record is an archive.
+  /**
+   * Only a folder holding a valid attempt record is an archive.
+   */
   async function archiveCount(actor) {
     const root = learnerArchiveRoot(actor);
     let count = 0;
@@ -128,8 +140,10 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     return count;
   }
 
-  // Step 1, under the archiver's lock after its refusals: the attempt record
-  // with its step results. A resumed close keeps the record it wrote first.
+  /**
+   * Step 1, under the archiver's lock after its refusals: the attempt record
+   * with its step results. A resumed close keeps the record it wrote first.
+   */
   async function writeAttemptRecord(actor, attemptId, reason) {
     const directory = bundleRoot(actor, attemptId);
     if (await readBundle(directory, attemptId)) return;
@@ -140,8 +154,10 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     }, PRIVATE);
   }
 
-  // Step 2: the learner store ends the attempt (forgetting its code ledger,
-  // C1), inside the close's preparation barrier. The stable request replays.
+  /**
+   * Step 2: the learner store ends the attempt (forgetting its code ledger,
+   * C1), inside the close's preparation barrier. The stable request replays.
+   */
   async function endAttempt(actor, attemptId, reason) {
     for (let tries = 1; ; tries++) {
       const state = await learners.readState({ actor });
@@ -155,9 +171,11 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     }
   }
 
-  // Step 3, once the attempt has ended, so Colleague no longer resolves its
-  // thread: Colleague releases the thread's live runtime, then its file moves
-  // into the bundle (archive) or goes (delete). A thread already moved is done.
+  /**
+   * Step 3, once the attempt has ended, so Colleague no longer resolves its
+   * thread: Colleague releases the thread's live runtime, then its file moves
+   * into the bundle (archive) or goes (delete). A thread already moved is done.
+   */
   async function closeThread(actor, attemptId, archive) {
     const learnerKey = learnerIdentity(actor).key;
     await releaseLearnThread({ learnerKey, attemptId });
@@ -169,15 +187,17 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     await rename(file, destination);
   }
 
-  // Finish (reason finished), restart and start-with-archive (archived) keep a
-  // bundle; delete (deleted) keeps nothing. The whole close until the attempt
-  // ends holds the preparation barrier, so no preparation can recreate the
-  // practice project meanwhile. The project goes first, through the archiver,
-  // so its refusals (a pinned session, storage) change nothing, and a removal
-  // that stops leaves the attempt in progress with its project marked
-  // deleting. Repeating the close resumes it, keyed by attemptId; for an
-  // attempt that has already ended it only finishes the thread step. Every
-  // archiving close ends with the disk limit, so a repeat also finishes it.
+  /**
+   * Finish (reason finished), restart and start-with-archive (archived) keep a
+   * bundle; delete (deleted) keeps nothing. The whole close until the attempt
+   * ends holds the preparation barrier, so no preparation can recreate the
+   * practice project meanwhile. The project goes first, through the archiver,
+   * so its refusals (a pinned session, storage) change nothing, and a removal
+   * that stops leaves the attempt in progress with its project marked
+   * deleting. Repeating the close resumes it, keyed by attemptId; for an
+   * attempt that has already ended it only finishes the thread step. Every
+   * archiving close ends with the disk limit, so a repeat also finishes it.
+   */
   async function closeAttempt({ actor, attemptId, archive, reason } = {}) {
     if (archive ? !ARCHIVE_REASONS.includes(reason) : reason !== "deleted") {
       throw new TypeError("Close an attempt as finished or archived with an archive, or as deleted without one.");
@@ -227,7 +247,9 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     return (await learners.readState({ actor })).progress.attempts.find(value => value.attemptId === attemptId) || null;
   }
 
-  // Removes one archived attempt bundle of this learner.
+  /**
+   * Removes one archived attempt bundle of this learner.
+   */
   async function deleteArchive({ actor, attemptId } = {}) {
     const state = await learners.readState({ actor });
     const archived = UUID_PATTERN.test(String(attemptId || "")) && attemptId !== state.progress.activeAttemptId &&
@@ -243,9 +265,11 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
   return Object.freeze({ list, exists, closeAttempt, deleteArchive });
 }
 
-// The pinned lesson's title, or its code when its content cannot be read.
-// The title comes from the lesson's identity (its descriptor), so a lesson
-// this Vibe64 can no longer teach is still named by its title.
+/**
+ * The pinned lesson's title, or its code when its content cannot be read.
+ * The title comes from the lesson's identity (its descriptor), so a lesson
+ * this Vibe64 can no longer teach is still named by its title.
+ */
 async function lessonTitle(content, pin) {
   // readable-check: allow method-probe - optional operation: content without admission reads is named by its whole lesson read
   const read = typeof content.readAdmissionIdentity === "function" ? content.readAdmissionIdentity : content.readLesson;

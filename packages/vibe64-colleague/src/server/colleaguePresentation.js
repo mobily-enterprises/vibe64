@@ -1,11 +1,15 @@
-// What Colleague shows a person's browsers: the history and streaming views of
-// a thread's record and its watches, and the observer and connection handles
-// it releases or answers.
-// A browser observer has release() once its conversation subscription is attached.
+/**
+ * What Colleague shows a person's browsers: the history and streaming views of
+ * a thread's record and its watches, and the observer and connection handles
+ * it releases or answers.
+ * A browser observer has release() once its conversation subscription is attached.
+ */
 function releaseObserver(observer) {
   if (observer.release) observer.release();
 }
-// A browser connection has acknowledge() only while a navigation waits for it.
+/**
+ * A browser connection has acknowledge() only while a navigation waits for it.
+ */
 function answerPendingNavigation(connection, result) {
   if (connection.acknowledge) connection.acknowledge(result);
 }
@@ -16,7 +20,9 @@ function publicWatch({ cursor, ...watch }) {
 // another watch source). Turns saved before it was worded for every watch keep theirs.
 const WATCH_UPDATE_NOTICE = "An update from what you asked Colleague to watch.";
 const WATCH_UPDATE_NOTICES = new Set([WATCH_UPDATE_NOTICE, "An update from your watched conversations."]);
-// A watch notice stays only beside the reply it introduced.
+/**
+ * A watch notice stays only beside the reply it introduced.
+ */
 function keepsWatchNotice(turn, runtime) {
   if (runtime) return runtime.origin === "application" && runtime.status === "complete";
   return turn.messages.some(item => item.role === "assistant" && item.text?.trim());
@@ -54,7 +60,9 @@ function colleagueBrowserState(current) {
     pendingRequest: current.pendingRequest?.origin === "application" ? null : current.pendingRequest,
     streaming: colleagueBrowserStream(current.streaming) };
 }
-// A streamed partial may end halfway through a surrogate pair.
+/**
+ * A streamed partial may end halfway through a surrogate pair.
+ */
 const trimIncompleteSurrogate = text => text.replace(/[\uD800-\uDBFF]$/, "");
 function colleagueBrowserStream(streaming) {
   return streaming ? { ...streaming, messages: streaming.messages.filter(message =>

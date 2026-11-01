@@ -36,10 +36,12 @@ function createWatchSources() {
     add(id, { kind: "conversation", read });
   }
 
-  // scope "project": the watch names one project (input.projectSlug), whose
-  // ordinary access and Learn/Develop rule apply to every read. "studio":
-  // nothing project-specific. `entity`: the realtime entity whose change
-  // events (entityId = the project) make a watch read again soon.
+  /**
+   * scope "project": the watch names one project (input.projectSlug), whose
+   * ordinary access and Learn/Develop rule apply to every read. "studio":
+   * nothing project-specific. `entity`: the realtime entity whose change
+   * events (entityId = the project) make a watch read again soon.
+   */
   function register({ id, label, description, scope = "project", input = {}, conditions, read, entity = "" } = {}) {
     if (typeof read !== "function" || typeof label !== "string" || !label.trim() ||
         typeof description !== "string" || !description.trim() || !["project", "studio"].includes(scope) ||
@@ -58,7 +60,9 @@ function createWatchSources() {
 
   const readsEntity = entity => Boolean(entity) && [...sources.values()].some(source => source.entity === entity);
 
-  // What the assistant may watch through watch.source.create.
+  /**
+   * What the assistant may watch through watch.source.create.
+   */
   const list = () => [...sources.values()].filter(source => source.kind === "state")
     .map(({ id, label, description, scope, input, conditions }) => ({ source: id, label, description, scope,
       input: { ...input }, conditions: { ...conditions } }));
@@ -66,8 +70,10 @@ function createWatchSources() {
   return Object.freeze({ registerConversation, register, get, readsEntity, list });
 }
 
-// A state watch's input: exactly the source's declared fields, each a short
-// non-empty string.
+/**
+ * A state watch's input: exactly the source's declared fields, each a short
+ * non-empty string.
+ */
 function stateWatchInput(source, input) {
   const value = input && typeof input === "object" && !Array.isArray(input) ? input : null;
   const declared = Object.keys(source.input);
@@ -91,9 +97,11 @@ function stateObservation(source, value) {
     conditionsMet: Object.keys(source.conditions).filter(name => met.includes(name)) };
 }
 
-// "changed" reports any change after the first reading; any other condition
-// reports when it becomes true, including on the first reading (asking "tell
-// me when my app is live" about a live app answers at once).
+/**
+ * "changed" reports any change after the first reading; any other condition
+ * reports when it becomes true, including on the first reading (asking "tell
+ * me when my app is live" about a live app answers at once).
+ */
 function stateWatchUpdate(watch, observation) {
   const previous = watch.cursor;
   const cursor = { fingerprint: observation.fingerprint, conditionsMet: observation.conditionsMet };

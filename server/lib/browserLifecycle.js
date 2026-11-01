@@ -7,8 +7,10 @@ const DEFAULT_BROWSER_LIFECYCLE_SHUTDOWN_DELAY_MS = 1000;
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
-// Shutdown is enabled only with the server's close function, so until then
-// there is no server to close.
+/**
+ * Shutdown is enabled only with the server's close function, so until then
+ * there is no server to close.
+ */
 function closeNoServer() {}
 
 function shutdownDelayLabel(delayMs = DEFAULT_BROWSER_LIFECYCLE_SHUTDOWN_DELAY_MS) {

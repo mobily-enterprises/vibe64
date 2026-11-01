@@ -92,7 +92,9 @@ function createRecordingRecords({ events, logger, now }) {
     await publish(entry);
   }
 
-  // A tracer that never became ready explains itself through its diagnostics.
+  /**
+   * A tracer that never became ready explains itself through its diagnostics.
+   */
   function unreadyTracers(entry, fallback) {
     const states = entry.reader.tracerStates();
     return entry.record.tracers.map((tracer) => {

@@ -59,7 +59,9 @@ function segmentPenalty(a, b, occupied) {
   return cost;
 }
 
-// A small binary heap keeps routing proportional to the explored corridors.
+/**
+ * A small binary heap keeps routing proportional to the explored corridors.
+ */
 function push(queue, item) {
   let index = queue.length;
   queue.push(item);

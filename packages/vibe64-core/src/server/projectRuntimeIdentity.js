@@ -20,15 +20,19 @@ function projectRuntimeIdentity(slug = "") {
   return `project:${normalizeProjectSlug(slug)}`;
 }
 
-// A learning-space path is <root>/<learnerKey>/<practiceId>/<slug>/...
+/**
+ * A learning-space path is <root>/<learnerKey>/<practiceId>/<slug>/...
+ */
 function learningSpaceSlugFromTargetRoot(targetRoot, learningSpaceRoot) {
   if (!pathInsideOrEqual(learningSpaceRoot, targetRoot)) return "";
   const [, practiceId = "", slug = ""] = path.relative(learningSpaceRoot, targetRoot).split(path.sep);
   return practiceId && practiceIdFromSlug(slug) === practiceId ? slug : "";
 }
 
-// A caller that names its projectsRoot names its learning space too; only the
-// default (no roots) reads the configured context's learning space.
+/**
+ * A caller that names its projectsRoot names its learning space too; only the
+ * default (no roots) reads the configured context's learning space.
+ */
 function catalogProjectSlugFromTargetRoot(targetRoot = "", {
   projectsRoot = "",
   learningSpaceRoot = projectsRoot ? "" : getStudioProjectContext()?.learningSpaceRoot

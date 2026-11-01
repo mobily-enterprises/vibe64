@@ -1,7 +1,9 @@
 import { learningPanelMatches } from "../shared/learningFocus.js";
 
-// A guided "show me" names its own place; its route, or its pane and database
-// view, must be the ones the browser settled on.
+/**
+ * A guided "show me" names its own place; its route, or its pane and database
+ * view, must be the ones the browser settled on.
+ */
 function guidedPlaceMatches(command, focus) {
   if (!command.guide?.navigate) return true;
   if (command.route) return focus?.route === command.route;

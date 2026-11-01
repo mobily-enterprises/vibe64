@@ -22,7 +22,9 @@ function git(root, args, options = {}) {
   return releaseGit(root, args, { code: "vibe64_publishing_git_failed", ...options });
 }
 
-// "owner/name" for a GitHub remote address, or null.
+/**
+ * "owner/name" for a GitHub remote address, or null.
+ */
 function githubRepositoryOf(url = "") {
   const match = /github\.com[/:]([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/u.exec(String(url).trim());
   return match ? `${match[1]}/${match[2]}` : null;
@@ -87,8 +89,10 @@ function createProjectRepository({ readProject }) {
     return found;
   }
 
-  // A real Git checkout of exactly the saved commit (shared objects, so cheap),
-  // for reading Packaging and versions and for running the project's checks.
+  /**
+   * A real Git checkout of exactly the saved commit (shared objects, so cheap),
+   * for reading Packaging and versions and for running the project's checks.
+   */
   async function withCheckout(repositoryRoot, commit, operation) {
     if (!COMMIT_ID.test(commit || "")) throw repositoryError("A checkout needs a full commit id.");
     const parent = await mkdtemp(path.join(os.tmpdir(), "vibe64-release-checkout-"));
@@ -102,7 +106,9 @@ function createProjectRepository({ readProject }) {
     }
   }
 
-  // Packaging and every versioned package's version at the saved commit.
+  /**
+   * Packaging and every versioned package's version at the saved commit.
+   */
   async function readRelease(repositoryRoot, commit) {
     return withCheckout(repositoryRoot, commit, async (root) => {
       const packaging = await inspectVibe64Packaging({ projectRoot: root });
@@ -119,7 +125,9 @@ function createProjectRepository({ readProject }) {
     });
   }
 
-  // Commit subjects since a tag (or the last 30), as a starting point for notes.
+  /**
+   * Commit subjects since a tag (or the last 30), as a starting point for notes.
+   */
   async function subjectsSince(repositoryRoot, commit, tag = null) {
     const range = tag && await git(repositoryRoot, ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}^{commit}`], { optional: true })
       ? `refs/tags/${tag}..${commit}`
@@ -139,16 +147,20 @@ function createProjectRepository({ readProject }) {
     });
   }
 
-  // Sends the release tags to the project's remote, so GitHub (and anyone
-  // cloning) sees them. Uses the person's own Git sign-in; never forced.
+  /**
+   * Sends the release tags to the project's remote, so GitHub (and anyone
+   * cloning) sees them. Uses the person's own Git sign-in; never forced.
+   */
   async function pushTags(facts, tags) {
     if (!facts.remote || !tags.length) return { pushed: [] };
     await git(facts.repositoryRoot, ["push", "--quiet", facts.remote.name, ...tags.map((tag) => `refs/tags/${tag}:refs/tags/${tag}`)], { timeout: 120_000 });
     return { pushed: tags };
   }
 
-  // Sends the saved branch to its upstream branch, as the person's own
-  // `git push` would: their Git sign-in, fast-forward only, never forced.
+  /**
+   * Sends the saved branch to its upstream branch, as the person's own
+   * `git push` would: their Git sign-in, fast-forward only, never forced.
+   */
   async function pushSaved(facts) {
     if (!facts.remote || facts.pushed) return { pushed: false };
     const upstreamBranch = facts.upstreamRef.split("/").slice(3).join("/");

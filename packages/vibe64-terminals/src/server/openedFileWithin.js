@@ -1,9 +1,11 @@
 import { realpath, stat } from "node:fs/promises";
 import process from "node:process";
 
-// Whether the file behind an open handle lies where `within(path)` allows.
-// Linux names the open file through /proc. Elsewhere the opened file must be
-// the same file that `filePath` resolves to now, and that resolved path is checked.
+/**
+ * Whether the file behind an open handle lies where `within(path)` allows.
+ * Linux names the open file through /proc. Elsewhere the opened file must be
+ * the same file that `filePath` resolves to now, and that resolved path is checked.
+ */
 async function openedFileWithin(handle, filePath, within, {
   platform = process.platform
 } = {}) {

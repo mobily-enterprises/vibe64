@@ -144,11 +144,13 @@ function createSessionWorkspaceSetup({ project, publishSessionChanged, setupRunn
     }, "Vibe64 could not retry workspace preparation.");
   }
 
-  // A starter replaces the Stack of a session that was prepared as empty;
-  // prepare it now so the Preview does not wait for host-managed resources.
-  // The new session's first AI turn usually holds the session briefly, so
-  // preparation waits its turn instead of giving up and leaving the app
-  // without its database until something else prepares it.
+  /**
+   * A starter replaces the Stack of a session that was prepared as empty;
+   * prepare it now so the Preview does not wait for host-managed resources.
+   * The new session's first AI turn usually holds the session briefly, so
+   * preparation waits its turn instead of giving up and leaving the app
+   * without its database until something else prepares it.
+   */
   async function prepareStarterWorkspace(sessionId) {
     const runtime = await project.createRuntime({ inspectSource: false });
     const session = await runtime.getSession(sessionId, { inspectSource: false });

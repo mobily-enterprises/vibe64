@@ -23,9 +23,11 @@ function createRetainedConversationHelper({ terminals, root, receipt, scopePrefi
     throw new TypeError("A retained Helper requires its original parent root and scope prefix.");
   }
   const scopePattern = new RegExp(`^${scopePrefix}_[a-f0-9-]+$`, "u");
-  // The receipt keeps a Helper whose close is unconfirmed, so it is retried
-  // before the next run. Its error names this parent's Helper and keeps the
-  // native owner's reason and code.
+  /**
+   * The receipt keeps a Helper whose close is unconfirmed, so it is retried
+   * before the next run. Its error names this parent's Helper and keeps the
+   * native owner's reason and code.
+   */
   function cleanupFailure(reason = "", cause = null) {
     const detail = String(reason || "").trim().slice(0, 512).replace(/[.\s]+$/u, "");
     return Object.assign(new Error(`The ${scopePrefix} Helper could not be closed${detail ? `: ${detail}` : ""}. ` +

@@ -1,9 +1,11 @@
 import { aiConnectionError } from "./aiConnectionError.js";
 
-// Reads every page of the OpenCode capability catalogue. With a
-// modelProviderId the rows are that provider's models; without one they are
-// the engine's providers. The first page's result, engine and provider are
-// returned for the caller's metadata.
+/**
+ * Reads every page of the OpenCode capability catalogue. With a
+ * modelProviderId the rows are that provider's models; without one they are
+ * the engine's providers. The first page's result, engine and provider are
+ * returned for the caller's metadata.
+ */
 async function readAllOpenCodeCapabilityRows(readCapabilities, { modelProviderId = "" } = {}) {
   const rows = [];
   const seenCursors = new Set();

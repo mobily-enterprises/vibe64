@@ -91,7 +91,9 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
     return { removed: id };
   }
 
-  // The token of the person's own `gh` sign-in, copied once into their keys.
+  /**
+   * The token of the person's own `gh` sign-in, copied once into their keys.
+   */
   async function githubCliToken() {
     try {
       const { stdout } = await run(ghCommand, ["auth", "token"], { timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: "1" } });
@@ -101,8 +103,10 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
     }
   }
 
-  // obtainCredential for one target: the account's token in the shape its
-  // destination expects, or the app's install key.
+  /**
+   * obtainCredential for one target: the account's token in the shape its
+   * destination expects, or the app's install key.
+   */
   function obtainFor(target) {
     return async (spec) => {
       if (spec.id === ANDROID_SIDELOAD_KEYSTORE.id || spec.id === ANDROID_SIDELOAD_KEY_PASSWORD.id) {
@@ -143,7 +147,9 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
     });
   }
 
-  // Creates the app's install key straight into the person's keys.
+  /**
+   * Creates the app's install key straight into the person's keys.
+   */
   async function createSideloadKey({ target, appName, javaHome }) {
     const entryId = sideloadKeyEntryId(target);
     if (keys.has(entryId)) throw brokerError(`${target.package} already has an install key.`, "vibe64_publishing_key_exists");
@@ -161,7 +167,9 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
     });
   }
 
-  // What a dry run reports, without local paths or anything credential-like.
+  /**
+   * What a dry run reports, without local paths or anything credential-like.
+   */
   function safeReport(report) {
     const keep = ["destination", "alreadyPublished", "previousVersion", "diff", "integrity", "repository", "tag", "tagPushed", "channel", "releaseExists", "project", "version", "index", "check"];
     const result = {};

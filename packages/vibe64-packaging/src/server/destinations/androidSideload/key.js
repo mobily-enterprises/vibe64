@@ -44,13 +44,17 @@ async function runKeytool(javaHome, args, { cwd, password, runCommand = spawnCom
   return result;
 }
 
-// The SHA-256 of a DER certificate, as apksigner prints it.
+/**
+ * The SHA-256 of a DER certificate, as apksigner prints it.
+ */
 function certificateDigest(der) {
   return createHash("sha256").update(der).digest("hex");
 }
 
-// The SHA-256 of the certificate of `alias` in a PKCS#12 key store; keytool
-// writes the certificate into `cwd`, a private folder the caller removes.
+/**
+ * The SHA-256 of the certificate of `alias` in a PKCS#12 key store; keytool
+ * writes the certificate into `cwd`, a private folder the caller removes.
+ */
 async function exportCertificateSha256({ javaHome, keystore, alias, password, cwd }, { runCommand = spawnCommand } = {}) {
   const certificate = path.join(cwd, "certificate.der");
   await runKeytool(javaHome, [
@@ -59,9 +63,11 @@ async function exportCertificateSha256({ javaHome, keystore, alias, password, cw
   return certificateDigest(await readFile(certificate));
 }
 
-// Creates a PKCS#12 key store holding a new RSA-4096 sideload key and gives the
-// caller's sink { keystore, password, alias, certificateSha256 } (buffers it may
-// keep; they are zeroed after the sink returns). Returns only public facts.
+/**
+ * Creates a PKCS#12 key store holding a new RSA-4096 sideload key and gives the
+ * caller's sink { keystore, password, alias, certificateSha256 } (buffers it may
+ * keep; they are zeroed after the sink returns). Returns only public facts.
+ */
 async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.tmpdir() } = {}, { runCommand = spawnCommand } = {}) {
   if (typeof sink !== "function") throw keyError("Creating a key needs a sink that keeps it.");
   const directory = await mkdtemp(path.join(tempRoot, "vibe64-sideload-key-"));

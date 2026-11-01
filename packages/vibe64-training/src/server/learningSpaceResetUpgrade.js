@@ -37,13 +37,17 @@ function validLearnerKey(key) {
   return Buffer.from(key, "base64url").toString("base64url") === key && Buffer.from(id).toString("base64url") === key;
 }
 
-// A schema-2 learning-space practice project, which this reset never touches.
+/**
+ * A schema-2 learning-space practice project, which this reset never touches.
+ */
 function learningSpaceMarker(record, slug) {
   try { return normalizeProjectTraining(record?.training).practiceId === practiceIdFromSlug(slug); }
   catch { return false; }
 }
 
-// The exact v1 practice marker (schema 1, attempt-keyed) on a managed project.
+/**
+ * The exact v1 practice marker (schema 1, attempt-keyed) on a managed project.
+ */
 function v1PracticeMarker(record, hex) {
   const training = record?.training;
   return object(training) && training.schemaVersion === 1 && validLearnerKey(training.learnerKey) &&
@@ -58,7 +62,9 @@ async function fileDigest(filePath) {
   return hash.digest("hex");
 }
 
-// File list, types, sizes, SHA-256 and link targets: the EXDEV copy proof.
+/**
+ * File list, types, sizes, SHA-256 and link targets: the EXDEV copy proof.
+ */
 async function treeDigest(root) {
   const entries = [];
   async function walk(target, relative) {
@@ -74,9 +80,11 @@ async function treeDigest(root) {
   return JSON.stringify(entries);
 }
 
-// The copy is verified once, and the proof is recorded before the source is
-// removed: a retry after an interrupted removal (a partial source) only
-// finishes removing it.
+/**
+ * The copy is verified once, and the proof is recorded before the source is
+ * removed: a retry after an interrupted removal (a partial source) only
+ * finishes removing it.
+ */
 async function finishCopy({ source, destination }, { verifiedRoot, removeTree }) {
   const verified = path.join(verifiedRoot, createHash("sha256").update(source).digest("hex"));
   if (await kind(verified) !== "file") {
@@ -89,8 +97,10 @@ async function finishCopy({ source, destination }, { verifiedRoot, removeTree })
   await removeTree(source, { recursive: true, force: true });
 }
 
-// Rename; across filesystems copy, then verify and remove the source. A retry
-// verifies a published copy whose source removal never started.
+/**
+ * Rename; across filesystems copy, then verify and remove the source. A retry
+ * verifies a published copy whose source removal never started.
+ */
 async function moveEntry(move, { renamePath, ...copy }) {
   const { source, destination } = move;
   await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });

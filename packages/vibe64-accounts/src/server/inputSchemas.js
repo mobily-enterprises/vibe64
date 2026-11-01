@@ -77,7 +77,9 @@ const modelRoutingSelectionSchema = createSchema({
   catalogRevision: { type: "string", pattern: VIBE64_ASSISTANT_CATALOG_REVISION_PATTERN, required: true },
   selectionSource: { type: "string", enum: ["recommended", "explicit"], required: true }
 });
-// A role value is a selection, null (off) or { follows }; the routing store validates which.
+/**
+ * A role value is a selection, null (off) or { follows }; the routing store validates which.
+ */
 const setupValues = setup => ({ type: "object", required: false, schema: createSchema(Object.fromEntries(ASSISTANT_SETUP_ROLES[setup].map(role =>
   [role, { type: "object", additionalProperties: true, nullable: true, required: false }]))) });
 const routingSetup = { type: "string", enum: Object.keys(ASSISTANT_SETUP_ROLES), required: false };

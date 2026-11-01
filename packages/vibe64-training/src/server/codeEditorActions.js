@@ -3,18 +3,20 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 
 /** @typedef {import("./types.js").TrainingCodeAuthorship} TrainingCodeAuthorship */
 
-// Practice projects are ordinary projects (Learning v2), so the learner edits
-// their code in the ordinary Files editor through the project-scoped
-// vibe64.source-editor.file.save. This owner, installed on the source editor,
-// records that save in the learner's code-authorship ledger, which the
-// authorship owner does only while the attempt that owns the practice project
-// (training-<attemptId>) is in progress (learners.activeAttemptForProject).
-// Every other save (another project, another person, no attempt in progress
-// there) is the editor's plain save.
-//
-// A host with several learner stores (for example normal and author-preview)
-// passes `selectOwners({ actor, attemptId })`, which returns the store's
-// { authorship } holding that attempt, or null.
+/**
+ * Practice projects are ordinary projects (Learning v2), so the learner edits
+ * their code in the ordinary Files editor through the project-scoped
+ * vibe64.source-editor.file.save. This owner, installed on the source editor,
+ * records that save in the learner's code-authorship ledger, which the
+ * authorship owner does only while the attempt that owns the practice project
+ * (training-<attemptId>) is in progress (learners.activeAttemptForProject).
+ * Every other save (another project, another person, no attempt in progress
+ * there) is the editor's plain save.
+ *
+ * A host with several learner stores (for example normal and author-preview)
+ * passes `selectOwners({ actor, attemptId })`, which returns the store's
+ * { authorship } holding that attempt, or null.
+ */
 function validOwners(owners) {
   // readable-check: allow method-probe - test asserts error: an owner without the original authorship save is refused with a TypeError
   if (typeof owners?.authorship?.saveLearnerFile !== "function") {

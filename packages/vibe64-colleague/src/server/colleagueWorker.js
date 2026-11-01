@@ -17,8 +17,10 @@ import { WATCH_UPDATE_NOTICE, trimIncompleteSurrogate } from "./colleaguePresent
 /** @typedef {import("./types.js").ColleagueConversations} ColleagueConversations */
 /** @typedef {import("./types.js").ColleagueNameResolver} ColleagueNameResolver */
 
-// A completed reply delivered these observations: drop them and settle the
-// watches that were waiting on them.
+/**
+ * A completed reply delivered these observations: drop them and settle the
+ * watches that were waiting on them.
+ */
 function markObservationsDelivered(record, observations) {
   const delivered = new Set(observations.map(observation => observation.id));
   record.observations = record.observations.filter(observation => !delivered.has(observation.id));
@@ -465,7 +467,9 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
     state.watchTimer.unref();
   }
 
-  // A watch without a source is a project's own coding conversation.
+  /**
+   * A watch without a source is a project's own coding conversation.
+   */
   function watchSource(watch) {
     if (!watch.source) return null;
     const source = watchSources.get(watch.source);

@@ -14,9 +14,11 @@ import { vibe64Packer } from "../packers/index.js";
 import { runBuildStage, storedArtifacts } from "../stages.js";
 import { exportSavedCommit } from "./exportCommit.js";
 
-// Without a release plan (a build on its own), the result store is keyed by
-// everything that decides the bytes: commit, Packaging, package, version and,
-// for app packages, the build number and the pinned native template.
+/**
+ * Without a release plan (a build on its own), the result store is keyed by
+ * everything that decides the bytes: commit, Packaging, package, version and,
+ * for app packages, the build number and the pinned native template.
+ */
 function buildOnlyKey({ commit, packagingHash, packageId, version, versionCode = null, template = null }) {
   return sha256(canonicalJson({
     contract: "vibe64.publish-build.v1",

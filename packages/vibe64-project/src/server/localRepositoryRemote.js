@@ -63,7 +63,9 @@ async function localRepositoryRemote(project, input = {}, {
     }
     return String(result.stdout ?? result.output ?? "").trim();
   }
-  // A folder that isn't a Git repository yet is a normal state, not an error.
+  /**
+   * A folder that isn't a Git repository yet is a normal state, not an error.
+   */
   async function isRepository() {
     const result = await runGit(["rev-parse", "--git-dir"]);
     if (result?.ok === true) return true;

@@ -42,7 +42,9 @@ function parseJson(text, label) {
   }
 }
 
-// The `[project]` table's static `version = "..."` line.
+/**
+ * The `[project]` table's static `version = "..."` line.
+ */
 function pyprojectVersionLine(text) {
   const lines = text.split("\n");
   let inProject = false;
@@ -103,9 +105,11 @@ function versionSource(entry) {
   return SOURCES[source];
 }
 
-// The version a package declares in its source right now, as written there
-// (PEP 440 for pyproject.toml). External packages are read from the packer's
-// own manifest.
+/**
+ * The version a package declares in its source right now, as written there
+ * (PEP 440 for pyproject.toml). External packages are read from the packer's
+ * own manifest.
+ */
 async function readSourceVersion({ projectRoot, entry }) {
   const root = packageRoot(projectRoot, entry);
   const source = versionSource(entry) || SOURCES[entry.packer === "python-dist" ? "pyproject.toml" : "package.json"];
@@ -122,8 +126,10 @@ function changelogHeading(version, date) {
   return `## ${version} - ${date}`;
 }
 
-// Inserts the new entry above the newest released entry (below an "Unreleased"
-// section and the title), or creates the file.
+/**
+ * Inserts the new entry above the newest released entry (below an "Unreleased"
+ * section and the title), or creates the file.
+ */
 function nextChangelog(text, { version, date, notes }) {
   const entry = `${changelogHeading(version, date)}\n\n${notes}\n`;
   if (text === null || !text.trim()) return `# Changelog\n\n${entry}`;
@@ -150,7 +156,9 @@ function cleanNotes(notes) {
   return notes.replace(/\r\n?/gu, "\n").trim();
 }
 
-// Computes the exact change without writing it: each file's current and next text.
+/**
+ * Computes the exact change without writing it: each file's current and next text.
+ */
 async function prepareReleaseChange({ projectRoot, entry, version, notes, date = new Date().toISOString().slice(0, 10) } = {}) {
   if (!entry?.id) throw prepareError("A release change needs the Packaging package.");
   if (!isSemver(version)) throw prepareError(`Version ${version} is not a semantic version such as 1.5.0.`);
@@ -186,7 +194,9 @@ async function prepareReleaseChange({ projectRoot, entry, version, notes, date =
   return { package: entry.id, previousVersion: current, version, sourceVersion: spelled, date, files };
 }
 
-// Writes a prepared change only if every file still holds what it was prepared from.
+/**
+ * Writes a prepared change only if every file still holds what it was prepared from.
+ */
 async function applyReleaseChange({ projectRoot, change } = {}) {
   if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) throw prepareError("The project root must be an absolute path.");
   const resolved = change.files.map((file) => {

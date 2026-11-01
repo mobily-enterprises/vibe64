@@ -13,9 +13,11 @@ function withoutCredentials(value = "") {
   return String(value).replace(/(https?:\/\/)[^\s/@]+@/gu, "$1[credentials]@").trim();
 }
 
-// Runs `git <args>` in `root` and returns its trimmed output. An optional
-// command that fails returns null; any other failure throws `code` with Git's
-// own message. `env` adds Git variables such as GIT_INDEX_FILE.
+/**
+ * Runs `git <args>` in `root` and returns its trimmed output. An optional
+ * command that fails returns null; any other failure throws `code` with Git's
+ * own message. `env` adds Git variables such as GIT_INDEX_FILE.
+ */
 async function releaseGit(root, args, {
   code = "VIBE64_PUBLISH_GIT_FAILED",
   optional = false,

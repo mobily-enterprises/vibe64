@@ -147,8 +147,10 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
       typeof value.threadId === "string" && value.threadId.trim() === value.threadId && value.threadId.length > 0;
   }
 
-  // Only the authorized setup-command owner may supply this evidence after
-  // checking the application's result against the current configuration.
+  /**
+   * Only the authorized setup-command owner may supply this evidence after
+   * checking the application's result against the current configuration.
+   */
   async function completeIntegrationSetupRequest(sessionId, selection = {}) {
     if (!validIntegrationSetupCompletion(selection)) {
       throw vibe64Error("Invalid integration setup completion.", "vibe64_invalid_integration_setup_completion");
@@ -166,8 +168,10 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
     return decideIntegrationSetupRequest(sessionId, selection, { outcome: "skipped" });
   }
 
-  // Persist before contacting the provider. A previous claim must be inspected,
-  // even after a restart; lack of local history does not prove non-delivery.
+  /**
+   * Persist before contacting the provider. A previous claim must be inspected,
+   * even after a restart; lack of local history does not prove non-delivery.
+   */
   async function claimIntegrationContinuation(sessionId, selection = {}) {
     return updateIntegrationContinuation(sessionId, selection, "sending");
   }
@@ -347,8 +351,10 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
     return { turns: new Map(), metadata: {}, rewound: [] };
   }
 
-  // The session lease owns cross-process exclusion; JSKIT owns the transaction.
-  // One rename publishes messages, native receipts and runtime metadata together.
+  /**
+   * The session lease owns cross-process exclusion; JSKIT owns the transaction.
+   * One rename publishes messages, native receipts and runtime metadata together.
+   */
   function conversationRecordTransaction(sessionPaths, callback, write = false, newTurnMetadata = null) {
     let record;
     const storage = createConversationStorage({
@@ -368,10 +374,14 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
     });
     return storage[write ? "write" : "read"](sessionPaths.conversationLogRoot, (transaction) => callback({
       ...transaction,
-      // A read sees the saved record unchanged, so its message index applies.
+      /**
+       * A read sees the saved record unchanged, so its message index applies.
+       */
       ...(write ? {} : { async hasMessage(id) { return conversationRecordHasMessage(record, id); } }),
       async listTurnIds() { return (await transaction.listTurnIds()).filter((id) => !record.rewound.includes(id)); },
-      // Identity lookups see the same turns as listTurnIds.
+      /**
+       * Identity lookups see the same turns as listTurnIds.
+       */
       // readable-check: allow method-probe - optional operation: a transaction without message lookups offers none
       ...(typeof transaction.findMessageTurnId === "function" ? { async findMessageTurnId(id) {
         const turnId = await transaction.findMessageTurnId(id);
@@ -512,7 +522,9 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
     storage: conversationStorage
   });
 
-  // One conversation-log entry by turn ID, or null like an absent log entry.
+  /**
+   * One conversation-log entry by turn ID, or null like an absent log entry.
+   */
   function readConversationLogTurn(scope, turnId) {
     return withConversationTransaction(scope, async (transaction) => {
       if (!(await transaction.listTurnIds()).includes(turnId)) return null;

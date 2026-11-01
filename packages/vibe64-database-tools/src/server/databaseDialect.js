@@ -9,8 +9,10 @@ import {
   inspectSqliteSchema
 } from "./schemaInspector.js";
 
-// Text from a driver value: binary values (mysql2 Buffers, worker-transferred
-// Uint8Arrays) decode as UTF-8; anything else is trimmed.
+/**
+ * Text from a driver value: binary values (mysql2 Buffers, worker-transferred
+ * Uint8Arrays) decode as UTF-8; anything else is trimmed.
+ */
 function driverText(value = "") {
   if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
     return Buffer.from(value).toString("utf8");

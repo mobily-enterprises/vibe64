@@ -41,7 +41,9 @@ function compareIdentifiers(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-// Semantic Versioning 2.0.0 precedence; build metadata is ignored.
+/**
+ * Semantic Versioning 2.0.0 precedence; build metadata is ignored.
+ */
 function compareSemver(left, right) {
   const a = parseSemver(left);
   const b = parseSemver(right);
@@ -58,7 +60,9 @@ function compareSemver(left, right) {
   return 0;
 }
 
-// Only prereleases PEP 440 can express: alpha|a, beta|b, rc, dev, post with one number.
+/**
+ * Only prereleases PEP 440 can express: alpha|a, beta|b, rc, dev, post with one number.
+ */
 function pep440FromSemver(version) {
   const parsed = parseSemver(version);
   if (/\+/u.test(version)) {

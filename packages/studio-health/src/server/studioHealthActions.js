@@ -34,7 +34,9 @@ function createStudioHealthActions({ studioHealth }) {
           observed: { type: "string", required: false, maxLength: 300 }
         }) }
       }) },
-      // Long command output stays on the Health page; the assistant gets a bounded summary.
+      /**
+       * Long command output stays on the Health page; the assistant gets a bounded summary.
+       */
       transformResult: result => result?.ok === false ? { ok: false, error: String(result.error || "Health checks could not run.").slice(0, 512) } : {
         ok: true, healthy: result.healthy === true,
         checks: (result.checks || []).slice(0, 40).map(check => ({

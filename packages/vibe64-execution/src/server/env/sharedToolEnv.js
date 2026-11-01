@@ -43,7 +43,9 @@ function resolveManagedPlaywrightVersion({ runtimePackRoot = "" } = {}) {
   return versions[0];
 }
 
-// Without packs, Playwright keeps its own browser cache and downloads.
+/**
+ * Without packs, Playwright keeps its own browser cache and downloads.
+ */
 function sharedToolEnv({ runtimePackRoot = "" } = {}) {
   const packRoot = resolveRuntimePackRoot({ root: runtimePackRoot });
   const cacheRoot = normalizeAbsolutePath(vibe64Host().sharedCacheRoot);

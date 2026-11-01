@@ -73,7 +73,9 @@ function refusalText(reason, fallback) {
 const bounded = result => boundedTrainingResult(result, { statusCode: 413,
   message: "The lesson result exceeds 128 KiB. Ask the owner to inspect the content; nothing was silently omitted." });
 
-// Never the choice answer: only fields the reader and Colleague may see.
+/**
+ * Never the choice answer: only fields the reader and Colleague may see.
+ */
 function stepProjection(step) {
   const check = step.check || { kind: "none" };
   return {
@@ -99,9 +101,11 @@ function visualProjection(visual) {
   };
 }
 
-// A choice result's evidence is the learner's selected option set; with its
-// outcome it would reveal the correct (or a rejected) answer, so Colleague's
-// tool result keeps only the outcome. The learner's own reader keeps it.
+/**
+ * A choice result's evidence is the learner's selected option set; with its
+ * outcome it would reveal the correct (or a rejected) answer, so Colleague's
+ * tool result keeps only the outcome. The learner's own reader keeps it.
+ */
 function assistantLessonResult(result) {
   if (!Array.isArray(result?.results)) return result;
   return { ...result, results: result.results.map(value => {
@@ -116,8 +120,10 @@ function resultProjection(result) {
   return pick(result, ["stepId", "kind", "outcome", "origin", "recordedAt", "reason", "evidence", "review"]);
 }
 
-// Bodies are paged when they exceed 64 KiB together. Steps outside the
-// requested page keep their metadata and name the page that carries their body.
+/**
+ * Bodies are paged when they exceed 64 KiB together. Steps outside the
+ * requested page keep their metadata and name the page that carries their body.
+ */
 function pageBodies(steps, notesText) {
   const bytes = value => Buffer.byteLength(value || "");
   let index = 0;
@@ -180,10 +186,12 @@ function createTrainingStepOperations({ learners, attemptLearners, content, step
     if (!saved) throw conflictFailure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
     return { state, attempt: saved };
   }
-  // Inner actions (session inspect, App run outputs) are re-admitted with the
-  // learner's own request authority against the practice project's ordinary
-  // project route: practice sessions are ordinary sessions (Learning v2 F1), so
-  // no learning-scoped input remains.
+  /**
+   * Inner actions (session inspect, App run outputs) are re-admitted with the
+   * learner's own request authority against the practice project's ordinary
+   * project route: practice sessions are ordinary sessions (Learning v2 F1), so
+   * no learning-scoped input remains.
+   */
   function stepContext(context) {
     const { vibe64Action: _admitted, ...inner } = context;
     void _admitted;
@@ -278,10 +286,12 @@ function createTrainingStepOperations({ learners, attemptLearners, content, step
     return { ok: true, available: true, ...await learningSpace.list(actor) };
   }
 
-  // A removal the learner asked for. Colleague needs the person's
-  // confirmation; the learner's own one-click browser action does not. A
-  // refusal (pinned session, not this learner's) is reported with nothing
-  // changed; a removal that stopped part-way is reported and resumes on retry.
+  /**
+   * A removal the learner asked for. Colleague needs the person's
+   * confirmation; the learner's own one-click browser action does not. A
+   * refusal (pinned session, not this learner's) is reported with nothing
+   * changed; a removal that stopped part-way is reported and resumes on retry.
+   */
   async function removePractice(run, reason, input, actor, context) {
     if (context.channel !== "api" && input.confirmed !== true) {
       throw conflictFailure("VIBE64_TRAINING_PRACTICE_UNCONFIRMED",
@@ -322,7 +332,9 @@ function createTrainingStepOperations({ learners, attemptLearners, content, step
 function createTrainingStepActions({ learners, attemptLearners, content, steps, exercises, learningSpace, publishLearnerChanged }) {
   const operations = createTrainingStepOperations({ learners, attemptLearners, content, steps, learningSpace, publishLearnerChanged });
 
-  // The removals: each run deletes, and removePractice confirms and reports it.
+  /**
+   * The removals: each run deletes, and removePractice confirms and reports it.
+   */
   // readable-check: allow method-probe - optional operation: without exercise preparation deleting answers that it is unavailable
   const deleteLesson = (input, actor) => typeof exercises?.deleteLesson === "function"
     ? exercises.deleteLesson({ actor, attemptId: input.attemptId }) : null;

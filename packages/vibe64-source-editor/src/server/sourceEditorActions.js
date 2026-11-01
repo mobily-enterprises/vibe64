@@ -49,7 +49,9 @@ const explanationFollowupStreamSchema = createSchema({
  * @param {PublishFileChanged} dependencies.publishFileChanged
  */
 function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
-  // A saved change is announced to the editors open on its session.
+  /**
+   * A saved change is announced to the editors open on its session.
+   */
   async function announceChange(operation, change) {
     const result = await change;
     await publishFileChanged(result, { operation });

@@ -160,8 +160,10 @@ function commandEnvWithoutGitIdentity({
   return { ...finalEnv, PATH, ...(runtimePackRoot() ? {} : { VIBE64_TOOL_PATH: PATH }) };
 }
 
-// Resolved last, so the person's Git config is read with the HOME, XDG
-// folders and PATH this command will actually run with.
+/**
+ * Resolved last, so the person's Git config is read with the HOME, XDG
+ * folders and PATH this command will actually run with.
+ */
 function gitIdentityInput({
   actor = {},
   baseEnv = process.env,
@@ -178,17 +180,21 @@ function gitIdentityInput({
   };
 }
 
-// The command env, awaiting the person's Git identity without holding the
-// server's thread. The execution gateway resolves every command with this.
+/**
+ * The command env, awaiting the person's Git identity without holding the
+ * server's thread. The execution gateway resolves every command with this.
+ */
 async function resolveCommandEnvAsync(options = {}) {
   const commandEnv = commandEnvWithoutGitIdentity(options);
   return { ...commandEnv, ...await gitIdentityEnv(gitIdentityInput(options, commandEnv)) };
 }
 
-// The same env for a builder that must stay synchronous (the Codex runtime
-// context). With `resolvedGitIdentityEnv` it applies that identity, as the
-// gateway's per-terminal env factory does; without it, it reads Git's config
-// while the caller waits.
+/**
+ * The same env for a builder that must stay synchronous (the Codex runtime
+ * context). With `resolvedGitIdentityEnv` it applies that identity, as the
+ * gateway's per-terminal env factory does; without it, it reads Git's config
+ * while the caller waits.
+ */
 function resolveCommandEnv(options = {}) {
   const commandEnv = commandEnvWithoutGitIdentity(options);
   return {

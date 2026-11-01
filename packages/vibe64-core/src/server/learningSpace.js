@@ -32,14 +32,18 @@ function practiceSlug(practiceId = "") {
   return `training-${String(practiceId).replaceAll("-", "")}`;
 }
 
-// Learner state keys on String(uid ?? username).
+/**
+ * Learner state keys on String(uid ?? username).
+ */
 function practiceLearnerKey(actor = null) {
   const id = String(actor?.uid ?? actor?.username ?? "");
   return id ? Buffer.from(id).toString("base64url") : "";
 }
 
-// The learner a key names, for work that has no person (agent turns after the
-// browser closes, maintenance, archive). Either id field yields the same key.
+/**
+ * The learner a key names, for work that has no person (agent turns after the
+ * browser closes, maintenance, archive). Either id field yields the same key.
+ */
 function practiceLearnerActor(learnerKey = "") {
   const id = Buffer.from(String(learnerKey || ""), "base64url").toString("utf8");
   return id && practiceLearnerKey({ username: id }) === learnerKey ? Object.freeze({ username: id }) : null;
@@ -66,7 +70,9 @@ function validLearnerKey(learnerKey) {
     !/[\u0000-\u001f\u007f]/u.test(id);
 }
 
-// The immutable marker: {schemaVersion: 2, learnerKey, practiceId, pin, exercise}.
+/**
+ * The immutable marker: {schemaVersion: 2, learnerKey, practiceId, pin, exercise}.
+ */
 function normalizeProjectTraining(value) {
   const shapes = [
     [value, ["schemaVersion", "learnerKey", "practiceId", "pin", "exercise"]],
@@ -114,11 +120,13 @@ function normalizeProjectTraining(value) {
   };
 }
 
-// The one admission rule for a training-<hex> slug, on both hosts. A person
-// (an actor, or a real request, which carries headers) opens only their own
-// practice project; anything else is not found, with no owner exception. Work
-// without a person is admitted as the marker's learner. Null means the
-// learning space has no such project, so the caller may try the catalogue.
+/**
+ * The one admission rule for a training-<hex> slug, on both hosts. A person
+ * (an actor, or a real request, which carries headers) opens only their own
+ * practice project; anything else is not found, with no owner exception. Work
+ * without a person is admitted as the marker's learner. Null means the
+ * learning space has no such project, so the caller may try the catalogue.
+ */
 async function admitPracticeProject({ projectContext, slug = "", actor = null, person = false } = {}) {
   if (!practiceIdFromSlug(slug)) return null;
   const project = await projectContext.readLearningSpaceProject(slug);

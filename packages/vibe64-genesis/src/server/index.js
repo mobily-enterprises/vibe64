@@ -306,7 +306,9 @@ async function runGenesisOperation(operation, options = {}, catalogOptions = {})
   return withTrustedGitRepository(projectRoot, () => operation(withVibe64StackCatalog(options, catalogOptions)));
 }
 
-// Applications own the prompt; the conversation runtime owns its native delivery.
+/**
+ * Applications own the prompt; the conversation runtime owns its native delivery.
+ */
 async function vibe64ConversationInstructions({ workdir, promptContext }) {
   const contribution = vibe64Driver(promptContext);
   if (promptContext.scope === "ephemeral") return contribution;
@@ -374,7 +376,9 @@ async function inspectVibe64Packaging(options = {}) {
   return vibe64PackagingInspection({ environment, section });
 }
 
-// Runs the project's own `## Verification` commands in projectRoot (a Git checkout).
+/**
+ * Runs the project's own `## Verification` commands in projectRoot (a Git checkout).
+ */
 function verifyGenesisProject(options = {}) {
   return runGenesisOperation(genesisCompiler.verify, options);
 }
@@ -419,8 +423,10 @@ function setGenesisCollaboration(options = {}) {
   return exactGenesisInspection(setCollaboration, GENESIS_CONTRACTS.collaboration, options);
 }
 
-// resourcesPreparing (the host is still preparing resources it supplies) only
-// words the reason Preview cannot start; Genesis never sees it.
+/**
+ * resourcesPreparing (the host is still preparing resources it supplies) only
+ * words the reason Preview cannot start; Genesis never sees it.
+ */
 async function inspectVibe64Outputs({ resourcesPreparing = false, ...options } = {}) {
   const [[section, resourceSection, workspaceSetupSection], environment] = await Promise.all([
     inspectGenesisStackSections([

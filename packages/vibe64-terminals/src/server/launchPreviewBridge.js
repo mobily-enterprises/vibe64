@@ -32,9 +32,11 @@ const [BRIDGE_SCRIPT_HEAD, BRIDGE_SCRIPT_TAIL] = readFileSync(new URL("./launchP
   .trimEnd()
   .split(BRIDGE_SCRIPT_CONFIG_PLACEHOLDER);
 
-// The project's Preview locator runs as its own script after the bridge, so a
-// locator that throws or fails to parse leaves the bridge working. Its text is
-// kept from closing the element early or opening an HTML comment.
+/**
+ * The project's Preview locator runs as its own script after the bridge, so a
+ * locator that throws or fails to parse leaves the bridge working. Its text is
+ * kept from closing the element early or opening an HTML comment.
+ */
 function previewLocatorScript(source = "") {
   const text = typeof source === "string" ? source : "";
   if (!text.trim()) {
@@ -43,11 +45,13 @@ function previewLocatorScript(source = "") {
   return `<script data-vibe64-preview-locator="1">(() => {\n${text.replace(/<(?=\/script|!--)/giu, "\\x3C")}\n})();</script>`;
 }
 
-// The bridge talks only to the editors that asked for this Preview: it ignores
-// messages from any other parent origin and addresses every reply to those
-// editor origins, so a foreign page that frames the Preview learns nothing.
-// `recording` is the session's Preview recording when the page was served; the
-// editor keeps it current and numbers its interactions.
+/**
+ * The bridge talks only to the editors that asked for this Preview: it ignores
+ * messages from any other parent origin and addresses every reply to those
+ * editor origins, so a foreign page that frames the Preview learns nothing.
+ * `recording` is the session's Preview recording when the page was served; the
+ * editor keeps it current and numbers its interactions.
+ */
 function launchPreviewBridgeScript({
   debug = false,
   locatorSource = "",

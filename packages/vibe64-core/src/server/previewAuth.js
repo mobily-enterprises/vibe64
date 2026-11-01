@@ -154,8 +154,10 @@ function normalizePreviewApplicationIdentities(value = []) {
   });
 }
 
-// previewIdentity is the Outputs Preview identity that @local/vibe64-genesis
-// already parsed and validated; its environment names are the app's aliases.
+/**
+ * previewIdentity is the Outputs Preview identity that @local/vibe64-genesis
+ * already parsed and validated; its environment names are the app's aliases.
+ */
 function previewIdentityCommandEnvironment({
   previewIdentity = null,
   secret = ""

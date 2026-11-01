@@ -1,5 +1,7 @@
-// An explicit final assistant block is durable in the ordinary conversation log.
-// It identifies a setup request; parsing it never authorizes a connection or runs a command.
+/**
+ * An explicit final assistant block is durable in the ordinary conversation log.
+ * It identifies a setup request; parsing it never authorizes a connection or runs a command.
+ */
 export function parseIntegrationSetupRequest(message) {
   if (message?.role !== "assistant" || typeof message.text !== "string") return null;
   const lines = message.text.replace(/\r\n/gu, "\n").split("\n");

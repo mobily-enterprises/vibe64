@@ -90,8 +90,10 @@ function createColleagueBrowserConversations({ actions, serviceState, records, t
         const conversation = await preparedConversation();
         return conversation ? conversation.inspectDelivery(input) : { status: "unknown", messageId: input.messageId };
       },
-      // Cancel always succeeds: an accepted message stays history, and an
-      // unsent or unconfirmed one is discarded by its native conversation.
+      /**
+       * Cancel always succeeds: an accepted message stays history, and an
+       * unsent or unconfirmed one is discarded by its native conversation.
+       */
       async cancelDelivery(input) {
         threads.assertCurrentConversation(state, id);
         await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });

@@ -17,9 +17,11 @@ function major(version) {
   return Number(String(version || "").split(".")[0]);
 }
 
-// facts.android: { packages: [{ id, targetSdk, icon: [problem], permissions:
-// [problem], plugins: [problem] }], toolchain: { java, androidSdk },
-// developerVerification: "registered" | null }
+/**
+ * facts.android: { packages: [{ id, targetSdk, icon: [problem], permissions:
+ * [problem], plugins: [problem] }], toolchain: { java, androidSdk },
+ * developerVerification: "registered" | null }
+ */
 async function gatherAndroidFacts({ sourceRoot, packaging, packageIds = null, toolchains = {}, developerVerification = null } = {}) {
   const apps = (packaging?.packages || []).filter((entry) => entry.packer === "capacitor" && (!packageIds || packageIds.includes(entry.id)));
   if (!apps.length) return null;

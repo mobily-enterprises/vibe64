@@ -95,8 +95,10 @@ function assistantProviderPolicy(provider = {}) {
   };
 }
 
-// The AI Accounts name of a recognised provider's connection, known even after
-// the connection is removed; "" for other catalogue providers.
+/**
+ * The AI Accounts name of a recognised provider's connection, known even after
+ * the connection is removed; "" for other catalogue providers.
+ */
 function assistantProviderProductLabel(modelProviderId = "") {
   return trimmedText(ASSISTANT_PROVIDER_POLICIES[trimmedText(modelProviderId)]?.productLabel);
 }

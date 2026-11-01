@@ -54,10 +54,12 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
     return null;
   }
 
-  // The learning-space project a practice slug names: its marker is valid,
-  // names that practice, and its namespace is a real directory. Null when the
-  // space has no such project; an unsafe or invalid one is skipped with a warning.
-  // `deleting` reports a deletion marker (a removal that stopped part-way).
+  /**
+   * The learning-space project a practice slug names: its marker is valid,
+   * names that practice, and its namespace is a real directory. Null when the
+   * space has no such project; an unsafe or invalid one is skipped with a warning.
+   * `deleting` reports a deletion marker (a removal that stopped part-way).
+   */
   async function readLearningSpaceProject(slug) {
     const practiceId = practiceIdFromSlug(slug);
     if (!practiceId) return null;
@@ -96,9 +98,11 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
     }
   }
 
-  // Every practice project in the space (one learner's with learnerKey), as
-  // {slug, learnerKey, practiceId, training}. Unsafe or invalid entries are
-  // skipped with a warning and never change the listing for the others.
+  /**
+   * Every practice project in the space (one learner's with learnerKey), as
+   * {slug, learnerKey, practiceId, training}. Unsafe or invalid entries are
+   * skipped with a warning and never change the listing for the others.
+   */
   async function listLearningSpaceProjects({ learnerKey } = {}) {
     const learners = [];
     for (const entry of await readDirectoryEntries(learningSpaceStorageRoot())) {
@@ -123,8 +127,10 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
     return projects.sort((left, right) => left.slug.localeCompare(right.slug));
   }
 
-  // A practice runtime root in the shared inventory is never a catalogue
-  // orphan: the catalogue sweep leaves every training slug with a marker.
+  /**
+   * A practice runtime root in the shared inventory is never a catalogue
+   * orphan: the catalogue sweep leaves every training slug with a marker.
+   */
   async function isLearningSpaceRuntime(slug, projectRuntimeRoot) {
     if (!PRACTICE_SLUG_PATTERN.test(slug)) return false;
     let metadata;
@@ -135,11 +141,13 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
     return true;
   }
 
-  // The one practice scope, on both hosts. allowDeleting admits only the
-  // learner's own deletion: it requires write access and lets that owner see
-  // and resume its deletion marker. requireProject is the ordinary page
-  // admission: a project without its record, or one being deleted, is a
-  // deleted practice project (not found).
+  /**
+   * The one practice scope, on both hosts. allowDeleting admits only the
+   * learner's own deletion: it requires write access and lets that owner see
+   * and resume its deletion marker. requireProject is the ordinary page
+   * admission: a project without its record, or one being deleted, is a
+   * deleted practice project (not found).
+   */
   async function runWithPracticeProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe",
     allowDeleting = false, requireProject = false } = {}, operation) {
     if (typeof operation !== "function") {

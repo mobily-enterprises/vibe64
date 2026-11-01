@@ -192,13 +192,15 @@ function createSessionRepositoryUpdates({ project, publishSessionChanged, termin
       }, "Vibe64 could not check this session for updates.");
     },
 
-    // One tick of a project's update probe (repositoryUpdateProbe.js). It reads
-    // every open session's authority head with one `ls-remote` per authority
-    // repository, then runs the ordinary forced check above (its fetch, under
-    // the project source lock) only for a session whose head moved. `memory`
-    // holds, per session, a connected contribution's authority heads and the
-    // last failure published. A project nobody watches and no agent turn uses
-    // is not read at all.
+    /**
+     * One tick of a project's update probe (repositoryUpdateProbe.js). It reads
+     * every open session's authority head with one `ls-remote` per authority
+     * repository, then runs the ordinary forced check above (its fetch, under
+     * the project source lock) only for a session whose head moved. `memory`
+     * holds, per session, a connected contribution's authority heads and the
+     * last failure published. A project nobody watches and no agent turn uses
+     * is not read at all.
+     */
     async probeRepositoryUpdates(slug, { memory = new Map(), watched = false } = {}) {
       return project.runInProjectContext(slug, async () => {
         const runtime = await project.createRuntime({ inspectSource: false });

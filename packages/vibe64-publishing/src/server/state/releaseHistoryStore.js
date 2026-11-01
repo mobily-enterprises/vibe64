@@ -42,7 +42,9 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
     return record;
   }
 
-  // Applies `change(record)` under the store's lock and saves the result.
+  /**
+   * Applies `change(record)` under the store's lock and saves the result.
+   */
   function update(id, change) {
     return exclusive(async () => {
       const record = await read(id);
@@ -88,7 +90,9 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
       const record = await readJsonFile(fileOf(id), null);
       if (record?.contract === RELEASE_RECORD_CONTRACT) records.push(record);
     }
-    // Newest activity first: a release resumed by a new confirmation moves up.
+    /**
+     * Newest activity first: a release resumed by a new confirmation moves up.
+     */
     const activity = (record) => record.resumedAt || record.createdAt;
     return records.sort((left, right) => activity(right).localeCompare(activity(left)) || right.id.localeCompare(left.id)).slice(0, limit);
   }

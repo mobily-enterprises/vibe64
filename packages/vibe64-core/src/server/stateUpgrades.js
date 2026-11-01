@@ -91,8 +91,10 @@ function requireSystemRoot(systemRoot) {
   }
 }
 
-// One apply.lock excludes ordinary upgrades, explicit repairs, baselines and
-// backup retention. busy() answers for a held lock; without it, that is an error.
+/**
+ * One apply.lock excludes ordinary upgrades, explicit repairs, baselines and
+ * backup retention. busy() answers for a held lock; without it, that is an error.
+ */
 async function withUpgradeLock(upgradeRoot, operation, { busy = null } = {}) {
   const lockPath = path.join(upgradeRoot, "apply.lock");
   let lock;
@@ -122,8 +124,10 @@ function ledgerExists(ledgerPath) {
   });
 }
 
-// Any non-directory entry (file, link, socket) is existing state; a tree of
-// empty directories, as host provisioning prepares, is still fresh.
+/**
+ * Any non-directory entry (file, link, socket) is existing state; a tree of
+ * empty directories, as host provisioning prepares, is still fresh.
+ */
 async function containsState(directory, ignoredPath) {
   let entries;
   try {
@@ -143,10 +147,12 @@ async function containsState(directory, ignoredPath) {
 const BASELINE_LEDGER_EXISTS = "state_upgrade_ledger_exists";
 const BASELINE_STATE_WITHOUT_LEDGER = "state_upgrade_state_without_ledger";
 
-// A brand-new installation is created in the current format, so it records
-// every upgrade this release knows as complete without running them. Only an
-// empty state root qualifies: replaying history against current data fails,
-// and recording history over unknown older data would skip needed upgrades.
+/**
+ * A brand-new installation is created in the current format, so it records
+ * every upgrade this release knows as complete without running them. Only an
+ * empty state root qualifies: replaying history against current data fails,
+ * and recording history over unknown older data would skip needed upgrades.
+ */
 async function recordStateUpgradeBaseline({ systemRoot, report = (level, message) => console.log(`[${level}] ${message}`) } = {}) {
   requireSystemRoot(systemRoot);
   const upgradeRoot = path.join(systemRoot, "upgrades");
@@ -173,10 +179,12 @@ async function recordStateUpgradeBaseline({ systemRoot, report = (level, message
   });
 }
 
-// The composition root supplies the feature-owned migration operations
-// (upgradeAssistantRouting, upgradeLearningPracticeHistory, ...) as the other
-// options; each upgrade reads the ones it needs. Core must not depend back on
-// Accounts or Runtime.
+/**
+ * The composition root supplies the feature-owned migration operations
+ * (upgradeAssistantRouting, upgradeLearningPracticeHistory, ...) as the other
+ * options; each upgrade reads the ones it needs. Core must not depend back on
+ * Accounts or Runtime.
+ */
 async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, apply = false,
   repairRetiredOperation = false, repairInteractiveContinuity = false,
   report = (level, message) => console.log(`[${level}] ${message}`), ...operations }) {
@@ -229,9 +237,11 @@ async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, a
   return withUpgradeLock(upgradeRoot, upgradeState);
 }
 
-// Retention belongs to the registry, not the immutable historical scripts.
-// Only a known, completed upgrade's regular backup tree is eligible. The same
-// apply.lock excludes ordinary upgrades and explicit repair invocations.
+/**
+ * Retention belongs to the registry, not the immutable historical scripts.
+ * Only a known, completed upgrade's regular backup tree is eligible. The same
+ * apply.lock excludes ordinary upgrades and explicit repair invocations.
+ */
 async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = Date.now(), signal } = {}) {
   if (!path.isAbsolute(systemRoot || "") || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("Backup retention requires an absolute, non-root Vibe64 system directory.");

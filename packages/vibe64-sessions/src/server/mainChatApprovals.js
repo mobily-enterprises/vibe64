@@ -41,14 +41,18 @@ function parseApprovals(raw = "") {
   return value;
 }
 
-// Keeps the newest entries, dropping the oldest decided ones first.
+/**
+ * Keeps the newest entries, dropping the oldest decided ones first.
+ */
 function prune(entries) {
   let excess = entries.length - KEPT_ENTRIES;
   return entries.filter((entry) => excess <= 0 || ["waiting", "sending"].includes(entry.status) || (excess -= 1, false));
 }
 
-// The waiting count of every open session of one project, read straight from
-// its session state so project lists never start a project runtime.
+/**
+ * The waiting count of every open session of one project, read straight from
+ * its session state so project lists never start a project runtime.
+ */
 async function countWaitingMainChatApprovals({ projectRuntimeRoot = "" } = {}) {
   if (!projectRuntimeRoot) return 0;
   const queues = await readActiveSessionMetadataValues({ projectRuntimeRoot, name: MAIN_CHAT_APPROVALS_METADATA });
@@ -199,9 +203,11 @@ function createMainChatApprovals({
     });
   }
 
-  // Approval hands the message to the owner's ordinary send. Its delivery
-  // id is stable per revision: approving a message already sending retries
-  // the stored text, and an edited text is a new delivery.
+  /**
+   * Approval hands the message to the owner's ordinary send. Its delivery
+   * id is stable per revision: approving a message already sending retries
+   * the stored text, and an edited text is a new delivery.
+   */
   async function approve(sessionId, approvalId, { expectedRevision, text: editedText } = {}, { vibe64User, browserAuthority = null }) {
     requireOwner(vibe64User);
     const entry = await change(sessionId, "main-chat-approval-approved", (approvals) => {

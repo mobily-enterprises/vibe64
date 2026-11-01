@@ -20,7 +20,9 @@ import { trustedAssistantUser } from "./trustedAssistantUser.js";
 
 const CONNECTED_SESSION_NAME_METADATA = "connected_session_name";
 
-// The reported result of bringing one connected checkout up to date.
+/**
+ * The reported result of bringing one connected checkout up to date.
+ */
 function connectedUpdateOutcome(update, branch) {
   if (update?.status === "updated" || update?.status === "current") {
     return { status: update.status, commit: text(update.commit) };
@@ -347,10 +349,12 @@ function createConnectedContributions({ actions, project, terminals, publishSess
     } : result;
   }
 
-  // Brings a receiving checkout up to its integration branch through the normal
-  // Update, carrying its edits onto the new commit. It leaves the checkout as it
-  // is while its agent or a Save/Update is working, while a published
-  // contribution awaits acceptance, and when the Update would conflict.
+  /**
+   * Brings a receiving checkout up to its integration branch through the normal
+   * Update, carrying its edits onto the new commit. It leaves the checkout as it
+   * is while its agent or a Save/Update is working, while a published
+   * contribution awaits acceptance, and when the Update would conflict.
+   */
   async function refreshConnectedContribution(runtime, session, branch) {
     const sessionId = session.sessionId;
     const skipped = reason => ({ ok: true, sessionId, status: "skipped", reason });
@@ -529,9 +533,11 @@ function createConnectedContributions({ actions, project, terminals, publishSess
             });
           }
         }
-        // A receiving session carries the name of the session it serves; its
-        // random identity means nothing to people. It follows that name on later
-        // preparations until someone renames the receiving session itself.
+        /**
+         * A receiving session carries the name of the session it serves; its
+         * random identity means nothing to people. It follows that name on later
+         * preparations until someone renames the receiving session itself.
+         */
         const named = async (allocated) => {
           const sessionId = allocated?.sessionId;
           if (!input.sessionName || !sessionId || allocated.sessionName === input.sessionName) return allocated;

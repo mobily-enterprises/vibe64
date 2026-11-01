@@ -173,8 +173,10 @@ async function renewCodexAttachments(executionRoot, sessionId, attachmentIds = [
   };
 }
 
-// The shared conversation layer uses the same upload lease as expiry and deletion.
-// Keep it held until the caller has copied or opened the file.
+/**
+ * The shared conversation layer uses the same upload lease as expiry and deletion.
+ * Keep it held until the caller has copied or opened the file.
+ */
 async function withUploadedAgentAttachment(executionRoot, sessionId, attachmentId, operation, options = {}) {
   const id = assertAttachmentId(attachmentId);
   const directory = attachmentHostDirectory(executionRoot, sessionId, id, options);

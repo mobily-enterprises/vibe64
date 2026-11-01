@@ -11,7 +11,9 @@ import { passthroughEnvironment, spawnCommand } from "../stages.js";
 
 const HTTP_TIMEOUT_MS = 30_000;
 
-// Every artifact file by its upload name (its base name), with checksum and size.
+/**
+ * Every artifact file by its upload name (its base name), with checksum and size.
+ */
 function artifactFiles(artifacts) {
   const files = artifacts.manifest.files.map((file) => ({
     name: path.posix.basename(file.path),
@@ -29,7 +31,9 @@ function artifactFiles(artifacts) {
   return files.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-// One checksum for a set of named files, comparable with what a registry reports.
+/**
+ * One checksum for a set of named files, comparable with what a registry reports.
+ */
 function namedFilesChecksum(files) {
   return sha256(canonicalJson([...files]
     .map(({ name, sha256: checksum }) => ({ name, sha256: checksum }))
@@ -65,8 +69,10 @@ function commandPrefix(value, fallback, label) {
   return argv;
 }
 
-// Publishing tools see PATH and locale, a private HOME, and nothing they could
-// mistake for an ambient login.
+/**
+ * Publishing tools see PATH and locale, a private HOME, and nothing they could
+ * mistake for an ambient login.
+ */
 function toolEnvironment({ home, baseEnvironment = process.env, extra = {} }) {
   return {
     ...passthroughEnvironment(baseEnvironment),
@@ -97,7 +103,9 @@ function redact(text, secrets = []) {
   return value;
 }
 
-// Runs one tool; failures carry its redacted output, never a credential.
+/**
+ * Runs one tool; failures carry its redacted output, never a credential.
+ */
 async function runTool({ argv, cwd, env, stdin = null, secrets = [], failureCode, failureMessage }, { runCommand = spawnCommand } = {}) {
   const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env, stdin });
   const output = redact(`${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`, secrets).trim();

@@ -21,7 +21,9 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 const MAX_CHECKED_SOURCES = 32;
 const checkedSources = new Map();
 
-// Whether the text parses as a classic script, remembered by content hash.
+/**
+ * Whether the text parses as a classic script, remembered by content hash.
+ */
 function parsesAsScript(source) {
   const hash = createHash("sha256").update(source).digest("hex");
   if (!checkedSources.has(hash)) {

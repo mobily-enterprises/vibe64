@@ -1,8 +1,10 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { integrationsSchema } from "@jskit-ai/connectors-core/shared/configuration";
 
-// A changes request supplies only fields the person chose to change. Reuse the
-// framework's types and reference constraints without create-time defaults.
+/**
+ * A changes request supplies only fields the person chose to change. Reuse the
+ * framework's types and reference constraints without create-time defaults.
+ */
 function changeFields(schema) {
   return Object.fromEntries(Object.entries(schema.getFieldDefinitions()).map(([key, definition]) => {
     const { defaultTo: _default, ...field } = definition;

@@ -3,7 +3,9 @@ import { isTruthyEnvValue } from "./runtimeEnv.js";
 const VIBE64_RUNTIME_MODE_LOCAL = "local";
 const VIBE64_ALLOW_UNSAFE_LOCAL_MODE_ENV = "VIBE64_ALLOW_UNSAFE_LOCAL_MODE";
 
-// Public Vibe64 runs in one mode.
+/**
+ * Public Vibe64 runs in one mode.
+ */
 function normalizeRuntimeMode() {
   return VIBE64_RUNTIME_MODE_LOCAL;
 }

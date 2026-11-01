@@ -44,7 +44,9 @@ function sessionAgentWorking(session) {
   });
 }
 
-// Splits one `git diff` output into its per-file sections.
+/**
+ * Splits one `git diff` output into its per-file sections.
+ */
 function fileSections(diff) {
   const sections = new Map();
   for (const part of String(diff || "").split(/^(?=diff --git )/mu)) {
@@ -72,7 +74,9 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
     return String(result.stdout || "");
   }
 
-  // Untracked work is new text the learner added; read it directly, bounded.
+  /**
+   * Untracked work is new text the learner added; read it directly, bounded.
+   */
   async function untrackedSection(source, relative) {
     const filename = path.join(source, ...relative.split("/"));
     if (!pathInside(source, filename)) return { omitted: "unsafe" };
@@ -121,8 +125,10 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
     return { files, diff: chunks.join(""), truncated };
   }
 
-  // The last turns of the practice session's Main chat: the learner's and the
-  // agent's own words, newest kept first within the budget.
+  /**
+   * The last turns of the practice session's Main chat: the learner's and the
+   * agent's own words, newest kept first within the budget.
+   */
   async function readConversation(attempt, sessionId, context) {
     const result = await actions.execute({ actionId: "vibe64.sessions.conversation-log.read",
       input: { projectSlug: attempt.projectSlug, sessionId, limit: String(EVIDENCE_LIMITS.conversationTurns) }, context });
@@ -144,8 +150,10 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
       result.pagination?.hasMoreBefore === true };
   }
 
-  // Keeps the serialized evidence within its byte budget by dropping the
-  // latest diff sections first; the file list always stays.
+  /**
+   * Keeps the serialized evidence within its byte budget by dropping the
+   * latest diff sections first; the file list always stays.
+   */
   function withinBudget(evidence) {
     const size = () => Buffer.byteLength(JSON.stringify(evidence));
     while (size() > EVIDENCE_LIMITS.evidenceBytes && evidence.changes.diff) {
@@ -163,8 +171,10 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
     return evidence;
   }
 
-  // The attempt's practice session as it is now, and its bounded evidence.
-  // conversation is read only when the step's review declares it.
+  /**
+   * The attempt's practice session as it is now, and its bounded evidence.
+   * conversation is read only when the step's review declares it.
+   */
   async function read({ attempt, conversation = false, context = {} } = {}) {
     const startCommit = attempt?.preparation?.startCommit;
     if (attempt?.preparation?.phase !== "ready") {

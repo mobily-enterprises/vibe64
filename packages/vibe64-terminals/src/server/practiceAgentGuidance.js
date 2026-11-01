@@ -17,8 +17,10 @@ function isPracticeProjectRuntime(runtime = null) {
   return Boolean(practiceIdFromSlug(path.basename(String(runtime?.projectContextRoot || ""))));
 }
 
-// Idempotent: appends only missing patterns to the clone's own info/exclude.
-// Tracked files (an exercise that ships guidance) remain tracked.
+/**
+ * Idempotent: appends only missing patterns to the clone's own info/exclude.
+ * Tracked files (an exercise that ships guidance) remain tracked.
+ */
 async function excludeAgentGuidanceFromPracticeHistory(projectRoot = "") {
   const gitDirectory = path.join(projectRoot, ".git");
   const stats = await lstat(gitDirectory).catch((error) => {

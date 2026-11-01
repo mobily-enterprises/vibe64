@@ -49,7 +49,9 @@ function licenceHash(text) {
   return `sha256:${createHash("sha256").update(text, "utf8").digest("hex")}`;
 }
 
-// The licence text exactly as Google's SDK repository publishes it.
+/**
+ * The licence text exactly as Google's SDK repository publishes it.
+ */
 function licenceFromRepository(xml, id = ANDROID_LICENCE_ID) {
   const match = new RegExp(`<license id="${id}" type="text">([\\s\\S]*?)</license>`, "u").exec(String(xml || ""));
   if (!match) throw toolchainError(`Google's SDK repository has no ${id} text.`);
@@ -68,7 +70,9 @@ async function fetchRepository({ fetchImpl = fetch, repositoryUrl = ANDROID_REPO
   return response.text();
 }
 
-// What the caller shows the person before anything is downloaded.
+/**
+ * What the caller shows the person before anything is downloaded.
+ */
 async function androidSdkLicence(options = {}) {
   return licenceFromRepository(await fetchRepository(options));
 }
@@ -96,7 +100,9 @@ function buildToolsOf(androidHome) {
   };
 }
 
-// { ok, androidHome, missing: [package], buildTools } for one SDK folder.
+/**
+ * { ok, androidHome, missing: [package], buildTools } for one SDK folder.
+ */
 async function describeAndroidSdk({ androidHome } = {}) {
   if (typeof androidHome !== "string" || !path.isAbsolute(androidHome)) {
     return { ok: false, androidHome: null, missing: [...SDK_PACKAGES], message: "No Android SDK folder given." };
@@ -114,7 +120,9 @@ async function describeAndroidSdk({ androidHome } = {}) {
   };
 }
 
-// The first complete SDK: Vibe64's install in `directory`, then ANDROID_HOME / ANDROID_SDK_ROOT.
+/**
+ * The first complete SDK: Vibe64's install in `directory`, then ANDROID_HOME / ANDROID_SDK_ROOT.
+ */
 async function findAndroidSdk({ directory = null, baseEnvironment = process.env } = {}) {
   const candidates = [directory, baseEnvironment.ANDROID_HOME, baseEnvironment.ANDROID_SDK_ROOT].filter((value) => typeof value === "string" && path.isAbsolute(value));
   let last = null;
@@ -133,8 +141,10 @@ async function readAcceptance(directory) {
   }
 }
 
-// Installs command-line tools and SDK_PACKAGES into `directory` after checking
-// the acceptance against the licence Google publishes right now.
+/**
+ * Installs command-line tools and SDK_PACKAGES into `directory` after checking
+ * the acceptance against the licence Google publishes right now.
+ */
 async function installAndroidSdk({
   directory,
   acceptance,

@@ -268,8 +268,10 @@ async function recordSessionGitCommandActor({
   };
 }
 
-// A local-source session only exchanges work with its local folder; that
-// folder's own upstream, even on GitHub, never makes it a GitHub session.
+/**
+ * A local-source session only exchanges work with its local folder; that
+ * folder's own upstream, even on GitHub, never makes it a GitHub session.
+ */
 function sessionRequiresGithubActor(session = {}) {
   const metadata = session.metadata || {};
   if (trimmedText(metadata.repository_mode) === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) return false;

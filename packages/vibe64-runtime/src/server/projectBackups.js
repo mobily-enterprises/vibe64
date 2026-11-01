@@ -4,7 +4,9 @@ import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 
 const BACKUP_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 
-// A project area's writes hold its lock; a second writer is told it is busy.
+/**
+ * A project area's writes hold its lock; a second writer is told it is busy.
+ */
 async function withProjectAreaLock(stateRoot, name, busy, operation) {
   if (!path.isAbsolute(stateRoot) || path.resolve(stateRoot) === path.parse(stateRoot).root) {
     throw new Error("Project file areas require a project runtime directory.");
@@ -17,7 +19,9 @@ async function withProjectAreaLock(stateRoot, name, busy, operation) {
   try { return await operation(); } finally { await release(); }
 }
 
-// Project Backups mutations share this lock with retention maintenance.
+/**
+ * Project Backups mutations share this lock with retention maintenance.
+ */
 function withProjectBackupsLock(stateRoot, operation) {
   return withProjectAreaLock(stateRoot, "project-backups", {
     message: "Project backups are busy. Try again shortly.", code: "project_backups_busy"
@@ -30,8 +34,10 @@ function withProjectDropZoneLock(stateRoot, operation) {
   }, operation);
 }
 
-// Files expire individually. Never follow links or recursively remove a folder:
-// an agent can write here directly, independently of a browser upload's lease.
+/**
+ * Files expire individually. Never follow links or recursively remove a folder:
+ * an agent can write here directly, independently of a browser upload's lease.
+ */
 async function maintainProjectBackups({ stateRoot, dryRun = false, now = Date.now(), signal } = {}) {
   const root = path.join(stateRoot, "backups");
   const result = { status: "success", reclaimedBytes: 0, eligibleBytes: 0, retainedBytes: 0, issues: [] };

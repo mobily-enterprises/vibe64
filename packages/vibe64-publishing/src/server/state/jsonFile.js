@@ -29,7 +29,9 @@ async function writeJsonFile(file, value, { mode = 0o600, directoryMode = 0o700 
   return value;
 }
 
-// One writer at a time per file inside this process.
+/**
+ * One writer at a time per file inside this process.
+ */
 function serialized() {
   let tail = Promise.resolve();
   return (operation) => {

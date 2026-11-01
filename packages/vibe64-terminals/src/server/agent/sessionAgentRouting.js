@@ -46,7 +46,9 @@ function createSessionAgentRouting({
   readRoutingConfiguration,
   resolveAssistantUser
 }) {
-  // A private copy of the configuration a caller supplies, or else of the saved one.
+  /**
+   * A private copy of the configuration a caller supplies, or else of the saved one.
+   */
   async function routingConfiguration(options) {
     return structuredClone(options.configuration || await readRoutingConfiguration());
   }
@@ -75,8 +77,10 @@ function createSessionAgentRouting({
   }
 
   async function resolvePurpose(input = {}, options = {}, { facts = new Map(), validateModels = true } = {}) {
-    // One availability response shares connection/catalogue reads across its
-    // purposes. The cache ends with that response; dispatch resolves afresh.
+    /**
+     * One availability response shares connection/catalogue reads across its
+     * purposes. The cache ends with that response; dispatch resolves afresh.
+     */
     const readFact = (key, operation) => {
       if (!facts.has(key)) facts.set(key, Promise.resolve().then(operation));
       return facts.get(key);
@@ -183,8 +187,10 @@ function createSessionAgentRouting({
     return { ...catalog, page: { kind: "providers", hasMore: false, nextCursor: "", total: catalog.modelProviders.length } };
   }
 
-  // The AI setup screen's read: both setups' saved values, recommendations,
-  // choices and illustrative decisions, from every connected tool's catalogue.
+  /**
+   * The AI setup screen's read: both setups' saved values, recommendations,
+   * choices and illustrative decisions, from every connected tool's catalogue.
+   */
   async function inspectRoutingConfiguration(configuration, options = {}) {
     const catalogs = [];
     const catalogErrors = new Map();
@@ -211,8 +217,10 @@ function createSessionAgentRouting({
       }));
     }
     const connectionAccess = [...access.values()];
-    // Illustrative actors affect only these read-only decisions. They never enter
-    // a provider execution context. Preview uses the same policy as admission.
+    /**
+     * Illustrative actors affect only these read-only decisions. They never enter
+     * a provider execution context. Preview uses the same policy as admission.
+     */
     const decide = (purposes, actor, previewConfiguration) => Object.fromEntries(purposes.map((purpose) => {
       const decision = resolveAssistantPurpose({ purpose, actor, configuration: previewConfiguration, catalogs, connectionAccess });
       return [purpose, JSON.parse(JSON.stringify(decision, (key, value) =>

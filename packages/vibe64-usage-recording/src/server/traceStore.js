@@ -53,8 +53,10 @@ async function appendJsonLine(filePath, value) {
   }
 }
 
-// The first maxBytes of a regular file, and whether that is all of it; null
-// for a missing file, a link or anything but a regular file.
+/**
+ * The first maxBytes of a regular file, and whether that is all of it; null
+ * for a missing file, a link or anything but a regular file.
+ */
 async function readRegularFile(filePath, maxBytes) {
   let handle;
   try {
@@ -89,8 +91,10 @@ async function readJsonFile(filePath, maxBytes = LINE_LIMIT) {
   }
 }
 
-// Bounded NDJSON objects of a Vibe64-written file; oversized or invalid lines
-// are skipped, and so is a line cut at the read limit.
+/**
+ * Bounded NDJSON objects of a Vibe64-written file; oversized or invalid lines
+ * are skipped, and so is a line cut at the read limit.
+ */
 async function readNdjson(filePath, maxLines) {
   let text = "";
   try {
@@ -119,8 +123,10 @@ const mergeCount = (left, right) => (left === null || right === null ? null : le
 const compareFunctions = (left, right) => left.path.localeCompare(right.path) ||
   left.start.line - right.start.line || left.start.column - right.start.column;
 
-// An incremental reader of a recording's hits files. poll() reads only bytes
-// added since the last poll, so a live recording is followed cheaply.
+/**
+ * An incremental reader of a recording's hits files. poll() reads only bytes
+ * added since the last poll, so a live recording is followed cheaply.
+ */
 function createTraceReader(directory) {
   const files = new Map();
   const scopes = new Map();
@@ -266,17 +272,21 @@ function createTraceReader(directory) {
     }
   }
 
-  // Request-like scopes that ran project code: proxy requests, local requests
-  // and terminal runs. They alone make the counts and the plumbing; the launch
-  // readiness check, like background work, does not.
+  /**
+   * Request-like scopes that ran project code: proxy requests, local requests
+   * and terminal runs. They alone make the counts and the plumbing; the launch
+   * readiness check, like background work, does not.
+   */
   function listedScopes() {
     return [...scopes.entries()].filter(([id, scope]) => scope.kind !== "background" && id !== USAGE_READINESS_REQUEST_ID &&
       scope.kind && scope.hits.size > 0);
   }
 
-  // Each process's work outside any request, when it ran project code: its
-  // start-up, timers, and every request of a server whose requests a tracer
-  // cannot tell apart.
+  /**
+   * Each process's work outside any request, when it ran project code: its
+   * start-up, timers, and every request of a server whose requests a tracer
+   * cannot tell apart.
+   */
   function backgroundScopes() {
     return [...scopes.entries()].filter(([, scope]) => scope.kind === "background" && scope.hits.size > 0);
   }
@@ -303,8 +313,10 @@ function createTraceReader(directory) {
     return { requests: listed.length, functions: new Set(listed.flatMap(([, scope]) => [...scope.hits.keys()])).size };
   }
 
-  // Per runtime: whether any of its processes became ready, wrote its idle
-  // line, or only reported diagnostics.
+  /**
+   * Per runtime: whether any of its processes became ready, wrote its idle
+   * line, or only reported diagnostics.
+   */
   function tracerStates() {
     const states = new Map();
     for (const file of files.values()) {
@@ -355,8 +367,10 @@ function createTraceReader(directory) {
   });
 }
 
-// The Preview proxy's request log and the recorded interactions, capped by
-// lines when written and read up to LOG_BYTES.
+/**
+ * The Preview proxy's request log and the recorded interactions, capped by
+ * lines when written and read up to LOG_BYTES.
+ */
 async function readRequestLog(directory) {
   return (await readNdjson(path.join(directory, "requests.ndjson"), USAGE_RECORDING_LIMITS.proxyRequestLines))
     .filter((row) => /^r_[0-9]{6}$/u.test(String(row.id || "")));
@@ -398,10 +412,12 @@ function requestRow(id, fields, reader, plumbing) {
   };
 }
 
-// Every request of a recording, in start order: the proxy's requests, local
-// request scopes and terminal runs that tracers reported themselves, each
-// process's background work (kind "background", no method, path or status),
-// and Vibe64's launch readiness check (kind "readiness", likewise).
+/**
+ * Every request of a recording, in start order: the proxy's requests, local
+ * request scopes and terminal runs that tracers reported themselves, each
+ * process's background work (kind "background", no method, path or status),
+ * and Vibe64's launch readiness check (kind "readiness", likewise).
+ */
 async function recordingRequestRows(directory, reader, { runLabel = null } = {}) {
   const plumbing = reader.plumbingKeys();
   const logged = await readRequestLog(directory);

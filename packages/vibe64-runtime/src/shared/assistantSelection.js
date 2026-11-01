@@ -449,7 +449,9 @@ function assertVibe64AssistantSelectionUpdate(currentValue = {}, nextValue = {},
 
 // The fields that name one assistant: its tool, provider, model, agent and thinking level.
 const VIBE64_ASSISTANT_SELECTION_IDENTITY_FIELDS = Object.freeze(["engineId", "modelProviderId", "modelId", "agentId", "variantId"]);
-// An absent field and an empty one name the same assistant.
+/**
+ * An absent field and an empty one name the same assistant.
+ */
 function sameVibe64AssistantSelection(left, right) {
   return VIBE64_ASSISTANT_SELECTION_IDENTITY_FIELDS.every(
     (key) => String(left?.[key] ?? "").trim() === String(right?.[key] ?? "").trim());

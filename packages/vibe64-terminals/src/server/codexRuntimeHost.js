@@ -49,9 +49,11 @@ function codexAgentSettingsFromSession(session = {}) {
   };
 }
 
-// The session's selection names its model provider. Model ids are not unique
-// across providers (both Z.AI connections offer GLM 5.3), so the model id alone
-// chooses one only for settings saved without a provider.
+/**
+ * The session's selection names its model provider. Model ids are not unique
+ * across providers (both Z.AI connections offer GLM 5.3), so the model id alone
+ * chooses one only for settings saved without a provider.
+ */
 function codexSelectedModelProviderId(session) {
   const selection = vibe64AssistantSelectionFromMetadata(session?.metadata || {}, { required: false });
   return trimmedText(session?.metadata?.codex_routing_home_provider) || trimmedText(selection?.modelProviderId) ||
@@ -59,7 +61,9 @@ function codexSelectedModelProviderId(session) {
     curatedCodexModel(session?.agentSettings?.model)?.modelProviderId || "";
 }
 
-// A thread starts on the provider its parameters or its runtime's routing name.
+/**
+ * A thread starts on the provider its parameters or its runtime's routing name.
+ */
 function codexThreadModelProvider(params = {}, routingModelProviderId = "") {
   return trimmedText(params.modelProvider) || trimmedText(routingModelProviderId) ||
     curatedCodexModel(params.model)?.modelProviderId || "openai";
@@ -275,12 +279,14 @@ function createCodexSessionRuntimeHost({
     });
   }
 
-  // Provider notifications are a high-frequency stream. Creating a session
-  // runtime here hydrates the persisted conversation history even
-  // with inspectSource disabled; during an active turn that previously caused
-  // repeated multi-megabyte reads and hundreds of MB of churn. Event handlers
-  // must use this bounded store and reserve full runtimes for mutations.
-  // Do not mask a regression with throttles or caches: keep the hot path bounded.
+  /**
+   * Provider notifications are a high-frequency stream. Creating a session
+   * runtime here hydrates the persisted conversation history even
+   * with inspectSource disabled; during an active turn that previously caused
+   * repeated multi-megabyte reads and hundreds of MB of churn. Event handlers
+   * must use this bounded store and reserve full runtimes for mutations.
+   * Do not mask a regression with throttles or caches: keep the hot path bounded.
+   */
   function createStoreForSession(sessionId = "") {
     return projectService.createSessionStore({
       sessionId
@@ -363,7 +369,9 @@ function createCodexSessionRuntimeHost({
     return prepareSessionRuntimeOptions(session, options);
   }
 
-  // These original owners control retained threads; neither admits new work.
+  /**
+   * These original owners control retained threads; neither admits new work.
+   */
   function codexAppServerControlRuntimeOptionsForSession(session, options) {
     return prepareSessionRuntimeOptions(session, options, "control");
   }

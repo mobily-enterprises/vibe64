@@ -49,7 +49,9 @@ function projectSlugExistsError() {
   return error;
 }
 
-// training-<hex> names a learning-space practice project on both hosts.
+/**
+ * training-<hex> names a learning-space practice project on both hosts.
+ */
 function assertCatalogueSlugAllowed(slug = "") {
   if (PRACTICE_SLUG_PATTERN.test(slug)) {
     throw Object.assign(new Error("Project names like training-<id> are reserved for practice projects. Choose a different project name."), {
@@ -238,8 +240,10 @@ function localProjectKeyFromTargetRoot(targetRoot = "") {
   return `${localProjectSlugFromTargetRoot(resolvedTargetRoot)}-${hash}`;
 }
 
-// A saved practice project belongs to its exact training marker, is not being
-// deleted (unless deletion is the operation) and keeps its managed Git authority.
+/**
+ * A saved practice project belongs to its exact training marker, is not being
+ * deleted (unless deletion is the operation) and keeps its managed Git authority.
+ */
 function practiceOwnershipDiffers(metadata, training, allowDeleting) {
   return !isDeepStrictEqual(metadata.training, training) || Boolean(metadata.deletion && !allowDeleting) ||
     projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT;

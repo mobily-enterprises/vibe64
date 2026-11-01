@@ -183,8 +183,10 @@ function satisfiedAlternative(resource = {}, environment = {}) {
   return null;
 }
 
-// The alternative a resource still needs: none when one is already satisfied,
-// otherwise the one with the most bindings present, preferred first.
+/**
+ * The alternative a resource still needs: none when one is already satisfied,
+ * otherwise the one with the most bindings present, preferred first.
+ */
 function requiredAlternative(resource = {}, environment = {}) {
   const alternatives = Array.isArray(resource.environmentAlternatives)
     ? resource.environmentAlternatives

@@ -10,8 +10,10 @@ const PLAYWRIGHT_BROWSER_LAUNCH_OK_PATTERN =
 const PLAYWRIGHT_RUNTIME_OK_PATTERN =
   /Playwright runtime ready:\s+Version \d+\.\d+\.\d+;\s+(?:manifest \/[^\r\n]+\/runtime\.env|command \/[^\r\n]+)\b/u;
 
-// Without packs, check the Playwright the person installed and the Chromium
-// headless shell in its own browser cache.
+/**
+ * Without packs, check the Playwright the person installed and the Chromium
+ * headless shell in its own browser cache.
+ */
 function installedPlaywrightCheckLines() {
   return [
     "set -euo pipefail",

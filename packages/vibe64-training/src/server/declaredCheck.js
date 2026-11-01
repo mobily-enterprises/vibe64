@@ -171,8 +171,10 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     });
   }
 
-  // A version 2 step's automatic response check: an exercise interaction check
-  // (not a code check) declared by the exact pinned lesson.
+  /**
+   * A version 2 step's automatic response check: an exercise interaction check
+   * (not a code check) declared by the exact pinned lesson.
+   */
   function responseStepCheck(lesson, id) {
     const step = lessonHasSteps(lesson.lesson) ? lesson.lesson.steps?.find(value => value.id === id) : null;
     const check = declaredStepCheck(lesson.lesson, step);
@@ -190,17 +192,21 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     return relative;
   }
 
-  // The step's own declared files; the ledger baseline is the entered step.
+  /**
+   * The step's own declared files; the ledger baseline is the entered step.
+   */
   function openCodeStep(lesson, id) {
     const code = codeStepOf(lesson, id);
     if (!code) throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This lesson step does not declare a code check.");
     return code;
   }
 
-  // A code check runs the pinned check on a private copy: the pinned exercise
-  // bytes, overlaid only by the learner's current bytes of the declared files.
-  // Agent edits elsewhere cannot change the result; a broken authorship chain
-  // in a declared file never runs and is an automatic not-yet-passed.
+  /**
+   * A code check runs the pinned check on a private copy: the pinned exercise
+   * bytes, overlaid only by the learner's current bytes of the declared files.
+   * Agent edits elsewhere cannot change the result; a broken authorship chain
+   * in a declared file never runs and is an automatic not-yet-passed.
+   */
   async function runCodeCheck({ actor, signal, ...submitted } = {}) {
     const input = validateContent(codeInputSchema, submitted, "Native code check identities");
     signal?.throwIfAborted();

@@ -4,7 +4,9 @@ import {
   githubCredentialContext, normalizeGithubAccountMode, runVibe64Command
 } from "@local/vibe64-execution/server";
 
-// The project's GitHub owner/name, wherever its record keeps it ("" for none).
+/**
+ * The project's GitHub owner/name, wherever its record keeps it ("" for none).
+ */
 export function projectGithubFullName(project) {
   return String(project?.githubRepository?.fullName || project?.repository?.github?.fullName || "");
 }

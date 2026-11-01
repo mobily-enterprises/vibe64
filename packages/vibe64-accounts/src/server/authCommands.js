@@ -35,8 +35,10 @@ function ghLoginCommandArgs(gitIdentity = {}) {
   ];
 }
 
-// Signing in to GitHub never replaces a name or email the person already gave
-// Git, and never writes an empty one.
+/**
+ * Signing in to GitHub never replaces a name or email the person already gave
+ * Git, and never writes an empty one.
+ */
 function ghGitIdentityWhenUnsetCommandLines(gitIdentity = {}) {
   return [["user.name", gitIdentity.name], ["user.email", gitIdentity.email]]
     .map(([key, value]) => [key, String(value || "").trim()])
