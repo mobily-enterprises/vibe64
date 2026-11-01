@@ -11,6 +11,7 @@ import { normalizeSourceEditorExplanation } from "./explanationRecords.js";
 import { positiveInteger, sourceEditorExplanationSummary } from "./explanationText.js";
 import { readSourceEditorFile, sourceEditorError } from "./sourceFiles.js";
 import { readSourceInterpretation, writeSourceInterpretation } from "./sourceInterpretations.js";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -127,13 +128,19 @@ function sourceEditorExplanationCacheTemplate(explanation = {}) {
   });
 }
 
-function createSourceEditorExplanationCache({
-  now = Date.now
-} = {}) {
+// An explanation with no saved interpretation has no completed template to read.
+function readNoCompletedTemplate() {
+  return null;
+}
+
+/**
+ * @param {object} dependencies
+ * @param {() => number} dependencies.now
+ */
+function createSourceEditorExplanationCache({ now }) {
   const completed = new Map();
   const generations = new Map();
   const inFlight = new Map();
-  const currentTime = typeof now === "function" ? now : Date.now;
   let closed = false;
 
   const forgetGenerationWhenUnused = (key) => {
@@ -145,7 +152,7 @@ function createSourceEditorExplanationCache({
     completed.delete(key);
     forgetGenerationWhenUnused(key);
   };
-  const prune = (nowMs = currentTime()) => {
+  const prune = (nowMs = now()) => {
     for (const [key, record] of completed.entries()) {
       if (record.expiresAt <= nowMs) {
         deleteCompleted(key);
@@ -158,7 +165,7 @@ function createSourceEditorExplanationCache({
     }
     completed.delete(key);
     completed.set(key, {
-      expiresAt: currentTime() + SOURCE_EDITOR_EXPLANATION_CACHE_TTL_MS,
+      expiresAt: now() + SOURCE_EDITOR_EXPLANATION_CACHE_TTL_MS,
       template,
       token
     });
@@ -177,15 +184,17 @@ function createSourceEditorExplanationCache({
     return record.template;
   };
 
-  const run = async (key = "", {
-    completedCache = true,
-    force = false,
+  // A file overview or function pseudocode also reads and writes its saved
+  // interpretation; other explanations keep only the in-memory cache.
+  const run = async (key, {
+    completedCache,
+    force,
     generate,
     reuse,
-    validateCompleted = null,
-    readCompleted = null,
-    writeCompleted = null
-  } = {}) => {
+    validateCompleted,
+    readCompleted = readNoCompletedTemplate,
+    writeCompleted = doNothing
+  }) => {
     if (closed) {
       throw sourceEditorError(
         "Source explanation cache is closed.",
@@ -194,10 +203,6 @@ function createSourceEditorExplanationCache({
         503
       );
     }
-    if (typeof generate !== "function" || typeof reuse !== "function") {
-      throw new TypeError("Source explanation caching requires generate() and reuse().");
-    }
-
     prune();
     let token = generations.get(key);
     if (force || !token) {
@@ -207,10 +212,9 @@ function createSourceEditorExplanationCache({
     if (force) {
       completed.delete(key);
     } else if (completedCache) {
-      const template = read(key) || (readCompleted ? await readCompleted() : null);
+      const template = read(key) || await readCompleted();
       if (template) {
-        const completedIdentityValid = typeof validateCompleted !== "function" ||
-          await validateCompleted(template) === true;
+        const completedIdentityValid = await validateCompleted(template) === true;
         if (completedIdentityValid && !closed && generations.get(key) === token) {
           return reuse(template, {
             cacheHit: true,
@@ -227,8 +231,7 @@ function createSourceEditorExplanationCache({
       if (active?.token === token) {
         const template = await active.promise;
         if (template) {
-          const completedIdentityValid = !completedCache || typeof validateCompleted !== "function" ||
-            await validateCompleted(template) === true;
+          const completedIdentityValid = !completedCache || await validateCompleted(template) === true;
           if (completedIdentityValid) {
             return reuse(template, {
               cacheHit: true,
@@ -253,12 +256,10 @@ function createSourceEditorExplanationCache({
       .then(async () => {
         generated = await generate();
         const template = sourceEditorExplanationCacheTemplate(generated);
-        const completedIdentityValid = completedCache && (
-          typeof validateCompleted !== "function" || await validateCompleted(generated) === true
-        );
+        const completedIdentityValid = completedCache && await validateCompleted(generated) === true;
         if (completedIdentityValid) {
           remember(key, token, template);
-          if (template && writeCompleted && !closed && generations.get(key) === token) {
+          if (template && !closed && generations.get(key) === token) {
             await writeCompleted(template, () => !closed && generations.get(key) === token);
           }
         }

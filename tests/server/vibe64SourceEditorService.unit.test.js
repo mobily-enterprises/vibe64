@@ -64,6 +64,9 @@ function structuredExplanation(answer = "") {
   return JSON.stringify({ answer });
 }
 
+// A stream whose events nobody reads.
+const unreadStream = Object.freeze({ emit() {}, isClosed: () => false });
+
 // Runs one explanation stream and returns its final result in response form:
 // { ok: true, explanation, events } or the streamed error response.
 async function streamResult(run) {
@@ -1296,7 +1299,7 @@ test("explanations overlap source work and exclude only a second turn in the sam
   };
   let explaining;
   const foreground = await store.runSessionExclusive("session-1", "agent-write-mode", async () => {
-    explaining = fixture.service.streamExplanation(input);
+    explaining = fixture.service.streamExplanation(input, unreadStream);
     await entered.promise;
     return "foreground completed while explanation was answering";
   });
@@ -3924,7 +3927,7 @@ for (const stopBoundary of [
         startColumn: 1,
         startLine: 1,
         userMessageId: "msg_initial_user"
-      });
+      }, unreadStream);
 
       const first = fixture.service.streamExplanationFollowup({
         assistantMessageId: "msg_a_assistant",
@@ -3932,7 +3935,7 @@ for (const stopBoundary of [
         message: "Question A",
         sessionId: "session-1",
         userMessageId: "msg_a_user"
-      });
+      }, unreadStream);
       operations.push(first);
       await firstReady.promise;
       firstFinished.resolve();
@@ -3996,7 +3999,7 @@ for (const stopBoundary of [
         message: "Question B",
         sessionId: "session-1",
         userMessageId: "msg_b_user"
-      }, { emit: (event) => secondEvents.push(event) });
+      }, { emit: (event) => secondEvents.push(event), isClosed: () => false });
       operations.push(second);
       await secondReady.promise;
       interruptFinished.resolve();
@@ -4656,7 +4659,7 @@ for (const action of ["Close", "session close"]) {
     } });
     t.after(async () => { release.resolve(); await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
     const input = { sessionId: "session-1", explanationId: "exp_late_start", path: "src/app.js", scope: "file" };
-    const generating = fixture.service.streamExplanation(input);
+    const generating = fixture.service.streamExplanation(input, unreadStream);
     await starting.promise;
     let closed = false;
     const closing = (action === "Close" ? fixture.service.deleteExplanation(input)
@@ -4780,7 +4783,7 @@ test("source Stop reports a rejected provider acknowledgement and preserves clea
   t.after(async () => { release.resolve(); await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
   const input = { sessionId: "session-1", explanationId: "exp_unconfirmed_stop", path: "src/app.js", scope: "file" };
   const events = [];
-  const generating = fixture.service.streamExplanation(input, { emit: (event) => events.push(event) });
+  const generating = fixture.service.streamExplanation(input, { emit: (event) => events.push(event), isClosed: () => false });
   await ready.promise;
   const stopped = await fixture.service.stopExplanation(input);
   await generating;
@@ -4811,7 +4814,7 @@ test("source Stop can cancel before profile resolution without starting or leaki
   } });
   t.after(async () => { release.resolve(); await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
   const input = { sessionId: "session-1", explanationId: "exp_cancel_prepare", path: "src/app.js", scope: "file" };
-  const generating = fixture.service.streamExplanation(input);
+  const generating = fixture.service.streamExplanation(input, unreadStream);
   await preparing.promise;
   const stopping = fixture.service.stopExplanation(input);
   await new Promise((resolve) => setImmediate(resolve));

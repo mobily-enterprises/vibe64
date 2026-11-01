@@ -33,6 +33,8 @@ import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
+/** @typedef {import("./types.js").SourceEditorStreamEmit} SourceEditorStreamEmit */
+/** @typedef {import("./types.js").SourceEditorStreamClosed} SourceEditorStreamClosed */
 
 // One streamed assistant turn of a source explanation: its messages, the
 // events it emits, the structured answer it parses, and the explanation
@@ -256,8 +258,8 @@ function sourceEditorExplanationWithMessage(explanation = {}, messageId = "", pa
   };
 }
 
-function emitSourceEditorExplanationEvent(emit = null, isClosed = null, type = "", payload = {}) {
-  if (typeof emit !== "function" || (typeof isClosed === "function" && isClosed())) {
+function emitSourceEditorExplanationEvent(emit, isClosed, type, payload) {
+  if (isClosed()) {
     return;
   }
   emit({
@@ -267,22 +269,22 @@ function emitSourceEditorExplanationEvent(emit = null, isClosed = null, type = "
 }
 
 /**
- * @param {object} [context]
- * @param {object} [options]
+ * @param {object} context
+ * @param {object} options
  * @param {TerminalsService} options.terminals
  */
-async function streamSourceEditorAgentTurn(context = {}, {
-  onText = null,
-  onExecutionProfile = null,
-  onThread = null,
-  onTurn = null,
-  prompt = "",
-  promptLabel = "",
+async function streamSourceEditorAgentTurn(context, {
+  onText,
+  onExecutionProfile,
+  onThread,
+  onTurn,
+  prompt,
+  promptLabel,
   terminals,
   threadId = "",
   outputSchema = SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA,
   answerMaxChars = SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS
-} = {}) {
+}) {
   let latestText = "";
   let latestExecutionProfile = null;
   let latestThreadId = toText(threadId);
@@ -301,11 +303,11 @@ async function streamSourceEditorAgentTurn(context = {}, {
         const eventExecutionProfile = sourceEditorExecutionProfileSnapshot(event.executionProfile);
         if (eventExecutionProfile && !latestExecutionProfile) {
           latestExecutionProfile = eventExecutionProfile;
-          await onExecutionProfile?.(eventExecutionProfile);
+          await onExecutionProfile(eventExecutionProfile);
         }
         if (event.type === "thread") {
           latestThreadId = toText(event.threadId) || latestThreadId;
-          await onThread?.({
+          await onThread({
             replacedThreadId: toText(event.replacedThreadId),
             threadId: latestThreadId
           });
@@ -314,7 +316,7 @@ async function streamSourceEditorAgentTurn(context = {}, {
         if (event.type === "turn") {
           latestThreadId = toText(event.threadId) || latestThreadId;
           latestTurnId = toText(event.turnId) || latestTurnId;
-          await onTurn?.({
+          await onTurn({
             status: toText(event.status),
             threadId: latestThreadId,
             turnId: latestTurnId
@@ -327,7 +329,7 @@ async function streamSourceEditorAgentTurn(context = {}, {
         }
         latestText = String(classification.text || "");
         if (classification.kind === "live_progress") {
-          await onText?.({ kind: "live_progress", text: latestText, threadId: latestThreadId, turnId: latestTurnId });
+          await onText({ kind: "live_progress", text: latestText, threadId: latestThreadId, turnId: latestTurnId });
         }
       }
     }));
@@ -345,12 +347,12 @@ async function streamSourceEditorAgentTurn(context = {}, {
     const executionProfile = requiredSourceEditorExecutionProfile(result?.executionProfile);
     if (!latestExecutionProfile) {
       latestExecutionProfile = executionProfile;
-      await onExecutionProfile?.(executionProfile);
+      await onExecutionProfile(executionProfile);
     }
     const text = sourceEditorStructuredAnswer(result?.text || latestText, {
       maxChars: answerMaxChars
     });
-    await onText?.({
+    await onText({
       kind: "final_assistant_result",
       text,
       threadId: latestThreadId,
@@ -369,7 +371,7 @@ async function streamSourceEditorAgentTurn(context = {}, {
       latestExecutionProfile;
     if (failureProfile && !latestExecutionProfile) {
       latestExecutionProfile = failureProfile;
-      await onExecutionProfile?.(failureProfile);
+      await onExecutionProfile(failureProfile);
     }
     const failure = sourceEditorFailureWithRejectedThread(
       threadId ? sourceEditorFollowupThreadError(error) : error,
@@ -386,13 +388,13 @@ async function streamSourceEditorAgentTurn(context = {}, {
 }
 
 function sourceEditorAgentStreamHandlers({
-  assistantMessageId = "",
-  currentExplanation = () => ({}),
-  emitEvent = () => {},
-  remember = async () => {},
-  setExplanation = () => {}
-} = {}) {
-  const updateExplanation = async (patch = {}) => {
+  assistantMessageId,
+  currentExplanation,
+  emitEvent,
+  remember,
+  setExplanation
+}) {
+  const updateExplanation = async (patch) => {
     const next = {
       ...currentExplanation(),
       ...patch
@@ -450,17 +452,19 @@ function sourceEditorAgentStreamHandlers({
 }
 
 /**
- * @param {object} [context]
- * @param {object} [initialExplanation]
- * @param {object} [options]
+ * @param {object} context
+ * @param {object} initialExplanation
+ * @param {object} options
+ * @param {SourceEditorStreamEmit} options.emit
  * @param {SourceEditorExplanationChats} options.explanationChats
+ * @param {SourceEditorStreamClosed} options.isClosed
  */
-function createSourceEditorExplanationStreamState(context = {}, initialExplanation = {}, {
-  assistantMessageId = "",
-  emit = null,
+function createSourceEditorExplanationStreamState(context, initialExplanation, {
+  assistantMessageId,
+  emit,
   explanationChats,
-  isClosed = null
-} = {}) {
+  isClosed
+}) {
   let explanation = initialExplanation;
   let writeQueue = Promise.resolve(explanation);
   const currentExplanation = () => explanation;
@@ -545,21 +549,21 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
 }
 
 /**
- * @param {object} [context]
- * @param {object} [options]
+ * @param {object} context
+ * @param {object} options
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminals
  */
-async function runTrackedSourceEditorAgentTurn(context = {}, {
-  assistantMessageId = "",
-  currentExplanation = () => ({}),
-  emitEvent = () => {},
+async function runTrackedSourceEditorAgentTurn(context, {
+  assistantMessageId,
+  currentExplanation,
+  emitEvent,
   explanationChats,
   fallbackError = "Source explanation failed.",
-  remember = async () => ({}),
-  run = async () => ({}),
+  remember,
+  run,
   terminals
-} = {}) {
+}) {
   const finishStoppedExplanation = async (executionProfile = null) => {
     let stopped = await readStoppedSourceEditorExplanation(context, currentExplanation().id, {
       explanationChats

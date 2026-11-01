@@ -22,6 +22,8 @@ import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
+/** @typedef {import("./types.js").SourceEditorStreamEmit} SourceEditorStreamEmit */
+/** @typedef {import("./types.js").SourceEditorStreamClosed} SourceEditorStreamClosed */
 
 // A follow-up question on a source explanation, answered in the helper
 // thread that explained it.
@@ -76,18 +78,19 @@ function sourceEditorHelperFollowupThread(explanation = {}) {
 }
 
 /**
- * @param {object} [context]
- * @param {object} [input]
- * @param {object} [options]
+ * @param {object} context
+ * @param {object} input
+ * @param {object} options
+ * @param {SourceEditorStreamEmit} options.emit
  * @param {SourceEditorExplanationChats} options.explanationChats
+ * @param {SourceEditorStreamClosed} options.isClosed
  * @param {TerminalsService} options.terminals
  */
-async function streamSourceEditorExplanationFollowup(context = {}, input = {}, options = {}) {
+async function streamSourceEditorExplanationFollowup(context, input, options) {
   const {
-    emit = null,
+    emit,
     explanationChats,
-    explanationTurns,
-    isClosed = null,
+    isClosed,
     terminals
   } = options;
   const message = sourceEditorExplanationFollowupMessage(input.message);
@@ -121,7 +124,6 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, o
     assistantMessageId,
     emit,
     explanationChats,
-    explanationTurns,
     isClosed
   });
 

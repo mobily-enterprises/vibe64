@@ -29,7 +29,11 @@ import {
   sourceEditorDirectoryPage,
   sourceEditorFileRevealTree
 } from "./sourceFileTree.js";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { toText } from "@local/vibe64-core/shared/toText";
+
+/** @typedef {import("./types.js").SourceEditorExplanationStream} SourceEditorExplanationStream */
+
 // Session source files: path policy, tree, file matching, search, resolution
 // and read/create/save. The Files areas and integrations reuse these helpers.
 const SOURCE_EDITOR_CONFLICT_CODE = "vibe64_source_editor_conflict";
@@ -78,13 +82,13 @@ function streamSourceEditorFileChanges(context, file, stream, fileObserver) {
 
   return new Promise((resolve) => {
     let finished = false;
-    let unsubscribe = null;
+    let unsubscribe = doNothing;
     const finish = () => {
       if (finished) {
         return;
       }
       finished = true;
-      unsubscribe?.();
+      unsubscribe();
       resolve();
     };
     onClose(finish);
@@ -157,19 +161,18 @@ async function runSourceEditorOperation(operation) {
   }
 }
 
-async function streamSourceEditorOperation(operation, {
-  emit = null
-} = {}) {
+/**
+ * @param {() => Promise<unknown>} operation
+ * @param {SourceEditorExplanationStream} stream
+ */
+async function streamSourceEditorOperation(operation, { emit }) {
   try {
     await operation();
   } catch (error) {
-    const response = sourceEditorErrorResponse(error);
-    if (typeof emit === "function") {
-      emit({
-        ...response,
-        type: "source-explanation.error"
-      });
-    }
+    emit({
+      ...sourceEditorErrorResponse(error),
+      type: "source-explanation.error"
+    });
   }
 }
 

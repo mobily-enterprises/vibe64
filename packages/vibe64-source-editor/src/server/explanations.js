@@ -74,6 +74,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
+/** @typedef {import("./types.js").SourceEditorExplanationStream} SourceEditorExplanationStream */
 
 const SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES = 128 * 1024 * 1024;
 
@@ -227,7 +228,11 @@ function createExplanationOperations({
     explanationCache.close();
   }
 
-  async function streamExplanation(input = {}, stream = {}) {
+  /**
+   * @param {object} input
+   * @param {SourceEditorExplanationStream} stream
+   */
+  async function streamExplanation(input, stream) {
     await streamSourceEditorOperation(async () => {
       await runSourceEditorAgentOperation(input, async (context) => {
         const explanationInput = await sourceEditorExplanationInput(context, input);
@@ -240,7 +245,6 @@ function createExplanationOperations({
             emit: stream.emit,
             explanationChats,
             explanationInput,
-            explanationTurns,
             isClosed: stream.isClosed,
             terminals
           }),
@@ -266,13 +270,16 @@ function createExplanationOperations({
     }, stream);
   }
 
-  async function streamExplanationFollowup(input = {}, stream = {}) {
+  /**
+   * @param {object} input
+   * @param {SourceEditorExplanationStream} stream
+   */
+  async function streamExplanationFollowup(input, stream) {
     await streamSourceEditorOperation(async () => {
       await runSourceEditorAgentOperation(input, (context) => (
         streamSourceEditorExplanationFollowup(context, input, {
           emit: stream.emit,
           explanationChats,
-          explanationTurns,
           isClosed: stream.isClosed,
           terminals
         })
@@ -541,10 +548,10 @@ async function createCachedSourceEditorExplanation(
   options = {}
 ) {
   const {
-    cacheState = {},
-    emit = null,
+    cacheState,
+    emit,
     explanationChats,
-    isClosed = null
+    isClosed
   } = options;
   const createdAt = new Date().toISOString();
   const explanationId = sourceEditorClientExplanationId(input.explanationId) || context.explanationId || sourceEditorExplanationId();
@@ -613,14 +620,12 @@ async function createCachedSourceEditorExplanation(
  */
 async function streamSourceEditorExplanation(context = {}, input = {}, options = {}) {
   const {
-    emit = null,
+    emit,
     explanationChats,
-    explanationInput = null,
-    explanationTurns,
-    isClosed = null,
+    explanationInput: preparedInput,
+    isClosed,
     terminals
   } = options;
-  const preparedInput = explanationInput || await sourceEditorExplanationInput(context, input);
   const createdAt = new Date().toISOString();
   const explanationId = sourceEditorClientExplanationId(input.explanationId) || context.explanationId || sourceEditorExplanationId();
   const userMessageId = sourceEditorClientMessageId(input.userMessageId) || sourceEditorExplanationMessageId();
@@ -657,7 +662,6 @@ async function streamSourceEditorExplanation(context = {}, input = {}, options =
     assistantMessageId,
     emit,
     explanationChats,
-    explanationTurns,
     isClosed
   });
 
