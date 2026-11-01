@@ -9,10 +9,10 @@ import {
   applySessionWorkUpdateDirect,
   captureSessionWorkUpdateCheckpointDirect,
   checkSessionUpdatesDirect,
-  inspectSessionUpdateFailureDirect,
   prepareSessionWorkUpdateDirect,
   regenerateSessionWorkUpdateDirect
 } from "./sessionWorkUpdate.js";
+import { inspectSessionUpdateFailureDirect } from "./sessionWorkUpdateRecovery.js";
 import {
   inspectSessionChangeDiffDirect,
   inspectSessionChangesDirect,
