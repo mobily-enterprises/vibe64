@@ -29,7 +29,7 @@ async function readClaudeCodeAuthStatus({ env = process.env, credentialHome = ap
 }
 
 /** True when the status read could not execute Claude Code at all. */
-function claudeStatusStartFailed(status = {}) {
+function claudeStatusStartFailed(status) {
   return String(status?.error || "").startsWith(CLAUDE_START_FAILED_ERROR);
 }
 

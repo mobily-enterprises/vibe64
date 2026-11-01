@@ -65,7 +65,7 @@ function terminalOwnerForGithubActor({
 
 async function resolveRequestGithubTerminalToolHome({
   env = process.env,
-  input = {},
+  input,
   logger = silentLogger,
   notReadyMessage = "GitHub is not ready. Connect GitHub before running repository commands.",
   operation = "",
@@ -167,7 +167,7 @@ function terminalNoGithubActorMetadata({
 }
 
 function terminalOwnerFromMetadata(metadata = {}) {
-  const owner = metadata?.terminalOwner && typeof metadata.terminalOwner === "object"
+  const owner = metadata.terminalOwner && typeof metadata.terminalOwner === "object"
     ? metadata.terminalOwner
     : {};
   const ownerScope = normalizeText(owner.ownerScope);
