@@ -60,7 +60,7 @@ export function inspectErdLayout(schema, layout) {
   return { inspection, routes: erdRouteSnapshot(graph.routes) };
 }
 
-export function moveErdTables(schema, layout, input = {}) {
+export function moveErdLayoutTables(schema, layout, input = {}) {
   if (!Number.isSafeInteger(input.revision) || input.revision < 0 || !Array.isArray(input.moves) ||
     input.moves.length < 1 || input.moves.length > 2_000) {
     throw vibe64Error("Provide the inspected revision and between 1 and 2000 table moves.", "vibe64_database_erd_moves_invalid");

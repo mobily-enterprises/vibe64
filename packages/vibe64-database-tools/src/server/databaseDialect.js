@@ -81,7 +81,7 @@ function defineDatabaseDialect(definition = {}) {
 
 const POSTGRESQL_DIALECT = defineDatabaseDialect({
   client: "pg",
-  commandResult(raw = {}) {
+  commandResult(raw) {
     return {
       affectedRows: Number(raw?.rowCount || 0),
       command: driverText(raw?.command || "COMMAND"),
@@ -100,7 +100,7 @@ const POSTGRESQL_DIALECT = defineDatabaseDialect({
   },
   queryOptions: Object.freeze({ rowMode: "array" }),
   readOnlyBeginSql: "BEGIN READ ONLY",
-  resultSet(raw = {}) {
+  resultSet(raw) {
     if (!Array.isArray(raw?.fields) || raw.fields.length < 1) {
       return null;
     }

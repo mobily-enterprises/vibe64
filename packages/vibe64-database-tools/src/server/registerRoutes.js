@@ -25,7 +25,7 @@ function withSession(request, input = {}) {
   };
 }
 
-function databaseStatusCode(response = {}) {
+function databaseStatusCode(response) {
   if (response?.ok !== false) {
     return 200;
   }

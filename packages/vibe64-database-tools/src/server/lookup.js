@@ -14,7 +14,7 @@ import { tableQuery } from "./tableQuery.js";
 const LOOKUP_LIMIT = 25;
 const DISPLAY_COLUMN_NAMES = Object.freeze(["name", "title", "label", "code"]);
 
-function relationship(schema = {}, relationshipId = "") {
+function relationship(schema, relationshipId = "") {
   const found = (Array.isArray(schema?.relationships) ? schema.relationships : []).find((candidate) => (
     candidate.id === normalizeText(relationshipId)
   ));
@@ -27,7 +27,7 @@ function relationship(schema = {}, relationshipId = "") {
   return found;
 }
 
-function schemaTable(schema = {}, qualifiedName = "") {
+function schemaTable(schema, qualifiedName = "") {
   const found = (Array.isArray(schema?.tables) ? schema.tables : []).find((candidate) => (
     candidate.qualifiedName === normalizeText(qualifiedName)
   ));

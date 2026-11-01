@@ -28,7 +28,7 @@ function tableKey(schema = "", name = "") {
   return `${text(schema)}\u0000${text(name)}`;
 }
 
-function tableMaps(schema = {}) {
+function tableMaps(schema) {
   const tables = Array.isArray(schema?.tables) ? schema.tables : [];
   return {
     byId: new Map(tables.map((table) => [text(table.physicalId), table]).filter(([id]) => id)),
@@ -36,7 +36,7 @@ function tableMaps(schema = {}) {
   };
 }
 
-function relationshipForColumn(schema = {}, table = {}, column = {}) {
+function relationshipForColumn(schema, table = {}, column = {}) {
   return (Array.isArray(schema?.relationships) ? schema.relationships : []).find((relationship) => (
     relationship.sourceTable === table.qualifiedName && relationship.columns.includes(column.name)
   )) || null;
@@ -424,7 +424,7 @@ async function cancelDatabaseQuery(activeQueries = new Map(), value = "") {
   };
 }
 
-function schemaTable(schema = {}, tableInput = {}) {
+function schemaTable(schema, tableInput = {}) {
   const table = (Array.isArray(schema?.tables) ? schema.tables : []).find((candidate) => (
     candidate.schema === text(tableInput.schema) && candidate.name === text(tableInput.name)
   ));
@@ -448,7 +448,7 @@ function schemaColumn(table = {}, value = "") {
   return column;
 }
 
-function validatedKey(table = {}, input = {}) {
+function validatedKey(table = {}, input) {
   const inputColumns = Array.isArray(input?.columns) ? input.columns : [];
   const names = inputColumns.map((entry) => text(entry?.column));
   const key = table.keys.find((candidate) => (

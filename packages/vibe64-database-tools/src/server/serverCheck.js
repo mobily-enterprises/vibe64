@@ -53,7 +53,7 @@ const NETWORK_UNREACHABLE = new Set(["EHOSTUNREACH", "ENETUNREACH", "ETIMEDOUT",
  * not-running, unreachable, wrong-login, login-method, database-missing,
  * no-access, invalid, failed.
  */
-function describeFailure(error = {}, { kind, endpoint }) {
+function describeFailure(error, { kind, endpoint }) {
   const code = String(error?.code || "");
   const errno = Number(error?.errno || 0);
   const message = String(error?.message || "");

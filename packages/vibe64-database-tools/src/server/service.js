@@ -38,7 +38,7 @@ import {
 } from "./sessionState.js";
 import { createSessionDatabase } from "./sessionDatabase.js";
 import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "./dataOverview.js";
-import { inspectErdLayout, moveErdTables } from "./erdLayout.js";
+import { inspectErdLayout, moveErdLayoutTables } from "./erdLayout.js";
 import { defaultTableQuery } from "../shared/sqlQuoting.js";
 import { DATA_OVERVIEW_INSTRUCTIONS, DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, dataOverviewCoverage, validateDataOverview } from "../shared/dataOverview.js";
 
@@ -223,411 +223,430 @@ function createService({
     });
   }
 
-  return Object.freeze({
-    checkServer(input) {
-      return databaseResult(() => sessionDatabase.checkServer(input));
-    },
+  function checkServer(input) {
+    return databaseResult(() => sessionDatabase.checkServer(input));
+  }
 
-    async readOverview(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const schema = await sessionDatabase.currentSchema(context);
-        const overview = await readDataOverview(context.session);
-        const reference = (value) => dataOverviewReference(schema, value);
-        const relationships = schema.relationships.map((relationship) => ({ ...relationship, reference: reference(relationship.id) }));
-        const coverage = dataOverviewCoverage({
-          tables: schema.tables.map((table) => ({ qualifiedName: reference(table.qualifiedName) })),
-          relationships: relationships.map((relationship) => ({ id: relationship.reference }))
-        }, overview.definition);
-        return {
-          ok: true, overview, coverage, valid: !overview.error && !coverage.missing.length && !coverage.missingRelationships.length,
-          instructions: DATA_OVERVIEW_INSTRUCTIONS,
-          schema: {
-            database: schema.database, engine: schema.engine, refreshedAt: schema.refreshedAt,
-            tables: schema.tables.map((table) => ({
-              reference: reference(table.qualifiedName), qualifiedName: table.qualifiedName, kind: table.kind, comment: table.comment,
-              keys: table.keys,
-              columns: table.columns.map((column) => ({ name: column.name, nativeType: column.nativeType, nullable: column.nullable, comment: column.comment }))
-            })),
-            relationships
-          }
-        };
-      });
-    },
-    async readState(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const schema = await sessionDatabase.currentSchema(context);
-        const [layout, workspace, overview] = await Promise.all([
-          readErdLayout(context.store, context.sessionId),
-          readWorkspace(context.store, context.sessionId, context.vibe64User),
-          readDataOverview(context.session, schema)
-        ]);
-        let decision;
-        try { decision = await assistantDecision(context); }
-        catch (error) { decision = { available: false, message: error.message }; }
-        return {
-          activeQueries: [...(activeQueries.get(sessionQueryKey(context.sessionId)) || [])]
-            .map(([queryId, query]) => ({ queryId, readOnly: query.readOnly, startedAt: query.startedAt, cancellable: Boolean(query.cancel) })),
-          assistant: databaseAssistantAvailability(decision),
-          connection: safeConnectionDescriptor(context.writeConnection, context),
-          layout,
-          overview,
-          ok: true,
+  async function readOverview(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const schema = await sessionDatabase.currentSchema(context);
+      const overview = await readDataOverview(context.session);
+      const reference = (value) => dataOverviewReference(schema, value);
+      const relationships = schema.relationships.map((relationship) => ({ ...relationship, reference: reference(relationship.id) }));
+      const coverage = dataOverviewCoverage({
+        tables: schema.tables.map((table) => ({ qualifiedName: reference(table.qualifiedName) })),
+        relationships: relationships.map((relationship) => ({ id: relationship.reference }))
+      }, overview.definition);
+      return {
+        ok: true, overview, coverage, valid: !overview.error && !coverage.missing.length && !coverage.missingRelationships.length,
+        instructions: DATA_OVERVIEW_INSTRUCTIONS,
+        schema: {
+          database: schema.database, engine: schema.engine, refreshedAt: schema.refreshedAt,
+          tables: schema.tables.map((table) => ({
+            reference: reference(table.qualifiedName), qualifiedName: table.qualifiedName, kind: table.kind, comment: table.comment,
+            keys: table.keys,
+            columns: table.columns.map((column) => ({ name: column.name, nativeType: column.nativeType, nullable: column.nullable, comment: column.comment }))
+          })),
+          relationships
+        }
+      };
+    });
+  }
+
+  async function readState(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const schema = await sessionDatabase.currentSchema(context);
+      const [layout, workspace, overview] = await Promise.all([
+        readErdLayout(context.store, context.sessionId),
+        readWorkspace(context.store, context.sessionId, context.vibe64User),
+        readDataOverview(context.session, schema)
+      ]);
+      let decision;
+      try { decision = await assistantDecision(context); }
+      catch (error) { decision = { available: false, message: error.message }; }
+      return {
+        activeQueries: [...(activeQueries.get(sessionQueryKey(context.sessionId)) || [])]
+          .map(([queryId, query]) => ({ queryId, readOnly: query.readOnly, startedAt: query.startedAt, cancellable: Boolean(query.cancel) })),
+        assistant: databaseAssistantAvailability(decision),
+        connection: safeConnectionDescriptor(context.writeConnection, context),
+        layout,
+        overview,
+        ok: true,
+        schema,
+        workspace,
+        writeAccess: {
+          available: true,
+          confirmationDatabase: context.writeConnection.database,
+          unlocked: false
+        }
+      };
+    });
+  }
+
+  async function refreshSchema(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const schema = await sessionDatabase.refreshSchema(context, normalizeText(input.source) || "user");
+      await publishLayoutChanged(context.sessionId, context.session);
+      return {
+        ok: true,
+        schema
+      };
+    });
+  }
+
+  async function saveOverview(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const schema = await sessionDatabase.currentSchema(context);
+      const definition = validateDataOverview(dataOverviewDefinition(schema, validateDataOverview(input.definition)));
+      const resolvedDefinition = dataOverviewDefinition(schema, definition, { qualified: true });
+      const text = `${JSON.stringify(definition, null, 2)}\n`;
+      if (Buffer.byteLength(text) > DATA_OVERVIEW_MAX_BYTES) {
+        throw databaseError("Data overview is larger than 256 KiB.", "vibe64_database_overview_invalid");
+      }
+      const current = await readDataOverview(context.session);
+      if (current.present && (!input.baseHash || input.baseHash !== current.hash)) {
+        throw databaseError("The data overview changed. Reload it before saving your grouping.", "vibe64_database_overview_conflict");
+      }
+      if (!current.present && input.baseHash) {
+        throw databaseError("The data overview was removed. Reload it before saving.", "vibe64_database_overview_conflict");
+      }
+      const payload = { sessionId: context.sessionId, path: DATA_OVERVIEW_PATH, text, baseHash: current.hash, vibe64User: context.vibe64User };
+      const result = current.present ? await sourceEditor.saveFile(payload) : await sourceEditor.createFile(payload);
+      if (result.ok === false) return result;
+      await publishLayoutChanged(context.sessionId, context.session);
+      return { ok: true, overview: { path: DATA_OVERVIEW_PATH, present: true, hash: result.file.hash, error: "", definition: resolvedDefinition } };
+    });
+  }
+
+  async function runQuery(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const schema = await sessionDatabase.currentSchema(context);
+      const readOnly = input.readOnly !== false;
+      const automaticDefault = input.automatic === true && schema.tables.some((table) => (
+        String(input.sql || "").trim() === defaultTableQuery(table, schema.engine)
+      ));
+      if (!readOnly) {
+        sessionDatabase.assertWriteQueryConfirmed(context, input);
+      }
+      const startedAt = Date.now();
+      try {
+        const result = await executeSessionQuery(context, {
+          queryId: input.queryId,
+          readOnly,
           schema,
-          workspace,
-          writeAccess: {
-            available: true,
-            confirmationDatabase: context.writeConnection.database,
-            unlocked: false
-          }
-        };
-      });
-    },
-
-    async refreshSchema(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const schema = await sessionDatabase.refreshSchema(context, normalizeText(input.source) || "user");
-        await publishLayoutChanged(context.sessionId, context.session);
-        return {
-          ok: true,
-          schema
-        };
-      });
-    },
-
-    async saveOverview(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const schema = await sessionDatabase.currentSchema(context);
-        const definition = validateDataOverview(dataOverviewDefinition(schema, validateDataOverview(input.definition)));
-        const resolvedDefinition = dataOverviewDefinition(schema, definition, { qualified: true });
-        const text = `${JSON.stringify(definition, null, 2)}\n`;
-        if (Buffer.byteLength(text) > DATA_OVERVIEW_MAX_BYTES) {
-          throw databaseError("Data overview is larger than 256 KiB.", "vibe64_database_overview_invalid");
-        }
-        const current = await readDataOverview(context.session);
-        if (current.present && (!input.baseHash || input.baseHash !== current.hash)) {
-          throw databaseError("The data overview changed. Reload it before saving your grouping.", "vibe64_database_overview_conflict");
-        }
-        if (!current.present && input.baseHash) {
-          throw databaseError("The data overview was removed. Reload it before saving.", "vibe64_database_overview_conflict");
-        }
-        const payload = { sessionId: context.sessionId, path: DATA_OVERVIEW_PATH, text, baseHash: current.hash, vibe64User: context.vibe64User };
-        const result = current.present ? await sourceEditor.saveFile(payload) : await sourceEditor.createFile(payload);
-        if (result.ok === false) return result;
-        await publishLayoutChanged(context.sessionId, context.session);
-        return { ok: true, overview: { path: DATA_OVERVIEW_PATH, present: true, hash: result.file.hash, error: "", definition: resolvedDefinition } };
-      });
-    },
-
-    async runQuery(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const schema = await sessionDatabase.currentSchema(context);
-        const readOnly = input.readOnly !== false;
-        const automaticDefault = input.automatic === true && schema.tables.some((table) => (
-          String(input.sql || "").trim() === defaultTableQuery(table, schema.engine)
-        ));
-        if (!readOnly) {
-          sessionDatabase.assertWriteQueryConfirmed(context, input);
-        }
-        const startedAt = Date.now();
-        try {
-          const result = await executeSessionQuery(context, {
-            queryId: input.queryId,
-            readOnly,
-            schema,
-            sql: input.sql
-          });
-          if (!automaticDefault) {
-            await recordQueryHistory(
-              context.store,
-              context.sessionId,
-              context.vibe64User,
-              historyEntry(input.sql, result, readOnly)
-            );
-            sessionDatabase.logOperation(context, {
-              affectedRows: Number(result.affectedRows || 0),
-              durationMs: result.durationMs,
-              operation: "query.run",
-              queryId: result.queryId,
-              readOnly,
-              sql: auditSql(input.sql),
-              status: "succeeded"
-            });
-          }
-          return result;
-        } catch (error) {
-          if (!automaticDefault) {
-            await recordQueryHistory(
-              context.store,
-              context.sessionId,
-              context.vibe64User,
-              historyEntry(input.sql, {
-                durationMs: Date.now() - startedAt,
-                kind: "error",
-                ok: false
-              }, readOnly)
-            ).catch(() => null);
-          }
-          // Failures are logged even for the automatic default-table load.
+          sql: input.sql
+        });
+        if (!automaticDefault) {
+          await recordQueryHistory(
+            context.store,
+            context.sessionId,
+            context.vibe64User,
+            historyEntry(input.sql, result, readOnly)
+          );
           sessionDatabase.logOperation(context, {
-            code: error?.code,
-            durationMs: Date.now() - startedAt,
+            affectedRows: Number(result.affectedRows || 0),
+            durationMs: result.durationMs,
             operation: "query.run",
-            queryId: normalizeText(input.queryId),
+            queryId: result.queryId,
             readOnly,
             sql: auditSql(input.sql),
-            status: "failed"
-          }, "warn");
-          throw error;
+            status: "succeeded"
+          });
         }
-      });
-    },
-
-    async cancelQuery(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const queries = sessionQueries(context.sessionId);
-        const result = await cancelDatabaseQuery(queries, input.queryId);
-        releaseSessionQueries(context.sessionId, queries);
+        return result;
+      } catch (error) {
+        if (!automaticDefault) {
+          await recordQueryHistory(
+            context.store,
+            context.sessionId,
+            context.vibe64User,
+            historyEntry(input.sql, {
+              durationMs: Date.now() - startedAt,
+              kind: "error",
+              ok: false
+            }, readOnly)
+          ).catch(() => null);
+        }
+        // Failures are logged even for the automatic default-table load.
         sessionDatabase.logOperation(context, {
-          cancelled: result.cancelled,
-          operation: "query.cancel",
-          queryId: result.queryId,
+          code: error?.code,
+          durationMs: Date.now() - startedAt,
+          operation: "query.run",
+          queryId: normalizeText(input.queryId),
+          readOnly,
+          sql: auditSql(input.sql),
+          status: "failed"
+        }, "warn");
+        throw error;
+      }
+    });
+  }
+
+  async function cancelQuery(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const queries = sessionQueries(context.sessionId);
+      const result = await cancelDatabaseQuery(queries, input.queryId);
+      releaseSessionQueries(context.sessionId, queries);
+      sessionDatabase.logOperation(context, {
+        cancelled: result.cancelled,
+        operation: "query.cancel",
+        queryId: result.queryId,
+        status: "succeeded"
+      });
+      return result;
+    });
+  }
+
+  async function updateCell(input) {
+    return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => updateDatabaseCell({
+      edit: input.edit,
+      knex,
+      schema,
+      value: input.value
+    }), {
+      operation: "cell.update",
+      table: input.edit?.table
+    }));
+  }
+
+  async function insertRow(input) {
+    return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => insertDatabaseRow({
+      knex,
+      schema,
+      table: input.table,
+      values: input.values
+    }), {
+      operation: "row.insert",
+      table: input.table
+    }));
+  }
+
+  async function deleteRow(input) {
+    return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => deleteDatabaseRow({
+      confirmed: input.confirmed,
+      key: input.key,
+      knex,
+      schema,
+      table: input.table
+    }), {
+      operation: "row.delete",
+      table: input.table
+    }));
+  }
+
+  async function searchLookup(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const schema = await sessionDatabase.currentSchema(context);
+      return withKnex(context.readEndpoint, ({ connection, knex }) => (
+        searchDatabaseLookup({
+          engine: connection.engine,
+          knex,
+          relationshipId: input.relationshipId,
+          schema,
+          search: input.search
+        })
+      ));
+    });
+  }
+
+  async function readErd(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const schema = await sessionDatabase.currentSchema(context);
+      const layout = await readErdLayout(context.store, context.sessionId);
+      const { inspection } = inspectErdLayout(schema, layout);
+      return { ok: true, ...inspection };
+    });
+  }
+
+  async function moveErdTables(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const schema = await sessionDatabase.currentSchema(context);
+      const current = await readErdLayout(context.store, context.sessionId);
+      const moved = moveErdLayoutTables(schema, current, input.changes);
+      const { routes, inspection } = inspectErdLayout(schema, moved.layout);
+      const layout = await saveErdLayout(context.store, context.sessionId, { ...moved.layout, routes }, {
+        expectedRevision: input.changes.revision
+      });
+      await publishLayoutChanged(context.sessionId, context.session);
+      return { ok: true, ...inspection, revision: layout.revision, previousMoves: moved.previousMoves };
+    });
+  }
+
+  async function saveLayout(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      const layout = await saveErdLayout(context.store, context.sessionId, input.layout);
+      await publishLayoutChanged(context.sessionId, context.session);
+      return {
+        layout,
+        ok: true
+      };
+    });
+  }
+
+  async function saveSnippet(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      return {
+        ok: true,
+        workspace: await saveStoredSnippet(
+          context.store,
+          context.sessionId,
+          context.vibe64User,
+          input.snippet
+        )
+      };
+    });
+  }
+
+  async function deleteSnippet(input) {
+    return databaseResult(async () => {
+      const context = await sessionDatabase.sessionContext(input);
+      return {
+        ok: true,
+        workspace: await deleteStoredSnippet(
+          context.store,
+          context.sessionId,
+          context.vibe64User,
+          input.snippetId
+        )
+      };
+    });
+  }
+
+  function askAssistant(input) {
+    const task = { sessionId: normalizeText(input.sessionId), projectScope: currentProjectScopeKey(),
+      actor: actorKey(input.vibe64User), controller: new AbortController() };
+    task.promise = databaseResult(async () => {
+      if ([...activeAssistants].some((other) => other !== task && other.sessionId === task.sessionId &&
+          other.projectScope === task.projectScope && other.actor === task.actor)) {
+        throw databaseError("Wait for your current database question to finish.", "vibe64_database_assistant_busy");
+      }
+      const context = await sessionDatabase.sessionContext(input);
+      task.controller.signal.throwIfAborted();
+      const decision = await assistantDecision(context);
+      if (!decision.available) throw databaseError(decision.message, decision.reasonCode);
+      const runtime = await projectService.createRuntime({ inspectSource: false });
+      const admitted = await runtime.store.runSessionExclusive(context.sessionId, `database-assistant-${task.actor}`, async () => {
+        const schema = await sessionDatabase.currentSchema(context);
+        const artifact = `database/assistant-tasks/${task.actor}.json`;
+        await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
+        task.controller.signal.throwIfAborted();
+        const id = `database_${randomUUID()}`;
+        const root = path.join(runtime.stateRoot, "assistant-helpers", id);
+        const helper = { scope: { id, environment: {}, runtimeRoot: path.join(root, "runtime"), workdir: path.join(root, "workdir"),
+          stableContext: "Answer only from the supplied database information. You have no tools or project access." },
+          selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity,
+          conversationId: "", runId: "", executionId: "" };
+        const retain = () => runtime.store.writeJsonArtifact(context.sessionId, artifact, helper);
+        await retain();
+        const options = { assistantSelection: helper.selection, vibe64User: context.vibe64User,
+          expectedConnectionIdentity: helper.connectionIdentity, signal: task.controller.signal,
+          async onEvent(event) {
+            if (event.type === "thread") helper.conversationId = event.threadId;
+            else if (event.type === "turn") helper.runId = event.turnId;
+            else if (event.type === "helper-execution") helper.executionId = event.executionId;
+            else return;
+            await retain();
+          } };
+        const startedAt = Date.now();
+        let result = null;
+        let failure = null;
+        try {
+          await mkdir(helper.scope.workdir, { recursive: true, mode: 0o700 });
+          await mkdir(helper.scope.runtimeRoot, { recursive: true, mode: 0o700 });
+          const profile = await terminalService.resolveEphemeralAgentExecutionProfile(helper.scope, { ...DATABASE_ASSISTANT_EXECUTION_PROFILE }, options);
+          helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(profile);
+          await retain();
+          task.controller.signal.throwIfAborted();
+          result = await runDatabaseAssistant({
+            agentContext: options,
+            assistant: databaseAssistantAvailability(decision),
+            executeReadQuery: (sql) => {
+              task.controller.signal.throwIfAborted();
+              return executeSessionQuery(context, { schema, sql, signal: task.controller.signal });
+            },
+            messages: input.messages,
+            runAgentTurn: (turnInput, turnOptions) => terminalService.runEphemeralAgentChatTurn(helper.scope,
+              { ...turnInput, executionProfile: profile }, turnOptions),
+            schema
+          });
+        } catch (error) {
+          failure = error;
+        }
+        // This service is the helper's only cleanup owner. A cleanup failure
+        // fails an otherwise successful question; after a failed question it
+        // is attached as the cause, so the original reason stays visible.
+        // Either way the retained artifact blocks the next question and is
+        // retried on session close.
+        try {
+          await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
+        } catch (cleanupError) {
+          if (failure) failure.cause ??= cleanupError;
+          else failure = cleanupError;
+        }
+        sessionDatabase.logOperation(context, failure ? {
+          code: failure.code,
+          durationMs: Date.now() - startedAt,
+          operation: "assistant.ask",
+          status: "failed"
+        } : {
+          durationMs: Date.now() - startedAt,
+          model: result.model,
+          operation: "assistant.ask",
+          queryCount: result.queries.length,
+          schemaLookupCount: result.schemaLookups.length,
           status: "succeeded"
-        });
+        }, failure ? "warn" : "info");
+        if (failure) throw failure;
         return result;
       });
-    },
+      if (!admitted.acquired) throw databaseError(admitted.value?.error || "The session is unavailable for a database question.",
+        admitted.value?.code || "vibe64_database_assistant_busy");
+      return admitted.value;
+    }).finally(() => activeAssistants.delete(task));
+    activeAssistants.add(task);
+    return task.promise;
+  }
 
-    async updateCell(input) {
-      return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => updateDatabaseCell({
-        edit: input.edit,
-        knex,
-        schema,
-        value: input.value
-      }), {
-        operation: "cell.update",
-        table: input.edit?.table
-      }));
-    },
+  async function close() {
+    const tasks = [...activeAssistants];
+    for (const task of tasks) task.controller.abort();
+    const queries = [...activeQueries.values()].flatMap((session) => [...session.values()]);
+    await Promise.allSettled(queries.filter((query) => query.cancel).map((query) => query.cancel()));
+    activeQueries.clear();
+    await Promise.allSettled(tasks.map((task) => task.promise));
+  }
 
-    async insertRow(input) {
-      return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => insertDatabaseRow({
-        knex,
-        schema,
-        table: input.table,
-        values: input.values
-      }), {
-        operation: "row.insert",
-        table: input.table
-      }));
-    },
-
-    async deleteRow(input) {
-      return databaseResult(() => sessionDatabase.runMutation(input, ({ knex, schema }) => deleteDatabaseRow({
-        confirmed: input.confirmed,
-        key: input.key,
-        knex,
-        schema,
-        table: input.table
-      }), {
-        operation: "row.delete",
-        table: input.table
-      }));
-    },
-
-    async searchLookup(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const schema = await sessionDatabase.currentSchema(context);
-        return withKnex(context.readEndpoint, ({ connection, knex }) => (
-          searchDatabaseLookup({
-            engine: connection.engine,
-            knex,
-            relationshipId: input.relationshipId,
-            schema,
-            search: input.search
-          })
-        ));
-      });
-    },
-
-    async readErd(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const schema = await sessionDatabase.currentSchema(context);
-        const layout = await readErdLayout(context.store, context.sessionId);
-        const { inspection } = inspectErdLayout(schema, layout);
-        return { ok: true, ...inspection };
-      });
-    },
-
-    async moveErdTables(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const schema = await sessionDatabase.currentSchema(context);
-        const current = await readErdLayout(context.store, context.sessionId);
-        const moved = moveErdTables(schema, current, input.changes);
-        const { routes, inspection } = inspectErdLayout(schema, moved.layout);
-        const layout = await saveErdLayout(context.store, context.sessionId, { ...moved.layout, routes }, {
-          expectedRevision: input.changes.revision
-        });
-        await publishLayoutChanged(context.sessionId, context.session);
-        return { ok: true, ...inspection, revision: layout.revision, previousMoves: moved.previousMoves };
-      });
-    },
-
-    async saveLayout(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        const layout = await saveErdLayout(context.store, context.sessionId, input.layout);
-        await publishLayoutChanged(context.sessionId, context.session);
-        return {
-          layout,
-          ok: true
-        };
-      });
-    },
-
-    async saveSnippet(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        return {
-          ok: true,
-          workspace: await saveStoredSnippet(
-            context.store,
-            context.sessionId,
-            context.vibe64User,
-            input.snippet
-          )
-        };
-      });
-    },
-
-    async deleteSnippet(input) {
-      return databaseResult(async () => {
-        const context = await sessionDatabase.sessionContext(input);
-        return {
-          ok: true,
-          workspace: await deleteStoredSnippet(
-            context.store,
-            context.sessionId,
-            context.vibe64User,
-            input.snippetId
-          )
-        };
-      });
-    },
-
-    askAssistant(input) {
-      const task = { sessionId: normalizeText(input.sessionId), projectScope: currentProjectScopeKey(),
-        actor: actorKey(input.vibe64User), controller: new AbortController() };
-      task.promise = databaseResult(async () => {
-        if ([...activeAssistants].some((other) => other !== task && other.sessionId === task.sessionId &&
-            other.projectScope === task.projectScope && other.actor === task.actor)) {
-          throw databaseError("Wait for your current database question to finish.", "vibe64_database_assistant_busy");
-        }
-        const context = await sessionDatabase.sessionContext(input);
-        task.controller.signal.throwIfAborted();
-        const decision = await assistantDecision(context);
-        if (!decision.available) throw databaseError(decision.message, decision.reasonCode);
-        const runtime = await projectService.createRuntime({ inspectSource: false });
-        const admitted = await runtime.store.runSessionExclusive(context.sessionId, `database-assistant-${task.actor}`, async () => {
-          const schema = await sessionDatabase.currentSchema(context);
-          const artifact = `database/assistant-tasks/${task.actor}.json`;
-          await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
-          task.controller.signal.throwIfAborted();
-          const id = `database_${randomUUID()}`;
-          const root = path.join(runtime.stateRoot, "assistant-helpers", id);
-          const helper = { scope: { id, environment: {}, runtimeRoot: path.join(root, "runtime"), workdir: path.join(root, "workdir"),
-            stableContext: "Answer only from the supplied database information. You have no tools or project access." },
-            selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity,
-            conversationId: "", runId: "", executionId: "" };
-          const retain = () => runtime.store.writeJsonArtifact(context.sessionId, artifact, helper);
-          await retain();
-          const options = { assistantSelection: helper.selection, vibe64User: context.vibe64User,
-            expectedConnectionIdentity: helper.connectionIdentity, signal: task.controller.signal,
-            async onEvent(event) {
-              if (event.type === "thread") helper.conversationId = event.threadId;
-              else if (event.type === "turn") helper.runId = event.turnId;
-              else if (event.type === "helper-execution") helper.executionId = event.executionId;
-              else return;
-              await retain();
-            } };
-          const startedAt = Date.now();
-          let result = null;
-          let failure = null;
-          try {
-            await mkdir(helper.scope.workdir, { recursive: true, mode: 0o700 });
-            await mkdir(helper.scope.runtimeRoot, { recursive: true, mode: 0o700 });
-            const profile = await terminalService.resolveEphemeralAgentExecutionProfile(helper.scope, { ...DATABASE_ASSISTANT_EXECUTION_PROFILE }, options);
-            helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(profile);
-            await retain();
-            task.controller.signal.throwIfAborted();
-            result = await runDatabaseAssistant({
-              agentContext: options,
-              assistant: databaseAssistantAvailability(decision),
-              executeReadQuery: (sql) => {
-                task.controller.signal.throwIfAborted();
-                return executeSessionQuery(context, { schema, sql, signal: task.controller.signal });
-              },
-              messages: input.messages,
-              runAgentTurn: (turnInput, turnOptions) => terminalService.runEphemeralAgentChatTurn(helper.scope,
-                { ...turnInput, executionProfile: profile }, turnOptions),
-              schema
-            });
-          } catch (error) {
-            failure = error;
-          }
-          // This service is the helper's only cleanup owner. A cleanup failure
-          // fails an otherwise successful question; after a failed question it
-          // is attached as the cause, so the original reason stays visible.
-          // Either way the retained artifact blocks the next question and is
-          // retried on session close.
-          try {
-            await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
-          } catch (cleanupError) {
-            if (failure) failure.cause ??= cleanupError;
-            else failure = cleanupError;
-          }
-          sessionDatabase.logOperation(context, failure ? {
-            code: failure.code,
-            durationMs: Date.now() - startedAt,
-            operation: "assistant.ask",
-            status: "failed"
-          } : {
-            durationMs: Date.now() - startedAt,
-            model: result.model,
-            operation: "assistant.ask",
-            queryCount: result.queries.length,
-            schemaLookupCount: result.schemaLookups.length,
-            status: "succeeded"
-          }, failure ? "warn" : "info");
-          if (failure) throw failure;
-          return result;
-        });
-        if (!admitted.acquired) throw databaseError(admitted.value?.error || "The session is unavailable for a database question.",
-          admitted.value?.code || "vibe64_database_assistant_busy");
-        return admitted.value;
-      }).finally(() => activeAssistants.delete(task));
-      activeAssistants.add(task);
-      return task.promise;
-    },
-
+  return Object.freeze({
+    checkServer,
+    readOverview,
+    readState,
+    refreshSchema,
+    saveOverview,
+    runQuery,
+    cancelQuery,
+    updateCell,
+    insertRow,
+    deleteRow,
+    searchLookup,
+    readErd,
+    moveErdTables,
+    saveLayout,
+    saveSnippet,
+    deleteSnippet,
+    askAssistant,
     closeAssistantsForSession,
-
-    async close() {
-      const tasks = [...activeAssistants];
-      for (const task of tasks) task.controller.abort();
-      const queries = [...activeQueries.values()].flatMap((session) => [...session.values()]);
-      await Promise.allSettled(queries.filter((query) => query.cancel).map((query) => query.cancel()));
-      activeQueries.clear();
-      await Promise.allSettled(tasks.map((task) => task.promise));
-    }
+    close
   });
 }
 
