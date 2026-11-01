@@ -32,7 +32,6 @@ import { createProjectOnboarding } from "./projectOnboarding.js";
 import { createProjectRepositories } from "./projectRepositories.js";
 import { projectResult } from "./projectResult.js";
 import { createProjectSelection } from "./projectSelection.js";
-import { createProjectServiceSlots } from "./projectServiceSlots.js";
 import { createProjectSessionEnvironment } from "./projectSessionEnvironment.js";
 import { createProjectSessionWork } from "./projectSessionWork.js";
 import { createProjectSettings } from "./projectSettings.js";
@@ -99,7 +98,9 @@ function createService({
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile
 }) {
-  const slots = createProjectServiceSlots();
+  // Sessions sets the observer of an applied starter through setTemplateApplicationObserver after construction.
+  // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
+  let templateApplicationObserver = null;
   const selection = createProjectSelection({ logger, projectContext });
   const environment = createProjectEnvironment({
     env,
@@ -156,9 +157,9 @@ function createService({
     const result = await projectResult(() => onboarding.applyProjectTemplateState(input));
     // The starter changed the Stack after the source locks were released; the
     // session owner prepares its workspace (dependencies, managed resources).
-    if (result?.ok === true && slots.templateApplicationObserver) {
+    if (result?.ok === true && templateApplicationObserver) {
       void Promise.resolve()
-        .then(() => slots.templateApplicationObserver({ sessionId: String(input.sessionId || "").trim() }))
+        .then(() => templateApplicationObserver({ sessionId: String(input.sessionId || "").trim() }))
         .catch((error) => logger.warn({ error: error?.message }, "Workspace preparation after a starter could not start."));
     }
     return result;
@@ -346,11 +347,11 @@ function createService({
     );
   }
 
-  function setTemplateApplicationObserver(observer = null) {
-    if (observer !== null && typeof observer !== "function") {
-      throw new TypeError("Vibe64 template application observer must be a function or null.");
+  function setTemplateApplicationObserver(observer) {
+    if (typeof observer !== "function") {
+      throw new TypeError("Vibe64 template application observer must be a function.");
     }
-    slots.templateApplicationObserver = observer;
+    templateApplicationObserver = observer;
   }
 
   async function saveEnvUserValues(input = {}) {

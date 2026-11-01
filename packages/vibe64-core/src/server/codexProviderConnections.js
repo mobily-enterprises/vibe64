@@ -11,6 +11,7 @@ import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { serializeByKey, writeFileAtomic } from "./atomicFile.js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "../shared/curatedCodexProviders.js";
+import { doNothing } from "../shared/doNothing.js";
 import { codexAuthMarkerPath, clearCodexAuthStatus, markCodexAuthReconnecting, readCodexAuthStatus } from "./codexAuthState.js";
 
 const changes = new Map();
@@ -40,6 +41,16 @@ function codexProviderModelCatalog(provider) {
 }
 
 /**
+ * A store with no agent runtimes to stop: a Claude key change still runs its own steps before and after the stop.
+ * @param {{ prepare?: () => Promise<unknown>, publish?: () => Promise<unknown> }} request
+ */
+async function changeKeyWithoutRuntimes({ prepare = doNothing, publish = doNothing }) {
+  await prepare();
+  await publish();
+  return { ok: true };
+}
+
+/**
  * @param {object} options
  * @param {string} options.systemRoot
  * @param {(request: object) => Promise<{ ok?: boolean, failed?: Array<{ error?: string }> }>} [options.invalidateRuntimes]
@@ -48,13 +59,7 @@ function codexProviderModelCatalog(provider) {
  */
 function createCodexProviderConnectionStore({
   systemRoot,
-  invalidateRuntimes = async input => {
-    // readable-check: allow optional-call - input validation: a key change's optional steps before and after its runtimes stop
-    await input.prepare?.();
-    // readable-check: allow optional-call - input validation: a key change's optional steps before and after its runtimes stop
-    await input.publish?.();
-    return { ok: true };
-  },
+  invalidateRuntimes = changeKeyWithoutRuntimes,
   fetchImpl = fetch
 }) {
   async function read(providerId, engineId = "codex") {
