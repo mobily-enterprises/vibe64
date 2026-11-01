@@ -7,26 +7,41 @@ import {
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
 
+import {
+  ACTION_SYSTEM_GRAPH_USAGE_ENTRIES_READ,
+  ACTION_SYSTEM_GRAPH_USAGE_FUNCTION_READ,
+  ACTION_SYSTEM_GRAPH_USAGE_JOIN,
+  ACTION_SYSTEM_GRAPH_USAGE_WEB_READ
+} from "./usageActions.js";
+
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
-// Query fields each usage route accepts; anything else in the request is
-// ignored rather than passed to the action.
-const USAGE_ROUTES = Object.freeze([
-  ["GET", "entries", "usage.entries.read", ["kind", "q", "cursor", "limit"], "List the entry points a usage map can start from."],
-  [
-    "GET",
-    "web",
-    "usage.web.read",
-    ["entryId", "mode", "certainty", "subsystemId", "maxNodes"],
-    "Read the subsystems, files or functions one entry point reaches."
-  ],
-  ["GET", "function", "usage.function.read", ["functionId"], "Read one function's calls and callers."],
-  ["POST", "join", "usage.join", ["functions"], "Join recorded functions to the current call web."]
-]);
+/**
+ * The URL's session plus the named request fields that are present. Anything else in the request is ignored rather
+ * than passed to the action.
+ */
+function usageInput(request, source, fields) {
+  return {
+    sessionId: request.params.sessionId,
+    ...Object.fromEntries(fields.filter((field) => source[field] !== undefined).map((field) => [field, source[field]]))
+  };
+}
 
-function picked(source, fields) {
-  return Object.fromEntries(fields.filter((field) => source[field] !== undefined).map((field) => [field, source[field]]));
+function usageEntriesInput(request) {
+  return usageInput(request, requestQuery(request), ["kind", "q", "cursor", "limit"]);
+}
+
+function usageWebInput(request) {
+  return usageInput(request, requestQuery(request), ["entryId", "mode", "certainty", "subsystemId", "maxNodes"]);
+}
+
+function usageFunctionInput(request) {
+  return usageInput(request, requestQuery(request), ["functionId"]);
+}
+
+function usageJoinInput(request) {
+  return usageInput(request, requestBody(request), ["functions"]);
 }
 
 /**
@@ -34,13 +49,9 @@ function picked(source, fields) {
  * @param {object} [options]
  * @param {StudioProjectContext} [options.projectContext]
  */
-function registerUsageRoutes(
-  http,
-  options = {}
-) {
-  const {
-    projectContext
-  } = options;
+function registerUsageRoutes(http, {
+  projectContext
+} = {}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-system-graph"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
@@ -50,17 +61,31 @@ function registerUsageRoutes(
       projectContext
     })
   });
-  for (const [method, suffix, operation, fields, summary] of USAGE_ROUTES) {
-    routes.actionRoute(method, `/system-graph/sessions/:sessionId/usage/${suffix}`, {
-      actionId: `vibe64.system-graph.${operation}`,
-      buildInput: (request) => ({
-        sessionId: request.params.sessionId,
-        ...picked(method === "GET" ? requestQuery(request) : requestBody(request), fields)
-      }),
-      ...(method === "POST" ? { bodyLimit: 1024 * 1024 } : {}),
-      summary
-    });
-  }
+
+  routes.actionRoute("GET", "/system-graph/sessions/:sessionId/usage/entries", {
+    actionId: ACTION_SYSTEM_GRAPH_USAGE_ENTRIES_READ,
+    buildInput: usageEntriesInput,
+    summary: "List the entry points a usage map can start from."
+  });
+
+  routes.actionRoute("GET", "/system-graph/sessions/:sessionId/usage/web", {
+    actionId: ACTION_SYSTEM_GRAPH_USAGE_WEB_READ,
+    buildInput: usageWebInput,
+    summary: "Read the subsystems, files or functions one entry point reaches."
+  });
+
+  routes.actionRoute("GET", "/system-graph/sessions/:sessionId/usage/function", {
+    actionId: ACTION_SYSTEM_GRAPH_USAGE_FUNCTION_READ,
+    buildInput: usageFunctionInput,
+    summary: "Read one function's calls and callers."
+  });
+
+  routes.actionRoute("POST", "/system-graph/sessions/:sessionId/usage/join", {
+    actionId: ACTION_SYSTEM_GRAPH_USAGE_JOIN,
+    buildInput: usageJoinInput,
+    bodyLimit: 1024 * 1024,
+    summary: "Join recorded functions to the current call web."
+  });
 }
 
 export {

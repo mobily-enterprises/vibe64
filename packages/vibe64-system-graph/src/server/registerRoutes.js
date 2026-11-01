@@ -5,21 +5,31 @@ import {
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
 
+import {
+  ACTION_SYSTEM_GRAPH_ARCHITECTURE_READ,
+  ACTION_SYSTEM_GRAPH_REFRESH,
+  ACTION_SYSTEM_GRAPH_REFRESH_CANCEL,
+  ACTION_SYSTEM_GRAPH_REFRESH_STATUS,
+  ACTION_SYSTEM_GRAPH_STATUS_READ
+} from "./systemGraphActions.js";
+
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
+
+function sessionInput(request) {
+  return {
+    sessionId: request.params.sessionId
+  };
+}
 
 /**
  * @param {RuntimeHttp} http
  * @param {object} [options]
  * @param {StudioProjectContext} [options.projectContext]
  */
-function registerRoutes(
-  http,
-  options = {}
-) {
-  const {
-    projectContext
-  } = options;
+function registerRoutes(http, {
+  projectContext
+} = {}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-system-graph"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
@@ -29,19 +39,37 @@ function registerRoutes(
       projectContext
     })
   });
-  const sessionRoute = "/system-graph/sessions/:sessionId";
 
-  for (const [method, suffix, operation, summary] of [
-    ["GET", "architecture", "architecture.read", "Read the compact neutral architecture snapshot for an active session."],
-    ["GET", "status", "status.read", "Read Genesis Machine and Program City availability for an active session."],
-    ["POST", "refresh/cancel", "refresh.cancel", "Cancel this source architecture analysis and await cleanup."],
-    ["GET", "refresh/status", "refresh.status", "Read the running analysis stage without loading the project index."],
-    ["POST", "refresh", "refresh", "Synchronously refresh both Genesis Cities for an active session."]
-  ]) routes.actionRoute(method, `${sessionRoute}/${suffix}`, {
-    actionId: `vibe64.system-graph.${operation}`,
-    buildInput: (request) => ({ sessionId: request.params.sessionId }),
-    ...(method === "POST" ? { bodyLimit: 16 * 1024 } : {}),
-    summary
+  routes.actionRoute("GET", "/system-graph/sessions/:sessionId/architecture", {
+    actionId: ACTION_SYSTEM_GRAPH_ARCHITECTURE_READ,
+    buildInput: sessionInput,
+    summary: "Read the compact neutral architecture snapshot for an active session."
+  });
+
+  routes.actionRoute("GET", "/system-graph/sessions/:sessionId/status", {
+    actionId: ACTION_SYSTEM_GRAPH_STATUS_READ,
+    buildInput: sessionInput,
+    summary: "Read Genesis Machine and Program City availability for an active session."
+  });
+
+  routes.actionRoute("POST", "/system-graph/sessions/:sessionId/refresh/cancel", {
+    actionId: ACTION_SYSTEM_GRAPH_REFRESH_CANCEL,
+    buildInput: sessionInput,
+    bodyLimit: 16 * 1024,
+    summary: "Cancel this source architecture analysis and await cleanup."
+  });
+
+  routes.actionRoute("GET", "/system-graph/sessions/:sessionId/refresh/status", {
+    actionId: ACTION_SYSTEM_GRAPH_REFRESH_STATUS,
+    buildInput: sessionInput,
+    summary: "Read the running analysis stage without loading the project index."
+  });
+
+  routes.actionRoute("POST", "/system-graph/sessions/:sessionId/refresh", {
+    actionId: ACTION_SYSTEM_GRAPH_REFRESH,
+    buildInput: sessionInput,
+    bodyLimit: 16 * 1024,
+    summary: "Synchronously refresh both Genesis Cities for an active session."
   });
 }
 

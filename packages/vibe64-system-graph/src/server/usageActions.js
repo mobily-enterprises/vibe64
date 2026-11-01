@@ -1,10 +1,15 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
-
-import { USAGE_ENTRY_KINDS } from "./usageIndex.js";
 import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
+import { USAGE_ENTRY_KINDS } from "./usageIndex.js";
+
 /** @typedef {import("./types.js").SystemGraphService} SystemGraphService */
+
+const ACTION_SYSTEM_GRAPH_USAGE_ENTRIES_READ = "vibe64.system-graph.usage.entries.read";
+const ACTION_SYSTEM_GRAPH_USAGE_WEB_READ = "vibe64.system-graph.usage.web.read";
+const ACTION_SYSTEM_GRAPH_USAGE_FUNCTION_READ = "vibe64.system-graph.usage.function.read";
+const ACTION_SYSTEM_GRAPH_USAGE_JOIN = "vibe64.system-graph.usage.join";
 
 const sessionId = { type: "string", minLength: 1, maxLength: 256, required: true };
 const optionalText = (maxLength) => ({ type: "string", maxLength, required: false });
@@ -30,7 +35,7 @@ function createUsageActions({ systemGraph }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.system-graph.usage.entries.read",
+      id: ACTION_SYSTEM_GRAPH_USAGE_ENTRIES_READ,
       input: {
         schema: createSchema({
           sessionId,
@@ -46,7 +51,7 @@ function createUsageActions({ systemGraph }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.system-graph.usage.web.read",
+      id: ACTION_SYSTEM_GRAPH_USAGE_WEB_READ,
       input: {
         schema: createSchema({
           sessionId,
@@ -63,7 +68,7 @@ function createUsageActions({ systemGraph }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.system-graph.usage.function.read",
+      id: ACTION_SYSTEM_GRAPH_USAGE_FUNCTION_READ,
       input: {
         schema: createSchema({
           sessionId,
@@ -76,7 +81,7 @@ function createUsageActions({ systemGraph }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.system-graph.usage.join",
+      id: ACTION_SYSTEM_GRAPH_USAGE_JOIN,
       input: {
         schema: createSchema({
           sessionId,
@@ -90,4 +95,10 @@ function createUsageActions({ systemGraph }) {
   ]);
 }
 
-export { createUsageActions };
+export {
+  ACTION_SYSTEM_GRAPH_USAGE_ENTRIES_READ,
+  ACTION_SYSTEM_GRAPH_USAGE_FUNCTION_READ,
+  ACTION_SYSTEM_GRAPH_USAGE_JOIN,
+  ACTION_SYSTEM_GRAPH_USAGE_WEB_READ,
+  createUsageActions
+};
