@@ -26,7 +26,7 @@ import {
   normalizedRuntimeRequirements,
   outputResultsMarkerLineSeen
 } from "./vibe64OutputTargets.js";
-import { trimmedText as normalizeOutputTargetId } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import { createLaunchRestartBaseline } from "./launchRestart.js";
 import { previewPublicOriginForLaunch } from "./previewPublicOrigin.js";
 import { launchExecutionProject } from "./launchPreviewAuth.js";
@@ -170,7 +170,7 @@ function createOutputTargetLaunchStart({
         }
         const cwd = context.sessionSourceRoot;
         let forceRestart = input.forceRestart === true;
-        let outputTargetId = normalizeOutputTargetId(input.outputTargetId);
+        let outputTargetId = trimmedText(input.outputTargetId);
         let outputTargets = null;
         const managedPreviewOperation = input.ensurePreview === true || input.restartPreview === true;
         if (managedPreviewOperation) {

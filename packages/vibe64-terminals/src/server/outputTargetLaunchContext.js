@@ -5,7 +5,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { currentProjectSlug } from "./terminalShared.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { inspectVibe64WorkspaceSetupForContext, listVibe64OutputTargets } from "./vibe64OutputTargets.js";
-import { trimmedText as normalizeOutputTargetId } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
 
 // What a launch reads before it starts: the session's launch context, its
@@ -165,7 +165,7 @@ function workspaceSetupLaunchDisabledReason(session = {}, inspection = null) {
 }
 
 function findOutputTarget(targets = [], outputTargetId = "") {
-  const normalizedOutputTargetId = normalizeOutputTargetId(outputTargetId);
+  const normalizedOutputTargetId = trimmedText(outputTargetId);
   return targets.find((target) => target.id === normalizedOutputTargetId) || null;
 }
 
@@ -228,7 +228,7 @@ function managedPreviewLaunchPlan({
 
   const activeMetadata = activeTerminal?.metadata || {};
   const lastOutputTarget = previewStatus.lastOutputTarget || savedOutputTarget || {};
-  const previousTargetId = normalizeOutputTargetId(
+  const previousTargetId = trimmedText(
     lastOutputTarget.id || activeMetadata.outputTargetId
   );
   if (restart && !previousTargetId) {

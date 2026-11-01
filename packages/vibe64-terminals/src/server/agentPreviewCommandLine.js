@@ -5,7 +5,7 @@ import {
 import {
   AGENT_PREVIEW_USAGE
 } from "@local/vibe64-execution/server";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import { responseError } from "./agentPreviewBrowserWorker.js";
 import {
   logsStdout,
@@ -28,15 +28,15 @@ function logPreviewCommandResult(logger, result = {}, fields = {}) {
   const ok = result.ok !== false && Number(result.exitCode || 0) === 0;
   return logOperationalEvent(logger, ok ? "info" : "warn", {
     code: result.code || "",
-    command: normalizeText(fields.command),
+    command: trimmedText(fields.command),
     component: "vibe64.agent_preview_command",
-    cwd: normalizeText(fields.cwd),
+    cwd: trimmedText(fields.cwd),
     durationMs: Number(fields.durationMs || 0),
     event: "vibe64.agent_preview_command.finished",
     exitCode: Number(result.exitCode ?? (ok ? 0 : 1)),
     ok,
     outputTail: ok ? "" : sanitizeLogText(result.stderr || result.error || "").slice(-1000),
-    sessionId: normalizeText(fields.sessionId)
+    sessionId: trimmedText(fields.sessionId)
   }, "Vibe64 agent preview command finished.");
 }
 
@@ -68,8 +68,8 @@ function createAgentPreviewCommandLine({
   readSessionUiState
 }) {
   async function authorizeBrowserIdentity(sessionId = "", identity = "") {
-    const normalizedSessionId = normalizeText(sessionId);
-    const requested = normalizeText(identity).toLowerCase();
+    const normalizedSessionId = trimmedText(sessionId);
+    const requested = trimmedText(identity).toLowerCase();
     if (!normalizedSessionId) {
       return responseError(
         "Vibe64 preview command session id is required.",
@@ -96,7 +96,7 @@ function createAgentPreviewCommandLine({
   // Managed app identities belong to the project; the session's bound project
   // and source scope every read and save, never a caller-supplied target.
   async function previewIdentities(sessionId = "", args = [], stdin = "") {
-    const words = (Array.isArray(args) ? args : []).map(normalizeText).filter(Boolean);
+    const words = (Array.isArray(args) ? args : []).map(trimmedText).filter(Boolean);
     const subcommand = words[1] || "";
     if (words[0] !== "identities" || words.length > (subcommand === "save" ? 2 : 1) || (subcommand && subcommand !== "save")) {
       return responseError("Usage: vibe64-helper preview identities [save < identities.json]", "vibe64_agent_preview_identities_usage", { exitCode: 64 });
@@ -121,7 +121,7 @@ function createAgentPreviewCommandLine({
         if (!Array.isArray(identities)) {
           return responseError("Provide the complete ordered identity list as a JSON array on stdin.", "vibe64_agent_preview_identities_input_invalid", { exitCode: 64 });
         }
-        const undeclared = identities.filter((identity) => !identityTypes.includes(normalizeText(identity?.type)));
+        const undeclared = identities.filter((identity) => !identityTypes.includes(trimmedText(identity?.type)));
         if (undeclared.length) {
           return responseError(identityTypes.length
             ? `Identity types must be ones this project's Stack declares in #### Preview identity: ${identityTypes.join(", ")}.`
@@ -160,10 +160,10 @@ function createAgentPreviewCommandLine({
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const parsed = parsePreviewCommandArgs(input.args);
-    const sessionId = normalizeText(input.sessionId);
+    const sessionId = trimmedText(input.sessionId);
     const baseFields = {
       command: parsed.command,
-      cwd: normalizeText(input.cwd),
+      cwd: trimmedText(input.cwd),
       sessionId
     };
     const finish = (result = {}) => {

@@ -21,7 +21,7 @@ import {
 import {
   prepareCodexGitCommand
 } from "./codexGitCommand.js";
-import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizeText } from "@local/vibe64-core/server/core";
 import { record } from "./record.js";
 import { createKeyedQueue, createSharedOperations } from "./keyedOperations.js";
 
@@ -29,9 +29,9 @@ const preparations = createKeyedQueue();
 const closures = createSharedOperations();
 
 function commandBoundaryError(name = "") {
-  const error = new Error(`Vibe64 could not prepare the session-scoped ${text(name) || "command"} boundary.`);
+  const error = new Error(`Vibe64 could not prepare the session-scoped ${normalizeText(name) || "command"} boundary.`);
   error.code = "vibe64_agent_command_boundary_unavailable";
-  error.boundary = text(name);
+  error.boundary = normalizeText(name);
   return error;
 }
 
@@ -45,10 +45,10 @@ async function agentSessionCommandEnvironmentIsHealthy(env = {}) {
     ["VIBE64_AGENT_DATABASE_COMMAND", "agent-database-command"]
   ].filter(([prefix]) => names.some((key) => key.startsWith(`${prefix}_`)));
   const results = await Promise.all(controls.map(async ([prefix, route]) => {
-    const socketPath = text(env[`${prefix}_SOCKET`]);
-    const sessionId = text(env[`${prefix}_SESSION_ID`]);
-    const generationId = text(env[`${prefix}_GENERATION`]);
-    const token = text(env[`${prefix}_TOKEN`]);
+    const socketPath = normalizeText(env[`${prefix}_SOCKET`]);
+    const sessionId = normalizeText(env[`${prefix}_SESSION_ID`]);
+    const generationId = normalizeText(env[`${prefix}_GENERATION`]);
+    const token = normalizeText(env[`${prefix}_TOKEN`]);
     if (!socketPath || !sessionId || !generationId || !token) return false;
     try {
       const result = await requestUnixJsonCommand({
@@ -112,7 +112,7 @@ async function prepareOpenCodeSessionCommandEnvironment(context = {}, {
 }
 
 async function prepareAgentSessionCommandEnvironment(options = {}) {
-  const key = codexTerminalNamespace(text(options.sessionId));
+  const key = codexTerminalNamespace(normalizeText(options.sessionId));
   if (closures.has(key)) throw commandBoundaryError("closing session");
   return preparations.run(key, () => {
     if (closures.has(key)) throw commandBoundaryError("closing session");
@@ -121,7 +121,7 @@ async function prepareAgentSessionCommandEnvironment(options = {}) {
 }
 
 async function closeAgentSessionCommandEnvironment(sessionId, operation) {
-  const key = codexTerminalNamespace(text(sessionId));
+  const key = codexTerminalNamespace(normalizeText(sessionId));
   return closures.run(key, async () => {
     await preparations.settled(key);
     return operation();
@@ -147,7 +147,7 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   sessionId = "",
   worktreePath = ""
 } = {}) {
-  const normalizedSessionId = text(sessionId);
+  const normalizedSessionId = normalizeText(sessionId);
   if (!gitCommand || !normalizedSessionId) {
     return {
       env: {},
@@ -160,9 +160,9 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
     commandService: gitCommand,
     env: gitEnvironment,
     sessionId: normalizedSessionId,
-    stateRoot: text(runtime?.stateRoot)
+    stateRoot: normalizeText(runtime?.stateRoot)
   });
-  if (git?.ok !== true || !text(git.hostWrapperDir)) {
+  if (git?.ok !== true || !normalizeText(git.hostWrapperDir)) {
     throw commandBoundaryError("Git");
   }
   const steps = [{ name: "Git", result: git }];
@@ -208,15 +208,15 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   if (unavailable) {
     throw commandBoundaryError(unavailable.name);
   }
-  const hostWrapperDir = text(git.hostWrapperDir);
+  const hostWrapperDir = normalizeText(git.hostWrapperDir);
   const helper = await prepareHelperCommand({ wrapperHostDir: hostWrapperDir, env });
   if (helper?.ok !== true) {
     throw commandBoundaryError("helper");
   }
   const filePaths = runtime ? runtime.store.paths(normalizedSessionId) : null;
-  const dropZoneRoot = text(filePaths?.dropZoneRoot);
-  const projectBackupsRoot = text(filePaths?.projectBackupsRoot);
-  const projectDropZoneRoot = text(filePaths?.projectDropZoneRoot);
+  const dropZoneRoot = normalizeText(filePaths?.dropZoneRoot);
+  const projectBackupsRoot = normalizeText(filePaths?.projectBackupsRoot);
+  const projectDropZoneRoot = normalizeText(filePaths?.projectDropZoneRoot);
   if (projectBackupsRoot || projectDropZoneRoot) await runtime.store.prepareProjectFileAreas();
   return {
     env: Object.assign({}, genesisParserEnvironment({ environment: env }), ...steps.map((step) => record(step.result?.env)), dropZoneRoot ? {

@@ -7,7 +7,7 @@ import {
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
   PREVIEW_IDENTITY_SELECTOR_TYPES
 } from "@local/vibe64-core/server/previewAuth";
-import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL as PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "@local/vibe64-genesis/server";
+import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "@local/vibe64-genesis/server";
 
 import {
   PREVIEW_IDENTITY_COMMAND_MAX_COOKIE_BYTES,
@@ -26,7 +26,7 @@ const EXAMPLE_REQUEST = previewIdentityCommandRequest({
   selector: { type: "email", value: "admin@example.com" }
 }, { requestId: EXAMPLE_REQUEST_ID, targetHref: "http://127.0.0.1:5173/" });
 const EXAMPLE_RESPONSE = Object.freeze({
-  protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
+  protocol: VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   requestId: EXAMPLE_REQUEST_ID,
   ok: true,
   // readable-check: allow setter-seam - not a slot: setCookie is the example response's cookie list
@@ -34,7 +34,7 @@ const EXAMPLE_RESPONSE = Object.freeze({
   identity: { displayName: "Admin", email: "admin@example.com", userId: "1" }
 });
 const EXAMPLE_REJECTION = Object.freeze({
-  protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
+  protocol: VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   requestId: EXAMPLE_REQUEST_ID,
   ok: false,
   code: "user_not_found",
@@ -50,7 +50,7 @@ const VIBE64_TERMINALS_AGENT_SPECS = Object.freeze([
     title: "Preview identity command protocol",
     exampleRequest: EXAMPLE_REQUEST,
     exampleResponses: [EXAMPLE_RESPONSE, EXAMPLE_REJECTION],
-    text: () => `# Preview identity command protocol (\`${PREVIEW_IDENTITY_COMMAND_PROTOCOL}\`)
+    text: () => `# Preview identity command protocol (\`${VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL}\`)
 
 An application-owned executable, declared under an Outputs web target's \`#### Preview identity\` block (grammar: \`vibe64-helper spec outputs\`), that signs the Preview browser in as an existing application account or signs it out. Vibe64 never creates users, changes roles or reads passwords; the application finds the account, rejects missing or disabled ones and creates or clears its own normal browser session.
 

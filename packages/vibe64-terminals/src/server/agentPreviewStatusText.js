@@ -5,7 +5,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { WEB_LAUNCH_READINESS_TIMEOUT_SECONDS } from "./launchTargetTerminal.js";
 import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol.js";
 import { previewLastPath, previewLogPath } from "./previewDiagnosticFiles.js";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import { isRecord } from "./isRecord.js";
 
 const DEFAULT_PREVIEW_LOG_LINES = 200;
@@ -21,11 +21,11 @@ function hasFlag(args = [], flag = "") {
 function optionValue(args = [], name = "") {
   const index = args.indexOf(name);
   if (index >= 0) {
-    return normalizeText(args[index + 1]);
+    return trimmedText(args[index + 1]);
   }
   const prefix = `${name}=`;
   const entry = args.find((arg) => String(arg || "").startsWith(prefix));
-  return entry ? normalizeText(entry.slice(prefix.length)) : "";
+  return entry ? trimmedText(entry.slice(prefix.length)) : "";
 }
 
 function parsePreviewCommandArgs(args = []) {
@@ -61,19 +61,19 @@ function normalizeTimeoutMs(value = "") {
 function previewReady(status) {
   const testOwnsPreview = ["starting", "running", "restoring"].includes(status?.previewTestRun?.state);
   return (status?.preview?.stoppedIntent !== true || testOwnsPreview) && status?.previewTarget?.available !== false &&
-    Boolean(normalizeText(status?.previewTarget?.href));
+    Boolean(trimmedText(status?.previewTarget?.href));
 }
 
 function activeTerminalExited(status, terminalSessionId = "") {
   const terminal = status?.activeTerminal || {};
-  if (terminalSessionId && normalizeText(terminal.id) && normalizeText(terminal.id) !== normalizeText(terminalSessionId)) {
+  if (terminalSessionId && trimmedText(terminal.id) && trimmedText(terminal.id) !== trimmedText(terminalSessionId)) {
     return false;
   }
-  return normalizeText(terminal.status) === "exited";
+  return trimmedText(terminal.status) === "exited";
 }
 
 function previewEndpoint(value = "") {
-  const url = normalizeText(value);
+  const url = trimmedText(value);
   if (!url) {
     return null;
   }
@@ -96,8 +96,8 @@ function previewEndpoint(value = "") {
 function previewPageUrl(baseUrl = "", route = "", {
   inheritBaseSearch = false
 } = {}) {
-  const normalizedBaseUrl = normalizeText(baseUrl);
-  const normalizedRoute = normalizeText(route);
+  const normalizedBaseUrl = trimmedText(baseUrl);
+  const normalizedRoute = trimmedText(route);
   if (!normalizedBaseUrl || !normalizedRoute.startsWith("/")) {
     return "";
   }
@@ -127,7 +127,7 @@ function previewInspectionUrl(status = {}, {
 } = {}) {
   const previewTarget = isRecord(status.previewTarget) ? status.previewTarget : {};
   const proxyUrl = previewReady(status) ? previewEndpoint(previewTarget.href)?.url || "" : "";
-  const route = normalizeText(previewState?.route);
+  const route = trimmedText(previewState?.route);
   if (proxyUrl) {
     return route
       ? previewPageUrl(proxyUrl, route, {
@@ -141,15 +141,15 @@ function previewInspectionUrl(status = {}, {
 function previewCurrentPage(previewState, {
   browserUrl = ""
 } = {}) {
-  const route = normalizeText(previewState?.route);
+  const route = trimmedText(previewState?.route);
   if (!route) {
     return null;
   }
   return {
     url: browserUrl,
-    observedAt: normalizeText(previewState?.updatedAt),
+    observedAt: trimmedText(previewState?.updatedAt),
     route,
-    title: normalizeText(previewState?.title)
+    title: trimmedText(previewState?.title)
   };
 }
 
@@ -159,12 +159,12 @@ function previewTerminal(status = {}) {
     return null;
   }
   return {
-    command: normalizeText(terminal.commandPreview),
-    createdAt: normalizeText(terminal.createdAt),
+    command: trimmedText(terminal.commandPreview),
+    createdAt: trimmedText(terminal.createdAt),
     exitCode: terminal.exitCode ?? null,
-    id: normalizeText(terminal.id),
+    id: trimmedText(terminal.id),
     running: terminal.running === true,
-    status: normalizeText(terminal.status)
+    status: trimmedText(terminal.status)
   };
 }
 
@@ -184,20 +184,20 @@ function previewStatusSummary(status = {}, {
   const activeMetadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
   const openTarget = isRecord(status.openTarget) ? status.openTarget : {};
   const previewTarget = isRecord(status.previewTarget) ? status.previewTarget : {};
-  const applicationUrl = normalizeText(lastOutputTarget.agentHref || activeMetadata.targetUrl || openTarget.href);
+  const applicationUrl = trimmedText(lastOutputTarget.agentHref || activeMetadata.targetUrl || openTarget.href);
   const browserUrl = previewInspectionUrl(status, { previewState });
   const browserEndpoint = previewReady(status) ? previewEndpoint(previewTarget.href) : null;
   const identityTypes = (Array.isArray(status.previewIdentity?.identityTypes)
     ? status.previewIdentity.identityTypes
     : [])
-    .map(normalizeText)
+    .map(trimmedText)
     .filter(Boolean);
   const identities = (Array.isArray(status.previewIdentity?.identities)
     ? status.previewIdentity.identities
     : [])
     .map((identity) => ({
-      name: normalizeText(identity?.name),
-      type: normalizeText(identity?.type)
+      name: trimmedText(identity?.name),
+      type: trimmedText(identity?.type)
     }))
     .filter((identity) => identity.name && identity.type);
   return {
@@ -211,13 +211,13 @@ function previewStatusSummary(status = {}, {
     endpoints: {
       browser: browserEndpoint
     },
-    defaultIdentity: normalizeText(status.previewIdentity?.defaultIdentityName),
+    defaultIdentity: trimmedText(status.previewIdentity?.defaultIdentityName),
     identities,
     identityTypes,
     outputTargetId: outputTargetIdFromStatus(status),
     stoppedIntent: status.preview?.stoppedIntent === true,
     ready: previewReady(status),
-    stale: previewTarget.stale === true || normalizeText(previewTarget.recovery?.reason) === "server_source_changed",
+    stale: previewTarget.stale === true || trimmedText(previewTarget.recovery?.reason) === "server_source_changed",
     terminal: previewTerminal(status)
   };
 }
@@ -308,7 +308,7 @@ function previewStartStdout(summary = {}, {
 function outputTargetIdFromStatus(status = {}) {
   const lastOutputTarget = isRecord(status.lastOutputTarget) ? status.lastOutputTarget : {};
   const activeMetadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
-  return normalizeText(lastOutputTarget.id || activeMetadata.outputTargetId);
+  return trimmedText(lastOutputTarget.id || activeMetadata.outputTargetId);
 }
 
 async function waitForPreviewReady(launchTarget, sessionId = "", {

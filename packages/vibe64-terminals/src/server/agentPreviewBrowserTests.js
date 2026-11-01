@@ -3,7 +3,7 @@ import {
   browserTestNeedsCleanup,
   drainBrowserTestExecutions
 } from "./browserTestCleanup.js";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 import {
   responseError,
   runRegisteredPlaywrightCommand
@@ -89,13 +89,18 @@ function createAgentPreviewBrowserTests({
     return { ok: true, cancelled: true, sessionId };
   }
 
+  /**
+   * Hands a waiting browser test the start its retry authorizes.
+   * @param {{ projectSlug: string, sessionId: string, admissionId: string }} identity
+   * @param {(start: object) => Promise<object>} authorizeStart
+   */
   async function resumeTestApproval({ projectSlug, sessionId, admissionId }, authorizeStart) {
     const pending = state.browserTestRuns.get(sessionId);
     if (!pending || pending.projectSlug !== projectSlug || pending.admissionId !== admissionId) {
       return responseError("The original test request has ended. Run the test command again.", "vibe64_test_approval_unavailable");
     }
     if (["resuming", "running"].includes(pending.state)) return { ok: true, accepted: true, replayed: true, sessionId };
-    if (pending.state !== "waiting" || Date.now() >= Date.parse(pending.expiresAt) || typeof authorizeStart !== "function") {
+    if (pending.state !== "waiting" || Date.now() >= Date.parse(pending.expiresAt)) {
       return responseError("This test approval has expired or is no longer available.", "vibe64_test_approval_unavailable");
     }
     // The command's promise remains its result owner. HTTP only acknowledges
@@ -199,7 +204,7 @@ function createAgentPreviewBrowserTests({
     if (state.browserTestRuns.has(sessionId) && !input.testRunToken) return responseError(
       "A browser test still owns this session. Use vibe64-helper playwright status, then cancel its run ID or wait for completion.", "vibe64_test_approval_busy"
     );
-    const admission = launchTarget.previewTestRunAdmission(sessionId, normalizeText(input.testRunToken));
+    const admission = launchTarget.previewTestRunAdmission(sessionId, trimmedText(input.testRunToken));
     if (admission) return admission;
     const parent = input.testRunToken ? state.browserTestRuns.get(sessionId) : null;
     const cancellation = new AbortController();

@@ -7,7 +7,7 @@ import {
   PREVIEW_IDENTITY_SUBJECT_SELECTOR,
   normalizePreviewIdentitySelection
 } from "@local/vibe64-core/server/previewAuth";
-import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL as PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "@local/vibe64-genesis/server";
+import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "@local/vibe64-genesis/server";
 import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -52,7 +52,7 @@ function previewIdentityCommandRequest(selection = {}, {
   }
   return {
     operation: normalizedSelection.operation,
-    protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
+    protocol: VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
     requestId: String(requestId),
     ...(normalizedSelection.operation === PREVIEW_IDENTITY_LOGIN_OPERATION
       ? { subject: commandRequestSubject(normalizedSelection) }
@@ -126,7 +126,7 @@ function normalizePreviewIdentityCommandResponse(value = {}, {
     );
   }
   if (
-    value.protocol !== PREVIEW_IDENTITY_COMMAND_PROTOCOL ||
+    value.protocol !== VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL ||
     String(value.requestId || "") !== String(requestId || "") ||
     typeof value.ok !== "boolean"
   ) {

@@ -33,7 +33,7 @@ import {
   USAGE_RECORDING_ENVIRONMENT,
   USAGE_RECORDING_REQUEST_HEADER
 } from "@local/vibe64-usage-recording/shared/contract";
-import { executionEnvRecord as normalizeLaunchEnv } from "./executionEnvRecord.js";
+import { executionEnvRecord } from "./executionEnvRecord.js";
 
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 const WEB_LAUNCH_READINESS_TIMEOUT_SECONDS = 300;
@@ -600,7 +600,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
           terminalSessionId: id || ""
         }), previewAuthSecretValue);
       }
-      return normalizeLaunchEnv({
+      return executionEnvRecord({
         ...(launch.env || {}),
         ...launchAgentEnv,
         VIBE64_LAUNCH_AGENT_HREF: environmentTargetHref,
