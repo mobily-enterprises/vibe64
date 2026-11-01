@@ -534,7 +534,14 @@ function createTemporaryConversationTurns({
     };
   }
 
-  async function snapshot(ctx, record, includeAccess = false, transcriptQuery) {
+  /**
+   * A chat read from its assistant, saving the goal it reports when it changed.
+   * @param {object} ctx
+   * @param {object} record
+   * @param {boolean} includeAccess whether the result carries the chat's access
+   * @param {object | undefined} transcriptQuery
+   */
+  async function readSnapshot(ctx, record, includeAccess, transcriptQuery) {
     const result = await conversationRuntime.readPersistentConversation({
       ...persistentConversationOptions(ctx, record),
       includeAccess,
@@ -546,6 +553,25 @@ function createTemporaryConversationTurns({
       await chatRecords.save(ctx, record, { goal: result.goal ?? null });
     }
     return result;
+  }
+
+  /**
+   * A chat read from its assistant, without its access.
+   * @param {object} ctx
+   * @param {object} record
+   */
+  function snapshot(ctx, record) {
+    return readSnapshot(ctx, record, false, undefined);
+  }
+
+  /**
+   * A chat read from its assistant with its access, as its own views show it.
+   * @param {object} ctx
+   * @param {object} record
+   * @param {object} [transcriptQuery]
+   */
+  function snapshotWithAccess(ctx, record, transcriptQuery) {
+    return readSnapshot(ctx, record, true, transcriptQuery);
   }
 
   async function savedSnapshot(ctx, record, transcriptQuery) {
@@ -566,7 +592,7 @@ function createTemporaryConversationTurns({
   async function displaySnapshot(ctx, record, transcriptQuery) {
     if (record.providerConversationId && record.state !== "closing" &&
         (["starting", "inProgress"].includes(record.status) || assistantGoalIsActive(record.goal))) {
-      return snapshot(ctx, record, true, transcriptQuery);
+      return snapshotWithAccess(ctx, record, transcriptQuery);
     }
     return conversationRuntime.projectStoredPersistentConversation({
       ...persistentConversationOptions(ctx, record),
@@ -598,6 +624,7 @@ function createTemporaryConversationTurns({
     routing,
     persistentConversationOptions,
     snapshot,
+    snapshotWithAccess,
     savedSnapshot,
     displaySnapshot,
     writeSnapshot,

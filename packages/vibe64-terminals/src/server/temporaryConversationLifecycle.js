@@ -50,7 +50,7 @@ function createTemporaryConversationLifecycle({
     const result = await chatTurns.writeSnapshot(sessionId, options, async (ctx) => {
       const conversationId = input.conversationId || randomUUID();
       const existing = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
-      if (existing) return chatTurns.snapshot(ctx, existing, true);
+      if (existing) return chatTurns.snapshotWithAccess(ctx, existing);
       created = true;
       const parentPreferences = assistantRoutingFromMetadata(ctx.session.metadata);
       const parentSelection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
@@ -90,7 +90,7 @@ function createTemporaryConversationLifecycle({
         status: "ready",
         attachments: []
       });
-      return chatTurns.snapshot(ctx, record, true);
+      return chatTurns.snapshotWithAccess(ctx, record);
     });
     // Other open views of this session list the new chat; Close has the same notice.
     if (created && result?.ok !== false) {
