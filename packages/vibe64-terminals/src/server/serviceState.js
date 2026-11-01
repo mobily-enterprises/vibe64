@@ -15,7 +15,10 @@ function createServiceState({ readClaudeAccountStatus }) {
   // Server shutdown happens once. Its signal stops discarded background AI
   // work (session naming).
   const shutdownSignal = new AbortController();
-  /** @type {AssistantRuntime} */
+  /**
+   * The defaults keep their own types, so a call through serviceState reaches the default it runs.
+   * @satisfies {AssistantRuntime}
+   */
   const assistantRuntime = {
     claudeConnectionStatus: async () => (await readClaudeAccountStatus()).loggedIn === true,
     codexConnectionStatus: async () => true,
