@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { normalizeText } from "./text.js";
+
 const VIBE64_CONVERSATION_KINDS = Object.freeze([
   "main",
   "temporary"
@@ -44,10 +46,6 @@ const MANAGED_ENVIRONMENT_INSTRUCTIONS = Object.freeze([
   "After an Env mutation, report only the affected scope and key names, never their values, and claim success only when the command succeeded.",
   "Store a secret the application needs generated (such as an application key) by generating it with the framework's own generator and piping it to `vibe64-helper env set <scope> <KEY> --secret`. Never write it into a generated `.env` file: Vibe64 regenerates that file from Env."
 ]);
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function record(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -180,20 +178,20 @@ async function vibe64DriverInputFromRegistry(request = {}, {
   }
   const data = record(value.data, "Vibe64 host resolver data");
   exactFields(data, ["registryPath"], "Vibe64 host resolver data");
-  const registryPath = text(data.registryPath);
+  const registryPath = normalizeText(data.registryPath);
   if (!path.isAbsolute(registryPath)) {
     throw new TypeError("Vibe64 host resolver data requires an absolute registryPath.");
   }
   const source = JSON.parse(await readRegistry(registryPath, "utf8"));
   if (!Array.isArray(source?.sessions)) throw new TypeError("The conversation ownership registry is invalid.");
   const sessions = source.sessions;
-  const providerSessionId = text(value.providerSessionId);
+  const providerSessionId = normalizeText(value.providerSessionId);
   if (value.parentSessionIds !== undefined && (!Array.isArray(value.parentSessionIds) ||
       value.parentSessionIds.length > 32 || value.parentSessionIds.some(id => typeof id !== "string" || !id.trim()))) {
     throw new TypeError("Invalid native conversation ancestry.");
   }
   const ids = [providerSessionId, ...(value.parentSessionIds || [])].filter(Boolean);
-  const selected = ids.map(id => sessions.find(entry => text(entry?.upstreamSessionId) === id)).find(Boolean);
+  const selected = ids.map(id => sessions.find(entry => normalizeText(entry?.upstreamSessionId) === id)).find(Boolean);
   const context = selected?.promptContext;
   if (!context) {
     return null;

@@ -1,6 +1,6 @@
 // Agent-readable specs of every Vibe64-owned Stack section, printed by
 // `vibe64 spec <name>`. Entry forms and limits come from the parsers' own tables,
-// and a focused test parses every example below with its real parser.
+// and every example below parses with its real parser.
 import { ARCHITECTURE_OBSERVATIONS_SCHEMA } from "genesis-compiler";
 
 import {

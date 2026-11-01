@@ -16,6 +16,7 @@ import {
 } from "./projectContractAttention.js";
 import * as genesisCompiler from "genesis-compiler";
 import { createVibe64HostContextRegistry } from "./hostContextRegistry.js";
+import { normalizeText } from "./text.js";
 
 import {
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
@@ -99,7 +100,7 @@ const {
   inspectStackSections,
   inspectSubsystems,
   listTemplates,
-  parserEnvironment,
+  parserEnvironment: genesisParserEnvironment,
   setCollaboration,
   setEngineeringProfile,
   syncAgentIntegrations,
@@ -150,10 +151,6 @@ const GENESIS_PROMPT_TASKS = new Set([
   "work"
 ]);
 
-function normalizeText(value = "") {
-  return String(value || "").trim();
-}
-
 function assertGenesisPromptTask(value, options = {}) {
   const {
     required = false
@@ -184,10 +181,6 @@ function genesisPromptRequest(input = {}, action = {}) {
     action.label
   ];
   return candidates.map(normalizeText).find(Boolean) || "Continue the requested project work.";
-}
-
-function genesisParserEnvironment(options = {}) {
-  return parserEnvironment(options);
 }
 
 function genesisPackageBinDirectory() {
