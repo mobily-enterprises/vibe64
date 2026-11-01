@@ -19,13 +19,17 @@ const visible = computed(() => Math.max(0, fraction.value * circumference.value 
 </script>
 
 <template>
-  <div class="training-progress-ring" role="progressbar" :aria-label="label" aria-valuemin="0" :aria-valuemax="max"
-    :aria-valuenow="Math.min(value, max)" :style="{ width: `${size}px`, height: `${size}px` }">
+  <div
+    class="training-progress-ring" role="progressbar" :aria-label="label" aria-valuemin="0" :aria-valuemax="max"
+    :aria-valuenow="Math.min(value, max)" :style="{ width: `${size}px`, height: `${size}px` }"
+  >
     <svg :viewBox="`0 0 ${size} ${size}`" aria-hidden="true" focusable="false">
       <circle class="training-progress-ring__track" :cx="size / 2" :cy="size / 2" :r="radius" fill="none" :stroke-width="stroke" />
-      <circle v-if="visible > 0" class="training-progress-ring__indicator" :cx="size / 2" :cy="size / 2" :r="radius" fill="none"
+      <circle
+        v-if="visible > 0" class="training-progress-ring__indicator" :cx="size / 2" :cy="size / 2" :r="radius" fill="none"
         :stroke-width="stroke" stroke-linecap="round" :stroke-dasharray="`${visible} ${circumference}`"
-        :transform="`rotate(-90 ${size / 2} ${size / 2})`" />
+        :transform="`rotate(-90 ${size / 2} ${size / 2})`"
+      />
     </svg>
     <span class="training-progress-ring__content"><slot>{{ percent }}%</slot></span>
   </div>

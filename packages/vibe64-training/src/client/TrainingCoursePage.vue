@@ -48,8 +48,10 @@ const path = computed(() => {
     </div>
 
     <header class="training-course-page__hero" :class="{ 'is-complete': complete }">
-      <TrainingCourseArt class="training-course-page__cover" :course-id="course.courseId" :title="course.title"
-        :statuses="progress.lessons.map(value => value.status)" />
+      <TrainingCourseArt
+        class="training-course-page__cover" :course-id="course.courseId" :title="course.title"
+        :statuses="progress.lessons.map(value => value.status)"
+      />
       <div class="training-course-page__hero-body">
         <div class="training-course-page__hero-text">
           <p class="training-course-page__eyebrow">Course</p>
@@ -61,8 +63,10 @@ const path = computed(() => {
           </div>
           <p class="training-course-page__count">{{ progress.completed }} of {{ progress.total }} lessons complete</p>
         </div>
-        <TrainingProgressRing class="training-course-page__ring" :value="progress.completed" :max="progress.total" :size="88" :stroke="9"
-          :label="`${progress.completed} of ${progress.total} lessons complete`">
+        <TrainingProgressRing
+          class="training-course-page__ring" :value="progress.completed" :max="progress.total" :size="88" :stroke="9"
+          :label="`${progress.completed} of ${progress.total} lessons complete`"
+        >
           <span class="training-course-page__ring-value"><strong>{{ progress.completed }}</strong>/{{ progress.total }}</span>
         </TrainingProgressRing>
       </div>
@@ -81,8 +85,10 @@ const path = computed(() => {
           <p class="training-course-page__next-label">Up next</p>
           <p class="training-course-page__next-title">{{ progress.next.title }} · {{ progress.next.code }}</p>
         </div>
-        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :readonly="startingLesson(progress.next)"
-          :disabled="!startAllowed && !startingLesson(progress.next)" @click="emit('start', progress.next)">
+        <v-btn
+          color="primary" variant="flat" min-height="48" rounded="pill" :readonly="startingLesson(progress.next)"
+          :disabled="!startAllowed && !startingLesson(progress.next)" @click="emit('start', progress.next)"
+        >
           <template v-if="startingLesson(progress.next)"><v-progress-circular indeterminate size="18" width="2" class="training-course-page__spinner" />Starting lesson…</template>
           <template v-else>Start next lesson</template>
         </v-btn>
@@ -138,7 +144,9 @@ const path = computed(() => {
                 :variant="next ? 'tonal' : 'text'" color="primary" min-height="48" rounded="pill"
                 class="training-course-page__start" :readonly="startingLesson(lesson)" :disabled="!startAllowed && !startingLesson(lesson)"
                 @click="emit('start', lesson)"
-              ><template v-if="startingLesson(lesson)"><v-progress-circular indeterminate size="18" width="2" class="training-course-page__spinner" />Starting lesson…</template><template v-else>Start lesson</template></v-btn>
+              >
+                <template v-if="startingLesson(lesson)"><v-progress-circular indeterminate size="18" width="2" class="training-course-page__spinner" />Starting lesson…</template><template v-else>Start lesson</template>
+              </v-btn>
             </div>
           </li>
         </ol>

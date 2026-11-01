@@ -72,8 +72,10 @@ const path = computed(() => {
         <circle :cx="orbits.cx" :cy="orbits.cy" r="10" :fill="art.accent" fill-opacity="0.7" stroke="none" />
       </g>
       <g v-else-if="art.pattern === 'grid'">
-        <circle v-for="dot in dots" :key="`${dot.x}-${dot.y}`" :cx="dot.x" :cy="dot.y" :r="dot.on ? 3.2 : 1.6"
-          :fill="dot.on ? art.accent : '#fff'" :fill-opacity="dot.on ? 0.9 : 0.28" />
+        <circle
+          v-for="dot in dots" :key="`${dot.x}-${dot.y}`" :cx="dot.x" :cy="dot.y" :r="dot.on ? 3.2 : 1.6"
+          :fill="dot.on ? art.accent : '#fff'" :fill-opacity="dot.on ? 0.9 : 0.28"
+        />
       </g>
       <g v-else fill="#fff">
         <path v-for="(d, index) in peaks" :key="index" :d="d" :fill-opacity="0.08 + index * 0.06" />
@@ -81,10 +83,14 @@ const path = computed(() => {
       <g v-if="path" class="training-course-art__path">
         <path :d="path.d" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="2.5" stroke-dasharray="2 6" stroke-linecap="round" />
         <g v-for="(node, index) in path.nodes" :key="index">
-          <circle :cx="node.x" :cy="node.y" r="7.5" :fill="node.status === 'completed' ? '#fff' : 'rgba(0,0,0,0.18)'"
-            stroke="#fff" :stroke-opacity="node.status === 'not-started' ? 0.6 : 1" stroke-width="2" />
-          <path v-if="node.status === 'completed'" :d="`M ${node.x - 3.2} ${node.y} l 2.2 2.3 l 4.2 -4.6`" fill="none"
-            :stroke="art.from" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <circle
+            :cx="node.x" :cy="node.y" r="7.5" :fill="node.status === 'completed' ? '#fff' : 'rgba(0,0,0,0.18)'"
+            stroke="#fff" :stroke-opacity="node.status === 'not-started' ? 0.6 : 1" stroke-width="2"
+          />
+          <path
+            v-if="node.status === 'completed'" :d="`M ${node.x - 3.2} ${node.y} l 2.2 2.3 l 4.2 -4.6`" fill="none"
+            :stroke="art.from" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          />
           <circle v-else-if="node.status === 'in-progress'" :cx="node.x" :cy="node.y" r="3" fill="#fff" />
         </g>
       </g>

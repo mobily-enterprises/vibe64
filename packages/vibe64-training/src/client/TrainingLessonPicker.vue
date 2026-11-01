@@ -201,8 +201,10 @@ const uniqueLessonCount = computed(() => new Set(summaries.value.flatMap(({ cour
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 </script>
 <template>
-  <section class="training-lesson-picker" :class="{ 'training-lesson-picker--course-open': openCourse }" aria-label="Courses"
-    :aria-busy="catalogueLoading || learningLoading">
+  <section
+    class="training-lesson-picker" :class="{ 'training-lesson-picker--course-open': openCourse }" aria-label="Courses"
+    :aria-busy="catalogueLoading || learningLoading"
+  >
     <header class="tlp-hero">
       <svg class="tlp-hero__art" viewBox="0 0 240 160" aria-hidden="true" focusable="false">
         <circle cx="188" cy="34" r="58" class="tlp-hero__sun" />
@@ -220,8 +222,12 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
           {{ plural(summaries.length, 'course') }} · {{ plural(uniqueLessonCount, 'lesson') }} installed
         </p>
       </div>
-      <v-btn class="tlp-hero__refresh" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.refresh"
-        :disabled="busy || catalogueLoading || learningLoading" @click="emit('refresh')">Refresh courses</v-btn>
+      <v-btn
+        class="tlp-hero__refresh" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.refresh"
+        :disabled="busy || catalogueLoading || learningLoading" @click="emit('refresh')"
+      >
+        Refresh courses
+      </v-btn>
     </header>
 
     <div v-if="learningLoading && !savedAttempt" class="tlp-skeleton tlp-skeleton--saved" role="status" aria-label="Loading saved lesson">
@@ -238,8 +244,10 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
     <article v-if="savedAttempt" class="tlp-saved training-lesson-picker__saved" aria-labelledby="tlp-saved-heading">
       <div class="tlp-saved__glow" aria-hidden="true" />
-      <TrainingProgressRing v-if="completion" class="tlp-saved__ring" :value="completion.passed" :max="completion.required" :size="96" :stroke="10"
-        :label="`${completion.passed} of ${completion.required} required steps done`">
+      <TrainingProgressRing
+        v-if="completion" class="tlp-saved__ring" :value="completion.passed" :max="completion.required" :size="96" :stroke="10"
+        :label="`${completion.passed} of ${completion.required} required steps done`"
+      >
         <span class="tlp-saved__ring-value"><strong>{{ completion.passed }}</strong> of {{ completion.required }}<small>required done</small></span>
       </TrainingProgressRing>
       <div v-else class="tlp-saved__badge" aria-hidden="true"><v-icon :icon="icons.bookmark" size="36" /></div>
@@ -257,8 +265,12 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         <p v-if="learningResult.activeSummaryCurrent === false" class="tlp-note tlp-note--warn">The saved summary needs reconciliation. Continue lesson rechecks this same attempt; reading it does not repair it.</p>
         <p v-if="!canResume" class="tlp-note">Continuing a lesson is unavailable in this installation. Your lesson remains visible.</p>
         <div class="tlp-saved__actions">
-          <v-btn color="primary" variant="flat" rounded="pill" size="large" min-height="48" :prepend-icon="icons.play"
-            :disabled="!resumeEnabled" @click="requestResume">Continue lesson</v-btn>
+          <v-btn
+            color="primary" variant="flat" rounded="pill" size="large" min-height="48" :prepend-icon="icons.play"
+            :disabled="!resumeEnabled" @click="requestResume"
+          >
+            Continue lesson
+          </v-btn>
         </div>
         <details class="tlp-identity">
           <summary><v-icon :icon="icons.info" size="18" /><span>Saved lesson identity</span><v-icon class="tlp-chevron" :icon="icons.chevronDown" size="18" /></summary>
@@ -311,9 +323,11 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
     />
     <template v-else>
       <div v-if="courses.length" class="tlp-grid training-lesson-picker__courses">
-        <article v-for="({ course, key, progress }, index) in summaries" :key="key" class="tlp-card"
+        <article
+          v-for="({ course, key, progress }, index) in summaries" :key="key" class="tlp-card"
           :class="{ 'tlp-card--active': progress.activeHere, 'tlp-card--off': statusTone(course) !== 'enabled' }"
-          :style="{ '--tlp-index': index }" :aria-label="course.title">
+          :style="{ '--tlp-index': index }" :aria-label="course.title"
+        >
           <div class="tlp-card__cover">
             <TrainingCourseArt :course-id="course.courseId" :title="course.title" :statuses="progress.lessons.map(value => value.status)" />
             <div class="tlp-card__chips">
@@ -332,8 +346,10 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
             </p>
             <p v-if="course.unusableLessons?.length" class="tlp-card__next" role="note">{{ unusableNote(course) }}</p>
             <div class="tlp-card__progress">
-              <TrainingProgressRing :value="progress.completed" :max="progress.total" :size="48" :stroke="5"
-                :label="`${course.title}: ${progress.completed} of ${progress.total} lessons complete`" />
+              <TrainingProgressRing
+                :value="progress.completed" :max="progress.total" :size="48" :stroke="5"
+                :label="`${course.title}: ${progress.completed} of ${progress.total} lessons complete`"
+              />
               <div>
                 <p class="tlp-card__count">{{ progress.completed }} of {{ progress.total }} lessons complete</p>
                 <p v-if="progress.next && !progress.activeHere" class="tlp-card__next">Next: {{ progress.next.title }}</p>
@@ -343,18 +359,28 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
             <TrainingStartFeedback v-if="feedbackFor(key)" :feedback="feedbackFor(key)" />
           </div>
           <div class="tlp-card__actions">
-            <v-btn v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
-              :disabled="!resumeEnabled" @click="requestResume">Continue lesson</v-btn>
-            <v-btn v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48"
+            <v-btn
+              v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
+              :disabled="!resumeEnabled" @click="requestResume"
+            >
+              Continue lesson
+            </v-btn>
+            <v-btn
+              v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48"
               :prepend-icon="startingHere(course, progress.next) ? undefined : icons.play"
               :readonly="startingHere(course, progress.next)" :disabled="!startPossible && !startingHere(course, progress.next)"
-              @click="startLesson(course, progress.next)">
+              @click="startLesson(course, progress.next)"
+            >
               <template v-if="startingHere(course, progress.next)"><v-progress-circular indeterminate size="18" width="2" class="tlp-card__spinner" />Starting lesson…</template>
               <template v-else>Start lesson</template>
             </v-btn>
-            <v-btn v-if="updateFor(course)" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.update"
+            <v-btn
+              v-if="updateFor(course)" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.update"
               :loading="installState?.phase === 'installing' && installState.courseId === course.courseId"
-              :disabled="busy" @click="requestInstall({ courseId: course.courseId, release: updateFor(course).release })">Update</v-btn>
+              :disabled="busy" @click="requestInstall({ courseId: course.courseId, release: updateFor(course).release })"
+            >
+              Update
+            </v-btn>
             <v-btn variant="text" rounded="pill" min-height="48" :append-icon="icons.arrowRight" @click="openCourseKey = key">View course</v-btn>
           </div>
         </article>
@@ -366,9 +392,11 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       </div>
       <TrainingCourseCreator v-if="creating && canCreateCourses" :topics="availableTopics" :busy="busy" @create="requestCreateCourse" @cancel="creating = false" />
       <div v-else-if="canCreateCourses && !courses.length"><v-btn variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.plus" :disabled="busy || catalogueLoading" @click="creating = true">New course</v-btn></div>
-      <TrainingCourseCatalogue v-if="showCatalogue && !creating" :available-result="availableResult" :available-loading="availableLoading"
+      <TrainingCourseCatalogue
+        v-if="showCatalogue && !creating" :available-result="availableResult" :available-loading="availableLoading"
         :available-error="availableError" :install-state="installState" :busy="busy"
-        @install="requestInstall" @view="viewInstalled" @refresh="emit('refresh')" />
+        @install="requestInstall" @view="viewInstalled" @refresh="emit('refresh')"
+      />
     </template>
     <div v-if="courses.length && (savedAttempt || (startUnconfirmed && !startFeedback) || !canStart)" class="training-lesson-picker__start">
       <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>A lesson is in progress. Starting a different one first asks to archive it.</span></p>

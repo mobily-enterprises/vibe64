@@ -55,8 +55,10 @@ function requestCreate() {
             <legend class="tcc-step__title">Installed topics</legend>
             <div class="tcc-topics">
               <div v-for="topic in topics" :key="key(topic)" class="tcc-topic" :class="{ 'tcc-topic--on': selected.includes(key(topic)) }">
-                <v-checkbox :model-value="selected.includes(key(topic))" color="primary" density="comfortable"
-                  :label="`${topic.title} · ${topic.release}`" hide-details @update:model-value="toggle(topic, $event)" />
+                <v-checkbox
+                  :model-value="selected.includes(key(topic))" color="primary" density="comfortable"
+                  :label="`${topic.title} · ${topic.release}`" hide-details @update:model-value="toggle(topic, $event)"
+                />
               </div>
             </div>
           </fieldset>

@@ -95,11 +95,17 @@ function install(course) {
             </p>
           </div>
           <div class="tcc__actions">
-            <v-btn v-if="course.installed === 'enabled'" variant="text" rounded="pill" min-height="48" :append-icon="icons.arrowRight"
-              @click="emit('view', { courseId: course.courseId, release: course.release })">View course</v-btn>
-            <v-btn v-else-if="installable(course)" color="primary" :variant="course.updateFrom ? 'flat' : 'tonal'" rounded="pill" min-height="48"
+            <v-btn
+              v-if="course.installed === 'enabled'" variant="text" rounded="pill" min-height="48" :append-icon="icons.arrowRight"
+              @click="emit('view', { courseId: course.courseId, release: course.release })"
+            >
+              View course
+            </v-btn>
+            <v-btn
+              v-else-if="installable(course)" color="primary" :variant="course.updateFrom ? 'flat' : 'tonal'" rounded="pill" min-height="48"
               :prepend-icon="course.updateFrom ? icons.update : icons.download" :loading="stateOf(course)?.phase === 'installing'"
-              :disabled="busy" @click="install(course)">
+              :disabled="busy" @click="install(course)"
+            >
               {{ stateOf(course)?.phase === 'failed' ? (course.updateFrom ? 'Retry update' : 'Retry install') : (course.updateFrom ? 'Update' : 'Install') }}
             </v-btn>
           </div>
