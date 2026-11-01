@@ -968,7 +968,7 @@ project its publisher names, or else of the request's project. Work that
 outlives its request names its session's project itself: Preview from the
 project whose runtime holds the session (`outputTargetLaunchStart.js`), a browser
 test from the project that registered the session's assistant commands
-(`agentPreviewCommand.js`). A change without a project reaches no page. The summary is a second publication of type `entity.summary`, so
+(`agentPreviewWorkerRegistry.js`). A change without a project reaches no page. The summary is a second publication of type `entity.summary`, so
 server listeners of session changes match `entity.changed` and see each change
 once. A change never carries the conversation's live text or transcript patch
 (`conversationStream`, `conversationLogPatch`): viewers receive both through
@@ -1302,6 +1302,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/codexGitCommandWrappers.js`
 - `packages/vibe64-terminals/src/server/unixJsonCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/agentPreviewWorkerRegistry.js`
+- `packages/vibe64-terminals/src/server/agentPreviewBrowserTests.js`
 - `packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommandText.js`

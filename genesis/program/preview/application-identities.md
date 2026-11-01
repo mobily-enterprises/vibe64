@@ -12,6 +12,7 @@ users without turning that convenience into a production sign-in mechanism.
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-terminals/src/server/previewIdentityCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/agentPreviewCommandLine.js`
 - `packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
