@@ -14,7 +14,12 @@ export { retireColleagueLearningWatches } from "./learningWatchUpgrade.js";
 export { retireColleagueFreeModel } from "./freeModelUpgrade.js";
 
 /** Offline conversion only. Native histories remain untouched and no work resumes. */
-export async function upgradeColleagueConversations({ systemRoot, apply, backupRoot, report }) {
+export async function upgradeColleagueConversations({
+  systemRoot,
+  apply,
+  backupRoot,
+  report
+}) {
   const root = path.join(systemRoot, "colleague");
   let entries;
   try {
@@ -103,7 +108,12 @@ export async function upgradeColleagueConversations({ systemRoot, apply, backupR
 }
 
 /** A separate numbered upgrade; the original schema 1-to-2 conversion stays unchanged. */
-export async function upgradeColleagueConversationRuntime({ systemRoot, apply, backupRoot, report }) {
+export async function upgradeColleagueConversationRuntime({
+  systemRoot,
+  apply,
+  backupRoot,
+  report
+}) {
   const root = path.join(systemRoot, "colleague");
   let entries;
   try {
@@ -204,7 +214,12 @@ function validateCurrentRuntimeHistories(record) {
 }
 
 /** Retain the original backend identity; only explicit new chats get a new one. */
-export async function upgradeColleagueConversationHistory({ systemRoot, apply, backupRoot, report }) {
+export async function upgradeColleagueConversationHistory({
+  systemRoot,
+  apply,
+  backupRoot,
+  report
+}) {
   const root = path.join(systemRoot, "colleague");
   let entries;
   try {

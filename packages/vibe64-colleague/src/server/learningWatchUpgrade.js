@@ -12,7 +12,12 @@ const LEARNING_WATCH_SOURCE = "learning-task";
  * every learning-task watch and its queued observations, keeping written
  * conversation history. Offline, with all writers stopped; backed-up publish.
  */
-export async function retireColleagueLearningWatches({ systemRoot, apply, backupRoot, report }) {
+export async function retireColleagueLearningWatches({
+  systemRoot,
+  apply,
+  backupRoot,
+  report
+}) {
   const root = path.join(systemRoot, "colleague");
   await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
   let entries;

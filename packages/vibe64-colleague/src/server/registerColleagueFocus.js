@@ -14,7 +14,11 @@ import { ACTION_COLLEAGUE_FOCUS_UPDATE } from "./colleagueActions.js";
  * @param {ActionCatalogue} dependencies.actions
  * @param {RuntimeLogger} dependencies.logger
  */
-function registerColleagueFocus({ realtime, actions, logger }) {
+function registerColleagueFocus({
+  realtime,
+  actions,
+  logger
+}) {
   return realtime.onConnection(({ socket, readRequest }) => {
     const bindings = new Map();
     let closed = false;
@@ -85,7 +89,11 @@ function registerColleagueFocus({ realtime, actions, logger }) {
  * @param {ActionCatalogue} dependencies.actions
  * @param {RuntimeLogger} dependencies.logger
  */
-function createColleagueBrowserFocus({ realtime, actions, logger }) {
+function createColleagueBrowserFocus({
+  realtime,
+  actions,
+  logger
+}) {
   const close = registerColleagueFocus({
     realtime,
     actions,

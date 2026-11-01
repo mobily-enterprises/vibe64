@@ -71,7 +71,10 @@ function createColleagueNavigationCoordination({ changed }) {
     });
     return { ok: true };
   }
-  return Object.freeze({ begin, acknowledge });
+  return Object.freeze({
+    begin,
+    acknowledge
+  });
 }
 
 export { createColleagueNavigationCoordination };

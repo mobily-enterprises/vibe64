@@ -13,7 +13,12 @@ import { instructions } from "./protocol.js";
 import { emptyCodexToolSchema, oldCodexToolSchema, parseUpgradeJson, restoredNative } from "./nativeConversationUpgrade.js";
 
 /** Stopped application metadata only; no native writer, file or goal is changed. */
-export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, backupRoot, report }) {
+export async function upgradeColleagueCodexCompletedPolicy({
+  systemRoot,
+  apply,
+  backupRoot,
+  report
+}) {
   const root = path.join(systemRoot, "colleague");
   await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
   const entries = await readdir(root, { withFileTypes: true }).catch(error => {
@@ -154,7 +159,12 @@ export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, 
 
 
 /** Repair only the known empty configuration written by native continuity. */
-export async function upgradeColleagueNativeInstructions({ systemRoot, apply, backupRoot, report }) {
+export async function upgradeColleagueNativeInstructions({
+  systemRoot,
+  apply,
+  backupRoot,
+  report
+}) {
   const root = path.join(systemRoot, "colleague");
   await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
   const entries = await readdir(root, { withFileTypes: true }).catch(error => {

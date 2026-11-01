@@ -1,6 +1,10 @@
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../shared/focusRealtime.js";
 
-function createColleagueFocusBinding({ socket, readFocus, onError }) {
+function createColleagueFocusBinding({
+  socket,
+  readFocus,
+  onError
+}) {
   let closed = false;
   let revision = 0;
   function update() {

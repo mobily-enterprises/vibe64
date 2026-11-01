@@ -78,7 +78,9 @@ function createColleagueConversations({
   const runtime = createConversationRuntime(runtimeOptions);
   // The same backend/catalogue has two server-owned policies, but each product
   // runtimeId owns only one live handle. Direct API uses the runtime's default policy.
-  const nativeRuntime = createConversationRuntime({ ...runtimeOptions, completedEnvelope: true,
+  const nativeRuntime = createConversationRuntime({
+    ...runtimeOptions,
+    completedEnvelope: true,
     // Native wake admission measures the serialized frame in UTF-16 units:
     // existing L context/framing + 2L raw arguments + L result object + 2L
     // result copied into feedback. Argument/result byte gates remain 256 KiB.
@@ -86,7 +88,8 @@ function createColleagueConversations({
       ...runtimeOptions.limits,
       maxInputCharacters: 6 * COLLEAGUE_TOOL_PAYLOAD_LIMIT,
       maxOutputCharacters: 1_670_455
-    } });
+    }
+  });
 
   async function attachBrowserObserver(state, observer, transferring = false) {
     if (state.transfer && !transferring) await state.transfer;

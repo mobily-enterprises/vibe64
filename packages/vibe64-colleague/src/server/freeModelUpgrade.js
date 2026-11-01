@@ -16,7 +16,12 @@ const retiredModel = selection => selection?.engineId === "opencode" &&
  * has no model: the next send chooses one from the person's connected AI or
  * asks them to set one up. Offline, with all writers stopped; backed-up publish.
  */
-export async function retireColleagueFreeModel({ systemRoot, apply, backupRoot, report }) {
+export async function retireColleagueFreeModel({
+  systemRoot,
+  apply,
+  backupRoot,
+  report
+}) {
   const root = path.join(systemRoot, "colleague");
   await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
   let entries;

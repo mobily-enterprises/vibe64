@@ -5,7 +5,13 @@ import { watch } from "vue";
 // revealing its conversation (refreshed first, so it is the lesson's Learn
 // thread) and the ordinary send. A request for another signed-in person is
 // never sent by this Colleague.
-function watchColleagueLearningRequests({ learning, actorKey, reveal, send, report }) {
+function watchColleagueLearningRequests({
+  learning,
+  actorKey,
+  reveal,
+  send,
+  report
+}) {
   if (!learning?.colleagueRequest || typeof learning.consumeColleagueRequest !== "function") return () => {};
   let running = "";
   return watch(() => learning.colleagueRequest.value, async request => {

@@ -25,7 +25,12 @@ function completedAction(operation) {
 }
 
 /** Retain a completed legacy marker; the unchanged continuity owner proves native history. */
-export async function repairColleagueRetiredOperation({ systemRoot, apply, backupRoot, report }) {
+export async function repairColleagueRetiredOperation({
+  systemRoot,
+  apply,
+  backupRoot,
+  report
+}) {
   const root = path.join(systemRoot, "colleague");
   await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
   const entries = await readdir(root, { withFileTypes: true }).catch(error => {
