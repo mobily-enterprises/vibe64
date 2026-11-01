@@ -282,7 +282,7 @@ function createCodexSessionRuntimeHost({
   /**
    * Provider notifications are a high-frequency stream. Creating a session
    * runtime here hydrates the persisted conversation history even
-   * with inspectSource disabled; during an active turn that previously caused
+   * with inspectSource disabled; during an active turn that would cause
    * repeated multi-megabyte reads and hundreds of MB of churn. Event handlers
    * must use this bounded store and reserve full runtimes for mutations.
    * Do not mask a regression with throttles or caches: keep the hot path bounded.
@@ -373,7 +373,7 @@ function createCodexSessionRuntimeHost({
   }
 
   /**
-   * These original owners control retained threads; neither admits new work.
+   * Runtime options for the owners that control retained threads; neither admits new work.
    */
   function codexAppServerControlRuntimeOptionsForSession(session, options) {
     return prepareSessionRuntimeOptions(session, options, "control");

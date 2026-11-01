@@ -277,8 +277,8 @@ async function clearCodexAppServerContextRefreshPending(store, sessionId = "", o
 }
 
 /**
- * This application receipt keeps the original bounded read and stale-thread fence.
- * Native event interpretation remains in the existing shared codecs.
+ * The application's context-renewal receipt: a bounded read with a stale-thread fence.
+ * Native event interpretation stays in the shared codecs.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
  * @param {CodexAppServerRunOwner} dependencies.runOwner

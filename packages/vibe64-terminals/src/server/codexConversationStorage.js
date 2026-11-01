@@ -101,7 +101,7 @@ function withCodexState(response = {}, session = {}) {
 }
 
 /**
- * Read only the original bounded state files. Every read stays fresh; this
+ * Read only the bounded state files. Every read stays fresh; this
  * storage projection never creates a session runtime or acquires a provider.
  * @param {object} dependencies
  * @param {ProjectService} dependencies.project
@@ -160,7 +160,10 @@ function createCodexConversationStorage({ project, runOwner }) {
     };
   }
 
-  return Object.freeze({ readSession: readCodexStateSession, state });
+  return Object.freeze({
+    readSession: readCodexStateSession,
+    state
+  });
 }
 
 export {

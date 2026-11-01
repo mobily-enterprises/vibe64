@@ -38,6 +38,8 @@ const ATTACHMENT_EXPIRY_RETRY_MS = 1_000;
 const ATTACHMENT_EXPIRY_ERROR_RETRY_MS = 5_000;
 const ATTACHMENT_SESSION_RETRY_MS = 1_000;
 const ATTACHMENT_HASH_PATTERN = /^[a-f0-9]{12}$/u;
+// Timers for attachment folders on disk, one per folder or session for the whole process (Q6): a folder is cleaned
+// once however many service instances schedule it.
 const attachmentCleanupTimers = new Map();
 const attachmentForcedCleanupTimers = new Map();
 const attachmentRetiredDirectoryTimers = new Map();

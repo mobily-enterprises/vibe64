@@ -161,7 +161,10 @@ function createActorCredentialCache({ now = Date.now, ttlMs = ACTOR_CREDENTIAL_T
     entries.delete(actorKey);
   }
 
-  return Object.freeze({ read, drop });
+  return Object.freeze({
+    read,
+    drop
+  });
 }
 
 function actorCredentialKey(session = {}, actor = {}, toolHome = {}) {

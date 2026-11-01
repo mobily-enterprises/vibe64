@@ -157,7 +157,7 @@ function createOpenCodeSessionAgentProvider({
         namespace: opencodeTerminalNamespace(sessionId),
         native: { owner: sharedRuntime, preparation: {
           /**
-           * Preserve the original uncached provider's field projection.
+           * The cleanup context carries only these fields of the current conversation.
            */
           cleanup: current => prepareSessionCleanup(sessionId, {
             assistantScope: current.assistantScope,
