@@ -39,7 +39,7 @@ function createAgentCommandProjectBinding(project, errors, { capture = () => ({}
    * Runs operation(binding, project) in the bound project, refusing when the
    * project at that slug is no longer the one that was bound.
    */
-  async function run(sessionId = "", operation) {
+  async function run(sessionId, operation) {
     const binding = bindings.get(toText(sessionId));
     if (!binding?.projectSlug) throw fail(errors.unbound);
     return project.runInProjectContext(binding.projectSlug, async () => {

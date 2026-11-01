@@ -182,7 +182,7 @@ function createTemporaryConversationLifecycle({
     });
   }
 
-  async function deleteTemporaryConversation(sessionId, input = {}, options = {}) {
+  async function deleteTemporaryConversation(sessionId, input, options = {}) {
     try { await routing.cancel(sessionId, { ...options, conversationId: input.conversationId }, { waitForCleanup: true }); }
     catch (error) { if (!["vibe64_conversation_closed", "vibe64_conversation_closing"].includes(error.code)) throw error; }
     let context;

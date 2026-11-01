@@ -3589,7 +3589,7 @@ test("Main transfer budget uses Claude's current context and reserves the reques
   const f = await fixture(t);
   const binding = await createSessionConversationBinding(f.provider, f.context.sessionId, f.context);
   const signal = new AbortController().signal;
-  const options = { context: f.context, input: { message: "Continue" }, handover: "", signal };
+  const options = { context: f.context, input: { message: "Continue" }, handover: "", signal, setPhase: async () => {} };
   const before = await binding.maximumHistoryBytes(options);
   assert.equal(before, 967_000 - 1000 - 48_350 - 8 - 2 - 4096);
   assert.equal(f.processes.length, 1);
@@ -3604,7 +3604,8 @@ test("Main transfer budget uses Claude's current context and reserves the reques
 test("Main transfer budget summarises a nearly full Claude context before sizing history", async t => {
   const f = await fixture(t);
   const binding = await createSessionConversationBinding(f.provider, f.context.sessionId, f.context);
-  const options = { context: f.context, input: { message: "Continue" }, handover: "", signal: new AbortController().signal };
+  const options = { context: f.context, input: { message: "Continue" }, handover: "", signal: new AbortController().signal,
+    setPhase: async () => {} };
   f.behavior.contextUsage = { totalTokens: 946_000, maxTokens: 1_000_000, autoCompactThreshold: 967_000, model: "opus" };
   f.behavior.afterSend = async (native, message) => {
     assert.equal(message, "/compact");
@@ -3633,7 +3634,8 @@ test("Main transfer budget summarises a nearly full Claude context before sizing
 test("Main transfer budget lets a message join a working, nearly full Claude without summarising", async t => {
   const f = await fixture(t);
   const binding = await createSessionConversationBinding(f.provider, f.context.sessionId, f.context);
-  const options = { context: f.context, input: { message: "Also check the footer" }, handover: "", signal: new AbortController().signal };
+  const options = { context: f.context, input: { message: "Also check the footer" }, handover: "",
+    signal: new AbortController().signal, setPhase: async () => {} };
   await f.provider.sendMessage(f.context, { message: "Work", messageId: "busy-work" });
   f.behavior.contextUsage = { totalTokens: 966_000, maxTokens: 1_000_000, autoCompactThreshold: 967_000, model: "opus" };
   assert.equal(await binding.maximumHistoryBytes(options), 1024);

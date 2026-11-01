@@ -10,7 +10,6 @@ import {
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { requireCompletedNativeConversationReplacement, STATE_KEY } from "./mainConversationContext.js";
 import { createCodexMainMessagePreparation } from "./mainConversationMessages.js";
-import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -229,7 +228,7 @@ async function createSessionConversationBinding(provider, sessionId, options = {
       return { ...prepared, actorContext: prepared.vibe64User || null };
     } : prepareInput,
     ...(host.readContextUsage ? {
-      async maximumHistoryBytes({ context, signal, input, handover, setPhase = doNothing }) {
+      async maximumHistoryBytes({ context, signal, input, handover, setPhase }) {
         /**
          * Count UTF-8 bytes conservatively instead of assuming English text's
          * usual characters/token ratio. Keep normal model settings unchanged.
