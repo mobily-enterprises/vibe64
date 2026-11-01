@@ -152,17 +152,13 @@ async function writeCodexAppServerIdentityMetadata({
       workdir
     })
   };
+  const { store } = runtime;
   const mutateSession = renewalInternal
-    ? runtime.store.mutateSessionForRenewal?.bind(runtime.store)
-    : runtime.store.mutateSession?.bind(runtime.store);
+    ? store.mutateSessionForRenewal.bind(store)
+    : store.mutateSession.bind(store);
   const writeMetadataValue = renewalInternal
-    ? runtime.store.writeMetadataValueForRenewal?.bind(runtime.store)
-    : runtime.store.writeMetadataValue?.bind(runtime.store);
-  if (typeof mutateSession !== "function" || typeof writeMetadataValue !== "function") {
-    throw new TypeError(renewalInternal
-      ? "Renewed assistant identity requires explicit internal renewal metadata access."
-      : "Assistant identity metadata access is unavailable.");
-  }
+    ? store.writeMetadataValueForRenewal.bind(store)
+    : store.writeMetadataValue.bind(store);
   // A new sign-in gives the session a new runtime directory; the one it
   // recorded before is reported so its owner can release it once stopped.
   const previousRuntimeDir = renewalInternal
@@ -271,12 +267,6 @@ async function writeCodexSessionRenewalThreadBaseline({
   threadIds = [],
   workdir = ""
 } = {}) {
-  const writeMetadataValue = runtime?.store?.writeMetadataValueForRenewal?.bind(runtime.store);
-  if (typeof writeMetadataValue !== "function") {
-    throw new TypeError(
-      "Renewed assistant thread baseline requires explicit internal renewal metadata access."
-    );
-  }
   const baseline = JSON.stringify({
     operationId: toText(operationId),
     schemaVersion: CODEX_SESSION_RENEWAL_BASELINE_SCHEMA,
@@ -285,7 +275,7 @@ async function writeCodexSessionRenewalThreadBaseline({
     }),
     workdir: normalizeWorkdir(workdir)
   });
-  await writeMetadataValue(
+  await runtime.store.writeMetadataValueForRenewal(
     sessionId,
     CODEX_SESSION_RENEWAL_BASELINE_METADATA,
     baseline
@@ -300,12 +290,6 @@ async function writeCodexSessionRenewalThreadClaim({
   threadId = "",
   workdir = ""
 } = {}) {
-  const writeMetadataValue = runtime?.store?.writeMetadataValueForRenewal?.bind(runtime.store);
-  if (typeof writeMetadataValue !== "function") {
-    throw new TypeError(
-      "Renewed assistant thread claim requires explicit internal renewal metadata access."
-    );
-  }
   const [normalizedThreadId] = defineCodexRenewalThreadIds([threadId], {
     errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE
   });
@@ -315,7 +299,7 @@ async function writeCodexSessionRenewalThreadClaim({
     threadId: normalizedThreadId,
     workdir: normalizeWorkdir(workdir)
   });
-  await writeMetadataValue(
+  await runtime.store.writeMetadataValueForRenewal(
     sessionId,
     CODEX_SESSION_RENEWAL_THREAD_CLAIM_METADATA,
     claim

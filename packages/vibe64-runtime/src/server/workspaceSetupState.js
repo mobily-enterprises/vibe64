@@ -103,13 +103,6 @@ async function writeWorkspaceSetupState(store, sessionId = "", value = {}, optio
   const writeMetadataValue = renewal
     ? store.writeMetadataValueForRenewal
     : store.writeMetadataValue;
-  if (typeof writeMetadataValue !== "function") {
-    throw new TypeError(
-      renewal
-        ? "Renewal workspace preparation requires the private metadata writer."
-        : "Workspace preparation requires the session metadata writer."
-    );
-  }
   await writeMetadataValue.call(
     store,
     sessionId,
