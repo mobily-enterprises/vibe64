@@ -37,6 +37,57 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {ReturnType<typeof import("./sessionConversationStore.js").createSessionConversationStore>} SessionConversationStore */
 
 /**
+ * Applies each message-data patch to the one message it names, in place.
+ * @param {object[]} messages
+ * @param {unknown} patches
+ * @returns {boolean} whether any message's data changed
+ */
+function applyMessageDataPatches(messages, patches) {
+  if (!Array.isArray(patches)) throw new Error("Conversation data upgrade must return message-data patches.");
+  let changed = false;
+  const patched = new Set();
+  for (const patch of patches) {
+    const matches = messages.filter(message => message.messageId === patch.messageId);
+    if (!patch.messageId || patched.has(patch.messageId) || matches.length !== 1 || !isPlainObject(patch.data)) {
+      throw new Error("Conversation data upgrade has an unknown or ambiguous message identity.");
+    }
+    patched.add(patch.messageId);
+    const message = matches[0];
+    if (message.data !== undefined && !isPlainObject(message.data)) {
+      throw new Error("Conversation message has invalid data. Inspect it before upgrading.");
+    }
+    const data = { ...message.data, ...patch.data };
+    if (!isDeepStrictEqual(message.data, data)) {
+      message.data = data;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+/**
+ * The file changes that move each saved plan to the upgraded plan text, retiring its old location.
+ * @param {object[]} plans the plans read before the upgrade
+ * @param {object[]} upgradedPlans the transform's plans
+ */
+function planChanges(plans, upgradedPlans) {
+  const changes = [];
+  for (const plan of upgradedPlans) {
+    const previous = plans.find(({ conversationId }) => conversationId === plan.conversationId);
+    if (!previous || typeof plan.text !== "string") throw new Error("Plan upgrade cannot create an unknown conversation's plan.");
+    if (previous.original !== plan.text) {
+      changes.push({
+        filePath: previous.filePath,
+        original: previous.original,
+        contents: plan.text
+      });
+    }
+    if (previous.originalOld !== null) changes.push({ filePath: previous.oldPath, original: previous.originalOld, contents: null });
+  }
+  return changes;
+}
+
+/**
  * Prepares the stopped-writer upgrades of the store's session state.
  * @param {object} dependencies
  * @param {SessionStoreState} dependencies.state
@@ -118,19 +169,7 @@ function createSessionStateUpgrades({
         } : {})
       });
       if (!isPlainObject(next)) throw new Error("Routing upgrade transform must return metadata/conversation patches.");
-      const changes = [];
-      for (const plan of next.plans || []) {
-        const previous = plans.find(({ conversationId }) => conversationId === plan.conversationId);
-        if (!previous || typeof plan.text !== "string") throw new Error("Plan upgrade cannot create an unknown conversation's plan.");
-        if (previous.original !== plan.text) {
-          changes.push({
-            filePath: previous.filePath,
-            original: previous.original,
-            contents: plan.text
-          });
-        }
-        if (previous.originalOld !== null) changes.push({ filePath: previous.oldPath, original: previous.originalOld, contents: null });
-      }
+      const changes = planChanges(plans, next.plans || []);
       if (transformPlanProgress) {
         for (const scope of [{ conversationId: "", root: sessionPaths.sessionRoot }, ...conversations.map(({ record, filePath }) => ({
           conversationId: record.conversationId,
@@ -578,26 +617,7 @@ function createSessionStateUpgrades({
             conversation: structuredClone(scope.conversation),
             messages: structuredClone(messages)
           });
-          if (!Array.isArray(patches)) throw new Error("Conversation data upgrade must return message-data patches.");
-          let changed = false;
-          const patched = new Set();
-          for (const patch of patches) {
-            const matches = messages.filter(message => message.messageId === patch.messageId);
-            if (!patch.messageId || patched.has(patch.messageId) || matches.length !== 1 || !isPlainObject(patch.data)) {
-              throw new Error("Conversation data upgrade has an unknown or ambiguous message identity.");
-            }
-            patched.add(patch.messageId);
-            const message = matches[0];
-            if (message.data !== undefined && !isPlainObject(message.data)) {
-              throw new Error("Conversation message has invalid data. Inspect it before upgrading.");
-            }
-            const data = { ...message.data, ...patch.data };
-            if (!isDeepStrictEqual(message.data, data)) {
-              message.data = data;
-              changed = true;
-            }
-          }
-          if (changed) {
+          if (applyMessageDataPatches(messages, patches)) {
             const contents = `${JSON.stringify(document, null, 2)}\n`;
             conversationStore.parseConversationRecord(contents);
             changes.push({ filePath, original, contents });

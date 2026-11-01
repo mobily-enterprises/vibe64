@@ -58,6 +58,53 @@ function conversationRecordHasMessage(record, messageId) {
   return Boolean(messageId) && ids.has(messageId);
 }
 
+function validIntegrationSetupCompletion(value) {
+  return typeof value.configurationHash === "string" && /^[a-f0-9]{64}$/u.test(value.configurationHash) &&
+    typeof value.verifiedAt === "string" && Number.isFinite(Date.parse(value.verifiedAt));
+}
+
+function validIntegrationContinuation(value) {
+  if (!isPlainObject(value)) return false;
+  if (value.status === "pending") return Object.keys(value).length === 1;
+  return Object.keys(value).length === 3 && ["sending", "accepted"].includes(value.status) &&
+    VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) &&
+    typeof value.threadId === "string" && value.threadId.trim() === value.threadId && value.threadId.length > 0;
+}
+
+function normalizeConversationTurnMetadata(value = null) {
+  if (!isPlainObject(value)) {
+    throw vibe64Error(
+      "Conversation turn metadata must be an object.",
+      "vibe64_invalid_conversation_turn_metadata"
+    );
+  }
+  const other = { ...value };
+  for (const key of [
+    "actorDisplayName",
+    "actorId",
+    "engineId",
+    "assistantSelection",
+    "assistantRouting",
+    "nativeMessageVersions"
+  ]) delete other[key];
+  return {
+    ...other,
+    actorDisplayName: toText(value.actorDisplayName),
+    actorId: toText(value.actorId),
+    ...(VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) ? { engineId: value.engineId } : {}),
+    ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
+    ...(isPlainObject(value.assistantRouting) &&
+      ["senior", "junior", "fix", "helper", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
+          assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
+            .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
+        } : {}),
+    ...(isPlainObject(value.nativeMessageVersions) ? {
+      nativeMessageVersions: Object.fromEntries(Object.entries(value.nativeMessageVersions)
+        .filter(([, version]) => typeof version === "string" && /^[a-f0-9]{64}$/u.test(version)))
+    } : {})
+  };
+}
+
 /**
  * Conversation storage: transcripts and their turns, integration setup
  * requests, a session's conversations and their live streams.
@@ -140,19 +187,6 @@ function createSessionConversationStore({
     }
     return archiveAccess.withReadableSessionPaths(sessionId, async (sessionPaths) =>
       (await readConversationTurn(sessionPaths, turnId)).integrationSetup || null);
-  }
-
-  function validIntegrationSetupCompletion(value) {
-    return typeof value.configurationHash === "string" && /^[a-f0-9]{64}$/u.test(value.configurationHash) &&
-      typeof value.verifiedAt === "string" && Number.isFinite(Date.parse(value.verifiedAt));
-  }
-
-  function validIntegrationContinuation(value) {
-    if (!isPlainObject(value)) return false;
-    if (value.status === "pending") return Object.keys(value).length === 1;
-    return Object.keys(value).length === 3 && ["sending", "accepted"].includes(value.status) &&
-      VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) &&
-      typeof value.threadId === "string" && value.threadId.trim() === value.threadId && value.threadId.length > 0;
   }
 
   /**
@@ -300,40 +334,6 @@ function createSessionConversationStore({
       }
       throw error;
     }
-  }
-
-  function normalizeConversationTurnMetadata(value = null) {
-    if (!isPlainObject(value)) {
-      throw vibe64Error(
-        "Conversation turn metadata must be an object.",
-        "vibe64_invalid_conversation_turn_metadata"
-      );
-    }
-    const other = { ...value };
-    for (const key of [
-      "actorDisplayName",
-      "actorId",
-      "engineId",
-      "assistantSelection",
-      "assistantRouting",
-      "nativeMessageVersions"
-    ]) delete other[key];
-    return {
-      ...other,
-      actorDisplayName: toText(value.actorDisplayName),
-      actorId: toText(value.actorId),
-      ...(VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) ? { engineId: value.engineId } : {}),
-      ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
-      ...(isPlainObject(value.assistantRouting) &&
-        ["senior", "junior", "fix", "helper", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
-            assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
-              .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
-          } : {}),
-      ...(isPlainObject(value.nativeMessageVersions) ? {
-        nativeMessageVersions: Object.fromEntries(Object.entries(value.nativeMessageVersions)
-          .filter(([, version]) => typeof version === "string" && /^[a-f0-9]{64}$/u.test(version)))
-      } : {})
-    };
   }
 
   function conversationRecordJson(record) {
