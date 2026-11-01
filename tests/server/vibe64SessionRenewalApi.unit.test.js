@@ -263,62 +263,23 @@ test("renewal actions use server action context identity and domain-native idemp
       request: { vibe64User }
     }
   };
-  const base = {
-    assistantSelection: ASSISTANT_SELECTION,
-    expectedHash: DRAFT_HASH,
-    expectedRevision: 2,
-    operationKey: "renewal:session-1:one",
-    originId: "tab:one",
-    sessionId: "session-1",
-    vibe64User: { username: "spoofed" }
-  };
+  const guard = { expectedHash: DRAFT_HASH, expectedRevision: 2 };
+  const operation = { operationKey: "renewal:session-1:one", originId: "tab:one" };
+  // Each action receives the input its schema accepts and passes it, with the
+  // server's user in place of any the caller named, to its service operation.
+  const transitions = [
+    ["inspect", ACTION_INSPECT_SESSION_RENEWAL, {}],
+    ["request", ACTION_REQUEST_SESSION_RENEWAL_DRAFT, operation],
+    ["update", ACTION_UPDATE_SESSION_RENEWAL_DRAFT, { draft: "Continue from the saved canonical commit.", ...guard, ...operation }],
+    ["cancel", ACTION_CANCEL_SESSION_RENEWAL, { ...guard, ...operation }],
+    ["confirm", ACTION_CONFIRM_SESSION_RENEWAL, { assistantSelection: ASSISTANT_SELECTION, ...guard, ...operation }],
+    ["retry", ACTION_RETRY_SESSION_RENEWAL, operation]
+  ];
+  for (const [, actionId, input] of transitions) {
+    await actionById(actions, actionId).execute({ ...input, sessionId: "session-1", vibe64User: { username: "spoofed" } }, context);
+  }
 
-  await actionById(actions, ACTION_INSPECT_SESSION_RENEWAL).execute(base, context);
-  await actionById(actions, ACTION_REQUEST_SESSION_RENEWAL_DRAFT).execute(base, context);
-  await actionById(actions, ACTION_UPDATE_SESSION_RENEWAL_DRAFT).execute({
-    ...base,
-    draft: "Continue from the saved canonical commit."
-  }, context);
-  await actionById(actions, ACTION_CANCEL_SESSION_RENEWAL).execute(base, context);
-  await actionById(actions, ACTION_CONFIRM_SESSION_RENEWAL).execute(base, context);
-  await actionById(actions, ACTION_RETRY_SESSION_RENEWAL).execute(base, context);
-
-  assert.deepEqual(calls, [
-    ["inspect", "session-1", { vibe64User }],
-    ["request", "session-1", {
-      operationKey: "renewal:session-1:one",
-      originId: "tab:one",
-      vibe64User
-    }],
-    ["update", "session-1", {
-      draft: "Continue from the saved canonical commit.",
-      expectedHash: DRAFT_HASH,
-      expectedRevision: 2,
-      operationKey: "renewal:session-1:one",
-      originId: "tab:one",
-      vibe64User
-    }],
-    ["cancel", "session-1", {
-      expectedHash: DRAFT_HASH,
-      expectedRevision: 2,
-      operationKey: "renewal:session-1:one",
-      originId: "tab:one",
-      vibe64User
-    }],
-    ["confirm", "session-1", {
-      assistantSelection: ASSISTANT_SELECTION,
-      expectedHash: DRAFT_HASH,
-      expectedRevision: 2,
-      operationKey: "renewal:session-1:one",
-      originId: "tab:one",
-      vibe64User
-    }],
-    ["retry", "session-1", {
-      operationKey: "renewal:session-1:one",
-      originId: "tab:one",
-      vibe64User
-    }]
-  ]);
+  assert.deepEqual(calls, transitions.map(([name, , input]) => [name, "session-1", { ...input, sessionId: "session-1", vibe64User }]));
 
   assert.equal(actionById(actions, ACTION_INSPECT_SESSION_RENEWAL).idempotency, "none");
   for (const actionId of RENEWAL_ACTION_IDS.slice(1)) {

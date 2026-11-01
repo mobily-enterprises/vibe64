@@ -1379,6 +1379,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-sessions/src/server/mainBrowserConversations.js`
 - `packages/vibe64-sessions/src/server/mainConversationAuthority.js`
 - `packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js`
+- `packages/vibe64-sessions/src/server/conversationHost.js`
 - `packages/vibe64-sessions/src/server/conversationTransportSchema.js`
 - `packages/vibe64-sessions/src/shared/conversationIdentity.js`
 - `packages/vibe64-terminals/src/server/providerUsage.js`

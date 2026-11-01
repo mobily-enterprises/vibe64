@@ -2221,7 +2221,7 @@ test("one exact update check is shared, cached, and invalidates every sibling se
     }
   });
 
-  const firstCheck = service.checkSessionUpdates("session-1");
+  const firstCheck = service.checkSessionUpdates("session-1", {});
   const joinedCheck = service.checkSessionUpdates("session-1", { force: true });
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(exactChecks, 1);
@@ -2250,7 +2250,7 @@ test("one exact update check is shared, cached, and invalidates every sibling se
     updateAvailable: true
   });
   const [result, joined] = await Promise.all([firstCheck, joinedCheck]);
-  const cached = await service.checkSessionUpdates("session-1");
+  const cached = await service.checkSessionUpdates("session-1", {});
   assert.equal(result.updateAvailable, true);
   assert.equal(result.relationship, "behind");
   assert.equal(result.updateStrategy, "rebase");

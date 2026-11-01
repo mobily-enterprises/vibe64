@@ -65,7 +65,7 @@ function operationResult(result) {
  * @param {TerminalsService} dependencies.terminals
  */
 function createMainBrowserConversations({ actions, terminals }) {
-  async function open({ id, context } = {}) {
+  async function open({ id, context }) {
     const temporary = temporaryConversationTarget(id);
     const target = temporary || mainConversationTarget(id);
     if (!target) throw unavailable();
@@ -81,6 +81,7 @@ function createMainBrowserConversations({ actions, terminals }) {
       if (current.actor.id !== actorId) throw unavailable();
       return current;
     }
+
     async function withTerminals(operation) {
       const current = await currentAccess();
       return runWithProjectRequestContext({ ...current.project, vibe64User: current.user }, () => operation({
@@ -88,64 +89,93 @@ function createMainBrowserConversations({ actions, terminals }) {
         browserAuthority: { ...target, actorId, requestContext }
       }));
     }
+
     function withConversation(operation) {
       return withTerminals(async options => operation(await (temporary
         ? terminals.openTemporaryBrowserConversation(target.sessionId, target.conversationId, options)
         : terminals.openBrowserConversation(target.sessionId, options))));
     }
+
     async function execute(actionId, input = {}) {
       await currentAccess();
       return actions.execute({ actionId, input: { ...input, ...target }, context: requestContext });
     }
 
-    return Object.freeze({
-      async read(query = {}) {
-        const options = { limit: "10", pageUnit: "messages" };
-        for (const key of ["beforeTurnId", "limit"]) if (Object.hasOwn(query, key)) options[key] = query[key];
-        const { configuration: _configuration, ...state } = await withConversation(conversation => conversation.read(options));
-        return { ...state, id };
-      },
-      async send(input) {
-        if (temporary) return operationResult(await withConversation(conversation => conversation.send(input)));
-        return operationResult(await execute(ACTION_SEND_AGENT_MESSAGE, {
-          ...pickFields(input.data, messageFields),
-          message: input.text, messageId: input.messageId,
-          // The person's plain message has no turn expectation: Routing
-          // steers it into a running turn or starts one. Only explicit
-          // steering keeps its finished-turn rejection and fallback.
-          ...(input.steer === true ? { submissionKind: "steer" } : {}),
-          ...(Object.hasOwn(input, "attachmentIds") ? { attachmentIds: input.attachmentIds } : {})
-        }));
-      },
-      async cancel() { return operationResult(
-        temporary ? await withConversation(conversation => conversation.cancel()) : await execute(ACTION_INTERRUPT_AGENT_TURN)
-      ); },
-      async select(input) {
-        if (temporary) return operationResult(await withConversation(conversation => conversation.select(input)));
-        return operationResult(await execute(ACTION_UPDATE_ASSISTANT_SELECTION, pickFields(input, selectionFields)));
-      },
-      async inspectDelivery(input) { return withConversation(conversation => conversation.inspectDelivery(input)); },
-      /**
-       * Cancel of one message never opens the native conversation or waits for its lock.
-       */
-      async cancelDelivery(input) {
-        return withTerminals(options => temporary
-          ? terminals.cancelTemporaryConversationMessage(target.sessionId, {
-            conversationId: target.conversationId,
-            messageId: input.messageId
-          }, options)
-          : terminals.cancelAgentMessage(target.sessionId, { messageId: input.messageId }, options));
-      },
-      async readGoal() { return temporary
+    async function read(query = {}) {
+      const options = { limit: "10", pageUnit: "messages" };
+      for (const key of ["beforeTurnId", "limit"]) if (Object.hasOwn(query, key)) options[key] = query[key];
+      const { configuration: _configuration, ...state } = await withConversation(conversation => conversation.read(options));
+      return { ...state, id };
+    }
+
+    async function send(input) {
+      if (temporary) return operationResult(await withConversation(conversation => conversation.send(input)));
+      return operationResult(await execute(ACTION_SEND_AGENT_MESSAGE, {
+        ...pickFields(input.data, messageFields),
+        message: input.text,
+        messageId: input.messageId,
+        // The person's plain message has no turn expectation: Routing
+        // steers it into a running turn or starts one. Only explicit
+        // steering keeps its finished-turn rejection and fallback.
+        ...(input.steer === true ? { submissionKind: "steer" } : {}),
+        ...(Object.hasOwn(input, "attachmentIds") ? { attachmentIds: input.attachmentIds } : {})
+      }));
+    }
+
+    async function cancel() {
+      return operationResult(temporary
+        ? await withConversation(conversation => conversation.cancel())
+        : await execute(ACTION_INTERRUPT_AGENT_TURN));
+    }
+
+    async function select(input) {
+      if (temporary) return operationResult(await withConversation(conversation => conversation.select(input)));
+      return operationResult(await execute(ACTION_UPDATE_ASSISTANT_SELECTION, pickFields(input, selectionFields)));
+    }
+
+    async function inspectDelivery(input) {
+      return withConversation(conversation => conversation.inspectDelivery(input));
+    }
+
+    /**
+     * Cancel of one message never opens the native conversation or waits for its lock.
+     */
+    async function cancelDelivery(input) {
+      return withTerminals(options => temporary
+        ? terminals.cancelTemporaryConversationMessage(target.sessionId, {
+          conversationId: target.conversationId,
+          messageId: input.messageId
+        }, options)
+        : terminals.cancelAgentMessage(target.sessionId, { messageId: input.messageId }, options));
+    }
+
+    async function readGoal() {
+      return temporary
         ? withConversation(conversation => conversation.readGoal())
-        : execute(ACTION_READ_CANONICAL_AGENT_GOAL); },
-      async updateGoal(input) { return temporary
+        : execute(ACTION_READ_CANONICAL_AGENT_GOAL);
+    }
+
+    async function updateGoal(input) {
+      return temporary
         ? withConversation(conversation => conversation.updateGoal(input))
-        : execute(ACTION_UPDATE_CANONICAL_AGENT_GOAL, input); },
-      async subscribe(listener) {
-        if (typeof listener !== "function") throw new TypeError("A conversation listener is required.");
-        return withConversation(conversation => conversation.subscribe(event => listener({ ...event, conversationId: id })));
-      }
+        : execute(ACTION_UPDATE_CANONICAL_AGENT_GOAL, input);
+    }
+
+    async function subscribe(listener) {
+      if (typeof listener !== "function") throw new TypeError("A conversation listener is required.");
+      return withConversation(conversation => conversation.subscribe(event => listener({ ...event, conversationId: id })));
+    }
+
+    return Object.freeze({
+      cancel,
+      cancelDelivery,
+      inspectDelivery,
+      read,
+      readGoal,
+      select,
+      send,
+      subscribe,
+      updateGoal
     });
   }
 

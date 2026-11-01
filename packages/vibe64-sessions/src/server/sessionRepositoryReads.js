@@ -39,63 +39,69 @@ async function optionalRepositorySession(project, value = "") {
  * @param {TerminalsService} dependencies.terminals
  */
 function createSessionRepositoryReads({ project, terminals }) {
-  const reads = Object.freeze({
-    async inspectRepositoryHistory(input) {
-      return sessionResult(async () => {
-        const session = await optionalRepositorySession(project, input.sessionId);
-        const history = await terminals.inspectRepositoryHistory({ ...input, session });
-        const updateCheck = cachedRepositoryUpdateCheck(session);
-        return {
-          ...history,
-          ...(updateCheck ? { updateCheck } : {})
-        };
-      }, "Vibe64 could not read project version history.");
-    },
+  async function inspectRepositoryHistory(input) {
+    return sessionResult(async () => {
+      const session = await optionalRepositorySession(project, input.sessionId);
+      const history = await terminals.inspectRepositoryHistory({ ...input, session });
+      const updateCheck = cachedRepositoryUpdateCheck(session);
+      return {
+        ...history,
+        ...(updateCheck ? { updateCheck } : {})
+      };
+    }, "Vibe64 could not read project version history.");
+  }
 
-    async inspectRepositoryVersionFiles(input) {
-      return sessionResult(async () => {
-        const session = await optionalRepositorySession(project, input.sessionId);
-        return terminals.inspectRepositoryVersionFiles({ ...input, session });
-      }, "Vibe64 could not read this project version.");
-    },
+  async function inspectRepositoryVersionFiles(input) {
+    return sessionResult(async () => {
+      const session = await optionalRepositorySession(project, input.sessionId);
+      return terminals.inspectRepositoryVersionFiles({ ...input, session });
+    }, "Vibe64 could not read this project version.");
+  }
 
-    async inspectRepositoryVersionFileDiff(input) {
-      return sessionResult(async () => {
-        const session = await optionalRepositorySession(project, input.sessionId);
-        return terminals.inspectRepositoryVersionFileDiff({ ...input, session });
-      }, "Vibe64 could not read this version's file change.");
-    },
+  async function inspectRepositoryVersionFileDiff(input) {
+    return sessionResult(async () => {
+      const session = await optionalRepositorySession(project, input.sessionId);
+      return terminals.inspectRepositoryVersionFileDiff({ ...input, session });
+    }, "Vibe64 could not read this version's file change.");
+  }
 
-    async inspectIncomingContributions(sessionId, input = {}) {
-      return sessionResult(() => terminals.inspectIncomingContributions(requiredIncomingSessionId(sessionId), {
+  async function inspectIncomingContributions(sessionId, input) {
+    return sessionResult(() => terminals.inspectIncomingContributions(requiredIncomingSessionId(sessionId), {
+      ...input,
+      vibe64User: trustedAssistantUser(input)
+    }), "Incoming changes could not be read. Refresh before acting.");
+  }
+
+  /**
+   * A review reads the same contributions with their diffs.
+   */
+  async function reviewIncomingContribution(sessionId, input) {
+    return inspectIncomingContributions(sessionId, { ...input, includeDiff: true });
+  }
+
+  async function changeIncomingContribution(sessionId, input) {
+    return sessionResult(async () => {
+      const result = await terminals.changeIncomingContribution(requiredIncomingSessionId(sessionId), {
         ...input,
         vibe64User: trustedAssistantUser(input)
-      }), "Incoming changes could not be read. Refresh before acting.");
-    },
+      });
+      // The Git result is confirmed. A failed UI notification must not turn
+      // that success into a retry of a remote write.
+      if (result.status !== "repair-review") {
+        try { await project.refreshGithub(); } catch { /* The next read reconstructs state from Git. */ }
+      }
+      return result;
+    }, "The contribution action was not confirmed. Refresh Incoming changes before retrying.");
+  }
 
-    /**
-     * A review reads the same contributions with their diffs.
-     */
-    async reviewIncomingContribution(sessionId, input) {
-      return reads.inspectIncomingContributions(sessionId, { ...input, includeDiff: true });
-    },
-
-    async changeIncomingContribution(sessionId, input) {
-      return sessionResult(async () => {
-        const result = await terminals.changeIncomingContribution(requiredIncomingSessionId(sessionId), {
-          ...input,
-          vibe64User: trustedAssistantUser(input)
-        });
-        // The Git result is confirmed. A failed UI notification must not turn
-        // that success into a retry of a remote write.
-        if (result.status !== "repair-review") {
-          try { await project.refreshGithub(); } catch { /* The next read reconstructs state from Git. */ }
-        }
-        return result;
-      }, "The contribution action was not confirmed. Refresh Incoming changes before retrying.");
-    }
+  return Object.freeze({
+    changeIncomingContribution,
+    inspectIncomingContributions,
+    inspectRepositoryHistory,
+    inspectRepositoryVersionFileDiff,
+    inspectRepositoryVersionFiles,
+    reviewIncomingContribution
   });
-  return reads;
 }
 
 export { createSessionRepositoryReads };

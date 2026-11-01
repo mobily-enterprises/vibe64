@@ -116,37 +116,36 @@ function createSessionRenewalController({
     workflowLockRetryMs
   });
 
-  const controller = {
-    async cancelSessionRenewal(sessionId, input) {
-      const runtime = await renewalAccess.runtimeForRenewal();
-      const state = await mutateSessionRenewalState(runtime, sessionId, (current) => {
-        assertSessionRenewalOperation(current, input.operationKey);
-        if (current.status === SESSION_RENEWAL_STATUS.CANCELLED) {
-          return undefined;
-        }
-        assertSessionRenewalDraftVersion(current, input);
-        if (current.status !== SESSION_RENEWAL_STATUS.REVIEW) {
-          throw renewalError(
-            "Only a handover awaiting review can be cancelled.",
-            "vibe64_session_renewal_cancel_not_available"
-          );
-        }
-        return statePatch(current, {
-          error: null,
-          stage: SESSION_RENEWAL_STAGE.CANCELLED,
-          status: SESSION_RENEWAL_STATUS.CANCELLED
-        });
+  async function cancelSessionRenewal(sessionId, input) {
+    const runtime = await renewalAccess.runtimeForRenewal();
+    const state = await mutateSessionRenewalState(runtime, sessionId, (current) => {
+      assertSessionRenewalOperation(current, input.operationKey);
+      if (current.status === SESSION_RENEWAL_STATUS.CANCELLED) {
+        return undefined;
+      }
+      assertSessionRenewalDraftVersion(current, input);
+      if (current.status !== SESSION_RENEWAL_STATUS.REVIEW) {
+        throw renewalError(
+          "Only a handover awaiting review can be cancelled.",
+          "vibe64_session_renewal_cancel_not_available"
+        );
+      }
+      return statePatch(current, {
+        error: null,
+        stage: SESSION_RENEWAL_STAGE.CANCELLED,
+        status: SESSION_RENEWAL_STATUS.CANCELLED
       });
-      scheduler.clearWorkflowLockRetry(state?.renewalId);
-      await renewalAccess.publish(sessionId, "session-renewal-cancelled", input.originId);
-      return publicRenewalResult(state, {}, input.vibe64User);
-    },
+    });
+    scheduler.clearWorkflowLockRetry(state?.renewalId);
+    await renewalAccess.publish(sessionId, "session-renewal-cancelled", input.originId);
+    return publicRenewalResult(state, {}, input.vibe64User);
+  }
 
-    async confirmSessionRenewal(sessionId, input) {
-      const runtime = await renewalAccess.runtimeForRenewal();
-      const observed = await readSessionRenewalState(runtime, sessionId);
-      assertSessionRenewalOperation(observed, input.operationKey);
-      return admission.runConfirmationOnce(observed.renewalId, input, async () => {
+  async function confirmSessionRenewal(sessionId, input) {
+    const runtime = await renewalAccess.runtimeForRenewal();
+    const observed = await readSessionRenewalState(runtime, sessionId);
+    assertSessionRenewalOperation(observed, input.operationKey);
+    return admission.runConfirmationOnce(observed.renewalId, input, async () => {
       if (
         observed?.approved &&
         [
@@ -282,267 +281,263 @@ function createSessionRenewalController({
       await scheduler.schedule(confirmed, input);
       await renewalAccess.publish(sessionId, "session-renewal-confirmed", input.originId);
       return publicRenewalResult(confirmed, {}, input.vibe64User);
-      });
-    },
+    });
+  }
 
-    async inspectSessionRenewal(sessionId, input) {
-      const runtime = await renewalAccess.runtimeForRenewal();
-      const state = await readSessionRenewalState(runtime, sessionId);
-      await scheduler.schedule(state, input);
-      return publicRenewalResult(state, {
-        available: state?.status !== SESSION_RENEWAL_STATUS.COMPLETED
-      }, input.vibe64User);
-    },
+  async function inspectSessionRenewal(sessionId, input) {
+    const runtime = await renewalAccess.runtimeForRenewal();
+    const state = await readSessionRenewalState(runtime, sessionId);
+    await scheduler.schedule(state, input);
+    return publicRenewalResult(state, {
+      available: state?.status !== SESSION_RENEWAL_STATUS.COMPLETED
+    }, input.vibe64User);
+  }
 
-    async requestSessionRenewalDraft(sessionId, input) {
-      const runtime = await renewalAccess.runtimeForRenewal();
-      const state = await runtime.store.runSessionRenewalStateExclusive(sessionId, async () => {
-        const current = await readSessionRenewalState(runtime, sessionId);
-        if (current) {
-          if (
-            current.status === SESSION_RENEWAL_STATUS.CANCELLED &&
-            current.operationKey !== input.operationKey
-          ) {
-            // A new operation key deliberately starts a fresh renewal after a
-            // prior review was cancelled.
-          } else {
-            assertSessionRenewalOperation(current, input.operationKey);
-            return current;
-          }
+  async function requestSessionRenewalDraft(sessionId, input) {
+    const runtime = await renewalAccess.runtimeForRenewal();
+    const state = await runtime.store.runSessionRenewalStateExclusive(sessionId, async () => {
+      const current = await readSessionRenewalState(runtime, sessionId);
+      if (current) {
+        if (
+          current.status === SESSION_RENEWAL_STATUS.CANCELLED &&
+          current.operationKey !== input.operationKey
+        ) {
+          // A new operation key deliberately starts a fresh renewal after a
+          // prior review was cancelled.
+        } else {
+          assertSessionRenewalOperation(current, input.operationKey);
+          return current;
         }
-        let created = null;
-        await runtime.store.mutateSessionForRenewal(sessionId, async () => {
-          const source = await runtime.getSessionForRenewal(sessionId, {
-            inspectSource: false
-          });
-          if (
-            source?.archived === true ||
-            toText(source?.sessionId) !== toText(sessionId) ||
-            toText(source?.status) !== VIBE64_SESSION_STATUS.ACTIVE
-          ) {
-            throw renewalError(
-              "Only an active session can be renewed.",
-              "vibe64_session_renewal_source_not_active"
-            );
-          }
-          const initial = createSessionRenewalState({
-            actor: actorFromUser(input.vibe64User),
-            operationKey: input.operationKey,
-            sessionId
-          });
-          created = await writeSessionRenewalState(runtime, sessionId, {
-            ...initial,
-            generation: {
-              attempt: 1,
-              operationId: operationId(initial.renewalId, "draft-1")
-            }
-          });
+      }
+      let created = null;
+      await runtime.store.mutateSessionForRenewal(sessionId, async () => {
+        const source = await runtime.getSessionForRenewal(sessionId, {
+          inspectSource: false
         });
-        return created;
+        if (
+          source?.archived === true ||
+          toText(source?.sessionId) !== toText(sessionId) ||
+          toText(source?.status) !== VIBE64_SESSION_STATUS.ACTIVE
+        ) {
+          throw renewalError(
+            "Only an active session can be renewed.",
+            "vibe64_session_renewal_source_not_active"
+          );
+        }
+        const initial = createSessionRenewalState({
+          actor: actorFromUser(input.vibe64User),
+          operationKey: input.operationKey,
+          sessionId
+        });
+        created = await writeSessionRenewalState(runtime, sessionId, {
+          ...initial,
+          generation: {
+            attempt: 1,
+            operationId: operationId(initial.renewalId, "draft-1")
+          }
+        });
       });
-      await scheduler.schedule(state, input);
-      await renewalAccess.publish(sessionId, "session-renewal-started", input.originId);
-      return publicRenewalResult(state, {}, input.vibe64User);
-    },
+      return created;
+    });
+    await scheduler.schedule(state, input);
+    await renewalAccess.publish(sessionId, "session-renewal-started", input.originId);
+    return publicRenewalResult(state, {}, input.vibe64User);
+  }
 
-    closeSessionRenewalWork: scheduler.closeSessionRenewalWork,
-
-    resumeSessionRenewals: scheduler.resumeSessionRenewals,
-
-    async retrySessionRenewal(sessionId, input) {
-      const runtime = await renewalAccess.runtimeForRenewal();
-      const observed = await readSessionRenewalState(runtime, sessionId);
-      assertSessionRenewalOperation(observed, input.operationKey);
+  async function retrySessionRenewal(sessionId, input) {
+    const runtime = await renewalAccess.runtimeForRenewal();
+    const observed = await readSessionRenewalState(runtime, sessionId);
+    assertSessionRenewalOperation(observed, input.operationKey);
+    if ([
+      SESSION_RENEWAL_STATUS.COMPLETED,
+      SESSION_RENEWAL_STATUS.RUNNING
+    ].includes(observed.status)) {
+      await scheduler.schedule(observed, input);
+      return publicRenewalResult(observed, {}, input.vibe64User);
+    }
+    const exclusive = await runVibe64RenewalAgentWriteExclusive(runtime, sessionId, async () => {
+      let current = await readSessionRenewalState(runtime, sessionId);
+      assertSessionRenewalOperation(current, input.operationKey);
       if ([
         SESSION_RENEWAL_STATUS.COMPLETED,
         SESSION_RENEWAL_STATUS.RUNNING
-      ].includes(observed.status)) {
-        await scheduler.schedule(observed, input);
-        return publicRenewalResult(observed, {}, input.vibe64User);
+      ].includes(current.status)) {
+        return current;
       }
-      const exclusive = await runVibe64RenewalAgentWriteExclusive(runtime, sessionId, async () => {
-        let current = await readSessionRenewalState(runtime, sessionId);
-        assertSessionRenewalOperation(current, input.operationKey);
-        if ([
-          SESSION_RENEWAL_STATUS.COMPLETED,
-          SESSION_RENEWAL_STATUS.RUNNING
-        ].includes(current.status)) {
-          return current;
-        }
-        if (current.status !== SESSION_RENEWAL_STATUS.FAILED) {
-          throw renewalError(
-            "This session renewal is not waiting to be retried.",
-            "vibe64_session_renewal_retry_not_available"
-          );
-        }
-        if (current.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING) {
-          current = await mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
-            ...(input.vibe64User
-              ? { continuedBy: actorFromUser(input.vibe64User) }
-              : {}),
-            error: null,
-            status: SESSION_RENEWAL_STATUS.RUNNING
-          }));
-          current = await restoration.completeFailureRestoration(runtime, current);
-          if (
-            current.status === SESSION_RENEWAL_STATUS.RUNNING ||
-            current.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING
-          ) {
-            return current;
-          }
-        }
-        if (current.stage === SESSION_RENEWAL_STAGE.DRAFT_GENERATING) {
-          const attempt = Math.max(1, Number(current.generation?.attempt) || 1) + 1;
-          return mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
-            ...(input.vibe64User
-              ? { continuedBy: actorFromUser(input.vibe64User) }
-              : {}),
-            error: null,
-            generation: {
-              attempt,
-              operationId: operationId(latest.renewalId, `draft-${attempt}`)
-            },
-            status: SESSION_RENEWAL_STATUS.RUNNING
-          }));
-        }
-        if (!SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES.has(current.stage)) {
-          const sourceStatus = await runtime.store.readStatusForRenewal(sessionId);
-          if (sourceStatus !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
-            throw renewalError(
-              "The acknowledged predecessor no longer owns its renewal transition.",
-              "vibe64_session_renewal_link_mismatch",
-              { retryable: true, statusCode: 500 }
-            );
-          }
-          return mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
-            ...(input.vibe64User
-              ? { continuedBy: actorFromUser(input.vibe64User) }
-              : {}),
-            error: null,
-            status: SESSION_RENEWAL_STATUS.RUNNING
-          }));
-        }
-
-        await predecessorSession.assertPredecessorIdle(runtime, sessionId);
-        await predecessorSession.freezePredecessorTerminalAdmission(current);
-        let durablyQuiesced = false;
-        try {
-          await restoration.restorePreAcknowledgementSource(runtime, current, {
-            thawAdmission: false
-          });
-          const session = await renewalAccess.readInternalSession(runtime, sessionId);
-          await predecessorSession.closePredecessorTerminals(runtime, current, session);
-          const basis = await inspectSessionRenewalEligibility({
-            operationId: operationId(current.renewalId, "retry"),
-            runtime,
-            session,
-            setupRunner,
-            terminals,
-            vibe64User: input.vibe64User
-          });
-          if (!renewalBasisMatches(basis, current.basis)) {
-            await successorSession.cleanupRenewalSuccessor(runtime, current);
-            current = await predecessorSession.returnToRenewalReview(runtime, current, basis);
-            await predecessorSession.thawPredecessorTerminalAdmission(current);
-            return current;
-          }
-          const retryingDiscardedSuccessor = (
-            current.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_DISCARDING
-          );
-          const retryingDiscardTransition = (
-            current.error?.code ===
-              "vibe64_session_renewal_successor_discard_transition_failed"
-          );
-          const retryAttempt = Math.max(1, Number(current.successor?.attempt) || 1);
-          current = await mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
-            ...(input.vibe64User
-              ? { continuedBy: actorFromUser(input.vibe64User) }
-              : {}),
-            error: null,
-            stage: current.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_ACTIVATING
-              ? SESSION_RENEWAL_STAGE.OLD_ARCHIVING
-              : current.stage,
-            ...(retryingDiscardedSuccessor || retryingDiscardTransition
-              ? {
-                  successor: {
-                    ...latest.successor,
-                    replacementCeiling: retryAttempt + (
-                      retryingDiscardedSuccessor ? 2 : 1
-                    )
-                  }
-                }
-              : {}),
-            status: SESSION_RENEWAL_STATUS.RUNNING
-          }));
-          await runtime.quiesceSessionForRenewal({
-            renewalId: current.renewalId,
-            sourceSessionId: sessionId
-          });
-          durablyQuiesced = true;
-          return current;
-        } catch (error) {
-          if (!durablyQuiesced) {
-            const sourceStatus = toText(
-              await runtime.store.readStatusForRenewal(sessionId)
-            );
-            if (sourceStatus === VIBE64_SESSION_STATUS.ACTIVE) {
-              await predecessorSession.thawPredecessorTerminalAdmission(current);
-            }
-          }
-          throw error;
-        }
-      }, { operation: "retry-session-renewal" });
-      if (!exclusive.acquired) {
+      if (current.status !== SESSION_RENEWAL_STATUS.FAILED) {
         throw renewalError(
-          toText(exclusive.value?.error) || "Another assistant operation is starting. Try again in a moment.",
-          toText(exclusive.value?.code) || "vibe64_session_renewal_agent_busy",
-          { retryable: true }
+          "This session renewal is not waiting to be retried.",
+          "vibe64_session_renewal_retry_not_available"
         );
       }
-      await scheduler.schedule(exclusive.value, input);
-      return publicRenewalResult(exclusive.value, {}, input.vibe64User);
-    },
-
-    async updateSessionRenewalDraft(sessionId, input) {
-      const runtime = await renewalAccess.runtimeForRenewal();
-      const state = await mutateSessionRenewalState(runtime, sessionId, (current) => {
-        assertSessionRenewalOperation(current, input.operationKey);
-        const requestedDraft = renewalHandoverText(input.draft);
+      if (current.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING) {
+        current = await mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
+          ...(input.vibe64User
+            ? { continuedBy: actorFromUser(input.vibe64User) }
+            : {}),
+          error: null,
+          status: SESSION_RENEWAL_STATUS.RUNNING
+        }));
+        current = await restoration.completeFailureRestoration(runtime, current);
         if (
-          current.status === SESSION_RENEWAL_STATUS.REVIEW &&
-          current.draft?.text === requestedDraft
+          current.status === SESSION_RENEWAL_STATUS.RUNNING ||
+          current.stage === SESSION_RENEWAL_STAGE.FAILURE_RESTORING
         ) {
-          return undefined;
+          return current;
         }
-        const draft = assertSessionRenewalDraftVersion(current, input);
-        if (current.status !== SESSION_RENEWAL_STATUS.REVIEW) {
+      }
+      if (current.stage === SESSION_RENEWAL_STAGE.DRAFT_GENERATING) {
+        const attempt = Math.max(1, Number(current.generation?.attempt) || 1) + 1;
+        return mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
+          ...(input.vibe64User
+            ? { continuedBy: actorFromUser(input.vibe64User) }
+            : {}),
+          error: null,
+          generation: {
+            attempt,
+            operationId: operationId(latest.renewalId, `draft-${attempt}`)
+          },
+          status: SESSION_RENEWAL_STATUS.RUNNING
+        }));
+      }
+      if (!SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES.has(current.stage)) {
+        const sourceStatus = await runtime.store.readStatusForRenewal(sessionId);
+        if (sourceStatus !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
           throw renewalError(
-            "This handover is not editable now.",
-            "vibe64_session_renewal_edit_not_available"
+            "The acknowledged predecessor no longer owns its renewal transition.",
+            "vibe64_session_renewal_link_mismatch",
+            { retryable: true, statusCode: 500 }
           );
         }
-        return statePatch(current, {
-          draft: createSessionRenewalDraft(requestedDraft, {
-            origin: "edited",
-            revision: draft.revision + 1
-          }),
-          error: null
+        return mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
+          ...(input.vibe64User
+            ? { continuedBy: actorFromUser(input.vibe64User) }
+            : {}),
+          error: null,
+          status: SESSION_RENEWAL_STATUS.RUNNING
+        }));
+      }
+
+      await predecessorSession.assertPredecessorIdle(runtime, sessionId);
+      await predecessorSession.freezePredecessorTerminalAdmission(current);
+      let durablyQuiesced = false;
+      try {
+        await restoration.restorePreAcknowledgementSource(runtime, current, {
+          thawAdmission: false
         });
-      });
-      await renewalAccess.publish(sessionId, "session-renewal-draft-updated", input.originId);
-      return publicRenewalResult(state, {}, input.vibe64User);
+        const session = await renewalAccess.readInternalSession(runtime, sessionId);
+        await predecessorSession.closePredecessorTerminals(runtime, current, session);
+        const basis = await inspectSessionRenewalEligibility({
+          operationId: operationId(current.renewalId, "retry"),
+          runtime,
+          session,
+          setupRunner,
+          terminals,
+          vibe64User: input.vibe64User
+        });
+        if (!renewalBasisMatches(basis, current.basis)) {
+          await successorSession.cleanupRenewalSuccessor(runtime, current);
+          current = await predecessorSession.returnToRenewalReview(runtime, current, basis);
+          await predecessorSession.thawPredecessorTerminalAdmission(current);
+          return current;
+        }
+        const retryingDiscardedSuccessor = (
+          current.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_DISCARDING
+        );
+        const retryingDiscardTransition = (
+          current.error?.code ===
+            "vibe64_session_renewal_successor_discard_transition_failed"
+        );
+        const retryAttempt = Math.max(1, Number(current.successor?.attempt) || 1);
+        current = await mutateSessionRenewalState(runtime, sessionId, (latest) => statePatch(latest, {
+          ...(input.vibe64User
+            ? { continuedBy: actorFromUser(input.vibe64User) }
+            : {}),
+          error: null,
+          stage: current.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_ACTIVATING
+            ? SESSION_RENEWAL_STAGE.OLD_ARCHIVING
+            : current.stage,
+          ...(retryingDiscardedSuccessor || retryingDiscardTransition
+            ? {
+                successor: {
+                  ...latest.successor,
+                  replacementCeiling: retryAttempt + (
+                    retryingDiscardedSuccessor ? 2 : 1
+                  )
+                }
+              }
+            : {}),
+          status: SESSION_RENEWAL_STATUS.RUNNING
+        }));
+        await runtime.quiesceSessionForRenewal({
+          renewalId: current.renewalId,
+          sourceSessionId: sessionId
+        });
+        durablyQuiesced = true;
+        return current;
+      } catch (error) {
+        if (!durablyQuiesced) {
+          const sourceStatus = toText(
+            await runtime.store.readStatusForRenewal(sessionId)
+          );
+          if (sourceStatus === VIBE64_SESSION_STATUS.ACTIVE) {
+            await predecessorSession.thawPredecessorTerminalAdmission(current);
+          }
+        }
+        throw error;
+      }
+    }, { operation: "retry-session-renewal" });
+    if (!exclusive.acquired) {
+      throw renewalError(
+        toText(exclusive.value?.error) || "Another assistant operation is starting. Try again in a moment.",
+        toText(exclusive.value?.code) || "vibe64_session_renewal_agent_busy",
+        { retryable: true }
+      );
     }
-  };
-  for (const methodName of [
-    "cancelSessionRenewal",
-    "confirmSessionRenewal",
-    "requestSessionRenewalDraft",
-    "retrySessionRenewal",
-    "updateSessionRenewalDraft"
-  ]) {
-    controller[methodName] = admission.admitMutation(controller[methodName]);
+    await scheduler.schedule(exclusive.value, input);
+    return publicRenewalResult(exclusive.value, {}, input.vibe64User);
   }
-  return Object.freeze(controller);
+
+  async function updateSessionRenewalDraft(sessionId, input) {
+    const runtime = await renewalAccess.runtimeForRenewal();
+    const state = await mutateSessionRenewalState(runtime, sessionId, (current) => {
+      assertSessionRenewalOperation(current, input.operationKey);
+      const requestedDraft = renewalHandoverText(input.draft);
+      if (
+        current.status === SESSION_RENEWAL_STATUS.REVIEW &&
+        current.draft?.text === requestedDraft
+      ) {
+        return undefined;
+      }
+      const draft = assertSessionRenewalDraftVersion(current, input);
+      if (current.status !== SESSION_RENEWAL_STATUS.REVIEW) {
+        throw renewalError(
+          "This handover is not editable now.",
+          "vibe64_session_renewal_edit_not_available"
+        );
+      }
+      return statePatch(current, {
+        draft: createSessionRenewalDraft(requestedDraft, {
+          origin: "edited",
+          revision: draft.revision + 1
+        }),
+        error: null
+      });
+    });
+    await renewalAccess.publish(sessionId, "session-renewal-draft-updated", input.originId);
+    return publicRenewalResult(state, {}, input.vibe64User);
+  }
+
+  return Object.freeze({
+    cancelSessionRenewal: admission.admitMutation(cancelSessionRenewal),
+    closeSessionRenewalWork: scheduler.closeSessionRenewalWork,
+    confirmSessionRenewal: admission.admitMutation(confirmSessionRenewal),
+    inspectSessionRenewal,
+    requestSessionRenewalDraft: admission.admitMutation(requestSessionRenewalDraft),
+    resumeSessionRenewals: scheduler.resumeSessionRenewals,
+    retrySessionRenewal: admission.admitMutation(retrySessionRenewal),
+    updateSessionRenewalDraft: admission.admitMutation(updateSessionRenewalDraft)
+  });
 }
 
 export { createSessionRenewalController };

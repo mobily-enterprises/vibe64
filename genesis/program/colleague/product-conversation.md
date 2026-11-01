@@ -45,6 +45,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/server/registerColleagueFocus.js`
 - `packages/vibe64-colleague/src/client/colleagueFocusBinding.js`
 - `packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js`
+- `packages/vibe64-sessions/src/server/conversationHost.js`
 - `packages/vibe64-colleague/src/server/colleagueActions.js`
 - Main: `packages/vibe64-colleague/src/server/service.js`
 - `packages/vibe64-colleague/src/server/colleagueServiceState.js`
