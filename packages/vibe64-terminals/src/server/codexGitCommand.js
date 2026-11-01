@@ -41,9 +41,9 @@ import {
   gatewayGitIdentityUserKey,
   githubAuthenticationRejected,
   logGitCommandResult,
-  readGithubToken,
-  responseError
+  readGithubToken
 } from "./codexGitCommandOperations.js";
+import { commandFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -69,10 +69,10 @@ const commandServers = createSessionCommandServers({
   maxBytes: CODEX_GIT_COMMAND_INPUT_MAX_BYTES,
   invalidJsonError: { code: "vibe64_codex_git_command_invalid_json", message: "Codex git command input must be valid JSON." },
   tooLargeError: { code: "vibe64_codex_git_command_input_too_large", message: "Codex git command input is too large." },
-  notFound: responseError("Unknown Codex git command route.", "vibe64_codex_git_command_route_not_found"),
+  notFound: commandFailure("Unknown Codex git command route.", "vibe64_codex_git_command_route_not_found"),
   rejection: {
     statusCode: 409,
-    payload: responseError(
+    payload: commandFailure(
       "Managed Git control generation is no longer current. Reconnect the assistant.",
       "vibe64_agent_control_unavailable",
       { diagnostic: { stage: "control", commandSubmitted: false, executionId: null } }
@@ -90,7 +90,7 @@ function noGithubGitCommandActorFromSession(session = {}, options = {}) {
     command = ""
   } = options;
   if (["gh", "vibe64-github"].includes(normalizeText(command))) {
-    return responseError(
+    return commandFailure(
       "GitHub commands are only available for GitHub repository sessions.",
       "vibe64_codex_git_command_github_unavailable",
       {
@@ -101,7 +101,7 @@ function noGithubGitCommandActorFromSession(session = {}, options = {}) {
   const sessionId = normalizeText(session.sessionId);
   const sourceRoot = sessionSourcePath(session);
   if (!sessionId || !sourceRoot) {
-    return responseError(
+    return commandFailure(
       "Codex git commands for non-GitHub sessions require a session source path.",
       "vibe64_codex_git_command_source_missing"
     );
@@ -181,7 +181,7 @@ function validateCommandCwd(cwd = "", actor = {}) {
   const resolvedCwd = path.resolve(normalizeHostCwd(cwd, actor));
   const sourceRoot = path.resolve(actor.sourceRoot);
   if (!pathInsideOrEqual(sourceRoot, resolvedCwd)) {
-    return responseError(
+    return commandFailure(
       "Codex git commands must run inside the active project.",
       "vibe64_codex_git_command_cwd_invalid",
       {
@@ -265,7 +265,7 @@ function createCodexGitCommandService({
     if (access !== false && access?.ok !== false) {
       return null;
     }
-    return responseError(
+    return commandFailure(
       access?.error || deniedMessage,
       access?.code || "vibe64_codex_git_actor_access_denied",
       {
@@ -288,7 +288,7 @@ function createCodexGitCommandService({
   } = {}) {
     const sessionId = normalizeText(suppliedSessionId || suppliedSession?.sessionId);
     if (!sessionId) {
-      return responseError(
+      return commandFailure(
         "Session Save requires a session id.",
         "vibe64_session_save_session_required"
       );
@@ -431,7 +431,7 @@ function createCodexGitCommandService({
     const runWithinBudget = (request) => {
       const timeout = Math.floor(CODEX_GIT_COMMAND_TIMEOUT_MS - (performance.now() - startedAt));
       if (timeout <= 0) {
-        return Promise.resolve(responseError(
+        return Promise.resolve(commandFailure(
           "Managed Git command exhausted its 30-second execution budget.",
           "vibe64_codex_git_command_timed_out",
           { exitCode: 1, timedOut: true }
@@ -443,10 +443,10 @@ function createCodexGitCommandService({
       return gatewayCommandRunner({ ...request, timeout, signal: input.signal });
     };
     if (!CODEX_GIT_COMMAND_WRAPPER_NAMES.includes(command)) {
-      return finish(responseError("This command path exposes git, gh and vibe64-github.", "vibe64_codex_git_command_invalid"));
+      return finish(commandFailure("This command path exposes git, gh and vibe64-github.", "vibe64_codex_git_command_invalid"));
     }
     if (!sessionId) {
-      return finish(responseError("Codex git command session id is required.", "vibe64_codex_git_command_session_required"));
+      return finish(commandFailure("Codex git command session id is required.", "vibe64_codex_git_command_session_required"));
     }
     // Codex probes Git frequently while its TUI is active. Git authorization
     // owns only source and actor metadata; a complete session runtime here would
@@ -464,7 +464,7 @@ function createCodexGitCommandService({
     }
     if (actor.sessionId !== sessionId) {
       return finish(
-        responseError("Codex git command actor belongs to a different session.", "vibe64_codex_git_actor_session_mismatch"),
+        commandFailure("Codex git command actor belongs to a different session.", "vibe64_codex_git_actor_session_mismatch"),
         actor
       );
     }
@@ -498,7 +498,7 @@ function createCodexGitCommandService({
         const projectRecord = await project.readCurrentProject();
         const slug = normalizeText(projectRecord.slug);
         if (!slug) {
-          return finish(responseError("The current project has no issue link.", "vibe64_github_issue_link_unavailable"), actor);
+          return finish(commandFailure("The current project has no issue link.", "vibe64_github_issue_link_unavailable"), actor);
         }
         return finish({
           ok: true,
@@ -507,7 +507,7 @@ function createCodexGitCommandService({
         }, actor);
       }
       if (args.length !== 1 || args[0] !== "refresh") {
-        return finish(responseError(usage, "vibe64_github_refresh_input_invalid"), actor);
+        return finish(commandFailure(usage, "vibe64_github_refresh_input_invalid"), actor);
       }
       await project.refreshGithub();
       return finish({

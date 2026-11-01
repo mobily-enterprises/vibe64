@@ -2,6 +2,7 @@
 
 import { USER_CREDENTIAL_SCOPE, normalizeText } from "@local/vibe64-execution/server";
 import { logOperationalEvent, sanitizeLogText } from "@local/vibe64-core/server/logging";
+import { commandFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
@@ -94,14 +95,6 @@ const GIT_GLOBAL_OPTIONS_WITH_VALUES = new Set([
   "--work-tree"
 ]);
 
-function responseError(message = "", code = "vibe64_codex_git_command_failed", extra = {}) {
-  return {
-    ...extra,
-    code,
-    error: message,
-    ok: false
-  };
-}
 
 function commandOutput(result = {}) {
   const captured = result.stderr || result.stdout;
@@ -268,7 +261,7 @@ async function readGithubToken({
     userKey
   });
   if (result?.timedOut === true) {
-    return responseError(
+    return commandFailure(
       "GitHub credential lookup timed out.",
       result.code || "vibe64_codex_git_command_timed_out",
       { exitCode: 1, signal: result.signal || "", timedOut: true, executionId: result.execution?.id }
@@ -277,7 +270,7 @@ async function readGithubToken({
   const token = result?.ok === true ? normalizeText(result.stdout) : "";
   if (!token) {
     const error = normalizeText(result?.stderr || result?.error);
-    return responseError(
+    return commandFailure(
       error || "GitHub authentication is not ready for this Vibe64 account.",
       "vibe64_codex_git_command_github_auth_unavailable",
       { statusCode: 403, errorCode: result?.code, executionId: result?.execution?.id }
@@ -358,7 +351,7 @@ async function commitAuthorOptions({
     }, "The commit author's Git identity could not be read.");
     return answered
       ? { ok: true, options: answered }
-      : responseError(
+      : commandFailure(
           "Vibe64 could not read your Git name and email just now, so nothing was changed. Try again.",
           "vibe64_session_git_author_unavailable",
           { executionId: normalizeText(result?.execution?.id) || null }
@@ -426,6 +419,5 @@ export {
   gatewayGitIdentityUserKey,
   githubAuthenticationRejected,
   logGitCommandResult,
-  readGithubToken,
-  responseError
+  readGithubToken
 };

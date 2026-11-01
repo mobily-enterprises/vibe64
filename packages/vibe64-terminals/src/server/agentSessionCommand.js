@@ -56,7 +56,6 @@ import {
   commandWrapperSource,
   decodedCommand,
   readBoundedFile,
-  responseError,
   sanitizedCommandEnvironment,
   SESSION_RENAME_CONTROL_ENV,
   sessionRenameCommandSource,
@@ -73,6 +72,7 @@ import {
   waitForCommandResult
 } from "./agentSessionCommandRun.js";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { commandLineFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -152,10 +152,10 @@ const commandServers = createSessionCommandServers({
   maxBytes: AGENT_SESSION_COMMAND_REQUEST_MAX_BYTES,
   invalidJsonError: { code: "vibe64_agent_session_command_invalid_json", message: "Vibe64 session command input must be valid JSON." },
   tooLargeError: { code: "vibe64_agent_session_command_input_too_large", message: "Vibe64 session command input is too large." },
-  notFound: responseError("Unknown Vibe64 session command route.", "vibe64_agent_session_command_route_not_found"),
+  notFound: commandLineFailure("Unknown Vibe64 session command route.", "vibe64_agent_session_command_route_not_found"),
   rejection: {
     statusCode: 403,
-    payload: responseError(
+    payload: commandLineFailure(
       "Vibe64 session command identity is invalid. Reconnect the affected assistant before retrying. If only a child agent is affected, ask its parent to replace that child and preserve its work.",
       "vibe64_agent_session_command_identity_invalid"
     )
@@ -164,7 +164,7 @@ const commandServers = createSessionCommandServers({
     fallbackCode: "vibe64_agent_session_command_request_failed",
     fallbackMessage: "Vibe64 session command request failed."
   },
-  errorBody: (payload) => responseError(payload.error, payload.code),
+  errorBody: (payload) => commandLineFailure(payload.error, payload.code),
   directoryMode: 0o700
 });
 
@@ -429,7 +429,7 @@ function createAgentSessionCommandService({
     input.signal?.throwIfAborted();
     const command = decodedCommand(input.commandBase64);
     if (!command) {
-      return responseError(
+      return commandLineFailure(
         "Vibe64 session command input is invalid.",
         "vibe64_agent_session_command_invalid",
         { exitCode: 2 }
@@ -500,7 +500,7 @@ function createAgentSessionCommandService({
     const executionId = toText(started?.execution?.id);
     if (started?.ok !== true || !executionId) {
       await rm(runRoot, { force: true, recursive: true }).catch(() => null);
-      return responseError(
+      return commandLineFailure(
         toText(started?.error || started?.stderr || started?.output) || "Vibe64 could not start this session command.",
         toText(started?.code) || "vibe64_agent_session_command_start_failed"
       );
@@ -561,7 +561,7 @@ function createAgentSessionCommandService({
         fallbackCode: "vibe64_agent_session_command_failed",
         fallbackMessage: "Vibe64 session command failed."
       });
-      result = responseError(payload.error, payload.code);
+      result = commandLineFailure(payload.error, payload.code);
     } finally {
       input.signal?.removeEventListener("abort", abort);
       runs.delete(abortController);

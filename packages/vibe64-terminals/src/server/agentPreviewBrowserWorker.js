@@ -19,6 +19,7 @@ import {
 } from "@local/vibe64-execution/server";
 import { removeDeadUnixJsonCommandSocket, requestUnixJsonCommand, unixCommandSocketIsPresent } from "./unixJsonCommand.js";
 import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { commandFailure } from "./commandFailure.js";
 
 const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
   "Browser checks need Playwright, and neither this project nor this computer has it. Report this and ask the person " +
@@ -27,14 +28,6 @@ const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
 
 const DEFAULT_PLAYWRIGHT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 
-function responseError(message = "", code = "vibe64_agent_preview_command_failed", extra = {}) {
-  return {
-    ...extra,
-    code,
-    error: message,
-    ok: false
-  };
-}
 
 function normalizedBrowserProcessGroups(value = []) {
   const groups = new Map();
@@ -83,7 +76,7 @@ async function browserWorkerRequest({
     socketPath,
     timeoutMs
   });
-  return response.payload || responseError(
+  return response.payload || commandFailure(
     "Managed browser returned an invalid response.",
     "vibe64_managed_browser_response_invalid"
   );
@@ -180,7 +173,7 @@ async function fileExists(filePath = "") {
 }
 
 function browserCleanupFault(message = "The managed browser execution could not be proven empty.") {
-  return responseError(message, "vibe64_execution_cleanup_required", {
+  return commandFailure(message, "vibe64_execution_cleanup_required", {
     retryable: false
   });
 }
@@ -277,7 +270,7 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
   const descriptor = browserWorkers.get(normalizedSessionId)?.get(socketPath);
   if (!descriptor) {
     return {
-      error: responseError(
+      error: commandFailure(
         "The managed browser is not registered for this assistant session.",
         "vibe64_managed_browser_not_registered"
       )
@@ -288,7 +281,7 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
     normalizeText(input.workerScriptPath) !== descriptor.workerScriptPath
   ) {
     return {
-      error: responseError(
+      error: commandFailure(
         "The managed browser command does not match the registered runtime.",
         "vibe64_managed_browser_runtime_invalid"
       )
@@ -298,7 +291,7 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
   const cwd = path.resolve(normalizeText(input.cwd) || worktreePath);
   if (!pathInsideOrEqual(worktreePath, cwd)) {
     return {
-      error: responseError(
+      error: commandFailure(
         "The managed browser working directory is outside this session source.",
         "vibe64_managed_browser_cwd_invalid"
       )
@@ -331,11 +324,11 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
   }
   const { cwd, descriptor } = registered;
   if (!descriptor.runtimeRoot) {
-    return responseError(LOCAL_PLAYWRIGHT_MESSAGE, "vibe64_preview_playwright_local");
+    return commandFailure(LOCAL_PLAYWRIGHT_MESSAGE, "vibe64_preview_playwright_local");
   }
   const parentExecutionId = normalizeText(input.parentExecutionId);
   if (!parentExecutionId) {
-    return responseError(
+    return commandFailure(
       "Browser testing requires a live assistant execution owner.",
       "vibe64_managed_browser_parent_required"
     );
@@ -354,7 +347,7 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       !pathInsideOrEqual(descriptor.worktreePath, cliPath) ||
       !/node_modules\/(?:@playwright\/test|playwright)\/cli\.js$/u.test(relativeCliPath.split(path.sep).join("/"))
     ) {
-      return responseError(
+      return commandFailure(
         "The browser-test command does not use this project's Playwright CLI.",
         "vibe64_managed_playwright_cli_invalid"
       );
@@ -376,7 +369,7 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       (!scriptName.startsWith("test:playwright:") &&
         !declaredScript.includes("playwright"))
     ) {
-      return responseError(
+      return commandFailure(
         "The requested package script is not a declared Playwright test script.",
         "vibe64_managed_playwright_script_invalid"
       );
@@ -384,7 +377,7 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
     command = descriptor.managedNpmPath;
     scriptText = packageRecord.scripts[scriptName];
   } else {
-    return responseError(
+    return commandFailure(
       "Browser testing requires the registered managed node or npm runner.",
       "vibe64_managed_playwright_runner_invalid"
     );
@@ -394,7 +387,7 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
   const targetId = normalizeText(input.targetId);
   const scopedPreview = Boolean(targetId || input.restorePreview === true);
   if (targetId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(targetId)) {
-    return responseError("Choose an exact declared Preview target id.", "vibe64_preview_target_invalid");
+    return commandFailure("Choose an exact declared Preview target id.", "vibe64_preview_target_invalid");
   }
   let baseUrl = "";
   try {
@@ -406,7 +399,7 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       baseUrl = normalizeText(requestedEnv.PLAYWRIGHT_BASE_URL);
     }
   } catch {
-    return responseError(
+    return commandFailure(
       "Browser testing requires a valid managed HTTP preview URL.",
       "vibe64_managed_playwright_base_url_invalid"
     );
@@ -418,14 +411,14 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
     !pathInsideOrEqual(runtimeRoot, browsersPath) ||
     path.basename(browsersPath) !== "browsers"
   ) {
-    return responseError(
+    return commandFailure(
       "Browser testing requires a registered Vibe64 browser runtime.",
       "vibe64_managed_playwright_runtime_invalid"
     );
   }
   const storageStatePath = normalizeText(requestedEnv.PLAYWRIGHT_STORAGE_STATE);
   if (storageStatePath && !path.isAbsolute(storageStatePath)) {
-    return responseError(
+    return commandFailure(
       "The managed Playwright storage-state path must be absolute.",
       "vibe64_managed_playwright_storage_state_invalid"
     );
@@ -470,7 +463,7 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
   };
   if (!scopedPreview) return runCommand(request);
   if (requestedEnv.PLAYWRIGHT_BASE_URL || storageStatePath) {
-    return responseError(
+    return commandFailure(
       "--target requires its own managed Preview URL and identity; do not supply an external URL or storage state.",
       "vibe64_preview_target_conflict"
     );
@@ -532,7 +525,7 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
   const { cwd, descriptor } = registered;
   if (!descriptor.runtimeRoot && !projectHasPlaywright(descriptor.worktreePath) &&
       !computerPlaywrightModulePath(process.env.PATH)) {
-    return responseError(PROJECT_PLAYWRIGHT_MISSING_MESSAGE, "vibe64_preview_playwright_missing");
+    return commandFailure(PROJECT_PLAYWRIGHT_MISSING_MESSAGE, "vibe64_preview_playwright_missing");
   }
   if (descriptor.startPromise) {
     return descriptor.startPromise;
@@ -639,7 +632,7 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
     if (drained.ok !== true) {
       return drained;
     }
-    return responseError(
+    return commandFailure(
       "The managed browser worker did not become ready.",
       "vibe64_managed_browser_readiness_timeout"
     );
@@ -664,7 +657,7 @@ async function stopRegisteredBrowserWorkerForInput(sessionId = "", input = {}, {
     .get(normalizedSessionId)
     ?.get(normalizeText(input.browserSocketPath));
   if (!descriptor) {
-    return responseError(
+    return commandFailure(
       "The managed browser is not registered for this assistant session.",
       "vibe64_managed_browser_not_registered"
     );
@@ -720,7 +713,6 @@ async function streamPlaywrightRun({ commandService, input, response, sessionId 
 }
 
 export {
-  responseError,
   runRegisteredPlaywrightCommand,
   startRegisteredBrowserWorker,
   stopRegisteredBrowserWorker,

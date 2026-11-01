@@ -4,12 +4,12 @@ import {
   drainBrowserTestExecutions
 } from "./browserTestCleanup.js";
 import {
-  responseError,
   runRegisteredPlaywrightCommand
 } from "./agentPreviewBrowserWorker.js";
 import { waitForPreviewReady } from "./agentPreviewStatusText.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { commandFailure } from "./commandFailure.js";
 
 /** @typedef {import("./types.js").AgentPreviewCommandState} AgentPreviewCommandState */
 /** @typedef {import("./types.js").AgentPreviewWorkerRegistry} AgentPreviewWorkerRegistry */
@@ -59,7 +59,7 @@ function createAgentPreviewBrowserTests({
 
   async function cancelPlaywrightRun(sessionId, runId) {
     const pending = state.browserTestRuns.get(sessionId);
-    if (!pending || pending.id !== runId) return responseError(
+    if (!pending || pending.id !== runId) return commandFailure(
       "That browser test is no longer active. Check playwright status before cancelling another run.", "vibe64_test_run_unavailable"
     );
     pending.cancelling ||= finishCancellation(sessionId, pending).finally(() => { pending.cancelling = null; });
@@ -89,7 +89,7 @@ function createAgentPreviewBrowserTests({
   function cancelTestApproval({ projectSlug, sessionId, admissionId }, reason = "cancelled") {
     const pending = state.browserTestRuns.get(sessionId);
     if (!pending || pending.projectSlug !== projectSlug || pending.admissionId !== admissionId || pending.state !== "waiting") {
-      return responseError("This test request is no longer waiting for approval.", "vibe64_test_approval_unavailable");
+      return commandFailure("This test request is no longer waiting for approval.", "vibe64_test_approval_unavailable");
     }
     pending.cancel(reason);
     return { ok: true, cancelled: true, sessionId };
@@ -103,11 +103,11 @@ function createAgentPreviewBrowserTests({
   async function resumeTestApproval({ projectSlug, sessionId, admissionId }, authorizeStart) {
     const pending = state.browserTestRuns.get(sessionId);
     if (!pending || pending.projectSlug !== projectSlug || pending.admissionId !== admissionId) {
-      return responseError("The original test request has ended. Run the test command again.", "vibe64_test_approval_unavailable");
+      return commandFailure("The original test request has ended. Run the test command again.", "vibe64_test_approval_unavailable");
     }
     if (["resuming", "running"].includes(pending.state)) return { ok: true, accepted: true, replayed: true, sessionId };
     if (pending.state !== "waiting" || Date.now() >= Date.parse(pending.expiresAt)) {
-      return responseError("This test approval has expired or is no longer available.", "vibe64_test_approval_unavailable");
+      return commandFailure("This test approval has expired or is no longer available.", "vibe64_test_approval_unavailable");
     }
     // The command's promise remains its result owner. HTTP only acknowledges
     // the handoff; a lost dashboard response never launches a second test.
@@ -189,7 +189,7 @@ function createAgentPreviewBrowserTests({
       );
       await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
       const authorizeStart = await decision;
-      if (!authorizeStart) return responseError(
+      if (!authorizeStart) return commandFailure(
         outcome === "expired" ? "The resource wait expired. Tests were not run."
           : outcome === "cancelled" ? "The resource wait was cancelled. Tests were not run."
             : "The original test command ended. Tests were not run.",
@@ -212,7 +212,7 @@ function createAgentPreviewBrowserTests({
 
   async function playwrightRun(sessionId, input, options = {}) {
     input = structuredClone(input);
-    if (state.browserTestRuns.has(sessionId) && !input.testRunToken) return responseError(
+    if (state.browserTestRuns.has(sessionId) && !input.testRunToken) return commandFailure(
       "A browser test still owns this session. Use vibe64-helper playwright status, then cancel its run ID or wait for completion.",
       "vibe64_test_approval_busy"
     );
@@ -270,7 +270,7 @@ function createAgentPreviewBrowserTests({
       }
       return result;
     } catch (error) {
-      result = responseError(error.message, error.code || "vibe64_managed_playwright_run_failed");
+      result = commandFailure(error.message, error.code || "vibe64_managed_playwright_run_failed");
       return result;
     } finally {
       options.signal.removeEventListener("abort", stopping);

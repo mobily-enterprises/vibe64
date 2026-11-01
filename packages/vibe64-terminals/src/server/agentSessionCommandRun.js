@@ -5,6 +5,7 @@ import { open, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { commandLineFailure } from "./commandFailure.js";
 
 const AGENT_SESSION_COMMAND_NAME = "vibe64-session-command";
 
@@ -41,16 +42,6 @@ const AGENT_SESSION_DESKTOP_BUS_ENV_NAMES = new Set([
   "DBUS_STARTER_BUS_TYPE"
 ]);
 
-function responseError(message = "", code = "vibe64_agent_session_command_failed", extra = {}) {
-  return {
-    ...extra,
-    code,
-    error: message,
-    exitCode: Number.isInteger(extra.exitCode) ? extra.exitCode : 1,
-    ok: false,
-    stderr: extra.stderr || `${message}\n`
-  };
-}
 
 function commandWrapperSource() {
   return `#!/usr/bin/env node
@@ -250,7 +241,7 @@ function decodedCommand(value = "") {
 function validateCommandCwd(cwd = "", sourceRoot = "") {
   const resolvedCwd = path.resolve(toText(cwd) || sourceRoot);
   if (!sourceRoot || !pathInsideOrEqual(sourceRoot, resolvedCwd)) {
-    return responseError(
+    return commandLineFailure(
       "Agent commands must run inside the active session source.",
       "vibe64_agent_session_command_cwd_invalid",
       {
@@ -315,7 +306,6 @@ export {
   commandWrapperSource,
   decodedCommand,
   readBoundedFile,
-  responseError,
   sanitizedCommandEnvironment,
   SESSION_RENAME_CONTROL_ENV,
   sessionRenameCommandSource,

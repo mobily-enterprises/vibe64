@@ -39,12 +39,12 @@ import {
   mutationPayload,
   parseCommandArgs,
   recordForKey,
-  responseError,
   scopeStatus,
   unavailableProductionStatus,
   validateParsedCommand
 } from "./agentEnvCommandText.js";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { commandLineFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -78,10 +78,10 @@ const commandServers = createSessionCommandServers({
   maxBytes: AGENT_ENV_COMMAND_REQUEST_MAX_BYTES,
   invalidJsonError: { code: "vibe64_agent_env_command_invalid_json", message: "Vibe64 Env command input must be valid JSON." },
   tooLargeError: { code: "vibe64_agent_env_command_input_too_large", message: "Vibe64 Env command input is too large." },
-  notFound: responseError("Unknown Vibe64 Env command route.", "vibe64_agent_env_command_route_not_found"),
+  notFound: commandLineFailure("Unknown Vibe64 Env command route.", "vibe64_agent_env_command_route_not_found"),
   rejection: {
     statusCode: 409,
-    payload: responseError(
+    payload: commandLineFailure(
       "Managed Env control generation is no longer current. Reconnect the assistant.",
       "vibe64_agent_control_unavailable"
     )
@@ -232,7 +232,7 @@ function createAgentEnvCommandService({
       ));
     }
     if (parsed.scope === ENV_SCOPE_PRODUCTION && statuses[0]?.available === false) {
-      return responseError(
+      return commandLineFailure(
         statuses[0].reason,
         "vibe64_agent_env_command_production_unavailable"
       );
@@ -254,7 +254,7 @@ function createAgentEnvCommandService({
     const key = normalizeRuntimeConfigKey(parsed.key);
     const environment = environmentForScope(parsed.scope);
     if (!environment) {
-      return responseError(
+      return commandLineFailure(
         unavailableProductionStatus().reason,
         "vibe64_agent_env_command_production_unavailable"
       );
@@ -285,7 +285,7 @@ function createAgentEnvCommandService({
     const key = normalizeRuntimeConfigKey(parsed.key);
     const environment = environmentForScope(parsed.scope);
     if (!environment) {
-      return responseError(
+      return commandLineFailure(
         unavailableProductionStatus().reason,
         "vibe64_agent_env_command_production_unavailable"
       );
@@ -348,7 +348,7 @@ function createAgentEnvCommandService({
   async function linkResult(parsed = {}, sessionId = "", binding = {}) {
     const key = normalizeRuntimeConfigKey(parsed.key);
     if (!offersSavedValueLinks(savedEnvValueLinks)) {
-      return responseError("This workspace offers no saved values.", "vibe64_saved_env_values_unavailable");
+      return commandLineFailure("This workspace offers no saved values.", "vibe64_saved_env_values_unavailable");
     }
     const request = { ...savedValueRequest(binding, sessionId), environment: parsed.scope, key };
     const linking = parsed.command === "link";

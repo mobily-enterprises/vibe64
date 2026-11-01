@@ -5,7 +5,6 @@ import {
 import {
   AGENT_PREVIEW_USAGE
 } from "@local/vibe64-execution/server";
-import { responseError } from "./agentPreviewBrowserWorker.js";
 import {
   logsStdout,
   parsePreviewCommandArgs,
@@ -17,6 +16,7 @@ import {
   waitForPreviewReady
 } from "./agentPreviewStatusText.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { commandFailure } from "./commandFailure.js";
 
 /** @typedef {import("./types.js").AgentPreviewWorkerRegistry} AgentPreviewWorkerRegistry */
 /** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
@@ -78,13 +78,13 @@ function createAgentPreviewCommandLine({
     const normalizedSessionId = normalizeText(sessionId);
     const requested = normalizeText(identity).toLowerCase();
     if (!normalizedSessionId) {
-      return responseError(
+      return commandFailure(
         "Vibe64 preview command session id is required.",
         "vibe64_agent_preview_command_session_required"
       );
     }
     if (!requested) {
-      return responseError(
+      return commandFailure(
         "Choose default, guest, or a configured managed app identity name.",
         "vibe64_agent_preview_identity_required"
       );
@@ -108,7 +108,7 @@ function createAgentPreviewCommandLine({
     const words = (Array.isArray(args) ? args : []).map(normalizeText).filter(Boolean);
     const subcommand = words[1] || "";
     if (words[0] !== "identities" || words.length > (subcommand === "save" ? 2 : 1) || (subcommand && subcommand !== "save")) {
-      return responseError(
+      return commandFailure(
         "Usage: vibe64-helper preview identities [save < identities.json]",
         "vibe64_agent_preview_identities_usage",
         { exitCode: 64 }
@@ -116,7 +116,7 @@ function createAgentPreviewCommandLine({
     }
     const projectSlug = workerRegistry.sessionProjectSlug(sessionId);
     if (!projectSlug) {
-      return responseError(
+      return commandFailure(
         "Managed app identities are not bound to this session's project. Reconnect the assistant.",
         "vibe64_agent_preview_identities_project_required"
       );
@@ -135,7 +135,7 @@ function createAgentPreviewCommandLine({
           // Invalid JSON is reported with the usage error below.
         }
         if (!Array.isArray(identities)) {
-          return responseError(
+          return commandFailure(
             "Provide the complete ordered identity list as a JSON array on stdin.",
             "vibe64_agent_preview_identities_input_invalid",
             { exitCode: 64 }
@@ -143,7 +143,7 @@ function createAgentPreviewCommandLine({
         }
         const undeclared = identities.filter((identity) => !identityTypes.includes(normalizeText(identity?.type)));
         if (undeclared.length) {
-          return responseError(identityTypes.length
+          return commandFailure(identityTypes.length
             ? `Identity types must be ones this project's Stack declares in #### Preview identity: ${identityTypes.join(", ")}.`
             : "This project's Stack declares no #### Preview identity types; add the application's Preview identity command first (vibe64-helper spec outputs).",
           "vibe64_agent_preview_identities_type_undeclared");
@@ -197,9 +197,9 @@ function createAgentPreviewCommandLine({
     };
 
     if (!sessionId) {
-      return finish(responseError("Vibe64 preview command session id is required.", "vibe64_agent_preview_command_session_required"));
+      return finish(commandFailure("Vibe64 preview command session id is required.", "vibe64_agent_preview_command_session_required"));
     }
-    if (parsed.error) return finish(responseError(parsed.error, "vibe64_preview_target_invalid"));
+    if (parsed.error) return finish(commandFailure(parsed.error, "vibe64_preview_target_invalid"));
     if (!parsed.command || parsed.command === "help" || parsed.command === "--help" || parsed.command === "-h") {
       return finish({
         exitCode: 0,
@@ -244,7 +244,7 @@ function createAgentPreviewCommandLine({
       if (status?.ok === false) return finish(failedStatusResult(status, "Vibe64 preview status failed."));
       const url = inspectionUrl(status, sessionId);
       if (!url) {
-        return finish(responseError(
+        return finish(commandFailure(
           "Managed preview inspection URL is unavailable. Run vibe64-helper preview ensure --wait --json first.",
           "vibe64_agent_preview_command_inspection_url_unavailable",
           {
@@ -293,7 +293,7 @@ function createAgentPreviewCommandLine({
         : result);
     }
     if (!["ensure", "restart"].includes(parsed.command)) {
-      return finish(responseError(`Unknown Vibe64 preview command: ${parsed.command}`, "vibe64_agent_preview_command_unknown", {
+      return finish(commandFailure(`Unknown Vibe64 preview command: ${parsed.command}`, "vibe64_agent_preview_command_unknown", {
         exitCode: 2,
         stderr: AGENT_PREVIEW_USAGE
       }));
@@ -325,7 +325,7 @@ function createAgentPreviewCommandLine({
       if (!waited.ok) {
         const timedOut = waited.timeout === true;
         const summary = statusSummary(status || {}, sessionId);
-        return finish(responseError(
+        return finish(commandFailure(
           timedOut
             ? "Timed out waiting for Vibe64 preview to become ready."
             : "Vibe64 preview did not become ready.",

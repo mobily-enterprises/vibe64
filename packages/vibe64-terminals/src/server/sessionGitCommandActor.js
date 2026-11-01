@@ -9,17 +9,10 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { commandFailure } from "./commandFailure.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
-function responseError(message = "", code = "vibe64_session_git_actor_failed", extra = {}) {
-  return {
-    ...extra,
-    code,
-    error: message,
-    ok: false
-  };
-}
 
 function actorMetadataRecord({
   reason = "",
@@ -62,7 +55,7 @@ function sessionGitCommandActorMetadata({
     ? normalizeText(vibe64User?.username || vibe64User?.osUsername)
     : GITHUB_ACCOUNT_MODE_LOCAL;
   if (ownerScope === "user" && !ownerUserKey) {
-    return responseError(
+    return commandFailure(
       "An enabled OS username is required for the Vibe64 user who authorized this session interaction.",
       "vibe64_os_user_required"
     );
@@ -70,7 +63,7 @@ function sessionGitCommandActorMetadata({
   const normalizedSessionId = normalizeText(session.sessionId);
   const normalizedSourceRoot = normalizeText(sourceRoot);
   if (!normalizedSessionId || !normalizedSourceRoot) {
-    return responseError(
+    return commandFailure(
       "Session Git command actor metadata requires a session id and source root.",
       "vibe64_session_git_command_actor_context_required"
     );
@@ -100,7 +93,7 @@ function sessionGitCommandActorMetadataFromExistingActor({
   const normalizedSessionId = normalizeText(session.sessionId || actor.sessionId);
   const normalizedSourceRoot = normalizeText(sourceRoot) || normalizeText(actor.sourceRoot);
   if (!actor.actorScope || !actor.actorUserKey || !normalizedSessionId || !normalizedSourceRoot) {
-    return responseError(
+    return commandFailure(
       "Session Git command actor metadata requires a session id, source root, and stored actor.",
       "vibe64_session_git_command_actor_context_required"
     );
@@ -144,7 +137,7 @@ function sessionGitCommandActorFromMetadata(session = {}) {
     workdir: normalizeText(metadata.session_git_command_actor_workdir)
   };
   if (!actor.actorScope || !actor.actorUserKey || !actor.sessionId || !actor.sourceRoot) {
-    return responseError(
+    return commandFailure(
       "Vibe64 does not have a complete GitHub command actor for this session.",
       "vibe64_session_git_command_actor_missing"
     );
@@ -258,7 +251,7 @@ async function recordSessionGitCommandActor({
     }
   );
   if (!persisted) {
-    return responseError(
+    return commandFailure(
       "Session Git command actor metadata could not be persisted.",
       "vibe64_session_git_command_actor_store_required"
     );

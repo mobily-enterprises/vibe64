@@ -29,10 +29,10 @@ import { createAgentPreviewWorkerRegistry } from "./agentPreviewWorkerRegistry.j
 import { createAgentPreviewBrowserTests } from "./agentPreviewBrowserTests.js";
 import { createAgentPreviewCommandLine } from "./agentPreviewCommandLine.js";
 import {
-  responseError,
   streamPlaywrightRun
 } from "./agentPreviewBrowserWorker.js";
 import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { commandFailure } from "./commandFailure.js";
 
 /** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -87,10 +87,10 @@ const commandServers = createSessionCommandServers({
   maxBytes: AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES,
   invalidJsonError: { code: "vibe64_agent_preview_command_invalid_json", message: "Vibe64 preview command input must be valid JSON." },
   tooLargeError: { code: "vibe64_agent_preview_command_input_too_large", message: "Vibe64 preview command input is too large." },
-  notFound: responseError("Unknown Vibe64 preview command route.", "vibe64_agent_preview_command_route_not_found"),
+  notFound: commandFailure("Unknown Vibe64 preview command route.", "vibe64_agent_preview_command_route_not_found"),
   rejection: {
     statusCode: 409,
-    payload: responseError(
+    payload: commandFailure(
       "Managed preview control generation is no longer current. Reconnect the assistant.",
       "vibe64_agent_control_unavailable"
     )

@@ -3,6 +3,7 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/server/savedEnvValues";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { commandLineFailure } from "./commandFailure.js";
 
 const ENV_SCOPE_DEVELOPMENT = "development";
 const ENV_SCOPE_PRODUCTION = "production";
@@ -31,19 +32,6 @@ function usageText() {
   ].join("\n") + "\n";
 }
 
-function responseError(message = "", code = "vibe64_agent_env_command_failed", options = {}) {
-  const {
-    exitCode = 1,
-    usage = false
-  } = options;
-  return {
-    code,
-    error: message,
-    exitCode,
-    ok: false,
-    stderr: `${message}\n${usage ? `\n${usageText()}` : ""}`
-  };
-}
 
 function assertOperationResult(result = {}, fallback = "Vibe64 Env operation failed.") {
   if (result.ok === false) {
@@ -97,9 +85,9 @@ function parseCommandArgs(args = []) {
 }
 
 function syntaxFailure(message = "Invalid Vibe64 Env command.") {
-  return responseError(message, "vibe64_agent_env_command_usage", {
+  return commandLineFailure(message, "vibe64_agent_env_command_usage", {
     exitCode: 2,
-    usage: true
+    stderr: `${message}\n\n${usageText()}`
   });
 }
 
@@ -298,7 +286,6 @@ export {
   mutationPayload,
   parseCommandArgs,
   recordForKey,
-  responseError,
   scopeStatus,
   unavailableProductionStatus,
   validateParsedCommand

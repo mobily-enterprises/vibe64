@@ -17,6 +17,7 @@ import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { commandLineFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -54,19 +55,6 @@ function usageText() {
   ].join("\n") + "\n";
 }
 
-function responseError(message = "", code = "vibe64_agent_database_command_failed", options = {}) {
-  const {
-    exitCode = 1,
-    usage = false
-  } = options;
-  return {
-    code,
-    error: message,
-    exitCode,
-    ok: false,
-    stderr: `${message}\n${usage ? `\n${usageText()}` : ""}`
-  };
-}
 
 function parseArgs(args = []) {
   const values = Array.isArray(args) ? args.map((arg) => String(arg || "")) : [];
@@ -83,9 +71,9 @@ function parseArgs(args = []) {
 
 function validateCommand(parsed = {}) {
   if (parsed.unsupportedFlag) {
-    return responseError(`Unsupported option: ${parsed.unsupportedFlag}`, "vibe64_agent_database_command_usage", {
+    return commandLineFailure(`Unsupported option: ${parsed.unsupportedFlag}`, "vibe64_agent_database_command_usage", {
       exitCode: 2,
-      usage: true
+      stderr: `Unsupported option: ${parsed.unsupportedFlag}\n\n${usageText()}`
     });
   }
   if (!parsed.command || parsed.help) {
@@ -98,9 +86,9 @@ function validateCommand(parsed = {}) {
   const singleCommand = ["refresh", "overview", "erd"].includes(parsed.command) && parsed.positionals.length === 1;
   const applyMoves = parsed.command === "erd" && parsed.positionals.length === 2 && parsed.positionals[1] === "apply";
   if (!singleCommand && !applyMoves) {
-    return responseError("The database command accepts refresh, overview, erd or erd apply.", "vibe64_agent_database_command_usage", {
+    return commandLineFailure("The database command accepts refresh, overview, erd or erd apply.", "vibe64_agent_database_command_usage", {
       exitCode: 2,
-      usage: true
+      stderr: `The database command accepts refresh, overview, erd or erd apply.\n\n${usageText()}`
     });
   }
   return null;
@@ -192,10 +180,10 @@ const commandServers = createSessionCommandServers({
   maxBytes: AGENT_DATABASE_COMMAND_REQUEST_MAX_BYTES,
   invalidJsonError: { code: "vibe64_agent_database_command_invalid_json", message: "Vibe64 database command input must be valid JSON." },
   tooLargeError: { code: "vibe64_agent_database_command_input_too_large", message: "Vibe64 database command input is too large." },
-  notFound: responseError("Unknown Vibe64 database command route.", "vibe64_agent_database_command_route_not_found"),
+  notFound: commandLineFailure("Unknown Vibe64 database command route.", "vibe64_agent_database_command_route_not_found"),
   rejection: {
     statusCode: 409,
-    payload: responseError(
+    payload: commandLineFailure(
       "Managed database control generation is no longer current. Reconnect the assistant.",
       "vibe64_agent_control_unavailable"
     )
