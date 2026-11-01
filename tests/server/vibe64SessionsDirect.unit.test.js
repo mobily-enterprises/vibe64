@@ -1354,6 +1354,7 @@ test("members can Save and create pull requests independently of AI access", asy
     async getSession() {
       return { agentRuns: [], sessionId: "session-1", status: "active" };
     },
+    async listSessionSummaries() { return []; },
     store: {
       async readBackgroundTask() { return null; },
       async writeBackgroundTaskEvent(...args) {
@@ -3440,7 +3441,7 @@ test("session listing reports unavailable sessions separately without changing c
     project: {
       async createRuntime() {
         return {
-          store: { async readAgentRuns() { return []; } },
+          store: { async listSessionsForRenewal() { return []; }, async readAgentRuns() { return []; } },
           async listSessionSummaries(options) {
             assert.deepEqual(options, { statusGroup: "open", includeUnavailable: true });
             return [unavailable, healthy];
@@ -3479,6 +3480,7 @@ test("session listing reads saved activity without opening chats and isolates un
     const runtime = {
       listSessionSummaries: store.listSessionSummaries,
       store: {
+        async listSessionsForRenewal() { return []; },
         async readAgentRuns(id) {
           if (id === "unreadable") throw new Error("Activity record unreadable");
           return store.readAgentRuns(id);
@@ -3982,7 +3984,8 @@ test("new sessions publish running workspace preparation and its eventual result
     },
     async listSessionSummaries() {
       return sessionCreationInputs.length > 0 ? [{ ...session }] : [];
-    }
+    },
+    store: { async listSessionsForRenewal() { return []; } }
   };
   const setupFinished = new Promise((resolve) => {
     finishSetup = () => {

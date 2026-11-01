@@ -150,9 +150,9 @@ function conversationContextGrant(_input, context) {
  * @param {{ sessionId: string }} input
  * @param {object} context
  */
-function mainBrowserAuthority(input, context) {
-  const grant = conversationContextGrant(input, context);
-  return { sessionId: input.sessionId, projectSlug: grant.project.slug,
+function mainBrowserAuthority(sessionId, context) {
+  const grant = conversationContextGrant({ sessionId }, context);
+  return { sessionId, projectSlug: grant.project.slug,
     actorId: grant.actor.id, requestContext: mainConversationRequestContext(context) };
 }
 
@@ -442,8 +442,9 @@ function createSessionActions({ sessions }) {
       assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. For new work, supply a unique messageId and reuse it unchanged on a delivery retry. When the person explicitly asks to continue a waiting Auto workflow or check its uncertain delivery, read the saved routing request and use reviewAction=retry with that request's original messageId and message; do not invent a new message identity. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Plan creation, changes, reopening, archival and execution are ordinary chat requests routed by intent. An optional planRevision checks the referenced current document without bypassing Router. Never send merely because a watch recommends more work. For a team member this queues the message for the owner's approval; it is not delivered until approved. In the member's own lesson (practice project) it is sent to the lesson's team AI without approval."),
       kind: "command",
       input: agentMessageActionInputValidator,
-      execute: (input, context) => sessions.sendAgentMessage(input.sessionId, input,
-        { browserAuthority: mainBrowserAuthority(input, context) })
+      // The message is the input without the session it is sent to.
+      execute: ({ sessionId, ...message }, context) => sessions.sendAgentMessage(sessionId, message,
+        { browserAuthority: mainBrowserAuthority(sessionId, context) })
     }),
     // Approvals are people's decisions: they have no assistant tool projection.
     action({
@@ -476,7 +477,7 @@ function createSessionActions({ sessions }) {
       input: mainChatApprovalActionInputValidator,
       // The approved message is the owner's own main-chat send.
       execute: (input, context) => sessions.approveMainChatApproval(input.sessionId, input.approvalId, input,
-        { browserAuthority: mainBrowserAuthority(input, context) })
+        { browserAuthority: mainBrowserAuthority(input.sessionId, context) })
     }),
     action({
       id: ACTION_INSPECT_ASSISTANT_ACCESS,

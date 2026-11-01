@@ -189,6 +189,10 @@ test("project and sessions register routes and captured actions during setup", a
     } },
     terminals: {
       openBrowserConversation() { throw new Error("Feature setup must not open a native conversation."); },
+      setConnectedPreparation() {},
+      setPlanCompleted() {},
+      waitForWorkspaceSetup: () => null,
+      workspaceSetupIsRunning: () => false,
       async resumeIntegrationContinuation(_sessionId, _input, options) {
         assert.deepEqual(await options.readIntegrationConfiguration(), { ok: true, baseHash: "verified-configuration" });
         return { ok: true };

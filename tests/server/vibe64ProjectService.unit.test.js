@@ -635,6 +635,11 @@ test("scope saving and session creation share one project policy boundary", asyn
       },
       async listSessionSummaries() {
         return openSessions.map((session) => ({ ...session }));
+      },
+      store: {
+        async listSessionsForRenewal() {
+          return [];
+        }
       }
     };
     const sessionsService = createSessionsService({

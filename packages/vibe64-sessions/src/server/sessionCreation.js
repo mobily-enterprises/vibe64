@@ -142,6 +142,10 @@ function createSessionCreation({ assistant, project, publishSessionChanged, setu
               throw sessionCreationLimitError(policy);
             }
             if (sessionId !== undefined) {
+              // readable-check: allow method-probe - test asserts error: vibe64SessionsDirect refuses reserved creation without the store's absence check
+              if (typeof runtime.store?.assertSessionCreationAbsent !== "function") {
+                throw new TypeError("Reserved session creation requires the session store's absence check.");
+              }
               await runtime.store.assertSessionCreationAbsent(sessionId);
             }
             const repositoryBranch = input.repositoryBranch ? await project.resolveSessionBranch({
