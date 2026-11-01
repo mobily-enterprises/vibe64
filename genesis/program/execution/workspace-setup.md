@@ -7,7 +7,7 @@ contract transported by the project's Stack.
 
 - Main: `packages/vibe64-terminals/src/server/workspaceSetup.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
-- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/serviceWorkspacePreparation.js`
 - `packages/vibe64-runtime/src/server/workspaceSetupState.js`
 - `packages/vibe64-sessions/src/server/sessionWorkspaceSetup.js`
 - `packages/vibe64-genesis/bin/genesis`

@@ -61,7 +61,6 @@ export default [
     files: [
       "packages/vibe64-terminals/src/server/agent/sessionAgentManager.js",
       "packages/vibe64-terminals/src/server/assistantRouting.js",
-      "packages/vibe64-terminals/src/server/service.js",
       "packages/vibe64-terminals/src/server/sessionConversations.js",
       "packages/vibe64-terminals/src/server/sessionPromptHints.js",
       "packages/vibe64-terminals/src/server/workspaceSetup.js"

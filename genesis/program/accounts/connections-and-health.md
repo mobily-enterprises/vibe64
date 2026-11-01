@@ -131,6 +131,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-terminals/src/server/openCodeHostPreparation.js`
 - `packages/vibe64-terminals/src/server/openCodeConversationAccounts.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/serviceProviderAccess.js`
 - `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
 - `packages/studio-health/src/server/service.js`
 - `packages/studio-health/src/server/studioHealthActions.js`

@@ -14,7 +14,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-terminals/src/server/mainConversationMessages.js`
 - `packages/vibe64-terminals/src/server/codexConversationPreparation.js`
 - `packages/vibe64-terminals/src/server/codexSessionEnvironment.js`
-- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/serviceAssistantPreparation.js`
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - Main: `packages/vibe64-system-graph/src/server/service.js`

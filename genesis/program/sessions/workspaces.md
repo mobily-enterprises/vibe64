@@ -71,7 +71,9 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-terminals/src/server/clonedDefaultBranchUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261030-cloned-default-branch.js`
 - `tests/server/clonedDefaultBranchUpgrade.unit.test.js`
-- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/serviceSessionAccess.js`
+- `packages/vibe64-terminals/src/server/serviceSessionTerminals.js`
+- `packages/vibe64-terminals/src/server/sessionTerminalCleanup.js`
 - `packages/vibe64-terminals/src/server/sessionGitCommandActor.js`
 - `packages/vibe64-terminals/src/server/projectStackInspection.js`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`

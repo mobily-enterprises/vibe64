@@ -87,6 +87,8 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `src/lib/studioUrls.js`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/serviceState.js`
+- `packages/vibe64-terminals/src/server/serviceHostSlots.js`
 - `packages/vibe64-colleague/src/server/conversationUpgrade.js`
 - `packages/vibe64-colleague/src/server/learningWatchUpgrade.js`
 - `packages/vibe64-colleague/src/server/nativeConversationUpgrade.js`

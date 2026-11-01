@@ -1,0 +1,108 @@
+/** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
+/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
+/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
+/** @typedef {ReturnType<typeof import("./sessionConversations.js").createSessionConversations>} SessionConversations */
+/** @typedef {ReturnType<typeof import("./sessionNaming.js").createSessionNaming>} SessionNaming */
+/** @typedef {ReturnType<typeof import("./assistantRouting.js").createAssistantRouting>} AssistantRouting */
+/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
+
+function normalizeAgentProviderId(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+/**
+ * Stopping the service: one stop of every AI runtime, shared by each feature that needs AI stopped
+ * first, and the server's close after the work in flight.
+ * @param {object} dependencies
+ * @param {ServiceState} dependencies.state
+ * @param {AssistantRouting} dependencies.assistantRouting
+ * @param {ConversationRuntime} dependencies.mainConversations
+ * @param {OutputTargetTerminalController} dependencies.outputTarget
+ * @param {ProjectServices} dependencies.projectServices
+ * @param {SessionAgentManager} dependencies.sessionAgent
+ * @param {SessionConversations} dependencies.sessionConversations
+ * @param {SessionNaming} dependencies.sessionNaming
+ */
+function createServiceShutdown({
+  state,
+  assistantRouting,
+  mainConversations,
+  outputTarget,
+  projectServices,
+  sessionAgent,
+  sessionConversations,
+  sessionNaming
+}) {
+  let shutdownStop = null;
+
+  async function close() {
+    state.lifecycle.closing = true;
+    await Promise.allSettled(state.turnCompletions);
+    const [agentClose, outputTargetClose] = await Promise.allSettled([
+      Promise.resolve().then(() => invalidateAgentRuntimes({
+        reason: "server-shutdown"
+      })),
+      Promise.resolve().then(() => outputTarget.close())
+    ]);
+    await Promise.allSettled([state.lifecycle.goalRecovery]);
+    const failures = [];
+    const agentResult = agentClose.status === "fulfilled"
+      ? agentClose.value
+      : null;
+    if (agentClose.status === "rejected") {
+      failures.push(agentClose.reason);
+    } else if (agentResult?.ok === false) {
+      const error = new Error("Assistant runtime shutdown did not complete successfully.");
+      error.code = "vibe64_agent_runtime_shutdown_failed";
+      error.details = agentResult;
+      failures.push(error);
+    }
+    if (outputTargetClose.status === "rejected") {
+      failures.push(outputTargetClose.reason);
+    }
+    try {
+      await projectServices.closeAll();
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length > 0) {
+      throw new AggregateError(failures, "Vibe64 terminal shutdown did not complete successfully.");
+    }
+    return {
+      agentResult,
+      ok: true
+    };
+  }
+
+  async function invalidateAgentRuntimes(input = {}) {
+    if (input.reason === "server-shutdown") {
+      shutdownStop ||= (async () => {
+        state.lifecycle.closing = true;
+        state.shutdownSignal.abort(Object.assign(new Error("Vibe64 is stopping."), { code: "vibe64_server_stopping" }));
+        const routing = await Promise.allSettled([assistantRouting.close(), sessionConversations.close(), sessionNaming.close()]);
+        await Promise.allSettled(state.turnCompletions);
+        const [native] = await Promise.allSettled([sessionAgent.invalidateRuntimes(input, {
+          providerId: normalizeAgentProviderId(input.provider)
+        })]);
+        const failures = [...routing, native].filter((result) => result.status === "rejected").map((result) => result.reason);
+        if (failures.length) throw new AggregateError(failures, "Assistant runtime shutdown did not complete successfully.");
+        await mainConversations.close();
+        return native.value;
+      })();
+      return shutdownStop;
+    }
+    return sessionAgent.invalidateRuntimes(input, {
+      providerId: normalizeAgentProviderId(input.provider)
+    });
+  }
+
+  return Object.freeze({
+    close,
+    invalidateAgentRuntimes
+  });
+}
+
+export {
+  createServiceShutdown
+};

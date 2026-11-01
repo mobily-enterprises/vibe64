@@ -20,7 +20,7 @@ work as a new PR. GitHub remains the PR store.
 - `packages/vibe64-sessions/src/server/assistantContracts.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`
-- `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/serviceSessionWork.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `packages/vibe64-terminals/src/server/sessionSourceCommands.js`
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`

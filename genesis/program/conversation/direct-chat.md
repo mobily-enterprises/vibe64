@@ -1350,6 +1350,10 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/openCodeConversationStorage.js`
 - `tests/server/opencodeReasoningSummaries.unit.test.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/serviceAssistant.js`
+- `packages/vibe64-terminals/src/server/serviceAssistantContext.js`
+- `packages/vibe64-terminals/src/server/serviceMainConversationHost.js`
+- `packages/vibe64-terminals/src/server/serviceGoals.js`
 - `packages/vibe64-terminals/src/server/codexSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/openCodeSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/mainConversationBinding.js`
@@ -4149,7 +4153,7 @@ still required before the existing automatic archive transition.
 
 #### Retained Main teaching cleanup after application session close
 
-`packages/vibe64-terminals/src/server/service.js` uses its same private
+`packages/vibe64-terminals/src/server/serviceSessionTerminals.js` uses its same private
 `closeAgentSession` at the two original manager-close callers: assistant
 changeover and per-session terminal close (including archive/renewal/Project
 cleanup). It first awaits original native closure and keeps native failures.
