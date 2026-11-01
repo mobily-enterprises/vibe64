@@ -1,9 +1,21 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
-import { USAGE_INTERACTION_KINDS } from "../shared/contract.js";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
+import { USAGE_INTERACTION_KINDS } from "../shared/contract.js";
+
 /** @typedef {import("./types.js").UsageRecordingService} UsageRecordingService */
+
+const ACTION_USAGE_RECORDING_TARGETS_READ = "vibe64.usage-recording.targets.read";
+const ACTION_USAGE_RECORDING_START = "vibe64.usage-recording.start";
+const ACTION_USAGE_RECORDING_CURRENT_READ = "vibe64.usage-recording.current.read";
+const ACTION_USAGE_RECORDING_STOP = "vibe64.usage-recording.stop";
+const ACTION_USAGE_RECORDING_DISMISS = "vibe64.usage-recording.dismiss";
+const ACTION_USAGE_RECORDING_LIST = "vibe64.usage-recording.list";
+const ACTION_USAGE_RECORDING_REQUESTS_READ = "vibe64.usage-recording.requests.read";
+const ACTION_USAGE_RECORDING_REQUEST_FUNCTIONS_READ = "vibe64.usage-recording.request-functions.read";
+const ACTION_USAGE_RECORDING_INTERACTION_RECORD = "vibe64.usage-recording.interaction.record";
+const ACTION_USAGE_RECORDING_DELETE = "vibe64.usage-recording.delete";
 
 const text = (maxLength, extra = {}) => ({ type: "string", minLength: 1, maxLength, required: true, ...extra });
 const optionalText = (maxLength) => ({ type: "string", maxLength, required: false });
@@ -21,14 +33,14 @@ function createUsageRecordingActions({ usageRecording }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.usage-recording.targets.read",
+      id: ACTION_USAGE_RECORDING_TARGETS_READ,
       input: { schema: createSchema({ sessionId }), mode: "create" },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.readTargets(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.usage-recording.start",
+      id: ACTION_USAGE_RECORDING_START,
       input: {
         schema: createSchema({
           sessionId,
@@ -42,35 +54,35 @@ function createUsageRecordingActions({ usageRecording }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.usage-recording.current.read",
+      id: ACTION_USAGE_RECORDING_CURRENT_READ,
       input: { schema: createSchema({ sessionId }), mode: "create" },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.readCurrent(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.usage-recording.stop",
+      id: ACTION_USAGE_RECORDING_STOP,
       input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.stop(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.usage-recording.dismiss",
+      id: ACTION_USAGE_RECORDING_DISMISS,
       input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.dismiss(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.usage-recording.list",
+      id: ACTION_USAGE_RECORDING_LIST,
       input: { schema: createSchema({ sessionId }), mode: "create" },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.list(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.usage-recording.requests.read",
+      id: ACTION_USAGE_RECORDING_REQUESTS_READ,
       input: {
         schema: createSchema({
           sessionId,
@@ -88,7 +100,7 @@ function createUsageRecordingActions({ usageRecording }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.usage-recording.request-functions.read",
+      id: ACTION_USAGE_RECORDING_REQUEST_FUNCTIONS_READ,
       input: {
         schema: createSchema({
           sessionId,
@@ -103,7 +115,7 @@ function createUsageRecordingActions({ usageRecording }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.usage-recording.interaction.record",
+      id: ACTION_USAGE_RECORDING_INTERACTION_RECORD,
       input: {
         schema: createSchema({
           sessionId,
@@ -121,7 +133,7 @@ function createUsageRecordingActions({ usageRecording }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.usage-recording.delete",
+      id: ACTION_USAGE_RECORDING_DELETE,
       input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.delete(input)
@@ -129,4 +141,16 @@ function createUsageRecordingActions({ usageRecording }) {
   ]);
 }
 
-export { createUsageRecordingActions };
+export {
+  ACTION_USAGE_RECORDING_CURRENT_READ,
+  ACTION_USAGE_RECORDING_DELETE,
+  ACTION_USAGE_RECORDING_DISMISS,
+  ACTION_USAGE_RECORDING_INTERACTION_RECORD,
+  ACTION_USAGE_RECORDING_LIST,
+  ACTION_USAGE_RECORDING_REQUESTS_READ,
+  ACTION_USAGE_RECORDING_REQUEST_FUNCTIONS_READ,
+  ACTION_USAGE_RECORDING_START,
+  ACTION_USAGE_RECORDING_STOP,
+  ACTION_USAGE_RECORDING_TARGETS_READ,
+  createUsageRecordingActions
+};

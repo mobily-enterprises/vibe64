@@ -7,22 +7,92 @@ import {
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
 
-/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+import {
+  ACTION_USAGE_RECORDING_CURRENT_READ,
+  ACTION_USAGE_RECORDING_DELETE,
+  ACTION_USAGE_RECORDING_DISMISS,
+  ACTION_USAGE_RECORDING_INTERACTION_RECORD,
+  ACTION_USAGE_RECORDING_LIST,
+  ACTION_USAGE_RECORDING_REQUESTS_READ,
+  ACTION_USAGE_RECORDING_REQUEST_FUNCTIONS_READ,
+  ACTION_USAGE_RECORDING_START,
+  ACTION_USAGE_RECORDING_STOP,
+  ACTION_USAGE_RECORDING_TARGETS_READ
+} from "./usageRecordingActions.js";
 
-const sessionRoute = "/usage-recordings/sessions/:sessionId";
-const pageQuery = (query = {}) => ({
-  ...(query.cursor !== undefined ? { cursor: String(query.cursor) } : {}),
-  ...(query.limit !== undefined ? { limit: Number(query.limit) } : {})
-});
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
+
+/** The URL's session, and its recording when the path names one. */
+function recordingInput(request) {
+  return {
+    sessionId: request.params.sessionId,
+    ...(request.params.recordingId ? { recordingId: request.params.recordingId } : {})
+  };
+}
+
+function pageQuery(query) {
+  return {
+    ...(query.cursor !== undefined ? { cursor: String(query.cursor) } : {}),
+    ...(query.limit !== undefined ? { limit: Number(query.limit) } : {})
+  };
+}
+
+function startInput(request) {
+  const body = requestBody(request);
+  return {
+    ...recordingInput(request),
+    targetId: body.targetId,
+    ...(body.parameters !== undefined ? { parameters: body.parameters } : {})
+  };
+}
+
+function requestsInput(request) {
+  const query = requestQuery(request);
+  return {
+    ...recordingInput(request),
+    ...pageQuery(query),
+    ...(query.q !== undefined ? { q: String(query.q) } : {}),
+    ...(query.includeEmpty !== undefined ? { includeEmpty: ["1", "true"].includes(String(query.includeEmpty)) } : {}),
+    ...(query.order !== undefined ? { order: String(query.order) } : {}),
+    ...(query.requestId !== undefined ? { requestId: String(query.requestId) } : {})
+  };
+}
+
+function requestFunctionsInput(request) {
+  return {
+    ...recordingInput(request),
+    requestId: request.params.requestId,
+    ...pageQuery(requestQuery(request))
+  };
+}
+
+function interactionInput(request) {
+  const {
+    id,
+    at,
+    label,
+    kind,
+    componentFile
+  } = requestBody(request);
+  return {
+    ...recordingInput(request),
+    id,
+    at,
+    label,
+    ...(kind !== undefined ? { kind } : {}),
+    ...(componentFile !== undefined ? { componentFile } : {})
+  };
+}
 
 /**
  * @param {RuntimeHttp} http
  * @param {object} [options]
  * @param {StudioProjectContext} [options.projectContext]
  */
-function registerRoutes(http, options = {}) {
-  const { projectContext } = options;
+function registerRoutes(http, {
+  projectContext
+} = {}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-usage-recording"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
@@ -32,55 +102,69 @@ function registerRoutes(http, options = {}) {
       projectContext
     })
   });
-  const ids = (request) => ({
-    sessionId: request.params.sessionId,
-    ...(request.params.recordingId ? { recordingId: request.params.recordingId } : {})
+
+  routes.actionRoute("GET", "/usage-recordings/sessions/:sessionId/targets", {
+    actionId: ACTION_USAGE_RECORDING_TARGETS_READ,
+    buildInput: recordingInput,
+    summary: "List the session's Output targets and whether each can be recorded."
   });
-  const body = (request) => requestBody(request);
-  for (const [method, suffix, operation, summary, buildInput = ids] of [
-    ["GET", "/targets", "targets.read", "List the session's Output targets and whether each can be recorded."],
-    ["POST", "", "start", "Start recording which project functions run in an Output target.",
-      (request) => ({
-        ...ids(request),
-        targetId: body(request).targetId,
-        ...(body(request).parameters !== undefined ? { parameters: body(request).parameters } : {})
-      })],
-    ["GET", "/current", "current.read", "Read the session's running or just finished recording."],
-    ["GET", "", "list", "List the session's recent recordings."],
-    ["POST", "/:recordingId/stop", "stop", "Stop a recording; always agrees."],
-    ["POST", "/:recordingId/dismiss", "dismiss", "Hide a finished recording from the recording indicator."],
-    ["GET", "/:recordingId/requests", "requests.read", "List a recording's requests with what each one ran.",
-      (request) => {
-        const query = requestQuery(request);
-        return {
-          ...ids(request),
-          ...pageQuery(query),
-          ...(query.q !== undefined ? { q: String(query.q) } : {}),
-          ...(query.includeEmpty !== undefined ? { includeEmpty: ["1", "true"].includes(String(query.includeEmpty)) } : {}),
-          ...(query.order !== undefined ? { order: String(query.order) } : {}),
-          ...(query.requestId !== undefined ? { requestId: String(query.requestId) } : {})
-        };
-      }],
-    ["GET", "/:recordingId/requests/:requestId/functions", "request-functions.read", "List the project functions one request ran.",
-      (request) => ({ ...ids(request), requestId: request.params.requestId, ...pageQuery(requestQuery(request)) })],
-    ["POST", "/:recordingId/interactions", "interaction.record", "Record a Preview interaction during a recording.",
-      (request) => {
-        const { id, at, label, kind, componentFile } = body(request);
-        return {
-          ...ids(request),
-          id,
-          at,
-          label,
-          ...(kind !== undefined ? { kind } : {}),
-          ...(componentFile !== undefined ? { componentFile } : {})
-        };
-      }],
-    ["DELETE", "/:recordingId", "delete", "Delete a recording, stopping it first."]
-  ]) routes.actionRoute(method, `${sessionRoute}${suffix}`, {
-    actionId: `vibe64.usage-recording.${operation}`,
-    buildInput,
-    ...(method === "POST" ? { bodyLimit: 16 * 1024 } : {}),
-    summary
+
+  routes.actionRoute("POST", "/usage-recordings/sessions/:sessionId", {
+    actionId: ACTION_USAGE_RECORDING_START,
+    buildInput: startInput,
+    bodyLimit: 16 * 1024,
+    summary: "Start recording which project functions run in an Output target."
+  });
+
+  routes.actionRoute("GET", "/usage-recordings/sessions/:sessionId/current", {
+    actionId: ACTION_USAGE_RECORDING_CURRENT_READ,
+    buildInput: recordingInput,
+    summary: "Read the session's running or just finished recording."
+  });
+
+  routes.actionRoute("GET", "/usage-recordings/sessions/:sessionId", {
+    actionId: ACTION_USAGE_RECORDING_LIST,
+    buildInput: recordingInput,
+    summary: "List the session's recent recordings."
+  });
+
+  routes.actionRoute("POST", "/usage-recordings/sessions/:sessionId/:recordingId/stop", {
+    actionId: ACTION_USAGE_RECORDING_STOP,
+    buildInput: recordingInput,
+    bodyLimit: 16 * 1024,
+    summary: "Stop a recording; always agrees."
+  });
+
+  routes.actionRoute("POST", "/usage-recordings/sessions/:sessionId/:recordingId/dismiss", {
+    actionId: ACTION_USAGE_RECORDING_DISMISS,
+    buildInput: recordingInput,
+    bodyLimit: 16 * 1024,
+    summary: "Hide a finished recording from the recording indicator."
+  });
+
+  routes.actionRoute("GET", "/usage-recordings/sessions/:sessionId/:recordingId/requests", {
+    actionId: ACTION_USAGE_RECORDING_REQUESTS_READ,
+    buildInput: requestsInput,
+    summary: "List a recording's requests with what each one ran."
+  });
+
+  routes.actionRoute("GET", "/usage-recordings/sessions/:sessionId/:recordingId/requests/:requestId/functions", {
+    actionId: ACTION_USAGE_RECORDING_REQUEST_FUNCTIONS_READ,
+    buildInput: requestFunctionsInput,
+    summary: "List the project functions one request ran."
+  });
+
+  routes.actionRoute("POST", "/usage-recordings/sessions/:sessionId/:recordingId/interactions", {
+    actionId: ACTION_USAGE_RECORDING_INTERACTION_RECORD,
+    buildInput: interactionInput,
+    bodyLimit: 16 * 1024,
+    summary: "Record a Preview interaction during a recording."
+  });
+
+  routes.actionRoute("DELETE", "/usage-recordings/sessions/:sessionId/:recordingId", {
+    actionId: ACTION_USAGE_RECORDING_DELETE,
+    buildInput: recordingInput,
+    summary: "Delete a recording, stopping it first."
   });
 }
 
