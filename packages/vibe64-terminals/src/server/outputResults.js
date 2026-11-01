@@ -15,6 +15,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import { openedFileWithin } from "./openedFileWithin.js";
+import { createKeyedQueue } from "./keyedOperations.js";
 import { pathInside } from "@local/vibe64-core/server/core";
 
 const OUTPUT_RESULTS_DIRECTORY = "output-results";
@@ -29,7 +30,7 @@ const OUTPUT_RESULTS_RETAINED_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const COPY_BUFFER_BYTES = 64 * 1024;
 const RESULT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const STORAGE_NAME_PATTERN = /^[0-9a-f-]{36}\.blob$/u;
-const snapshotLocks = new Map();
+const snapshotQueue = createKeyedQueue();
 
 function outputResultError(code, message, statusCode = 409) {
   const error = new Error(message);
@@ -247,18 +248,6 @@ function normalizeDownload(download) {
   };
 }
 
-async function withSnapshotLock(key = "", operation = async () => null) {
-  const previous = snapshotLocks.get(key) || Promise.resolve();
-  const run = previous.catch(() => null).then(operation);
-  const tracked = run.finally(() => {
-    if (snapshotLocks.get(key) === tracked) {
-      snapshotLocks.delete(key);
-    }
-  });
-  snapshotLocks.set(key, tracked);
-  return tracked;
-}
-
 async function snapshotDeclaredOutputResults({
   downloads = [],
   outputTargetId = "",
@@ -283,7 +272,7 @@ async function snapshotDeclaredOutputResults({
   const sourceRoot = path.resolve(sessionSourceRoot);
   const root = outputResultsRoot(session);
   const normalizedTerminalSessionId = String(terminalSessionId || "").trim();
-  return withSnapshotLock(root, async () => {
+  return snapshotQueue.run(root, async () => {
     await mkdir(root, { recursive: true, mode: 0o700 });
     await chmod(root, 0o700);
     const index = await readOutputResultsIndex(root);

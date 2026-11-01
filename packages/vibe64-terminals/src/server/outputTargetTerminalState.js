@@ -1,4 +1,5 @@
 import { createLaunchPreviewProxyRegistry } from "./launchPreviewProxy.js";
+import { createSharedOperations } from "./keyedOperations.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
@@ -13,9 +14,9 @@ function createOutputTargetTerminalState({ env }) {
   const launchPreviewProxies = createLaunchPreviewProxyRegistry({
     env
   });
-  const launchReadyWrites = new Map();
+  const launchReadyWrites = createSharedOperations();
   const previewTestRuns = new Map();
-  const outputResultWrites = new Map();
+  const outputResultWrites = createSharedOperations();
 
   return Object.freeze({
     launchPreviewProxies,

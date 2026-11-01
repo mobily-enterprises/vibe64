@@ -5,6 +5,7 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { normalizeText } from "@local/vibe64-core/server/core";
 import { hasOwn } from "../hasOwn.js";
+import { createSharedOperations } from "../keyedOperations.js";
 import {
   agentOperationResult,
   assistantUser,
@@ -78,27 +79,11 @@ function createSessionAgentProviderCalls({
   conversationOperations,
   attachments
 }) {
-  const operations = new Map();
+  const operations = createSharedOperations();
   // A full profile selects provider-owned execution details. Only the exact
   // in-process object issued by this manager may carry those details into a
   // turn; clones and durable snapshots are audit records, not capabilities.
   const verifiedExecutionProfiles = new WeakMap();
-
-  async function coalescedOperation(key = "", operation) {
-    const existing = operations.get(key);
-    if (existing) {
-      return existing;
-    }
-    const pending = Promise.resolve().then(operation);
-    operations.set(key, pending);
-    try {
-      return await pending;
-    } finally {
-      if (operations.get(key) === pending) {
-        operations.delete(key);
-      }
-    }
-  }
 
   function rememberVerifiedExecutionProfile(provider = {}, sessionId = "", resolution = null, context = {}) {
     const snapshot = vibe64AgentExecutionProfileAuditSnapshot(resolution);
@@ -318,7 +303,7 @@ function createSessionAgentProviderCalls({
     };
     const identity = normalizeText(coalesceIdentity);
     return identity
-      ? coalescedOperation(operationKey(sessionId, provider.id, method, identity), run)
+      ? operations.run(operationKey(sessionId, provider.id, method, identity), run)
       : run();
   }
 

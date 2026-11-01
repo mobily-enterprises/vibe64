@@ -23,9 +23,10 @@ import {
 } from "./codexGitCommand.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 import { record } from "./record.js";
+import { createKeyedQueue, createSharedOperations } from "./keyedOperations.js";
 
-const preparations = new Map();
-const closures = new Map();
+const preparations = createKeyedQueue();
+const closures = createSharedOperations();
 
 function commandBoundaryError(name = "") {
   const error = new Error(`Vibe64 could not prepare the session-scoped ${text(name) || "command"} boundary.`);
@@ -113,31 +114,18 @@ async function prepareOpenCodeSessionCommandEnvironment(context = {}, {
 async function prepareAgentSessionCommandEnvironment(options = {}) {
   const key = codexTerminalNamespace(text(options.sessionId));
   if (closures.has(key)) throw commandBoundaryError("closing session");
-  const pending = (preparations.get(key) || Promise.resolve()).catch(() => null).then(() => {
+  return preparations.run(key, () => {
     if (closures.has(key)) throw commandBoundaryError("closing session");
     return prepareAgentSessionCommandEnvironmentUnlocked(options);
   });
-  preparations.set(key, pending);
-  try {
-    return await pending;
-  } finally {
-    if (preparations.get(key) === pending) preparations.delete(key);
-  }
 }
 
 async function closeAgentSessionCommandEnvironment(sessionId, operation) {
   const key = codexTerminalNamespace(text(sessionId));
-  if (closures.has(key)) return closures.get(key);
-  const pending = Promise.resolve().then(async () => {
-    await preparations.get(key)?.catch(() => null);
+  return closures.run(key, async () => {
+    await preparations.settled(key);
     return operation();
   });
-  closures.set(key, pending);
-  try {
-    return await pending;
-  } finally {
-    if (closures.get(key) === pending) closures.delete(key);
-  }
 }
 
 async function prepareAgentSessionCommandEnvironmentUnlocked({

@@ -39,8 +39,8 @@ function createOutputTargetTerminalSessions({
   async function close() {
     for (const testRun of state.previewTestRuns.values()) testRun.closing = true;
     await Promise.allSettled([
-      ...state.launchReadyWrites.values(),
-      ...state.outputResultWrites.values()
+      ...state.launchReadyWrites.pending(),
+      ...state.outputResultWrites.pending()
     ]);
     await state.launchPreviewProxies.closeAll();
   }

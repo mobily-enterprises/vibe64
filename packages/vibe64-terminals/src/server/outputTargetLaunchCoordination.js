@@ -6,27 +6,12 @@ import { normalizeOpenTarget } from "./outputTargetMetadata.js";
 import { outputTargetTerminalNamespace } from "./terminalShared.js";
 import { ensureLaunchPreviewProxy, markLaunchTerminalReady } from "./launchPreviewReadiness.js";
 import { resolveLaunchPreviewStatus } from "./launchPreviewStatus.js";
+import { createKeyedQueue } from "./keyedOperations.js";
 
 /** @typedef {import("./types.js").OutputTargetTerminalState} OutputTargetTerminalState */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
-
-// One write per key at a time: a second request for the key shares the write
-// in flight, and the key is free again once that write settles.
-function sharedWrite(writes, key, startWrite) {
-  const existing = writes.get(key);
-  if (existing) {
-    return existing;
-  }
-  const tracked = startWrite().finally(() => {
-    if (writes.get(key) === tracked) {
-      writes.delete(key);
-    }
-  });
-  writes.set(key, tracked);
-  return tracked;
-}
 
 /**
  * The coordination every launch shares: one start at a time per session,
@@ -51,7 +36,7 @@ function createOutputTargetLaunchCoordination({
   setWorkflowPhase,
   sessionAdmissionFailure
 }) {
-  const launchStartLocks = new Map();
+  const launchStarts = createKeyedQueue();
 
   // The environment, project and command runner a Preview status read or
   // proxy start runs with, after the caller's own options.
@@ -134,7 +119,7 @@ function createOutputTargetLaunchCoordination({
       });
     }
     const key = `${String(context.session?.sessionRoot || "")}:${terminalSessionId}`;
-    return sharedWrite(state.outputResultWrites, key, () => snapshotDeclaredOutputResults({
+    return state.outputResultWrites.run(key, () => snapshotDeclaredOutputResults({
       downloads,
       outputTargetId: outputTarget.id,
       session: context.session,
@@ -186,27 +171,18 @@ function createOutputTargetLaunchCoordination({
   function markLaunchReady(input = {}) {
     const terminalSessionId = String(input.terminalSession?.id || "").trim();
     const key = `${String(input.namespace || "")}:${terminalSessionId}`;
-    return sharedWrite(state.launchReadyWrites, key, () => Promise.resolve().then(async () => {
+    return state.launchReadyWrites.run(key, async () => {
       const result = await markLaunchTerminalReady(input);
       const metadata = input.terminalSession?.metadata;
       if (result?.ready && metadata?.outputMode === "interactive") {
         await setWorkflowPhase(metadata.resourceWorkflowId, "running");
       }
       return result;
-    }));
+    });
   }
 
-  async function withLaunchStartLock(sessionId = "", operation) {
-    const key = String(sessionId || "global");
-    const previous = launchStartLocks.get(key) || Promise.resolve();
-    const run = previous.catch(() => null).then(operation);
-    const tracked = run.catch(() => null).finally(() => {
-      if (launchStartLocks.get(key) === tracked) {
-        launchStartLocks.delete(key);
-      }
-    });
-    launchStartLocks.set(key, tracked);
-    return run;
+  function withLaunchStartLock(sessionId, operation) {
+    return launchStarts.run(String(sessionId || "global"), operation);
   }
 
   function launchAdmissionFailure(sessionId = "", session = null) {
