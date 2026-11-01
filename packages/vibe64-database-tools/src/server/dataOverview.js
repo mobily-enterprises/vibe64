@@ -9,23 +9,21 @@ import { DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, validateDataOverview } fro
  * MySQL's schema qualifier is the selected database, unlike PostgreSQL's
  * application-owned schemas. Only the overview's persisted references omit it.
  */
-export function dataOverviewReference(schema, reference, options = {}) {
-  const { qualified = false } = options;
+export function dataOverviewReference(schema, reference) {
   if (schema.engine !== "mysql") return reference;
   const prefix = `${schema.database}.`;
-  if (qualified) return `${prefix}${reference}`;
   if (!reference.startsWith(prefix)) throw new Error(`Data overview: ${reference} is outside the selected database.`);
   return reference.slice(prefix.length);
 }
 
-export function dataOverviewDefinition(schema, definition, options) {
-  const reference = (value) => dataOverviewReference(schema, value, options);
-  const tableReference = (value) => {
-    if (schema.engine === "mysql" && options?.qualified && value.includes(".")) {
-      throw new Error("Data overview: MySQL table references must omit the database name.");
-    }
-    return reference(value);
-  };
+/**
+ * A persisted reference with MySQL's database qualifier restored.
+ */
+function qualifiedDataOverviewReference(schema, reference) {
+  return schema.engine === "mysql" ? `${schema.database}.${reference}` : reference;
+}
+
+function mapDataOverviewReferences(definition, reference, tableReference) {
   return {
     ...definition,
     actors: definition.actors.map((actor) => ({ ...actor, table: tableReference(actor.table), tables: actor.tables.map(tableReference) })),
@@ -37,6 +35,28 @@ export function dataOverviewDefinition(schema, definition, options) {
         .map(([table, position]) => [table === "other-tables" ? table : tableReference(table), position]))
     })
   };
+}
+
+/**
+ * The definition with its references in persisted form.
+ */
+export function dataOverviewDefinition(schema, definition) {
+  const reference = (value) => dataOverviewReference(schema, value);
+  return mapDataOverviewReferences(definition, reference, reference);
+}
+
+/**
+ * A persisted definition with its references qualified for the refreshed schema.
+ */
+export function qualifiedDataOverviewDefinition(schema, definition) {
+  const reference = (value) => qualifiedDataOverviewReference(schema, value);
+  const tableReference = (value) => {
+    if (schema.engine === "mysql" && value.includes(".")) {
+      throw new Error("Data overview: MySQL table references must omit the database name.");
+    }
+    return reference(value);
+  };
+  return mapDataOverviewReferences(definition, reference, tableReference);
 }
 
 export async function readDataOverview(session, schema) {
@@ -62,7 +82,7 @@ export async function readDataOverview(session, schema) {
     const content = buffer.subarray(0, length);
     result.hash = createHash("sha256").update(content).digest("hex");
     const definition = validateDataOverview(JSON.parse(content.toString("utf8")));
-    result.definition = schema ? dataOverviewDefinition(schema, definition, { qualified: true }) : definition;
+    result.definition = schema ? qualifiedDataOverviewDefinition(schema, definition) : definition;
   } catch (error) {
     if (error.code !== "ENOENT") {
       result.present = true;

@@ -36,7 +36,12 @@ import {
   saveSnippet as saveStoredSnippet
 } from "./sessionState.js";
 import { createSessionDatabase } from "./sessionDatabase.js";
-import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "./dataOverview.js";
+import {
+  dataOverviewDefinition,
+  dataOverviewReference,
+  qualifiedDataOverviewDefinition,
+  readDataOverview
+} from "./dataOverview.js";
 import { inspectErdLayout, moveErdLayoutTables } from "./erdLayout.js";
 import { defaultTableQuery } from "../shared/sqlQuoting.js";
 import {
@@ -349,7 +354,7 @@ function createService({
       const context = await sessionDatabase.sessionContext(input);
       const schema = await sessionDatabase.currentSchema(context);
       const definition = validateDataOverview(dataOverviewDefinition(schema, validateDataOverview(input.definition)));
-      const resolvedDefinition = dataOverviewDefinition(schema, definition, { qualified: true });
+      const resolvedDefinition = qualifiedDataOverviewDefinition(schema, definition);
       const text = `${JSON.stringify(definition, null, 2)}\n`;
       if (Buffer.byteLength(text) > DATA_OVERVIEW_MAX_BYTES) {
         throw databaseError("Data overview is larger than 256 KiB.", "vibe64_database_overview_invalid");

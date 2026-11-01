@@ -6,7 +6,12 @@ import test from "node:test";
 import { dataOverviewCoverage, validateDataOverview } from "../../packages/vibe64-database-tools/src/shared/dataOverview.js";
 import { dataOverviewGraph, routeOverviewEdges } from "../../packages/vibe64-database-tools/src/client/dataOverviewModel.js";
 import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/shared/erdRouting.js";
-import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "../../packages/vibe64-database-tools/src/server/dataOverview.js";
+import {
+  dataOverviewDefinition,
+  dataOverviewReference,
+  qualifiedDataOverviewDefinition,
+  readDataOverview
+} from "../../packages/vibe64-database-tools/src/server/dataOverview.js";
 import { createService } from "../../packages/vibe64-database-tools/src/server/service.js";
 import { createService as createSourceEditor } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { bookingOverview, dataOverviewSchema } from "../fixtures/dataOverviewSchema.js";
@@ -356,7 +361,7 @@ test("PostgreSQL schema distinctions and constraint names remain exact across da
   for (const database of ["session_one", "session_two"]) {
     const schema = { engine: "postgresql", database };
     assert.deepEqual(dataOverviewDefinition(schema, definition), definition);
-    assert.deepEqual(dataOverviewDefinition(schema, definition, { qualified: true }), definition);
+    assert.deepEqual(qualifiedDataOverviewDefinition(schema, definition), definition);
     assert.equal(dataOverviewReference(schema, "archive.bookings:archive_fk"), "archive.bookings:archive_fk");
   }
   const mysql = { engine: "mysql", database: "session_one" };
