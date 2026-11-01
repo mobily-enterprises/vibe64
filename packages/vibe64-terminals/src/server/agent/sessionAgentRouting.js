@@ -15,6 +15,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
+/** @typedef {import("../types.js").SessionAgentProvider} SessionAgentProvider */
 
 function mergeRoutingCatalogPage(catalog, page, revisionError) {
   catalog ||= { ...page, modelProviders: [] };
@@ -53,11 +54,13 @@ function createSessionAgentRouting({
     return structuredClone(options.configuration || await readRoutingConfiguration());
   }
 
-  async function providerCapabilities(provider = {}, input = {}, options = {}) {
-    // readable-check: allow method-probe - input validation: every assistant provider declares its capabilities
-    if (typeof provider.capabilities !== "function") {
-      throw new TypeError(`Assistant provider ${provider.id} does not implement capabilities().`);
-    }
+  /**
+   * The capabilities a provider offers the actor, checked against the capability contract.
+   * @param {SessionAgentProvider} provider
+   * @param {object} input
+   * @param {object} options
+   */
+  async function providerCapabilities(provider, input, options) {
     return defineVibe64AssistantCapabilities(await provider.capabilities({
       engineId: provider.id,
       transportId: provider.transportId,

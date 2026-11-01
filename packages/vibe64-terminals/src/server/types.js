@@ -82,4 +82,24 @@
 /** @typedef {ReturnType<typeof import("./workspaceSetupRunnerState.js").createWorkspaceSetupRunnerState>} WorkspaceSetupRunnerState */
 /** @typedef {ReturnType<typeof import("./workspaceSetupExecution.js").createWorkspaceSetupExecution>} WorkspaceSetupExecution */
 
+/** @typedef {ReturnType<typeof import("./agent/providers/codexSessionAgentProvider.js").createCodexSessionAgentProvider>} CodexSessionAgentProvider */
+/** @typedef {ReturnType<typeof import("./agent/providers/opencodeSessionAgentProvider.js").createOpenCodeSessionAgentProvider>} OpenCodeSessionAgentProvider */
+/** @typedef {ReturnType<typeof import("./agent/providers/claudeConversationHost.js").createClaudeConversationHost>} ClaudeSessionAgentProvider */
+/**
+ * The session agent provider contract: one provider per engine.
+ * @typedef {CodexSessionAgentProvider | OpenCodeSessionAgentProvider | ClaudeSessionAgentProvider} SessionAgentProvider
+ */
+/**
+ * The provider methods the session agent manager dispatches by name.
+ * @typedef {"closeProject" | "closeSession" | "closeTerminal" | "createConversation" | "deleteAttachment" | "deleteConversation"
+ *   | "deleteDetachedChatThread" | "ensureSession" | "generateSessionRenewalHandover" | "hasActiveTemporaryConversation"
+ *   | "inspectMessageAdmission" | "interruptDetachedChatTurn" | "interruptTurn" | "invalidateRuntimes"
+ *   | "listNativeConversationStorage" | "readConversation" | "readGoal" | "readTerminal" | "reconcileSessions"
+ *   | "releaseRenewalPredecessorAttachments" | "releaseRenewalPredecessorProcessExitProof"
+ *   | "releaseRenewalSuccessorProcessExitProof" | "resizeTerminal" | "resolveExecutionProfile" | "retireConversationHistory"
+ *   | "runDetachedChatTurn" | "seedSessionRenewalHandover" | "sendMessage" | "sessionState" | "startConversationTurn"
+ *   | "startTerminal" | "stopConversation" | "streamDetachedChatTurn" | "subscribeTerminal" | "unsubscribeSessions"
+ *   | "updateGoal" | "updateSessionSettings" | "uploadAttachment" | "waitForConversationTurn" | "writeTerminal"} SessionAgentProviderMethod
+ */
+
 export {};

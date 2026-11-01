@@ -1,6 +1,8 @@
 import { openMainConversation } from "../mainConversationBinding.js";
 
 /** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("../types.js").SessionAgentProvider} SessionAgentProvider */
+/** @typedef {import("../types.js").SessionAgentProviderMethod} SessionAgentProviderMethod */
 
 const CONVERSATION_COMMANDS = Object.freeze({
   sendMessage: (conversation, request) => conversation.send(request.input),
@@ -109,10 +111,7 @@ function createSessionAgentConversationOperations({ conversationRuntime }) {
         : conversationRuntime.seedNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input }));
     };
     const command = CONVERSATION_COMMANDS[method];
-    // readable-check: allow method-probe - optional operation: a provider without conversation adapters has no conversation commands
-    if (!command || typeof provider.prepareConversationRequest !== "function" ||
-        // readable-check: allow method-probe - optional operation: a provider without conversation adapters has no conversation commands
-        typeof provider.projectConversationResult !== "function") {
+    if (!command) {
       throw new TypeError("Conversation operations require their request and result adapters.");
     }
     const scoped = SCOPED_CONVERSATION_METHODS.has(method);
@@ -145,11 +144,15 @@ function createSessionAgentConversationOperations({ conversationRuntime }) {
           return command(conversation, request);
         });
       };
-      // readable-check: allow method-probe - data: a request adapter answers with its request or a promise of it
-      return prepared && typeof prepared.then === "function" ? prepared.then(dispatch) : dispatch(prepared);
+      return prepared instanceof Promise ? prepared.then(dispatch) : dispatch(prepared);
     };
   }
 
+  /**
+   * The operation the provider serves for a contract method, or undefined when its engine has none.
+   * @param {SessionAgentProvider} provider
+   * @param {SessionAgentProviderMethod} method
+   */
   function providerOperation(provider, method) {
     return conversationOperation(provider, method) || provider[method];
   }

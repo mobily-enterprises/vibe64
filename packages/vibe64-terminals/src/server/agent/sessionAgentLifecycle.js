@@ -14,6 +14,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("../types.js").SessionAgentAccess} SessionAgentAccess */
 /** @typedef {import("../types.js").SessionAgentConversationOperations} SessionAgentConversationOperations */
 /** @typedef {ReturnType<typeof import("./sessionAgentProviderCalls.js").createSessionAgentProviderCalls>} SessionAgentProviderCalls */
+/** @typedef {import("../types.js").SessionAgentProviderMethod} SessionAgentProviderMethod */
 
 /**
  * Closing and releasing what the manager holds: sessions, projects,
@@ -84,9 +85,7 @@ function createSessionAgentLifecycle({
       transportId: provider.transportId
     };
     const operation = conversationOperations.providerOperation(provider, "closeSession");
-    const result = typeof operation !== "function"
-      ? agentOperationResult(provider, id, { closed: false, ok: true })
-      : agentOperationResult(provider, id, await operation.call(provider, context));
+    const result = agentOperationResult(provider, id, await operation.call(provider, context));
     if (result.ok !== false) {
       sessionBindings.forgetBinding(id);
       for (const [terminalId, terminal] of state.terminalBindings) {
@@ -98,8 +97,12 @@ function createSessionAgentLifecycle({
 
   /**
    * A released renewal predecessor or successor no longer holds its session binding.
+   * @param {SessionAgentProviderMethod} method
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {object} options
    */
-  async function releaseAndForgetBinding(method, sessionId = "", input = {}, options = {}) {
+  async function releaseAndForgetBinding(method, sessionId, input, options) {
     const id = toText(sessionId);
     const result = await providerCalls.callSessionProvider(method, id, input, options);
     if (result.ok !== false) sessionBindings.forgetBinding(id);
@@ -121,12 +124,17 @@ function createSessionAgentLifecycle({
   /**
    * Local storage work is explicitly invoked by trusted host code. It neither
    * selects the current assistant nor authorizes a model inference.
-   * One native history operation of the binding's engine, refused with its own message when the engine has none.
+   * One native history operation of the binding's engine, refused with its own message when no installed engine has it.
+   * @param {SessionAgentProviderMethod} method
+   * @param {string} unavailableMessage
+   * @param {string} sessionId
+   * @param {object} binding
+   * @param {object} options
    */
   function callNativeHistoryOperation(method, unavailableMessage, sessionId, binding, options) {
     const provider = state.providerById.get(binding.engineId);
-    const operation = provider && conversationOperations.providerOperation(provider, method);
-    if (typeof operation !== "function") throw new TypeError(unavailableMessage);
+    if (!provider) throw new TypeError(unavailableMessage);
+    const operation = conversationOperations.providerOperation(provider, method);
     return operation.call(provider, { ...options, sessionId }, binding);
   }
 
@@ -196,11 +204,6 @@ function createSessionAgentLifecycle({
     for (const [providerId, providerSessions] of grouped) {
       const provider = state.providerById.get(providerId);
       const operation = conversationOperations.providerOperation(provider, "reconcileSessions");
-      if (typeof operation !== "function") {
-        throw new TypeError(
-          `Assistant provider ${provider.id} does not implement reconcileSessions().`
-        );
-      }
       if (assistantUser(options)) {
         for (const session of providerSessions) {
           await accessChecks.requireAccessFor(provider, session?.sessionId, {

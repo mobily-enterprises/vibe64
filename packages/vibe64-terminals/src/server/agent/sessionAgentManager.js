@@ -1,7 +1,6 @@
 import { SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE, EPHEMERAL_ASSISTANT_CONTEXT_MAX_CHARACTERS, defineEphemeralAssistantScope,
   sessionAgentProviderId } from "./sessionAgentRules.js";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
-import { currentProjectVibe64User } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionAgentManagerState } from "./sessionAgentManagerState.js";
 import { createSessionAgentBindings } from "./sessionAgentBindings.js";
 import { createSessionAgentAccess } from "./sessionAgentAccess.js";
@@ -14,7 +13,12 @@ import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("../types.js").SessionAgentProvider} SessionAgentProvider */
 
+/**
+ * A provider with its product and transport ids trimmed; one without both is refused.
+ * @param {SessionAgentProvider} provider
+ */
 function normalizeProvider(provider) {
   const id = toText(provider.id);
   const transportId = toText(provider.transportId);
@@ -32,14 +36,14 @@ function normalizeProvider(provider) {
  * The session agent manager. Each concern is built once, in dependency
  * order, and the manager offers its operations by name.
  * @param {object} dependencies
- * @param {SessionAttachments} [dependencies.attachments] the session's attachments; without them messages carry none
+ * @param {SessionAttachments} dependencies.attachments
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {string} [dependencies.defaultProviderId]
  * @param {(context: object) => Promise<object>} dependencies.readAssistantAccess
  * @param {(selection: object) => Promise<object | null>} dependencies.readProviderUsage
- * @param {(user: object | null) => Promise<object | null>} [dependencies.resolveAssistantUser]
+ * @param {(user: object | null) => Promise<object | null>} dependencies.resolveAssistantUser
  * @param {() => Promise<object>} dependencies.readRoutingConfiguration
- * @param {object[]} [dependencies.providers] the session agent providers, one per engine
+ * @param {SessionAgentProvider[]} dependencies.providers the session agent providers, one per engine
  */
 function createSessionAgentManager({
   attachments,
@@ -47,9 +51,9 @@ function createSessionAgentManager({
   defaultProviderId = "codex",
   readAssistantAccess,
   readProviderUsage,
-  resolveAssistantUser = async (user) => user || currentProjectVibe64User() || null,
+  resolveAssistantUser,
   readRoutingConfiguration,
-  providers = []
+  providers
 }) {
   const providerById = new Map();
   for (const candidate of providers) {
@@ -123,7 +127,16 @@ function createSessionAgentManager({
   }
 
   const manager = Object.freeze({
-    ...scopedTurnOperations,
+    createConversation: scopedTurnOperations.createConversation,
+    createEphemeralConversation: scopedTurnOperations.createEphemeralConversation,
+    deleteConversation: scopedTurnOperations.deleteConversation,
+    inspectMessageAdmission: scopedTurnOperations.inspectMessageAdmission,
+    readConversation: scopedTurnOperations.readConversation,
+    startConversationTurn: scopedTurnOperations.startConversationTurn,
+    startEphemeralConversationTurn: scopedTurnOperations.startEphemeralConversationTurn,
+    stopConversation: scopedTurnOperations.stopConversation,
+    stopEphemeralConversation: scopedTurnOperations.stopEphemeralConversation,
+    waitForEphemeralConversationTurn: scopedTurnOperations.waitForEphemeralConversationTurn,
     conversationProvider: sessionBindings.conversationProvider,
     resolveAssistantPurpose: routing.resolvePurpose,
     inspectRoutingConfiguration: routing.inspectRoutingConfiguration,

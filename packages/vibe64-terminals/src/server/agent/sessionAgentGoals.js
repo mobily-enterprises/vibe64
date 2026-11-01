@@ -50,15 +50,20 @@ function createSessionAgentGoals({
   accessChecks,
   conversationOperations
 }) {
+  /**
+   * The session's goal. A canonical read always carries its onGoalResult observer.
+   * @param {string} sessionId
+   * @param {object} [options]
+   */
   async function readGoal(sessionId, options = {}) {
     options = goalOptions(options);
     const provider = sessionBindings.goalProvider(sessionId, options);
     const operation = conversationOperations.providerOperation(provider, "readGoal");
+    // readable-check: allow method-probe - optional operation: an engine without goals reads its goal as unsupported
     if (typeof operation !== "function") {
       const result = { status: "unsupported", goal: null };
       if (!options.canonicalGoal) return result;
-      // readable-check: allow optional-call - input validation: a canonical goal read's optional result observer
-      await options.onGoalResult?.(result, {
+      await options.onGoalResult(result, {
         segmentId: null, capabilities: { goals: false, goalBudgets: false, goalCommands: {} }
       });
       return null;
@@ -90,6 +95,7 @@ function createSessionAgentGoals({
       throw error;
     }
     const operation = conversationOperations.providerOperation(provider, "updateGoal");
+    // readable-check: allow method-probe - optional operation: an engine without goals refuses goal controls
     if (typeof operation !== "function") {
       throw new TypeError("This assistant does not support goal controls.");
     }

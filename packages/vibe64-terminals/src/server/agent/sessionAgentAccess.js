@@ -118,14 +118,6 @@ function createSessionAgentAccess({
     const provider = sessionId
       ? sessionBindings.bindSession(sessionId, options)
       : sessionBindings.providerFor(options);
-    const fallback = {
-      providerId: provider.id,
-      transportId: provider.transportId
-    };
-    // readable-check: allow method-probe - optional operation: a provider without a description is described by its catalogue entry
-    if (typeof provider.describeProvider !== "function") {
-      return Object.freeze(fallback);
-    }
     await requireAccessFor(provider, sessionId, options);
     const described = await provider.describeProvider({
       providerId: provider.id,
@@ -151,7 +143,8 @@ function createSessionAgentAccess({
       );
     }
     return Object.freeze({
-      ...fallback,
+      providerId: provider.id,
+      transportId: provider.transportId,
       accountIdentitySignature
     });
   }

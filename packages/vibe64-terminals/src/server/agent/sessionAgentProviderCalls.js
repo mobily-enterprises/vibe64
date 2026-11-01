@@ -23,6 +23,8 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
 /** @typedef {import("../types.js").SessionAgentAccess} SessionAgentAccess */
 /** @typedef {import("../types.js").SessionAgentConversationOperations} SessionAgentConversationOperations */
+/** @typedef {import("../types.js").SessionAgentProvider} SessionAgentProvider */
+/** @typedef {import("../types.js").SessionAgentProviderMethod} SessionAgentProviderMethod */
 
 const EXECUTION_PROFILE_RESOLUTION_FIELDS = new Set([
   "limits",
@@ -70,7 +72,7 @@ function operationKey(sessionId = "", providerId = "", operation = "", identity 
  * @param {SessionAgentBindings} dependencies.sessionBindings
  * @param {SessionAgentAccess} dependencies.accessChecks
  * @param {SessionAgentConversationOperations} dependencies.conversationOperations
- * @param {SessionAttachments} [dependencies.attachments] the session's attachments; without them messages carry none
+ * @param {SessionAttachments} dependencies.attachments
  */
 function createSessionAgentProviderCalls({
   state,
@@ -136,6 +138,11 @@ function createSessionAgentProviderCalls({
     }, expected);
   }
 
+  /**
+   * One session's provider operation, named by the provider contract; a native terminal start is tracked while it opens.
+   * @param {SessionAgentProviderMethod} method
+   * @param {...any} args the session id, input, options and call settings
+   */
   async function callSessionProvider(method, ...args) {
     const opening = method === "startTerminal" ? Promise.withResolvers() : null;
     if (opening) state.terminalStarts.add(opening.promise);
@@ -149,7 +156,15 @@ function createSessionAgentProviderCalls({
     }
   }
 
-  async function invokeSessionProvider(method = "", sessionId = "", input = {}, options = {}, {
+  /**
+   * @param {SessionAgentProviderMethod} method
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {object} options
+   * @param {object} [settings]
+   * @param {string} [settings.coalesceIdentity] identical calls with this identity share one run
+   */
+  async function invokeSessionProvider(method, sessionId = "", input = {}, options = {}, {
     coalesceIdentity = ""
   } = {}) {
     let operationOptions = {
@@ -186,7 +201,8 @@ function createSessionAgentProviderCalls({
     if (method === "startTerminal" && state.connectionChanges.has(provider.id)) {
       throw connectionChangeBusy(provider.id);
     }
-    const operation = attachments?.[method] || conversationOperations.providerOperation(provider, method);
+    const operation = attachments[method] || conversationOperations.providerOperation(provider, method);
+    // readable-check: allow method-probe - optional operation: an engine without this operation refuses it by name
     if (typeof operation !== "function") {
       throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
     }
@@ -198,8 +214,7 @@ function createSessionAgentProviderCalls({
       assistantAccess: authorization?.access || null,
       assistantSelection: sessionAssistantSelection(operationOptions),
       assistantScope: operationOptions.assistantScope || null,
-      // readable-check: allow method-probe - input validation: a caller's optional event stream
-      onEvent: typeof operationOptions.onEvent === "function" ? operationOptions.onEvent : null,
+      onEvent: operationOptions.onEvent ?? null,
       providerId: provider.id,
       runtime: operationOptions.runtime || null,
       ...(method === "sendMessage" && operationOptions.browserAuthority
@@ -231,12 +246,6 @@ function createSessionAgentProviderCalls({
               )
             };
           } else {
-            // readable-check: allow method-probe - test asserts error: a provider without execution profiles is refused
-            if (typeof provider.resolveExecutionProfile !== "function") {
-              throw new TypeError(
-                `Assistant provider ${provider.id} does not implement resolveExecutionProfile().`
-              );
-            }
             const requestedExecutionProfile = defineVibe64AgentExecutionProfileRequest(
               input.executionProfile
             );
@@ -276,7 +285,7 @@ function createSessionAgentProviderCalls({
           (providerInput.attachments?.length || providerInput.steer)) {
         throw new TypeError("Bounded helpers accept supplied text only; start a new request to change their input.");
       }
-      if (attachments && !options.attachmentsPrepared && ["sendMessage", "startConversationTurn"].includes(method)) {
+      if (!options.attachmentsPrepared && ["sendMessage", "startConversationTurn"].includes(method)) {
         if (method === "sendMessage" && provider.conversationOperations?.includes(method) && !context.assistantScope) {
           // The original sender chooses historical attachment IDs before this
           // same authorized storage resolver prepares their native input.
@@ -321,22 +330,35 @@ function createSessionAgentProviderCalls({
       : run();
   }
 
+  /**
+   * @param {SessionAgentProvider} provider
+   * @param {SessionAgentProviderMethod} method
+   * @param {unknown} input
+   * @param {object} options
+   */
   async function callProviderOperation(provider, method, input, options) {
     const operation = conversationOperations.providerOperation(provider, method);
-    if (typeof operation !== "function") {
-      throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
-    }
     return agentOperationResult(provider, "", await operation.call(provider, {
       providerId: provider.id,
       transportId: provider.transportId
     }, input, options));
   }
 
-  async function callProvider(method = "", input = {}, options = {}) {
+  /**
+   * @param {SessionAgentProviderMethod} method
+   * @param {unknown} input
+   * @param {object} [options]
+   */
+  async function callProvider(method, input, options = {}) {
     return callProviderOperation(sessionBindings.providerFor(options), method, input, options);
   }
 
-  async function callAllProviders(method = "", input = {}, options = {}) {
+  /**
+   * @param {SessionAgentProviderMethod} method
+   * @param {object} [input]
+   * @param {object} [options]
+   */
+  async function callAllProviders(method, input = {}, options = {}) {
     const requestedProviderId = sessionAgentProviderId(options);
     const targets = requestedProviderId
       ? [sessionBindings.providerFor(options)]
@@ -367,6 +389,10 @@ function createSessionAgentProviderCalls({
   /**
    * An ephemeral assistant scope runs outside any session, routing
    * conversation or project runtime.
+   * @param {SessionAgentProviderMethod} method
+   * @param {object} assistantScope
+   * @param {object} [input]
+   * @param {object} [options]
    */
   function callEphemeralScope(method, assistantScope, input = {}, options = {}) {
     return callSessionProvider(method, assistantScope.id, input, {

@@ -43,7 +43,11 @@ test("native replacement blocks terminal and goal bypass while permitting ordina
   assert.deepEqual(calls, ["send"]);
 });
 
-function routingManagerFixture({ resolveAssistantUser, disconnected = [], withoutModels = [] } = {}) {
+function routingManagerFixture({
+  resolveAssistantUser = sessionAgentManagerDefaults.resolveAssistantUser,
+  disconnected = [],
+  withoutModels = []
+} = {}) {
   const selection = (engineId, modelProviderId, modelId) => ({ schema: "vibe64.assistant-selection.v1",
     engineId, agentId: engineId, modelProviderId, modelId, variantId: "", catalogRevision });
   const senior = selection("codex", "openai", "gpt-6-astra");
@@ -874,11 +878,19 @@ test("session agent manager describes providers without binding a session", asyn
     ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
-      transportId: "codex_app_server"
+      transportId: "codex_app_server",
+      async describeProvider() {
+        return {
+          accountIdentitySignature: `sha256:${"b".repeat(64)}`,
+          providerId: "codex",
+          transportId: "codex_app_server"
+        };
+      }
     }]
   });
 
   assert.deepEqual(await manager.describeProvider(), {
+    accountIdentitySignature: `sha256:${"b".repeat(64)}`,
     providerId: "codex",
     transportId: "codex_app_server"
   });
@@ -1183,6 +1195,9 @@ test("session agent manager rejects copied, forged, and cross-session pre-resolv
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
+      async closeSession() {
+        return { closed: true, ok: true };
+      },
       async resolveExecutionProfile() {
         return providerResolution;
       },
@@ -1505,6 +1520,9 @@ test("session agent manager fails closed when a provider cannot resolve a reques
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
+      async resolveExecutionProfile() {
+        throw new Error("This provider has no helper execution profile.");
+      },
       async createConversation() {
         throw new Error("Detached work must not start.");
       }
@@ -1519,7 +1537,7 @@ test("session agent manager fails closed when a provider cannot resolve a reques
       },
       prompt: "Explain this source."
     }, executionProfileOptions),
-    /does not implement resolveExecutionProfile/u
+    /This provider has no helper execution profile/u
   );
 });
 
@@ -2108,6 +2126,9 @@ test("Restored detached: session agent manager rejects copied, forged, and cross
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
+      async closeSession() {
+        return { closed: true, ok: true };
+      },
       async resolveExecutionProfile() {
         return providerResolution;
       },
@@ -2335,6 +2356,9 @@ test("Restored detached: session agent manager fails closed when a provider cann
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
+      async resolveExecutionProfile() {
+        throw new Error("This provider has no helper execution profile.");
+      },
       async runDetachedChatTurn() {
         throw new Error("Detached work must not start.");
       }
@@ -2349,7 +2373,7 @@ test("Restored detached: session agent manager fails closed when a provider cann
       },
       prompt: "Explain this source."
     }),
-    /does not implement resolveExecutionProfile/u
+    /This provider has no helper execution profile/u
   );
 });
 
