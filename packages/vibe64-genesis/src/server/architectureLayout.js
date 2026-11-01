@@ -54,8 +54,12 @@ function parseVibe64ArchitectureLayoutLines(lines, options = {}) {
       const key = field[1].toLowerCase();
       if (current[key] !== undefined) invalidStackOperation(ERROR_CODE, path, `Duplicate ${field[1]}.`, index + 1);
       if (key === "kind" && !ARCHITECTURE_LAYOUT_KINDS.includes(values[0])) {
-        invalidStackOperation(ERROR_CODE, path,
-          `Kind must be ${ARCHITECTURE_LAYOUT_KINDS.slice(0, -1).join(", ")} or ${ARCHITECTURE_LAYOUT_KINDS.at(-1)}.`, index + 1);
+        invalidStackOperation(
+          ERROR_CODE,
+          path,
+          `Kind must be ${ARCHITECTURE_LAYOUT_KINDS.slice(0, -1).join(", ")} or ${ARCHITECTURE_LAYOUT_KINDS.at(-1)}.`,
+          index + 1
+        );
       }
       current[key] = values[0];
     }

@@ -43,7 +43,9 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
 
   await save(sessions);
 
-  function get(providerSessionId) { return structuredClone(sessions.get(providerSessionId)); }
+  function get(providerSessionId) {
+    return structuredClone(sessions.get(providerSessionId));
+  }
 
   async function register(providerSessionId, promptContext, workdir = "") {
     if (closed) throw new Error("The Genesis host context registry is closed.");

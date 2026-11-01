@@ -23,8 +23,11 @@ function parseVibe64IntegrationSetupLines(lines, options = {}) {
   const entries = lines.map((line) => line.trim()).filter(Boolean);
   const entry = entries.length === 1 && entries[0].match(/^- Command with (.+?) in `([^`\r\n]+)`: (.+)$/u);
   if (!entry) {
-    invalidStackOperation(ERROR_CODE, setupPath,
-      `Integration setup requires exactly one entry: ${INTEGRATION_SETUP_ENTRY_FORM}; or - Nothing.`);
+    invalidStackOperation(
+      ERROR_CODE,
+      setupPath,
+      `Integration setup requires exactly one entry: ${INTEGRATION_SETUP_ENTRY_FORM}; or - Nothing.`
+    );
   }
   return {
     argv: processArguments(entry[3], ERROR_CODE, setupPath, "Integration setup command"),

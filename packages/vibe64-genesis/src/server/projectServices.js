@@ -44,5 +44,7 @@ function vibe64ProjectServicesInspection(section = {}) {
   };
 }
 
-export { PROJECT_SERVICE_ENTRY_FORM, VIBE64_PROJECT_SERVICES_SECTION, VIBE64_PROJECT_SERVICES_CONTRACT,
-  parseVibe64ProjectServicesLines, vibe64ProjectServicesInspection };
+export {
+  PROJECT_SERVICE_ENTRY_FORM, VIBE64_PROJECT_SERVICES_SECTION, VIBE64_PROJECT_SERVICES_CONTRACT,
+  parseVibe64ProjectServicesLines, vibe64ProjectServicesInspection
+};

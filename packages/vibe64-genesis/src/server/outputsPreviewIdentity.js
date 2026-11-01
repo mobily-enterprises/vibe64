@@ -130,12 +130,12 @@ function normalizePreviewIdentity(draft, outputsPath, targetId) {
     protocol,
     runtimes: draft.runtimes
       ? runtimeArguments(
-          draft.runtimes.map((value) => `\`${value}\``).join(" "),
-          ERROR_CODE,
-          outputsPath,
-          "Preview identity runtimes",
-          draft.line
-        )
+        draft.runtimes.map((value) => `\`${value}\``).join(" "),
+        ERROR_CODE,
+        outputsPath,
+        "Preview identity runtimes",
+        draft.line
+      )
       : [],
     timeoutMs
   };

@@ -194,9 +194,7 @@ function stackCommand(source, code, operationPath, label, line, { form, observed
   const workdirEntry = unconditional.match(WORKDIR_SUFFIX);
   return {
     argv: processArguments(entry[2], code, operationPath, `${label} command`, line),
-    runtimeRequirements: runtimeArguments(
-      workdirEntry ? workdirEntry[1] : unconditional, code, operationPath, `${label} runtimes`, line
-    ),
+    runtimeRequirements: runtimeArguments(workdirEntry ? workdirEntry[1] : unconditional, code, operationPath, `${label} runtimes`, line),
     workdir: projectPath(workdirEntry ? workdirEntry[2] : ".", code, operationPath, `${label} workdir`, line),
     ...(conditionPath
       ? {
