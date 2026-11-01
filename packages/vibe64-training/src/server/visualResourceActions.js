@@ -2,7 +2,8 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { pinnedLessonKey } from "./installedContent.js";
 
-/** @typedef {import("./types.js").TrainingService} TrainingService */
+/** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
+/** @typedef {import("./types.js").TrainingContent} TrainingContent */
 
 const TRAINING_VISUAL_RESOURCE_ACTION = "vibe64.training.visual-resource.read";
 // The original lesson bundle permits 32 MiB; base64 expansion and metadata
@@ -12,7 +13,7 @@ const MAX_RESOURCE_BYTES = 48 * 1024 * 1024;
 /**
  * The pinned diagram of one of the signed-in learner's saved attempts, with the
  * snapshot the learner saved, inside its transport limit.
- * @param {{ learners: TrainingService["learners"], content: TrainingService["content"] }} owners
+ * @param {{ learners: TrainingLearners, content: TrainingContent }} owners
  * @param {object} context
  * @param {{ attemptId: string, visualId: string }} input
  */
@@ -51,8 +52,8 @@ async function readLessonVisual({ learners, content }, context, { attemptId, vis
 
 /**
  * @param {object} dependencies
- * @param {TrainingService["learners"]} dependencies.learners
- * @param {TrainingService["content"]} dependencies.content
+ * @param {TrainingLearners} dependencies.learners
+ * @param {TrainingContent} dependencies.content
  */
 function createTrainingVisualResourceActions({ learners, content }) {
   return Object.freeze([Object.freeze({

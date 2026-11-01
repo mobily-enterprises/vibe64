@@ -1,7 +1,7 @@
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 
-/** @typedef {ReturnType<typeof import("./codeAuthorship.js").createTrainingCodeAuthorship>} TrainingCodeAuthorship */
+/** @typedef {import("./types.js").TrainingCodeAuthorship} TrainingCodeAuthorship */
 
 // Practice projects are ordinary projects (Learning v2), so the learner edits
 // their code in the ordinary Files editor through the project-scoped

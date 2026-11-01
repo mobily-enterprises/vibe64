@@ -48,7 +48,7 @@ import {
 } from "./inputSchemas.js";
 
 /** @typedef {import("./types.js").SessionsService} SessionsService */
-/** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
+/** @typedef {import("./types.js").RepositoryUpdateProbe} RepositoryUpdateProbe */
 
 const ACTION_SKIP_INTEGRATION_SETUP = "vibe64.sessions.integration-setup.skip";
 const ACTION_RESUME_INTEGRATION_SETUP = "vibe64.sessions.integration-setup.resume";

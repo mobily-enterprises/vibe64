@@ -4,7 +4,8 @@ import { NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actio
 import { requestId, text } from "./trainingActions.js";
 import { runLearnerAction } from "./stepActions.js";
 
-/** @typedef {import("./types.js").TrainingService} TrainingService */
+/** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
+/** @typedef {import("./types.js").TrainingPublishLearnerChanged} TrainingPublishLearnerChanged */
 
 // Learning v2 learner notes (contract C7): Colleague's private summary of the
 // person it teaches. The learner store keeps them in that learner's own
@@ -30,8 +31,8 @@ const expectedRevision = { type: "integer", required: true, min: 0, max: Number.
 
 /**
  * @param {object} dependencies
- * @param {TrainingService["learners"]} dependencies.learners
- * @param {TrainingService["publishLearnerChanged"]} dependencies.publishLearnerChanged
+ * @param {TrainingLearners} dependencies.learners
+ * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
  */
 function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) {
   async function save(actor, context, input) {

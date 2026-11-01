@@ -4,6 +4,11 @@ import { boundedTrainingResult } from "./errors.js";
 import { lessonAvailableTo } from "./lessonAvailability.js";
 
 /** @typedef {import("./types.js").TrainingService} TrainingService */
+/** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
+/** @typedef {import("./types.js").TrainingPublishLearnerChanged} TrainingPublishLearnerChanged */
+/** @typedef {import("./types.js").TrainingContent} TrainingContent */
+/** @typedef {import("./types.js").TrainingExercises} TrainingExercises */
+/** @typedef {import("./types.js").TrainingLearningSpace} TrainingLearningSpace */
 
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
 const revision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
@@ -177,12 +182,12 @@ async function runTrainingOperation(name, operation, input, context) {
  * that its operation is unavailable here.
  * @param {object} dependencies
  * @param {TrainingService["catalogue"]} dependencies.catalogue
- * @param {TrainingService["learners"]} dependencies.learners
- * @param {TrainingService["content"] | null} dependencies.content
- * @param {TrainingService["exercises"] | null} dependencies.exercises
+ * @param {TrainingLearners} dependencies.learners
+ * @param {TrainingContent | null} dependencies.content
+ * @param {TrainingExercises | null} dependencies.exercises
  * @param {TrainingService["courseInstaller"] | null} dependencies.courseInstaller
- * @param {TrainingService["learningSpace"] | null} dependencies.learningSpace
- * @param {TrainingService["publishLearnerChanged"]} dependencies.publishLearnerChanged
+ * @param {TrainingLearningSpace | null} dependencies.learningSpace
+ * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
  */
 function createTrainingOperations({ catalogue, learners, content, exercises, courseInstaller, learningSpace, publishLearnerChanged }) {
   // A pinned lesson's steps never change, so each is read once; who may take
@@ -382,12 +387,12 @@ function createTrainingOperations({ catalogue, learners, content, exercises, cou
  * Composition supplies the original readers and one exercise preparation owner.
  * @param {object} dependencies
  * @param {TrainingService["catalogue"]} dependencies.catalogue
- * @param {TrainingService["learners"]} dependencies.learners
- * @param {TrainingService["content"] | null} dependencies.content
- * @param {TrainingService["exercises"] | null} dependencies.exercises
+ * @param {TrainingLearners} dependencies.learners
+ * @param {TrainingContent | null} dependencies.content
+ * @param {TrainingExercises | null} dependencies.exercises
  * @param {TrainingService["courseInstaller"] | null} dependencies.courseInstaller
- * @param {TrainingService["learningSpace"] | null} dependencies.learningSpace
- * @param {TrainingService["publishLearnerChanged"]} dependencies.publishLearnerChanged
+ * @param {TrainingLearningSpace | null} dependencies.learningSpace
+ * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
  */
 function createTrainingActions({ catalogue, learners, content, exercises, courseInstaller, learningSpace, publishLearnerChanged }) {
   const operations = createTrainingOperations({ catalogue, learners, content, exercises, courseInstaller, learningSpace, publishLearnerChanged });

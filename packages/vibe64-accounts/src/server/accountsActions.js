@@ -20,8 +20,8 @@ import {
 } from "./accountRealtimeEvents.js";
 
 /** @typedef {import("./types.js").AccountsService} AccountsService */
-/** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
-/** @typedef {ReturnType<typeof import("./aiConnectionService.js").createAiConnectionService>} AiConnectionService */
+/** @typedef {import("./types.js").AiConnectionService} AiConnectionService */
+/** @typedef {import("./types.js").AccountsRequireAiManagement} AccountsRequireAiManagement */
 
 const ACTION_READ_CODEX_PROVIDERS = "vibe64.accounts.codex-providers.read";
 const ACTION_READ_MODEL_ROUTING = "vibe64.accounts.model-routing.read";
@@ -240,7 +240,7 @@ function createAccountsActions({ accounts }) {
 /**
  * @param {object} dependencies
  * @param {AiConnectionService} dependencies.aiConnectionService
- * @param {AccountsRuntime["requireAiManagement"]} dependencies.requireAiManagement
+ * @param {AccountsRequireAiManagement} dependencies.requireAiManagement
  */
 function createAiConnectionActions({ aiConnectionService, requireAiManagement }) {
   // Every AI connection operation is the AI manager's alone.

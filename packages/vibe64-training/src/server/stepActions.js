@@ -7,6 +7,11 @@ import { availableStepIds } from "./lessonAvailability.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
 /** @typedef {import("./types.js").TrainingService} TrainingService */
+/** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
+/** @typedef {import("./types.js").TrainingPublishLearnerChanged} TrainingPublishLearnerChanged */
+/** @typedef {import("./types.js").TrainingContent} TrainingContent */
+/** @typedef {import("./types.js").TrainingExercises} TrainingExercises */
+/** @typedef {import("./types.js").TrainingLearningSpace} TrainingLearningSpace */
 
 // Learning v2 (Rev 4 C2): the lesson reader, step results, reader position,
 // the lesson in progress and the archived lessons. Admission is the existing
@@ -155,12 +160,12 @@ async function runLearnerAction(operation, input, context) {
  * place, and listing or removing practice. Each change is announced to the
  * learner's tabs.
  * @param {object} dependencies
- * @param {TrainingService["learners"]} dependencies.learners
- * @param {TrainingService["learners"]} dependencies.attemptLearners
- * @param {TrainingService["content"]} dependencies.content
+ * @param {TrainingLearners} dependencies.learners
+ * @param {TrainingLearners} dependencies.attemptLearners
+ * @param {TrainingContent} dependencies.content
  * @param {TrainingService["steps"]} dependencies.steps
- * @param {TrainingService["learningSpace"] | null} dependencies.learningSpace
- * @param {TrainingService["publishLearnerChanged"]} dependencies.publishLearnerChanged
+ * @param {TrainingLearningSpace | null} dependencies.learningSpace
+ * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
  */
 function createTrainingStepOperations({ learners, attemptLearners, content, steps, learningSpace, publishLearnerChanged }) {
   const notify = async (actor, attempt, reason) => {
@@ -306,13 +311,13 @@ function createTrainingStepOperations({ learners, attemptLearners, content, step
 
 /**
  * @param {object} dependencies
- * @param {TrainingService["learners"]} dependencies.learners
- * @param {TrainingService["learners"]} [dependencies.attemptLearners]
- * @param {TrainingService["content"]} dependencies.content
+ * @param {TrainingLearners} dependencies.learners
+ * @param {TrainingLearners} [dependencies.attemptLearners]
+ * @param {TrainingContent} dependencies.content
  * @param {TrainingService["steps"]} dependencies.steps
- * @param {TrainingService["exercises"] | null} dependencies.exercises
- * @param {TrainingService["learningSpace"] | null} dependencies.learningSpace
- * @param {TrainingService["publishLearnerChanged"]} dependencies.publishLearnerChanged
+ * @param {TrainingExercises | null} dependencies.exercises
+ * @param {TrainingLearningSpace | null} dependencies.learningSpace
+ * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
  */
 function createTrainingStepActions({ learners,
   // readable-check: allow dependency-default - filled by a composing host repository; convert with its supplier
