@@ -409,13 +409,11 @@ test("the service answers each query with the snapshot and reloads a changed cal
   try {
     let city = machine;
     const reads = [];
-    const cache = createCallWebCache();
     const service = createUsageService({
       project: projectServiceFor(root),
       cityReader: async () => ({ builtAt: "2026-10-30T10:00:00.000Z", city, exists: true, kind: "machine", path: ".genesis/machine-city.json" }),
       callWebReader: async (sourceRoot, architecture) => { reads.push([sourceRoot, architecture.callWeb.identity]); return callWeb; },
-      layoutReader: async () => LAYOUT,
-      callWebCache: cache
+      layoutReader: async () => LAYOUT
     });
     const entries = await service.readUsageEntries({ sessionId: "s1" });
     assert.equal(entries.ok, true, entries.error);
@@ -446,7 +444,7 @@ test("the service answers each query with the snapshot and reloads a changed cal
     assert.deepEqual([unknown.ok, unknown.code], [false, "vibe64_usage_entry_not_found"]);
     const badMode = await service.readUsageWeb({ sessionId: "s1", entryId: CLI, mode: "recording" });
     assert.equal(badMode.code, "vibe64_invalid_usage_mode");
-    cache.clear();
+    releaseCallWeb(root);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

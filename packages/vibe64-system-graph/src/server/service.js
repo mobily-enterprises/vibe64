@@ -21,6 +21,7 @@ import {
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 import {
   CALL_WEB_PATH,
@@ -30,11 +31,10 @@ import {
   validateGenesisCity
 } from "./genesisCities.js";
 import { releaseCallWeb } from "./usageService.js";
-import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 // The largest inspection request an inspector receives on standard input.
 const ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES = 4 * 1024 * 1024;

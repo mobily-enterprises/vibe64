@@ -2,6 +2,7 @@ import { inspectVibe64ArchitectureLayout } from "@local/vibe64-genesis/server";
 import { pathExists } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 import {
   readGenesisCallWeb,
@@ -23,7 +24,6 @@ import {
   readImportsWeb,
   requireEntry
 } from "./usageWeb.js";
-import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
@@ -52,14 +52,12 @@ function releaseCallWeb(sourceRoot) {
  * @param {typeof readGenesisCity} [dependencies.cityReader]
  * @param {typeof readGenesisCallWeb} [dependencies.callWebReader]
  * @param {typeof inspectVibe64ArchitectureLayout} [dependencies.layoutReader]
- * @param {typeof callWebs} [dependencies.callWebCache]
  */
 function createUsageService({
   project,
   cityReader = readGenesisCity,
   callWebReader = readGenesisCallWeb,
-  layoutReader = inspectVibe64ArchitectureLayout,
-  callWebCache = callWebs
+  layoutReader = inspectVibe64ArchitectureLayout
 }) {
   const snapshotIndexes = new WeakMap();
 
@@ -97,7 +95,7 @@ function createUsageService({
   async function callIndexFor(sourceRoot, index) {
     const identity = index.snapshot.callWebIdentity;
     if (!identity) return null;
-    return callWebCache.read(sourceRoot, identity, async () => {
+    return callWebs.read(sourceRoot, identity, async () => {
       const document = await callWebReader(sourceRoot, index.architecture);
       return document ? buildCallIndex(document) : null;
     });
