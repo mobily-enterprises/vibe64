@@ -20,6 +20,7 @@ import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/
 import * as learningFocus from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
 import * as navigationPanes from "../../packages/vibe64-colleague/src/shared/navigationPanes.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
+import { createColleagueUsageKnowledge } from "../../packages/vibe64-colleague/src/server/usageKnowledge.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // This source-evaluating renderer compiles the exercised SFCs below. Package
@@ -2264,7 +2265,7 @@ test("the local Colleague host opens a session's Main chat itself, without carry
 });
 
 test("the local Colleague host opens every project view that navigation.open offers", async t => {
-  const offered = createColleagueActions({ colleague: {} }).find(({ id }) => id === "vibe64.colleague.navigation.open").input.schema.structure.pane.enum;
+  const offered = createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes: navigationPanes.NO_HOST_PANES }).find(({ id }) => id === "vibe64.colleague.navigation.open").input.schema.structure.pane.enum;
   assert.deepEqual(offered, [...navigationPanes.VIBE64_COLLEAGUE_PANES]);
   const route = vue.reactive({ path: "/app/project/demo", query: {} });
   const pushed = [];

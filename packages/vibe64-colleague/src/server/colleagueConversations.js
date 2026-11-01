@@ -5,6 +5,7 @@ import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext
 import { COLLEAGUE_TOOL_LIMITS, COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, learnInstructions } from "./protocol.js";
 import { COLLEAGUE_MODEL_UNAVAILABLE, failure, requireResult } from "./colleagueFailure.js";
 import { colleagueBrowserStream, releaseObserver, trimIncompleteSurrogate } from "./colleaguePresentation.js";
+import { ACTION_COLLEAGUE_CONTEXT_READ } from "./colleagueActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
@@ -58,7 +59,7 @@ function createColleagueConversations({
       }
       const state = await threads.stateFor(context);
       if (conversationId !== state.record.runtimeId) return false;
-      await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context });
+      await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context });
       if (["send", "wake", "tool"].includes(operation)) {
         if (context.colleague.generation !== state.generation || state.stopping) return false;
         if (context.colleague.autonomous && !context.colleague.observationIds.some(id =>

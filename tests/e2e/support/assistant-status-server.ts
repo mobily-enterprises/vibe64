@@ -36,7 +36,9 @@ import { createSessionAgentManager } from "../../../packages/vibe64-terminals/sr
 import { sessionAgentManagerDefaults } from "../../fixtures/sessionAgentManagerDefaults.js";
 import { registerRoutes as registerTerminalRoutes } from "../../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { createColleagueService } from "../../../packages/vibe64-colleague/src/server/service.js";
-import { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "../../../packages/vibe64-colleague/src/server/colleagueActions.js";
+import { createColleagueActions } from "../../../packages/vibe64-colleague/src/server/colleagueActions.js";
+import { createColleagueUsageKnowledge } from "../../../packages/vibe64-colleague/src/server/usageKnowledge.js";
+import { NO_HOST_PANES } from "../../../packages/vibe64-colleague/src/shared/navigationPanes.js";
 import { sourceMetadata } from "../../server/vibe64TestHelpers.js";
 import {
   bootstrapPayload, currentAppPayload, directChatSessionPayload,
@@ -272,8 +274,6 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
           return service.stop(input, context);
         },
         browserConversations: { ...service.browserConversations,
-          conversationDataSchema: colleagueConversationDataSchema,
-          conversationSelectionSchema: colleagueConversationSelectionSchema,
           async open(input) {
             const conversation = await service.browserConversations.open(input);
             return { ...conversation,
@@ -284,7 +284,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
         }
       } };
     },
-    actions: ({ colleague }) => createColleagueActions(colleague),
+    actions: ({ colleague }) => createColleagueActions({ colleague, usage: createColleagueUsageKnowledge(), navigationPanes: NO_HOST_PANES }),
     async shutdown(_deps, { outputs }) {
       try { await outputs.colleague.close(); }
       finally { await rm(colleagueRoot, { recursive: true, force: true }); }

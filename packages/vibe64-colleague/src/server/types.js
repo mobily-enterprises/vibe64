@@ -2,8 +2,9 @@
 // capabilities, for features that require them, and the types several of the
 // package's files share.
 
-/** @typedef {ReturnType<typeof import("./Vibe64ColleagueFeature.js").createColleague>} ColleagueService */
-/** @typedef {ReturnType<typeof import("./Vibe64ColleagueFeature.js").createColleagueBrowserFocus>} ColleagueBrowserFocus */
+/** @typedef {ReturnType<typeof import("./service.js").createColleagueService>} ColleagueService */
+/** @typedef {ReturnType<typeof import("./registerColleagueFocus.js").createColleagueBrowserFocus>} ColleagueBrowserFocus */
+/** @typedef {ReturnType<typeof import("./usageKnowledge.js").createColleagueUsageKnowledge>} ColleagueUsageKnowledge */
 /** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
 /** @typedef {ReturnType<typeof import("./colleagueRecords.js").createColleagueRecords>} ColleagueRecords */
 /** @typedef {ReturnType<typeof import("./colleagueThreads.js").createColleagueThreads>} ColleagueThreads */

@@ -7,6 +7,7 @@ import { stateObservation, stateWatchUpdate } from "./watchSources.js";
 import { assignmentSummary, suspendAssignment } from "./assignments.js";
 import { failure, requireResult } from "./colleagueFailure.js";
 import { WATCH_UPDATE_NOTICE, trimIncompleteSurrogate } from "./colleaguePresentation.js";
+import { ACTION_COLLEAGUE_CONTEXT_READ } from "./colleagueActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -393,7 +394,7 @@ function createColleagueWorker({
             connection = state.nextConnection;
           }
           await actions.execute({
-            actionId: "vibe64.colleague.context.read",
+            actionId: ACTION_COLLEAGUE_CONTEXT_READ,
             input: {},
             context: threads.actionContext(state, connection)
           });
@@ -490,7 +491,7 @@ function createColleagueWorker({
           controller.signal.throwIfAborted();
           if (!isCurrent() || !currentContext) return "end";
           if (phase === "before-parse") {
-            await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: currentContext.context });
+            await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: currentContext.context });
             if (state.pendingMessages.length) {
               feedback = "The user supplied new steering while you were responding. No operation from that response was executed. Follow their latest message.";
               return "continue";

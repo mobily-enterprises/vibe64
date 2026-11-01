@@ -145,8 +145,7 @@ function createColleagueTurns({
       await selecting;
       return records.snapshot(state);
     },
-    async send(input, context, options = {}) {
-      const { receiptOnly = false } = options;
+    async send(input, context) {
       const state = await threads.stateFor(context);
       const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
       const admitted = state.admission.then(async () => {
@@ -218,7 +217,7 @@ function createColleagueTurns({
       state.admission = admitted.catch(() => {});
       const receipt = await admitted;
       if (receipt?.ok === false) return receipt;
-      return receiptOnly ? receipt : records.snapshot(state, input.clientId);
+      return context.colleagueReceiptOnly === true ? receipt : records.snapshot(state, input.clientId);
     },
     async stop(input, context) {
       const state = await threads.stateFor(context);

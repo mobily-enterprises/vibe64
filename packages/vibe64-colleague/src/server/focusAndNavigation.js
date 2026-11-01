@@ -32,7 +32,9 @@ function createColleagueFocusAndNavigation({ threads }) {
     return { ok: true, focus: focused || {} };
   }
 
-  async function reportFocus(input, context, { browserBinding } = {}) {
+  async function reportFocus(input, context) {
+    // A socket's focus update carries its browser binding, the lifetime of that focus.
+    const browserBinding = context.colleagueBrowserBinding;
     const state = await threads.stateFor(context);
     if (browserBinding && !browserBinding.current()) throw failure("This browser focus update is no longer current.");
     const connection = state.connections.get(input.clientId) || { clientId: input.clientId };

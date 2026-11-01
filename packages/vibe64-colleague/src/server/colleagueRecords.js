@@ -9,6 +9,7 @@ import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 import { COLLEAGUE_MODEL_UNAVAILABLE, failure } from "./colleagueFailure.js";
 import { colleagueHistoryMessages, publicWatch, releaseObserver } from "./colleaguePresentation.js";
+import { ACTION_COLLEAGUE_ASSIGNMENT_CREATE, ACTION_COLLEAGUE_CONTEXT_READ } from "./colleagueActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
@@ -19,7 +20,7 @@ import { colleagueHistoryMessages, publicWatch, releaseObserver } from "./collea
 // switch the mode for the person. Learn threads watch only their lesson's
 // practice project (the service decides).
 const LEARN_ONLY_ACTION = /^vibe64\.training\.(?!learning-mode\.(?:read|set)$)|^vibe64\.colleague\.navigation\.open-learning$/u;
-const DEVELOP_ONLY_ACTIONS = new Set(["vibe64.colleague.assignment.create"]);
+const DEVELOP_ONLY_ACTIONS = new Set([ACTION_COLLEAGUE_ASSIGNMENT_CREATE]);
 // Main's own goal controls act on the Main conversation running them; Colleague never has them.
 const MAIN_ONLY_ACTIONS = new Set(["vibe64.terminals.main-goal.pause", "vibe64.terminals.main-goal.block"]);
 
@@ -204,7 +205,7 @@ function createColleagueRecords({
       // Product invalidation may announce a changed active identity. It grants
       // no access to the old runtime or the new conversation transcript.
       const context = { ...observer.context, colleague: { ...observer.context.colleague, conversationId: undefined } };
-      void actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context })
+      void actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context })
         .then(() => {
           if (!state.browserObservers.has(observer)) return;
           try { Promise.resolve(observer.listener({ type: "application", interimReply: state.interimReply })).catch(() => {}); }

@@ -1,8 +1,10 @@
 import { attachDirectRequestActionExecutor } from "@jskit-ai/kernel/server/http";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../shared/focusRealtime.js";
+import { ACTION_COLLEAGUE_FOCUS_UPDATE } from "./colleagueActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Focus belongs to one existing authenticated browser connection. The action
@@ -10,8 +12,9 @@ import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../shared/focus
  * @param {object} dependencies
  * @param {RuntimeRealtime} dependencies.realtime
  * @param {ActionCatalogue} dependencies.actions
+ * @param {RuntimeLogger} dependencies.logger
  */
-function registerColleagueFocus({ realtime, actions }) {
+function registerColleagueFocus({ realtime, actions, logger }) {
   return realtime.onConnection(({ socket, readRequest }) => {
     const bindings = new Map();
     let closed = false;
@@ -19,8 +22,8 @@ function registerColleagueFocus({ realtime, actions }) {
       const binding = bindings.get(clientId);
       bindings.delete(clientId);
       if (binding) binding.owner.connected = false;
-      if (binding?.release) void binding.release().catch(error => {
-        console.error("Colleague browser focus cleanup failed.", error);
+      if (binding?.release) void binding.release().catch((error) => {
+        logger.error({ error }, "Colleague browser focus cleanup failed.");
       });
     }
     async function update(input, acknowledge) {
@@ -37,17 +40,17 @@ function registerColleagueFocus({ realtime, actions }) {
         if (!current()) return;
         attachDirectRequestActionExecutor({ actions, request });
         const result = await request.executeAction({
-          actionId: "vibe64.colleague.focus.update",
+          actionId: ACTION_COLLEAGUE_FOCUS_UPDATE,
           channel: "api",
           surface: "app",
           input,
-          deps: {
-            browserBinding: {
+          context: {
+            colleagueBrowserBinding: {
               owner: binding.owner,
               current,
               onRelease(detach) {
-                if (binding.release && binding.release !== detach) void binding.release().catch(error => {
-                  console.error("Colleague previous actor focus cleanup failed.", error);
+                if (binding.release && binding.release !== detach) void binding.release().catch((error) => {
+                  logger.error({ error }, "Colleague previous actor focus cleanup failed.");
                 });
                 binding.release = detach;
                 if (!current()) release(input.clientId);
@@ -75,4 +78,20 @@ function registerColleagueFocus({ realtime, actions }) {
   });
 }
 
-export { registerColleagueFocus };
+/**
+ * Colleague's browser focus: closing it stops following the browser.
+ * @param {object} dependencies
+ * @param {RuntimeRealtime} dependencies.realtime
+ * @param {ActionCatalogue} dependencies.actions
+ * @param {RuntimeLogger} dependencies.logger
+ */
+function createColleagueBrowserFocus({ realtime, actions, logger }) {
+  const close = registerColleagueFocus({
+    realtime,
+    actions,
+    logger
+  });
+  return Object.freeze({ close });
+}
+
+export { createColleagueBrowserFocus, registerColleagueFocus };

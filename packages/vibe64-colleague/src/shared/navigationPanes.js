@@ -8,4 +8,16 @@ const VIBE64_COLLEAGUE_PANES = Object.freeze(["preview", "settings", "env", "int
 // The views of one development session, which need its exact sessionId.
 const VIBE64_COLLEAGUE_SESSION_PANES = Object.freeze(["session", "changes", "repository", "files", "database", "system", "ai-terminal"]);
 
-export { VIBE64_COLLEAGUE_PANES, VIBE64_COLLEAGUE_SESSION_PANES };
+// The optional capability through which a composed host adds its own project views, and the named default a
+// composition without it uses: no host views.
+const COLLEAGUE_NAVIGATION_PANES_TOKEN = "vibe64.colleague.navigation-panes";
+const NO_HOST_PANES = Object.freeze([]);
+
+/** @typedef {{ pane: string, meaning: string }} ColleagueNavigationPane A composed host's view and what it shows. */
+
+export {
+  COLLEAGUE_NAVIGATION_PANES_TOKEN,
+  NO_HOST_PANES,
+  VIBE64_COLLEAGUE_PANES,
+  VIBE64_COLLEAGUE_SESSION_PANES
+};

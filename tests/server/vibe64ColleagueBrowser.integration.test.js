@@ -10,6 +10,8 @@ import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-c
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { nameColleague } from "../../packages/vibe64-colleague/src/server/colleagueName.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
+import { createColleagueUsageKnowledge } from "../../packages/vibe64-colleague/src/server/usageKnowledge.js";
+import { NO_HOST_PANES } from "../../packages/vibe64-colleague/src/shared/navigationPanes.js";
 import { io } from "socket.io-client";
 import { createServer } from "../../server.js";
 
@@ -200,7 +202,7 @@ test("Colleague browser facade retains Fastify cookie headers and revalidates lo
     finally { try { await service.close(); } finally { await rm(root, { recursive: true, force: true }); } }
   });
   actions.register({ contributorId: "cookie-colleague", domain: "colleague",
-    actions: createColleagueActions({ colleague: service }).map(definition => ({ channels: ["api", "internal"], surfaces: ["app"], ...definition })) });
+    actions: createColleagueActions({ colleague: service, usage: createColleagueUsageKnowledge(), navigationPanes: NO_HOST_PANES }).map(definition => ({ channels: ["api", "internal"], surfaces: ["app"], ...definition })) });
   app.get("/conversation", async request => {
     assert.equal(Object.hasOwn(request, "headers"), false, "Exercise Fastify's inherited header getter");
     request.vibe64User = user;

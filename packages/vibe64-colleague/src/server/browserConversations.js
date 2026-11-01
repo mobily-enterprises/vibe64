@@ -1,6 +1,13 @@
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { failure } from "./colleagueFailure.js";
 import { colleagueBrowserState, releaseObserver } from "./colleaguePresentation.js";
+import {
+  ACTION_COLLEAGUE_CONTEXT_READ,
+  ACTION_COLLEAGUE_MESSAGE_SEND,
+  ACTION_COLLEAGUE_MODEL_SELECT,
+  ACTION_COLLEAGUE_TURN_STOP
+} from "./colleagueActions.js";
+import { colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "./colleagueSchemas.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
@@ -39,7 +46,7 @@ function createColleagueBrowserConversations({
       } : context?.requestMeta,
       colleague: { userKey: threads.userKey(context), clientId: "", focus: null }
     };
-    await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
+    await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
     const state = await threads.stateFor(context);
     if (state.record.previousConversations.some(old => old.scopeId === id)) threads.assertCurrentConversation(state, id);
     if (id !== state.record.scopeId) throw failure("This Colleague conversation is unavailable.", "conversation_forbidden", 403);
@@ -53,7 +60,7 @@ function createColleagueBrowserConversations({
     return {
       async read(options = {}) {
         threads.assertCurrentConversation(state, id);
-        await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
+        await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
         const pageOptions = {};
         for (const key of ["beforeTurnId", "limit"]) {
           if (Object.hasOwn(options, key)) pageOptions[key] = options[key];
@@ -94,30 +101,30 @@ function createColleagueBrowserConversations({
       async send(input) {
         if (input.attachmentIds?.length) throw failure("Colleague does not accept attachments.", "conversation_unsupported");
         return actions.execute({
-          actionId: "vibe64.colleague.message.send",
-          context: requestContext,
+          actionId: ACTION_COLLEAGUE_MESSAGE_SEND,
+          // The browser reads the delivery receipt, not the whole conversation.
+          context: { ...requestContext, colleagueReceiptOnly: true },
           input: {
             ...input.data,
             expectedConversationId: id,
             messageId: input.messageId,
             message: input.text
-          },
-          deps: { receiptOnly: true }
+          }
         });
       },
       async cancel() {
-        return actions.execute({ actionId: "vibe64.colleague.turn.stop", input: { expectedConversationId: id }, context: requestContext });
+        return actions.execute({ actionId: ACTION_COLLEAGUE_TURN_STOP, input: { expectedConversationId: id }, context: requestContext });
       },
       async select(input) {
         return actions.execute({
-          actionId: "vibe64.colleague.model.select",
+          actionId: ACTION_COLLEAGUE_MODEL_SELECT,
           input: { ...input, expectedConversationId: id },
           context: requestContext
         });
       },
       async inspectDelivery(input) {
         threads.assertCurrentConversation(state, id);
-        await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
+        await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
         const turn = state.record.conversationLog.find(item => !item.metadata?.runtime?.engine &&
           item.user?.messageId === input.messageId);
         if (turn) return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user", duplicate: true };
@@ -130,7 +137,7 @@ function createColleagueBrowserConversations({
        */
       async cancelDelivery(input) {
         threads.assertCurrentConversation(state, id);
-        await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
+        await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
         if (state.record.conversationLog.some(item => !item.metadata?.runtime?.engine && item.user?.messageId === input.messageId)) {
           return { ok: true, cancelled: false, messageId: input.messageId, status: "accepted" };
         }
@@ -162,7 +169,11 @@ function createColleagueBrowserConversations({
     };
   }
 
-  return Object.freeze({ open });
+  return Object.freeze({
+    open,
+    conversationDataSchema: colleagueConversationDataSchema,
+    conversationSelectionSchema: colleagueConversationSelectionSchema
+  });
 }
 
 export { createColleagueBrowserConversations };

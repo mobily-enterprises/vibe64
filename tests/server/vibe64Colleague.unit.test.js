@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createEventRuntime } from "@jskit-ai/kernel/server/runtime";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { PROJECT_OPERATION, registerVibe64ActionContext, vibe64ActionPolicy, WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { LEARNING_MODE_PROJECT_CODE, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, assertLearningModeAllowsProject, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
@@ -16,6 +17,8 @@ import { releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { nameColleague } from "../../packages/vibe64-colleague/src/server/colleagueName.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
+import { createColleagueUsageKnowledge } from "../../packages/vibe64-colleague/src/server/usageKnowledge.js";
+import { NO_HOST_PANES } from "../../packages/vibe64-colleague/src/shared/navigationPanes.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
 import { createWatchSources, stateWatchUpdate } from "../../packages/vibe64-colleague/src/server/watchSources.js";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions, learnInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
@@ -262,7 +265,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       return { ok: true };
     }
   }) }).filter(({ id }) => ["vibe64.sessions.inspect", "vibe64.sessions.conversation-log.read"].includes(id) || (assigning && id === "vibe64.sessions.agent-message.send")));
-  actions.register({ contributorId: "colleague-test", domain: "vibe64", actions: [operation, ...extras, ...extraActions, ...createColleagueActions({ colleague: service })]
+  actions.register({ contributorId: "colleague-test", domain: "vibe64", actions: [operation, ...extras, ...extraActions, ...createColleagueActions({ colleague: service, usage: createColleagueUsageKnowledge(), navigationPanes: NO_HOST_PANES })]
     .map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
   const send = (message, messageId = "user-1", extra = {}) => actions.execute({ actionId: "vibe64.colleague.message.send", input: {
     clientId: "browser-1", message, messageId, ...extra
@@ -1322,7 +1325,7 @@ test("a paused watch says it is paused without naming who paused it", async (t) 
 });
 
 test("Colleague's watch guidance gives only examples public itself registers", () => {
-  const sourcesRead = createColleagueActions({ colleague: {} }).find(action => action.id === "vibe64.colleague.watch.sources.read");
+  const sourcesRead = createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes: NO_HOST_PANES }).find(action => action.id === "vibe64.colleague.watch.sources.read");
   for (const text of [colleagueInstructions, learnInstructions, sourcesRead.extensions.assistant.description]) {
     assert.doesNotMatch(text, /deployment/u);
   }
@@ -2229,7 +2232,7 @@ test("Colleague teaches through lessons, navigation, guides and checks, and neve
   assert.match(colleagueInstructions, /Teach me leaves the step visible/u);
   assert.match(colleagueInstructions, /show a step with navigation\.open-learning attemptId\/stepId/u);
   // Every navigation action the teacher text names is a real Colleague action.
-  const actionIds = new Set(createColleagueActions({ colleague: {} }).map(action => action.id));
+  const actionIds = new Set(createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes: NO_HOST_PANES }).map(action => action.id));
   for (const [name] of colleagueInstructions.matchAll(/navigation\.[a-z-]+/gu)) {
     assert.ok(actionIds.has(`vibe64.colleague.${name}`), name);
   }
@@ -5411,7 +5414,7 @@ test("Colleague socket focus preserves the original action authorization and inp
   t.after(() => release?.());
   const f = await fixture(t, [], { watching: true });
   let connect;
-  registerColleagueFocus({ actions: f.actions, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
+  registerColleagueFocus({ actions: f.actions, logger: silentLogger, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
   const socket = new EventEmitter();
   socket.connected = true;
   release = connect({ socket, readRequest: async () => ({ ...f.context.requestMeta.request }) });
@@ -5428,7 +5431,7 @@ test("Colleague socket focus preserves the original action authorization and inp
 test("Colleague socket focus cannot return after disconnect during authorization", async t => {
   const f = await fixture(t, [], { watching: true });
   let connect;
-  registerColleagueFocus({ actions: f.actions, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
+  registerColleagueFocus({ actions: f.actions, logger: silentLogger, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
   const socket = new EventEmitter();
   socket.connected = true;
   const gate = Promise.withResolvers(), entered = Promise.withResolvers();
@@ -5483,6 +5486,7 @@ test("Colleague browser focus adapter owns its subscription independently of Col
   let released = 0;
   const outputs = await Vibe64ColleagueFocusFeature.setup({
     colleague: {},
+    logger: silentLogger,
     realtime: { onConnection(listener) { assert.equal(typeof listener, "function"); attached += 1; return () => { released += 1; }; } },
     actionCatalogue: { register() {} }
   }, {});
@@ -5855,19 +5859,19 @@ test("a lesson's teacher watches only its attempt's practice project, and the wa
 
 test("a composed host adds its own project views to navigation.open, each with its meaning", () => {
   const open = actions => actions.find(({ id }) => id === "vibe64.colleague.navigation.open");
-  const local = open(createColleagueActions({ colleague: {} }));
+  const local = open(createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes: NO_HOST_PANES }));
   assert.ok(!local.input.schema.structure.pane.enum.includes("extra-view"));
-  const composed = open(createColleagueActions({ colleague: {}, navigationPanes: [{ pane: "extra-view", meaning: "the host's extra view" }] }));
+  const composed = open(createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes: [{ pane: "extra-view", meaning: "the host's extra view" }] }));
   assert.equal(composed.input.schema.structure.pane.enum.at(-1), "extra-view");
   assert.match(composed.extensions.assistant.description, /extra-view means the host's extra view/u);
   assert.doesNotMatch(local.extensions.assistant.description, /extra-view/u);
   for (const navigationPanes of [[{ pane: "settings", meaning: "again" }], [{ pane: "Extra", meaning: "x" }], [{ pane: "extra-view" }]]) {
-    assert.throws(() => createColleagueActions({ colleague: {}, navigationPanes }), /new lowercase view name with a meaning/u);
+    assert.throws(() => createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes }), /new lowercase view name with a meaning/u);
   }
 });
 
 test("Colleague's own browser endpoints are not Colleague tools; its exposed actions are described", () => {
-  const actions = createColleagueActions({ colleague: {} });
+  const actions = createColleagueActions({ colleague: {}, usage: createColleagueUsageKnowledge(), navigationPanes: NO_HOST_PANES });
   for (const name of ["state.read", "conversation.start-fresh", "conversation.history.read", "conversation.history-page.read", "focus.update",
     "message.send", "turn.stop", "model.select", "navigation.acknowledge"]) {
     assert.equal(actions.find(({ id }) => id === `vibe64.colleague.${name}`).extensions.assistant.exclude, true, name);

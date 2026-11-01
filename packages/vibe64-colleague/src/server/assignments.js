@@ -1,12 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { readWatchedConversation, watchUpdate } from "./attention.js";
+import {
+  ACTION_COLLEAGUE_ASSIGNMENT_MESSAGE_SEND,
+  ACTION_COLLEAGUE_ASSIGNMENT_RELAY,
+  ACTION_COLLEAGUE_ASSIGNMENT_REVIEW_CREATE,
+  ACTION_COLLEAGUE_ASSIGNMENT_UPDATE
+} from "./colleagueActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationTranscript>} ConversationTranscript */
 
 const assignmentCommands = new Set([
-  "vibe64.colleague.assignment.message.send", "vibe64.colleague.assignment.review.create", "vibe64.colleague.assignment.update",
-  "vibe64.colleague.assignment.relay"
+  ACTION_COLLEAGUE_ASSIGNMENT_MESSAGE_SEND, ACTION_COLLEAGUE_ASSIGNMENT_REVIEW_CREATE, ACTION_COLLEAGUE_ASSIGNMENT_UPDATE,
+  ACTION_COLLEAGUE_ASSIGNMENT_RELAY
 ]);
 const openStatuses = new Set(["active", "waiting", "needs-user"]);
 const fail = (message) => Object.assign(new Error(message), { statusCode: 409, code: "vibe64_colleague_assignment_conflict" });
