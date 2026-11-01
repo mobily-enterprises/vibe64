@@ -117,7 +117,7 @@ function createClaudeConversationHost({
     disconnectedMessage: "Claude was interrupted when Vibe64 disconnected.",
     store: nativeStorage,
     preparation: {
-      account(entry) { return accounts.prepareAccount(entry); },
+      account: prepareAccount,
       context: contextFor,
       entry: prepareEntry,
       checkConfiguration,
@@ -149,8 +149,11 @@ function createClaudeConversationHost({
     accountStatus, connectionStatus, createProcess: options => createProcess({ ...options, logger }),
     command: claudeCommand, commandRunner, stopExecution, credentialHome, env });
   const { queries: accountQueries, queryFailure: accountQueryFailure } = accounts;
-  const publishTurnEvent = createClaudeConversationEvents({ projectService, storage: conversationStorage,
+  const turnEvents = createClaudeConversationEvents({ projectService, storage: conversationStorage,
     messagePolicy, owner: conversations, accountQueries, publishSessionChanged, logger });
+  // The owner calls back into its accounts and turn events, which are built from it.
+  function prepareAccount(entry) { return accounts.prepareAccount(entry); }
+  function publishTurnEvent(entry, event) { return turnEvents(entry, event); }
   const terminalAccess = createTerminalAccess(conversations, recordGitActor);
   async function contextFor(context) {
     const projectContext = captureProjectRequestContext();
@@ -299,8 +302,8 @@ function createClaudeConversationHost({
       };
       if (mode === "renewal") return {
         native: { owner: conversations, preparation: {
-          handover: (input, context) => prepareRenewalHandover(context, input),
-          seed: (input, context) => prepareRenewalSeed(context, input)
+          handover: (handoverInput, context) => prepareRenewalHandover(context, handoverInput),
+          seed: (seedInput, context) => prepareRenewalSeed(context, seedInput)
         } }
       };
       if (mode === "reconciliation") return {
@@ -323,17 +326,17 @@ function createClaudeConversationHost({
         const { runtime } = context;
         return {
           context, namespace: claudeTerminalNamespace(sessionId), publish: publishSessionChanged,
-          async readContextUsage({ context: current, input, signal }) {
+          async readContextUsage({ context: current, input: usageInput, signal }) {
             signal?.throwIfAborted();
             const entry = await conversations.acquire({ ...current, sessionId });
-            return conversations.readContextUsage(entry, { ...input, signal });
+            return conversations.readContextUsage(entry, { ...usageInput, signal });
           },
-          async compactContext({ context: current, input, signal }) {
+          async compactContext({ context: current, input: compactInput, signal }) {
             signal?.throwIfAborted();
             const entry = await conversations.acquire({ ...current, sessionId });
             // False: Claude is working, and summarises itself as it goes.
             if (conversations.snapshot(entry)?.active) return false;
-            return conversations.compactContext(entry, { ...input, signal });
+            return conversations.compactContext(entry, { ...compactInput, signal });
           },
           state: {
             async read(current, representation, nativeState) {

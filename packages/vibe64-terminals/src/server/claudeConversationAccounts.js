@@ -152,7 +152,7 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
       const modelProviderId = context.assistantSelection?.modelProviderId;
       const catalog = await accounts.capabilities(context, { modelProviderId });
       const model = catalog.modelProviders.filter((provider) => provider.connected && (!modelProviderId || provider.id === modelProviderId))
-        .flatMap((provider) => provider.models).find((model) => model.id === modelId);
+        .flatMap((provider) => provider.models).find((candidate) => candidate.id === modelId);
       const thinking = context.assistantSelection?.variantId || "";
       if (!model || (thinking && !model.variants.some((variant) => variant.id === thinking))) {
         throw error("The selected Claude helper model is unavailable. Choose another in AI Accounts.");
