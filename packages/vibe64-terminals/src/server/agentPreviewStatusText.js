@@ -58,13 +58,13 @@ function normalizeTimeoutMs(value = "") {
   return Number.isSafeInteger(number) && number > 0 ? number : DEFAULT_PREVIEW_WAIT_TIMEOUT_MS;
 }
 
-function previewReady(status = {}) {
+function previewReady(status) {
   const testOwnsPreview = ["starting", "running", "restoring"].includes(status?.previewTestRun?.state);
   return (status?.preview?.stoppedIntent !== true || testOwnsPreview) && status?.previewTarget?.available !== false &&
     Boolean(normalizeText(status?.previewTarget?.href));
 }
 
-function activeTerminalExited(status = {}, terminalSessionId = "") {
+function activeTerminalExited(status, terminalSessionId = "") {
   const terminal = status?.activeTerminal || {};
   if (terminalSessionId && normalizeText(terminal.id) && normalizeText(terminal.id) !== normalizeText(terminalSessionId)) {
     return false;
@@ -138,7 +138,7 @@ function previewInspectionUrl(status = {}, {
   return "";
 }
 
-function previewCurrentPage(previewState = {}, {
+function previewCurrentPage(previewState, {
   browserUrl = ""
 } = {}) {
   const route = normalizeText(previewState?.route);
@@ -154,7 +154,7 @@ function previewCurrentPage(previewState = {}, {
 }
 
 function previewTerminal(status = {}) {
-  const terminal = isRecord(status?.activeTerminal) ? status.activeTerminal : null;
+  const terminal = isRecord(status.activeTerminal) ? status.activeTerminal : null;
   if (!terminal) {
     return null;
   }
@@ -169,7 +169,7 @@ function previewTerminal(status = {}) {
 }
 
 function previewDiagnostics(status = {}) {
-  const metadata = isRecord(status?.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
+  const metadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
   const session = { sessionRoot: metadata.sessionRoot };
   return previewLastPath(session) ? {
     latest: previewLastPath(session),
@@ -262,7 +262,7 @@ function logsStdout(status = {}, {
   json = false,
   lines = DEFAULT_PREVIEW_LOG_LINES
 } = {}) {
-  const output = previewLogTail(status?.activeTerminal?.output, lines);
+  const output = previewLogTail(status.activeTerminal?.output, lines);
   const payload = {
     diagnostics: previewDiagnostics(status),
     outputTargetId: outputTargetIdFromStatus(status),

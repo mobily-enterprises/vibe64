@@ -554,7 +554,7 @@ function temporaryConversationInput(request) {
   };
 }
 
-function withoutVibe64User(input = {}) {
+function withoutVibe64User(input) {
   const { vibe64User: _ignored, ...safeInput } = input || {};
   void _ignored;
   return safeInput;

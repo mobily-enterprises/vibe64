@@ -109,7 +109,7 @@ function previewIdentityResult(payload = {}, selection = {}) {
       ok: true
     };
   }
-  const identityPayload = payload?.identity && typeof payload.identity === "object" && !Array.isArray(payload.identity)
+  const identityPayload = payload.identity && typeof payload.identity === "object" && !Array.isArray(payload.identity)
     ? payload.identity
     : payload;
   const selector = selection.subject?.selector || selection.selector || selection.subject?.identifiers?.[0] || {};

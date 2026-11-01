@@ -44,7 +44,7 @@ function responseError(message = "", code = "vibe64_agent_env_command_failed", {
 }
 
 function assertOperationResult(result = {}, fallback = "Vibe64 Env operation failed.") {
-  if (result?.ok === false) {
+  if (result.ok === false) {
     throw vibe64Error(
       normalizeText(result.error || result.errors?.[0]?.message) || fallback,
       normalizeText(result.code || result.errors?.[0]?.code) || "vibe64_agent_env_command_failed"
@@ -147,20 +147,20 @@ function recordIsLinked(record = null) {
 }
 
 function statusRecord(record = {}, scope = "", isUserValueRecord = () => false) {
-  const configured = record?.valuePresent === true;
+  const configured = record.valuePresent === true;
   const stored = isUserValueRecord(record) === true;
   const linked = recordIsLinked(record);
   return {
     configured,
-    editable: record?.editable === true,
-    key: normalizeText(record?.key),
-    ...(linked ? { label: normalizeText(record?.label), linked: true } : {}),
-    missing: record?.missing === true || record?.valuePresent !== true,
-    owner: normalizeText(record?.owner),
-    requiredFor: Array.isArray(record?.requiredFor) ? record.requiredFor.map(normalizeText).filter(Boolean) : [],
+    editable: record.editable === true,
+    key: normalizeText(record.key),
+    ...(linked ? { label: normalizeText(record.label), linked: true } : {}),
+    missing: record.missing === true || record.valuePresent !== true,
+    owner: normalizeText(record.owner),
+    requiredFor: Array.isArray(record.requiredFor) ? record.requiredFor.map(normalizeText).filter(Boolean) : [],
     scope,
-    secret: record?.secret === true,
-    source: normalizeText(record?.source),
+    secret: record.secret === true,
+    source: normalizeText(record.source),
     state: linked ? "linked" : configured ? "configured" : stored ? "empty" : "missing",
     stored
   };

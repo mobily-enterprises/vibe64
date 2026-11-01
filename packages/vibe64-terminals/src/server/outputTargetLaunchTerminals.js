@@ -77,7 +77,7 @@ function launchActionsFromOutput(output = "") {
   return [...actionMap.values()];
 }
 
-function launchActionsChanged(currentActions = [], nextActions = []) {
+function launchActionsChanged(currentActions, nextActions) {
   return JSON.stringify(currentActions || []) !== JSON.stringify(nextActions || []);
 }
 

@@ -6,7 +6,7 @@ import path from "node:path";
 const PREVIEW_LOG_FILE_NAME = "preview-log.jsonl";
 const PREVIEW_LAST_FILE_NAME = "preview-last.json";
 
-function previewDiagnosticsSessionRoot(session = {}) {
+function previewDiagnosticsSessionRoot(session) {
   return String(session?.sessionRoot || "").trim();
 }
 

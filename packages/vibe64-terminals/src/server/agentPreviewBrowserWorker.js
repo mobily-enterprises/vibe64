@@ -90,7 +90,7 @@ async function browserWorkerRequest({
   );
 }
 
-async function registeredProcessGroupIsAlive(entry = {}) {
+async function registeredProcessGroupIsAlive(entry) {
   const groupId = Number(entry?.groupId);
   const leader = await readProcessStart(groupId);
   if (

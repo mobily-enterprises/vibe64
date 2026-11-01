@@ -48,7 +48,7 @@ function canonicalDeclaredPath(value = "") {
     !declaredPath.split("/").some((part) => !part || part === "..");
 }
 
-function outputResultsRoot(session = {}) {
+function outputResultsRoot(session) {
   const sessionRoot = String(session?.sessionRoot || "").trim();
   if (!sessionRoot || !path.isAbsolute(sessionRoot)) {
     throw outputResultError(
@@ -231,7 +231,7 @@ function publicOutputRun(run = {}) {
   };
 }
 
-function normalizeDownload(download = {}) {
+function normalizeDownload(download) {
   const declaredPath = String(download?.path || "").trim();
   if (!canonicalDeclaredPath(declaredPath)) {
     throw outputResultError(

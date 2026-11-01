@@ -39,7 +39,7 @@ function parsesAsScript(source) {
   return checkedSources.get(hash);
 }
 
-async function readPreviewLocatorSource(session = {}, {
+async function readPreviewLocatorSource(session, {
   inspect = inspectVibe64ArchitectureInspection,
   read = readArchitecturePreviewLocator
 } = {}) {

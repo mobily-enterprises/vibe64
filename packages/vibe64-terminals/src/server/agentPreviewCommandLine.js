@@ -25,15 +25,15 @@ import {
 /** @typedef {typeof import("@local/vibe64-core/server/sessionUiSyncState").readSessionUiSyncStateForSession} ReadSessionUiSyncState */
 
 function logPreviewCommandResult(logger, result = {}, fields = {}) {
-  const ok = result?.ok !== false && Number(result?.exitCode || 0) === 0;
+  const ok = result.ok !== false && Number(result.exitCode || 0) === 0;
   return logOperationalEvent(logger, ok ? "info" : "warn", {
-    code: result?.code || "",
+    code: result.code || "",
     command: normalizeText(fields.command),
     component: "vibe64.agent_preview_command",
     cwd: normalizeText(fields.cwd),
     durationMs: Number(fields.durationMs || 0),
     event: "vibe64.agent_preview_command.finished",
-    exitCode: Number(result?.exitCode ?? (ok ? 0 : 1)),
+    exitCode: Number(result.exitCode ?? (ok ? 0 : 1)),
     ok,
     outputTail: ok ? "" : sanitizeLogText(result.stderr || result.error || "").slice(-1000),
     sessionId: normalizeText(fields.sessionId)

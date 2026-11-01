@@ -80,7 +80,7 @@ function createOutputTargetLaunchCoordination({
   async function ensureReadyLaunchPreviewProxy(context = {}, terminal = {}, {
     source = "ready"
   } = {}) {
-    const metadata = terminal?.metadata || {};
+    const metadata = terminal.metadata || {};
     const targetHref = String(
       normalizeOpenTarget(metadata.openTarget || {}).href || metadata.targetUrl || ""
     ).trim();
@@ -108,7 +108,7 @@ function createOutputTargetLaunchCoordination({
         error: vibe64SessionDebugError(error),
         sessionId: String(context.session?.sessionId || metadata.sessionId || ""),
         source,
-        terminalSessionId: String(terminal?.id || "")
+        terminalSessionId: String(terminal.id || "")
       }, {
         level: "warn"
       });

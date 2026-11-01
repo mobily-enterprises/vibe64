@@ -98,7 +98,7 @@ async function markLaunchTerminalReady({
   terminalSession = {},
   updateMetadata = () => null
 } = {}) {
-  const terminalSessionId = String(terminalSession?.id || "").trim();
+  const terminalSessionId = String(terminalSession.id || "").trim();
   const currentTerminal = readTerminalSession(terminalSessionId, {
     namespace
   });
