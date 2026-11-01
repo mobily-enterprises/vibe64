@@ -10,12 +10,38 @@ import { createAccountsRuntime } from "@local/vibe64-accounts/server/accountsRun
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { runWithPracticeProjectContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
-  routingAssignmentSelection, routingModelChoices, routingModelScore, routingRunsInChoices, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation,
-  assistantRoutingSetupFor, assistantMainAiChanged, ASSISTANT_PURPOSE_ROLES, MAIN_CHAT_PURPOSES,
-  assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingRequestForDisplay, goalStatusIsComplete,
-  assistantGoalIsActive, assistantWorkflowStateIsSupported, assistantWorkflowRole, assistantWorkflowMessageIds, assistantRoutingStatusLabel,
-  assistantRoutingRequestCanBeReplaced, assistantWorkflowUpgradeChanges } from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  assistantModePrompt,
+  assistantGoalManagementMessage,
+  assistantRoutingPrompt,
+  assistantWorkflowInstructions,
+  parseRoutingDecision,
+  assistantRoutingPreferences,
+  assistantRoutingAutomation,
+  assistantRoutingSetupFor,
+  assistantMainAiChanged,
+  ASSISTANT_PURPOSE_ROLES,
+  MAIN_CHAT_PURPOSES,
+  assistantRoutingGoalFromMetadata,
+  assistantRoutingRequestFromMetadata,
+  assistantRoutingRequestForDisplay,
+  goalStatusIsComplete,
+  assistantGoalIsActive,
+  assistantWorkflowStateIsSupported,
+  assistantWorkflowRole,
+  assistantWorkflowMessageIds,
+  assistantRoutingStatusLabel,
+  assistantRoutingRequestCanBeReplaced,
+  assistantWorkflowUpgradeChanges
+} from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  recommendedRoutingAssignments,
+  routingAssignmentSelection,
+  routingModelChoices,
+  routingModelScore,
+  routingRunsInChoices,
+  resolveAssistantPurpose
+} from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
 import { sameVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { assistantRoutingRequestForMessage } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
@@ -696,7 +722,7 @@ test("a workspace Zen model is eligible for chat, Router and bounded Helpers in 
 test("subscriptions run only in their own tool; key models list every tool that offers them", () => {
   const sources = (code) => readdirSync(path.resolve("packages"), { recursive: true })
     .filter((file) => /\/src\/.*\.js$/u.test(`/${file}`) && readFileSync(path.resolve("packages", file), "utf8").includes(`"${code}"`))
-    .filter((file) => !file.endsWith("shared/assistantRouting.js"));
+    .filter((file) => !file.endsWith("shared/assistantRoutingAssignments.js"));
   assert.deepEqual(sources("claude_subscription"), ["vibe64-terminals/src/server/claudeConversationAccounts.js"]);
   assert.deepEqual(sources("codex_subscription"), ["vibe64-runtime/src/server/codexAppServerProvider.js"]);
   const choice = (engineId, modelProviderId, modelId, endpointCode) => ({ engineId, modelProviderId, modelId, endpointCode });

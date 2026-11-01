@@ -1257,6 +1257,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `tests/server/vibe64WorkPlanClient.test.js`
 - `tests/server/vibe64PromptHintsApi.unit.test.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
+- `packages/vibe64-runtime/src/shared/assistantRoutingAssignments.js`
 - `packages/vibe64-runtime/src/server/codexAppServerProcess.js`
 - `tests/server/codexHistoryAdapter.unit.test.js`
 - `tests/server/codexProviderSwitch.test.js`

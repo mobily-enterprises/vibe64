@@ -8,7 +8,7 @@ import { createAssistantRouting } from "../../packages/vibe64-terminals/src/serv
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileRequest } from "@local/vibe64-runtime/shared";
-import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
+import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
 import { sessionAgentManagerDefaults } from "./sessionAgentManagerDefaults.js";
 
 async function publishPlanFixture(context, text) {

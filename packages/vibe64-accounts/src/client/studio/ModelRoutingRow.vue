@@ -41,7 +41,8 @@ export { defaultRunsIn, routeKey, routingSelectionText, TOOL_MARKS, toolLabel };
 import { computed, ref } from "vue";
 import { mdiChevronDown } from "@mdi/js";
 import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
-import { assistantModeLabel, routingRunsInChoices } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { routingRunsInChoices } from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
 import AiPersonalUse from "./AiPersonalUse.vue";
 
 // One role of an AI setup: its model and thinking, a quiet "Same as" line for a

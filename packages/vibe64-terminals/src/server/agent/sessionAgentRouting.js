@@ -1,6 +1,19 @@
-import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, ASSISTANT_SETUP_ROLES, assistantRoutingSetupValues, assistantSetupRoleValue,
-  isAssistantRoutingOwner, needsMainChatApproval, recommendedRoutingAssignments, routingAssignmentSelection, routingModelChoices,
-  resolveAssistantPurpose, hasConnectedAssistantModels } from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  ASSISTANT_PURPOSE_ROLES,
+  ASSISTANT_ROLE_PURPOSES,
+  ASSISTANT_SETUP_ROLES,
+  assistantRoutingSetupValues,
+  assistantSetupRoleValue,
+  isAssistantRoutingOwner,
+  needsMainChatApproval
+} from "@local/vibe64-runtime/shared/assistantRouting";
+import {
+  recommendedRoutingAssignments,
+  routingAssignmentSelection,
+  routingModelChoices,
+  resolveAssistantPurpose,
+  hasConnectedAssistantModels
+} from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
 import {
   canUseVibe64Assistant,
   VIBE64_AGENT_PROVIDERS,

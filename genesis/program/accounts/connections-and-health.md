@@ -56,6 +56,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/server/upgradeValues.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20260926-assistant-role-names.js`
 - `packages/vibe64-runtime/src/shared/assistantRouting.js`
+- `packages/vibe64-runtime/src/shared/assistantRoutingAssignments.js`
 - `packages/vibe64-runtime/src/shared/assistantRoutingScores.json`
 - `packages/vibe64-runtime/src/shared/assistantLabels.js`
 - `packages/vibe64-accounts/src/client/composables/useModelRouting.js`
