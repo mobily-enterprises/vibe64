@@ -2011,7 +2011,8 @@ test("a pre-existing normal training-<hex> project still opens and new projects 
 test("Learn opens only the learner's practice projects and Develop refuses them, after practice admission", async (t) => {
   const { __testables: { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE }, registerLearningModeReader } =
     await import("../../packages/vibe64-core/src/server/learningMode.js");
-  t.after(() => registerLearningModeReader(null));
+  let releaseMode = () => {};
+  t.after(() => releaseMode());
   const learn = { code: "vibe64_learning_mode_project", statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE };
   const develop = { code: "vibe64_learning_mode_project", statusCode: 403, message: PRACTICE_PROJECT_MODE_MESSAGE };
   for (const host of ["local", "hosted"]) {
@@ -2030,7 +2031,7 @@ test("Learn opens only the learner's practice projects and Develop refuses them,
       const open = (target, request = { headers: {} }) => resolveProjectRequestContext({ projectContext: context,
         request: { params: { slug: target }, vibe64User: learner, ...request } });
       let mode = { on: false, currentAttemptId: "", lessonCode: "", practiceSlug: slug };
-      registerLearningModeReader(() => mode);
+      releaseMode = registerLearningModeReader(() => mode);
       await assert.rejects(open(slug), develop, `${host}: Develop refuses the practice project`);
       assert.equal((await open(own)).slug, own, `${host}: Develop opens the learner's own project`);
       assert.equal((await open(slug, {})).slug, slug, `${host}: work without a person is never limited`);
@@ -2042,10 +2043,10 @@ test("Learn opens only the learner's practice projects and Develop refuses them,
         await assert.rejects(open(own), learn, `${host}: Learn refuses the learner's own project`);
         assert.equal((await open(own, {})).slug, own, `${host}: internal work still opens it`);
       }
-      registerLearningModeReader(() => { throw new Error("unreadable"); });
+      releaseMode = registerLearningModeReader(() => { throw new Error("unreadable"); });
       await assert.rejects(open(slug), develop, `${host}: a reader failure counts as Develop`);
       assert.equal((await open(own)).slug, own);
-      registerLearningModeReader(null);
+      releaseMode();
       assert.equal((await open(slug)).slug, slug, `${host}: without Learning nothing is limited`);
     });
   }

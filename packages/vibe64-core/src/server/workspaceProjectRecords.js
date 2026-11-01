@@ -10,10 +10,10 @@ import { updateProjectRecordMetadata } from "./projectRecordMetadata.js";
 import { PROJECT_REPOSITORY_MODE_MANAGED_GIT, projectRepositoryView } from "./projectRepository.js";
 import { normalizeProjectSlug, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR, resolveProjectRecordPath } from "./projectState.js";
 import {
-  DEFAULT_HOSTED_REPOSITORY_BRANCH,
+  DEFAULT_CATALOGUE_REPOSITORY_BRANCH,
   assertCatalogueSlugAllowed,
   assertDirectoryUsable,
-  assertHostedRepositoryMetadata,
+  assertCatalogueRepositoryMetadata,
   normalizeProjectMetadata,
   practiceOwnershipDiffers,
   projectCatalogUnavailableError,
@@ -92,8 +92,8 @@ function createWorkspaceProjectRecords({
       projectSessionSourceRoot: paths.projectSessionSourceRootForTarget(projectPath),
       projectsRoot
     }).catch((error) => {
-      // A catalogue entry with a retired training marker (an old hosted
-      // practice project awaiting the scrap upgrade) is not a project of the
+      // A catalogue entry with a retired training marker (an old practice
+      // project awaiting the scrap upgrade) is not a project of the
       // catalogue; it never takes the other projects' listing down with it.
       if (error?.code === "vibe64_project_training_invalid") {
         return learningProjects.skipLearningSpaceEntry(path.basename(projectPath), "catalogue entry with an invalid training marker");
@@ -197,8 +197,8 @@ function createWorkspaceProjectRecords({
     if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot)) {
       throw projectSlugExistsError();
     }
-    const metadata = assertHostedRepositoryMetadata(projectMetadataFromInput(input, {
-      defaultRepositoryBranch: DEFAULT_HOSTED_REPOSITORY_BRANCH,
+    const metadata = assertCatalogueRepositoryMetadata(projectMetadataFromInput(input, {
+      defaultRepositoryBranch: DEFAULT_CATALOGUE_REPOSITORY_BRANCH,
       defaultRepositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
     }));
     if (scope && projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
@@ -303,7 +303,7 @@ function createWorkspaceProjectRecords({
     const projectContextRoot = paths.projectContextRootForSlug(slug);
     await assertDirectoryUsable(projectContextRoot);
     await updateWorkspaceProjectState({ slug }, async (currentMetadata) => {
-      const metadata = assertHostedRepositoryMetadata({
+      const metadata = assertCatalogueRepositoryMetadata({
         ...currentMetadata,
         ...projectMetadataFromInput({
           ...input,
@@ -328,7 +328,7 @@ function createWorkspaceProjectRecords({
         await learningProjects.practiceDirectoryExists(directory);
       }
     }
-    const metadata = assertHostedRepositoryMetadata(await readProjectMetadata({
+    const metadata = assertCatalogueRepositoryMetadata(await readProjectMetadata({
       projectRecordPath: paths.projectRecordPathForSlug(slug)
     }));
     if (scope && (Object.keys(metadata).length || await pathExists(scope.targetRoot) || await pathExists(scope.projectRuntimeRoot)) &&
@@ -366,7 +366,7 @@ function createWorkspaceProjectRecords({
       slug
     };
     const metadata = await updateProjectRecordMetadata(state.projectRecordPath, async (current) => {
-      const currentMetadata = assertHostedRepositoryMetadata(normalizeProjectMetadata(current));
+      const currentMetadata = assertCatalogueRepositoryMetadata(normalizeProjectMetadata(current));
       if (!Object.keys(currentMetadata).length) {
         throw projectStateMissingError(state.slug);
       }
@@ -377,7 +377,7 @@ function createWorkspaceProjectRecords({
       const training = currentMetadata.training
         ? normalizeProjectTraining(currentMetadata.training)
         : undefined;
-      const nextMetadata = assertHostedRepositoryMetadata(normalizeProjectMetadata(await update(currentMetadata, {
+      const nextMetadata = assertCatalogueRepositoryMetadata(normalizeProjectMetadata(await update(currentMetadata, {
         ...state,
         metadata: currentMetadata
       })));

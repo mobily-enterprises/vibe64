@@ -1977,8 +1977,7 @@ test("Colleague opens only the projects of the person's mode and relays the exac
   const reads = [];
   const practiceSlug = "alpha";
   let mode = { on: true, currentAttemptId: "12345678-1234-4234-8234-123456789abc", lessonCode: "L1", practiceSlug };
-  registerLearningModeReader(async ({ actor }) => { reads.push(actor); return mode; });
-  t.after(() => registerLearningModeReader(null));
+  t.after(registerLearningModeReader(async ({ actor }) => { reads.push(actor); return mode; }));
   await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
   const context = { ...f.context, colleague: { clientId: "tab-a" } };
   const execute = (input) => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
@@ -5504,8 +5503,7 @@ test("Colleague browser focus adapter owns its subscription independently of Col
 const LESSON_ATTEMPT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 function learnModeFixture(t) {
   const learning = { mode: { on: false, currentAttemptId: "", lessonCode: "", practiceSlug: "" } };
-  registerLearningModeReader(async () => learning.mode);
-  t.after(() => registerLearningModeReader(null));
+  t.after(registerLearningModeReader(async () => learning.mode));
   learning.develop = () => { learning.mode = { ...learning.mode, on: false }; };
   learning.learn = (currentAttemptId = LESSON_ATTEMPT) => { learning.mode = { ...learning.mode, on: true, currentAttemptId }; };
   return learning;

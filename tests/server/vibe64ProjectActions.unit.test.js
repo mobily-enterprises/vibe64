@@ -285,7 +285,8 @@ test("repository policy changes carry only their public setting on the existing 
 });
 
 test("Learn mode creates no projects and selects only the practice project; Develop never selects it", async (t) => {
-  t.after(() => registerLearningModeReader(null));
+  let releaseMode = () => {};
+  t.after(() => releaseMode());
   const calls = [];
   const project = createService({ logger: silentLogger, projectContext: {
     createWorkspaceProject: input => { calls.push(["create", input.name]); return { ok: true }; },
@@ -295,7 +296,7 @@ test("Learn mode creates no projects and selects only the practice project; Deve
   const select = featureAction(project, ACTION_SELECT_PROJECT);
   const practiceSlug = "training-12345678123442348234123456789abc";
   let mode = { on: true, currentAttemptId: "12345678-1234-4234-8234-123456789abc", lessonCode: "INTRO-01", practiceSlug };
-  registerLearningModeReader(() => mode);
+  releaseMode = registerLearningModeReader(() => mode);
   const learn = { code: "vibe64_learning_mode_project", statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE };
   await assert.rejects(create.execute({ name: "shop" }), learn);
   await assert.rejects(select.execute({ slug: "shop" }), learn);

@@ -157,11 +157,11 @@ test("a standalone local owner runs a project owner operation, and nobody else d
 
 test("Colleague opens only the projects its thread allows, and only once team AI allows the person, with today's messages", async (t) => {
   let mode = { on: false, currentAttemptId: "", lessonCode: "", practiceSlug: PRACTICE_SLUG };
-  registerLearningModeReader(() => mode);
+  const releaseMode = registerLearningModeReader(() => mode);
   let teamAiReady = true;
   const releaseReadiness = registerTeamAiReadiness(async () => teamAiReady);
   t.after(() => {
-    registerLearningModeReader(null);
+    releaseMode();
     releaseReadiness();
   });
   const definition = operation("vibe64.test.project", PROJECT_OPERATION);

@@ -405,8 +405,9 @@ test("Colleague acting for a learner opens only the projects of their mode and r
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-colleague-mode-"));
   configureStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), explicitSystemRoot: path.join(root, "system"),
     explicitManagedSourceRoot: path.join(root, "projects"), env: {}, home: root, learningSpace: { root: path.join(root, "projects", ".learning") } });
+  let releaseMode = () => {};
   t.after(async () => {
-    registerLearningModeReader(null);
+    releaseMode();
     configureStudioProjectContext();
     await rm(root, { force: true, recursive: true });
   });
@@ -419,7 +420,7 @@ test("Colleague acting for a learner opens only the projects of their mode and r
   const open = projectSlug => underActionPolicy(definition).execute({ projectSlug }, { colleague: {}, requestMeta: { request: { vibe64User: user } } });
   const reads = [];
   let mode = { on: false, currentAttemptId: "", lessonCode: "", practiceSlug };
-  registerLearningModeReader(({ actor }) => { reads.push(actor); return mode; });
+  releaseMode = registerLearningModeReader(({ actor }) => { reads.push(actor); return mode; });
   await assert.rejects(open(practiceSlug), { code: "vibe64_learning_mode_project", statusCode: 403, message: PRACTICE_PROJECT_MODE_MESSAGE });
   assert.deepEqual(reads.at(-1), user, "the mode is the acting person's");
   mode = { ...mode, on: true, currentAttemptId: "12345678-1234-4234-8234-123456789abc" };

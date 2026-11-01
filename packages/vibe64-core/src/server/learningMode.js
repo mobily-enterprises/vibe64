@@ -29,19 +29,19 @@ let learningModeReadFailure = doNothing;
 const requestModes = new WeakMap();
 
 /**
- * Returns the unregister function. null clears the reader.
- * @param {Function | null} reader
+ * Returns the unregister function, which clears the reader it registered.
+ * @param {Function} reader
  * @param {object} [options]
  * @param {(error: unknown) => void} [options.onReadFailure]
  */
 // readable-check: allow module-registry - cycle: vibe64.training requires vibe64.project, whose request gate reads it
 function registerLearningModeReader(reader, options = {}) {
   const { onReadFailure = doNothing } = options;
-  if (reader !== null && typeof reader !== "function") throw new TypeError("Learning mode needs its Training reader.");
+  if (typeof reader !== "function") throw new TypeError("Learning mode needs its Training reader.");
   learningModeReader = reader;
   learningModeReadFailure = onReadFailure;
   return () => {
-    if (reader && learningModeReader === reader) {
+    if (learningModeReader === reader) {
       learningModeReader = null;
       learningModeReadFailure = doNothing;
     }

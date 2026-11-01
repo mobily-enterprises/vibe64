@@ -34,7 +34,7 @@ import { VIBE64_PROJECTS_ROOT_ENV, resolveDefaultProjectsRoot } from "./studioRo
 
 // Project records and their saved metadata: slugs, context and runtime
 // roots, metadata files and the GitHub repository read from Git remotes.
-const DEFAULT_HOSTED_REPOSITORY_BRANCH = "main";
+const DEFAULT_CATALOGUE_REPOSITORY_BRANCH = "main";
 
 function normalizeRoot(value, fallbackRoot = process.cwd()) {
   return path.resolve(String(value || "").trim() || fallbackRoot);
@@ -90,12 +90,12 @@ function projectStateMissingError(slug = "") {
   return error;
 }
 
-function assertHostedRepositoryMetadata(metadata = {}) {
+function assertCatalogueRepositoryMetadata(metadata = {}) {
   if (projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
     return metadata;
   }
   const error = new Error(
-    "Hosted projects cannot use a project namespace as local source. Correct this project record explicitly before opening it."
+    "Catalogue projects cannot use a project namespace as local source. Correct this project record explicitly before opening it."
   );
   error.code = "vibe64_hosted_local_source_unsupported";
   error.statusCode = 409;
@@ -447,7 +447,7 @@ async function workspaceProjectRecordForPath({
   projectsRoot = ""
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
-  const metadata = assertHostedRepositoryMetadata(await readProjectMetadata({
+  const metadata = assertCatalogueRepositoryMetadata(await readProjectMetadata({
     projectRecordPath
   }));
   const runtime = await readProjectRuntimeOpenState({
@@ -614,8 +614,8 @@ function githubRemoteRecord(owner = "", repository = "") {
 export {
   assertCatalogueSlugAllowed,
   assertDirectoryUsable,
-  assertHostedRepositoryMetadata,
-  DEFAULT_HOSTED_REPOSITORY_BRANCH,
+  assertCatalogueRepositoryMetadata,
+  DEFAULT_CATALOGUE_REPOSITORY_BRANCH,
   gitCommandOutput,
   githubRemoteRecord,
   githubRepositoryFromGitRemotes,

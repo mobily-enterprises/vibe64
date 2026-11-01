@@ -71,7 +71,7 @@ function isTrustedStudioWebSocketRequest(request = {}) {
   if (request.headers?.origin !== undefined) {
     return originMatchesRequest(request) && isLocalStudioRequest(request);
   }
-  // Local command-line clients may omit Origin; hosted cookie sessions may not.
+  // Local command-line clients may omit Origin; signed-in cookie sessions may not.
   return !hasAuthenticatedVibe64User(request) && isLocalStudioRequest(request);
 }
 

@@ -35,7 +35,7 @@ function resolveDefaultLocalEditorSystemRoot(home = os.homedir(), platform = pro
 }
 
 /**
- * The hosted project catalogue lives in a folder in the service account's home.
+ * The project catalogue lives in a folder in the service account's home.
  */
 function resolveDefaultProjectsRoot(home = os.homedir()) {
   return normalizeRoot(path.join(home || process.cwd(), VIBE64_DEFAULT_PROJECTS_DIR));
