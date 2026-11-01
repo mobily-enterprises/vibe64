@@ -143,7 +143,8 @@ const Vibe64SessionsFeature = defineFeature({
    */
   async shutdown({ terminals }, { outputs }) {
     const sessions = outputs.sessions;
-    slotReleases.get(sessions)();
+    // readable-check: allow optional-call - optional operation: sessions outputs that setup did not build registered no reader
+    slotReleases.get(sessions)?.();
     const operations = [
       Promise.resolve(sessions.closeSessionRenewalWork()),
       Promise.resolve(sessions.closeSessionPresence()),
