@@ -19,6 +19,7 @@ users without turning that convenience into a production sign-in mechanism.
 - `packages/vibe64-genesis/src/server/outputs.js`
 - `packages/vibe64-core/src/server/previewAuth.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/outputTargetLaunchStatus.js`
 - `packages/vibe64-terminals/src/server/launchPreviewAuth.js`
 - `src/components/studio/PreviewIdentitySettings.vue`
 - `packages/vibe64-project/src/shared/onboardingRequest.js`

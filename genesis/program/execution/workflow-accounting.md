@@ -22,6 +22,8 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
 - `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/outputTargetLaunchStart.js`
+- `packages/vibe64-terminals/src/server/outputTargetLaunchCoordination.js`
 - `packages/vibe64-terminals/src/server/outputTargetMetadata.js`
 - `packages/vibe64-terminals/src/server/launchPreviewStatus.js`
 - `packages/vibe64-terminals/src/server/previewDiagnosticFiles.js`

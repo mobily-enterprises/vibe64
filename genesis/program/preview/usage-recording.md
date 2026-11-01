@@ -32,6 +32,9 @@ follows it on every pane.
 - `packages/vibe64-usage-recording/src/client/Vibe64UsageRecordingSummary.vue`
 - `packages/vibe64-usage-recording/src/client/usageRecordingText.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/outputTargetLaunchStart.js`
+- `packages/vibe64-terminals/src/server/outputTargetLaunchStatus.js`
+- `packages/vibe64-terminals/src/server/outputTargetTerminalSessions.js`
 - `packages/vibe64-terminals/src/server/launchPreviewStatus.js`
 - `packages/vibe64-terminals/src/server/launchPreviewReadiness.js`
 - `packages/vibe64-terminals/src/server/launchPreviewProxy.js`

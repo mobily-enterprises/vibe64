@@ -966,7 +966,7 @@ owner's approval notice and project message labels read summaries; the
 session's own readers keep the full change. A change reaches the pages of the
 project its publisher names, or else of the request's project. Work that
 outlives its request names its session's project itself: Preview from the
-project whose runtime holds the session (`outputTargetTerminal.js`), a browser
+project whose runtime holds the session (`outputTargetLaunchStart.js`), a browser
 test from the project that registered the session's assistant commands
 (`agentPreviewCommand.js`). A change without a project reaches no page. The summary is a second publication of type `entity.summary`, so
 server listeners of session changes match `entity.changed` and see each change
