@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { canonicalJson } from "./content.js";
 import { compareChoiceAnswer, pinnedLessonKey } from "./installedContent.js";
@@ -8,6 +8,7 @@ import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { readLearningFact } from "./learningFacts.js";
 import { availableStepIds } from "./lessonAvailability.js";
 import { trainingFailure } from "./errors.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 /** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
@@ -20,7 +21,6 @@ import { trainingFailure } from "./errors.js";
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const requestPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u;
-const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function stepFailure(message, code = "VIBE64_TRAINING_STEP_INVALID", statusCode = 409) {
   return trainingFailure(code, message, { statusCode });
@@ -250,7 +250,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       checked = await runCodeCheckObservation({ checks, context, actor, attemptId,
         sessionId: target.sessionId, observationId, checkId: check.id, stepId });
       evidence = { checkId: check.id, observationId,
-        ...(Array.isArray(checked.files) && checked.files.length ? { filesHash: sha256(canonicalJson(checked.files)) } : {}) };
+        ...(Array.isArray(checked.files) && checked.files.length ? { filesHash: sha256Hex(canonicalJson(checked.files)) } : {}) };
     } else {
       if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
       const receipt = entry.receipts.find(value => value.stepId === stepId && value.checkId === check.id);
@@ -286,7 +286,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
         selected.some(value => !Number.isSafeInteger(value) || value < 0 || value >= options)) {
       throw stepFailure("Choose one or more of this question's options.", "ACTION_VALIDATION_FAILED", 400);
     }
-    // readable-check: allow method-probe - optional operation: content without answer comparison answers CHECK_UNDECLARED, which tests assert
+    // readable-check: allow method-probe - test asserts error: content without readChoiceAnswer answers VIBE64_TRAINING_CHECK_UNDECLARED
     if (typeof content.readChoiceAnswer !== "function") {
       throw stepFailure("This installation cannot compare the answer for this step.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
@@ -349,7 +349,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       return { ok: true, stepId, outcome: "not-yet-passed", recorded: false, replayed: false,
         reason: "No changes yet. Change your practice project first, then check your work again." };
     }
-    const evidenceHash = sha256(canonicalJson({ lessonHash: lesson.hash, stepId, rubric: step.check.rubric, evidence: read.evidence }));
+    const evidenceHash = sha256Hex(canonicalJson({ lessonHash: lesson.hash, stepId, rubric: step.check.rubric, evidence: read.evidence }));
     const same = entry.results.findLast(value => value.stepId === stepId && value.kind === "review" && value.evidence.evidenceHash === evidenceHash);
     if (same) return replayed(same, stepId);
     const verdict = await reviewer.review({ actor, lesson, step, evidence: read.evidence, context });

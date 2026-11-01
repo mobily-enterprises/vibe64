@@ -69,7 +69,7 @@ function createLearnerCodeLedgers({ activeAttemptForProject, createNamespace, lo
     });
   }
 
-  return { ledgerPath, readCodeLedger, updateCodeLedger, withLedgerLock };
+  return Object.freeze({ ledgerPath, readCodeLedger, updateCodeLedger, withLedgerLock });
 }
 
 export { createLearnerCodeLedgers };

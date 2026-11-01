@@ -1,12 +1,11 @@
-import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { lessonHasSteps, topicSchema, visualSchema, validateContent, validateLesson } from "./contentSchemas.js";
 import { declaredLearningVocabulary, trainingGuideRequest } from "../shared/learningVocabulary.js";
 import { TRAINING_BEAT_CHECKS, beatNeedsPracticeProject, splitStepBeats } from "../shared/beats.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 const excludedExerciseEntries = new Set([".git", "node_modules", ".genesis"]);
-const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const validId = value => /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u.test(value);
 
 function uniqueIds(items, key, label) {
@@ -62,7 +61,7 @@ async function createTopicReader(directory) {
     const file = await read(reference, base);
     return { ...file, value: JSON.parse(file.bytes.toString("utf8")) };
   }
-  return { root, resolve, read, json };
+  return Object.freeze({ root, resolve, read, json });
 }
 
 function checkPrerequisiteCycles(lessons) {
@@ -209,7 +208,7 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
   const base = path.dirname(descriptor.filename);
   const files = new Map();
   function include(file) {
-    recordBundleFile(files, { path: file.relative, sha256: hash(file.bytes), bytes: file.bytes.length });
+    recordBundleFile(files, { path: file.relative, sha256: sha256Hex(file.bytes), bytes: file.bytes.length });
     if (files.size > 512 || [...files.values()].reduce((total, item) => total + item.bytes, 0) > 32 * 1024 * 1024) throw new Error(`Lesson ${entry.code} exceeds bundle limits.`);
   }
   include(descriptor);
@@ -327,7 +326,7 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
     }
   }
   const manifest = { schemaVersion: 1, code: lesson.code, files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) };
-  return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative, served, ...(problem ? { problem } : {}) };
+  return { lesson, manifest, hash: sha256Hex(canonicalJson(manifest)), descriptorPath: descriptor.relative, served, ...(problem ? { problem } : {}) };
 }
 
 // authoring refuses retired v1 lessons: author commands never produce them,
@@ -380,11 +379,11 @@ async function validateTopic(directory, { authoring = false, installed = false }
       throw new Error(`Invalid create/continue sequence: ${lesson.code}.`);
     }
   }
-  const topicFiles = [packageFile, outline].map(file => ({ path: file.relative, sha256: hash(file.bytes), bytes: file.bytes.length }));
+  const topicFiles = [packageFile, outline].map(file => ({ path: file.relative, sha256: sha256Hex(file.bytes), bytes: file.bytes.length }));
   const topicManifest = { schemaVersion: 1, topic, release: packageFile.value.version, files: topicFiles,
     lessons: bundles.map(({ lesson, hash, status, required }) => ({ code: lesson.code, hash, status, required })) };
   bundleFiles([topicManifest, ...bundles.map(bundle => bundle.manifest)]);
-  return { topic, release: packageFile.value.version, bundles, topicManifest, topicHash: hash(canonicalJson(topicManifest)) };
+  return { topic, release: packageFile.value.version, bundles, topicManifest, topicHash: sha256Hex(canonicalJson(topicManifest)) };
 }
 
 export { bundleFiles, canonicalJson, validateTopic };

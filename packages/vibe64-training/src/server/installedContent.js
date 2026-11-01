@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
@@ -6,6 +5,7 @@ import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { lessonHasSteps, validateContent, validateLesson } from "./contentSchemas.js";
 import { splitStepBeats } from "../shared/beats.js";
 import { declaredLearningVocabulary } from "../shared/learningVocabulary.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
@@ -20,7 +20,6 @@ const pinSchema = createSchema({
   commit: { ...text, maxLength: 40 },
   topicHash: { ...text, maxLength: 64 }
 });
-const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 // A choice answer is read only by the server comparator. Every other
 // projection of a lesson descriptor goes through this.
@@ -167,7 +166,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       }
       const packageBytes = await boundedFile(path.join(filesRoot, "package.json"), 1024 * 1024);
       const packageFile = files.find(file => file.path === "package.json");
-      if (packageBytes.length !== packageFile.bytes || sha256(packageBytes) !== packageFile.sha256) {
+      if (packageBytes.length !== packageFile.bytes || sha256Hex(packageBytes) !== packageFile.sha256) {
         throw new Error("Installed source changed during reading.");
       }
       const metadata = JSON.parse(packageBytes.toString("utf8"));
@@ -192,7 +191,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     const record = manifest.files.find(file => file.path === relative);
     if (!record) throw new Error("Lesson requested an unrecorded installed file.");
     const bytes = await boundedFile(filename, 1024 * 1024);
-    if (bytes.length !== record.bytes || sha256(bytes) !== record.sha256) {
+    if (bytes.length !== record.bytes || sha256Hex(bytes) !== record.sha256) {
       throw new Error("Installed lesson changed while reading. Ask the owner to reinstall the verified snapshot.");
     }
     return { path: relative, bytes };
@@ -216,7 +215,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
         { topicId, commit, topicHash });
       const bundle = JSON.parse((await boundedFile(path.join(snapshotRoot, "bundle.json"), 32 * 1024 * 1024)).toString("utf8"));
       const topicManifest = bundle.topicManifest;
-      if (!topicManifest || sha256(canonicalJson(topicManifest)) !== topicHash ||
+      if (!topicManifest || sha256Hex(canonicalJson(topicManifest)) !== topicHash ||
           topicManifest.topic.topicId !== topicId || topicManifest.release !== pin.release) {
         throw new Error("Installed topic manifest differs from the trusted identity.");
       }
@@ -224,7 +223,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       const descriptor = topicManifest.topic.lessons.find(item => item.code === lessonCode);
       const selected = bundle.lessons.find(item => item.code === lessonCode);
       if (!entry || !descriptor || !selected || entry.hash !== lessonHash ||
-          sha256(canonicalJson(selected.manifest)) !== lessonHash) {
+          sha256Hex(canonicalJson(selected.manifest)) !== lessonHash) {
         throw new Error("Installed lesson manifest differs from the trusted content hash.");
       }
       if (entry.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
@@ -392,7 +391,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     return { ...identity, files };
   }
 
-  return { readTopic, readLesson, readAdmissionIdentity, readVisual, readCheck, readExercise, readChoiceAnswer };
+  return Object.freeze({ readTopic, readLesson, readAdmissionIdentity, readVisual, readCheck, readExercise, readChoiceAnswer });
 }
 
 // The content key the readers below take for an attempt's pinned lesson.

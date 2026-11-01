@@ -31,8 +31,8 @@ function beatFailure(message) {
 // whose page activity completes it. A topic's declared names are trusted by
 // name; the host that registers them owns their meaning.
 const doable = (target, vocabulary) => Boolean(vocabulary.activity(target) || vocabulary.place(target)?.event ||
-  trainingPlaceShown(target, {}, vocabulary) !== null || vocabulary.declared?.(target));
-const knownPlace = (target, vocabulary) => Boolean(vocabulary.place(target) || vocabulary.declaredPlace?.(target));
+  trainingPlaceShown(target, {}, vocabulary) !== null || vocabulary.declared(target));
+const knownPlace = (target, vocabulary) => Boolean(vocabulary.place(target) || vocabulary.declaredPlace(target));
 
 function parseBeat(source, number, vocabulary) {
   const match = line.exec(source);
@@ -99,7 +99,7 @@ function beatNeedsPracticeProject(beat, vocabulary = learningVocabulary) {
   const place = vocabulary.place(beatPlace(beat, vocabulary));
   if (place) return place.scope === "project";
   // An activity without a place (agent-finished) happens in a practice project.
-  return !vocabulary.declared?.(beat.target);
+  return !vocabulary.declared(beat.target);
 }
 
 export { TRAINING_BEAT_CHECKS, beatNeedsPracticeProject, beatPlace, splitStepBeats };

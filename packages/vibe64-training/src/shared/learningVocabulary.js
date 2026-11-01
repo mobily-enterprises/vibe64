@@ -112,10 +112,21 @@ function defineActivity(value) {
   return Object.freeze({ id: value.id, event: value.event, ...(value.place ? { place: value.place } : {}) });
 }
 
+// An installation's vocabulary declares no names of its own.
+function declaresNothing() {
+  return false;
+}
+
 // One vocabulary: the built-ins plus what a host registers. The same names
 // are registered identically on a host's server and in its browser; a name
-// registered twice must mean the same thing.
-function createLearningVocabulary({ places = BUILT_IN_PLACES, activities = BUILT_IN_ACTIVITIES, facts = BUILT_IN_FACTS } = {}) {
+// registered twice must mean the same thing. Only a topic's bundler
+// vocabulary declares names: here declared, declaredPlace and
+// declaredActivity answer false.
+function createLearningVocabulary({
+  places: initialPlaces = BUILT_IN_PLACES,
+  activities: initialActivities = BUILT_IN_ACTIVITIES,
+  facts: initialFacts = BUILT_IN_FACTS
+} = {}) {
   const placeMap = new Map();
   const activityMap = new Map();
   const factSet = new Set();
@@ -135,17 +146,40 @@ function createLearningVocabulary({ places = BUILT_IN_PLACES, activities = BUILT
     for (const value of acted) activityMap.set(value.id, value);
     for (const fact of newFacts) factSet.add(fact);
   }
-  register({ places, activities, facts });
+  register({ places: initialPlaces, activities: initialActivities, facts: initialFacts });
+
+  function place(id) {
+    return placeMap.get(id) || null;
+  }
+
+  function activity(id) {
+    return activityMap.get(id) || null;
+  }
+
+  function hasFact(id) {
+    return factSet.has(id);
+  }
+
+  function places() {
+    return [...placeMap.values()];
+  }
+
+  // Every page activity a view may report: activity events and place events.
+  function events() {
+    return new Set([...[...activityMap.values()].map(value => value.event),
+      ...[...placeMap.values()].filter(value => value.event).map(value => value.event)]);
+  }
 
   return Object.freeze({
     register,
-    place: id => placeMap.get(id) || null,
-    activity: id => activityMap.get(id) || null,
-    hasFact: id => factSet.has(id),
-    places: () => [...placeMap.values()],
-    // Every page activity a view may report: activity events and place events.
-    events: () => new Set([...[...activityMap.values()].map(value => value.event),
-      ...[...placeMap.values()].filter(value => value.event).map(value => value.event)])
+    place,
+    activity,
+    hasFact,
+    places,
+    events,
+    declared: declaresNothing,
+    declaredPlace: declaresNothing,
+    declaredActivity: declaresNothing
   });
 }
 
@@ -163,12 +197,33 @@ function declaredLearningVocabulary({ places = [], activities = [], facts = [] }
   for (const id of [...places, ...activities, ...facts]) if (!ID.test(id || "")) throw vocabularyFailure(`Declared name ${id} is not a lowercase id.`);
   const declaredPlaces = new Set(places.filter(id => !known.has(id)));
   const declaredActivities = new Set(activities.filter(id => !vocabulary.activity(id)));
+
+  function declaredPlace(id) {
+    return declaredPlaces.has(id);
+  }
+
+  function declaredActivity(id) {
+    return declaredActivities.has(id);
+  }
+
+  function declared(id) {
+    return declaredPlace(id) || declaredActivity(id);
+  }
+
+  function hasFact(id) {
+    return vocabulary.hasFact(id) || facts.includes(id);
+  }
+
   return Object.freeze({
-    ...vocabulary,
-    declared: id => declaredPlaces.has(id) || declaredActivities.has(id),
-    declaredPlace: id => declaredPlaces.has(id),
-    declaredActivity: id => declaredActivities.has(id),
-    hasFact: id => vocabulary.hasFact(id) || facts.includes(id)
+    register: vocabulary.register,
+    place: vocabulary.place,
+    activity: vocabulary.activity,
+    hasFact,
+    places: vocabulary.places,
+    events: vocabulary.events,
+    declared,
+    declaredPlace,
+    declaredActivity
   });
 }
 
@@ -189,7 +244,7 @@ const placeOpens = place => Boolean(place?.open);
 // the place first; highlight rings it (both default to: point only).
 function trainingGuideRequest(input = {}, vocabulary = learningVocabulary) {
   const place = typeof input.target === "string" ? vocabulary.place(input.target) : null;
-  const declared = !place && typeof vocabulary.declaredPlace === "function" && vocabulary.declaredPlace(input.target);
+  const declared = !place && vocabulary.declaredPlace(input.target);
   if (!place && !declared) {
     throw guideFailure(`Use one of this installation's guide places: ${vocabulary.places().map(value => value.id).join(", ")}.`);
   }
@@ -267,7 +322,7 @@ function lessonStepNeeds(step, vocabulary = learningVocabulary) {
   for (const beat of Array.isArray(step?.beats) ? step.beats : []) {
     if (beat.kind === "check") continue;
     const activity = vocabulary.activity(beat.target);
-    if (activity || vocabulary.declaredActivity?.(beat.target)) {
+    if (activity || vocabulary.declaredActivity(beat.target)) {
       activities.add(beat.target);
       if (activity?.place) places.add(activity.place);
     } else places.add(beat.target);

@@ -152,7 +152,7 @@ function createTrainingContentInstaller({ systemRoot } = {}) {
     }
   }
 
-  return { installTopic };
+  return Object.freeze({ installTopic });
 }
 
 export { createTrainingContentInstaller };

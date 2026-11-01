@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { courseSchema, topicSchema, validateContent } from "./contentSchemas.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 async function readPinnedTopic(directory) {
   const root = await realpath(directory);
@@ -46,7 +46,7 @@ async function readPinnedTopic(directory) {
       const size = header ? Number(header[1]) : -1;
       const end = headerEnd + 1 + size;
       if (size !== file.bytes || stdout[end] !== 0 ||
-          createHash("sha256").update(stdout.subarray(headerEnd + 1, end)).digest("hex") !== file.sha256) {
+          sha256Hex(stdout.subarray(headerEnd + 1, end)) !== file.sha256) {
         throw new Error(`Topic input differs from its pinned commit: ${file.path}.`);
       }
       offset = end + 1;
@@ -74,7 +74,7 @@ function createCourseLock(input, resolvedTopics) {
     if (!/^[a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+$/u.test(resolved.repository || "") || !/^[a-f0-9]{40}$/u.test(resolved.commit || "")) throw new Error(`Topic requires a repository and immutable commit: ${reference.topicId}.`);
     const manifest = resolved.topicManifest;
     if (!manifest || manifest.schemaVersion !== 1 || manifest.topic?.topicId !== reference.topicId || manifest.release !== reference.release ||
-      createHash("sha256").update(canonicalJson(manifest)).digest("hex") !== resolved.topicHash) {
+      sha256Hex(canonicalJson(manifest)) !== resolved.topicHash) {
       throw new Error(`Topic manifest identity mismatch: ${reference.topicId}.`);
     }
     validateContent(topicSchema, manifest.topic, reference.topicId);

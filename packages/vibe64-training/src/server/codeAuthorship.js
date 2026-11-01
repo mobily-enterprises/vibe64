@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { declaredStepCheck, lessonHasSteps } from "./contentSchemas.js";
 import { conflictFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 /** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
@@ -14,7 +14,6 @@ const MAX_FILE_BYTES = 1024 * 1024;
 // Code steps share one save log per attempt (the ledger holds 256);
 // one slot stays free so a save that cannot extend the previous entry fits.
 const MAX_SEPARATE_ENTRIES = 255;
-const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 // Reads the bytes of declared exercise-relative files from the live session
 // source. Paths come from the pinned lesson, never from a request.
@@ -34,7 +33,7 @@ async function readDeclaredFiles(source, files) {
       throw conflictFailure("VIBE64_TRAINING_CODE_FILE_UNSAFE", `The lesson file ${file} is not an ordinary file of at most 1 MiB.`);
     }
     const bytes = await readFile(filename);
-    result.push({ path: file, sha256: sha256(bytes), bytes });
+    result.push({ path: file, sha256: sha256Hex(bytes), bytes });
   }
   return result;
 }
@@ -150,7 +149,7 @@ function createTrainingCodeAuthorship({ learners, content, project }) {
       const savedPath = saved?.file?.path;
       if (saved?.ok === false || !tracking || !trackedPaths(current).has(savedPath)) return { value: saved };
       const entry = { path: savedPath, baseHash: String(input.baseHash || ""), savedHash: String(saved.file.hash || ""),
-        intendedHash: sha256(Buffer.from(String(input.text ?? ""), "utf8")), actorId: learnerId,
+        intendedHash: sha256Hex(Buffer.from(String(input.text ?? ""), "utf8")), actorId: learnerId,
         at: new Date().toISOString(), saves: 1 };
       const entries = current.entries;
       const last = entries.at(-1);

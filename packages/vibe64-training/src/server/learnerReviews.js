@@ -49,7 +49,7 @@ function createLearnerReviews({ createNamespace, userPaths }) {
     }
   }
 
-  return { runReviewExclusive };
+  return Object.freeze({ runReviewExclusive });
 }
 
 export { createLearnerReviews };

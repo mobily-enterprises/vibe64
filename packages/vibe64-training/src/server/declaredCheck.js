@@ -3,12 +3,12 @@ import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { createHash } from "node:crypto";
 import { canonicalJson } from "./content.js";
 import { declaredStepCheck, lessonHasSteps, validateContent } from "./contentSchemas.js";
 import { codeStepOf, readDeclaredFiles, verifyStepAuthorship } from "./codeAuthorship.js";
 import { trainingFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 /** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
@@ -31,7 +31,6 @@ const codeInputSchema = createSchema({
   sessionId: identity, observationId: identity, stepId
 });
 const DEFAULT_CODE_TIMEOUT_SECONDS = 15;
-const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function failure(code, message, extra = {}) {
   return trainingFailure(code, message, { statusCode: 409, ...extra });
@@ -235,7 +234,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
               ? `needs your own change: edit ${authorship.files.join(", ")} yourself in Dashboard → Files during this step, then press Check now`
               : `needs an independent attempt: other edits detected in ${authorship.files.join(", ")}` });
       }
-      const filesHash = sha256(canonicalJson(checked));
+      const filesHash = sha256Hex(canonicalJson(checked));
       await canonicalDirectory(paths.sessionRoot);
       await mkdir(paths.artifactsRoot, { recursive: true, mode: 0o700 });
       await canonicalDirectory(paths.artifactsRoot);
@@ -313,7 +312,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     });
   }
 
-  return { runOrientationCheck, runCodeCheck };
+  return Object.freeze({ runOrientationCheck, runCodeCheck });
 }
 
 export { createTrainingDeclaredCheckOwner };

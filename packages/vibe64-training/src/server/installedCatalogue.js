@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
@@ -9,6 +8,7 @@ import { canonicalJson } from "./content.js";
 import { courseSchema, list, validateContent } from "./contentSchemas.js";
 import { createInstalledTrainingContent, validateInstalledTopicPin } from "./installedContent.js";
 import { causedFailure } from "./errors.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 const MAX_COURSES = 16;
 const MAX_BYTES = 1024 * 1024;
@@ -313,7 +313,7 @@ function createInstalledTrainingCatalogue({ systemRoot }) {
     }
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 48).replace(/-+$/u, "");
     const course = { schemaVersion: 1,
-      courseId: `custom-${slug || createHash("sha256").update(name).digest("hex").slice(0, 12)}`,
+      courseId: `custom-${slug || sha256Hex(name).slice(0, 12)}`,
       title: name, release: "1.0.0", status: "released",
       topics: topics.map(topic => ({ topicId: topic.topicId, release: topic.release })) };
     const existing = catalogue.courses.find(entry => entry.course.courseId === course.courseId);
@@ -327,7 +327,7 @@ function createInstalledTrainingCatalogue({ systemRoot }) {
     return enableCourse({ course, lock: createCourseLock(course, resolved), expectedRevision });
   }
 
-  return { readCatalogue, enableCourse, disableCourse, removeCourse, createCourse };
+  return Object.freeze({ readCatalogue, enableCourse, disableCourse, removeCourse, createCourse });
 }
 
 export { createInstalledTrainingCatalogue };

@@ -640,11 +640,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision, startCommit }, "start");
   }
 
-  return { readState, activeAttemptForProject, readAttemptRecord, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive,
+  return Object.freeze({ readState, activeAttemptForProject, readAttemptRecord, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive,
     beginPreparation, recordPreparationReady, recordPreparationFailure, recordPreparationStart, runReviewExclusive: reviews.runReviewExclusive,
     readCodeLedger: codeLedgers.readCodeLedger, updateCodeLedger: codeLedgers.updateCodeLedger, readStepProgress: steps.readStepProgress, updateStepProgress: steps.updateStepProgress, readReader: steps.readReader, saveReader: steps.saveReader,
     // readable-check: allow setter-seam - not a slot: setLearningMode saves one learner's Learn mode
-    readTeacherNotes: notes.readTeacherNotes, saveTeacherNotes: notes.saveTeacherNotes, readLearningMode: learningMode.readLearningMode, setLearningMode: learningMode.setLearningMode };
+    readTeacherNotes: notes.readTeacherNotes, saveTeacherNotes: notes.saveTeacherNotes, readLearningMode: learningMode.readLearningMode, setLearningMode: learningMode.setLearningMode });
 }
 
 export {

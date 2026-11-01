@@ -663,7 +663,7 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     }
   }
 
-  return { readState, readExerciseProjectScope };
+  return Object.freeze({ readState, readExerciseProjectScope });
 }
 
 export { createPracticeHistoryReader };

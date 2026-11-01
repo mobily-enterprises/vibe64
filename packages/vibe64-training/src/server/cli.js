@@ -1,11 +1,12 @@
 import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { lessonHasSteps } from "./contentSchemas.js";
 import { createCourseLock, readPinnedTopic } from "./catalogue.js";
 import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 async function runTrainingCli(args, { write = text => console.log(text) } = {}) {
   if (args[0] === "install-topic") {
@@ -91,7 +92,7 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
       const files = bundleFiles([result.topicManifest, ...result.bundles.map(bundle => bundle.manifest)]);
       for (const file of files) {
         const bytes = await readFile(path.join(source, file.path));
-        if (createHash("sha256").update(bytes).digest("hex") !== file.sha256) throw new Error(`Source changed during bundling: ${file.path}. Validate and retry.`);
+        if (sha256Hex(bytes) !== file.sha256) throw new Error(`Source changed during bundling: ${file.path}. Validate and retry.`);
         const filename = path.join(output, "files", file.path);
         await mkdir(path.dirname(filename), { recursive: true });
         await writeFile(filename, bytes, { flag: "wx" });

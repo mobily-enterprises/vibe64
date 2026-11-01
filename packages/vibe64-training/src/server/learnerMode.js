@@ -62,7 +62,7 @@ function createLearnerMode({ createNamespace, loadState, userPaths, verifyInstal
   }
 
   // readable-check: allow setter-seam - not a slot: setLearningMode saves one learner's Learn mode
-  return { readLearningMode, setLearningMode };
+  return Object.freeze({ readLearningMode, setLearningMode });
 }
 
 export { createLearnerMode };

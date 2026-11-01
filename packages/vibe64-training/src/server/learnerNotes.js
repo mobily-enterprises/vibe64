@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 import { LEARNER_NOTES_MAX_CHARS as MAX_NOTES_CHARS, TRAINING_NOTES_CHANGED_CODE } from "../shared/learnerContract.js";
 import { validateContent } from "./contentSchemas.js";
 import { failure, inspectDirectoryChain, inspectPath, isoTime, MAX_NOTES_BYTES, MAX_NOTES_REQUESTS, notesSchema, readRecord, requestPattern, sha256Pattern, validNotesText } from "./learnerRecords.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 /**
  * A learner's teacher notes: read and saved under their own lock.
@@ -59,7 +59,7 @@ function createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, us
       throw failure("VIBE64_TRAINING_NOTES_INVALID",
         `Save learner notes as text of at most ${MAX_NOTES_CHARS} characters without control characters, with an exact request ID.`, 400);
     }
-    const textHash = createHash("sha256").update(value).digest("hex");
+    const textHash = sha256Hex(value);
     await createNamespace(paths);
     const release = await acquireRecordLock(paths.notesLock, "VIBE64_TRAINING_NOTES_BUSY", "The learner notes are being saved. Retry the same request in a moment.");
     try {
@@ -102,7 +102,7 @@ function createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, us
     }
   }
 
-  return { readTeacherNotes, saveTeacherNotes };
+  return Object.freeze({ readTeacherNotes, saveTeacherNotes });
 }
 
 export { createLearnerNotes };
