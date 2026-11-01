@@ -7,7 +7,8 @@ import {
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 
-import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { sourceEditorError } from "./sourceFiles.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -85,7 +86,7 @@ function sourceEditorExecutionProfileIdentity(value = null) {
 }
 
 function sourceEditorVibe64UserIdentity(vibe64User = null) {
-  if (!isPlainObject(vibe64User)) {
+  if (!isRecord(vibe64User)) {
     return "";
   }
   const identity = toText(
@@ -130,15 +131,6 @@ async function describeSourceEditorAgentProvider(terminals, context = {}) {
  * @param {object} [context]
  */
 async function resolveSourceEditorAgentExecutionProfile(terminals, context = {}) {
-  // readable-check: allow method-probe - test asserts error: a terminal service without the low-cost profile is refused with execution_profile_missing
-  if (typeof terminals.resolveEphemeralAgentExecutionProfile !== "function") {
-    throw sourceEditorError(
-      "The selected assistant provider cannot resolve the low-cost profile required for source explanations.",
-      "vibe64_source_explanation_execution_profile_missing",
-      {},
-      503
-    );
-  }
   const resolved = await terminals.resolveEphemeralAgentExecutionProfile(
     context.assistantHelper.scope,
     sourceEditorExecutionProfileRequest(),

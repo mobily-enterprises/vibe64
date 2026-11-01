@@ -3220,11 +3220,13 @@ test("source editor fails closed when the helper profile observation is missing"
   }
 });
 
-test("source editor fails closed before generation when helper profile resolution is unavailable", async () => {
+test("source editor fails closed before generation when helper profile resolution returns no profile", async () => {
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
     terminals: {
-      resolveEphemeralAgentExecutionProfile: null,
+      async resolveEphemeralAgentExecutionProfile() {
+        return null;
+      },
       async runEphemeralAgentChatTurn() {
         agentCalls += 1;
         return { ok: true };
@@ -3243,7 +3245,7 @@ test("source editor fails closed before generation when helper profile resolutio
 
     assert.equal(response.ok, false);
     assert.equal(response.code, "vibe64_source_explanation_execution_profile_missing");
-    assert.match(response.error, /cannot resolve the low-cost profile/u);
+    assert.match(response.error, /did not provide a verified execution profile/u);
     assert.equal(agentCalls, 0);
   } finally {
     await rm(fixture.root, {
