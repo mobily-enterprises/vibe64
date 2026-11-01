@@ -10,7 +10,7 @@ import {
   defineVibe64AgentExecutionProfileResolution,
   vibe64AgentExecutionProfileAuditSnapshot,
   vibe64AgentProviderSupportsExecutionProfile
-} from "../../packages/vibe64-runtime/src/shared/index.js";
+} from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
 
 function validResolution(overrides = {}) {
   const {

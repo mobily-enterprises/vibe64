@@ -5,11 +5,11 @@ import { prepareSessionDetachedConversationRun } from "../../packages/vibe64-ter
 
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
-  VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   VIBE64_ASSISTANT_ENGINE_IDS,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "../../packages/vibe64-runtime/src/shared/index.js";
+import { VIBE64_AGENT_EXECUTION_TOOL_POLICIES } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
 import {
   OPENCODE_HELPER_PROFILE_REVISION,
   createOpenCodeSessionAgentProvider,
