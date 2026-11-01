@@ -78,8 +78,8 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
   // The installer bundles installed topics with this same command.
   const result = await validateTopic(source, { authoring: command === "validate" });
   const manifest = { schemaVersion: 1, topic: result.topic, release: result.release, topicHash: result.topicHash,
-    topicManifest: result.topicManifest, lessons: result.bundles.map(({ lesson, hash, status, required, manifest }) => ({
-    code: lesson.code, hash, status, required, manifest
+    topicManifest: result.topicManifest, lessons: result.bundles.map(({ lesson, hash, status, required, manifest: lessonManifest }) => ({
+    code: lesson.code, hash, status, required, manifest: lessonManifest
   })) };
   if (command === "bundle") {
     const requestedOutput = path.resolve(destination);

@@ -170,7 +170,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
           "VIBE64_TRAINING_STEP_RESULTS_FULL");
       }
       const saved = { ...result, requestId, recordedAt: new Date().toISOString() };
-      const receipts = receipt ? [...entry.receipts.filter(value => value.stepId !== receipt.stepId), receipt] : entry.receipts;
+      const receipts = receipt ? [...entry.receipts.filter(kept => kept.stepId !== receipt.stepId), receipt] : entry.receipts;
       return { entry: { results: [...entry.results, saved], receipts },
         value: { ok: true, stepId: result.stepId, outcome: saved.outcome, recorded: true, replayed: false,
           ...(saved.reason ? { reason: saved.reason } : {}) } };
@@ -245,11 +245,11 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const target = practiceTarget(attempt);
     const observationId = randomUUID();
     let checked;
-    let evidence;
+    let checkEvidence;
     if (check.kind === "code") {
       checked = await runCodeCheckObservation({ checks, context, actor, attemptId,
         sessionId: target.sessionId, observationId, checkId: check.id, stepId });
-      evidence = { checkId: check.id, observationId,
+      checkEvidence = { checkId: check.id, observationId,
         ...(Array.isArray(checked.files) && checked.files.length ? { filesHash: sha256Hex(canonicalJson(checked.files)) } : {}) };
     } else {
       if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
@@ -260,7 +260,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       }
       checked = await runExerciseResponseCheck({ actions, checks, context, actor, target,
         attemptId, observationId, exercise: receipt, checkId: check.id, stepId });
-      evidence = { checkId: check.id, observationId };
+      checkEvidence = { checkId: check.id, observationId };
     }
     const outcome = checked.checkResult.outcome;
     const reason = boundedReason(checked.reason);
@@ -271,7 +271,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
           : "Diagnostic only: a check Colleague runs is never saved in the learner's results." };
     }
     return record({ actor, attemptId, requestId, lesson,
-      result: { stepId, kind: "auto", outcome, evidence, origin: "check", ...(reason ? { reason } : {}) } });
+      result: { stepId, kind: "auto", outcome, evidence: checkEvidence, origin: "check", ...(reason ? { reason } : {}) } });
   }
 
   // The server comparator: the only reader of a choice step's answer, which
@@ -341,18 +341,18 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       return { ok: true, stepId, outcome: "passed", recorded: false, replayed: false, alreadyPassed: true };
     }
     practiceTarget(attempt);
-    const read = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
-    if (read.session.agentWorking) {
+    const practice = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
+    if (practice.session.agentWorking) {
       throw stepFailure("Wait until the agent finishes, then check your work again.", "VIBE64_TRAINING_REVIEW_AGENT_WORKING");
     }
-    if (read.empty) {
+    if (practice.empty) {
       return { ok: true, stepId, outcome: "not-yet-passed", recorded: false, replayed: false,
         reason: "No changes yet. Change your practice project first, then check your work again." };
     }
-    const evidenceHash = sha256Hex(canonicalJson({ lessonHash: lesson.hash, stepId, rubric: step.check.rubric, evidence: read.evidence }));
+    const evidenceHash = sha256Hex(canonicalJson({ lessonHash: lesson.hash, stepId, rubric: step.check.rubric, evidence: practice.evidence }));
     const same = entry.results.findLast(value => value.stepId === stepId && value.kind === "review" && value.evidence.evidenceHash === evidenceHash);
     if (same) return replayed(same, stepId);
-    const verdict = await reviewer.review({ actor, lesson, step, evidence: read.evidence, context });
+    const verdict = await reviewer.review({ actor, lesson, step, evidence: practice.evidence, context });
     const { passed, ...feedback } = verdict;
     const saved = await record({ actor, attemptId, requestId, lesson,
       result: { stepId, kind: "review", outcome: passed ? "passed" : "not-yet-passed", origin: "check",
@@ -366,9 +366,9 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     if (!lesson.lesson.exercise) throw stepFailure("This lesson has no practice project to read.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     practiceTarget(attempt);
-    const read = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
+    const practice = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
     const last = (await savedEntry(actor, attempt)).results.findLast(value => value.stepId === stepId && value.kind === "review");
-    return { ok: true, stepId, agentWorking: read.session.agentWorking, empty: read.empty, evidence: read.evidence,
+    return { ok: true, stepId, agentWorking: practice.session.agentWorking, empty: practice.empty, evidence: practice.evidence,
       ...(step.check?.kind === "review" ? { rubric: step.check.rubric } : {}),
       lastReview: last ? { outcome: last.outcome, recordedAt: last.recordedAt, ...structuredClone(last.review) } : null };
   }

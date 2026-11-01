@@ -286,8 +286,8 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
     const completion = attempt
       ? lessonCompletion(lesson, await steps.readAttemptSteps(paths, attempt, lesson), availableStepIds(lesson, actor)) : null;
-    const completed = new Set(state.progress.completedLessons.map(lesson => canonicalJson({ code: lesson.code, hash: lesson.hash })));
-    const lessonCompletions = state.progress.completedLessons.map(lesson => ({ lessonCode: lesson.code, lessonHash: lesson.hash,
+    const completed = new Set(state.progress.completedLessons.map(done => canonicalJson({ code: done.code, hash: done.hash })));
+    const lessonCompletions = state.progress.completedLessons.map(done => ({ lessonCode: done.code, lessonHash: done.hash,
       required: 0, passed: 0, completed: true, open: false }));
     if (completion) {
       const open = { ...completion, completed: completion.completed || completed.has(canonicalJson(attempt.pin.lesson)), open: true };

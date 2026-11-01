@@ -24,39 +24,39 @@
 const ID = /^[a-z][a-z0-9-]{0,63}$/u;
 const SCOPES = new Set(["studio", "project"]);
 const WHO = new Set(["everyone", "owner"]);
-const step = (id, label) => Object.freeze({ id, label });
-const PREVIEW = step("preview", "Preview");
-const DASHBOARD = step("dashboard", "Dashboard");
-const DATABASE = step("database", "Database");
-const ACCOUNT_MENU = step("account-menu", "Account menu");
+const pathStep = (id, label) => Object.freeze({ id, label });
+const PREVIEW = pathStep("preview", "Preview");
+const DASHBOARD = pathStep("dashboard", "Dashboard");
+const DATABASE = pathStep("database", "Database");
+const ACCOUNT_MENU = pathStep("account-menu", "Account menu");
 
 const BUILT_IN_PLACES = [
   { id: "preview", label: "Preview", scope: "project", open: { pane: "preview" }, steps: [PREVIEW] },
   // Dashboard has no single view to open: open one of its sections instead.
   { id: "dashboard", label: "Dashboard", scope: "project", open: null, steps: [DASHBOARD] },
   { id: "database-erd", label: "ERD", scope: "project", open: { pane: "database", databaseView: "erd" },
-    steps: [DASHBOARD, DATABASE, step("database-erd", "ERD")] },
+    steps: [DASHBOARD, DATABASE, pathStep("database-erd", "ERD")] },
   { id: "database-data", label: "Data", scope: "project", open: { pane: "database", databaseView: "data" },
-    steps: [DASHBOARD, DATABASE, step("database-data", "Data")] },
-  { id: "files", label: "Files", scope: "project", open: { pane: "files" }, steps: [DASHBOARD, step("files", "Files")] },
-  { id: "changes", label: "Current changes", scope: "project", open: { pane: "changes" }, steps: [DASHBOARD, step("changes", "Current changes")] },
-  { id: "git-log", label: "Git log", scope: "project", open: { pane: "repository" }, steps: [DASHBOARD, step("git-log", "Git log")] },
-  { id: "session-info", label: "Session info", scope: "project", open: { pane: "session" }, steps: [DASHBOARD, step("session-info", "Session info")] },
-  { id: "architecture", label: "Architecture", scope: "project", open: { pane: "system" }, steps: [DASHBOARD, step("architecture", "Architecture")] },
-  { id: "publish", label: "Publish", scope: "project", open: { pane: "publish" }, steps: [DASHBOARD, step("publish", "Publish")] },
-  { id: "chat", label: "Coding chat", scope: "project", open: null, shown: [{ pane: "chat" }, { chatVisible: true }], steps: [step("chat", "Coding chat")] },
-  { id: "save", label: "Save", scope: "project", open: null, event: "saved", steps: [step("save", "Save")] },
+    steps: [DASHBOARD, DATABASE, pathStep("database-data", "Data")] },
+  { id: "files", label: "Files", scope: "project", open: { pane: "files" }, steps: [DASHBOARD, pathStep("files", "Files")] },
+  { id: "changes", label: "Current changes", scope: "project", open: { pane: "changes" }, steps: [DASHBOARD, pathStep("changes", "Current changes")] },
+  { id: "git-log", label: "Git log", scope: "project", open: { pane: "repository" }, steps: [DASHBOARD, pathStep("git-log", "Git log")] },
+  { id: "session-info", label: "Session info", scope: "project", open: { pane: "session" }, steps: [DASHBOARD, pathStep("session-info", "Session info")] },
+  { id: "architecture", label: "Architecture", scope: "project", open: { pane: "system" }, steps: [DASHBOARD, pathStep("architecture", "Architecture")] },
+  { id: "publish", label: "Publish", scope: "project", open: { pane: "publish" }, steps: [DASHBOARD, pathStep("publish", "Publish")] },
+  { id: "chat", label: "Coding chat", scope: "project", open: null, shown: [{ pane: "chat" }, { chatVisible: true }], steps: [pathStep("chat", "Coding chat")] },
+  { id: "save", label: "Save", scope: "project", open: null, event: "saved", steps: [pathStep("save", "Save")] },
   { id: "reload-preview", label: "Reload preview", scope: "project", open: null, event: "preview-reloaded",
-    steps: [PREVIEW, step("reload-preview", "Reload preview")] },
+    steps: [PREVIEW, pathStep("reload-preview", "Reload preview")] },
   // The L button that switches between Develop and Learn (opening it opens Courses).
-  { id: "learning", label: "Learning", scope: "studio", open: { learning: true }, shown: [], event: "learn-toggled", steps: [step("learning", "Learning")] },
-  { id: "lesson", label: "Lesson", scope: "studio", open: null, shown: [{ pane: "lesson" }], steps: [step("lesson", "Lesson")] },
-  { id: "lesson-bar", label: "Lesson step bar", scope: "studio", open: null, steps: [step("lesson-bar", "Lesson step bar")] },
-  { id: "courses", label: "Courses", scope: "studio", open: null, shown: [{ learningOpen: true }], steps: [step("courses", "Courses")] },
-  { id: "colleague", label: "Colleague", scope: "studio", open: null, event: "colleague-opened", steps: [step("colleague", "Colleague")] },
+  { id: "learning", label: "Learning", scope: "studio", open: { learning: true }, shown: [], event: "learn-toggled", steps: [pathStep("learning", "Learning")] },
+  { id: "lesson", label: "Lesson", scope: "studio", open: null, shown: [{ pane: "lesson" }], steps: [pathStep("lesson", "Lesson")] },
+  { id: "lesson-bar", label: "Lesson step bar", scope: "studio", open: null, steps: [pathStep("lesson-bar", "Lesson step bar")] },
+  { id: "courses", label: "Courses", scope: "studio", open: null, shown: [{ learningOpen: true }], steps: [pathStep("courses", "Courses")] },
+  { id: "colleague", label: "Colleague", scope: "studio", open: null, event: "colleague-opened", steps: [pathStep("colleague", "Colleague")] },
   { id: "account-menu", label: "Account menu", scope: "studio", open: null, steps: [ACCOUNT_MENU] },
-  { id: "account-settings", label: "Account settings", scope: "studio", open: null, steps: [ACCOUNT_MENU, step("account-settings", "Account settings")] },
-  { id: "ai-setup", label: "AI setup", scope: "studio", open: null, steps: [ACCOUNT_MENU, step("ai-setup", "AI setup")] }
+  { id: "account-settings", label: "Account settings", scope: "studio", open: null, steps: [ACCOUNT_MENU, pathStep("account-settings", "Account settings")] },
+  { id: "ai-setup", label: "AI setup", scope: "studio", open: null, steps: [ACCOUNT_MENU, pathStep("ai-setup", "AI setup")] }
 ];
 const BUILT_IN_ACTIVITIES = [
   { id: "send-message", event: "message-sent", place: "chat" },
@@ -101,7 +101,7 @@ function definePlace(value) {
   }
   if (value.event !== undefined && !ID.test(value.event)) throw vocabularyFailure(`${name} event is a lowercase activity name.`);
   return Object.freeze({ id: value.id, label: value.label, scope: value.scope, who, open: open && Object.freeze({ ...open }),
-    steps: Object.freeze(value.steps.map(item => step(item.id, item.label))), shown: Object.freeze(shown.map(item => Object.freeze({ ...item }))),
+    steps: Object.freeze(value.steps.map(item => pathStep(item.id, item.label))), shown: Object.freeze(shown.map(item => Object.freeze({ ...item }))),
     ...(value.event ? { event: value.event } : {}) });
 }
 

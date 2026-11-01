@@ -288,13 +288,13 @@ async function runDatabaseAssistant({
         maximumResponses: MAX_ASSISTANT_TOOL_TURNS,
         timeoutMs: DATABASE_ASSISTANT_TURN_TIMEOUT_MS
       },
-      async complete(prompt, { timeoutMs, outputSchema }) {
+      async complete(turnPrompt, { timeoutMs, outputSchema }) {
         const result = await runAgentTurn({
           ...(threadId ? { conversationId: threadId, threadId } : {}),
           ephemeral: true,
           executionProfile: { ...DATABASE_ASSISTANT_EXECUTION_PROFILE },
           outputSchema,
-          prompt,
+          prompt: turnPrompt,
           promptLabel: "Database copilot",
           timeoutMs
         }, {
