@@ -6,10 +6,9 @@ import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server
 
 export {
   upgradeColleagueNativeContinuity,
-  upgradeColleagueCodexCompletedPolicy,
-  upgradeColleagueNativeInstructions,
   upgradeColleagueHistoricalInteractiveContinuity
 } from "./nativeConversationUpgrade.js";
+export { upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions } from "./nativeContinuityRepairs.js";
 export { repairColleagueRetiredOperation } from "./retiredOperationUpgrade.js";
 export { retireColleagueLearningWatches } from "./learningWatchUpgrade.js";
 export { retireColleagueFreeModel } from "./freeModelUpgrade.js";
