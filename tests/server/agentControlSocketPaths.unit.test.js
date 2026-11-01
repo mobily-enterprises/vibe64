@@ -12,6 +12,7 @@ import { prepareAgentDatabaseCommand } from "../../packages/vibe64-terminals/src
 import { prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { agentSessionCommandEnvironmentIsHealthy } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
 import { requestUnixJsonCommand, unixCommandSocketPath, unixJsonCommandServerIsHealthy } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 test("a timed-out control health probe retains the listener and its credentials for retry", async (t) => {
   const root = await mkdtemp(path.join(tmpdir(), "v64-health-"));
@@ -31,7 +32,7 @@ test("a timed-out control health probe retains the listener and its credentials 
     await rm(root, { recursive: true, force: true });
   });
   await new Promise(resolve => server.listen(socketPath, resolve));
-  const entry = { server, token: "fixture-token", sessionId: "fixture-session", generationId: "fixture-generation" };
+  const entry = { commandService: { logger: silentLogger }, server, token: "fixture-token", sessionId: "fixture-session", generationId: "fixture-generation" };
   const probe = { socketPath, sessionId: entry.sessionId, healthPath: "/health", timeoutMs: 50 };
   await assert.rejects(unixJsonCommandServerIsHealthy(entry, probe), error => {
     assert.equal(error.code, "vibe64_agent_control_unavailable");
