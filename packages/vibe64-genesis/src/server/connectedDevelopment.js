@@ -45,18 +45,22 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
       const line = index + 1;
       const packageType = source.match(/^- Default package type: `([^`\r\n]*)`$/u);
       if (packageType) {
-        if (defaultPackageType) invalidStackOperation(
-          ERROR_CODE,
-          OPERATION_PATH,
-          "Declare exactly one default package type.",
-          line
-        );
-        if (!isConnectedPackageType(packageType[1])) invalidStackOperation(
-          ERROR_CODE,
-          OPERATION_PATH,
-          `Default package type must be ${connectedPackageTypeListText()}.`,
-          line
-        );
+        if (defaultPackageType) {
+          invalidStackOperation(
+            ERROR_CODE,
+            OPERATION_PATH,
+            "Declare exactly one default package type.",
+            line
+          );
+        }
+        if (!isConnectedPackageType(packageType[1])) {
+          invalidStackOperation(
+            ERROR_CODE,
+            OPERATION_PATH,
+            `Default package type must be ${connectedPackageTypeListText()}.`,
+            line
+          );
+        }
         defaultPackageType = packageType[1];
         continue;
       }
@@ -71,20 +75,24 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
       }
       const custom = source.match(CUSTOM_RUNNER_LINE);
       const entry = custom ? null : source.match(STEP_LINE);
-      if (!custom && !entry) invalidStackOperation(
-        ERROR_CODE,
-        OPERATION_PATH,
-        unknownEntryMessage("Connected development entry", source, CONNECTED_DEVELOPMENT_ENTRY_FORMS),
-        line
-      );
+      if (!custom && !entry) {
+        invalidStackOperation(
+          ERROR_CODE,
+          OPERATION_PATH,
+          unknownEntryMessage("Connected development entry", source, CONNECTED_DEVELOPMENT_ENTRY_FORMS),
+          line
+        );
+      }
       const kind = custom ? "Custom runner" : entry[1];
       const phase = kind === "Verify" ? "verify" : "prepare";
-      if (!custom && verifying && phase === "prepare") invalidStackOperation(
-        ERROR_CODE,
-        OPERATION_PATH,
-        "All Prepare entries must precede Verify entries.",
-        line
-      );
+      if (!custom && verifying && phase === "prepare") {
+        invalidStackOperation(
+          ERROR_CODE,
+          OPERATION_PATH,
+          "All Prepare entries must precede Verify entries.",
+          line
+        );
+      }
       verifying ||= !custom && phase === "verify";
       const step = {
         label: custom ? CUSTOM_RUNNER_LABEL
@@ -94,16 +102,20 @@ function vibe64ConnectedDevelopmentInspection(section = {}) {
           observed: source
         })
       };
-      if (step.condition) invalidStackOperation(
-        ERROR_CODE,
-        OPERATION_PATH,
-        "Connected development steps must run unconditionally; a skipped step cannot prove source consumption.",
-        line
-      );
+      if (step.condition) {
+        invalidStackOperation(
+          ERROR_CODE,
+          OPERATION_PATH,
+          "Connected development steps must run unconditionally; a skipped step cannot prove source consumption.",
+          line
+        );
+      }
       if (custom) {
         if (customRunner) invalidStackOperation(ERROR_CODE, OPERATION_PATH, "Declare exactly one Custom runner.", line);
         customRunner = step;
-      } else steps.push({ ...step, phase });
+      } else {
+        steps.push({ ...step, phase });
+      }
     }
     const defaultOnly = defaultPackageType && !sourcesFile && !steps.length && !customRunner;
     if (!defaultOnly && (!sourcesFile || (!steps.some(step => step.phase === "verify") && !customRunner))) {
