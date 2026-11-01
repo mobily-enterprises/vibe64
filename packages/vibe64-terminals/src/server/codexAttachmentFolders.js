@@ -2,6 +2,7 @@
 
 import { mkdir, readdir, stat } from "node:fs/promises";
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { tryAcquireExclusiveFileLock, stableHash } from "@local/vibe64-execution/server";
 import { targetRuntimeIdentity } from "@local/vibe64-core/server/projectRuntimeIdentity";
 import { codexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
@@ -62,10 +63,7 @@ function isSuggestionPin(entry = {}) {
 }
 
 function attachmentUploadValidationError(code, message, statusCode = 400) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+  return new AppError(statusCode, message, { code });
 }
 
 function waitForAttachmentLock() {

@@ -1,4 +1,5 @@
 // Exchanges a managed app identity grant through the Preview proxy, once per grant.
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 import { PREVIEW_IDENTITY_LOGOUT_OPERATION, verifyPreviewIdentityGrant } from "@local/vibe64-core/server/previewAuth";
 import { previewTokenCookie } from "./launchPreviewHeaders.js";
@@ -71,10 +72,7 @@ async function previewIdentityRequestGrant(request) {
 }
 
 function previewIdentityProxyError(message, code, statusCode = 400) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+  return new AppError(statusCode, message, { code });
 }
 
 function previewIdentityErrorPayload(error = {}, options = {}) {

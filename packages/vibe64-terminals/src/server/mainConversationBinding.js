@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
 import { vibe64AssistantConversationKey, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { conversationMessageIdentity, conversationMessageVersion } from "@local/vibe64-runtime/server/sessionStore";
@@ -35,12 +36,7 @@ function requireCompletedConversationRewind(session) {
   requireCompletedNativeConversationReplacement(session);
   const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
   if (state?.rewind && !state.rewind.completed) {
-    throw Object.assign(
-      new Error(
-        "An unfinished conversation Undo from a previous release blocks assistant work. Complete it using the previous release before upgrading."
-      ),
-      { code: "vibe64_conversation_rewind_pending", statusCode: 409 }
-    );
+    throw new AppError(409, "An unfinished conversation Undo from a previous release blocks assistant work. Complete it using the previous release before upgrading.", { code: "vibe64_conversation_rewind_pending" });
   }
 }
 
@@ -250,10 +246,7 @@ async function createSessionConversationBinding(provider, sessionId, options = {
           const { usedTokens, windowTokens } = await host.readContextUsage({ context, signal, input });
           if (!Number.isSafeInteger(usedTokens) || usedTokens < 0 ||
               !Number.isSafeInteger(windowTokens) || windowTokens < 1) {
-            throw Object.assign(
-              new Error("The selected assistant's context usage is unavailable. Retry after reconnecting it."),
-              { code: "vibe64_assistant_context_unavailable", statusCode: 503 }
-            );
+            throw new AppError(503, "The selected assistant's context usage is unavailable. Retry after reconnecting it.", { code: "vibe64_assistant_context_unavailable" });
           }
           const reserve = Math.max(32_768, Math.ceil(windowTokens * 0.05));
           const requestBytes = Buffer.byteLength(String(input.message || "")) +
@@ -271,24 +264,17 @@ async function createSessionConversationBinding(provider, sessionId, options = {
             if (await host.compactContext({ context, signal, input }) === false) return Math.max(bytes, 1024);
           } catch (error) {
             if (signal?.aborted) throw error;
-            throw Object.assign(
-              new Error(
-                `The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`
-              ),
-              { code: "vibe64_assistant_context_full", statusCode: 409 }
-            );
+            throw new AppError(409, `The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`, {
+              code: "vibe64_assistant_context_full",
+              params: { reason: error.message }
+            });
           } finally {
             await setPhase("preparing");
           }
           bytes = await room();
         }
         if (bytes < 1024) {
-          throw Object.assign(
-            new Error(
-              "The assistant's memory is too full to receive this conversation. Your chat is saved; try again, or switch to another assistant."
-            ),
-            { code: "vibe64_assistant_context_full", statusCode: 409 }
-          );
+          throw new AppError(409, "The assistant's memory is too full to receive this conversation. Your chat is saved; try again, or switch to another assistant.", { code: "vibe64_assistant_context_full" });
         }
         return bytes;
       }
@@ -415,10 +401,7 @@ function createMainConversationBinding(store, sessionId, context) {
         const selection = vibe64AssistantSelectionFromMetadata(current.metadata);
         const metadata = current.metadata;
         const fail = (message) => {
-          throw Object.assign(new Error(message), {
-            code: "vibe64_conversation_replacement_unavailable",
-            statusCode: 409
-          });
+          throw new AppError(409, message, { code: "vibe64_conversation_replacement_unavailable" });
         };
         if (metadata.agent_identity_provider !== selection.engineId || metadata.agent_identity_conversation_id !== expectedId ||
             !metadata.agent_identity_workdir) fail("The native predecessor identity changed or is incomplete.");

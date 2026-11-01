@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 import { manageWorkPlan, readWorkPlanPage } from "./assistantWorkPlan.js";
 import {
@@ -183,10 +184,7 @@ function createServiceAgentConversations({
   function replaceAgentConversation(sessionId, input = {}, options = {}) {
     return sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
       const fail = (message) => {
-        throw Object.assign(new Error(message), {
-          code: "vibe64_conversation_replacement_unavailable",
-          statusCode: 409
-        });
+        throw new AppError(409, message, { code: "vibe64_conversation_replacement_unavailable" });
       };
       if (context.session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(context.session) ||
           sessionHasActiveAgentRun(context.session) || workspaceSetup.isRunning(sessionId)) {

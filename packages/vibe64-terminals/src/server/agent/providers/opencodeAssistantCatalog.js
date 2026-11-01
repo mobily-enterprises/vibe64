@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 import {
   VIBE64_ASSISTANT_ENGINE_IDS,
@@ -42,10 +43,7 @@ function decodedCursor(value = "", kind = "providers", modelProviderId = "") {
     }
     return decoded.offset;
   } catch {
-    const error = new Error("The assistant catalog cursor is invalid for this request.");
-    error.code = "vibe64_assistant_catalog_cursor_invalid";
-    error.statusCode = 400;
-    throw error;
+    throw new AppError(400, "The assistant catalog cursor is invalid for this request.", { code: "vibe64_assistant_catalog_cursor_invalid" });
   }
 }
 

@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import {
   createSessionConversationBinding,
   prepareSessionConversationActivity,
@@ -164,10 +165,7 @@ function createServiceMainConversationHost({
             const authority = current.browserAuthority;
             if (!authority || authority.sessionId !== id || admitted.conversationId !== id ||
                 admitted.origin !== "user" || !admitted.nativeThreadId || !admitted.nativeTurnId) {
-              throw Object.assign(new Error("Goal control requires the current admitted Main request."), {
-                code: "vibe64_main_goal_control_required",
-                statusCode: 403
-              });
+              throw new AppError(403, "Goal control requires the current admitted Main request.", { code: "vibe64_main_goal_control_required" });
             }
             const grant = await actions.execute({
               actionId: "vibe64.sessions.conversation.context.read",

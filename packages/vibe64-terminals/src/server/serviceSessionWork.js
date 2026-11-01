@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import {
   assertSessionRepositoryReview,
@@ -360,17 +361,12 @@ function createServiceSessionWork({
       activeMessage: "Wait for the assistant turn to finish before reading its committed source snapshot."
     }, async (context) => {
       if (state.lifecycle.closing || context.session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(context.session)) {
-        throw Object.assign(new Error("Committed source reads require an open session that is not closing or renewing."), {
-          code: "vibe64_session_source_read_unavailable",
-          statusCode: 409
-        });
+        throw new AppError(409, "Committed source reads require an open session that is not closing or renewing.", { code: "vibe64_session_source_read_unavailable" });
       }
       if (workspaceSetup.isRunning(id) || context.session.workspaceSetup?.status === "running") {
-        throw Object.assign(new Error("Workspace setup must finish before reading this session's committed source snapshot."), {
-          code: "vibe64_session_source_read_setup_running",
-          statusCode: 409,
-          retryable: true
-        });
+        throw Object.assign(new AppError(409, "Workspace setup must finish before reading this session's committed source snapshot.", {
+          code: "vibe64_session_source_read_setup_running"
+        }), { retryable: true });
       }
       requireCompletedConversationRewind(context.session);
       await agentConversations.assertSessionRenewalIdle(id, context);
@@ -380,10 +376,7 @@ function createServiceSessionWork({
         const session = await context.runtime.getSessionWithoutSource(id);
         const sourceRoot = sessionSourcePath(session);
         if (session.sessionId !== id || !sourceRoot) {
-          throw Object.assign(new Error("This exact session has no available managed source."), {
-            code: "vibe64_session_source_root_missing",
-            statusCode: 409
-          });
+          throw new AppError(409, "This exact session has no available managed source.", { code: "vibe64_session_source_root_missing" });
         }
         return operation({ runtime: context.runtime, session, sourceRoot });
       }, { operation: "read-session-source" });

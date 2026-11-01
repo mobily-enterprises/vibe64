@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { parseWorkPlanLines, workPlanScope } from "../shared/assistantWorkPlan.js";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
@@ -12,7 +13,7 @@ const PLAN_LIMIT = 256 * 1024;
 const workPlanQueue = createKeyedQueue();
 
 function planError(message, code = "vibe64_work_plan_invalid") {
-  return Object.assign(new Error(message), { code, statusCode: 409 });
+  return new AppError(409, message, { code });
 }
 
 function workPlanPath(context) {

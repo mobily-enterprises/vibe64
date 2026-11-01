@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import {
   assistantRoutingGoalFromMetadata,
@@ -16,7 +17,7 @@ const MAX_CANCELLED_MESSAGES = 50;
 const activeMessage = state => state.followup || state.input;
 const usesWorkPlan = state => state.planInvolved === true;
 function failure(message, code = "vibe64_assistant_routing_unavailable") {
-  return Object.assign(new Error(message), { code, statusCode: 409 });
+  return new AppError(409, message, { code });
 }
 function parseRequest(value) {
   const request = value ? JSON.parse(value) : null;

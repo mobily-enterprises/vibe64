@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 /**
@@ -11,10 +12,7 @@ function requestMainGoalControl(operation, input, context) {
   // readable-check: allow method-probe - input validation: only an admitted Main conversation's request carries its goal controls
   if (typeof context.mainGoalControl?.[operation] !== "function" ||
       (context.vibe64Action?.project || currentProjectRequestContext())?.slug !== context.projectSlug) {
-    throw Object.assign(new Error("Only this goal's admitted Main conversation can request this goal control."), {
-      code: "vibe64_main_goal_control_required",
-      statusCode: 403
-    });
+    throw new AppError(403, "Only this goal's admitted Main conversation can request this goal control.", { code: "vibe64_main_goal_control_required" });
   }
   return context.mainGoalControl[operation](input);
 }

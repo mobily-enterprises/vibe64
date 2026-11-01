@@ -1,5 +1,6 @@
 // Whether a launched Preview is ready: its readiness marker in the terminal output, marking the terminal
 // ready, and the Preview proxy it serves through.
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 import stripAnsi from "strip-ansi";
 import { readTerminalSession, updateTerminalSessionMetadata } from "@local/vibe64-execution/server/terminalSessions";
@@ -324,10 +325,9 @@ async function ensureLaunchPreviewProxy({
           terminal
         });
         if (!runner) {
-          const error = new Error("Application preview identity command is unavailable. Restart the preview.");
-          error.code = "vibe64_preview_identity_command_unavailable";
-          error.statusCode = 409;
-          throw error;
+          throw new AppError(409, "Application preview identity command is unavailable. Restart the preview.", {
+            code: "vibe64_preview_identity_command_unavailable"
+          });
         }
         return runner(selection);
       }

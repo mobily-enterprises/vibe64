@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 import {
   sessionSourcePath
@@ -33,10 +34,7 @@ const STORAGE_NAME_PATTERN = /^[0-9a-f-]{36}\.blob$/u;
 const snapshotQueue = createKeyedQueue();
 
 function outputResultError(code, message, statusCode = 409) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+  return new AppError(statusCode, message, { code });
 }
 
 function canonicalDeclaredPath(value = "") {

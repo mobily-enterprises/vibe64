@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { conversationMessageVersion } from "@jskit-ai/assistant-core/server/conversation";
 import { temporaryConversationTurnActionInputValidator } from "./inputSchemas.js";
 import { parseIntegrationSetupRequest } from "@local/vibe64-runtime/shared";
@@ -65,7 +66,10 @@ function presentation(input = {}) {
   if (Object.hasOwn(result, "title")) {
     result.title = result.title.replace(/[\s\p{Cc}]+/gu, " ").trim();
     if (result.title.length > TITLE_MAX_LENGTH) {
-      throw Object.assign(new Error(`Chat names can be at most ${TITLE_MAX_LENGTH} characters.`), { statusCode: 400 });
+      throw new AppError(400, `Chat names can be at most ${TITLE_MAX_LENGTH} characters.`, {
+        code: "vibe64_conversation_title_too_long",
+        params: { max: TITLE_MAX_LENGTH }
+      });
     }
   }
   if (Object.hasOwn(input, "recoveryAutoPaused")) result.recoveryAutoPaused = input.recoveryAutoPaused === true;
@@ -144,12 +148,7 @@ function requireSuccess(result) {
   return result;
 }
 
-const teamTemporaryModesRefusal = () => Object.assign(
-  new Error(
-    "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom."
-  ),
-  { code: "vibe64_assistant_owner_required", statusCode: 403 }
-);
+const teamTemporaryModesRefusal = () => new AppError(403, "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom.", { code: "vibe64_assistant_owner_required" });
 
 export {
   attemptedChangeover,

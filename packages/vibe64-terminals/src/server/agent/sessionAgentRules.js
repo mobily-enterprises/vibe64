@@ -1,4 +1,5 @@
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   Vibe64AgentExecutionProfileError,
@@ -160,16 +161,11 @@ function untrustedExecutionProfileResolutionError(provider = {}, sessionId = "",
 function connectionChangeBusy(engineId = "opencode", sessionIds = []) {
   const label = engineId === "claude" ? "Claude Code" : "OpenCode";
   const where = sessionIds.length ? ` open in ${sessionIds.length === 1 ? "session" : "sessions"} ${sessionIds.join(", ")}` : "";
-  return Object.assign(
-    new Error(
-      `Close ${label} native terminals${where}, then retry this connection change. The saved connection has not changed.`
-    ),
-    {
-      code: `vibe64_${engineId}_connection_in_use`,
-      statusCode: 409,
-      ...(sessionIds.length ? { details: { sessionIds } } : {})
-    }
-  );
+  return new AppError(409, `Close ${label} native terminals${where}, then retry this connection change. The saved connection has not changed.`, {
+    code: `vibe64_${engineId}_connection_in_use`,
+    params: { engine: label, sessionIds: sessionIds.join(", ") },
+    ...(sessionIds.length ? { details: { sessionIds } } : {})
+  });
 }
 
 function bindingKey(sessionId, options = {}) {

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 
@@ -35,11 +36,13 @@ function createRetainedConversationHelper({
    */
   function cleanupFailure(reason = "", cause = null) {
     const detail = String(reason || "").trim().slice(0, 512).replace(/[.\s]+$/u, "");
-    return Object.assign(new Error(`The ${scopePrefix} Helper could not be closed${detail ? `: ${detail}` : ""}. ` +
-      `Retry before starting another ${scopePrefix}.`, cause ? { cause } : undefined), {
+    const error = new AppError(409, `The ${scopePrefix} Helper could not be closed${detail ? `: ${detail}` : ""}. ` +
+      `Retry before starting another ${scopePrefix}.`, {
       code: "vibe64_retained_helper_cleanup_failed",
-      statusCode: 409
+      params: { scope: scopePrefix, reason: detail }
     });
+    if (cause) error.cause = cause;
+    return error;
   }
   async function cleanup(context) {
     const helper = await receipt.read();
@@ -69,15 +72,11 @@ function createRetainedConversationHelper({
   async function requireHelper(context, workloadId) {
     const decision = await terminals.resolveAssistantPurpose({ purpose: workloadId }, { vibe64User: authenticatedVibe64User(context) });
     if (!decision.available) {
-      throw Object.assign(
-        new Error(
-          `${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Review Models, then try again.`
-        ),
-        {
-          code: "vibe64_colleague_helper_unavailable",
-          statusCode: 409
-        }
-      );
+      const reason = decision.message ? String(decision.message).slice(0, 512) : "";
+      throw new AppError(409, `${reason ? `${reason} ` : ""}Review Models, then try again.`, {
+        code: "vibe64_colleague_helper_unavailable",
+        params: { reason }
+      });
     }
     return decision;
   }

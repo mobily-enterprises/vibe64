@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import {
   assertCanUseVibe64Assistant,
   canUseVibe64Assistant,
@@ -64,10 +65,7 @@ function createSessionAgentAccess({
     const { access, vibe64User } = context;
     assertCanUseVibe64Assistant(access, vibe64User);
     if (options.expectedConnectionIdentity && access.connectionIdentity !== options.expectedConnectionIdentity) {
-      throw Object.assign(new Error("The selected AI connection changed. Start a new request."), {
-        code: "vibe64_assistant_connection_changed",
-        statusCode: 409
-      });
+      throw new AppError(409, "The selected AI connection changed. Start a new request.", { code: "vibe64_assistant_connection_changed" });
     }
     return context;
   }

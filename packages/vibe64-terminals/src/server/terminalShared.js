@@ -1,5 +1,6 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 
 import {
@@ -68,11 +69,7 @@ function codexSessionWorkdirAllowed({
 }
 
 function openCodeError(code, message, details = {}, statusCode = 409) {
-  const error = new Error(message);
-  error.code = code;
-  error.details = { ...details };
-  error.statusCode = statusCode;
-  return error;
+  return new AppError(statusCode, message, { code, details: { ...details } });
 }
 
 const VIBE64_OPENCODE_ERROR_CODES = Object.freeze({
@@ -96,7 +93,7 @@ function openCodeSessionId(value = "") {
 }
 
 function claudeConversationError(message, code = "vibe64_claude_operation_failed") {
-  return Object.assign(new Error(message), { code, statusCode: 409 });
+  return new AppError(409, message, { code });
 }
 
 function vibe64Result(operation) {

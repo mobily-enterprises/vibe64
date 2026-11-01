@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
   assistantRoutingPreferences,
@@ -162,10 +163,7 @@ function createTemporaryConversationLifecycle({
     const messages = result.messages || [];
     const end = input.beforeMessageId ? messages.findIndex((message) => message.id === input.beforeMessageId) : messages.length;
     if (end < 0) {
-      throw Object.assign(new Error("This message cursor no longer exists. Read the latest messages again."), {
-        code: "vibe64_conversation_cursor_missing",
-        statusCode: 409
-      });
+      throw new AppError(409, "This message cursor no longer exists. Read the latest messages again.", { code: "vibe64_conversation_cursor_missing" });
     }
     const start = Math.max(0, end - (input.messageLimit || 12));
     return { ...result, messages: messages.slice(start, end), earlierMessages: start > 0 };

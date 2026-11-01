@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 import {
   PREVIEW_IDENTITY_LOGIN_OPERATION,
@@ -23,10 +24,7 @@ const PREVIEW_TOKEN_COOKIE_PREFIX = PREVIEW_PROXY_TOKEN_QUERY_PARAM;
 const COOKIE_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
 
 function previewIdentityCommandError(message = "", code = "vibe64_preview_identity_command_failed", statusCode = 502) {
-  const error = new Error(message || "Application preview identity command failed.");
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
+  return new AppError(statusCode, message || "Application preview identity command failed.", { code });
 }
 
 function commandRequestSubject(selection = {}) {

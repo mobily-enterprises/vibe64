@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import {
   createMainConversationBinding,
   readMainConversationHistory,
@@ -35,10 +36,7 @@ export async function replaceNativeConversation(sessionId, input, context, agent
   const expectedId = String(input.expectedConversationId || "");
   const handover = typeof input.handover === "string" ? input.handover.trim() : "";
   const fail = (message) => {
-    throw Object.assign(new Error(message), {
-      code: "vibe64_conversation_replacement_unavailable",
-      statusCode: 409
-    });
+    throw new AppError(409, message, { code: "vibe64_conversation_replacement_unavailable" });
   };
   if (!/^[a-zA-Z0-9_-]{1,128}$/u.test(operationId) || !expectedId || !handover || handover.length > 64 * 1024) {
     fail("Replacement requires an operation id, exact predecessor id and a handover of at most 65536 characters.");

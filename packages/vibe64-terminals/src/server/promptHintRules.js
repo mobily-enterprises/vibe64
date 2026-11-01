@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
@@ -54,10 +55,7 @@ function boundedText(value = "", maximum = 0) {
  * A prompt hint request's own identifiers are checked before any work starts.
  */
 function promptHintRequestError(message, code) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = 400;
-  return error;
+  return new AppError(400, message, { code });
 }
 
 function definePromptHintOperationId(value = "") {

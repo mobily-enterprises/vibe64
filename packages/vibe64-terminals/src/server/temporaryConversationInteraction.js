@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
   ACTION_START_TEMPORARY_CONVERSATION_TURN,
@@ -76,10 +77,7 @@ function createTemporaryConversationInteraction({
     async function execute(actionId, input, context) {
       const authority = context?.browserAuthority;
       if (!authority || authority.sessionId !== sessionId || authority.conversationId !== conversationId) {
-        throw Object.assign(new Error("Temporary commands require their original action authority."), {
-          code: "conversation_forbidden",
-          statusCode: 403
-        });
+        throw new AppError(403, "Temporary commands require their original action authority.", { code: "conversation_forbidden" });
       }
       return actions.execute({
         actionId,
@@ -154,10 +152,7 @@ function createTemporaryConversationInteraction({
         cancel: (_input, context) => execute(ACTION_STOP_TEMPORARY_CONVERSATION, {}, context),
         select(input, context) {
           if (!input || Object.keys(input).some(key => !["agentSettings", "assistantRouting"].includes(key))) {
-            throw Object.assign(new TypeError("Choose this conversation's declared mode or model."), {
-              code: "conversation_input_invalid",
-              statusCode: 400
-            });
+            throw new AppError(400, "Choose this conversation's declared mode or model.", { code: "conversation_input_invalid" });
           }
           return execute(ACTION_UPDATE_TEMPORARY_CONVERSATION, input, context);
         },

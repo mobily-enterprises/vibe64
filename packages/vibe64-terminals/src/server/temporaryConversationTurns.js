@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { normalizeVibe64AgentTaskResult, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { assistantRoutingStatusIsPending, assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
@@ -315,15 +316,7 @@ function createTemporaryConversationTurns({
       const record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
       if (selection.engineId === "codex" && Object.entries(record.nativeBindings || {}).some(([key, binding]) =>
         binding.assistantSelection.engineId === "codex" && key !== "codex")) {
-        throw Object.assign(
-          new Error(
-            "This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed."
-          ),
-          {
-            code: "vibe64_codex_history_unsupported",
-            statusCode: 409
-          }
-        );
+        throw new AppError(409, "This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed.", { code: "vibe64_codex_history_unsupported" });
       }
       if (record.assistantSelection.engineId !== selection.engineId) {
         await conversationRuntime.preparePersistentConversationChangeover({

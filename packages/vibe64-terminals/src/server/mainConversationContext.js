@@ -1,6 +1,7 @@
 // Reads the context a session's conversation runs in: its runtime, session, execution root and engine scope.
 
 import path from "node:path";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS,
   defineVibe64AssistantSelection,
@@ -32,18 +33,10 @@ function requireCompletedNativeConversationReplacement(session, options = {}) {
   const { requireBriefing = false } = options;
   const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
   if (state?.replacement?.status === "preparing") {
-    throw Object.assign(
-      new Error("Native conversation replacement is unfinished. Retry that operation before starting assistant work."),
-      { code: "vibe64_conversation_replacement_pending", statusCode: 409 }
-    );
+    throw new AppError(409, "Native conversation replacement is unfinished. Retry that operation before starting assistant work.", { code: "vibe64_conversation_replacement_pending" });
   }
   if (requireBriefing && state?.replacement?.status === "ready") {
-    throw Object.assign(
-      new Error(
-        "Send a chat message to deliver the saved continuity briefing before starting a native terminal or goal."
-      ),
-      { code: "vibe64_conversation_replacement_briefing_pending", statusCode: 409 }
-    );
+    throw new AppError(409, "Send a chat message to deliver the saved continuity briefing before starting a native terminal or goal.", { code: "vibe64_conversation_replacement_briefing_pending" });
   }
 }
 

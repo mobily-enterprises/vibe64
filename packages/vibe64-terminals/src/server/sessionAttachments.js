@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { copyFile, mkdir, open, readFile, readdir, rename, rm, utimes, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { prepareConversationAttachmentMessage } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   conversationAttachmentContentType,
@@ -25,7 +26,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 function attachmentDirectory(paths, id) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id)) {
-    throw Object.assign(new Error("Attachment id is invalid."), { statusCode: 400 });
+    throw new AppError(400, "Attachment id is invalid.", { code: "vibe64_agent_attachment_id_invalid" });
   }
   return path.join(paths.artifactsRoot, "attachments", id);
 }
@@ -104,11 +105,11 @@ function createSessionAttachments({ project, env = process.env }) {
         const session = await runtime.getSessionWithoutSource(sessionId);
         if (sessionIsClosing(session) || !vibe64SessionStatusIsOpen(session.status)) {
           const closingReason = sessionClosingReason(session);
-          throw Object.assign(new Error(closingReason
+          throw new AppError(409, closingReason
             ? `Session is ${closingReason}. Attachments cannot be added while it is closing.`
-            : "This session is closing. Attachments cannot be added now."), {
+            : "This session is closing. Attachments cannot be added now.", {
             code: "vibe64_agent_attachment_session_unavailable",
-            statusCode: 409
+            params: { reason: closingReason }
           });
         }
       }
@@ -133,7 +134,7 @@ function createSessionAttachments({ project, env = process.env }) {
   async function prepareMessage(context, input, options = {}) {
     const { durable = true, conversationId = "" } = options;
     const ids = [...new Set(Array.isArray(input.attachmentIds) ? input.attachmentIds : [])];
-    if (ids.length > 10) throw Object.assign(new Error("A message can include at most 10 attachments."), { statusCode: 400 });
+    if (ids.length > 10) throw new AppError(400, "A message can include at most 10 attachments.", { code: "vibe64_agent_attachment_limit_exceeded", params: { max: 10 } });
     const attachments = [];
     if (ids.length) {
       const resolved = await attachmentContext(context);
@@ -193,7 +194,7 @@ function createSessionAttachments({ project, env = process.env }) {
       if (!saved) {
         const executionRoot = sessionSourcePath(session);
         if (!executionRoot || !vibe64SessionStatusIsOpen(session.status)) {
-          throw Object.assign(new Error("This session has no such attachment."), { statusCode: 404 });
+          throw new AppError(404, "This session has no such attachment.", { code: "vibe64_agent_attachment_not_found" });
         }
         return withUploadedAgentAttachment(executionRoot, sessionId, id, openAttachment, { env });
       }
@@ -201,10 +202,7 @@ function createSessionAttachments({ project, env = process.env }) {
         return await openAttachment(saved);
       } catch (error) {
         if (error.code === "ENOENT" && !vibe64SessionStatusIsOpen(session.status)) {
-          throw Object.assign(new Error("This attachment is no longer retained. Its description remains in the chat."), {
-            code: "vibe64_agent_attachment_expired",
-            statusCode: 410
-          });
+          throw new AppError(410, "This attachment is no longer retained. Its description remains in the chat.", { code: "vibe64_agent_attachment_expired" });
         }
         throw error;
       }

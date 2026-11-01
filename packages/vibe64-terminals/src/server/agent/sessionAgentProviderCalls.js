@@ -1,3 +1,4 @@
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
 import {
   defineVibe64AgentExecutionProfileRequest,
@@ -182,10 +183,7 @@ function createSessionAgentProviderCalls({
     const terminalBinding = terminalId ? state.terminalBindings.get(terminalId) : null;
     if (method === "writeTerminal" && (!terminalBinding || terminalBinding.invalidated ||
         terminalBinding.sessionId !== toText(sessionId))) {
-      throw Object.assign(new Error("Reopen the AI terminal before sending input. Its connection is no longer bound to this session."), {
-        code: "vibe64_assistant_terminal_reopen_required",
-        statusCode: 409
-      });
+      throw new AppError(409, "Reopen the AI terminal before sending input. Its connection is no longer bound to this session.", { code: "vibe64_assistant_terminal_reopen_required" });
     }
     const boundTerminal = terminalBinding?.sessionId === toText(sessionId) && method.endsWith("Terminal");
     if (boundTerminal) {

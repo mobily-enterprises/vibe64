@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
   assistantRoutingPreferences,
@@ -23,11 +24,7 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
   async function recordFor(ctx, conversationId) {
     const record = await ctx.runtime.store.readSessionConversation(ctx.session.sessionId, conversationId);
     if (!record) {
-      throw Object.assign(new Error("This conversation has been closed."), {
-        code: "vibe64_conversation_closed",
-        statusCode: 404,
-        conversationExpired: true
-      });
+      throw new AppError(404, "This conversation has been closed.", { code: "vibe64_conversation_closed" });
     }
     return record;
   }
@@ -51,10 +48,7 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
     const saved = await ctx.runtime.store.mutateSession(ctx.session.sessionId, async () => {
       const current = await recordFor(ctx, record.conversationId);
       if (requireOpen && current.state === "closing") {
-        throw Object.assign(new Error("This conversation is closing."), {
-          code: "vibe64_conversation_closing",
-          statusCode: 409
-        });
+        throw new AppError(409, "This conversation is closing.", { code: "vibe64_conversation_closing" });
       }
       patch = patchFor(current);
       const next = { ...patch };

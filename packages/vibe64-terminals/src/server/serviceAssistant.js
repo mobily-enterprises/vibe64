@@ -245,16 +245,14 @@ function createServiceAssistant({
 
   function updateAssistantModelAccess(input = {}, options = {}) {
     if (input.engineId !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE) {
-      const error = new Error("Only OpenCode providers expose configurable model access.");
-      error.code = "vibe64_assistant_model_access_not_configurable";
-      error.statusCode = 400;
-      throw error;
+      throw new AppError(400, "Only OpenCode providers expose configurable model access.", {
+        code: "vibe64_assistant_model_access_not_configurable"
+      });
     }
     if (!state.assistantRuntime.updateModelAccess) {
-      const error = new Error("This Vibe64 host does not support changing provider model access.");
-      error.code = "vibe64_assistant_model_access_unavailable";
-      error.statusCode = 503;
-      throw error;
+      throw new AppError(503, "This Vibe64 host does not support changing provider model access.", {
+        code: "vibe64_assistant_model_access_unavailable"
+      });
     }
     return state.assistantRuntime.updateModelAccess({
       engineId: input.engineId,
@@ -539,10 +537,7 @@ function createServiceAssistant({
 
   async function openBrowserConversation(sessionId, options = {}) {
     if (!options.browserAuthority || options.browserAuthority.sessionId !== sessionId) {
-      throw Object.assign(new Error("Main browser conversations require current project access."), {
-        code: "conversation_forbidden",
-        statusCode: 403
-      });
+      throw new AppError(403, "Main browser conversations require current project access.", { code: "conversation_forbidden" });
     }
     const diagnostics = realtimeDebugEnabled(env);
     let phase = "session-read";
@@ -616,10 +611,7 @@ function createServiceAssistant({
   async function openTemporaryBrowserConversation(sessionId, conversationId, options = {}) {
     const authority = options.browserAuthority;
     if (!authority || authority.sessionId !== sessionId || authority.conversationId !== conversationId) {
-      throw Object.assign(new Error("Temporary browser conversations require current project access."), {
-        code: "conversation_forbidden",
-        statusCode: 403
-      });
+      throw new AppError(403, "Temporary browser conversations require current project access.", { code: "conversation_forbidden" });
     }
     const context = await assistantContext.assistantSessionOptions(sessionId, options);
     return mainConversations.open({
