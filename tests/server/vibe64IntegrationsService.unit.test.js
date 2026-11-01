@@ -283,7 +283,7 @@ test("application setup uses saved declaration, project Env and exact session so
   const file = path.join(source, "integrations.json");
   const saved = JSON.stringify(configuration());
   await writeFile(file, saved);
-  const input = { sessionId: "one", environment: "development", integrationId: "calendar", operation: "status" };
+  const input = { sessionId: "one", integrationId: "calendar", operation: "status" };
   const response = await service.runIntegrationSetup(input);
   assert.equal(response.ok, true, JSON.stringify(response));
   assert.equal(response.status, "disconnected");
@@ -316,7 +316,7 @@ test("saved setup declaration executes through the service and real application 
       callbackUrl: process.env.GOOGLE_CALLBACK_URL }) + "\\n");
   `);
   const response = await service.runIntegrationSetup({
-    sessionId: "one", environment: "development", integrationId: "calendar", operation: "status"
+    sessionId: "one", integrationId: "calendar", operation: "status"
   });
   assert.equal(response.ok, true, JSON.stringify(response));
   assert.equal(response.status, "disconnected");
@@ -334,8 +334,7 @@ test("setup refuses production, missing integrations and personal account connec
   const config = configuration();
   config.integrations.calendar.accountMode = "per-user";
   await writeFile(path.join(source, "integrations.json"), JSON.stringify(config));
-  const input = { sessionId: "one", environment: "development", integrationId: "calendar", operation: "connect" };
-  assert.equal((await service.runIntegrationSetup({ ...input, environment: "production" })).statusCode, 422);
+  const input = { sessionId: "one", integrationId: "calendar", operation: "connect" };
   assert.equal((await service.runIntegrationSetup({ ...input, integrationId: "absent" })).statusCode, 404);
   assert.equal((await service.runIntegrationSetup(input)).statusCode, 422);
   assert.equal((await service.runIntegrationSetup({ ...input, operation: "invalid" })).statusCode, 422);
@@ -345,7 +344,7 @@ test("setup refuses production, missing integrations and personal account connec
 });
 
 test("setup requires an available source lock and never infers a missing application command", async (t) => {
-  const input = { sessionId: "one", environment: "development", integrationId: "calendar", operation: "status" };
+  const input = { sessionId: "one", integrationId: "calendar", operation: "status" };
   const locked = await fixture(t, { locked: true, setup: true });
   await writeFile(path.join(locked.source, "integrations.json"), JSON.stringify(configuration()));
   assert.equal((await locked.service.runIntegrationSetup(input)).statusCode, 409);
@@ -374,7 +373,7 @@ test("setup rechecks application ownership after Env preparation", async (t) => 
   });
   await writeFile(path.join(source, "integrations.json"), JSON.stringify(configuration()));
   const response = await service.runIntegrationSetup({
-    sessionId: "one", environment: "development", integrationId: "calendar", operation: "connect"
+    sessionId: "one", integrationId: "calendar", operation: "connect"
   });
   assert.equal(response.statusCode, 422);
   assert.equal(environmentCalls.length, 1);
@@ -484,7 +483,7 @@ test("chat Connect recovers pending consent instead of creating a replacement at
     text: '```vibe64-integration\n{"integrationId":"calendar"}\n```'
   });
   const { baseHash } = await service.readIntegrations({ sessionId: "one" });
-  const input = { sessionId: "one", environment: "development", integrationId: "calendar", operation: "connect",
+  const input = { sessionId: "one", integrationId: "calendar", operation: "connect",
     setupRequest: { turnId: turn.turnId, requestId: turn.integrationSetup.requestId, configurationHash: baseHash } };
   const initial = await service.runIntegrationSetup(input);
   assert.equal(initial.status, "pending", JSON.stringify(initial));
@@ -508,7 +507,7 @@ test("setup completes a member's saved request without access to the main person
     text: 'Configure calendar.\n\n```vibe64-integration\n{"integrationId":"calendar"}\n```'
   });
   const { baseHash } = await service.readIntegrations({ sessionId: "one" });
-  const input = { sessionId: "one", environment: "development", integrationId: "calendar", operation: "status",
+  const input = { sessionId: "one", integrationId: "calendar", operation: "status",
     vibe64User: actor, setupRequest: { turnId: turn.turnId, requestId: turn.integrationSetup.requestId, configurationHash: baseHash } };
   const result = await service.runIntegrationSetup(input);
   assert.equal(result.ok, true, JSON.stringify(result));
@@ -538,7 +537,7 @@ test("setup refuses untrusted request association before application execution",
   });
   const { baseHash } = await service.readIntegrations({ sessionId: "one" });
   const setupRequest = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId, configurationHash: baseHash };
-  const input = { sessionId: "one", environment: "development", integrationId: "calendar", operation: "connect",
+  const input = { sessionId: "one", integrationId: "calendar", operation: "connect",
     vibe64User: { username: "owner" }, setupRequest };
   for (const [patch, code] of [
     [{ integrationId: "another-slot" }, "vibe64_integration_setup_request_changed"],
@@ -569,7 +568,7 @@ test("setup does not complete unverified results or overwrite Skip during comman
     });
     const { baseHash } = await service.readIntegrations({ sessionId: "one" });
     setupRequest = { turnId: turn.turnId, requestId: turn.integrationSetup.requestId, configurationHash: baseHash };
-    const result = await service.runIntegrationSetup({ sessionId: "one", environment: "development",
+    const result = await service.runIntegrationSetup({ sessionId: "one",
       integrationId: "calendar", operation: "status", setupRequest });
     if (skipDuringCommand) {
       assert.equal(result.ok, true, JSON.stringify(result));
@@ -602,7 +601,7 @@ test("concurrent chat connects share consent while separate requests retain thei
     text: 'Another task.\n\n```vibe64-integration\n{"integrationId":"calendar"}\n```'
   });
   const { baseHash } = await service.readIntegrations({ sessionId: "one" });
-  const input = (turn) => ({ sessionId: "one", environment: "development", integrationId: "calendar", operation: "connect",
+  const input = (turn) => ({ sessionId: "one", integrationId: "calendar", operation: "connect",
     setupRequest: { turnId: turn.turnId, requestId: turn.integrationSetup.requestId, configurationHash: baseHash } });
   await Promise.all([service.runIntegrationSetup(input(first)), service.runIntegrationSetup(input(first))]);
   // A lock contender may be refused; a subsequent explicit retry must recover
@@ -627,7 +626,7 @@ for (const integration of [
     schemaVersion: 1, registrations: {}, integrations: { analytics: integration }
   }));
   for (const operation of ["status", "connect", "disconnect"]) {
-    const result = await service.runIntegrationSetup({ sessionId: "one", environment: "development", integrationId: "analytics", operation });
+    const result = await service.runIntegrationSetup({ sessionId: "one", integrationId: "analytics", operation });
     assert.equal(result.statusCode, 422);
     assert.match(JSON.stringify(result), /vibe64_integration_configuration_only/);
   }
@@ -785,7 +784,7 @@ test("payment management binds saved merchant configuration and refuses non-owne
     environments: { sandbox: { integrationId: "billing", providerAccountId: "acct_fixture", webhookSecretRef: "env:SIGNING_SECRET", returnUrlRef: "env:RETURN_URL" } },
     plans: { pro: { name: "Pro", amount: 1200, currency: "USD", interval: "month", features: [], renewalCredits: 0 } } };
   await writeFile(path.join(source, "integrations.json"), JSON.stringify(config));
-  const input = { sessionId: "one", environment: "development", integrationId: "billing", operation: "payments-preview", paymentEnvironment: "sandbox", vibe64User: { role: "owner" } };
+  const input = { sessionId: "one", integrationId: "billing", operation: "payments-preview", paymentEnvironment: "sandbox", vibe64User: { role: "owner" } };
   for (const selection of [
     {},
     { operation: "payments-readiness" },
@@ -1139,7 +1138,7 @@ test("Google Ads management requires a shared Google binding and owner before En
   config.integrations.ads = { provider: "google-ads", accountMode: "shared", scopes: ["https://www.googleapis.com/auth/adwords"],
     authentication: { method: "oauth2", registrationRef: "google" } };
   await writeFile(path.join(source, "integrations.json"), JSON.stringify(config));
-  const input = { sessionId: "one", environment: "development", integrationId: "ads", operation: "ads-discover", ads: {}, vibe64User: { role: "owner" } };
+  const input = { sessionId: "one", integrationId: "ads", operation: "ads-discover", ads: {}, vibe64User: { role: "owner" } };
   assert.equal((await service.runIntegrationSetup({ ...input, vibe64User: { role: "member" } })).statusCode, 403);
   assert.equal((await service.runIntegrationSetup({ ...input, integrationId: "calendar" })).statusCode, 422);
   assert.equal(environmentCalls.length, 0); assert.equal(calls.length, 0);

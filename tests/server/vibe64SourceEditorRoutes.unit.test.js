@@ -413,7 +413,7 @@ test("integration setup accepts selections only; executable, Env and session rem
     assert.equal(calls.length, 0);
     for (const key of ["environment", "command", "env", "sourceRoot"]) delete request.input.body[key];
     await route.handler(request, reply);
-    assert.deepEqual(calls, [{ sessionId: "session-1", integrationId: "calendar", environment: "development",
+    assert.deepEqual(calls, [{ sessionId: "session-1", integrationId: "calendar",
       operation: "connect", vibe64User: { username: "trusted-owner" },
       setupRequest: { turnId: "000001", requestId: "a".repeat(64), configurationHash: "b".repeat(64) },
       verificationInput: { account: "fixture" } }]);

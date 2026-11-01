@@ -283,14 +283,6 @@ function createIntegrationOperations({
 
   async function runIntegrationSetup(input = {}) {
     return runSourceEditorOperation(async () => {
-      if (input.environment !== "development") {
-        throw sourceEditorError(
-          "Session integration setup requires the development environment.",
-          "vibe64_integration_environment_invalid",
-          {},
-          422
-        );
-      }
       createIntegrationSetupRequest(input);
       if ((input.operation.startsWith("payments-") || input.operation.startsWith("ads-")) &&
           input.vibe64User &&

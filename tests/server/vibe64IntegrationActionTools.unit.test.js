@@ -140,7 +140,6 @@ test("integration connection tools retain exact selections and omit consent URLs
     assert.equal(response.ok, true, JSON.stringify(response));
     assert.deepEqual(response.result, { ok: true, status: "pending", consentRequired: true, attemptId: "attempt-one", expiresAt: state.setupResult.expiresAt });
     assert.equal(JSON.stringify(response).includes("private"), false);
-    assert.equal(calls.at(-1).input.environment, "development");
     assert.equal(calls.at(-1).input.vibe64User, state.actor);
     state.setupResult = { status: "connected", verifiedAt: "2026-09-29T11:00:00Z", accountLabel: "Fixture account", grantedScopes: ["read-records"] };
     state.setupRequestResult = { outcome: "completed", message: "private-chat-details" };

@@ -324,7 +324,7 @@ function createSourceEditorActions({ sourceEditor }) {
         mode: "create"
       },
       extensions: { assistant: integrationSetupTool(), vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.runIntegrationSetup({ ...input, environment: "development" })
+      execute: (input) => sourceEditor.runIntegrationSetup(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
