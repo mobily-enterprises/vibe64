@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import {
   vibe64Error,
   isPlainObject,
@@ -194,7 +195,7 @@ async function quarantineAbandonedSessionLock(lockPath = "") {
 async function acquireSessionLock(sessionPaths, lockName = "", {
   // The caller retries or falls back, so a refusal is routine information.
   expectedRefusal = false,
-  logger = null,
+  logger = silentLogger,
   onRejected = null,
   operation = "",
   processPlatform = process.platform,

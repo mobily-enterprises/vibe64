@@ -1,5 +1,6 @@
 import { access } from "node:fs/promises";
 
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import {
   APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
@@ -65,7 +66,7 @@ function terminalOwnerForGithubActor({
 async function resolveRequestGithubTerminalToolHome({
   env = process.env,
   input = {},
-  logger = null,
+  logger = silentLogger,
   notReadyMessage = "GitHub is not ready. Connect GitHub before running repository commands.",
   operation = "",
   terminalKind = "project-tool",
