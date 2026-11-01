@@ -12,7 +12,7 @@ export function erdObstacles(nodes = [], clearance = CLEARANCE) {
   }));
 }
 
-export function segmentBlocked(a, b, obstacles, ignoreStart = null, ignoreEnd = null) {
+function segmentBlocked(a, b, obstacles, ignoreStart = null, ignoreEnd = null) {
   return obstacles.some((box) => box.id !== ignoreStart && box.id !== ignoreEnd && (a.x === b.x
     ? a.x > box.left && a.x < box.right && Math.max(a.y, b.y) > box.top && Math.min(a.y, b.y) < box.bottom
     : a.y > box.top && a.y < box.bottom && Math.max(a.x, b.x) > box.left && Math.min(a.x, b.x) < box.right));

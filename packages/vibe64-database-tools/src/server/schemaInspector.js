@@ -709,6 +709,5 @@ async function inspectSqliteSchema(knex, connection = {}) {
 export {
   inspectSqliteSchema,
   inspectMysqlSchema,
-  inspectPostgresSchema,
-  rawRows
+  inspectPostgresSchema
 };

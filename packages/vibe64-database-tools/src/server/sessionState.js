@@ -286,20 +286,14 @@ async function saveErdLayout(store, sessionId = "", layout = {}, options = {}) {
 }
 
 export {
-  HISTORY_LIMIT,
-  LAYOUT_NODE_LIMIT,
-  SCHEMA_ARTIFACT_PATH,
-  SNIPPET_LIMIT,
   actorIdentity,
   actorKey,
   deleteSnippet,
-  mutateWorkspace,
   readErdLayout,
   readSchemaSnapshot,
   readWorkspace,
   recordQueryHistory,
   saveErdLayout,
   saveSnippet,
-  workspaceArtifactPath,
   writeSchemaSnapshot
 };

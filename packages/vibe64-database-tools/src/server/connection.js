@@ -155,10 +155,7 @@ async function withSessionKnex(endpoint, operation) {
 }
 
 export {
-  DATABASE_POOL_ACQUIRE_TIMEOUT_MS,
-  DATABASE_POOL_MAX,
   createSessionKnex,
   resolveDatabaseConnection,
-  safeConnectionUrl,
   withSessionKnex
 };

@@ -185,9 +185,7 @@ function queryId(value = "") {
 }
 
 export {
-  MAX_QUERY_TEXT_BYTES,
   assertSingleStatement,
   queryId,
-  sqlSegments,
   statementCommand
 };

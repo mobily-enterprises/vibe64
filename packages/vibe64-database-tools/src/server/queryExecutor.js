@@ -584,10 +584,6 @@ async function deleteDatabaseRow({
 }
 
 export {
-  QUERY_RESPONSE_BYTES,
-  QUERY_ROW_LIMIT,
-  QUERY_TIMEOUT_MS,
-  boundedRows,
   cancelDatabaseQuery,
   deleteDatabaseRow,
   databaseValue,
@@ -595,6 +591,5 @@ export {
   insertDatabaseRow,
   jsonSafeValue,
   normalizeRawResponse,
-  updateDatabaseCell,
-  validatedKey
+  updateDatabaseCell
 };
