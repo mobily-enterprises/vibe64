@@ -65,7 +65,7 @@ function archiveFixture(phase = "", archivePreparation = prepareNothingForArchiv
 
 test("ordinary archival has no preparation policy unless a host registers it", async () => {
   const f = archiveFixture();
-  assert.equal((await f.service.archiveSession("session-a")).ok, true);
+  assert.equal((await f.service.archiveSession("session-a", {})).ok, true);
   assert.deepEqual(f.calls, ["stop", "resources", "archive"]);
   await assert.rejects(() => Vibe64SessionsFeature.setup({ archivePreparation: {} }, {}), /function or null/u);
 });
@@ -79,7 +79,7 @@ test("preparation sees stopped, current session state before resource and source
     f.calls.push("prepare");
     await runtime.store.writeMetadataValue(session.sessionId, "prepared", "yes");
   });
-  const result = await f.service.archiveSession("session-a");
+  const result = await f.service.archiveSession("session-a", {});
   assert.equal(result.ok, true);
   assert.equal(result.metadata.prepared, "yes");
   assert.deepEqual(f.calls, ["stop", "prepare", "resources", "archive"]);
@@ -93,14 +93,14 @@ for (const failure of ["throw", "result"]) {
       if (failure === "throw") throw new Error("History could not be preserved");
       return { ok: false, error: "History could not be preserved" };
     });
-    const failed = await f.service.archiveSession("session-a");
+    const failed = await f.service.archiveSession("session-a", {});
     assert.equal(failed.ok, false);
     assert.match(failed.error, /History could not be preserved/u);
     assert.equal(f.session.status, "active");
     assert.equal(JSON.parse(f.session.metadata.session_archive_operation).status, "failed");
     assert.deepEqual(f.calls, ["stop"]);
     failing = false;
-    assert.equal((await f.service.archiveSession("session-a")).ok, true);
+    assert.equal((await f.service.archiveSession("session-a", {})).ok, true);
     assert.deepEqual(f.calls, ["stop", "stop", "resources", "archive"]);
   });
 }
@@ -111,7 +111,7 @@ for (const phase of ["resources", "source"]) {
       assert.equal(context.phase, phase);
       f.calls.push("prepare");
     });
-    assert.equal((await f.service.archiveSession("session-a")).ok, true);
+    assert.equal((await f.service.archiveSession("session-a", {})).ok, true);
     assert.deepEqual(f.calls, phase === "resources"
       ? ["prepare", "resources", "archive"] : ["prepare", "archive"]);
   });
@@ -125,7 +125,7 @@ test("preparation stays inside the session agent-write lock", { timeout: 10_000 
     entered.resolve();
     await release.promise;
   });
-  const archiving = f.service.archiveSession("session-a");
+  const archiving = f.service.archiveSession("session-a", {});
   await Promise.race([entered.promise, archiving.then(result => assert.fail(
     `Archiving returned before preparation entered: ${JSON.stringify(result)}`))]);
   try {
@@ -201,7 +201,7 @@ test("preparation writes survive real archive publication without changing the s
         await runtime.store.writeConversationUserMessage("session-a", { text: "Preserve final history" });
       } }
     });
-    const result = await service.archiveSession("session-a");
+    const result = await service.archiveSession("session-a", {});
     assert.equal(result.ok, true, result.error);
     assert.equal(result.status, "archived");
     await runtime.store.withArchivedSession("session-a", async (session) => {

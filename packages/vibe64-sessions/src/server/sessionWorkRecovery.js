@@ -46,8 +46,7 @@ function createSessionWorkRecovery({
     const failedPublication = task?.status === "failed" && (
       task.stage === "publishing" || task.code === "vibe64_session_save_publication_unknown"
     );
-    // readable-check: allow method-probe - test asserts error: vibe64ConnectedSave holds a receiving Save unfinished through a terminal without Save recovery
-    if ((task?.status !== "running" && !failedPublication) || typeof terminals.recoverSessionWorkSave !== "function") {
+    if (task?.status !== "running" && !failedPublication) {
       return task;
     }
     if (workOperations.operationId("save", session.sessionId) === normalizeText(task.operationId)) {

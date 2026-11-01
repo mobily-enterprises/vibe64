@@ -58,7 +58,7 @@ test("ordinary archive preserves the visible predecessor of a failed renewal", a
     metadata: { renewal_id: "renewal-1", renewed_from: "session-a" }
   };
   f.runtime.store.listSessionsForRenewal = async () => [f.session, successor];
-  const blocked = await f.service().archiveSession("session-a");
+  const blocked = await f.service().archiveSession("session-a", {});
   assert.equal(blocked.ok, false);
   assert.equal(blocked.code, "vibe64_session_renewal_blocks_archive");
   assert.match(blocked.error, /Retry/u);
@@ -69,7 +69,7 @@ test("ordinary archive preserves the visible predecessor of a failed renewal", a
   assert.equal(successor.status, "renewal_pending");
 
   successor.status = "active";
-  assert.equal((await f.service().archiveSession("session-a")).ok, true);
+  assert.equal((await f.service().archiveSession("session-a", {})).ok, true);
 });
 
 for (const [phase, expected] of [
@@ -102,7 +102,7 @@ test("failure is durable, announced, and not repeatedly retried at startup", asy
   await f.service().resumeSessionArchives();
   assert.deepEqual(f.events, []);
   f.project.releaseSessionResources = async () => { f.calls.push("resources"); return { ok: true }; };
-  assert.equal((await f.service().archiveSession("session-a")).ok, true);
+  assert.equal((await f.service().archiveSession("session-a", {})).ok, true);
   assert.deepEqual(f.calls, ["stop", "resources", "source"]);
 });
 
@@ -121,7 +121,7 @@ test("an unreadable archive marker is reported per session and recovery continue
 test("archiving refuses an archive marker with an unknown phase and keeps it", async () => {
   const f = fixture({ status: "running", phase: "elsewhere" });
   const marker = f.session.metadata.session_archive_operation;
-  const result = await f.service().archiveSession("session-a");
+  const result = await f.service().archiveSession("session-a", {});
   assert.equal(result.ok, false);
   assert.equal(result.code, "vibe64_session_archive_state_invalid");
   assert.match(result.error, /recovery evidence was preserved/u);
@@ -132,7 +132,7 @@ test("archiving refuses an archive marker with an unknown phase and keeps it", a
 test("structured cleanup refusal never removes source", async () => {
   const f = fixture();
   f.project.releaseSessionResources = async () => ({ ok: false, error: "Cleanup refused" });
-  const response = await f.service().archiveSession("session-a");
+  const response = await f.service().archiveSession("session-a", {});
   assert.equal(response.ok, false);
   assert.deepEqual(f.calls, ["stop"]);
   assert.equal(f.session.status, "active");
@@ -213,7 +213,7 @@ test("phase announcements follow durable progress before the next slow operation
     assert.equal(f.events.filter(e => e.reason === "session-archive-progress").length, 2);
     return f.session;
   };
-  assert.equal((await f.service().archiveSession("session-a")).ok, true);
+  assert.equal((await f.service().archiveSession("session-a", {})).ok, true);
 });
 
 test("the archive's stopping phase removes the session's command helpers with its runtime", async () => {
@@ -223,6 +223,6 @@ test("the archive's stopping phase removes the session's command helpers with it
     assert.equal(runtime, f.runtime);
     f.calls.push("helpers");
   };
-  assert.equal((await f.service().archiveSession("session-a")).ok, true);
+  assert.equal((await f.service().archiveSession("session-a", {})).ok, true);
   assert.deepEqual(f.calls, ["stop", "helpers", "resources", "source"]);
 });

@@ -10,18 +10,18 @@ const REPOSITORY_UPDATE_PROBE_RETRY_MS = 60_000;
  * as long as the project's record. A probe never overlaps itself: ticks that
  * pass while one runs are skipped.
  * @param {object} dependencies
- * @param {typeof clearTimeout} [dependencies.clearTimer]
+ * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
  * @param {() => number} [dependencies.now]
  * @param {(error: Error, projectSlug: string) => void} dependencies.onError
  * @param {(slug: string, state: object) => Promise<object>} dependencies.probe
- * @param {typeof setTimeout} [dependencies.setTimer]
+ * @param {typeof setTimeout} [dependencies.setTimeoutFn]
  */
 function createRepositoryUpdateProbe({
-  clearTimer = clearTimeout,
+  clearTimeoutFn = clearTimeout,
   now = Date.now,
   onError,
   probe,
-  setTimer = setTimeout
+  setTimeoutFn = setTimeout
 }) {
   const projects = new Map();
   let closed = false;
@@ -67,7 +67,7 @@ function createRepositoryUpdateProbe({
     const elapsed = Math.max(0, now() - entry.lastStartedAt);
     const delay = elapsed < period ? period - elapsed
       : afterProbe ? (period - (elapsed % period)) % period : 0;
-    entry.timer = setTimer(() => {
+    entry.timer = setTimeoutFn(() => {
       entry.timer = null;
       void run(slug, entry);
     }, delay);
@@ -125,7 +125,7 @@ function createRepositoryUpdateProbe({
   function close() {
     closed = true;
     for (const entry of projects.values()) {
-      if (entry.timer) clearTimer(entry.timer);
+      if (entry.timer) clearTimeoutFn(entry.timer);
       entry.timer = null;
     }
     projects.clear();

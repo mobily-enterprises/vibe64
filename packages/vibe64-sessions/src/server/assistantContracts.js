@@ -460,8 +460,28 @@ function conversationOperationTool(description) {
   });
 }
 
-function renewalTool(description, options = {}) {
-  const { includeDraft = false } = options;
+/**
+ * A renewal tool reports the draft's revision but never its text.
+ * @param {string} description
+ */
+function renewalTool(description) {
+  return buildRenewalTool(description, () => ({}));
+}
+
+/**
+ * The renewal inspection also returns the draft's text, so the assistant can
+ * read the handover it is asked to review.
+ * @param {string} description
+ */
+function renewalInspectionTool(description) {
+  return buildRenewalTool(description, (draft) => ({ draftText: draft.text }));
+}
+
+/**
+ * @param {string} description
+ * @param {(draft: { text: string }) => { draftText?: string }} draftTextFields
+ */
+function buildRenewalTool(description, draftTextFields) {
   const strings = {
     ...limits(["sessionId", "renewalId", "operationKey", "status", "stage", "successorSessionId", "updatedAt",
       "draftHash", "draftOrigin", "code", "maintenanceStatus"]),
@@ -503,7 +523,7 @@ function renewalTool(description, options = {}) {
         ...(renewal ? { manualRequired: renewal.manualRequired === true } : {}),
         ...(renewal?.draft ? {
           draftRevision: renewal.draft.revision,
-          ...(includeDraft ? { draftText: renewal.draft.text } : {})
+          ...draftTextFields(renewal.draft)
         } : {})
       };
     }
@@ -609,6 +629,7 @@ export {
   repositoryHistoryTool,
   repositoryVersionFilesTool,
   conversationOperationTool,
+  renewalInspectionTool,
   renewalTool,
   sessionTool,
   sessionWorkTool,

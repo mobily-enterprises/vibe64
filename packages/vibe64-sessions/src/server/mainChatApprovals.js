@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { readActiveSessionMetadataValues } from "@local/vibe64-runtime/server/sessionStore";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
@@ -22,7 +23,7 @@ const NOTE_MAX_LENGTH = 500;
 const ENTRY_ID_PATTERN = /^[A-Za-z0-9_-]{8,100}$/u;
 
 function failure(message, code, statusCode) {
-  return Object.assign(new Error(message), { code, statusCode });
+  return new AppError(statusCode, message, { code });
 }
 
 function person(vibe64User = null) {
@@ -39,7 +40,11 @@ function parseApprovals(raw = "") {
   if (!normalizeText(raw)) return { schemaVersion: 1, entries: [] };
   const value = JSON.parse(raw);
   if (value?.schemaVersion !== 1 || !Array.isArray(value.entries)) {
-    throw failure("This chat's approval queue is unreadable.", "vibe64_main_chat_approvals_invalid", 500);
+    // An unreadable queue is a server fault, so its message stays hidden from HTTP callers.
+    throw Object.assign(new Error("This chat's approval queue is unreadable."), {
+      code: "vibe64_main_chat_approvals_invalid",
+      statusCode: 500
+    });
   }
   return value;
 }
@@ -155,7 +160,7 @@ function createMainChatApprovals({
     };
   }
 
-  async function enqueue(sessionId, { message, messageId = "", attachmentIds = [] } = {}, { vibe64User }) {
+  async function enqueue(sessionId, { message, messageId = "", attachmentIds = [] }, { vibe64User }) {
     if (attachmentIds.length) {
       throw failure("Messages for approval are text only. Remove the attachments and send again.",
         "vibe64_main_chat_approval_text_only", 400);
@@ -232,7 +237,7 @@ function createMainChatApprovals({
    * id is stable per revision: approving a message already sending retries
    * the stored text, and an edited text is a new delivery.
    */
-  async function approve(sessionId, approvalId, { expectedRevision, text: editedText } = {}, { vibe64User, browserAuthority = null }) {
+  async function approve(sessionId, approvalId, { expectedRevision, text: editedText }, { vibe64User, browserAuthority = null }) {
     requireOwner(vibe64User);
     const entry = await change(sessionId, "main-chat-approval-approved", (approvals) => {
       const current = entryFor(approvals, approvalId);

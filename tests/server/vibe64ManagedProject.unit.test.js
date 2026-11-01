@@ -462,7 +462,7 @@ test("shared managed repository owner provisions and clones a real private pract
         const runtime = await project.createRuntimeWithoutSource({ createSessionSource: context =>
           project.runProjectSourceExclusive(async () => createSessionSource({ ...context, project: await project.readCurrentProject(),
             runCommand: directCommand }), { operation: "session-source-create" }) });
-        const session = await runtime.createSession({ sessionId: `training-${training.practiceId}`,
+        const session = await runtime.createSession({ metadata: {}, sessionId: `training-${training.practiceId}`,
           sourceContext: { expectedCommit: proof.commit, vibe64User: actor } });
         const { sessionSourcePath } = await import("@local/vibe64-core/server/sessionSourcePath");
         const source = sessionSourcePath(session);

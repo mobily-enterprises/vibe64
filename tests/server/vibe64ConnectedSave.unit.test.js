@@ -91,6 +91,11 @@ test("connected Save commits and records each receiver, resumes after failure, a
         async checkSessionUpdates(_id, { session }) {
           return { ok: true, ahead: 0, behind: 0, canonicalCommit: session.metadata.canonical_commit };
         },
+        // An interrupted receiving Save recovers as pushed but not yet reconciled.
+        async recoverSessionWorkSave(_id, { session }) {
+          return { reconciled: false, saveCommit: session.metadata.canonical_commit };
+        },
+        async retireSessionWorkSave() {},
         async inspectSessionWork(_id, { session, inspectContributionPublication, knownSubmittedCommit }) {
           const target = currentProjectRequestContext().slug;
           return { ok: true, unsaved: dirty.has(target), ahead: dirty.has(target) ? 1 : 0,

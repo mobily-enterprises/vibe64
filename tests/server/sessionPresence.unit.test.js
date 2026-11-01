@@ -29,12 +29,12 @@ function fakeClock(initialNow = Date.parse("2026-08-25T01:00:00.000Z")) {
   let nextId = 1;
   const timers = new Map();
   return {
-    clearTimer(timer) {
+    clearTimeoutFn(timer) {
       timers.delete(timer?.id);
     },
     now: () => current,
     pending: () => timers.size,
-    setTimer(callback, delay) {
+    setTimeoutFn(callback, delay) {
       const timer = {
         dueAt: current + delay,
         id: nextId,
@@ -132,11 +132,11 @@ test("heartbeats replace local expiry and stale updates cannot rewind presence",
   const clock = fakeClock();
   const published = [];
   const service = createSessionPresenceService({
-    clearTimer: clock.clearTimer,
+    clearTimeoutFn: clock.clearTimeoutFn,
     now: clock.now,
     onPublishError: () => {},
     publishPresence: async (payload) => published.push(payload),
-    setTimer: clock.setTimer
+    setTimeoutFn: clock.setTimeoutFn
   });
 
   assert.equal((await service.update(presenceInput())).status, "typing");
@@ -160,11 +160,11 @@ test("explicit idle retains a short sequence tombstone and origins remain indepe
   const clock = fakeClock();
   const published = [];
   const service = createSessionPresenceService({
-    clearTimer: clock.clearTimer,
+    clearTimeoutFn: clock.clearTimeoutFn,
     now: clock.now,
     onPublishError: () => {},
     publishPresence: async (payload) => published.push(payload),
-    setTimer: clock.setTimer
+    setTimeoutFn: clock.setTimeoutFn
   });
 
   await service.update(presenceInput());
@@ -193,7 +193,7 @@ test("presence storage is bounded and publication failure stays ephemeral", asyn
   const errors = [];
   const published = [];
   const service = createSessionPresenceService({
-    clearTimer: clock.clearTimer,
+    clearTimeoutFn: clock.clearTimeoutFn,
     maxEntries: 1,
     now: clock.now,
     onPublishError: (error) => errors.push(error.message),
@@ -203,7 +203,7 @@ test("presence storage is bounded and publication failure stays ephemeral", asyn
         throw new Error("socket unavailable");
       }
     },
-    setTimer: clock.setTimer
+    setTimeoutFn: clock.setTimeoutFn
   });
 
   await service.update(presenceInput());
@@ -222,11 +222,11 @@ test("temporary chats have independent presence sequences and expiry within the 
   const clock = fakeClock();
   const published = [];
   const service = createSessionPresenceService({
-    clearTimer: clock.clearTimer,
+    clearTimeoutFn: clock.clearTimeoutFn,
     now: clock.now,
     onPublishError: () => {},
     publishPresence: async (payload) => published.push(payload),
-    setTimer: clock.setTimer
+    setTimeoutFn: clock.setTimeoutFn
   });
   try {
     for (const conversationId of ["", "temporary-one", "temporary-two"]) {

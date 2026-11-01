@@ -8,6 +8,7 @@ import {
   repositoryHistoryTool,
   repositoryVersionFilesTool,
   conversationOperationTool,
+  renewalInspectionTool,
   renewalTool,
   sessionTool,
   sessionWorkTool,
@@ -256,7 +257,7 @@ function createSessionActions({ sessions }) {
       id: ACTION_INSPECT_SESSION_RENEWAL,
       input: { ...sessionRenewalInspectActionInputValidator, mode: "create" },
       extensions: {
-        assistant: renewalTool(ASSISTANT_TOOL_DESCRIPTIONS.inspectSessionRenewal, { includeDraft: true }),
+        assistant: renewalInspectionTool(ASSISTANT_TOOL_DESCRIPTIONS.inspectSessionRenewal),
         vibe64: PROJECT_OPERATION
       },
       execute: (input) => sessions.inspectSessionRenewal(input.sessionId, input)
