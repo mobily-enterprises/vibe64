@@ -49,6 +49,18 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 /** @typedef {import("./sessionRuntimeRenewal.js").RenewalSessionRequest} RenewalSessionRequest */
 
+
+/**
+ * Session reads no longer take an inspectSource option; their *WithoutSource methods skip source inspection. A caller
+ * that still passes the option would otherwise read with the runtime's default and inspect the source again unseen.
+ * @param {string} method
+ * @param {unknown} retiredOptions
+ */
+function refuseInspectSourceOption(method, retiredOptions) {
+  if (retiredOptions !== null && typeof retiredOptions === "object" && Object.hasOwn(retiredOptions, "inspectSource")) {
+    throw new TypeError(`${method} takes no inspectSource option; call ${method}WithoutSource to skip source inspection.`);
+  }
+}
 class Vibe64SessionRuntime {
   /**
    * @param {object} options
@@ -189,7 +201,8 @@ class Vibe64SessionRuntime {
     return this.promptEnvironment;
   }
 
-  async getSession(sessionId) {
+  async getSession(sessionId, retiredOptions) {
+    refuseInspectSourceOption("getSession", retiredOptions);
     return this.sessionView(await this.store.readSession(sessionId));
   }
 
@@ -198,7 +211,8 @@ class Vibe64SessionRuntime {
     return this.sessionViewWithoutSource(await this.store.readSession(sessionId));
   }
 
-  async getSessionForRenewal(sessionId) {
+  async getSessionForRenewal(sessionId, retiredOptions) {
+    refuseInspectSourceOption("getSessionForRenewal", retiredOptions);
     return this.sessionViewForRenewal(await this.store.readSessionForRenewal(sessionId));
   }
 
@@ -262,7 +276,8 @@ class Vibe64SessionRuntime {
     return this.store.restoreSessionAfterRenewalCancellation(options);
   }
 
-  async sessionView(session = {}) {
+  async sessionView(session = {}, retiredOptions) {
+    refuseInspectSourceOption("sessionView", retiredOptions);
     assertUsableSession(session);
     const sourceInspection = this.inspectSourceByDefault
       ? await this.inspectSourceForSession(session)

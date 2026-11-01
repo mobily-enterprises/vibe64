@@ -1057,3 +1057,16 @@ test("source-bearing Learning preserves original unattached-source failure and u
     assert.equal((await runtime.store.readSession(created.sessionId)).metadata.source_path, sourcePath(root, created.sessionId));
   });
 });
+
+test("session reads refuse the retired inspectSource option instead of inspecting the source unseen", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+    });
+    const retired = { inspectSource: false };
+    await assert.rejects(runtime.getSession("session-1", retired), /getSession takes no inspectSource option/u);
+    await assert.rejects(runtime.getSessionForRenewal("session-1", retired), /getSessionForRenewal takes no inspectSource option/u);
+    await assert.rejects(runtime.sessionView({ sessionId: "session-1" }, retired), /sessionView takes no inspectSource option/u);
+  });
+});

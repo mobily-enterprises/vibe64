@@ -2563,3 +2563,10 @@ test("practice project runtime keeps its learning-space roots and lazy environme
     });
   });
 });
+
+test("createRuntime refuses the retired inspectSource option instead of inspecting the source unseen", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = project(targetRoot);
+    await assert.rejects(service.createRuntime({ inspectSource: false }), /createRuntime takes no inspectSource option/u);
+  });
+});

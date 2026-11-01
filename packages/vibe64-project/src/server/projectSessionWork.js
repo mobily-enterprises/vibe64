@@ -53,6 +53,10 @@ function createProjectSessionWork({ environment, selection }) {
 
   /** A session runtime of the selected project; its session reads inspect the source checkout. */
   async function createRuntime(options = {}) {
+    // A caller still passing the retired inspectSource option would get a runtime that inspects the source unseen.
+    if (Object.hasOwn(options, "inspectSource")) {
+      throw new TypeError("createRuntime takes no inspectSource option; call createRuntimeWithoutSource to skip source inspection.");
+    }
     return new Vibe64SessionRuntime(sessionRuntimeOptions(options));
   }
 
