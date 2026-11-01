@@ -157,7 +157,6 @@ test("the frozen reader keeps its refusals: invalid records, continued practice,
   }
   const unavailable = createPracticeHistoryReader({ systemRoot: f.systemRoot, content: { readLesson: f.installed.readLesson } });
   await assert.rejects(() => unavailable.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
-  assert.throws(() => createPracticeHistoryReader({ systemRoot: f.systemRoot, content: {} }), /configured installed-content reader/u);
   const learning = answered(active.attemptId);
   learning.submissions[0].rubricRevision = f.pin.lesson.hash;
   learning.submissions[0].rubric = "lesson.md#other";

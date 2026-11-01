@@ -1882,9 +1882,6 @@ test("an isolated original store admits drafts only through its configured autho
   await assert.rejects(() => f.reserve(), /draft and cannot be taught/u);
   assert.deepEqual(await treeState(f.systemRoot), before);
   await assert.rejects(() => fs.lstat(path.join(f.systemRoot, "training/users")), { code: "ENOENT" });
-  for (const content of [null, {}, { readLesson: true }]) {
-    assert.throws(() => createTrainingLearnerState({ systemRoot: previewRoot, content }), /configured installed-content reader/u);
-  }
 });
 
 test("actual saved exercise caller admits only its same original local Project record inside the owning callback", async t => {

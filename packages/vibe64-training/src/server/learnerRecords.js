@@ -1,6 +1,7 @@
 import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 
+import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { practiceSlug } from "@local/vibe64-core/server/learningSpace";
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
@@ -399,6 +400,38 @@ function validateLessonStepResults(entry, lesson) {
   }
 }
 
+/**
+ * Step progress and the reader position use their own short locks so they
+ * never contend with progress.json writers or the preparation barrier.
+ * @param {string} lockPath
+ * @param {string} code
+ * @param {string} message
+ */
+async function acquireRecordLock(lockPath, code, message) {
+  const existing = await inspectPath(lockPath, false);
+  if (existing && existing.size !== 0) throw new Error("Learning state lock contains unexplained data; inspect it before retrying.");
+  let release = await tryAcquireExclusiveFileLock(lockPath);
+  for (const deadline = Date.now() + STEP_LOCK_WAIT_MS; !release && Date.now() < deadline;) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    release = await tryAcquireExclusiveFileLock(lockPath);
+  }
+  if (!release) throw failure(code, message, 409);
+  return release;
+}
+
+/**
+ * Learner records live under one canonical, absolute, non-root server-owned system root.
+ * @param {string} systemRoot
+ */
+function assertLearningSystemRoot(systemRoot) {
+  if (typeof systemRoot !== "string" ||
+      !path.isAbsolute(systemRoot) ||
+      path.resolve(systemRoot) !== systemRoot ||
+      systemRoot === path.parse(systemRoot).root) {
+    throw new Error("Learning state needs a canonical absolute, non-root server-owned system root.");
+  }
+}
+
 function failure(code, message, statusCode, details = {}) {
   return trainingFailure(code, message, { statusCode, ...details });
 }
@@ -615,6 +648,8 @@ function lessonCompletion(lesson, entry, available) {
 }
 
 export {
+  acquireRecordLock,
+  assertLearningSystemRoot,
   activeSchema,
   attemptSchema,
   attemptSessionId,
