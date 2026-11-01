@@ -209,9 +209,11 @@ function createServiceSessionTerminals({
           label: "Prompt suggestions"
         },
         {
-          controller: { closeAllForSession: (id, options) => controllerOptions.renewalCleanup
-            ? state.slots.databaseToolsProvider?.closeRenewalAssistantsForSession(id, options)
-            : state.slots.databaseToolsProvider?.closeAssistantsForSession(id, options) },
+          controller: {
+            closeAllForSession: (id, options) => controllerOptions.renewalCleanup
+              ? state.slots.databaseToolsProvider?.closeRenewalAssistantsForSession(id, options)
+              : state.slots.databaseToolsProvider?.closeAssistantsForSession(id, options)
+          },
           label: "Database copilot"
         },
         {
