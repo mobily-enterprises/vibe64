@@ -6,7 +6,8 @@ import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 const ACTION_READ_VOICE_CATALOGUE = "vibe64.voice.catalogue.read";
 const emptyInput = Object.freeze({
-  schema: createSchema({})
+  schema: createSchema({}),
+  mode: "patch"
 });
 
 const voiceText = { type: "string", maxLength: 256, required: false };
