@@ -23,7 +23,7 @@ async function loadProjectExecutionEnvRecords({
       ...(includeResourceConfiguration ? { resourceConfigurationFingerprint: null } : {})
     };
   }
-  const sessionId = String(session.sessionId || session.id || "").trim();
+  const sessionId = String(session.sessionId || "").trim();
   const env = await resolveEnvironment.call(projectService, {
     ...(includeResourceConfiguration ? { includeResourceConfiguration: true } : {}),
     ...(reusePrepared ? { reusePrepared: true } : {}),

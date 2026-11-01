@@ -45,7 +45,7 @@ async function writePreviewDiagnostic(session = {}, record = {}, {
   const normalizedRecord = {
     at: new Date().toISOString(),
     schemaVersion: 1,
-    sessionId: String(record.sessionId || session.sessionId || session.id || "").trim(),
+    sessionId: String(record.sessionId || session.sessionId || "").trim(),
     sessionRoot,
     status: String(record.status || "failed").trim() || "failed",
     sessionSourceRoot: String(record.sessionSourceRoot || sessionSourcePath(session) || "").trim(),
@@ -68,7 +68,7 @@ async function writePreviewDiagnostic(session = {}, record = {}, {
   } catch (error) {
     vibe64SessionDebugLog("server.outputTargetTerminal.previewDiagnostics.error", {
       error: vibe64SessionDebugError(error),
-      sessionId: record.sessionId || session.sessionId || session.id || "",
+      sessionId: record.sessionId || session.sessionId || "",
       sessionRoot
     }, {
       level: "warn"

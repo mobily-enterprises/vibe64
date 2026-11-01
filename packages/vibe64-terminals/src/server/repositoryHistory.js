@@ -81,7 +81,7 @@ function repositoryReadContext(project = {}, session = null) {
       cwd: sessionSourceRoot,
       executionRoot: sessionSourceRoot,
       mode,
-      sessionId: trimmedText(session.sessionId || session.id),
+      sessionId: trimmedText(session.sessionId),
       snapshotRef
     };
   }
