@@ -28,7 +28,8 @@ import {
   sourceEditorSelectionForRange,
   sourceEditorTextHash
 } from "./explanationText.js";
-import { isPlainObject, readSourceEditorFile, sourceEditorError, sourceEditorErrorResponse } from "./sourceFiles.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { readSourceEditorFile, sourceEditorError, sourceEditorErrorResponse } from "./sourceFiles.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -62,7 +63,7 @@ function sourceEditorFollowupThreadError(error = null) {
   return sourceEditorError(
     `${message} Regenerate this explanation before asking another follow-up.`,
     toText(error?.code) || "vibe64_source_explanation_agent_thread_unavailable",
-    isPlainObject(error?.details) ? error.details : {},
+    isRecord(error?.details) ? error.details : {},
     Number(error?.statusCode) || 409
   );
 }
@@ -77,7 +78,7 @@ function sourceEditorFailureWithRejectedThread(error = null, rejectedThread = nu
     failure = sourceEditorError(
       response.error || "The agent could not answer this source explanation chat.",
       response.code || "vibe64_source_explanation_agent_failed",
-      isPlainObject(response.details) ? response.details : {},
+      isRecord(response.details) ? response.details : {},
       response.statusCode || 502
     );
   }
@@ -107,7 +108,7 @@ function sourceEditorStructuredAnswer(value = "", options = {}) {
       );
     }
   }
-  const keys = isPlainObject(envelope) ? Object.keys(envelope) : [];
+  const keys = isRecord(envelope) ? Object.keys(envelope) : [];
   const answer = keys.length === 1 && keys[0] === "answer" && typeof envelope.answer === "string"
     ? envelope.answer.trim()
     : "";
@@ -181,7 +182,7 @@ async function cleanupRejectedSourceEditorExplanationThread(
     return cleanup?.ok === true
       ? cleanup
       : {
-          ...(isPlainObject(cleanup) ? cleanup : {}),
+          ...(isRecord(cleanup) ? cleanup : {}),
           error: toText(cleanup?.error) || "Agent chat cleanup did not confirm that the thread was deleted.",
           ok: false
         };
@@ -194,7 +195,7 @@ async function cleanupRejectedSourceEditorExplanationThread(
 }
 
 function sourceEditorExplanationMessage(role = "", text = "", createdAt = new Date().toISOString(), options = {}) {
-  const source = isPlainObject(options) ? options : {};
+  const source = isRecord(options) ? options : {};
   return {
     createdAt,
     id: toText(source.id) || sourceEditorExplanationMessageId(),
@@ -323,7 +324,7 @@ async function streamSourceEditorAgentTurn(context, {
           });
           return;
         }
-        const classification = isPlainObject(event.classification) ? event.classification : {};
+        const classification = isRecord(event.classification) ? event.classification : {};
         if (!["final_assistant_result", "live_progress"].includes(classification.kind) || !classification.text) {
           return;
         }
@@ -609,7 +610,7 @@ async function runTrackedSourceEditorAgentTurn(context, {
         stopped: true
       };
     }
-    const rejectedThread = isPlainObject(error?.sourceEditorRejectedThread)
+    const rejectedThread = isRecord(error?.sourceEditorRejectedThread)
       ? error.sourceEditorRejectedThread
       : null;
     const rejectedThreadId = toText(rejectedThread?.threadId);

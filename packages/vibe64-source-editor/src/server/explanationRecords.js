@@ -11,7 +11,8 @@ import {
   sourceEditorExecutionProfileSnapshot
 } from "./explanationProfile.js";
 import { positiveInteger, SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION, sourceEditorExplanationMessageId } from "./explanationText.js";
-import { isPlainObject, normalizeSourceEditorRelativePath, sourceEditorError, sourceEditorLanguageForPath } from "./sourceFiles.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { normalizeSourceEditorRelativePath, sourceEditorError, sourceEditorLanguageForPath } from "./sourceFiles.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -251,7 +252,7 @@ async function deleteSourceEditorExplanationAgentThread(context = {}, record = {
     throw sourceEditorError(
       agentCleanup?.error || "The agent service did not confirm that the temporary source explanation chat was deleted.",
       agentCleanup?.code || "vibe64_source_explanation_agent_cleanup_unconfirmed",
-      isPlainObject(agentCleanup) ? agentCleanup : { cleanupResult: agentCleanup ?? null },
+      isRecord(agentCleanup) ? agentCleanup : { cleanupResult: agentCleanup ?? null },
       agentCleanup?.statusCode || 502
     );
   }

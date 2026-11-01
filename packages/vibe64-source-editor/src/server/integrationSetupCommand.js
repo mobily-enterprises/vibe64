@@ -247,7 +247,7 @@ function parsePaymentManagementResponse(result, request) {
   return result;
 }
 
-function createIntegrationSetupRequest(selection) {
+function buildIntegrationSetupRequest(selection) {
   const {
     operation,
     integrationId,
@@ -334,7 +334,7 @@ async function runIntegrationSetupCommand({
   if (typeof runCommand !== "function" || !command || !path.isAbsolute(sourceRoot || "")) {
     invalid("Application integration setup is not configured.");
   }
-  const request = createIntegrationSetupRequest(selection);
+  const request = buildIntegrationSetupRequest(selection);
   const input = `${JSON.stringify(request)}\n`;
   const [executable, ...args] = command.argv;
   const cwd = path.resolve(sourceRoot, command.workdir);
@@ -373,7 +373,7 @@ async function runIntegrationSetupCommand({
 }
 
 export {
-  createIntegrationSetupRequest,
+  buildIntegrationSetupRequest,
   INTEGRATION_SETUP_OPERATIONS,
   INTEGRATION_SETUP_PROTOCOL,
   parseIntegrationSetupResponse,

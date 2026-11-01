@@ -59,10 +59,6 @@ const SOURCE_EDITOR_RESOLVE_EXTENSIONS = [
   ".md"
 ];
 
-function isPlainObject(value = null) {
-  return value && typeof value === "object" && !Array.isArray(value);
-}
-
 function streamSourceEditorFileChanges(context, file, stream, fileObserver) {
   const {
     emit,
@@ -658,7 +654,6 @@ export {
   directoryNode,
   downloadSessionFile,
   ensureSourceEditorParentDirectory,
-  isPlainObject,
   normalizeNewSourceEditorFilePath,
   normalizeSourceEditorQuery,
   normalizeSourceEditorRelativePath,

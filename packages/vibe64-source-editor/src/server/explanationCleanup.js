@@ -21,7 +21,8 @@ import {
   writeSourceEditorExplanation
 } from "./explanationRecords.js";
 import { sourceEditorExplanationWithMessage, withSourceEditorExplanationFreshness } from "./explanationStream.js";
-import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { sourceEditorError } from "./sourceFiles.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 // Stopping, cleaning up and deleting source explanations, with the helper
@@ -84,7 +85,7 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
       throw sourceEditorError(
         result?.error || "The agent service did not confirm that this source explanation was stopped.",
         result?.code || "vibe64_source_explanation_agent_interrupt_unconfirmed",
-        isPlainObject(result) ? result : { interruptResult: result ?? null },
+        isRecord(result) ? result : { interruptResult: result ?? null },
         result?.statusCode || 502
       );
     }

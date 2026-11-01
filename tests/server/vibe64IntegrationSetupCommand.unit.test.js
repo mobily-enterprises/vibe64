@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {
-  createIntegrationSetupRequest, INTEGRATION_SETUP_PROTOCOL, parseIntegrationSetupResponse, runIntegrationSetupCommand
+  buildIntegrationSetupRequest, INTEGRATION_SETUP_PROTOCOL, parseIntegrationSetupResponse, runIntegrationSetupCommand
 } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
 
 const request = { protocol: INTEGRATION_SETUP_PROTOCOL, requestId: "request-1", operation: "status" };
@@ -191,7 +191,7 @@ test("payment catalogue commands require explicit environments and bounded revie
 });
 
 test('payment readiness requires each bounded check and the selected environment', () => {
-  const request = createIntegrationSetupRequest({ operation: 'payments-readiness', integrationId: 'billing', paymentEnvironment: 'live' });
+  const request = buildIntegrationSetupRequest({ operation: 'payments-readiness', integrationId: 'billing', paymentEnvironment: 'live' });
   const result = { protocol: request.protocol, requestId: request.requestId, status: 'payments-readiness', paymentEnvironment: 'live', providerAccountId: 'acct_a',
     checks: ['credentials', 'account', 'charges', 'payouts', 'catalogue', 'webhook', 'checkout', 'site', 'deployment'].map((id) => ({ id, status: 'unknown', detail: 'No evidence yet.' })) };
   assert.deepEqual(parseIntegrationSetupResponse(JSON.stringify(result), request), result);
@@ -203,15 +203,15 @@ test('payment readiness requires each bounded check and the selected environment
     { ...result, ready: true },
     { ...result, checks: result.checks.map((check) => ({ ...check, token: 'secret' })) }
   ]) assert.throws(() => parseIntegrationSetupResponse(JSON.stringify(invalid), request));
-  assert.throws(() => createIntegrationSetupRequest({ operation: 'payments-readiness', integrationId: 'billing', paymentEnvironment: 'live', reviewId: 'a'.repeat(64) }));
+  assert.throws(() => buildIntegrationSetupRequest({ operation: 'payments-readiness', integrationId: 'billing', paymentEnvironment: 'live', reviewId: 'a'.repeat(64) }));
 });
 
 test('catalogue recovery binds the reviewed operation and excludes private pending fields', () => {
   const selection = { operation: 'payments-recover', integrationId: 'billing', paymentEnvironment: 'sandbox', reviewId: 'a'.repeat(64), providerId: 'price_existing' };
-  const request = createIntegrationSetupRequest(selection);
+  const request = buildIntegrationSetupRequest(selection);
   assert.equal(request.providerId, 'price_existing');
   for (const change of [{ reviewId: undefined }, { providerId: '../other' }, { operation: 'payments-preview' }]) {
-    assert.throws(() => createIntegrationSetupRequest({ ...selection, ...change }));
+    assert.throws(() => buildIntegrationSetupRequest({ ...selection, ...change }));
   }
   const response = { protocol: request.protocol, requestId: request.requestId, status: 'payments', paymentEnvironment: 'sandbox', providerAccountId: 'acct_a',
     review: { reviewId: 'b'.repeat(64), changes: [], drift: [], removed: [], pending: true,
@@ -225,7 +225,7 @@ test('catalogue recovery binds the reviewed operation and excludes private pendi
 
 test("payment history binds a bounded display page to the requested subject and environment", () => {
   const input = { operation: "payments-history", integrationId: "stripe", paymentEnvironment: "sandbox", subjectId: "customer-a", collection: "transactions" };
-  const selected = createIntegrationSetupRequest(input);
+  const selected = buildIntegrationSetupRequest(input);
   assert.equal(selected.after, null);
   const result = { protocol: selected.protocol, requestId: selected.requestId, status: "payments-history",
     paymentEnvironment: "sandbox", providerAccountId: "acct_fixture", subjectId: "customer-a", collection: "transactions",
@@ -239,9 +239,9 @@ test("payment history binds a bounded display page to the requested subject and 
     assert.throws(() => parseIntegrationSetupResponse(JSON.stringify({ ...result, ...change }), selected));
   }
   for (const change of [{ subjectId: "" }, { collection: "customers" }, { after: "bad cursor" }, { operation: "payments-preview" }]) {
-    assert.throws(() => createIntegrationSetupRequest({ ...input, ...change }), { statusCode: 422 });
+    assert.throws(() => buildIntegrationSetupRequest({ ...input, ...change }), { statusCode: 422 });
   }
-  const subscriptions = createIntegrationSetupRequest({ ...input, collection: "subscriptions" });
+  const subscriptions = buildIntegrationSetupRequest({ ...input, collection: "subscriptions" });
   assert.doesNotThrow(() => parseIntegrationSetupResponse(JSON.stringify({ ...result, requestId: subscriptions.requestId,
     collection: "subscriptions", items: [{ id: "sub_1", kind: "subscription", status: "active", createdAt: "2026-09-12T00:00:00.000Z" }], nextCursor: null }), subscriptions));
 });
@@ -249,16 +249,16 @@ test("payment history binds a bounded display page to the requested subject and 
 test("Ads requests bind explicit inputs and reviewed launch confirmation to the existing application command", () => {
   const reviewId = "a".repeat(64);
   const selection = { operation: "ads-launch", integrationId: "google-ads", ads: { campaignId: "33", reviewId, trackingConfirmed: true, billingConfirmed: true } };
-  const request = createIntegrationSetupRequest(selection);
+  const request = buildIntegrationSetupRequest(selection);
   assert.deepEqual(request.ads, selection.ads);
   for (const ads of [{ ...selection.ads, billingConfirmed: false }, { ...selection.ads, url: "https://elsewhere.test" },
-    { ...selection.ads, campaignId: "33/../44" }, { ...selection.ads, reviewId: "unreviewed" }]) assert.throws(() => createIntegrationSetupRequest({ ...selection, ads }));
-  assert.throws(() => createIntegrationSetupRequest({ operation: "status", integrationId: "google-ads", ads: {} }));
-  assert.deepEqual(createIntegrationSetupRequest({ operation: "ads-discover", integrationId: "google-ads", ads: {} }).ads, {});
+    { ...selection.ads, campaignId: "33/../44" }, { ...selection.ads, reviewId: "unreviewed" }]) assert.throws(() => buildIntegrationSetupRequest({ ...selection, ads }));
+  assert.throws(() => buildIntegrationSetupRequest({ operation: "status", integrationId: "google-ads", ads: {} }));
+  assert.deepEqual(buildIntegrationSetupRequest({ operation: "ads-discover", integrationId: "google-ads", ads: {} }).ads, {});
 });
 
 test("Ads responses reject credentials, mismatched campaign reviews and wrong operations", () => {
-  const request = createIntegrationSetupRequest({ operation: "ads-campaign", integrationId: "google-ads", ads: { campaignId: "33" } });
+  const request = buildIntegrationSetupRequest({ operation: "ads-campaign", integrationId: "google-ads", ads: { campaignId: "33" } });
   const value = { protocol: request.protocol, requestId: request.requestId, status: "ads", operation: request.operation,
     data: { campaign: { id: "33", status: "PAUSED" }, reviewId: "a".repeat(64), ads: [{ adGroupAd: { ad: { finalUrls: ["https://app.test"] } } }] } };
   assert.deepEqual(parseIntegrationSetupResponse(JSON.stringify(value), request), value);

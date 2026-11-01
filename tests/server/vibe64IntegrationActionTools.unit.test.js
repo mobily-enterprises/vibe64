@@ -5,7 +5,7 @@ import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
-import { createIntegrationSetupRequest, parseIntegrationSetupResponse } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
+import { buildIntegrationSetupRequest, parseIntegrationSetupResponse } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 async function withIntegrationTools(run) {
@@ -26,7 +26,7 @@ async function withIntegrationTools(run) {
       async saveIntegrations(input) { record(input); return state.failure || { ok: true,
         configuration: state.configuration, baseHash: "b".repeat(64), fileChange: { path: "integrations.json" } }; },
       async runIntegrationSetup(input) {
-        const request = createIntegrationSetupRequest(input);
+        const request = buildIntegrationSetupRequest(input);
         record(input);
         if (state.failure) return state.failure;
         const result = parseIntegrationSetupResponse(JSON.stringify({ protocol: request.protocol, requestId: request.requestId, ...state.setupResult }), request);

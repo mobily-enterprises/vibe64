@@ -1,5 +1,9 @@
 import { validatePaymentConfiguration } from "@jskit-ai/payments-core/shared";
-import { parseIntegrationConfiguration, validateIntegrationConfiguration } from "@jskit-ai/connectors-core/shared/configuration";
+import {
+  isProviderConfigurationOnly,
+  parseIntegrationConfiguration,
+  validateIntegrationConfiguration
+} from "@jskit-ai/connectors-core/shared/configuration";
 import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
 import { discoverN8nOAuth, registerN8nClient } from "@jskit-ai/connectors-catalog/server/n8n";
 import { registerHeyGenClient } from "@jskit-ai/connectors-catalog/server/heygen";
@@ -14,14 +18,14 @@ import { runtimeConfigKeyIsVibe64Reserved } from "@local/vibe64-core/server/runt
 import { googleCalendarDefinition } from "@jskit-ai/connector-google-calendar/shared";
 import { inspectVibe64IntegrationSetup } from "@local/vibe64-genesis/server";
 import { vibe64RuntimePacks } from "@local/vibe64-terminals/server/vibe64OutputTargets";
-import { createIntegrationSetupRequest, runIntegrationSetupCommand } from "./integrationSetupCommand.js";
+import { buildIntegrationSetupRequest, runIntegrationSetupCommand } from "./integrationSetupCommand.js";
 import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { sourceEditorFilePolicy } from "./filePolicy.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 import {
   SOURCE_EDITOR_CONFLICT_CODE,
   createSourceEditorFile,
-  isPlainObject,
   readSourceEditorFile,
   runSourceEditorOperation,
   saveSourceEditorFile,
@@ -137,8 +141,7 @@ async function inspectApplicationIntegrationSetup(context, input) {
   const integration = config.integrations[input.integrationId];
   if (!integration) throw sourceEditorError("Choose an integration saved in this project.", "vibe64_integration_missing", {}, 404);
   if (INTEGRATION_PROVIDERS.some((provider) => provider.id === integration.provider
-    // readable-check: allow optional-call - optional operation: an integration provider definition decides per settings only when it has configurationOnlyForSettings()
-    && (provider.configurationOnly || provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
+    && isProviderConfigurationOnly(provider, integration.settings || {}))) {
     throw sourceEditorError(
       "This integration uses public configuration, not an account connection. Save its settings and wire them into the application.",
       "vibe64_integration_configuration_only",
@@ -194,7 +197,7 @@ async function runApplicationIntegrationSetup({
   selection,
   runCommand = runVibe64Command
 }) {
-  createIntegrationSetupRequest(selection);
+  buildIntegrationSetupRequest(selection);
   const checked = await inspectApplicationIntegrationSetup({
     sourceRoot,
     releaseEnvironmentFile,
@@ -240,7 +243,7 @@ async function runApplicationIntegrationSetup({
  * @param {typeof fetch} dependencies.integrationDiscoveryFetch
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {(input: object, operation: (context: object) => Promise<unknown>, options?: object) => Promise<unknown>} dependencies.runSourceEditorWriteExclusive
+ * @param {(input: object, operation: (context: object) => Promise<unknown>) => Promise<unknown>} dependencies.runSourceEditorWriteExclusive
  * @param {SourceEditorSearchIndex} dependencies.searchIndex
  * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.sourceEditorContext
  */
@@ -257,7 +260,7 @@ function createIntegrationOperations({
   async function inspectIntegrationSetupRequest(context, input) {
     const request = input.setupRequest;
     if (request === undefined) return;
-    if (!isPlainObject(request) || Object.keys(request).length !== 3 ||
+    if (!isRecord(request) || Object.keys(request).length !== 3 ||
         !["connect", "status"].includes(input.operation) ||
         typeof request.turnId !== "string" || request.turnId.length > 32 || !/^\d{6,}$/u.test(request.turnId) ||
         typeof request.requestId !== "string" || !/^[a-f0-9]{64}$/u.test(request.requestId) ||
@@ -281,9 +284,9 @@ function createIntegrationOperations({
     return saved;
   }
 
-  async function runIntegrationSetup(input = {}) {
+  async function runIntegrationSetup(input) {
     return runSourceEditorOperation(async () => {
-      createIntegrationSetupRequest(input);
+      buildIntegrationSetupRequest(input);
       if ((input.operation.startsWith("payments-") || input.operation.startsWith("ads-")) &&
           input.vibe64User &&
           input.vibe64User.role !== "owner") {
@@ -339,7 +342,7 @@ function createIntegrationOperations({
     });
   }
 
-  async function registerOAuthIntegration(input = {}) {
+  async function registerOAuthIntegration(input) {
     return runSourceEditorOperation(async () => {
       if (input.vibe64User && input.vibe64User.role !== "owner") {
         throw sourceEditorError("Only the workspace owner can register a project OAuth client.", "vibe64_owner_required", {}, 403);
@@ -445,7 +448,7 @@ function createIntegrationOperations({
     });
   }
 
-  async function discoverN8nIntegration(input = {}) {
+  async function discoverN8nIntegration(input) {
     return runSourceEditorOperation(async () => {
       await sourceEditorContext(input.sessionId);
       const discovery = await discoverN8nOAuth({ serverUrl: input.serverUrl }, { fetchImpl: integrationDiscoveryFetch });
@@ -453,14 +456,14 @@ function createIntegrationOperations({
     });
   }
 
-  async function readIntegrations(input = {}) {
+  async function readIntegrations(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId);
       return readApplicationIntegrations(context);
     });
   }
 
-  async function readIntegrationProviders(input = {}) {
+  async function readIntegrationProviders(input) {
     return runSourceEditorOperation(async () => {
       await sourceEditorContext(input.sessionId);
       const search = String(input.search || "").trim().toLowerCase();
@@ -481,7 +484,7 @@ function createIntegrationOperations({
     });
   }
 
-  async function saveIntegrations(input = {}) {
+  async function saveIntegrations(input) {
     return runSourceEditorOperation(async () => {
       if (Object.hasOwn(input, "configuration") === Object.hasOwn(input, "changes")) {
         throw sourceEditorError("Supply configuration or requested changes, not both.", "vibe64_integration_changes_invalid", {}, 422);

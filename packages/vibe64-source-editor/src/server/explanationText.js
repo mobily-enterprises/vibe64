@@ -3,7 +3,8 @@ import path from "node:path";
 
 import { SOURCE_EXPLANATION_PROMPT_VERSION, sourceExplanationGuidance } from "@local/vibe64-genesis/server";
 
-import { isPlainObject, sourceEditorError, sourceEditorHash, sourceEditorLanguageForPath } from "./sourceFiles.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { sourceEditorError, sourceEditorHash, sourceEditorLanguageForPath } from "./sourceFiles.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 // The text a source explanation reads and asks with: line ranges and
@@ -233,7 +234,7 @@ function sourceEditorExplanationPrompt({
   const wholeFile = range.scope === "file";
   const functionExplanation = range.scope === "selection" && range.presentation === "steps" && Boolean(range.symbolId);
   const presentation = SOURCE_EXPLANATION_PRESENTATIONS[range.presentation];
-  const inlineCode = isPlainObject(promptCode) ? promptCode : {};
+  const inlineCode = isRecord(promptCode) ? promptCode : {};
   const codeLabel = toText(inlineCode.label) || (wholeFile ? "File contents" : "Selected code");
   const codeNote = toText(inlineCode.note);
   const codeText = String(inlineCode.text ?? selectedText ?? "");
