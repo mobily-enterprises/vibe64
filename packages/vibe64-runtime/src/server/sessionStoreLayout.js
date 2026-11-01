@@ -53,20 +53,20 @@ function createParsedFileCache(limit) {
     if (entries.size > limit) entries.delete(entries.keys().next().value);
     return value;
   }
-  return Object.freeze({
-    remember,
-    async read(filePath, parse) {
-      const handle = await open(filePath, "r");
-      try {
-        const identity = fileIdentity(await handle.stat({ bigint: true }));
-        const cached = entries.get(filePath);
-        if (cached?.identity === identity) return remember(filePath, identity, cached.value);
-        return remember(filePath, identity, parse(await handle.readFile("utf8")));
-      } finally {
-        await handle.close();
-      }
+
+  async function read(filePath, parse) {
+    const handle = await open(filePath, "r");
+    try {
+      const identity = fileIdentity(await handle.stat({ bigint: true }));
+      const cached = entries.get(filePath);
+      if (cached?.identity === identity) return remember(filePath, identity, cached.value);
+      return remember(filePath, identity, parse(await handle.readFile("utf8")));
+    } finally {
+      await handle.close();
     }
-  });
+  }
+
+  return Object.freeze({ remember, read });
 }
 
 async function runCommand(command, args = [], {

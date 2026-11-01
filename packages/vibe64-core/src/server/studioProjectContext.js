@@ -232,8 +232,14 @@ function createStudioProjectContext({
     return selectedTargetRoot;
   }
 
+  const currentPracticeProjectScope = () => paths.practiceScope();
+
+  function hasSelection() {
+    return Boolean(selectedTargetRoot);
+  }
+
   return Object.freeze({
-    currentPracticeProjectScope: () => paths.practiceScope(),
+    currentPracticeProjectScope,
     runWithPracticeProjectScope: learningProjects.runWithPracticeProjectScope,
     listLearningSpaceProjects: learningProjects.listLearningSpaceProjects,
     readLearningSpaceProject: learningProjects.readLearningSpaceProject,
@@ -274,9 +280,7 @@ function createStudioProjectContext({
     get targetRoot() {
       return selectedTargetRoot;
     },
-    hasSelection() {
-      return Boolean(selectedTargetRoot);
-    },
+    hasSelection,
     listProjects,
     listWorkspaceProjects: workspaceRecords.listWorkspaceProjects,
     readWorkspaceProject: workspaceRecords.readWorkspaceProject,

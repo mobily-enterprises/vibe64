@@ -415,7 +415,7 @@ function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalog
     ]);
   }
 
-  return { listWorkspaceProjects, sweepOrphanProjectRuntimeRoots, createWorkspaceProjectRecord, assertWorkspaceProjectAvailable, readWorkspaceProject, updateWorkspaceProjectMetadata, readWorkspaceProjectState, beginWorkspaceProjectDeletion, completeWorkspaceProjectDeletionStep, discardWorkspaceProjectRecord };
+  return Object.freeze({ listWorkspaceProjects, sweepOrphanProjectRuntimeRoots, createWorkspaceProjectRecord, assertWorkspaceProjectAvailable, readWorkspaceProject, updateWorkspaceProjectMetadata, readWorkspaceProjectState, beginWorkspaceProjectDeletion, completeWorkspaceProjectDeletionStep, discardWorkspaceProjectRecord });
 }
 
 export { createWorkspaceProjectRecords, registerApprovalCountReader };

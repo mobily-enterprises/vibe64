@@ -263,13 +263,17 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
     return { failures };
   }
 
-  return {
+  function prepareSessionArchive(context) {
+    return archivePreparation?.(context);
+  }
+
+  return Object.freeze({
     archiveSession,
-    prepareArchive: (context) => archivePreparation?.(context),
+    prepareArchive: prepareSessionArchive,
     resumeSessionArchives,
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setArchivePreparation
-  };
+  });
 }
 
 export { createSessionArchive };

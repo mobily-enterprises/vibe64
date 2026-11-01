@@ -20,18 +20,21 @@ const STARTER_PREPARATION_WAIT_MS = 60_000;
  * @param {TerminalsService} terminals
  */
 function createTerminalsSetupRunner(terminals) {
-  return Object.freeze({
-    isRunning: (sessionId) => terminals.workspaceSetupIsRunning(sessionId),
-    start: ({ retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
-      session.sessionId,
-      { retry, runtime, session, waitMs }
-    ),
-    startRenewal: ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
-      session.sessionId,
-      { retry, runtime, session }
-    ),
-    wait: (sessionId) => terminals.waitForWorkspaceSetup(sessionId)
-  });
+  const isRunning = (sessionId) => terminals.workspaceSetupIsRunning(sessionId);
+
+  const start = ({ retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
+    session.sessionId,
+    { retry, runtime, session, waitMs }
+  );
+
+  const startRenewal = ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
+    session.sessionId,
+    { retry, runtime, session }
+  );
+
+  const wait = (sessionId) => terminals.waitForWorkspaceSetup(sessionId);
+
+  return Object.freeze({ isRunning, start, startRenewal, wait });
 }
 
 /**
@@ -96,75 +99,78 @@ function createSessionWorkspaceSetup({ project, publishSessionChanged, setupRunn
     }
   }
 
+  async function retryWorkspaceSetup(sessionId, input) {
+    return sessionResult(async () => {
+      if (setupRunner.isRunning(sessionId)) {
+        const error = new Error("Workspace preparation is already running.");
+        error.code = "vibe64_workspace_setup_running";
+        throw error;
+      }
+      const runtime = await project.createRuntime({
+        inspectSource: false
+      });
+      const session = await runtime.getSession(sessionId, {
+        inspectSource: false
+      });
+      const status = text(session.workspaceSetup?.status);
+      if (!["ambiguous", "failed", "required", "unconfigured", "succeeded"].includes(status)) {
+        const error = new Error(
+          "Workspace preparation can only be started when it is required, newly configured, finished, or needs a recipe choice."
+        );
+        error.code = "vibe64_workspace_setup_retry_not_available";
+        throw error;
+      }
+      const setup = await setupRunner.start({
+        retry: true,
+        runtime,
+        session
+      });
+      if (setup?.ok === false) {
+        return setup;
+      }
+      const currentSession = await runtime.getSession(sessionId, {
+        inspectSource: false
+      });
+      await publishSessionChanged(sessionId, {
+        operation: "updated",
+        originId: text(input.originId),
+        reason: "workspace-setup-retried",
+        session: currentSession
+      });
+      observeWorkspaceSetup(sessionId, setup.completion, {
+        originId: input.originId
+      });
+      return publicSession(currentSession);
+    }, "Vibe64 could not retry workspace preparation.");
+  }
+
+  // A starter replaces the Stack of a session that was prepared as empty;
+  // prepare it now so the Preview does not wait for host-managed resources.
+  // The new session's first AI turn usually holds the session briefly, so
+  // preparation waits its turn instead of giving up and leaving the app
+  // without its database until something else prepares it.
+  async function prepareStarterWorkspace(sessionId) {
+    const runtime = await project.createRuntime({ inspectSource: false });
+    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    // The starter's files are unsaved session work that no turn, Save or
+    // editor event announces; repository status re-inspects on this reason.
+    await publishSessionChanged(sessionId, { operation: "updated", reason: "session-starter-applied", session });
+    if (setupRunner.isRunning(sessionId) || session.status !== "active") return;
+    const setup = await setupRunner.start({ runtime, session, waitMs: STARTER_PREPARATION_WAIT_MS });
+    if (setup?.ok === false) return;
+    await publishSessionChanged(sessionId, {
+      operation: "updated",
+      reason: "workspace-setup-started",
+      session: await runtime.getSession(sessionId, { inspectSource: false })
+    });
+    observeWorkspaceSetup(sessionId, setup?.completion);
+  }
+
   return Object.freeze({
     observeWorkspaceSetup,
     prepareUpdatedWorkspace,
-    async retryWorkspaceSetup(sessionId, input) {
-      return sessionResult(async () => {
-        if (setupRunner.isRunning(sessionId)) {
-          const error = new Error("Workspace preparation is already running.");
-          error.code = "vibe64_workspace_setup_running";
-          throw error;
-        }
-        const runtime = await project.createRuntime({
-          inspectSource: false
-        });
-        const session = await runtime.getSession(sessionId, {
-          inspectSource: false
-        });
-        const status = text(session.workspaceSetup?.status);
-        if (!["ambiguous", "failed", "required", "unconfigured", "succeeded"].includes(status)) {
-          const error = new Error(
-            "Workspace preparation can only be started when it is required, newly configured, finished, or needs a recipe choice."
-          );
-          error.code = "vibe64_workspace_setup_retry_not_available";
-          throw error;
-        }
-        const setup = await setupRunner.start({
-          retry: true,
-          runtime,
-          session
-        });
-        if (setup?.ok === false) {
-          return setup;
-        }
-        const currentSession = await runtime.getSession(sessionId, {
-          inspectSource: false
-        });
-        await publishSessionChanged(sessionId, {
-          operation: "updated",
-          originId: text(input.originId),
-          reason: "workspace-setup-retried",
-          session: currentSession
-        });
-        observeWorkspaceSetup(sessionId, setup.completion, {
-          originId: input.originId
-        });
-        return publicSession(currentSession);
-      }, "Vibe64 could not retry workspace preparation.");
-    },
-
-    // A starter replaces the Stack of a session that was prepared as empty;
-    // prepare it now so the Preview does not wait for host-managed resources.
-    // The new session's first AI turn usually holds the session briefly, so
-    // preparation waits its turn instead of giving up and leaving the app
-    // without its database until something else prepares it.
-    async prepareStarterWorkspace(sessionId) {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
-      // The starter's files are unsaved session work that no turn, Save or
-      // editor event announces; repository status re-inspects on this reason.
-      await publishSessionChanged(sessionId, { operation: "updated", reason: "session-starter-applied", session });
-      if (setupRunner.isRunning(sessionId) || session.status !== "active") return;
-      const setup = await setupRunner.start({ runtime, session, waitMs: STARTER_PREPARATION_WAIT_MS });
-      if (setup?.ok === false) return;
-      await publishSessionChanged(sessionId, {
-        operation: "updated",
-        reason: "workspace-setup-started",
-        session: await runtime.getSession(sessionId, { inspectSource: false })
-      });
-      observeWorkspaceSetup(sessionId, setup?.completion);
-    }
+    retryWorkspaceSetup,
+    prepareStarterWorkspace
   });
 }
 

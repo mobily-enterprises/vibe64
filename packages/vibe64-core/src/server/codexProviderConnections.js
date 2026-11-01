@@ -192,7 +192,7 @@ function createCodexProviderConnectionStore({
       return list();
     });
   }
-  return { change, list, read, runtimeOptions, threadConfig, claudeProviderSettings };
+  return Object.freeze({ change, list, read, runtimeOptions, threadConfig, claudeProviderSettings });
 }
 
 export { codexProviderModelCatalog, codexProviderPaths, createCodexProviderConnectionStore };

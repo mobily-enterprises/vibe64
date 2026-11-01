@@ -77,7 +77,7 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
       return next;
     });
   }
-  return { read, write };
+  return Object.freeze({ read, write });
 }
 
 export { createAssistantRoutingStore, validateAssistantRoutingConfiguration };

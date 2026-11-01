@@ -58,42 +58,43 @@ function createSessionRenewalRecoveryTask({ recover, logger }) {
     }, "An interrupted session archive or renewal could not resume.");
   }
 
-  return Object.freeze({
-    start() {
-      if (stopped || started) {
-        return activeRecovery;
-      }
-      started = true;
-      let result;
-      try {
-        result = recover({ signal: stopping.signal });
-      } catch (error) {
-        result = Promise.reject(error);
-      }
-      const recovery = Promise.resolve(result)
-        .then((report) => {
-          for (const failure of Array.isArray(report?.failures) ? report.failures : []) reportFailure(failure);
-        })
-        .catch((error) => {
-          reportFailure({ code: error?.code, error: error?.message });
-          vibe64SessionDebugLog("server.sessions.renewal.resume.error", {
-            error: vibe64SessionDebugError(error)
-          });
-        })
-        .finally(() => {
-          if (activeRecovery === recovery) {
-            activeRecovery = null;
-          }
-        });
-      activeRecovery = recovery;
-      return recovery;
-    },
-    async stop() {
-      stopped = true;
-      stopping.abort();
-      await activeRecovery;
+  function start() {
+    if (stopped || started) {
+      return activeRecovery;
     }
-  });
+    started = true;
+    let result;
+    try {
+      result = recover({ signal: stopping.signal });
+    } catch (error) {
+      result = Promise.reject(error);
+    }
+    const recovery = Promise.resolve(result)
+      .then((report) => {
+        for (const failure of Array.isArray(report?.failures) ? report.failures : []) reportFailure(failure);
+      })
+      .catch((error) => {
+        reportFailure({ code: error?.code, error: error?.message });
+        vibe64SessionDebugLog("server.sessions.renewal.resume.error", {
+          error: vibe64SessionDebugError(error)
+        });
+      })
+      .finally(() => {
+        if (activeRecovery === recovery) {
+          activeRecovery = null;
+        }
+      });
+    activeRecovery = recovery;
+    return recovery;
+  }
+
+  async function stop() {
+    stopped = true;
+    stopping.abort();
+    await activeRecovery;
+  }
+
+  return Object.freeze({ start, stop });
 }
 
 /**
@@ -275,10 +276,12 @@ const TURN_ACTIVE_REASONS = new Set([
  * @param {() => void} dependencies.closeWatches
  */
 function createRepositoryUpdates({ probe, closeWatches }) {
-  return { probe, close() {
+  function close() {
     closeWatches();
     probe.close();
-  } };
+  }
+
+  return Object.freeze({ probe, close });
 }
 
 // Browser pages watch the projects and sessions they show over realtime

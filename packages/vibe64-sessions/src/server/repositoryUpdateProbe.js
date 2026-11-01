@@ -85,39 +85,41 @@ function createRepositoryUpdateProbe({
     }
   }
 
-  return Object.freeze({
-    // Returns the release for this viewer. The project's next probe stops
-    // when nobody watches it and no agent turn runs in it.
-    watch(slugValue) {
-      const slug = String(slugValue || "").trim();
-      if (closed || !slug) return () => {};
-      const entry = entryFor(slug);
-      entry.viewers += 1;
-      schedule(slug, entry);
-      let released = false;
-      return () => {
-        if (released) return;
-        released = true;
-        entry.viewers -= 1;
-      };
-    },
-    // An agent turn started: probe the project if it is idle.
-    wake(slugValue) {
-      const slug = String(slugValue || "").trim();
-      if (closed || !slug) return;
-      const entry = entryFor(slug);
-      if (entry.running) entry.woken = true;
-      else schedule(slug, entry);
-    },
-    close() {
-      closed = true;
-      for (const entry of projects.values()) {
-        if (entry.timer) clearTimer(entry.timer);
-        entry.timer = null;
-      }
-      projects.clear();
+  // Returns the release for this viewer. The project's next probe stops
+  // when nobody watches it and no agent turn runs in it.
+  function watch(slugValue) {
+    const slug = String(slugValue || "").trim();
+    if (closed || !slug) return () => {};
+    const entry = entryFor(slug);
+    entry.viewers += 1;
+    schedule(slug, entry);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      entry.viewers -= 1;
+    };
+  }
+
+  // An agent turn started: probe the project if it is idle.
+  function wake(slugValue) {
+    const slug = String(slugValue || "").trim();
+    if (closed || !slug) return;
+    const entry = entryFor(slug);
+    if (entry.running) entry.woken = true;
+    else schedule(slug, entry);
+  }
+
+  function close() {
+    closed = true;
+    for (const entry of projects.values()) {
+      if (entry.timer) clearTimer(entry.timer);
+      entry.timer = null;
     }
-  });
+    projects.clear();
+  }
+
+  return Object.freeze({ watch, wake, close });
 }
 
 export {

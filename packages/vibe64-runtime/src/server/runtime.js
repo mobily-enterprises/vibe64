@@ -137,23 +137,23 @@ class Vibe64SessionRuntime {
       metadata,
       sessionId,
       status
-    }, async (session) => {
+    }, async (created) => {
       if (this.learningScope?.noExercise) {
         // "genesis" remains the supported storage/runtime format, not a claim
         // that this source-less learning session has a Genesis project.
-        return session;
+        return created;
       }
       try {
         if (this.createSessionSource) {
           await this.createSessionSource({
             ...(sourceContext && typeof sourceContext === "object" ? sourceContext : {}),
             runtime: this,
-            session,
+            session: created,
             store: this.store
           });
-          session = await this.store.readSession(session.sessionId);
+          created = await this.store.readSession(created.sessionId);
         }
-        if (!sessionHasSource(session)) {
+        if (!sessionHasSource(created)) {
           throw vibe64Error(
             this.createSessionSource
               ? "Session source creation completed without attaching a source directory."
@@ -164,16 +164,16 @@ class Vibe64SessionRuntime {
           );
         }
       } catch (error) {
-        await this.store.mutateSession(session.sessionId, async () => {
+        await this.store.mutateSession(created.sessionId, async () => {
           await Promise.all([
-            this.store.writeMetadataValue(session.sessionId, "source_creation_error", normalizeText(error?.message)),
-            this.store.writeMetadataValue(session.sessionId, "source_creation_failed", "yes"),
-            this.store.writeStatus(session.sessionId, VIBE64_SESSION_STATUS.BLOCKED)
+            this.store.writeMetadataValue(created.sessionId, "source_creation_error", normalizeText(error?.message)),
+            this.store.writeMetadataValue(created.sessionId, "source_creation_failed", "yes"),
+            this.store.writeStatus(created.sessionId, VIBE64_SESSION_STATUS.BLOCKED)
           ]);
         });
         throw error;
       }
-      return session;
+      return created;
     });
     return this.sessionView(session);
   }

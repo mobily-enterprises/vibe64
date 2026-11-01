@@ -136,7 +136,7 @@ function createProjectPaths({ managedSourceRoot, practiceOwner, projectCatalogEn
       : "";
   }
 
-  return { practiceScope, targetIsCatalogProjectHome, projectContextRootForSlug, projectRecordPathForSlug, projectRecordPathForTarget, projectRuntimeRootForSlug, projectRuntimeRootForTarget, projectSessionSourceRootForSlug, projectSessionSourceRootForTarget, sourceRootForTarget, sourceConfigRootForTarget };
+  return Object.freeze({ practiceScope, targetIsCatalogProjectHome, projectContextRootForSlug, projectRecordPathForSlug, projectRecordPathForTarget, projectRuntimeRootForSlug, projectRuntimeRootForTarget, projectSessionSourceRootForSlug, projectSessionSourceRootForTarget, sourceRootForTarget, sourceConfigRootForTarget });
 }
 
 export { createProjectPaths };

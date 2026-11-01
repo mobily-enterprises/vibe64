@@ -178,7 +178,7 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
     return runWithPracticeProjectContext(practiceOwner, scope, operation);
   }
 
-  return { readLearningSpaceProject, listLearningSpaceProjects, runWithPracticeProjectScope, skipLearningSpaceEntry, isLearningSpaceRuntime, practiceDirectoryExists };
+  return Object.freeze({ readLearningSpaceProject, listLearningSpaceProjects, runWithPracticeProjectScope, skipLearningSpaceEntry, isLearningSpaceRuntime, practiceDirectoryExists });
 }
 
 export { createLearningSpaceProjects };

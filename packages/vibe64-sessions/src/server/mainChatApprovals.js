@@ -128,119 +128,119 @@ function createMainChatApprovals({
       decidedBy: person(vibe64User) || { id: "owner", displayName: "Owner" } });
   }
 
-  return Object.freeze({
-    async read(sessionId, { vibe64User = null } = {}) {
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const approvals = parseApprovals(await runtime.store.readMetadataValue(sessionId, MAIN_CHAT_APPROVALS_METADATA));
-      const team = await readWorkspaceTeam();
-      return { ok: true, sessionId, owner: isAssistantRoutingOwner(vibe64User), practice: currentRequestIsPracticeProject(), viewer: person(vibe64User),
-        ownerName: team.ownerName, entries: approvals.entries };
-    },
+  async function read(sessionId, { vibe64User = null } = {}) {
+    const runtime = await project.createRuntime({ inspectSource: false });
+    const approvals = parseApprovals(await runtime.store.readMetadataValue(sessionId, MAIN_CHAT_APPROVALS_METADATA));
+    const team = await readWorkspaceTeam();
+    return { ok: true, sessionId, owner: isAssistantRoutingOwner(vibe64User), practice: currentRequestIsPracticeProject(), viewer: person(vibe64User),
+      ownerName: team.ownerName, entries: approvals.entries };
+  }
 
-    async enqueue(sessionId, { message, messageId = "", attachmentIds = [] } = {}, { vibe64User }) {
-      if (attachmentIds.length) {
-        throw failure("Messages for approval are text only. Remove the attachments and send again.",
-          "vibe64_main_chat_approval_text_only", 400);
-      }
-      const sender = person(vibe64User);
-      const id = ENTRY_ID_PATTERN.test(messageId) ? messageId : crypto.randomUUID();
-      const team = await readWorkspaceTeam();
-      const runtime = await project.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
-      const steer = (await terminals.agentSessionState(sessionId, { runtime, session }))?.turn?.active === true;
-      return change(sessionId, "main-chat-approval-queued", (approvals) => {
-        const existing = approvals.entries.find((entry) => entry.id === id);
-        if (existing?.sender.id === sender.id && existing.text === message) {
-          return { ok: true, queued: true, approvalId: id, status: existing.status };
-        }
-        if (existing) throw failure("Send this message again as a new message.", "vibe64_main_chat_approval_exists", 409);
-        if (approvals.entries.filter((entry) => entry.status === "waiting" && entry.sender.id === sender.id).length >= WAITING_PER_SENDER) {
-          throw failure(`You have ${WAITING_PER_SENDER} messages waiting. Wait for ${team.ownerName || "the owner"} to review them, or withdraw one.`,
-            "vibe64_main_chat_approval_limit", 409);
-        }
-        const now = new Date().toISOString();
-        approvals.entries.push({ id, sender, text: message, steer, status: "waiting",
-          revision: 1, createdAt: now, updatedAt: now, error: "" });
-        return { ok: true, queued: true, approvalId: id, status: "waiting" };
-      }, { approvalId: id, approvalSender: sender.displayName });
-    },
-
-    async edit(sessionId, approvalId, { text: nextText, expectedRevision }, { vibe64User }) {
-      if (!text(nextText)) throw failure("Write a message, or withdraw it.", "vibe64_agent_message_input_required", 400);
-      return change(sessionId, "main-chat-approval-updated", (approvals) => {
-        const entry = entryFor(approvals, approvalId);
-        requireSender(entry, vibe64User);
-        requireState(entry, ["waiting"], expectedRevision);
-        Object.assign(entry, { text: text(nextText), revision: entry.revision + 1, updatedAt: new Date().toISOString(), error: "" });
-        return { ok: true, entry };
-      });
-    },
-
-    async withdraw(sessionId, approvalId, { expectedRevision }, { vibe64User }) {
-      return change(sessionId, "main-chat-approval-withdrawn", (approvals) => {
-        const entry = entryFor(approvals, approvalId);
-        requireSender(entry, vibe64User);
-        requireState(entry, ["waiting"], expectedRevision);
-        decided(entry, vibe64User, "withdrawn");
-        return { ok: true, entry };
-      });
-    },
-
-    async decline(sessionId, approvalId, { expectedRevision, note = "" }, { vibe64User }) {
-      requireOwner(vibe64User);
-      if (text(note).length > NOTE_MAX_LENGTH) {
-        throw failure(`Keep the note under ${NOTE_MAX_LENGTH} characters.`, "vibe64_main_chat_approval_note_invalid", 400);
-      }
-      return change(sessionId, "main-chat-approval-declined", (approvals) => {
-        const entry = entryFor(approvals, approvalId);
-        requireState(entry, ["waiting"], expectedRevision);
-        decided(entry, vibe64User, "declined");
-        entry.note = text(note);
-        return { ok: true, entry };
-      });
-    },
-
-    // Approval hands the message to the owner's ordinary send. Its delivery
-    // id is stable per revision: approving a message already sending retries
-    // the stored text, and an edited text is a new delivery.
-    async approve(sessionId, approvalId, { expectedRevision, text: editedText } = {}, { vibe64User, browserAuthority = null }) {
-      requireOwner(vibe64User);
-      const entry = await change(sessionId, "main-chat-approval-approved", (approvals) => {
-        const current = entryFor(approvals, approvalId);
-        requireState(current, ["waiting", "sending"], expectedRevision);
-        const edited = text(editedText) && text(editedText) !== current.text;
-        if (edited && current.status === "sending") {
-          throw failure("This message is being sent. Approve it again to retry it unchanged.", "vibe64_main_chat_approval_sending", 409);
-        }
-        if (edited) {
-          current.originalText ||= current.text;
-          current.text = text(editedText);
-          current.revision += 1;
-        }
-        decided(current, vibe64User, "sending");
-        current.error = "";
-        return { ...current };
-      });
-      let result;
-      try {
-        result = await deliver(sessionId, {
-          message: entry.text, messageId: `approval_${entry.id}_${entry.revision}`, vibe64User,
-          turnMetadata: { sender: { id: entry.sender.id, displayName: entry.sender.displayName,
-            approvalId: entry.id, approvedBy: entry.decidedBy.displayName } }
-        }, browserAuthority ? { browserAuthority } : {});
-      } catch (error) {
-        result = { ok: false, error: error.message, code: error.code };
-      }
-      const sent = result?.ok !== false;
-      await change(sessionId, sent ? "main-chat-approval-sent" : "main-chat-approval-updated", (approvals) => {
-        const current = entryFor(approvals, approvalId);
-        Object.assign(current, { status: sent ? "sent" : "waiting", updatedAt: new Date().toISOString(),
-          error: sent ? "" : text(result?.error) || "The message could not be sent." });
-      });
-      return sent ? { ...result, ok: true, approvalId, status: "sent" }
-        : { ...result, ok: false, approvalId, status: "waiting" };
+  async function enqueue(sessionId, { message, messageId = "", attachmentIds = [] } = {}, { vibe64User }) {
+    if (attachmentIds.length) {
+      throw failure("Messages for approval are text only. Remove the attachments and send again.",
+        "vibe64_main_chat_approval_text_only", 400);
     }
-  });
+    const sender = person(vibe64User);
+    const id = ENTRY_ID_PATTERN.test(messageId) ? messageId : crypto.randomUUID();
+    const team = await readWorkspaceTeam();
+    const runtime = await project.createRuntime({ inspectSource: false });
+    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const steer = (await terminals.agentSessionState(sessionId, { runtime, session }))?.turn?.active === true;
+    return change(sessionId, "main-chat-approval-queued", (approvals) => {
+      const existing = approvals.entries.find((entry) => entry.id === id);
+      if (existing?.sender.id === sender.id && existing.text === message) {
+        return { ok: true, queued: true, approvalId: id, status: existing.status };
+      }
+      if (existing) throw failure("Send this message again as a new message.", "vibe64_main_chat_approval_exists", 409);
+      if (approvals.entries.filter((entry) => entry.status === "waiting" && entry.sender.id === sender.id).length >= WAITING_PER_SENDER) {
+        throw failure(`You have ${WAITING_PER_SENDER} messages waiting. Wait for ${team.ownerName || "the owner"} to review them, or withdraw one.`,
+          "vibe64_main_chat_approval_limit", 409);
+      }
+      const now = new Date().toISOString();
+      approvals.entries.push({ id, sender, text: message, steer, status: "waiting",
+        revision: 1, createdAt: now, updatedAt: now, error: "" });
+      return { ok: true, queued: true, approvalId: id, status: "waiting" };
+    }, { approvalId: id, approvalSender: sender.displayName });
+  }
+
+  async function edit(sessionId, approvalId, { text: nextText, expectedRevision }, { vibe64User }) {
+    if (!text(nextText)) throw failure("Write a message, or withdraw it.", "vibe64_agent_message_input_required", 400);
+    return change(sessionId, "main-chat-approval-updated", (approvals) => {
+      const entry = entryFor(approvals, approvalId);
+      requireSender(entry, vibe64User);
+      requireState(entry, ["waiting"], expectedRevision);
+      Object.assign(entry, { text: text(nextText), revision: entry.revision + 1, updatedAt: new Date().toISOString(), error: "" });
+      return { ok: true, entry };
+    });
+  }
+
+  async function withdraw(sessionId, approvalId, { expectedRevision }, { vibe64User }) {
+    return change(sessionId, "main-chat-approval-withdrawn", (approvals) => {
+      const entry = entryFor(approvals, approvalId);
+      requireSender(entry, vibe64User);
+      requireState(entry, ["waiting"], expectedRevision);
+      decided(entry, vibe64User, "withdrawn");
+      return { ok: true, entry };
+    });
+  }
+
+  async function decline(sessionId, approvalId, { expectedRevision, note = "" }, { vibe64User }) {
+    requireOwner(vibe64User);
+    if (text(note).length > NOTE_MAX_LENGTH) {
+      throw failure(`Keep the note under ${NOTE_MAX_LENGTH} characters.`, "vibe64_main_chat_approval_note_invalid", 400);
+    }
+    return change(sessionId, "main-chat-approval-declined", (approvals) => {
+      const entry = entryFor(approvals, approvalId);
+      requireState(entry, ["waiting"], expectedRevision);
+      decided(entry, vibe64User, "declined");
+      entry.note = text(note);
+      return { ok: true, entry };
+    });
+  }
+
+  // Approval hands the message to the owner's ordinary send. Its delivery
+  // id is stable per revision: approving a message already sending retries
+  // the stored text, and an edited text is a new delivery.
+  async function approve(sessionId, approvalId, { expectedRevision, text: editedText } = {}, { vibe64User, browserAuthority = null }) {
+    requireOwner(vibe64User);
+    const entry = await change(sessionId, "main-chat-approval-approved", (approvals) => {
+      const current = entryFor(approvals, approvalId);
+      requireState(current, ["waiting", "sending"], expectedRevision);
+      const edited = text(editedText) && text(editedText) !== current.text;
+      if (edited && current.status === "sending") {
+        throw failure("This message is being sent. Approve it again to retry it unchanged.", "vibe64_main_chat_approval_sending", 409);
+      }
+      if (edited) {
+        current.originalText ||= current.text;
+        current.text = text(editedText);
+        current.revision += 1;
+      }
+      decided(current, vibe64User, "sending");
+      current.error = "";
+      return { ...current };
+    });
+    let result;
+    try {
+      result = await deliver(sessionId, {
+        message: entry.text, messageId: `approval_${entry.id}_${entry.revision}`, vibe64User,
+        turnMetadata: { sender: { id: entry.sender.id, displayName: entry.sender.displayName,
+          approvalId: entry.id, approvedBy: entry.decidedBy.displayName } }
+      }, browserAuthority ? { browserAuthority } : {});
+    } catch (error) {
+      result = { ok: false, error: error.message, code: error.code };
+    }
+    const sent = result?.ok !== false;
+    await change(sessionId, sent ? "main-chat-approval-sent" : "main-chat-approval-updated", (approvals) => {
+      const current = entryFor(approvals, approvalId);
+      Object.assign(current, { status: sent ? "sent" : "waiting", updatedAt: new Date().toISOString(),
+        error: sent ? "" : text(result?.error) || "The message could not be sent." });
+    });
+    return sent ? { ...result, ok: true, approvalId, status: "sent" }
+      : { ...result, ok: false, approvalId, status: "waiting" };
+  }
+
+  return Object.freeze({ read, enqueue, edit, withdraw, decline, approve });
 }
 
 export { MAIN_CHAT_APPROVALS_METADATA, countWaitingMainChatApprovals, createMainChatApprovals };

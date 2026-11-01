@@ -268,11 +268,9 @@ function createSessionPresenceService({
     }
   }
 
-  return Object.freeze({
-    close,
-    size: () => entries.size,
-    update
-  });
+  const size = () => entries.size;
+
+  return Object.freeze({ close, size, update });
 }
 
 export {

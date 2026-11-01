@@ -295,9 +295,9 @@ function createConnectedContributions({ actions, project, terminals, publishSess
           contribution: binding.contribution,
           sessionName: (text(session.sessionName) || sessionId).slice(0, 120)
         }, requestContext);
-        let result = await allocate();
+        let allocation = await allocate();
         let update = null;
-        if (result?.ok !== false && result?.sourceReady === true) {
+        if (allocation?.ok !== false && allocation?.sourceReady === true) {
           // Bring the checkout up to its integration branch when that cannot
           // affect anyone's work. A refusal never stops preparation; the
           // checkout is used as it is and the outcome is reported.
@@ -308,28 +308,28 @@ function createConnectedContributions({ actions, project, terminals, publishSess
           } catch (error) {
             update = { ok: false, error: text(error?.message) };
           }
-          if (update?.status === "updated") result = await allocate();
+          if (update?.status === "updated") allocation = await allocate();
         }
         remaining.delete(names[index]);
         if (remaining.size) {
           report(`Preparing connected projects: ${[...remaining].join(", ")} (${targets.length - remaining.size} of ${targets.length} ready)`);
         }
-        return { repository, binding, result, update };
+        return { repository, binding, allocation, update };
       }));
       for (const [index, target] of targets.entries()) {
         preparingRepository = target.repository;
         if (allocated[index].status === "rejected") throw allocated[index].reason;
-        const { repository, binding, result, update } = allocated[index].value;
-        if (result?.ok === false) return { ...result, prepared };
-        prepared.push({ repository, projectSlug: binding.projectSlug, sessionId: result.sessionId,
-          sourceReady: result.sourceReady === true, workspaceSetup: result.workspaceSetup,
+        const { repository, binding, allocation, update } = allocated[index].value;
+        if (allocation?.ok === false) return { ...allocation, prepared };
+        prepared.push({ repository, projectSlug: binding.projectSlug, sessionId: allocation.sessionId,
+          sourceReady: allocation.sourceReady === true, workspaceSetup: allocation.workspaceSetup,
           update: connectedUpdateOutcome(update, binding.contribution.integrationBranch) });
-        if (result.sourceReady !== true) return {
+        if (allocation.sourceReady !== true) return {
           ok: false,
           code: "vibe64_connected_source_unavailable",
           error: `The contribution source for ${repository} is not ready. Open its session in ${binding.projectSlug} and recover the source before retrying.`
         };
-        resolvedSources.push({ repository: target.repository, projectSlug: binding.projectSlug, session: result });
+        resolvedSources.push({ repository: target.repository, projectSlug: binding.projectSlug, session: allocation });
       }
       if (targets.length) report("Linking connected sources");
       preparingRepository = "";
@@ -572,7 +572,7 @@ function createConnectedContributions({ actions, project, terminals, publishSess
     },
   });
 
-  return { assertConnectedWorkSaved, inspectConnectedWork, methods, prepareConnectedSourcesInsideAgentWrite, saveConnectedWork };
+  return Object.freeze({ assertConnectedWorkSaved, inspectConnectedWork, methods, prepareConnectedSourcesInsideAgentWrite, saveConnectedWork });
 }
 
 export { createConnectedContributions };
