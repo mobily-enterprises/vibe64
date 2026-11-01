@@ -114,7 +114,13 @@ function createServiceGoals({
     goalAdmissions.get(intent.id)?.abort(new Error("Goal continuation was stopped before dispatch."));
     await context.runtime.store.writeMetadataValue(sessionId, GOAL_STOP_REQUEST,
       JSON.stringify({ intentId: intent.id, requestedAt: new Date().toISOString() }));
-    void changeGoalIntent(sessionId, context, () => null).catch(() => {});
+    void changeGoalIntent(sessionId, context, () => null).catch((error) => logOperationalEvent(logger, "warn", {
+      component: "vibe64.agent_goal",
+      event: "vibe64.agent_goal.intent_clear_failed",
+      sessionId: sessionId,
+      code: error?.code,
+      error: error?.message
+    }, "A stopped goal's intent could not be cleared; its stop request stays recorded."));
   }
 
   async function stopGoalIntent(sessionId, context, expectedId) {

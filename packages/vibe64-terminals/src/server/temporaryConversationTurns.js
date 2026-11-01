@@ -16,6 +16,7 @@ import {
 } from "./mainConversationBinding.js";
 import { requireSuccess, routingRequest, presentation } from "./temporaryConversationRules.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /** @typedef {import("./types.js").PrepareAssistantSelection} PrepareAssistantSelection */
 /** @typedef {import("./types.js").PrepareAgentSkills} PrepareAgentSkills */
@@ -26,12 +27,14 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * A temporary chat's turns on the shared conversation runtime: the facilities it lends that runtime,
  * snapshots, the session write coordinator, coalesced output saves, and the chat's own routing with
  * the scoped context and native agent it routes through.
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {TemporaryConversationRecords} dependencies.chatRecords
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {ConversationRuntime} dependencies.conversationRuntime
@@ -57,7 +60,8 @@ function createTemporaryConversationTurns({
   systemRoot,
   prepareSelection,
   publishSessionChanged,
-  temporarySaveDelayMs
+  temporarySaveDelayMs,
+  logger
 }) {
   if (!Number.isSafeInteger(routingWaitMs) || routingWaitMs < 0) {
     throw new TypeError("Temporary conversations require the assistant routing lock wait.");
@@ -259,7 +263,7 @@ function createTemporaryConversationTurns({
     return context;
   }
 
-  const routing = createAssistantRouting({ systemRoot, allowAuto: false, agent: routingAgent, publish: publishSessionChanged,
+  const routing = createAssistantRouting({ systemRoot, allowAuto: false, agent: routingAgent, logger, publish: publishSessionChanged,
     /**
      * A send waits behind a sibling chat's slow assistant startup, as Main does,
      * instead of refusing after the shorter default wait.
@@ -439,7 +443,13 @@ function createTemporaryConversationTurns({
           }, {
               ...ctx,
               conversationId: record.conversationId
-            }, { recovered: true }).catch(() => {});
+            }, { recovered: true }).catch((error) => logOperationalEvent(logger, "warn", {
+              component: "vibe64.temporary_conversation",
+              event: "vibe64.temporary_conversation.recovered_turn_failed",
+              sessionId: sessionId,
+              code: error?.code,
+              error: error?.message
+            }, "A recovered temporary chat turn could not be routed; the next read retries it."));
         }
         const page = readPage ? await readPage() : null;
         return {

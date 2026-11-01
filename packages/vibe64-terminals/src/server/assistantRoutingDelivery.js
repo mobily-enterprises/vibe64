@@ -19,15 +19,18 @@ import {
   usesWorkPlan,
   recentVisibleMessages
 } from "./assistantRoutingRequests.js";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
 /** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
 /** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Delivery of a routed request, or of its follow-up, to the chosen AI, and the attribution its turn carries.
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {AssistantRoutingState} dependencies.routingState
  * @param {AssistantRoutingRecords} dependencies.records
  * @param {AssistantRoutingDecisions} dependencies.decisions
@@ -43,7 +46,8 @@ function createAssistantRoutingDelivery({
   agent,
   dispatch,
   prepareSelection,
-  interrupt
+  interrupt,
+  logger
 }) {
   async function deliver(sessionId, context, state, followup = false, inspectionOnly = false) {
     if (!routingState.allowAuto && state.mode === "auto") {
@@ -200,7 +204,13 @@ function createAssistantRoutingDelivery({
     records.mark(state.messageId, "dispatched");
     if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code);
     // A Cancel that arrived during dispatch stops the turn this message started.
-    if (records.isCancelling(sessionId, context, messageId)) await interrupt(sessionId, context).catch(() => {});
+    if (records.isCancelling(sessionId, context, messageId)) await interrupt(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {
+      component: "vibe64.assistant_routing",
+      event: "vibe64.assistant_routing.interrupt_failed",
+      sessionId: sessionId,
+      code: error?.code,
+      error: error?.message
+    }, "Stopping a cancelled message's turn failed; the cancel stays recorded."));
     state.status = "working";
     state.delivery = "accepted";
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";

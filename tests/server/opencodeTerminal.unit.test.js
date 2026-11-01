@@ -4686,7 +4686,7 @@ test("R20 hidden renewal successor preserves the original invalid-ACK boundary t
       event: { kind: "reasoning-helper-created" }, patch: { reasoningSummaryHelper: helper } }));
     let deleteConfirmed = false;
     const deletedHelpers = [];
-    const presentation = createOpenCodeConversationPresentation({ getAssistantManager: () => ({
+    const presentation = createOpenCodeConversationPresentation({ logger: silentLogger, getAssistantManager: () => ({
       async deleteEphemeralConversation(scope, input, options) {
         deletedHelpers.push({ scope, input, options });
         return { ok: deleteConfirmed, error: deleteConfirmed ? "" : "Helper deletion is not confirmed" };

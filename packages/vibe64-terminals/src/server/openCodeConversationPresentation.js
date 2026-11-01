@@ -7,10 +7,12 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 const OPENCODE_AGENT_RUN_ID = "opencode_server";
 const OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS = 1_000;
@@ -36,6 +38,7 @@ function openCodeReasoningHeadline(value = "") {
 /**
  * Product progress summaries and publication use the original native inventory.
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {OpenCodeSharedRuntime["turns"]} dependencies.turns
@@ -45,7 +48,8 @@ function createOpenCodeConversationPresentation({
   getAssistantManager,
   publishSessionChanged,
   turns,
-  temporaryConversations
+  temporaryConversations,
+  logger
 }) {
   const progressPublishes = new Map();
   const progressPublishedAt = new Map();
@@ -198,7 +202,13 @@ function createOpenCodeConversationPresentation({
       void publishSessionChanged(sessionId, {
         payload: { assistantProgress: summary },
         reason: "opencode-server-progress"
-      }).catch(() => {});
+      }).catch((error) => logOperationalEvent(logger, "warn", {
+        component: "vibe64.opencode",
+        event: "vibe64.opencode.progress_publish_failed",
+        sessionId: sessionId,
+        code: error?.code,
+        error: error?.message
+      }, "OpenCode progress could not be published; the next update publishes it."));
       return;
     }
     if (progressPublishes.has(sessionId)) {
@@ -213,7 +223,13 @@ function createOpenCodeConversationPresentation({
         void publishSessionChanged(sessionId, {
           payload: { assistantProgress: pending.summary },
           reason: "opencode-server-progress"
-        }).catch(() => {});
+        }).catch((error) => logOperationalEvent(logger, "warn", {
+          component: "vibe64.opencode",
+          event: "vibe64.opencode.progress_publish_failed",
+          sessionId: sessionId,
+          code: error?.code,
+          error: error?.message
+        }, "OpenCode progress could not be published; the next update publishes it."));
       }
     }, OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS - (now - last));
     progressPublishes.set(sessionId, { summary, timer });

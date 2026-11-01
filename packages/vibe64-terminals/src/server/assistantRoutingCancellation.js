@@ -10,17 +10,20 @@ import {
   MAX_CANCELLED_MESSAGES,
   STATE_KEY
 } from "./assistantRoutingRequests.js";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
 /** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
 /** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
 /** @typedef {import("./types.js").AssistantRoutingDelivery} AssistantRoutingDelivery */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Stop and Cancel: the inspection of an uncertain delivery, stopping a request's routing, cancelling
  * one message without the agent-write lock, and the cleanup that settles afterwards.
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {AssistantRoutingState} dependencies.routingState
  * @param {AssistantRoutingRecords} dependencies.records
  * @param {AssistantRoutingDecisions} dependencies.decisions
@@ -40,7 +43,8 @@ function createAssistantRoutingCancellation({
   exclusive,
   open,
   interrupt,
-  discardPending
+  discardPending,
+  logger
 }) {
   function inspectDelivery(sessionId, { messageId }, options) {
     return exclusive(sessionId, options, async context => {
@@ -170,7 +174,13 @@ function createAssistantRoutingCancellation({
     if (task?.messageId === messageId) {
       task.cancelled = true;
       // readable-check: allow optional-call - optional operation: a routing task has a stop once its helper has started
-      void Promise.resolve(task.stop?.()).catch(() => {});
+      void Promise.resolve(task.stop?.()).catch((error) => logOperationalEvent(logger, "warn", {
+        component: "vibe64.assistant_routing",
+        event: "vibe64.assistant_routing.helper_stop_failed",
+        sessionId: sessionId,
+        code: error?.code,
+        error: error?.message
+      }, "A cancelled message's routing helper could not be stopped."));
     }
     // The running turn may be this message's when its routed delivery was
     // attempted or accepted, or when it is the chat's newest message.
@@ -178,7 +188,13 @@ function createAssistantRoutingCancellation({
       : (await store.readConversationTail(sessionId, { userLimit: 1 })).findLast(turn => turn.user)?.user?.messageId === messageId;
     let interrupted = false;
     if (owned) interrupted = await interrupt(sessionId, context).then(result => result?.ok !== false, () => false);
-    void exclusive(sessionId, options, current => settle(sessionId, current)).catch(() => {});
+    void exclusive(sessionId, options, current => settle(sessionId, current)).catch((error) => logOperationalEvent(logger, "warn", {
+      component: "vibe64.assistant_routing",
+      event: "vibe64.assistant_routing.settle_failed",
+      sessionId: sessionId,
+      code: error?.code,
+      error: error?.message
+    }, "Settling a cancelled message failed; the next send settles it."));
     return { ok: true, cancelled: true, messageId, interrupted };
   }
 

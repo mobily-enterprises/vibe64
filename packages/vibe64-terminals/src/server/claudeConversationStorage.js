@@ -97,6 +97,7 @@ function createClaudeConversationStorage({ createError: error }) {
         await rename(temporary, file);
       } finally { await rm(temporary, { force: true }); }
     });
+    // The queue tail only orders later saves; this save's own caller receives its failure.
     entry.saving = saving.catch(() => {});
     await saving;
   }

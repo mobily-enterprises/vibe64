@@ -104,6 +104,7 @@ function createAssistantRoutingDecisions({
           executionProfile: helper.executionProfile,
           cleanupExecutionId: helper.executionId
         }, helperContext);
+        // Marks the rejection handled; task.stop returns this promise, and its caller logs a failed stop.
         void interrupt.catch(() => {});
       }
       return interrupt;

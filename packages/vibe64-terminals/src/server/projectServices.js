@@ -43,6 +43,7 @@ function createProjectServices({
 
   function exclusive(project, operation) {
     const result = project.tail.then(operation);
+    // The queue tail only orders later operations; this operation's caller receives its failure.
     project.tail = result.catch(() => {});
     return result;
   }

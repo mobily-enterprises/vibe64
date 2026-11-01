@@ -7,6 +7,7 @@ import {
   assistantGoalIsActive
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { failure, readCancelled, read, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
@@ -14,11 +15,13 @@ import { failure, readCancelled, read, usesWorkPlan } from "./assistantRoutingRe
 /** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
 /** @typedef {import("./types.js").AssistantRoutingDelivery} AssistantRoutingDelivery */
 /** @typedef {ReturnType<typeof import("./assistantRoutingCancellation.js").createAssistantRoutingCancellation>} AssistantRoutingCancellation */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Sending: a message's admission into a new or resumed request, its routing and delivery, and the
  * shutdown that closes the requests still being prepared.
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {AssistantRoutingState} dependencies.routingState
  * @param {AssistantRoutingRecords} dependencies.records
  * @param {AssistantRoutingDecisions} dependencies.decisions
@@ -40,7 +43,8 @@ function createAssistantRoutingAdmission({
   exclusive,
   dispatch,
   interrupt,
-  onTiming
+  onTiming,
+  logger
 }) {
   let closing = false;
 
@@ -82,7 +86,13 @@ function createAssistantRoutingAdmission({
       context = current;
       key = records.keyFor(sessionId, context);
       // Finish earlier cancels' cleanup first; it never blocks this admission.
-      await cancellation.settle(sessionId, context).catch(() => {});
+      await cancellation.settle(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {
+        component: "vibe64.assistant_routing",
+        event: "vibe64.assistant_routing.settle_failed",
+        sessionId: sessionId,
+        code: error?.code,
+        error: error?.message
+      }, "Earlier cancels' cleanup failed; this message is still admitted."));
       if ((await readCancelled(context.runtime.store, sessionId)).some(entry => entry.messageId === input.messageId)) {
         throw Object.assign(failure("This message was cancelled. Send it again as a new message.", "vibe64_assistant_message_cancelled"),
           { delivery: "not-sent" });
@@ -344,7 +354,13 @@ function createAssistantRoutingAdmission({
       records.mark(input.messageId, "dispatched");
       // A Cancel that arrived during dispatch stops the turn this message started.
       if (result?.delivered === true && records.isCancelling(sessionId, current, input.messageId)) {
-        await interrupt(sessionId, current).catch(() => {});
+        await interrupt(sessionId, current).catch((error) => logOperationalEvent(logger, "warn", {
+          component: "vibe64.assistant_routing",
+          event: "vibe64.assistant_routing.interrupt_failed",
+          sessionId: sessionId,
+          code: error?.code,
+          error: error?.message
+        }, "Stopping a cancelled message's turn failed; the cancel stays recorded."));
       }
       if (result?.delivered === true && task.steeringRequestId) {
         const persisted = await read(current.runtime.store, sessionId);

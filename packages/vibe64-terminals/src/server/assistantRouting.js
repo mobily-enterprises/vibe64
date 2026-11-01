@@ -10,6 +10,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Main routing reports send timing and follows a completed plan (automatic
@@ -26,6 +27,7 @@ function followNoCompletedPlan() {
  * interrupt Stop uses (interrupt), and the native attempt's discard, which runs
  * under that lock (discardPending).
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {string} dependencies.systemRoot
  * @param {boolean} [dependencies.allowAuto]
  * @param {SessionAgentManager} dependencies.agent
@@ -50,6 +52,7 @@ function createAssistantRouting({
   open,
   interrupt,
   discardPending,
+  logger,
   onTiming = doNothing,
   onPlanCompleted = followNoCompletedPlan
 }) {
@@ -71,7 +74,8 @@ function createAssistantRouting({
     agent,
     dispatch,
     prepareSelection,
-    interrupt
+    interrupt,
+    logger
   });
   const cancellation = createAssistantRoutingCancellation({
     routingState,
@@ -82,7 +86,8 @@ function createAssistantRouting({
     exclusive,
     open,
     interrupt,
-    discardPending
+    discardPending,
+    logger
   });
   const admission = createAssistantRoutingAdmission({
     routingState,
@@ -94,7 +99,8 @@ function createAssistantRouting({
     exclusive,
     dispatch,
     interrupt,
-    onTiming
+    onTiming,
+    logger
   });
   const outcomes = createAssistantRoutingOutcomes({
     routingState,

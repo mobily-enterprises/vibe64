@@ -146,7 +146,8 @@ function createOpenCodeSessionRegistration({
     getAssistantManager,
     publishSessionChanged,
     turns,
-    temporaryConversations
+    temporaryConversations,
+    logger
   });
   const events = createOpenCodeConversationEvents({
     project,
@@ -181,7 +182,8 @@ function createOpenCodeSessionRegistration({
     hostPreparation,
     events,
     publishSessionChanged,
-    prepareSessionCleanup
+    prepareSessionCleanup,
+    logger
   });
 
   const lifecyclePreparation = createOpenCodeLifecyclePreparation({

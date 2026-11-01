@@ -116,7 +116,8 @@ function createService({
   const providerUsage = createProviderUsage({
     resolveConnection: (selection) => selection.engineId === "opencode"
       ? state.assistantRuntime.resolveConnection(selection)
-      : codexProviderConnections.read(selection.modelProviderId, selection.engineId)
+      : codexProviderConnections.read(selection.modelProviderId, selection.engineId),
+    logger
   });
   /*
    * The parts that call back into each other: a turn's follow-up reaches routing, goals and temporary chats, which
@@ -243,6 +244,7 @@ function createService({
   });
   assistantRouting = createAssistantRouting({
     systemRoot: codexProviderOptions.systemRoot,
+    logger,
     agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {
       const result = await sessionAccess.runMainAgentWrite(sessionId, options, operation,
@@ -257,7 +259,13 @@ function createService({
      * The pause never waits for the goal settings lock (requestGoalStop).
      */
     async interrupt(sessionId, context) {
-      await goals.requestGoalStop(sessionId, context).catch(() => {});
+      await goals.requestGoalStop(sessionId, context).catch((error) => logOperationalEvent(logger, "warn", {
+        component: "vibe64.agent_goal",
+        event: "vibe64.agent_goal.stop_request_failed",
+        sessionId: sessionId,
+        code: error?.code,
+        error: error?.message
+      }, "Goal continuation could not be paused for a Cancel; the native turn still stops."));
       return sessionAgent.interruptTurn(sessionId, { reason: "cancel-message" }, context);
     },
     discardPending: discardAssistantChangeoverMessage,
@@ -289,6 +297,7 @@ function createService({
 
   sessionConversations = createSessionConversations({
     actions,
+    logger,
     conversationRuntime: mainConversations,
     systemRoot: codexProviderOptions.systemRoot,
     prepareSelection: (sessionId, selection, context) => sessionAgent.prepareSelection(sessionId, selection, context),

@@ -13,6 +13,7 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
 /** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * A session's temporary chats. Session storage owns discovery and the
@@ -20,6 +21,7 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
  * explicit Close removes a user-facing temporary chat. The parts are built
  * once, in dependency order, and the result names each of their functions.
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {ActionCatalogue} dependencies.actions
@@ -49,6 +51,7 @@ function createSessionConversations({
   prepareSelection,
   publishSessionChanged,
   publishConversation,
+  logger,
   temporarySaveDelayMs = 1_000,
   temporaryCompletionAttempts = 6,
   temporaryCompletionRetryMs = 500
@@ -66,7 +69,8 @@ function createSessionConversations({
     systemRoot,
     prepareSelection,
     publishSessionChanged,
-    temporarySaveDelayMs
+    temporarySaveDelayMs,
+    logger
   });
   const chatLifecycle = createTemporaryConversationLifecycle({
     chatRecords,

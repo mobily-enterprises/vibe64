@@ -3470,7 +3470,7 @@ test("provider balance reads observe Codex claim and completion without holding 
       fetchImpl: async () => ({ ok: true, json: async () => ({ id: "verified", status: "completed", output: [], type: "message", content: [] }) }) });
     await connections.change("deepseek", { apiKey: "test-key" });
     const pending = [];
-    const usage = createProviderUsage({ resolveConnection: async () => ({ apiKey: "test-key" }), fetchImpl: () => {
+    const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => ({ apiKey: "test-key" }), fetchImpl: () => {
       const request = Promise.withResolvers(); pending.push(request); return request.promise;
     } });
     captures.onSessionChanged = (id, event) => usage.observe("test-project", id, event);

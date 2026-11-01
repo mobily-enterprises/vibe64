@@ -12,6 +12,7 @@ import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencod
 import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /** @typedef {import("./types.js").OpenCodeLifecyclePreparation} OpenCodeLifecyclePreparation */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -20,6 +21,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparationContextFor} OpenCodeMainMessagePreparationContextFor */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 function openCodeExecutionProfile(input = {}) {
   if (!input.executionProfile) {
@@ -82,6 +84,7 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
 
 /**
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {OpenCodeMainMessagePreparationContextFor} dependencies.contextFor
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
@@ -95,7 +98,8 @@ function createOpenCodeScopedPreparation({
   hostPreparation,
   events,
   publishSessionChanged,
-  prepareSessionCleanup
+  prepareSessionCleanup,
+  logger
 }) {
   const { prepareProcess, sharedRoots, promptContext, writeSessionEnvironmentRegistry } = hostPreparation;
   const { detachedObservationProjection } = events;
@@ -281,7 +285,13 @@ function createOpenCodeScopedPreparation({
                     providerTurnId: tracked.inputMessageId
                   }
                 }
-              })).catch(() => {});
+              })).catch((error) => logOperationalEvent(logger, "warn", {
+                component: "vibe64.opencode",
+                event: "vibe64.opencode.turn_idle_publish_failed",
+                sessionId: sessionId,
+                code: error?.code,
+                error: error?.message
+              }, "A temporary OpenCode turn's idle state could not be published."));
             }
           }
         }

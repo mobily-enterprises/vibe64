@@ -10,6 +10,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileRequest } from "@local/vibe64-runtime/shared";
 import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRoutingAssignments";
 import { sessionAgentManagerDefaults } from "./sessionAgentManagerDefaults.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const { workPlanPath } = __testables;
 
@@ -157,7 +158,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, {
   const interrupts = [];
   const discards = [];
   let dispatchGate = null;
-  const routingOptions = { systemRoot: root, agent, exclusive, onPlanCompleted, prepareSelection: async () => {},
+  const routingOptions = { systemRoot: root, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
     open: async (_id, options) => ({ ...context, ...options }),
     interrupt: async () => { interrupts.push(Date.now()); return { ok: true, interrupted: true }; },
     discardPending: async (_id, messageId) => { discards.push(messageId); },

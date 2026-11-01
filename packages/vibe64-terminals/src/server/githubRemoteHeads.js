@@ -86,6 +86,7 @@ async function readBoundedBody(response) {
   for await (const chunk of response.body || []) {
     total += chunk.length;
     if (total > MAX_LISTING_BYTES) {
+      // Releasing the unread body is best effort; the oversized listing is refused either way.
       await response.body.cancel().catch(() => {});
       throw invalidListing();
     }
@@ -148,10 +149,12 @@ async function listGithubRemoteHeads({
       signal
     });
     if (response.status !== 200) {
+      // Releasing the unread body is best effort; the failed status is reported either way.
       await response.body?.cancel().catch(() => {});
       throw failedStatusError(response.status);
     }
     if (!String(response.headers.get("content-type") || "").startsWith("application/x-git-upload-pack-result")) {
+      // Releasing the unread body is best effort; the wrong content type is reported either way.
       await response.body?.cancel().catch(() => {});
       throw invalidListing();
     }

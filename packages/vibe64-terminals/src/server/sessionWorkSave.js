@@ -668,6 +668,8 @@ async function saveSessionWork({
         runCommand
       }).then(onCacheMaintenance).catch((error) => (
         onCacheMaintenance(failedCacheMaintenance(context, saved.verifiedCommit, error))
+      // The failure already went to onCacheMaintenance, which logs it; this stops a throwing reporter
+      // from becoming an unhandled rejection.
       )).catch(() => {});
     });
   }

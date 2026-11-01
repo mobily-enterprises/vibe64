@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { createProviderUsage } from "../../packages/vibe64-terminals/src/server/providerUsage.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const selection = (engineId = "codex", modelProviderId = "deepseek") => ({
   schema: "vibe64.assistant-selection.v1", engineId, modelProviderId, modelId: "model",
@@ -24,7 +25,7 @@ test("all three orchestrators refresh once at each turn boundary without waiting
     const current = selection(engineId);
     const requests = [];
     let updates = 0;
-    const usage = createProviderUsage({
+    const usage = createProviderUsage({ logger: silentLogger,
       resolveConnection: async () => ({ apiKey: "test-key" }),
       fetchImpl: (url, options) => {
         const pending = Promise.withResolvers();
@@ -67,7 +68,7 @@ test("all three orchestrators refresh once at each turn boundary without waiting
 });
 
 test("DeepSeek preserves currencies and real zero balances while discarding malformed rows", async () => {
-  const usage = createProviderUsage({ resolveConnection: async () => ({ apiKey: "key" }),
+  const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => ({ apiKey: "key" }),
     fetchImpl: async () => ({ ok: true, json: async () => ({ balance_infos: [
       null, { currency: "USD", total_balance: "" }, { currency: "USD", total_balance: "oops" },
       { currency: "USD", total_balance: "0" }, { currency: "CNY", total_balance: "34.567" }
@@ -81,7 +82,7 @@ test("DeepSeek preserves currencies and real zero balances while discarding malf
 
 test("GLM normalizes supplied coding windows and excludes tool quotas", async () => {
   const current = selection("opencode", "zai-coding-plan");
-  const usage = createProviderUsage({ resolveConnection: async () => ({ apiKey: "glm-key" }),
+  const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => ({ apiKey: "glm-key" }),
     fetchImpl: async (url, options) => {
       assert.equal(url, "https://api.z.ai/api/monitor/usage/quota/limit");
       assert.equal(options.headers.Authorization, "glm-key");
@@ -106,7 +107,7 @@ test("pay-as-you-go GLM reads dollar balances at both turn boundaries across eng
   for (const engineId of ["codex", "claude", "opencode"]) {
     const current = selection(engineId, "zai");
     let reads = 0;
-    const usage = createProviderUsage({ resolveConnection: async () => ({ apiKey: "glm-api-key" }),
+    const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => ({ apiKey: "glm-api-key" }),
       fetchImpl: async (url, options) => {
         assert.equal(url, "https://api.z.ai/api/biz/account/query-customer-account-report");
         assert.equal(options.headers.Authorization, "Bearer glm-api-key");
@@ -138,7 +139,7 @@ test("GLM HTTP 200 errors and missing or malformed balances never become money",
     { data: { balance: "12.40" } },
     ...[undefined, null, "", " ", "oops", true, [], {}, Infinity].map(balance => ({ success: true, data: { balance } }))
   ]) {
-    const usage = createProviderUsage({ resolveConnection: async () => ({ apiKey: "key" }),
+    const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => ({ apiKey: "key" }),
       fetchImpl: async () => ({ ok: true, json: async () => payload }) });
     usage.observe("project", "session", event(current, true));
     await setImmediate();
@@ -150,7 +151,7 @@ test("GLM HTTP 200 errors and missing or malformed balances never become money",
 
 test("Auto handoffs read the executing provider and keep native and OpenCode keys separate", async () => {
   const requests = [];
-  const usage = createProviderUsage({
+  const usage = createProviderUsage({ logger: silentLogger,
     resolveConnection: async (current) => ({ apiKey: `${current.engineId === "opencode" ? "opencode" : "native"}-${current.modelProviderId}` }),
     fetchImpl: async (url, options) => {
       requests.push(options.headers.Authorization);
@@ -179,7 +180,7 @@ test("Auto handoffs read the executing provider and keep native and OpenCode key
 test("replaced keys cannot inherit cached or in-flight balances", async () => {
   let key = "old-key";
   const requests = [];
-  const usage = createProviderUsage({ resolveConnection: async () => ({ apiKey: key }), fetchImpl: () => {
+  const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => ({ apiKey: key }), fetchImpl: () => {
     const pending = Promise.withResolvers();
     requests.push(pending);
     return pending.promise;
@@ -206,7 +207,7 @@ test("failed reads are unavailable, never zero or a turn failure", async () => {
     async () => ({ ok: true, json: async () => { throw new Error("Invalid JSON"); } }),
     async () => ({ ok: true, json: async () => ({}) })
   ]) {
-    const usage = createProviderUsage({ resolveConnection: async () => ({ apiKey: "secret" }), fetchImpl });
+    const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => ({ apiKey: "secret" }), fetchImpl });
     usage.observe("project", "one", event(selection(), true), () => { throw new Error("Observer failed"); });
     await setImmediate();
     const result = await usage.read(selection());
@@ -214,7 +215,7 @@ test("failed reads are unavailable, never zero or a turn failure", async () => {
     assert.equal(result.balances?.length || 0, 0);
     assert.equal(JSON.stringify(result).includes("secret"), false);
   }
-  const usage = createProviderUsage({ resolveConnection: async () => { throw new Error("Credentials unavailable"); } });
+  const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => { throw new Error("Credentials unavailable"); } });
   usage.observe("project", "one", event(selection(), true));
   await setImmediate();
   assert.equal((await usage.read(selection())).status, "unavailable");
@@ -222,7 +223,7 @@ test("failed reads are unavailable, never zero or a turn failure", async () => {
 
 test("unsupported providers and non-turn events never query; session tracking is scoped and releasable", async () => {
   let reads = 0;
-  const usage = createProviderUsage({ resolveConnection: async () => { reads++; return { apiKey: "key" }; }, fetchImpl: async () => balanceResponse() });
+  const usage = createProviderUsage({ logger: silentLogger, resolveConnection: async () => { reads++; return { apiKey: "key" }; }, fetchImpl: async () => balanceResponse() });
   for (const providerId of ["openai", "unsupported", "constructor"]) {
     const current = selection("codex", providerId);
     usage.observe("project", "one", event(current, true));

@@ -44,6 +44,7 @@ import {
   bootstrapPayload, currentAppPayload, directChatSessionPayload,
   readyProjectSelectionPayload, WORKSPACE_SLUG
 } from "./base-shell-data.ts";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 type Handler = (response: ServerResponse, request: IncomingMessage) => void | Promise<void>;
 type GoalView = { status: string; goal: Record<string, unknown> | null;
@@ -651,6 +652,7 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
     host: { conversation: ({ id, context }) => service.conversationBinding(id, context) }
   });
   service = createSessionConversations({ systemRoot: root, sessionAgent, conversationRuntime: common, actions, attachments,
+    logger: silentLogger,
     prepareAgentSkills: async () => {},
     readSessionContext: async (sessionId, options = {}) => ({
       ...options, runtime, session: await runtime.getSession(sessionId)

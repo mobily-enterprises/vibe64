@@ -1,7 +1,9 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
 /** @typedef {import("./types.js").ResolveAssistantConnection} ResolveAssistantConnection */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 const PROVIDERS = {
   deepseek: {
@@ -58,10 +60,11 @@ function normalizeUsage(providerId, value) {
  * Account snapshots are optional and memory-only. Turn execution never awaits a
  * balance request, and the HTTP read never makes an upstream request of its own.
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ResolveAssistantConnection} dependencies.resolveConnection
  * @param {typeof fetch} [dependencies.fetchImpl]
  */
-function createProviderUsage({ resolveConnection, fetchImpl = fetch }) {
+function createProviderUsage({ resolveConnection, logger, fetchImpl = fetch }) {
   const accounts = new Map();
   const turns = new Map();
 
@@ -127,7 +130,13 @@ function createProviderUsage({ resolveConnection, fetchImpl = fetch }) {
       const stage = `${selection.engineId}:${selection.modelProviderId}:${turnId}:${run.active}`;
       if (turns.get(key) === stage) return;
       turns.set(key, stage);
-      void refresh(selection).then(onUpdated).catch(() => {});
+      void refresh(selection).then(onUpdated).catch((error) => logOperationalEvent(logger, "warn", {
+        component: "vibe64.provider_usage",
+        event: "vibe64.provider_usage.refresh_failed",
+        sessionId: sessionId,
+        code: error?.code,
+        error: error?.message
+      }, "Provider usage could not be refreshed; the next turn refreshes it."));
     } catch { /* Optional observation must not interrupt lifecycle publication. */ }
   }
 
