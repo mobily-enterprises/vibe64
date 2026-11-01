@@ -11,8 +11,10 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 import {
+  GENESIS_STACK_PATH,
   GENESIS_STACK_SECTION_AMBIGUOUS,
-  genesisProjectContractNeedsAttention
+  genesisProjectContractNeedsAttention,
+  genesisStackUnreadable
 } from "./projectContractAttention.js";
 import * as genesisCompiler from "genesis-compiler";
 import { createVibe64HostContextRegistry } from "./hostContextRegistry.js";
@@ -356,7 +358,7 @@ async function inspectGenesisStackComponents(options = {}) {
   }
   // The compiler treats an absent Stack as empty during bootstrap. An explicit
   // inspection must distinguish that from a saved, valid empty selection.
-  await readFile(path.join(options.projectRoot, "genesis/stack.md"), "utf8");
+  await readFile(path.join(options.projectRoot, GENESIS_STACK_PATH), "utf8");
   const stack = await inspectGenesisStackSection(VIBE64_WORKSPACE_SETUP_SECTION, options);
   return { components: stack.components, stackHash: stack.stackHash };
 }
@@ -528,8 +530,10 @@ async function renderGenesisPrompt({
 }
 
 export {
+  GENESIS_STACK_PATH,
   GENESIS_STACK_SECTION_AMBIGUOUS,
   genesisProjectContractNeedsAttention,
+  genesisStackUnreadable,
   inspectVibe64ConnectedDevelopment,
   inspectVibe64ProjectServices,
   parseVibe64ProjectServicesLines,

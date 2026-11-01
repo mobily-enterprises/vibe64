@@ -4,11 +4,14 @@ import {
   rememberAssistantBeforeChangeover,
   requireCompletedConversationRewind
 } from "./assistantChangeover.js";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import {
   GENESIS_BLUEPRINT_PATH,
+  GENESIS_STACK_PATH,
   genesisProjectContractNeedsAttention,
+  genesisStackUnreadable,
   inspectGenesisProjectFormat,
   inspectGenesisAgentIntegrations,
   syncGenesisAgentIntegrations,
@@ -25,6 +28,23 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").InspectAgentSkills} InspectAgentSkills */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {Error & { code: string, details?: { path?: string, line?: number, observed?: string } }} GenesisStackError */
+
+/**
+ * The message is refused with Genesis's own explanation, so the person can fix the Stack file
+ * and send again. Genesis numbers lines within the failing section.
+ * @param {GenesisStackError} error
+ */
+function unreadableStackRefusal(error) {
+  const { path: file = GENESIS_STACK_PATH, line, observed } = error.details || {};
+  const where = line ? `${file} (line ${line} of its section)` : file;
+  const found = observed ? ` Found: "${observed}".` : "";
+  return new AppError(409, `${where} cannot be read: ${error.message}${found} Fix it, then send the message again.`, {
+    code: "vibe64_genesis_stack_unreadable",
+    params: { file, line, message: error.message, observed },
+    details: { genesisCode: error.code }
+  });
+}
 
 /**
  * What a session's assistant needs before work reaches it: the previous assistant stopped on a
@@ -108,6 +128,7 @@ function createServiceAssistantPreparation({
         }, "Project contracts need repair or a project decision; skill refresh deferred so chat remains available.");
         return;
       }
+      if (genesisStackUnreadable(error)) throw unreadableStackRefusal(error);
       if (error?.code !== "AGENT_SKILL_UNAVAILABLE") throw error;
       await workspacePreparation.invalidateWorkspaceSetup(
         context,

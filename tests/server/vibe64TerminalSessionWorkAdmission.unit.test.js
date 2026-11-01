@@ -630,6 +630,33 @@ test("an undecided competing Stack section defers skill refresh without blocking
     event.code === "STACK_SECTION_AMBIGUOUS"), true);
 });
 
+test("an unreadable Stack refuses the message with Genesis's file, line and explanation", async (t) => {
+  const { service, session, project } = await terminalServiceFixture(t, agentWriteLockHarness());
+  const projectRoot = session.metadata.source_path;
+  await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
+  await initializeGenesisProject({ projectRoot });
+  const stackPath = path.join(projectRoot, "genesis/stack.md");
+  const stack = await readFile(stackPath, "utf8");
+  await writeFile(stackPath, `${stack.trimEnd()}\n\n## Verification\n\n- Verify \`application\`: \`npm\` \`test\`\n\nRun the checks before every release.\n`);
+  project.runProjectSourceExclusive = async () => assert.fail("An unreadable Stack must not change source.");
+  await assert.rejects(service.sendAgentMessage(session.sessionId,
+    { message: "Why does the project not start?" }, { engineId: "opencode" }),
+  (error) => {
+    assert.equal(error.status, 409);
+    assert.equal(error.code, "vibe64_genesis_stack_unreadable");
+    assert.equal(error.message, "genesis/stack.md (line 3 of its section) cannot be read: " +
+      "Every Verification entry must use `- Verify `label`: `command` `argument`...`. " +
+      "Found: \"Run the checks before every release.\". Fix it, then send the message again.");
+    assert.deepEqual(error.params, {
+      file: "genesis/stack.md",
+      line: 3,
+      message: "Every Verification entry must use `- Verify `label`: `command` `argument`...`.",
+      observed: "Run the checks before every release."
+    });
+    return true;
+  });
+});
+
 test("assistant inspection and active-turn steering leave outdated skills untouched", async (t) => {
   const lock = agentWriteLockHarness();
   const { service, session, project } = await terminalServiceFixture(t, lock, {

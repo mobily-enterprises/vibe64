@@ -14,8 +14,21 @@ function genesisProjectContractNeedsAttention(error) {
   return PROJECT_CONTRACT_ATTENTION_CODES.includes(String(error?.code || "").trim());
 }
 
+// Genesis cannot parse the Stack itself, for example a prose paragraph under an
+// operation section. Its message and details (path, section line, observed
+// text) say what to fix; callers show them instead of failing as a host error.
+const GENESIS_STACK_PATH = "genesis/stack.md";
+const GENESIS_STACK_EXTENSION_SECTION_CODES = Object.freeze(["UI_DISCOVERY_INVALID", "PACKAGE_DISCOVERY_INVALID"]);
+
+function genesisStackUnreadable(error) {
+  if (error?.name !== "GenesisError" || genesisProjectContractNeedsAttention(error)) return false;
+  return error.code.startsWith("STACK_") || GENESIS_STACK_EXTENSION_SECTION_CODES.includes(error.code);
+}
+
 export {
   GENESIS_STACK_CONTRACTS_INCOMPLETE,
+  GENESIS_STACK_PATH,
   GENESIS_STACK_SECTION_AMBIGUOUS,
-  genesisProjectContractNeedsAttention
+  genesisProjectContractNeedsAttention,
+  genesisStackUnreadable
 };

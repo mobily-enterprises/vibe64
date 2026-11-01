@@ -107,7 +107,11 @@ automatic skill refresh without invalidating successful setup or changing source
 so the conversation can repair or decide them; Vibe64 never picks a proposal.
 Setup and launch retain their contract validation: workspace preparation records
 an undecided section as `ambiguous` with Genesis's message, and the agent status
-command reports it as a blocked inspection. Other inspection errors still propagate.
+command reports it as a blocked inspection. A Stack Genesis cannot parse at all,
+such as prose under an operation section (`genesisStackUnreadable()`), refuses the
+message with `vibe64_genesis_stack_unreadable` (409), naming the file, Genesis's
+section line, the offending text and Genesis's message, so the person fixes the
+file and sends again. Other inspection errors still propagate.
 An active main or temporary turn skips this preparation. Routine connection
 verification and read-only temporary conversations remain read-only. Project
 format migration remains a separate operation, and skill maintenance does not
