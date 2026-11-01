@@ -683,7 +683,10 @@ test("integration continuation recovers provider acceptance after local write fa
   });
   const writeUser = runtime.store.writeConversationUserMessage;
   runtime.store.writeConversationUserMessage = async () => { throw new Error("Local disk write failed."); };
-  const missing = await service.resumeIntegrationContinuation(session.sessionId, input);
+  const missing = await service.resumeIntegrationContinuation(session.sessionId, input, {
+    readIntegrationConfiguration: async () => ({ ok: false, code: "vibe64_integration_configuration_unavailable",
+      error: "Integration configuration cannot be checked before continuing." })
+  });
   assert.equal(missing.code, "vibe64_integration_configuration_unavailable");
   for (const current of [
     { baseHash: "b".repeat(64), configuration: { integrations: { mail: {} } } },
@@ -2230,7 +2233,7 @@ test("source read rechecks original active work after waiting for preparation", 
   await assert.rejects(access(path.join(f.runtime.stateRoot, "locks/source-mutation.lock")), { code: "ENOENT" });
 });
 
-test("source read preserves reconnection timeout and requires original project source locking", async t => {
+test("source read preserves the reconnection timeout", async t => {
   const f = await exclusiveSourceReadFixture(t, { store: {} });
   const read = () => f.service.runSessionSourceReadExclusive(f.session.sessionId, () => assert.fail("No source work is admitted after timeout."));
   f.runtime.store.runSessionExclusive = async (_id, _name, _operation, options) => {
@@ -2243,8 +2246,6 @@ test("source read preserves reconnection timeout and requires original project s
     message: "The assistant is still reconnecting. Wait until it is ready, then try again.",
     details: { blockingOperation: "prepare-agent-session" }
   });
-  delete f.project.runProjectSourceExclusive;
-  await assert.rejects(read(), { code: "vibe64_project_source_lock_unavailable" });
 });
 
 

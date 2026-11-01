@@ -245,8 +245,7 @@ function createServiceAssistant({
       error.statusCode = 400;
       throw error;
     }
-    // readable-check: allow method-probe - optional operation: a host without model access changes refuses them
-    if (typeof state.assistantRuntime.updateModelAccess !== "function") {
+    if (!state.assistantRuntime.updateModelAccess) {
       const error = new Error("This Vibe64 host does not support changing provider model access.");
       error.code = "vibe64_assistant_model_access_unavailable";
       error.statusCode = 503;
@@ -296,15 +295,6 @@ function createServiceAssistant({
 
   async function resumeIntegrationContinuation(sessionId, input = {}, options = {}) {
     const inspectConfiguration = async (saved) => {
-      // readable-check: allow method-probe - test asserts error: a goal without an integration configuration reader is refused
-      if (typeof options.readIntegrationConfiguration !== "function") {
-        return {
-          ok: false,
-          code: "vibe64_integration_configuration_unavailable",
-          error: "Integration configuration cannot be checked before continuing.",
-          integrationSetup: saved
-        };
-      }
       const current = await options.readIntegrationConfiguration();
       if (current?.ok === false) return current;
       if (current?.baseHash !== saved.configurationHash ||
@@ -449,7 +439,12 @@ function createServiceAssistant({
         try {
           sessionNaming.start(await assistantContext.assistantSessionOptions(sessionId, options), input.messageId);
         } catch (error) {
-          logger.warn({ error: error.message, sessionId }, "Session naming could not start.");
+          logOperationalEvent(logger, "warn", {
+            component: "vibe64.session_naming",
+            event: "vibe64.session_naming.start_failed",
+            error: error.message,
+            sessionId
+          }, "Session naming could not start.");
         }
       }
       if (result?.ok === false) {

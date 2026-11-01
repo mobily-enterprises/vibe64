@@ -206,9 +206,6 @@ function createPreviewIdentityCommandRunner({
   sourceRoot = "",
   targetHref = ""
 }) {
-  if (typeof runCommand !== "function") {
-    throw new TypeError("Preview identity command runner requires runCommand.");
-  }
   // capability is the Outputs Preview identity @local/vibe64-genesis validated.
   if (!capability) {
     return null;

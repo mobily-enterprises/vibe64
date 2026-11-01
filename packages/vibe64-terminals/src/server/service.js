@@ -138,8 +138,7 @@ function createService({
   const workspaceSetup = createWorkspaceSetupRunner({
     project,
     connectedPreparation: options => {
-      // readable-check: allow method-probe - cycle: vibe64.sessions requires vibe64.terminals
-      if (typeof state.slots.connectedPreparation !== "function") throw new Error("Connected workspace preparation is unavailable.");
+      if (!state.slots.connectedPreparation) throw new Error("Connected workspace preparation is unavailable.");
       return state.slots.connectedPreparation(options);
     }
   });
@@ -565,7 +564,9 @@ function createService({
     pauseMainGoal,
     blockMainGoal,
     readAgentGoal: goals.readAgentGoal,
+    readCanonicalAgentGoal: goals.readCanonicalAgentGoal,
     updateAgentGoal: goals.updateAgentGoal,
+    updateCanonicalAgentGoal: goals.updateCanonicalAgentGoal,
     readAgentPlanUsage: assistant.readAgentPlanUsage,
     readSessionWorkPlan: agentConversations.readSessionWorkPlan,
     archiveSessionWorkPlan: agentConversations.archiveSessionWorkPlan,

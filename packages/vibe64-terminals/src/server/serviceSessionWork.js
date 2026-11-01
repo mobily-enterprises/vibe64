@@ -271,12 +271,6 @@ function createServiceSessionWork({
   }
 
   async function createSessionSource(input = {}) {
-    // readable-check: allow method-probe - test asserts error: a project service without the source mutation lock is refused
-    if (typeof project.runProjectSourceExclusive !== "function") {
-      const error = new Error("Session source creation requires the project source mutation lock.");
-      error.code = "vibe64_project_source_lock_unavailable";
-      throw error;
-    }
     return project.runProjectSourceExclusive(async () => {
       const source = await createManagedSessionSource({
         ...input,
@@ -357,21 +351,11 @@ function createServiceSessionWork({
    * model. Snapshot validation/installation remains with its content owner.
    */
   async function runConnectedSourcePreparation(sessionId, input, operation) {
-    if (typeof operation !== "function") throw new TypeError("Connected preparation requires an internal source operation.");
     return runSessionRepositoryWrite(sessionId, input, { operation: "prepare-connected-sources" }, operation);
   }
 
   async function runSessionSourceReadExclusive(sessionId, operation) {
     const id = assertValidVibe64SessionId(sessionId);
-    if (typeof operation !== "function") {
-      throw new TypeError("Exclusive session source reads require an internal operation.");
-    }
-    // readable-check: allow method-probe - test asserts error: a project service without the source mutation lock is refused
-    if (typeof project.runProjectSourceExclusive !== "function") {
-      throw Object.assign(new Error("Session source reads require the project source mutation lock."), {
-        code: "vibe64_project_source_lock_unavailable"
-      });
-    }
     return runSessionRepositoryWrite(id, {}, {
       operation: "read-session-source",
       activeCode: "vibe64_session_source_read_agent_active",

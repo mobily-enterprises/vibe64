@@ -160,7 +160,7 @@ async function proxyPreviewIdentityExchange(request, response, {
   const setCookie = [];
   let signedOut = false;
   try {
-    if (typeof consumeIdentityGrant !== "function") {
+    if (!consumeIdentityGrant) {
       throw previewIdentityProxyError(
         "This preview does not support identity switching.",
         "vibe64_preview_identity_unsupported",
@@ -169,7 +169,7 @@ async function proxyPreviewIdentityExchange(request, response, {
     }
     const grant = await previewIdentityRequestGrant(request);
     const selection = consumeIdentityGrant(grant);
-    if (typeof executePreviewIdentityCommand !== "function") {
+    if (!executePreviewIdentityCommand) {
       throw previewIdentityProxyError(
         "Application preview identity command is unavailable. Restart the preview.",
         "vibe64_preview_identity_command_unavailable",

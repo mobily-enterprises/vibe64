@@ -179,7 +179,7 @@ function previewIdentityCommandRunnerForLaunchTerminal({
   terminal = null
 } = {}) {
   const capability = terminal?.metadata?.previewIdentity;
-  if (!capability || typeof runCommand !== "function") {
+  if (!capability || !runCommand) {
     return null;
   }
   const previewAuth = previewAuthForLaunchTerminal(terminal, {
