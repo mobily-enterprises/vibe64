@@ -1,7 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 
-import { USAGE_ENTRY_KINDS } from "./usageWeb.js";
+import { USAGE_ENTRY_KINDS } from "./usageIndex.js";
 import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 
 /** @typedef {import("./types.js").SystemGraphService} SystemGraphService */

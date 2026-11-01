@@ -10,7 +10,9 @@ vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({ usePaths: () 
 
 import {
   buildCallIndex,
-  buildSnapshotIndex,
+  buildSnapshotIndex
+} from "../../packages/vibe64-system-graph/src/server/usageIndex.js";
+import {
   joinFunctions,
   readCallsWeb,
   readImportsWeb

@@ -8,6 +8,7 @@ reach, or the functions one recorded request actually ran. Architecture shows it
 ## Sources
 
 - Main: `packages/vibe64-system-graph/src/server/usageWeb.js`
+- `packages/vibe64-system-graph/src/server/usageIndex.js`
 - `packages/vibe64-system-graph/src/server/usageActions.js`
 - `packages/vibe64-system-graph/src/server/usageRoutes.js`
 - `packages/vibe64-system-graph/src/server/genesisCities.js`

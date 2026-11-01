@@ -10,16 +10,18 @@ import {
 } from "./genesisCities.js";
 import { createSnapshotCache } from "./snapshotCache.js";
 import {
-  CALL_WEB_CACHE_SESSIONS,
   buildCallIndex,
   buildSnapshotIndex,
+  usageError
+} from "./usageIndex.js";
+import {
+  CALL_WEB_CACHE_SESSIONS,
   joinFunctions,
   readCallsWeb,
   readEntries,
   readFunction,
   readImportsWeb,
-  requireEntry,
-  usageError
+  requireEntry
 } from "./usageWeb.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 

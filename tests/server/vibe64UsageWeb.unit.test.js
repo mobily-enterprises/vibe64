@@ -8,9 +8,11 @@ import { test } from "node:test";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import { readGenesisCallWeb } from "../../packages/vibe64-system-graph/src/server/genesisCities.js";
 import {
-  USAGE_QUERY_LIMITS,
   buildCallIndex,
-  buildSnapshotIndex,
+  buildSnapshotIndex
+} from "../../packages/vibe64-system-graph/src/server/usageIndex.js";
+import {
+  USAGE_QUERY_LIMITS,
   joinFunctions,
   readCallsWeb,
   readEntries,
