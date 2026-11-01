@@ -19,6 +19,9 @@ import {
   realUserActorRequiresInstalledHelper
 } from "../policy/permissionPolicy.js";
 
+/** The close step of a terminal that has none. */
+function noCloseStep() {}
+
 const ptyExecutions = new Map();
 
 function ptyHelperPayloadPath(root = "") {
@@ -99,6 +102,7 @@ async function runPtyCommand(request = {}, options = {}) {
   } = options;
   try {
     const terminal = request.terminal || {};
+    const { onClose = noCloseStep } = terminal;
     const executionId = request.execution?.id || "";
     const sessionInput = terminalSessionInputForRequest(request, {
       actor,
@@ -119,10 +123,7 @@ async function runPtyCommand(request = {}, options = {}) {
       namespaceLimitPrefix: terminal.namespaceLimitPrefix,
       onClose: async (input) => {
         try {
-          // readable-check: allow method-probe - input validation: a terminal's optional step when it closes
-          if (typeof terminal.onClose === "function") {
-            await terminal.onClose(input);
-          }
+          await onClose(input);
         } finally {
           if (executionId) {
             ptyExecutions.set(executionId, {

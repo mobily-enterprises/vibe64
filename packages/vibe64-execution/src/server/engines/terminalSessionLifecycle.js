@@ -123,12 +123,8 @@ async function runLifecycleHook(session, {
     return null;
   }
   session[flag] = true;
-  const handler = session[hook];
-  if (typeof handler !== "function") {
-    return null;
-  }
   try {
-    await handler(payload);
+    await session[hook](payload);
     return null;
   } catch (error) {
     const message = String(error?.message || error || `${label}.`);

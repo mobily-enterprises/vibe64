@@ -54,6 +54,9 @@ import {
   startedSessionsForNamespace
 } from "./terminalSessionRegistry.js";
 
+/** A stop or close hook for a terminal with nothing to do then. */
+function noTerminalHook() {}
+
 const requirePty = createRequire(import.meta.url);
 
 function readTerminalSessionControlState(id, options = {}) {
@@ -138,9 +141,9 @@ function startTerminalSession({
   namespace = "default",
   namespaceLimitPrefix = "",
   runningLimitFilter = null,
-  onClose = null,
+  onClose = noTerminalHook,
   onOutput = null,
-  onStop = null,
+  onStop = noTerminalHook,
   reuseRunning = false,
   detachedIdleTimeoutMs = 0
 }) {
