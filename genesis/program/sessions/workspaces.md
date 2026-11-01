@@ -29,6 +29,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
 - `packages/vibe64-sessions/src/server/sessionRenewalWorkflow.js`
 - `packages/vibe64-sessions/src/server/sessionRenewalScheduler.js`
+- `packages/vibe64-sessions/src/server/sessionRenewalActors.js`
 - `packages/vibe64-sessions/src/server/sessionRenewalAdmission.js`
 - `packages/vibe64-sessions/src/server/sessionRenewalPredecessor.js`
 - `packages/vibe64-sessions/src/server/sessionRenewalSuccessor.js`
@@ -540,12 +541,14 @@ Archive lives in Sessions' archive module, one function per durable phase;
 connected-source orchestration lives in its connected-contributions module.
 Both are composed into the one session service, as renewal is.
 
-The session service exposes optional `setArchivePreparation(callback)` for host
-preparation after terminal shutdown, under the existing agent-write lock and
+A host provides its preparation as the optional
+`vibe64.sessions.archive-preparation` capability, resolved once when Sessions is
+set up; it runs after terminal shutdown, under the existing agent-write lock and
 before the next resource/source archive step. Every attempt invokes it, including
 resumption at a later durable phase, so the callback must be idempotent and handle
 already-removed source. Throwing or returning `ok: false` preserves the existing
-archive failure/retry behavior. There is no default callback or maintenance policy.
+archive failure/retry behavior. Without it an archive prepares nothing and does not
+read the session for it; there is no maintenance policy.
 Renewal invokes the same callback after predecessor shutdown and successor
 acknowledgement, before source/archive preparation. It supplies `renewal: true`
 and the existing renewal artifact reader/writer remains the persistence owner

@@ -1,4 +1,6 @@
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
+import { prepareNothingForArchive } from "../../packages/vibe64-sessions/src/server/sessionArchive.js";
+import { restoreStandaloneRenewalActor } from "../../packages/vibe64-sessions/src/server/sessionRenewalActors.js";
 import { createTerminalsSetupRunner } from "../../packages/vibe64-sessions/src/server/sessionWorkspaceSetup.js";
 
 // The session service requires each collaborator and calls the terminal and
@@ -36,7 +38,9 @@ function withOperations(double, operations) {
 function createSessionsService(dependencies) {
   const terminals = withOperations(dependencies.terminals, NEUTRAL_TERMINAL_OPERATIONS);
   return createService({
+    archivePreparation: prepareNothingForArchive,
     publishProjectChanged: async () => null,
+    restoreRenewalActor: restoreStandaloneRenewalActor,
     publishSessionChanged: async () => null,
     sessionPresence: { close() {}, update: async () => ({ ok: true, status: "unavailable" }) },
     workspaceSetupRunner: createTerminalsSetupRunner(terminals),

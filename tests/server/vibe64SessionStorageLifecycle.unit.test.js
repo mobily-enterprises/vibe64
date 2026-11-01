@@ -4,13 +4,15 @@ import path from "node:path";
 import test from "node:test";
 
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
+import { Vibe64SessionsProvider } from "../../packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js";
+import { prepareNothingForArchive } from "../../packages/vibe64-sessions/src/server/sessionArchive.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 import { retireNativeConversation } from "@jskit-ai/assistant-core/server/native-history";
 import { installVibe64ManagedExecutionProvider } from "@local/vibe64-execution/server";
 
-function archiveFixture(phase = "") {
+function archiveFixture(phase = "", archivePreparation = prepareNothingForArchive) {
   const calls = [];
   const session = { sessionId: "session-a", status: "active", sourceReady: true, metadata: {} };
   if (phase) {
@@ -44,6 +46,7 @@ function archiveFixture(phase = "") {
     }
   };
   const service = createService({
+    archivePreparation,
     project: {
       async createRuntime() { return runtime; },
       async releaseSessionResources() { calls.push("resources"); return { ok: true }; }
@@ -62,12 +65,11 @@ test("ordinary archival has no preparation policy unless a host registers it", a
   const f = archiveFixture();
   assert.equal((await f.service.archiveSession("session-a")).ok, true);
   assert.deepEqual(f.calls, ["stop", "resources", "archive"]);
-  assert.throws(() => f.service.setArchivePreparation({}), /function or null/u);
+  assert.throws(() => Vibe64SessionsProvider.setup({ archivePreparation: {} }, {}), /function or null/u);
 });
 
 test("preparation sees stopped, current session state before resource and source removal", async () => {
-  const f = archiveFixture();
-  f.service.setArchivePreparation(async ({ phase, runtime, session }) => {
+  const f = archiveFixture("", async ({ phase, runtime, session }) => {
     assert.equal(phase, "stopping");
     assert.equal(runtime, f.runtime);
     assert.equal(session.metadata.final_answer_saved, "yes");
@@ -83,8 +85,9 @@ test("preparation sees stopped, current session state before resource and source
 
 for (const failure of ["throw", "result"]) {
   test(`preparation ${failure} preserves source and supports an explicit retry`, async () => {
-    const f = archiveFixture();
-    f.service.setArchivePreparation(async () => {
+    let failing = true;
+    const f = archiveFixture("", async () => {
+      if (!failing) return undefined;
       if (failure === "throw") throw new Error("History could not be preserved");
       return { ok: false, error: "History could not be preserved" };
     });
@@ -94,7 +97,7 @@ for (const failure of ["throw", "result"]) {
     assert.equal(f.session.status, "active");
     assert.equal(JSON.parse(f.session.metadata.session_archive_operation).status, "failed");
     assert.deepEqual(f.calls, ["stop"]);
-    f.service.setArchivePreparation(null);
+    failing = false;
     assert.equal((await f.service.archiveSession("session-a")).ok, true);
     assert.deepEqual(f.calls, ["stop", "stop", "resources", "archive"]);
   });
@@ -102,8 +105,7 @@ for (const failure of ["throw", "result"]) {
 
 for (const phase of ["resources", "source"]) {
   test(`preparation is repeatable when an archive resumes at ${phase}`, async () => {
-    const f = archiveFixture(phase);
-    f.service.setArchivePreparation(async (context) => {
+    const f = archiveFixture(phase, async (context) => {
       assert.equal(context.phase, phase);
       f.calls.push("prepare");
     });
@@ -114,10 +116,9 @@ for (const phase of ["resources", "source"]) {
 }
 
 test("preparation stays inside the session agent-write lock", { timeout: 10_000 }, async () => {
-  const f = archiveFixture();
   const entered = Promise.withResolvers();
   const release = Promise.withResolvers();
-  f.service.setArchivePreparation(async () => {
+  const f = archiveFixture("", async () => {
     f.calls.push("prepare");
     entered.resolve();
     await release.promise;
@@ -190,13 +191,13 @@ test("preparation writes survive real archive publication without changing the s
     await runtime.store.createSession({ sessionId: "session-a", runtimeKind: "genesis",
       metadata: { source_creation_failed: "yes" } });
     const service = createService({
+      archivePreparation: async ({ runtime, session }) => {
+        await runtime.store.writeArtifact(session.sessionId, "archive-evidence.txt", "preserved");
+      },
       project: { async createRuntime() { return runtime; } },
       terminals: { async closeSessionTerminals() {
         await runtime.store.writeConversationUserMessage("session-a", { text: "Preserve final history" });
       } }
-    });
-    service.setArchivePreparation(async ({ runtime, session }) => {
-      await runtime.store.writeArtifact(session.sessionId, "archive-evidence.txt", "preserved");
     });
     const result = await service.archiveSession("session-a");
     assert.equal(result.ok, true, result.error);

@@ -9,6 +9,22 @@ import { trustedAssistantUser } from "./trustedAssistantUser.js";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {import("./types.js").SessionArchivePreparation} SessionArchivePreparation */
+
+// A composed host's preparation of each archive (for example preserving what
+// the session wrote) is provided through this token; without one an archive
+// prepares nothing.
+const SESSION_ARCHIVE_PREPARATION_TOKEN = "vibe64.sessions.archive-preparation";
+
+/** @type {SessionArchivePreparation} */
+async function prepareNothingForArchive() {}
+
+/** @param {unknown} prepare */
+function assertArchivePreparation(prepare) {
+  if (prepare && typeof prepare !== "function") {
+    throw new TypeError("Session archive preparation must be a function or null.");
+  }
+}
 
 // A session's persisted archive progress. Unreadable progress is refused with
 // one coded error so recovery never guesses at what was already removed.
@@ -33,14 +49,13 @@ function readSessionArchiveOperation(metadata) {
  * source, recording each durable phase so startup resumes an interrupted one.
  * A host may add idempotent preparation between those phases.
  * @param {object} dependencies
+ * @param {SessionArchivePreparation} dependencies.archivePreparation
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  */
-function createSessionArchive({ project, terminals, setupRunner, publishSessionChanged }) {
-  let archivePreparation = null;
-
+function createSessionArchive({ archivePreparation, project, terminals, setupRunner, publishSessionChanged }) {
   // Stopping: preview, AI turns and remaining tools stop before anything is removed.
   // The session's live conversations also leave memory: once its source is gone
   // they cannot be reopened, and a later account change would fail on them.
@@ -53,15 +68,15 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
   }
 
   /**
-   * The host's optional preparation runs on every attempt, at whichever phase.
-   * @param {((request: object) => Promise<object>) | null} prepare
+   * The host's preparation runs on every attempt, at whichever phase. Without
+   * one the session is not read for it.
    * @param {Vibe64SessionRuntime} runtime
    * @param {string} sessionId
    * @param {string} phase
    */
-  async function runArchivePreparation(prepare, runtime, sessionId, phase) {
-    if (!prepare) return;
-    const prepared = await prepare({
+  async function runArchivePreparation(runtime, sessionId, phase) {
+    if (archivePreparation === prepareNothingForArchive) return;
+    const prepared = await archivePreparation({
       phase,
       runtime,
       session: await runtime.getSession(sessionId, { inspectSource: false })
@@ -82,9 +97,6 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
   }
 
   async function archiveSession(sessionId, input = {}) {
-    // One attempt keeps the same host callback even if configuration changes
-    // while terminal shutdown is in progress.
-    const prepareArchive = archivePreparation;
     return sessionResult(async () => {
       if (setupRunner.isRunning(sessionId)) {
         const error = new Error("Wait for workspace preparation to finish before archiving this session.");
@@ -166,7 +178,7 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
               session: closingSession
             });
             if (operation.phase === "stopping") await stopSessionWork(runtime, currentSession);
-            await runArchivePreparation(prepareArchive, runtime, sessionId, operation.phase);
+            await runArchivePreparation(runtime, sessionId, operation.phase);
             if (operation.phase === "stopping") {
               await advanceArchivePhase("resources");
             }
@@ -224,13 +236,6 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
     }, "Vibe64 could not archive this session.");
   }
 
-  function setArchivePreparation(prepare = null) {
-    if (prepare !== null && typeof prepare !== "function") {
-      throw new TypeError("Session archive preparation must be a function or null.");
-    }
-    archivePreparation = prepare;
-  }
-
   async function resumeSessionArchives({ signal = null } = {}) {
     const runtime = await project.createRuntime({ inspectSource: false });
     // A closed session whose archive cannot be published is reported with the
@@ -263,17 +268,11 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
     return { failures };
   }
 
-  function prepareSessionArchive(context) {
-    return archivePreparation?.(context);
-  }
-
   return Object.freeze({
     archiveSession,
-    prepareArchive: prepareSessionArchive,
-    resumeSessionArchives,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setArchivePreparation
+    prepareArchive: archivePreparation,
+    resumeSessionArchives
   });
 }
 
-export { createSessionArchive };
+export { SESSION_ARCHIVE_PREPARATION_TOKEN, assertArchivePreparation, createSessionArchive, prepareNothingForArchive };

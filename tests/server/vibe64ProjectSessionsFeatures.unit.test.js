@@ -14,9 +14,6 @@ import {
 import {
   Vibe64SessionsProvider
 } from "../../packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js";
-import {
-  createService as createSessionsService
-} from "../../packages/vibe64-sessions/src/server/service.js";
 
 test("session discovery pages every archived/open identity through canonical tools while native lists stay complete", async () => {
   const sessions = Array.from({ length: 127 }, (_, i) => ({ sessionId: `session-${i}`, sessionName: `History ${i}`,
@@ -183,6 +180,7 @@ test("project and sessions register routes and captured actions during setup", a
       }
     },
     project: { async createRuntime() { return {}; }, setTemplateApplicationObserver(observer) { templateObservers.push(observer); } },
+    renewalActorResolver: async () => null,
     sourceEditor: { async readIntegrations(input) {
       configurationReads.push(input);
       return { ok: true, baseHash: "verified-configuration" };
@@ -202,10 +200,8 @@ test("project and sessions register routes and captured actions during setup", a
 
   assert.equal(typeof sessionOutputs.sessions.createSession, "function");
   assert.deepEqual(templateObservers.map((observer) => typeof observer), ["function"], "applying a starter prepares its session workspace");
-  assert.equal(typeof sessionOutputs.sessions.setRenewalActorResolver, "function");
-  assert.doesNotThrow(() => sessionOutputs.sessions.setRenewalActorResolver(async () => null));
   assert.throws(
-    () => sessionOutputs.sessions.setRenewalActorResolver({}),
+    () => Vibe64SessionsProvider.setup({ renewalActorResolver: {} }, {}),
     /must be a function or null/u
   );
   assert.equal(sessionActions.length, 1);
@@ -384,11 +380,11 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.throws(
-    () => createSessionsService({
+    () => Vibe64SessionsProvider.setup({
       project: {},
       renewalActorResolver: {},
       terminals: {}
-    }),
+    }, {}),
     /must be a function or null/u
   );
 });

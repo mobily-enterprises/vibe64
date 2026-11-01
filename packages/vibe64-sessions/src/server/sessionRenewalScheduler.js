@@ -4,11 +4,12 @@ import {
   SESSION_RENEWAL_STATUS,
   readSessionRenewalState
 } from "./sessionRenewalState.js";
-import { actorFromUser, renewalActorsMatch, renewalError, renewalTransitionActor } from "./sessionRenewalRules.js";
+import { actorFromUser, renewalActorsMatch, renewalTransitionActor } from "./sessionRenewalRules.js";
 
 /** @typedef {import("./types.js").RenewalAdmission} RenewalAdmission */
 /** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */
 /** @typedef {import("./types.js").RenewalRestoration} RenewalRestoration */
+/** @typedef {import("./types.js").RenewalActorRestoration} RenewalActorRestoration */
 /** @typedef {ReturnType<typeof import("./sessionRenewalWorkflow.js").createRenewalWorkflow>} RenewalWorkflow */
 
 const SESSION_RENEWAL_WORKFLOW_LOCK_RETRY_MS = 1_000;
@@ -39,14 +40,14 @@ function stoppedRecoveryResult({ discoveredSessionIds = [] } = {}) {
  * @param {RenewalAdmission} dependencies.admission
  * @param {typeof clearTimeout} dependencies.clearTimeoutFn
  * @param {RenewalSessionAccess} dependencies.renewalAccess
- * @param {() => ((actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>) | null} dependencies.renewalActorResolver
  * @param {RenewalRestoration} dependencies.restoration
+ * @param {RenewalActorRestoration} dependencies.restoreRenewalActor
  * @param {typeof setTimeout} dependencies.setTimeoutFn
  * @param {RenewalWorkflow} dependencies.workflow
  * @param {number} dependencies.workflowLockRetryMs
  */
 function createRenewalScheduler({
-  admission, clearTimeoutFn, renewalAccess, renewalActorResolver, restoration, setTimeoutFn, workflow, workflowLockRetryMs
+  admission, clearTimeoutFn, renewalAccess, restoration, restoreRenewalActor, setTimeoutFn, workflow, workflowLockRetryMs
 }) {
   const pendingWorkflowLockRetries = new Map();
   const workflowLockRetryDelayMs = Math.max(
@@ -121,38 +122,7 @@ function createRenewalScheduler({
         vibe64User: input.vibe64User
       };
     }
-    const resolver = renewalActorResolver();
-    if (!resolver) {
-      // Standalone Vibe64 runs as the local user and needs no user-store
-      // resolver. A multi-user host installs one before boot.
-      if (!requestActor) {
-        return input;
-      }
-      throw renewalError(
-        "The current Vibe64 host cannot restore the user identity required to continue this session renewal.",
-        "vibe64_session_renewal_actor_resolver_unavailable",
-        { retryable: true }
-      );
-    }
-    const resolved = await resolver(
-      persistedActor,
-      {
-        renewalId: state.renewalId,
-        sessionId: state.sessionId,
-        stage: state.stage
-      }
-    );
-    if (!renewalActorsMatch(resolved, persistedActor)) {
-      throw renewalError(
-        "The restored session-renewal actor does not match the persisted workflow actor.",
-        "vibe64_session_renewal_actor_mismatch",
-        { retryable: true, statusCode: 500 }
-      );
-    }
-    return {
-      ...input,
-      vibe64User: resolved
-    };
+    return restoreRenewalActor(state, input, { persistedActor, requestActor });
   }
 
   async function runPersistedRenewalWorkflow(sessionId = "", input = {}) {

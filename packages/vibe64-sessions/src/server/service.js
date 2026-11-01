@@ -27,27 +27,21 @@ import { text } from "./trimmedText.js";
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
-/** @typedef {(actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>} RenewalActorResolver */
+/** @typedef {import("./types.js").RenewalActorRestoration} RenewalActorRestoration */
+/** @typedef {import("./types.js").SessionArchivePreparation} SessionArchivePreparation */
 /** @typedef {import("./types.js").AccountsInitializeModelRouting} AccountsInitializeModelRouting */
-
-/** @param {RenewalActorResolver | null} resolver */
-function assertRenewalActorResolver(resolver) {
-  if (resolver !== null && typeof resolver !== "function") {
-    throw new TypeError("Vibe64 session renewal actor resolver must be a function or null.");
-  }
-  return resolver;
-}
 
 /**
  * The vibe64.sessions service: every session operation, each from the part
  * of the session that owns it.
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
+ * @param {SessionArchivePreparation} dependencies.archivePreparation
  * @param {AccountsInitializeModelRouting} dependencies.initializeModelRouting
  * @param {ProjectService} dependencies.project
  * @param {PublishProjectChanged} dependencies.publishProjectChanged
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {RenewalActorResolver | null} [dependencies.renewalActorResolver]
+ * @param {RenewalActorRestoration} dependencies.restoreRenewalActor
  * @param {SessionPresenceService} dependencies.sessionPresence
  * @param {SourceEditorService} dependencies.sourceEditor
  * @param {TerminalsService} dependencies.terminals
@@ -55,23 +49,22 @@ function assertRenewalActorResolver(resolver) {
  */
 function createService({
   actions,
+  archivePreparation,
   initializeModelRouting,
   project,
   publishProjectChanged,
   publishSessionChanged,
-  // readable-check: allow dependency-default - filled by a composing host repository; convert with its supplier
-  renewalActorResolver = null,
+  restoreRenewalActor,
   sessionPresence,
   sourceEditor,
   terminals,
   workspaceSetupRunner: setupRunner
 }) {
-  let configuredRenewalActorResolver = assertRenewalActorResolver(renewalActorResolver);
   const workOperations = createSessionWorkOperations();
   const workspaceSetup = createSessionWorkspaceSetup({ project, publishSessionChanged, setupRunner });
   const recovery = createSessionWorkRecovery({ terminals, workOperations, workspaceSetup });
   const repositoryUpdates = createSessionRepositoryUpdates({ project, publishSessionChanged, terminals, workOperations });
-  const archive = createSessionArchive({ project, terminals, setupRunner, publishSessionChanged });
+  const archive = createSessionArchive({ archivePreparation, project, terminals, setupRunner, publishSessionChanged });
   const connected = createConnectedContributions({
     actions, project, terminals, publishSessionChanged, workOperations,
     sessions: () => service
@@ -91,21 +84,14 @@ function createService({
     prepareArchive: archive.prepareArchive,
     project,
     publishSessionChanged,
-    renewalActorResolver: () => configuredRenewalActorResolver,
     resolveSuccessorAssistant: assistant.resolveSessionStart,
+    restoreRenewalActor,
     setupRunner,
     terminals
   });
 
   const service = Object.freeze({
     browserConversations: createMainBrowserConversations({ actions, terminals }),
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setArchivePreparation: archive.setArchivePreparation,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setRenewalActorResolver(resolver = null) {
-      configuredRenewalActorResolver = assertRenewalActorResolver(resolver);
-    },
-
     archiveSession: archive.archiveSession,
     resumeSessionArchives: archive.resumeSessionArchives,
 

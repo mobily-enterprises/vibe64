@@ -12,6 +12,16 @@
 /** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createSessionWorkspaceSetup>} SessionWorkspaceSetup */
 /** @typedef {ReturnType<typeof import("./sessionArchive.js").createSessionArchive>} SessionArchive */
 /** @typedef {SessionArchive["prepareArchive"]} SessionArchivePrepareArchive */
+/**
+ * A host's preparation of a session's archive, at each phase of every attempt;
+ * `{ ok: false, error?, code? }` stops the archive.
+ * @typedef {(context: { phase: string, renewal?: boolean, runtime: import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime, session: object }) => Promise<unknown>} SessionArchivePreparation
+ */
+/** @typedef {(actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>} RenewalActorResolver */
+/**
+ * How a persisted renewal's workflow input gets its person when the request's own person is not the persisted one.
+ * @typedef {(state: object, input: object, actors: { persistedActor: object, requestActor: object | null }) => Promise<object>} RenewalActorRestoration
+ */
 /** @typedef {ReturnType<typeof import("./sessionRenewalPredecessor.js").createRenewalPredecessorSession>} RenewalPredecessorSession */
 /** @typedef {ReturnType<typeof import("./sessionRenewalAccess.js").createRenewalSessionAccess>} RenewalSessionAccess */
 /** @typedef {ReturnType<typeof import("./sessionRenewalSuccessor.js").createRenewalSuccessorSession>} RenewalSuccessorSession */

@@ -7,6 +7,8 @@
   "exports": {
     "./shared/conversation": "./src/shared/conversationIdentity.js",
     "./shared/project-watch": "./src/shared/projectWatch.js",
+    "./server/sessionArchive": "./src/server/sessionArchive.js",
+    "./server/sessionRenewalActors": "./src/server/sessionRenewalActors.js",
     "./server/types": "./src/server/types.js"
   },
   "jskit": {

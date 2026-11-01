@@ -40,6 +40,7 @@ import { createRenewalWorkflow } from "./sessionRenewalWorkflow.js";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").SessionArchivePrepareArchive} SessionArchivePrepareArchive */
+/** @typedef {import("./types.js").RenewalActorRestoration} RenewalActorRestoration */
 
 /**
  * @param {object} dependencies
@@ -47,7 +48,7 @@ import { createRenewalWorkflow } from "./sessionRenewalWorkflow.js";
  * @param {SessionArchivePrepareArchive} dependencies.prepareArchive
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {() => ((actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>) | null} dependencies.renewalActorResolver
+ * @param {RenewalActorRestoration} dependencies.restoreRenewalActor
  * @param {(input: object, options: object) => Promise<object>} dependencies.resolveSuccessorAssistant
  * @param {typeof setTimeout} [dependencies.setTimeoutFn]
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
@@ -59,8 +60,8 @@ function createSessionRenewalController({
   prepareArchive,
   project,
   publishSessionChanged,
-  renewalActorResolver,
   resolveSuccessorAssistant,
+  restoreRenewalActor,
   setTimeoutFn = setTimeout,
   setupRunner,
   terminals,
@@ -76,7 +77,7 @@ function createSessionRenewalController({
     admission, completion, predecessorSession, renewalAccess, restoration, setupRunner, successorSession, terminals
   });
   const scheduler = createRenewalScheduler({
-    admission, clearTimeoutFn, renewalAccess, renewalActorResolver, restoration, setTimeoutFn, workflow, workflowLockRetryMs
+    admission, clearTimeoutFn, renewalAccess, restoration, restoreRenewalActor, setTimeoutFn, workflow, workflowLockRetryMs
   });
 
   const controller = {

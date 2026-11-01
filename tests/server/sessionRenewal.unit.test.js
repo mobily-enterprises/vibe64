@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { createSessionRenewalController } from "../../packages/vibe64-sessions/src/server/sessionRenewal.js";
+import { restoreRenewalActorWith, restoreStandaloneRenewalActor } from "../../packages/vibe64-sessions/src/server/sessionRenewalActors.js";
 import { inspectSessionRenewalEligibility } from "../../packages/vibe64-sessions/src/server/sessionRenewalRules.js";
 import {
   SESSION_RENEWAL_STAGE,
@@ -1208,7 +1209,7 @@ function fixture({
     prepareArchive: async () => undefined,
     project,
     publishSessionChanged: async (_sessionId, event) => events.push(event),
-    renewalActorResolver: () => resolveRenewalActor,
+    restoreRenewalActor: resolveRenewalActor ? restoreRenewalActorWith(resolveRenewalActor) : restoreStandaloneRenewalActor,
     resolveSuccessorAssistant: async (input, options) => {
       const requested = input.assistantSelection;
       calls.selectionRequests.push({ requested, ...options });
@@ -1716,7 +1717,7 @@ test("same-named sessions in two hosted projects schedule by durable renewal ide
     prepareArchive: async () => undefined,
     project,
     publishSessionChanged: async () => null,
-    renewalActorResolver: () => null,
+    restoreRenewalActor: restoreStandaloneRenewalActor,
     resolveSuccessorAssistant: async () => {
       throw new TypeError("Session renewal requires an assistant selection resolver before confirmation.");
     },

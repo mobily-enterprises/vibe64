@@ -10,18 +10,28 @@ existing archives require no conversion.
 
 ## Preparation before archival
 
-Register through the existing `vibe64.sessions` service:
+Provide it as the optional `vibe64.sessions.archive-preparation` capability
+(`SESSION_ARCHIVE_PREPARATION_TOKEN` from `@local/vibe64-sessions/server/sessionArchive`),
+from a feature that does not require `vibe64.sessions`:
 
 ```js
-sessions.setArchivePreparation(async ({ phase, runtime, session, renewal = false }) => {
-  // Preserve any additional host-owned evidence before the next archive step.
-  // Return normally on success; throw or return { ok: false, error } on failure.
+defineFeature({
+  id: "host.session-archive-preparation",
+  provides: { archivePreparation: SESSION_ARCHIVE_PREPARATION_TOKEN },
+  setup: () => ({
+    archivePreparation: async ({ phase, runtime, session, renewal = false }) => {
+      // Preserve any additional host-owned evidence before the next archive step.
+      // Return normally on success; throw or return { ok: false, error } on failure.
+    }
+  })
 });
 ```
 
-Pass `null` to remove the callback. Other values are rejected. An ordinary archive
-attempt retains the callback selected when that attempt began; renewal reads the
-configured callback when it reaches predecessor archival.
+A value that is not a function is rejected when Sessions is set up. Without the
+capability an archive prepares nothing (`prepareNothingForArchive`, which a
+feature that has nothing to prepare in some configurations returns). The
+callback is fixed for the service's lifetime; ordinary archive attempts and
+renewal's predecessor archival use the same one.
 
 The callback runs under the session agent-write lock, after the ordinary
 terminal/output shutdown stage and before resource release or source archival

@@ -15,6 +15,13 @@ import { createVibe64ProjectChangedPublisher } from "@local/vibe64-project/serve
 import { countWaitingMainChatApprovals } from "./mainChatApprovals.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
+import { SESSION_ARCHIVE_PREPARATION_TOKEN, assertArchivePreparation, prepareNothingForArchive } from "./sessionArchive.js";
+import {
+  SESSION_RENEWAL_ACTOR_RESOLVER_TOKEN,
+  assertRenewalActorResolver,
+  restoreRenewalActorWith,
+  restoreStandaloneRenewalActor
+} from "./sessionRenewalActors.js";
 import { createTerminalsSetupRunner } from "./sessionWorkspaceSetup.js";
 import {
   createSessionPresencePublisher,
@@ -33,6 +40,8 @@ import {
 /** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").SessionArchivePreparation} SessionArchivePreparation */
+/** @typedef {import("./types.js").RenewalActorResolver} RenewalActorResolver */
 
 /**
  * Startup resumes interrupted archives, then interrupted renewals. Each step
@@ -160,6 +169,12 @@ function createVibe64SessionsFeature() {
       sourceEditor: "vibe64.source-editor",
       terminals: "vibe64.terminals"
     },
+    // A composed host's preparation of each archive, and its people's resolver
+    // for renewals that continue without them.
+    optional: {
+      archivePreparation: SESSION_ARCHIVE_PREPARATION_TOKEN,
+      renewalActorResolver: SESSION_RENEWAL_ACTOR_RESOLVER_TOKEN
+    },
     provides: {
       sessions: "vibe64.sessions"
     },
@@ -170,14 +185,18 @@ function createVibe64SessionsFeature() {
     /**
      * @param {object} capabilities
      * @param {AccountsService} capabilities.accounts
+     * @param {SessionArchivePreparation | null} capabilities.archivePreparation
      * @param {RuntimeEvents} capabilities.events
      * @param {RuntimeHttp} capabilities.http
      * @param {ProjectService} capabilities.project
+     * @param {RenewalActorResolver | null} capabilities.renewalActorResolver
      * @param {SourceEditorService} capabilities.sourceEditor
      * @param {TerminalsService} capabilities.terminals
      * @param {{ actionCatalogue: ActionCatalogue }} context
      */
-    setup({ accounts, events, http, project, sourceEditor, terminals }, { actionCatalogue }) {
+    setup({ accounts, archivePreparation, events, http, project, renewalActorResolver, sourceEditor, terminals }, { actionCatalogue }) {
+      assertArchivePreparation(archivePreparation);
+      assertRenewalActorResolver(renewalActorResolver);
       const sessionPresence = createSessionPresenceService({
         onPublishError: (error) => {
           vibe64SessionDebugLog("server.sessions.presence.publish.error", {
@@ -188,10 +207,12 @@ function createVibe64SessionsFeature() {
       });
       const sessions = createService({
         actions: actionCatalogue,
+        archivePreparation: archivePreparation ?? prepareNothingForArchive,
         initializeModelRouting: (input) => accounts.initializeModelRouting(input),
         project,
         publishProjectChanged: createVibe64ProjectChangedPublisher({ events }),
         publishSessionChanged: createSessionChangedPublisher(events),
+        restoreRenewalActor: renewalActorResolver ? restoreRenewalActorWith(renewalActorResolver) : restoreStandaloneRenewalActor,
         sessionPresence,
         sourceEditor,
         terminals,

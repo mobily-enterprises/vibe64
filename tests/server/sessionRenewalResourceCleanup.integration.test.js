@@ -26,6 +26,7 @@ import {
 import {
   createSessionRenewalController
 } from "../../packages/vibe64-sessions/src/server/sessionRenewal.js";
+import { restoreStandaloneRenewalActor } from "../../packages/vibe64-sessions/src/server/sessionRenewalActors.js";
 import {
   createAgentEnvCommandService,
   prepareAgentEnvCommand
@@ -539,7 +540,7 @@ async function renewalHarness(targetRoot, {
       }
     },
     publishSessionChanged: async () => null,
-    renewalActorResolver: () => null,
+    restoreRenewalActor: restoreStandaloneRenewalActor,
     async resolveSuccessorAssistant(input, { session, vibe64User }) {
       assert.equal(input.assistantSelection, undefined);
       assert.equal(session.sessionId, PREDECESSOR_ID);
