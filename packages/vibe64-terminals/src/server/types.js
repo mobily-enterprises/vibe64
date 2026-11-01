@@ -102,4 +102,23 @@
  *   | "updateGoal" | "updateSessionSettings" | "uploadAttachment" | "waitForConversationTurn" | "writeTerminal"} SessionAgentProviderMethod
  */
 
+/** @typedef {ReturnType<typeof import("./serviceTurnPublication.js").createServiceTurnPublication>} ServiceTurnPublication */
+/** @typedef {ServiceTurnPublication["publishAgentSessionChanged"]} PublishAgentSessionChanged */
+/** @typedef {ReturnType<typeof import("./serviceCommandServices.js").createServiceCommandServices>} ServiceCommandServices */
+/** @typedef {ReturnType<typeof import("./serviceMainConversationHost.js").createServiceMainConversationHost>} ServiceMainConversationHost */
+/** @typedef {ReturnType<typeof import("./providerUsage.js").createProviderUsage>} ProviderUsage */
+/** @typedef {ReturnType<typeof import("./previewDiagnostics.js").createPreviewDiagnosticRecorder>} PreviewDiagnosticRecorder */
+/** @typedef {ReturnType<typeof import("./openCodeSessionRegistration.js").createOpenCodeSessionRegistration>} OpenCodeSessionRegistration */
+/** @typedef {ReturnType<typeof import("@local/studio-terminal-core/server/codexRuntimeContext").codexRuntimeContext>["providerOptions"]} CodexAppServerProviderOptions */
+/** @typedef {() => ReturnType<typeof import("@local/studio-terminal-core/server/claudeRuntime").readClaudeCodeAuthStatus>} ReadClaudeAccountStatus */
+/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/assistantRoutingStore").createAssistantRoutingStore>["read"]} ReadRoutingConfiguration */
+/** @typedef {typeof import("@local/vibe64-genesis/server").inspectGenesisSkills} InspectAgentSkills */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64Execution} StopVibe64Execution */
+/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64OwnedExecutions} StopVibe64OwnedExecutions */
+/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64RestoredService} StopVibe64RestoredService */
+/** @typedef {typeof import("./agentCommandEnvironment.js").prepareAgentSessionCommandEnvironment} PrepareAgentSessionCommandEnvironment */
+/** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
+/** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+
 export {};

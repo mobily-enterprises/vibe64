@@ -20,16 +20,10 @@ const AGENT_WRITE_WAIT_MS = 60_000;
  * @param {Vibe64SessionRuntime} runtime
  * @param {string} [sessionId]
  */
-async function renewalSession(runtime, sessionId = "") {
-  // readable-check: allow method-probe - optional operation: a runtime without an internal renewal reader cannot renew
-  if (typeof runtime?.getSessionForRenewal === "function") {
-    return runtime.getSessionForRenewal(sessionId, {
-      inspectSource: false
-    });
-  }
-  const error = new Error("Session renewal requires an internal renewal session reader.");
-  error.code = "vibe64_session_renewal_reader_unavailable";
-  throw error;
+function renewalSession(runtime, sessionId) {
+  return runtime.getSessionForRenewal(sessionId, {
+    inspectSource: false
+  });
 }
 
 async function runSessionRenewalOperation(
@@ -117,12 +111,9 @@ function createServiceSessionAccess({
             durationMs
           }, "Assistant message acquired its application write lock.");
         }
-        // readable-check: allow method-probe - optional operation: a write without a session reader runs on the session it was given
-        const session = typeof runtime.getSession === "function"
-          ? await runtime.getSession(sessionId, {
-              inspectSource: false
-            })
-          : options.session;
+        const session = await runtime.getSession(sessionId, {
+          inspectSource: false
+        });
         if (lockOptions.operation !== "replace-agent-conversation") requireCompletedNativeConversationReplacement(session);
         return operation({
           ...options,
@@ -183,17 +174,18 @@ function createServiceSessionAccess({
     return exclusive.value;
   }
 
-  async function publishTerminalSessionChanged(
-    kind = "",
-    sessionId = "",
-    reason = "",
-    payload = {}
-  ) {
-    const publisher = publishSessionChanged?.[kind];
-    if (typeof publisher !== "function" || !String(sessionId || "").trim()) {
+  /**
+   * Publishes one kind of terminal session change, for a session that has an id.
+   * @param {keyof TerminalSessionChangedPublishers} kind
+   * @param {string} sessionId
+   * @param {string} reason
+   * @param {object} [payload]
+   */
+  async function publishTerminalSessionChanged(kind, sessionId, reason, payload = {}) {
+    if (!String(sessionId || "").trim()) {
       return null;
     }
-    return publisher(sessionId, {
+    return publishSessionChanged[kind](sessionId, {
       ...payload,
       reason
     });
@@ -204,11 +196,7 @@ function createServiceSessionAccess({
     const projectContextRoot = requestContext?.targetRoot ||
       projectServiceNamespaceRoot(project) ||
       "";
-    const projectRuntimeRoot = requestContext?.projectRuntimeRoot ||
-      // readable-check: allow method-probe - optional operation: a project service without a runtime root uses the request's
-      (typeof project.currentProjectRuntimeRoot === "function"
-        ? project.currentProjectRuntimeRoot()
-        : "");
+    const projectRuntimeRoot = requestContext?.projectRuntimeRoot || project.currentProjectRuntimeRoot();
     // "global" names the runtime used when no project request context is set.
     const projectSlug = String(requestContext?.slug || "").trim() || "global";
     return {
@@ -236,15 +224,7 @@ function createServiceSessionAccess({
     const listOptions = {
       statusGroup: "open"
     };
-    // readable-check: allow method-probe - optional operation: a runtime lists full sessions, summaries or none
-    if (typeof runtime?.listSessions === "function") {
-      return runtime.listSessions(listOptions);
-    }
-    // readable-check: allow method-probe - optional operation: a runtime lists full sessions, summaries or none
-    if (typeof runtime?.listSessionSummaries === "function") {
-      return runtime.listSessionSummaries(listOptions);
-    }
-    return [];
+    return runtime.listSessions(listOptions);
   }
 
   return Object.freeze({

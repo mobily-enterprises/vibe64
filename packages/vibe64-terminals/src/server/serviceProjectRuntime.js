@@ -253,10 +253,6 @@ function createServiceProjectRuntime({
   }
 
   async function closeDormantListedProjectRuntime(projectRecord = {}, input = {}) {
-    // readable-check: allow method-probe - optional operation: a project service without request contexts cannot close a listed project's runtime
-    if (typeof project.runInProjectContext !== "function") {
-      throw new TypeError("Vibe64 project service must own project request-context resolution.");
-    }
     return project.runInProjectContext(
       projectRecord.slug,
       () => closeDormantCurrentProjectRuntime(input)
@@ -296,17 +292,6 @@ function createServiceProjectRuntime({
   }
 
   async function closeDormantProjectRuntimes(input = {}) {
-    // readable-check: allow method-probe - optional operation: a project service without a project list closes only the current project
-    if (typeof project.listProjects !== "function") {
-      const result = await closeDormantCurrentProjectRuntime(input);
-      return {
-        closedCount: result.dormant ? 1 : 0,
-        failed: result.ok === false ? [result] : [],
-        ok: result.ok !== false,
-        projectCount: 1,
-        results: [result]
-      };
-    }
     const listed = await project.listProjects();
     if (listed?.ok === false) {
       return {
@@ -324,8 +309,7 @@ function createServiceProjectRuntime({
     const results = [];
     const listedSlugs = new Set(projects.map((projectRecord) => projectRecord.slug));
     try {
-      // readable-check: allow optional-call - optional operation: a project service without practice projects lists none
-      for (const slug of await project.listPracticeProjectSlugs?.() || []) {
+      for (const slug of await project.listPracticeProjectSlugs()) {
         if (!listedSlugs.has(slug)) projects.push({ slug });
       }
     } catch (error) {

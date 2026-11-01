@@ -26,12 +26,12 @@ import {
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import {
   Vibe64TerminalsFeature,
-  createVibe64TerminalsFeature,
-  terminalsProviderEnv
+  createVibe64TerminalsFeature
 } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
+import { terminalsProviderEnv } from "../../packages/vibe64-terminals/src/server/terminalsEnv.js";
 import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
-import { startProjectRuntimeDormancyCleanupSchedule } from "../../packages/vibe64-terminals/src/server/service.js";
+import { startProjectRuntimeDormancyCleanupSchedule } from "../../packages/vibe64-terminals/src/server/projectRuntimeDormancy.js";
 import { previewPublicOriginForLaunch } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 
 async function withTemporaryRoot(callback) {
@@ -177,6 +177,9 @@ test("terminals feature creates the direct API from runtime env", async () => {
         },
         currentTargetRoot() {
           return targetRoot;
+        },
+        async projectExecutionEnvironment() {
+          return {};
         },
         async readCurrentProject() {
           return {
@@ -418,6 +421,7 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
         async listSessions() { recovered += 1; return []; } }; },
       currentProjectRuntimeRoot() { return runtimeRoot; },
       currentTargetRoot() { return targetRoot; },
+      async listProjects() { return { ok: true, projects: [{ slug: "project", runtime: { open: true } }] }; },
       async readCurrentProject() { return { slug: "project" }; },
       async readEnv() { return { env: { records: [] }, ok: true }; },
       runInProjectContext(_slug, operation) { return operation(); },

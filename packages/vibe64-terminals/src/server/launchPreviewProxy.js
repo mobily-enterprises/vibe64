@@ -464,40 +464,51 @@ async function startLaunchPreviewProxy({
     targetHref: targetUrl.toString(),
     terminalSessionId: String(scope.terminalSessionId || "")
   });
-  return {
-    allowEditorOrigin(value = "") {
-      const origin = normalizePreviewEditorOrigin(value);
-      if (origin) {
-        editorOrigins.add(origin);
-      }
-    },
-    useLocatorSource(value = "") {
-      locatorSource = typeof value === "string" ? value : "";
-    },
-    close: () => closePreviewServer({
+  function allowEditorOrigin(value = "") {
+    const origin = normalizePreviewEditorOrigin(value);
+    if (origin) {
+      editorOrigins.add(origin);
+    }
+  }
+
+  function useLocatorSource(value = "") {
+    locatorSource = typeof value === "string" ? value : "";
+  }
+
+  function close() {
+    return closePreviewServer({
       listen,
       server,
       tracker
-    }),
-    isPublished: () => {
-      if (!server.listening) {
+    });
+  }
+
+  /** Whether the proxy still listens, on the same socket file when it listens on one. */
+  function isPublished() {
+    if (!server.listening) {
+      return false;
+    }
+    if (!listen.socketPath) {
+      return true;
+    }
+    try {
+      const socket = lstatSync(listen.socketPath);
+      return socket.isSocket() &&
+        socket.dev === listen.socketDevice &&
+        socket.ino === listen.socketInode;
+    } catch (error) {
+      if (["ENOENT", "ENOTDIR"].includes(String(error?.code || ""))) {
         return false;
       }
-      if (!listen.socketPath) {
-        return true;
-      }
-      try {
-        const socket = lstatSync(listen.socketPath);
-        return socket.isSocket() &&
-          socket.dev === listen.socketDevice &&
-          socket.ino === listen.socketInode;
-      } catch (error) {
-        if (["ENOENT", "ENOTDIR"].includes(String(error?.code || ""))) {
-          return false;
-        }
-        throw error;
-      }
-    },
+      throw error;
+    }
+  }
+
+  return Object.freeze({
+    allowEditorOrigin,
+    useLocatorSource,
+    close,
+    isPublished,
     origin: proxyOrigin,
     connectHref: connectUrl.toString(),
     publicOrigin,
@@ -510,7 +521,7 @@ async function startLaunchPreviewProxy({
     }),
     token,
     targetHref: targetUrl.toString()
-  };
+  });
 }
 
 function normalizePreviewAuth(value = {}, options = {}) {

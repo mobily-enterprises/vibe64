@@ -1,6 +1,7 @@
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createSessionConversationBinding, prepareSessionConversationDisposal } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { opencodeTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
@@ -2922,7 +2923,7 @@ async function mainOpenCodeServiceFixture(t, { actions = null, onSessionChanged 
     saveEnvUserValues: async () => ({ ok: true })
   };
   const publications = [];
-  service = createTerminalService({ actions, logger: silentLogger, project,
+  service = createTerminalService(terminalsServiceCollaborators({ actions, logger: silentLogger, project,
     env: { ...f.controllerOptions.env, VIBE64_SYSTEM_ROOT: path.join(f.root, "system"),
       VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
     codexTerminalController: { codexToolHomeRequired: false,
@@ -2932,7 +2933,7 @@ async function mainOpenCodeServiceFixture(t, { actions = null, onSessionChanged 
       publications.push(event);
       await onSessionChanged?.(id, event);
     } }
-  });
+  }));
   service.configureAssistantRuntime({
     listConnections: f.controllerOptions.listConnections,
     resolveConnection: f.controllerOptions.resolveConnection,

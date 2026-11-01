@@ -7,10 +7,10 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").AgentPreviewCommandState} AgentPreviewCommandState */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+/** @typedef {import("./types.js").RunVibe64Command} RunVibe64Command */
 /** @typedef {ReturnType<typeof import("./unixJsonCommand.js").createSessionCommandServers>} SessionCommandServers */
-/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64Execution} StopVibe64Execution */
-/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64OwnedExecutions} StopVibe64OwnedExecutions */
+/** @typedef {import("./types.js").StopVibe64Execution} StopVibe64Execution */
+/** @typedef {import("./types.js").StopVibe64OwnedExecutions} StopVibe64OwnedExecutions */
 
 /**
  * Each session's registered Preview browser workers: registering a worker's

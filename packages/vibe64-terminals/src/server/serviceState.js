@@ -1,6 +1,6 @@
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
-/** @typedef {() => ReturnType<typeof import("@local/studio-terminal-core/server/claudeRuntime").readClaudeCodeAuthStatus>} ReadClaudeAccountStatus */
+/** @typedef {import("./types.js").ReadClaudeAccountStatus} ReadClaudeAccountStatus */
 
 /**
  * What the service's parts share: the turn completions in flight, the shutdown signal, and the assistant

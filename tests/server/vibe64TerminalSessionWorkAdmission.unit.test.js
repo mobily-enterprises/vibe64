@@ -40,6 +40,7 @@ import {
 import {
   createService as createTerminalService
 } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import {
   addGenesisStack,
   genesisPackageBinDirectory,
@@ -226,7 +227,7 @@ async function terminalServiceFixture(t, lock, {
       return { ok: true };
     }
   };
-  const service = createTerminalService({
+  const service = createTerminalService(terminalsServiceCollaborators({
     ...(inspectAgentSkills ? { inspectAgentSkills } : {}),
     logger,
     codexTerminalController: {
@@ -247,7 +248,7 @@ async function terminalServiceFixture(t, lock, {
     opencodeTerminalController,
     publishSessionChanged,
     runCodexGitGatewayCommand
-  });
+  }));
   t.after(async () => {
     await service.close();
     await rm(root, { force: true, recursive: true });
@@ -1164,7 +1165,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
       return { ok: true };
     }
   };
-  const service = createTerminalService({
+  const service = createTerminalService(terminalsServiceCollaborators({
     logger: silentLogger,
     codexTerminalController: { codexToolHomeRequired: false },
     env: {
@@ -1174,7 +1175,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
       VIBE64_WORKSPACE: "test"
     },
     project
-  });
+  }));
   t.after(async () => {
     await service.close();
     await rm(root, { force: true, recursive: true });
@@ -1335,7 +1336,7 @@ test("renewal workspace setup privately resumes a pending successor while public
       return { ok: true };
     }
   };
-  const service = createTerminalService({
+  const service = createTerminalService(terminalsServiceCollaborators({
     logger: silentLogger,
     codexTerminalController: { codexToolHomeRequired: false },
     env: {
@@ -1345,7 +1346,7 @@ test("renewal workspace setup privately resumes a pending successor while public
       VIBE64_WORKSPACE: "test"
     },
     project
-  });
+  }));
   t.after(async () => {
     await service.close();
     await rm(root, { force: true, recursive: true });

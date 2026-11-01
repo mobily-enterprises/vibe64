@@ -43,6 +43,7 @@ import {
 import {
   createService as createTerminalService
 } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import {
   codexTerminalNamespace,
   outputTargetTerminalNamespace
@@ -434,7 +435,7 @@ async function renewalHarness(targetRoot, {
     })}\n`,
     "utf8"
   );
-  const terminals = createTerminalService({
+  const terminals = createTerminalService(terminalsServiceCollaborators({
     logger: silentLogger,
     codexTerminalController: {
       codexToolHomeRequired: false,
@@ -442,7 +443,7 @@ async function renewalHarness(targetRoot, {
     },
     env,
     project: commandProject
-  });
+  }));
   const predecessor = await runtime.getSession(PREDECESSOR_ID, {
     inspectSource: false
   });

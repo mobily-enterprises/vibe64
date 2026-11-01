@@ -37,8 +37,8 @@ import {
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
 /** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
-/** @typedef {ReturnType<typeof import("./previewDiagnostics.js").createPreviewDiagnosticRecorder>} PreviewDiagnosticRecorder */
-/** @typedef {ReturnType<typeof import("./providerUsage.js").createProviderUsage>} ProviderUsage */
+/** @typedef {import("./types.js").PreviewDiagnosticRecorder} PreviewDiagnosticRecorder */
+/** @typedef {import("./types.js").ProviderUsage} ProviderUsage */
 /** @typedef {import("./types.js").SessionConversations} SessionConversations */
 /** @typedef {import("./types.js").SessionNaming} SessionNaming */
 /** @typedef {import("./types.js").SessionPromptHintsService} SessionPromptHintsService */

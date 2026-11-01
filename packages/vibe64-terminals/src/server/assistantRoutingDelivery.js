@@ -1,3 +1,4 @@
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { readWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
 import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
@@ -172,6 +173,7 @@ function createAssistantRoutingDelivery({
     };
     await store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection(selection));
     records.mark(state.messageId, "selection-saved");
+    const { onPromptSending = doNothing } = context;
     const result = await dispatch(sessionId, {
       ...(followup ? {} : state.input), messageId, message, displayMessage,
       ...(state.task === "deslop" ? { genesisTask: "deslop" } : {}),
@@ -181,8 +183,7 @@ function createAssistantRoutingDelivery({
         ...(followup ? { actor: "app", actorLabel: followupLabel } : {})
       },
       onPromptSending: async ({ threadId }) => {
-        // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
-        if (!followup) await context.onPromptSending?.({ threadId, assistantSelection: selection });
+        if (!followup) await onPromptSending({ threadId, assistantSelection: selection });
         state.threadId = threadId;
         state.attemptedMessageId = messageId;
         // Persist the attempt before dispatch, but keep a live send in progress.

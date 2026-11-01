@@ -91,7 +91,7 @@ function readinessMarkerFromSpec(spec = {}) {
 async function markLaunchTerminalReady({
   namespace = "",
   projectSlug = "",
-  publishSessionChanged = async () => null,
+  publishSessionChanged,
   source = "marker",
   store,
   sessionId = "",
@@ -172,7 +172,7 @@ async function markLaunchTerminalReady({
 async function repairLaunchReadinessFromOutput({
   context = {},
   markReady = markLaunchTerminalReady,
-  publishSessionChanged = async () => null,
+  publishSessionChanged,
   sessionId = "",
   terminal = null
 } = {}) {

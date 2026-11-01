@@ -37,14 +37,14 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {ReturnType<typeof import("./openCodeSessionRegistration.js").createOpenCodeSessionRegistration>} OpenCodeSessionRegistration */
+/** @typedef {import("./types.js").OpenCodeSessionRegistration} OpenCodeSessionRegistration */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").SessionConversations} SessionConversations */
 /** @typedef {import("./types.js").SessionNaming} SessionNaming */
 /** @typedef {import("./types.js").SessionPromptHintsService} SessionPromptHintsService */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
-/** @typedef {ReturnType<typeof import("@local/studio-terminal-core/server/codexRuntimeContext").codexRuntimeContext>["providerOptions"]} CodexAppServerProviderOptions */
+/** @typedef {import("./types.js").CodexAppServerProviderOptions} CodexAppServerProviderOptions */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 
 

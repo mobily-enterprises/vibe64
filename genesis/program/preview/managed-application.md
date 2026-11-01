@@ -67,6 +67,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 
 - `packages/vibe64-core/src/server/launchPreviewProxyEnv.js`
 - `packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js`
+- `packages/vibe64-terminals/src/server/terminalsEnv.js`
 - `tests/server/vibe64TerminalsProvider.unit.test.js`
 - `packages/current-app/src/server/currentAppActions.js`
 - `packages/current-app/src/server/inputSchemas.js`
@@ -76,6 +77,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/outputAssistantContracts.js`
 - `packages/vibe64-terminals/src/server/inputSchemas.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
+- `packages/vibe64-terminals/src/server/terminalTransferRoutes.js`
 - `tests/server/vibe64TerminalActionDispatch.unit.test.js`
 - `tests/server/vibe64OutputActionTools.unit.test.js`
 - `tests/server/vibe64OutputTools.integration.test.js`
@@ -100,6 +102,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/launchTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-terminals/src/server/serviceCommandServices.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommandLine.js`
 - `packages/vibe64-terminals/src/server/agentPreviewWorkerRegistry.js`
 - `packages/vibe64-terminals/src/server/agentPreviewBrowserTests.js`

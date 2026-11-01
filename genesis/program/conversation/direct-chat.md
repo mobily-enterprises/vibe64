@@ -1358,6 +1358,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/openCodeConversationStorage.js`
 - `tests/server/opencodeReasoningSummaries.unit.test.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/serviceAgentProviders.js`
+- `packages/vibe64-terminals/src/server/serviceTurnPublication.js`
 - `packages/vibe64-terminals/src/server/serviceAssistant.js`
 - `packages/vibe64-terminals/src/server/serviceAssistantContext.js`
 - `packages/vibe64-terminals/src/server/serviceMainConversationHost.js`

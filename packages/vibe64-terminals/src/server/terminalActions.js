@@ -45,6 +45,38 @@ import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFi
 
 /** @typedef {import("./types.js").TerminalsService} TerminalsService */
 
+const ACTION_READ_GLOBAL_TERMINAL_STATUS = "vibe64.terminals.global-terminal.status";
+const ACTION_START_GLOBAL_TERMINAL = "vibe64.terminals.global-terminal.start";
+const ACTION_RECONCILE_AGENT_SESSIONS = "vibe64.terminals.agent-sessions.reconcile";
+const ACTION_OPEN_PROJECT_RUNTIME = "vibe64.terminals.project-runtime.open";
+const ACTION_CLOSE_PROJECT_RUNTIME = "vibe64.terminals.project-runtime.close";
+const ACTION_RECORD_PREVIEW_DIAGNOSTIC = "vibe64.terminals.preview-diagnostics.record";
+const ACTION_READ_OUTPUTS = "vibe64.terminals.outputs.read";
+const ACTION_READ_OUTPUT_RESULT = "vibe64.terminals.output-result.read";
+const ACTION_STOP_OUTPUT_TARGET = "vibe64.terminals.output-target.stop";
+const ACTION_START_AGENT_TERMINAL = "vibe64.terminals.agent-terminal.start";
+const ACTION_READ_AGENT_GOAL = "vibe64.terminals.agent-goal.read";
+const ACTION_UPDATE_AGENT_GOAL = "vibe64.terminals.agent-goal.update";
+const ACTION_READ_AGENT_PLAN_USAGE = "vibe64.terminals.agent-plan-usage.read";
+const ACTION_READ_WORK_PLAN = "vibe64.terminals.work-plan.read";
+const ACTION_ARCHIVE_WORK_PLAN = "vibe64.terminals.work-plan.archive";
+const ACTION_RESTORE_WORK_PLAN = "vibe64.terminals.work-plan.restore";
+const ACTION_PREPARE_AGENT_SESSION = "vibe64.terminals.agent-session.prepare";
+const ACTION_READ_AGENT_ATTACHMENT = "vibe64.terminals.agent-attachment.read";
+const ACTION_READ_OUTPUT_TERMINAL = "vibe64.terminals.output-terminal.read";
+const ACTION_CLOSE_OUTPUT_TERMINAL = "vibe64.terminals.output-terminal.close";
+const ACTION_READ_AGENT_TERMINAL = "vibe64.terminals.agent-terminal.read";
+const ACTION_CLOSE_AGENT_TERMINAL = "vibe64.terminals.agent-terminal.close";
+const ACTION_READ_AGENT_TERMINAL_CONTROL = "vibe64.terminals.agent-terminal.control.snapshot";
+const ACTION_CHECK_AGENT_TERMINAL_TEXT = "vibe64.terminals.agent-terminal.control.check-text";
+const ACTION_WRITE_AGENT_TERMINAL_TEXT = "vibe64.terminals.agent-terminal.control.text";
+const ACTION_WRITE_AGENT_TERMINAL_KEY = "vibe64.terminals.agent-terminal.control.key";
+const ACTION_READ_GLOBAL_TERMINAL = "vibe64.terminals.global-terminal.read";
+const ACTION_CLOSE_GLOBAL_TERMINAL = "vibe64.terminals.global-terminal.close";
+const ACTION_READ_GLOBAL_TERMINAL_CONTROL = "vibe64.terminals.global-terminal.control.snapshot";
+const ACTION_CHECK_GLOBAL_TERMINAL_TEXT = "vibe64.terminals.global-terminal.control.check-text";
+const ACTION_WRITE_GLOBAL_TERMINAL_TEXT = "vibe64.terminals.global-terminal.control.text";
+const ACTION_WRITE_GLOBAL_TERMINAL_KEY = "vibe64.terminals.global-terminal.control.key";
 const ACTION_START_OUTPUT_TARGET = "vibe64.terminals.output-target.start";
 const ACTION_OPEN_OUTPUT_TARGET = "vibe64.terminals.output-target.open";
 const ACTION_SELECT_PREVIEW_IDENTITY = "vibe64.terminals.preview-identity.select";
@@ -72,35 +104,35 @@ function createTerminalActions({ terminals }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.global-terminal.status",
+      id: ACTION_READ_GLOBAL_TERMINAL_STATUS,
       input: emptyInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: () => terminals.globalCodexTerminalState()
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.global-terminal.start",
+      id: ACTION_START_GLOBAL_TERMINAL,
       input: emptyInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.startGlobalCodexTerminal(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.agent-sessions.reconcile",
+      id: ACTION_RECONCILE_AGENT_SESSIONS,
       input: emptyInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.reconcileOpenAgentSessions(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.project-runtime.open",
+      id: ACTION_OPEN_PROJECT_RUNTIME,
       input: projectRuntimeInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.openProjectRuntime(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.project-runtime.close",
+      id: ACTION_CLOSE_PROJECT_RUNTIME,
       input: projectRuntimeInputValidator,
       extensions: {
         assistant: {
@@ -112,7 +144,7 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.preview-diagnostics.record",
+      id: ACTION_RECORD_PREVIEW_DIAGNOSTIC,
       input: previewDiagnosticActionInputValidator,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
@@ -120,21 +152,21 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.outputs.read",
+      id: ACTION_READ_OUTPUTS,
       input: outputStatusInputValidator,
       extensions: { assistant: outputStatusTool(), vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.outputTargetStatus(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.output-result.read",
+      id: ACTION_READ_OUTPUT_RESULT,
       input: outputResultInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readOutputResult(input.sessionId, input.resultId)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.output-target.stop",
+      id: ACTION_STOP_OUTPUT_TARGET,
       input: terminalInputValidator,
       extensions: {
         assistant: outputTerminalTool(
@@ -146,14 +178,14 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.agent-terminal.start",
+      id: ACTION_START_AGENT_TERMINAL,
       input: agentTerminalStartInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.startAgentTerminal(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.agent-goal.read",
+      id: ACTION_READ_AGENT_GOAL,
       input: sessionInputValidator,
       extensions: {
         assistant: {
@@ -165,7 +197,7 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.agent-goal.update",
+      id: ACTION_UPDATE_AGENT_GOAL,
       input: agentGoalInputValidator,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
@@ -178,7 +210,7 @@ function createTerminalActions({ terminals }) {
       idempotency: "none",
       channels: ["automation"],
       extensions: { assistant: mainGoalPauseTool, vibe64: PROJECT_OPERATION },
-      execute: (input, context) => terminals.requestMainGoalControl("pause", input, context)
+      execute: (input, context) => terminals.pauseMainGoal(input, context)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -187,7 +219,7 @@ function createTerminalActions({ terminals }) {
       idempotency: "none",
       channels: ["automation"],
       extensions: { assistant: mainGoalBlockTool, vibe64: PROJECT_OPERATION },
-      execute: (input, context) => terminals.requestMainGoalControl("block", input, context)
+      execute: (input, context) => terminals.blockMainGoal(input, context)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
@@ -208,21 +240,21 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.agent-plan-usage.read",
+      id: ACTION_READ_AGENT_PLAN_USAGE,
       input: sessionInputValidator,
       extensions: { assistant: planUsageTool(), vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readAgentPlanUsage(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.work-plan.read",
+      id: ACTION_READ_WORK_PLAN,
       input: workPlanReadInputValidator,
       extensions: { assistant: workPlanTool(), vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readSessionWorkPlan(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.work-plan.archive",
+      id: ACTION_ARCHIVE_WORK_PLAN,
       input: workPlanArchiveInputValidator,
       idempotency: "none",
       extensions: {
@@ -235,7 +267,7 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.work-plan.restore",
+      id: ACTION_RESTORE_WORK_PLAN,
       input: workPlanRestoreInputValidator,
       idempotency: "none",
       extensions: {
@@ -248,14 +280,14 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.agent-session.prepare",
+      id: ACTION_PREPARE_AGENT_SESSION,
       input: sessionInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.ensureAgentSession(input.sessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.agent-attachment.read",
+      id: ACTION_READ_AGENT_ATTACHMENT,
       input: agentAttachmentDeleteActionInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readAgentAttachment(input.sessionId, input.attachmentId)
@@ -264,7 +296,7 @@ function createTerminalActions({ terminals }) {
     // callers. Shell content is deliberately excluded from Colleague discovery.
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.output-terminal.read",
+      id: ACTION_READ_OUTPUT_TERMINAL,
       input: terminalInputValidator,
       extensions: {
         assistant: outputTerminalTool(
@@ -277,7 +309,7 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.output-terminal.close",
+      id: ACTION_CLOSE_OUTPUT_TERMINAL,
       input: terminalInputValidator,
       extensions: {
         assistant: outputTerminalTool(
@@ -289,35 +321,35 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.agent-terminal.read",
+      id: ACTION_READ_AGENT_TERMINAL,
       input: terminalInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readAgentTerminal(input.sessionId, input.terminalSessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.agent-terminal.close",
+      id: ACTION_CLOSE_AGENT_TERMINAL,
       input: terminalInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.closeAgentTerminal(input.sessionId, input.terminalSessionId)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.agent-terminal.control.snapshot",
+      id: ACTION_READ_AGENT_TERMINAL_CONTROL,
       input: terminalInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readAgentTerminalControl(input.sessionId, input.terminalSessionId, input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.agent-terminal.control.check-text",
+      id: ACTION_CHECK_AGENT_TERMINAL_TEXT,
       input: terminalControlActionInputValidator(false, "text"),
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.checkAgentTerminalText(input.sessionId, input.terminalSessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.agent-terminal.control.text",
+      id: ACTION_WRITE_AGENT_TERMINAL_TEXT,
       input: terminalControlActionInputValidator(false, "text"),
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
@@ -325,7 +357,7 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.agent-terminal.control.key",
+      id: ACTION_WRITE_AGENT_TERMINAL_KEY,
       input: terminalControlActionInputValidator(false, "key"),
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
@@ -333,35 +365,35 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.global-terminal.read",
+      id: ACTION_READ_GLOBAL_TERMINAL,
       input: globalTerminalInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readGlobalCodexTerminal(input.terminalSessionId)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.global-terminal.close",
+      id: ACTION_CLOSE_GLOBAL_TERMINAL,
       input: globalTerminalInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.closeGlobalCodexTerminal(input.terminalSessionId)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.global-terminal.control.snapshot",
+      id: ACTION_READ_GLOBAL_TERMINAL_CONTROL,
       input: globalTerminalInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.readGlobalCodexTerminalControl(input.terminalSessionId)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
-      id: "vibe64.terminals.global-terminal.control.check-text",
+      id: ACTION_CHECK_GLOBAL_TERMINAL_TEXT,
       input: terminalControlActionInputValidator(true, "text"),
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => terminals.checkGlobalCodexTerminalText(input.terminalSessionId, input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.global-terminal.control.text",
+      id: ACTION_WRITE_GLOBAL_TERMINAL_TEXT,
       input: terminalControlActionInputValidator(true, "text"),
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
@@ -369,7 +401,7 @@ function createTerminalActions({ terminals }) {
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
-      id: "vibe64.terminals.global-terminal.control.key",
+      id: ACTION_WRITE_GLOBAL_TERMINAL_KEY,
       input: terminalControlActionInputValidator(true, "key"),
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
@@ -525,21 +557,53 @@ function createTerminalActions({ terminals }) {
 }
 
 export {
-  ACTION_READ_CANONICAL_AGENT_GOAL,
-  ACTION_UPDATE_CANONICAL_AGENT_GOAL,
-  ACTION_LIST_TEMPORARY_CONVERSATIONS,
-  ACTION_UPDATE_TEMPORARY_CONVERSATION,
+  ACTION_ARCHIVE_WORK_PLAN,
   ACTION_CANCEL_SESSION_PROMPT_HINTS,
+  ACTION_CHECK_AGENT_TERMINAL_TEXT,
+  ACTION_CHECK_GLOBAL_TERMINAL_TEXT,
+  ACTION_CLOSE_AGENT_TERMINAL,
+  ACTION_CLOSE_GLOBAL_TERMINAL,
+  ACTION_CLOSE_OUTPUT_TERMINAL,
+  ACTION_CLOSE_PROJECT_RUNTIME,
   ACTION_CREATE_TEMPORARY_CONVERSATION,
   ACTION_DELETE_AGENT_ATTACHMENT,
   ACTION_DELETE_TEMPORARY_CONVERSATION,
   ACTION_GENERATE_SESSION_PROMPT_HINTS,
+  ACTION_LIST_TEMPORARY_CONVERSATIONS,
   ACTION_OPEN_OUTPUT_TARGET,
+  ACTION_OPEN_PROJECT_RUNTIME,
+  ACTION_PREPARE_AGENT_SESSION,
+  ACTION_READ_AGENT_ATTACHMENT,
+  ACTION_READ_AGENT_GOAL,
+  ACTION_READ_AGENT_PLAN_USAGE,
+  ACTION_READ_AGENT_TERMINAL,
+  ACTION_READ_AGENT_TERMINAL_CONTROL,
+  ACTION_READ_CANONICAL_AGENT_GOAL,
+  ACTION_READ_GLOBAL_TERMINAL,
+  ACTION_READ_GLOBAL_TERMINAL_CONTROL,
+  ACTION_READ_GLOBAL_TERMINAL_STATUS,
+  ACTION_READ_OUTPUTS,
+  ACTION_READ_OUTPUT_RESULT,
+  ACTION_READ_OUTPUT_TERMINAL,
   ACTION_READ_TEMPORARY_CONVERSATION,
+  ACTION_READ_WORK_PLAN,
+  ACTION_RECONCILE_AGENT_SESSIONS,
+  ACTION_RECORD_PREVIEW_DIAGNOSTIC,
+  ACTION_RESTORE_WORK_PLAN,
   ACTION_SELECT_PREVIEW_IDENTITY,
+  ACTION_START_AGENT_TERMINAL,
+  ACTION_START_GLOBAL_TERMINAL,
   ACTION_START_OUTPUT_TARGET,
   ACTION_START_TEMPORARY_CONVERSATION_TURN,
+  ACTION_STOP_OUTPUT_TARGET,
   ACTION_STOP_TEMPORARY_CONVERSATION,
+  ACTION_UPDATE_AGENT_GOAL,
+  ACTION_UPDATE_CANONICAL_AGENT_GOAL,
+  ACTION_UPDATE_TEMPORARY_CONVERSATION,
   ACTION_UPLOAD_AGENT_ATTACHMENT,
+  ACTION_WRITE_AGENT_TERMINAL_KEY,
+  ACTION_WRITE_AGENT_TERMINAL_TEXT,
+  ACTION_WRITE_GLOBAL_TERMINAL_KEY,
+  ACTION_WRITE_GLOBAL_TERMINAL_TEXT,
   createTerminalActions
 };

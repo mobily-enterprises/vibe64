@@ -1,51 +1,25 @@
-import { createPreviewDiagnosticRecorder } from "./previewDiagnostics.js";
-import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
-import { vibe64Error } from "@local/vibe64-core/server/core";
-import { readProjectPreview, sendProjectMessage } from "./projectMessage.js";
-import { createProjectServices } from "./projectServices.js";
-import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
-import { createClaudeConversationHost } from "./agent/providers/claudeConversationHost.js";
-import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
-import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
-import { createAssistantRouting } from "./assistantRouting.js";
-import { createSessionConversations } from "./sessionConversations.js";
-import { CLAUDE_PREPARATION_DELIVERY_STAGES } from "./mainConversationBinding.js";
-import { discardAssistantChangeoverMessage, requireCompletedConversationRewind } from "./assistantChangeover.js";
-import { createSessionAttachments } from "./sessionAttachments.js";
-import { createProviderUsage } from "./providerUsage.js";
-import { createSessionAgentManager } from "./agent/sessionAgentManager.js";
 import process from "node:process";
-import { createAgentEnvCommandService } from "./agentEnvCommand.js";
-import { NO_PRODUCTION_ENVIRONMENT } from "./productionEnvironment.js";
-import { NO_SAVED_ENV_VALUE_LINKS } from "./savedEnvValueLinks.js";
-import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
-import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
-import { createAgentSessionCommandService } from "./agentSessionCommand.js";
-import { createCodexGitCommandService } from "./codexGitCommand.js";
-import { createSessionNaming } from "./sessionNaming.js";
-import { createOutputTargetTerminalController } from "./outputTargetTerminal.js";
 import { inspectGenesisSkills } from "@local/vibe64-genesis/server";
-import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { codexRuntimeContext } from "@local/studio-terminal-core/server/codexRuntimeContext";
-import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
+import { createPreviewDiagnosticRecorder } from "./previewDiagnostics.js";
+import { createAssistantRouting } from "./assistantRouting.js";
+import { createSessionConversations } from "./sessionConversations.js";
+import { discardAssistantChangeoverMessage, requireCompletedConversationRewind } from "./assistantChangeover.js";
+import { createProviderUsage } from "./providerUsage.js";
+import { createSessionNaming } from "./sessionNaming.js";
 import { createTerminalControls } from "./terminalControls.js";
 import { requestMainGoalControl } from "./mainGoalControl.js";
 import { createWorkspaceSetupRunner } from "./workspaceSetup.js";
-import { createCodexSessionRegistration } from "./codexSessionRegistration.js";
-import { createOpenCodeSessionRegistration } from "./openCodeSessionRegistration.js";
 import { createSessionPromptHintsService } from "./sessionPromptHints.js";
-import { startProjectRuntimeDormancyCleanupSchedule } from "./projectRuntimeDormancy.js";
-import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
-import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
+import { AGENT_WRITE_WAIT_MS, createServiceSessionAccess } from "./serviceSessionAccess.js";
 import { createServiceState } from "./serviceState.js";
-import { createServiceSessionAccess } from "./serviceSessionAccess.js";
 import { createServiceWorkspacePreparation } from "./serviceWorkspacePreparation.js";
 import { createServiceAssistantContext } from "./serviceAssistantContext.js";
-import { createServiceProviderAccess } from "./serviceProviderAccess.js";
 import { createServiceAssistantPreparation } from "./serviceAssistantPreparation.js";
 import { createServiceSessionTerminals } from "./serviceSessionTerminals.js";
 import { createServiceGoals } from "./serviceGoals.js";
@@ -58,10 +32,15 @@ import { createServiceAgentReconcile } from "./serviceAgentReconcile.js";
 import { createServiceProjectRuntime } from "./serviceProjectRuntime.js";
 import { createServiceShutdown } from "./serviceShutdown.js";
 import { createServiceHostSlots } from "./serviceHostSlots.js";
+import { createServiceTurnPublication } from "./serviceTurnPublication.js";
+import { createServiceCommandServices } from "./serviceCommandServices.js";
+import { createServiceAgentProviders } from "./serviceAgentProviders.js";
 
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
-/** @typedef {ReturnType<typeof import("./serviceMainConversationHost.js").createServiceMainConversationHost>} ServiceMainConversationHost */
+/** @typedef {import("./types.js").ServiceMainConversationHost} ServiceMainConversationHost */
+/** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
+/** @typedef {import("./types.js").SessionConversations} SessionConversations */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -70,7 +49,7 @@ import { createServiceHostSlots } from "./serviceHostSlots.js";
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
-/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+/** @typedef {import("./types.js").RunVibe64Command} RunVibe64Command */
 /** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
 
 /**
@@ -90,14 +69,6 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
   return context.providerOptions;
 }
 
-/** @param {RuntimeEnv} env */
-function codexToolHomeSourceFromEnv(env) {
-  const context = codexRuntimeContext({
-    env
-  });
-  return context?.ok === true ? context.toolHomeSource : "";
-}
-
 /**
  * @param {object} dependencies
  * @param {ActionCatalogue | null} [dependencies.actions]
@@ -106,13 +77,13 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
- * @param {ProductionEnvironmentProvider} [dependencies.productionEnvironmentProvider] a host's production Env
- * @param {ProjectServices | null} [dependencies.projectServices]
+ * @param {ProductionEnvironmentProvider} dependencies.productionEnvironmentProvider a host's production Env, or none
+ * @param {ProjectServices} dependencies.projectServices
  * @param {ProjectService} dependencies.project
- * @param {ProjectRuntimeChangedPublisher} [dependencies.publishProjectRuntimeChanged]
- * @param {TerminalSessionChangedPublishers} [dependencies.publishSessionChanged]
+ * @param {ProjectRuntimeChangedPublisher} dependencies.publishProjectRuntimeChanged
+ * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
- * @param {SavedEnvValueLinks} [dependencies.savedEnvValueLinks] a host's saved values to link
+ * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link, or none
  */
 function createService({
   // readable-check: allow dependency-default - optional operation: without an action catalogue the assistant has no Vibe64 tools
@@ -124,24 +95,15 @@ function createService({
   logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
   opencodeTerminalController = {},
-  productionEnvironmentProvider = NO_PRODUCTION_ENVIRONMENT,
-  // readable-check: allow dependency-default - optional operation: without supplied project services the service creates its own
-  projectServices: suppliedProjectServices = null,
+  productionEnvironmentProvider,
+  projectServices,
   project,
-  // readable-check: allow dependency-default - optional operation: without a project runtime publisher runtime changes are not announced
-  publishProjectRuntimeChanged = async () => null,
-  // readable-check: allow dependency-default - optional operation: without session publishers session changes are not announced
-  publishSessionChanged = {},
+  publishProjectRuntimeChanged,
+  publishSessionChanged,
   runCodexGitGatewayCommand,
-  savedEnvValueLinks = NO_SAVED_ENV_VALUE_LINKS
+  savedEnvValueLinks
 }) {
-  if (!project) {
-    throw new TypeError("createService requires vibe64.project.");
-  }
   const previewDiagnostics = createPreviewDiagnosticRecorder({ logger });
-  const projectServices = suppliedProjectServices || createProjectServices();
-  let assistantRouting;
-  let sessionConversations;
 
   /**
    * The one Claude Code account status read, with the inputs Claude
@@ -150,11 +112,23 @@ function createService({
    */
   const readClaudeAccountStatus = () => readClaudeCodeAuthStatus({ env });
   const state = createServiceState({ readClaudeAccountStatus });
-  /**
-   * The goals, assistant and Main conversation host parts are built at the end, after the
-   * collaborators that call back into them.
-   * @type {ServiceGoals}
+  const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
+  const codexProviderConnections = createCodexProviderConnectionStore({ systemRoot: codexProviderOptions.systemRoot });
+  const providerUsage = createProviderUsage({
+    resolveConnection: (selection) => selection.engineId === "opencode"
+      ? state.assistantRuntime.resolveConnection(selection)
+      : codexProviderConnections.read(selection.modelProviderId, selection.engineId)
+  });
+  /*
+   * The parts that call back into each other: a turn's follow-up reaches routing, goals and temporary chats, which
+   * publish through it; routing interrupts through goals; the Main conversation host and the assistant read each
+   * other. They are built below, after the collaborators that call back into them.
    */
+  /** @type {AssistantRouting} */
+  let assistantRouting;
+  /** @type {SessionConversations} */
+  let sessionConversations;
+  /** @type {ServiceGoals} */
   let goals;
   /** @type {ServiceAssistant} */
   let assistant;
@@ -180,273 +154,67 @@ function createService({
     publishSessionChanged,
     workspaceSetup
   });
-
-  const publishAgentSessionChanged = async (sessionId, payload = {}) => {
-    if (!state.lifecycle.closing) {
-      providerUsage.observe(currentProjectScopeKey(), sessionId, payload, () => {
-        // readable-check: allow optional-call - optional operation: a service without session publishers announces no plan usage
-        if (!state.lifecycle.closing) return publishSessionChanged.agentTerminal?.(sessionId, { reason: "agent-plan-usage" });
-      });
-    }
-    const publisher = publishSessionChanged.agentTerminal;
-    if (typeof publisher === "function") {
-      await publisher(sessionId, payload);
-    }
-    if (state.lifecycle.closing) return;
-    if (payload.reason === "temporary-agent-turn-idle") {
-      const completion = sessionConversations?.afterTemporaryTurn(sessionId, payload.payload).catch((error) => {
-        logOperationalEvent(logger, "warn", {
-          component: "vibe64.assistant_routing",
-          event: "vibe64.assistant_routing.temporary_review_deferred",
-          sessionId,
-          code: error.code
-        }, "Temporary chat review needs attention.");
-      });
-      if (completion) {
-        state.turnCompletions.add(completion);
-        void completion.finally(() => state.turnCompletions.delete(completion));
-      }
-      return;
-    }
-    if (!["claude-stream-turn-idle", "codex-app-server-turn-idle", "opencode-server-turn-idle"].includes(
-      String(payload.reason || "").trim()
-    )) {
-      return;
-    }
-    const completion = Promise.all([
-      assistantRouting?.afterTurn(sessionId, payload, {}).catch((error) => {
-        logOperationalEvent(logger, "warn", {
-          component: "vibe64.assistant_routing",
-          event: "vibe64.assistant_routing.review_deferred",
-          sessionId,
-          code: error.code
-        }, "Automatic review needs attention.");
-      }),
-      // A goal's automatic continuation follows each of its turns.
-      goals.cancelGoalIfMainAiChanged(sessionId, null, { activeOnly: true }).catch((error) => {
-        logOperationalEvent(logger, "warn", {
-          component: "vibe64.agent_goal",
-          event: "vibe64.agent_goal.main_ai_cancel_failed",
-          sessionId,
-          code: error.code
-        }, "A goal on the previous main AI could not be cancelled.");
-      }),
-      workspacePreparation.prepareWorkspaceSetup(sessionId, {
-        publish: true,
-        waitMs: AGENT_WRITE_WAIT_MS
-      }).catch((error) => {
-        vibe64SessionDebugLog("server.terminals.workspaceSetup.afterTurn.error", {
-          error: vibe64SessionDebugError(error),
-          sessionId
-        });
-      })
-    ]);
-    state.turnCompletions.add(completion);
-    void completion.finally(() => state.turnCompletions.delete(completion));
-  };
-
-  const codexGitCommand = createCodexGitCommandService({
-    env,
+  const { publishAgentSessionChanged } = createServiceTurnPublication({
+    afterTemporaryTurn: (sessionId, payload) => sessionConversations.afterTemporaryTurn(sessionId, payload),
+    afterRoutedTurn: (sessionId, payload, options) => assistantRouting.afterTurn(sessionId, payload, options),
+    cancelGoalIfMainAiChanged: (sessionId, vibe64User, options) => goals.cancelGoalIfMainAiChanged(sessionId, vibe64User, options),
     logger,
-    project,
-    runGatewayCommand: runCodexGitGatewayCommand
+    providerUsage,
+    publishSessionChanged,
+    state,
+    workspacePreparation
   });
-  let agentPreviewCommand;
-  const outputTarget = createOutputTargetTerminalController({
-    ensureProjectServices: projectServices.ensure,
+  const commands = createServiceCommandServices({
     env,
-    ensureWorkspacePrepared: async (sessionId, context = {}) => {
-      if (await workspaceSetup.isPrepared(context)) {
-        return { completion: null, state: context.session.workspaceSetup };
-      }
-      return workspacePreparation.prepareWorkspaceSetup(sessionId, {
-        publish: true,
-        rerunFailed: context.rerunFailedSetup === true,
-        waitForCompletion: true
-      });
-    },
-    project,
-    stopPreviewBrowsers: (sessionId) => agentPreviewCommand.stopBrowsersForSession(sessionId),
-    publishSessionChanged: publishSessionChanged.outputTarget,
-    sessionAdmissionFailure: (sessionId) => sessionTerminalAdmissionFailure(sessionId, "output")
-  });
-  agentPreviewCommand = createAgentPreviewCommandService({
-    launchTarget: outputTarget,
-    logger,
-    project,
-    publishSessionChanged: publishSessionChanged.outputTarget
-  });
-  const agentEnvCommand = createAgentEnvCommandService({
+    inspectAssistantAccess: (sessionId, options) => assistant.inspectAssistantAccess(sessionId, options),
     logger,
     productionEnvironmentProvider,
     project,
-    savedEnvValueLinks
-  });
-  const agentDatabaseCommand = createAgentDatabaseCommandService({
-    logger,
-    project,
-    readDatabaseTools: () => state.slots.databaseToolsProvider
-  });
-  const agentSessionCommand = createAgentSessionCommandService({
-    retryWorkspaceSetup: sessionId => workspacePreparation.prepareWorkspaceSetup(sessionId, { publish: true, retry: true }),
-    readProjectPreview: input => readProjectPreview(input, {
-      project,
-      authorize: (actor, slug) => state.assistantRuntime.authorizeProjectMessage(actor, slug),
-      assertOpen: () => projectServices.assertOpen(sessionAccess.projectRuntimeContext()),
-      launchTarget: outputTarget
-    }),
-    sendProjectMessage: input => sendProjectMessage(input, {
-      project,
-      publish: publishAgentSessionChanged,
-      authorize: (actor, slug) => state.assistantRuntime.authorizeProjectMessage(actor, slug),
-      assertOpen: () => projectServices.assertOpen(sessionAccess.projectRuntimeContext()),
-      prepare: async (sessionId, options) => {
-        const access = await assistant.inspectAssistantAccess(sessionId, options);
-        if (access.available !== true || access.canUse !== true) {
-          throw vibe64Error(
-            access.disabledReason || "The selected session has no available assistant.",
-            "vibe64_project_message_assistant_unavailable"
-          );
-        }
-        const { runtime: openState } = await sessionAccess.currentProjectRuntimeOpenState();
-        projectServices.assertOpen(sessionAccess.projectRuntimeContext());
-        const destination = options.requireSelectedSession
-          ? await options.runtime.store.readCurrentSession()
-          : await options.runtime.store.readSession(sessionId);
-        if (!openState.open || destination?.sessionId !== sessionId ||
-            (!options.requireSelectedSession && destination.status !== VIBE64_SESSION_STATUS.ACTIVE)) {
-          throw vibe64Error(
-            "The destination closed, became unavailable or its selected session changed. Check it before sending again.",
-            "vibe64_project_message_destination_changed"
-          );
-        }
-      },
-      send: (sessionId, message, options) => assistant.sendAgentMessage(sessionId, message, options),
-      reportFailure: (error, receipt) => logger.warn({
-        event: "vibe64.project_message.delivery_failed",
-        error: error.message,
-        code: error.code,
-        sourceProject: input.sourceProject,
-        sourceSession: input.sourceSession,
-        ...receipt
-      }, "Accepted project message failed during asynchronous delivery.")
-    }),
-    reportWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),
-    logger,
-    publishSessionChanged: publishAgentSessionChanged,
-    project
-  });
-  const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
-  const codexProviderConnections = createCodexProviderConnectionStore({ systemRoot: codexProviderOptions.systemRoot });
-  const providerUsage = createProviderUsage({
-    resolveConnection: (selection) => selection.engineId === "opencode"
-      ? state.assistantRuntime.resolveConnection(selection)
-      : codexProviderConnections.read(selection.modelProviderId, selection.engineId)
-  });
-  const runNativeDetachedConversation = request => mainConversations.runNativeDetachedConversation(request);
-  const codex = createCodexSessionRegistration({
-    ...codexTerminalController,
-    listConnections: codexProviderConnections.list,
-    connectionStatus: (context) => state.assistantRuntime.codexConnectionStatus(context),
-    agentDatabaseCommand,
-    agentEnvCommand,
-    agentPreviewCommand,
-    agentSessionCommand,
-    codexAppServerProviderOptions: codexProviderOptions,
-    codexToolHomeRequired: codexTerminalController.codexToolHomeRequired ?? true,
-    codexToolHomeSource: codexTerminalController.codexToolHomeSource || codexToolHomeSourceFromEnv(env),
-    codexGitCommand,
-    env,
-    logger,
-    project,
-    publishSessionChanged: publishAgentSessionChanged,
-    publishConversation: event => mainConversations.publishNative(event),
-    continueGoalAfterAccountChange: (sessionId, input) => goals.continueGoalAfterAccountChange(sessionId, input),
-    runNativeDetachedConversation
-  });
-  const assistantContext = createServiceAssistantContext({ sessionAccess, actions });
-
-  const mainConversations = createConversationRuntime({
-    engine: "codex",
-    hostDeliveryStages: CLAUDE_PREPARATION_DELIVERY_STAGES,
-    onDeliveryTiming(event) {
-      const slow = event.elapsedMs >= 1000 && ["accepted", "first-response"].includes(event.stage);
-      logOperationalEvent(logger, slow || event.stage === "failed" ? "warn" : "info", {
-        event: "vibe64.agent_message.delivery_timing",
-        component: "vibe64.agent_message",
-        sessionId: event.conversationId,
-        engineId: event.engine,
-        messageId: event.messageId,
-        stage: event.stage,
-        previousStage: event.previousStage,
-        durationMs: event.durationMs,
-        elapsedMs: event.elapsedMs,
-        timings: event.timings
-      }, "Assistant delivery timing.");
-    },
-    ...(assistantContext.mainToolCatalog ? { toolCatalog: assistantContext.mainToolCatalog } : {}),
-    authorize: (request) => mainConversationHost.authorizeMainConversation(request),
-    host: {
-      nativeTools: true,
-      conversation: (request) => mainConversationHost.prepareMainConversationOperation(request)
-    }
-  });
-
-  const opencode = createOpenCodeSessionRegistration({
-    ...opencodeTerminalController,
-    agentDatabaseCommand,
-    agentEnvCommand,
-    agentPreviewCommand,
-    agentSessionCommand,
-    codexGitCommand,
-    env,
-    getAssistantManager: () => sessionAgent,
-    listConnections: (context) => state.assistantRuntime.listConnections(context),
-    logger,
-    project,
-    publishSessionChanged: publishAgentSessionChanged,
-    publishConversation: event => mainConversations.publishNative(event),
-    resolveConnection: (context) => state.assistantRuntime.resolveConnection(context),
-    runNativeDetachedConversation
-  });
-  const sessionAttachments = createSessionAttachments({ project, env });
-  const claudeProvider = createClaudeConversationHost({
-    env,
-    project,
-    logger,
-    publishSessionChanged: publishAgentSessionChanged,
-    publishConversation: event => mainConversations.publishNative(event),
-    systemRoot: codexProviderOptions.systemRoot,
-    runNativeDetachedConversation,
-    codexGitCommand,
-    agentDatabaseCommand,
-    agentEnvCommand,
-    agentPreviewCommand,
-    agentSessionCommand,
-    accountStatus: readClaudeAccountStatus,
-    connectionStatus: (context) => state.assistantRuntime.claudeConnectionStatus(context)
-  });
-  const providerAccess = createServiceProviderAccess({
+    projectServices,
+    publishAgentSessionChanged,
+    publishSessionChanged,
+    recordWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),
+    runCodexGitGatewayCommand,
+    savedEnvValueLinks,
+    sendAgentMessage: (sessionId, message, options) => assistant.sendAgentMessage(sessionId, message, options),
+    sessionAccess,
     state,
-    claudeProvider,
-    codex,
-    codexProviderConnections
+    workspacePreparation,
+    workspaceSetup
   });
-
-  const readRoutingConfiguration = () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read();
-
-  const sessionAgent = createSessionAgentManager({
-    attachments: sessionAttachments,
-    conversationRuntime: mainConversations,
-    readProviderUsage: providerUsage.read,
-    resolveAssistantUser: (user) => state.assistantRuntime.resolveAssistantUser(user),
+  const {
+    agentDatabaseCommand,
+    agentEnvCommand,
+    agentPreviewCommand,
+    agentSessionCommand,
+    codexGitCommand,
+    outputTarget
+  } = commands;
+  const assistantContext = createServiceAssistantContext({ sessionAccess, actions });
+  const {
+    codex,
+    mainConversations,
+    opencode,
     readRoutingConfiguration,
-    providers: [
-      claudeProvider,
-      codex.provider,
-      opencode.provider
-    ],
-    readAssistantAccess: providerAccess.readAssistantAccess
+    sessionAgent,
+    sessionAttachments
+  } = createServiceAgentProviders({
+    assistantContext,
+    authorizeMainConversation: (request) => mainConversationHost.authorizeMainConversation(request),
+    codexProviderOptions,
+    codexProviderConnections,
+    codexTerminalController,
+    commands,
+    continueGoalAfterAccountChange: (sessionId, input) => goals.continueGoalAfterAccountChange(sessionId, input),
+    env,
+    logger,
+    opencodeTerminalController,
+    prepareMainConversationOperation: (request) => mainConversationHost.prepareMainConversationOperation(request),
+    project,
+    providerUsage,
+    publishAgentSessionChanged,
+    readClaudeAccountStatus,
+    state
   });
   const sessionPromptHints = createSessionPromptHintsService({
     publishSessionChanged: publishAgentSessionChanged,
@@ -476,7 +244,8 @@ function createService({
     signal: state.shutdownSignal.signal
   });
   assistantRouting = createAssistantRouting({
-    systemRoot: codexProviderOptions.systemRoot, agent: sessionAgent,
+    systemRoot: codexProviderOptions.systemRoot,
+    agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {
       const result = await sessionAccess.runMainAgentWrite(sessionId, options, operation,
         { operation: "assistant-routing", waitMs: options.lockWaitMs ?? AGENT_WRITE_WAIT_MS });
@@ -669,6 +438,24 @@ function createService({
     writeGlobalInput: (terminalSessionId, data, options) => terminals.writeGlobalCodexTerminal(terminalSessionId, data, options)
   });
 
+  /**
+   * Main chat pauses its own goal.
+   * @param {object} input
+   * @param {object} context
+   */
+  function pauseMainGoal(input, context) {
+    return requestMainGoalControl("pause", input, context);
+  }
+
+  /**
+   * Main chat blocks its own goal.
+   * @param {object} input
+   * @param {object} context
+   */
+  function blockMainGoal(input, context) {
+    return requestMainGoalControl("block", input, context);
+  }
+
   return Object.freeze({
     temporaryConversationDataSchema: sessionConversations.temporaryConversationDataSchema,
     temporaryConversationSelectionSchema: sessionConversations.temporaryConversationSelectionSchema,
@@ -776,7 +563,8 @@ function createService({
     cancelSessionPromptHints: assistant.cancelSessionPromptHints,
     resumeIntegrationContinuation: assistant.resumeIntegrationContinuation,
     sendAgentMessage: assistant.sendAgentMessage,
-    requestMainGoalControl,
+    pauseMainGoal,
+    blockMainGoal,
     readAgentGoal: goals.readAgentGoal,
     updateAgentGoal: goals.updateAgentGoal,
     readAgentPlanUsage: assistant.readAgentPlanUsage,
@@ -843,6 +631,5 @@ function createService({
 }
 
 export {
-  createService,
-  startProjectRuntimeDormancyCleanupSchedule
+  createService
 };

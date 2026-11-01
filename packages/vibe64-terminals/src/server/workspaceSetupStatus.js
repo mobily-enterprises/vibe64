@@ -70,9 +70,7 @@ function createWorkspaceSetupStatus({
     } catch {
       return false;
     }
-    // readable-check: allow method-probe - optional operation: a project service without environment status reports its resources ready
-    const environmentStatus = typeof project.projectEnvironmentStatus === "function"
-      ? await project.projectEnvironmentStatus({ sessionId: session.sessionId, session }) : { status: "ready" };
+    const environmentStatus = await project.projectEnvironmentStatus({ sessionId: session.sessionId, session });
     return setup.status === "ready" &&
       previous.status === "succeeded" &&
       Boolean(setup.recipeHash) &&

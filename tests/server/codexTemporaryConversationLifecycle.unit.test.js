@@ -41,6 +41,7 @@ import {
 import {
   createService as createTerminalService
 } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import {
   createService as createSourceEditorService
 } from "../../packages/vibe64-source-editor/src/server/service.js";
@@ -690,7 +691,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
         return { ok: true };
       }
     };
-    const terminals = createTerminalService({
+    const terminals = createTerminalService(terminalsServiceCollaborators({
       logger: silentLogger,
       codexTerminalController: {
             codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
@@ -705,7 +706,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
         VIBE64_WORKSPACE: "test"
       },
       project: terminalProjectService
-    });
+    }));
     await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
     await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ owner: {
       quickHelper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" },
@@ -851,7 +852,7 @@ for (const startFails of [false, true]) {
       };
       const followupDispatch = createDeterministicHold();
       const stopInputRead = createDeterministicHold();
-      const terminals = createTerminalService({
+      const terminals = createTerminalService(terminalsServiceCollaborators({
         logger: silentLogger,
         codexTerminalController: {
                 codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
@@ -880,7 +881,7 @@ for (const startFails of [false, true]) {
           VIBE64_WORKSPACE: "test"
         },
         project: terminalProjectService
-      });
+      }));
       await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
       await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ owner: {
         quickHelper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" },
@@ -1131,7 +1132,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
         return { ok: true };
       }
     };
-    const terminals = createTerminalService({
+    const terminals = createTerminalService(terminalsServiceCollaborators({
       logger: silentLogger,
       codexTerminalController: {
         codexAppServerProviderFactory() {
@@ -1145,7 +1146,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
         VIBE64_WORKSPACE: "test"
       },
       project: terminalProjectService
-    });
+    }));
     const cancelled = {
       code: "cancelled-inside-lock",
       ok: false
@@ -2274,7 +2275,7 @@ async function withAgentMessageController(operation, {
   };
   const terminalServices = [];
   const createService = ({ logger = silentLogger } = {}) => {
-    const service = createTerminalService({
+    const service = createTerminalService(terminalsServiceCollaborators({
       actions,
       projectServices,
       codexTerminalController: controllerOptions,
@@ -2282,7 +2283,7 @@ async function withAgentMessageController(operation, {
       logger,
       publishSessionChanged: { agentTerminal: controllerOptions.publishSessionChanged },
       project
-    });
+    }));
     terminalServices.push(service);
     return service;
   };
@@ -3420,8 +3421,8 @@ test("Codex integration continuation recovers native acceptance with a fresh ser
       }], status: "completed" }];
       await terminals.close();
       store.writeConversationUserMessage = writeUser;
-      restarted = createTerminalService({ logger: silentLogger, codexTerminalController: controllerOptions,
-        env: controllerOptions.env, project });
+      restarted = createTerminalService(terminalsServiceCollaborators({ logger: silentLogger, codexTerminalController: controllerOptions,
+        env: controllerOptions.env, project }));
       const result = await restarted.resumeIntegrationContinuation(sessionId, input);
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.equal(result.integrationSetup.continuation.status, "accepted");

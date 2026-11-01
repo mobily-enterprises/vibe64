@@ -20,6 +20,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
 
 const AGENT_DATABASE_COMMAND_NAME = "vibe64-database";
 const AGENT_DATABASE_COMMAND_SOCKET_NAME = "database-command.sock";
@@ -319,7 +320,7 @@ function createAgentDatabaseCommandService({
 
 /**
  * @param {object} options
- * @param {ReturnType<typeof createAgentDatabaseCommandService>} options.commandService
+ * @param {AgentDatabaseCommandService} options.commandService
  * @param {string} [options.sessionId]
  * @param {string} [options.wrapperHostDir]
  */

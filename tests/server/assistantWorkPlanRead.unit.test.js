@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import { workPlanPath, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 
 test("plan service reads the actual session without AI and preserves private renewal access", async (t) => {
@@ -16,10 +17,10 @@ test("plan service reads the actual session without AI and preserves private ren
   await store.createSession({ sessionId, runtimeKind: "genesis" });
   const runtime = { stateRoot: root, store, getSession: (id) => store.readSession(id) };
   const unused = () => assert.fail("Reading a plan must not inspect or change project configuration.");
-  const service = createService({ env: {}, logger: silentLogger, project: { createRuntime: async () => runtime,
+  const service = createService(terminalsServiceCollaborators({ env: {}, logger: silentLogger, project: { createRuntime: async () => runtime,
     createSessionStore: async () => store, readCurrentProject: unused, readEnv: unused,
     runInProjectContext: unused, saveEnvUserValues: unused },
-    codexTerminalController: { codexAppServerProviderFactory() { assert.fail("Reading a plan must not start AI."); } } });
+    codexTerminalController: { codexAppServerProviderFactory() { assert.fail("Reading a plan must not start AI."); } } }));
   assert.deepEqual(await service.readSessionWorkPlan(sessionId), { ok: true, sessionId, available: false, current: null, history: [] });
   const context = { runtime, session: await store.readSession(sessionId) };
   const file = workPlanPath(context);

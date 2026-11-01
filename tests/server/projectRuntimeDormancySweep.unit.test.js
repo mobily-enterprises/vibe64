@@ -38,6 +38,7 @@ test("the dormancy sweep reads session records only and closes an idle runtime w
       return runtime;
     },
     currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
+    async listPracticeProjectSlugs() { return []; },
     async listProjects() { return { ok: true, projects: [{ slug: "inspector", runtime: { open: true } }] }; },
     async readCurrentProject() { return { slug: "inspector" }; },
     async readEnv() { return { env: { records: [] }, ok: true }; },

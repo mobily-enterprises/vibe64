@@ -2,6 +2,7 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 
 import {
   runWithProjectRequestContext
@@ -72,8 +73,8 @@ test("Vibe64 terminal roots never fall back to the hosted namespace", () => {
 test("shared conversation hosts preserve Claude's native profile lookup", () => {
   for (const env of [{}, { CLAUDE_CONFIG_DIR: "/tmp/selected-claude-profile" }, { CLAUDE_CONFIG_DIR: "" }]) {
     const unused = () => assert.fail("Preparing a shared host must not read or change project state.");
-    const service = createService({ env, logger: silentLogger, project: { readCurrentProject: unused, readEnv: unused,
-      runInProjectContext: unused, saveEnvUserValues: unused, createRuntime: unused, createSessionStore: unused } });
+    const service = createService(terminalsServiceCollaborators({ env, logger: silentLogger, project: { readCurrentProject: unused, readEnv: unused,
+      runInProjectContext: unused, saveEnvUserValues: unused, createRuntime: unused, createSessionStore: unused } }));
     const host = service.createConversationHost({ id: "colleague-profile", workdir: "/tmp/colleague-profile",
       runtimeRoot: "/tmp/colleague-profile-runtime" });
     assert.equal(host.allowAccountChange, false);
@@ -94,10 +95,10 @@ test("opt-in browser opening timings retain failure boundaries without request o
         return { metadata: {} }; // Selection is unavailable; native opening must still fail.
       } };
       const unused = () => assert.fail("A failed browser read must not start work.");
-      const service = createService({ env: { JSKIT_REALTIME_DEBUG: enabled ? "1" : "0" },
+      const service = createService(terminalsServiceCollaborators({ env: { JSKIT_REALTIME_DEBUG: enabled ? "1" : "0" },
         logger: { warn: event => events.push(event) },
         project: { readCurrentProject: unused, readEnv: unused, runInProjectContext: unused,
-          saveEnvUserValues: unused, createRuntime: async () => runtime, createSessionStore: unused } });
+          saveEnvUserValues: unused, createRuntime: async () => runtime, createSessionStore: unused } }));
       await assert.rejects(service.openBrowserConversation("session-1", {}), { code: "conversation_forbidden" });
       assert.equal(events.length, 0, "Unadmitted handles do not enter diagnostics");
       await assert.rejects(service.openBrowserConversation("session-1", {

@@ -84,8 +84,7 @@ function createServiceWorkspacePreparation({
     });
     const setupChanged = String(setup.state?.updatedAt || "") !==
       String(session.workspaceSetup?.updatedAt || "");
-    // readable-check: allow method-probe - optional operation: a service without session publishers announces no setup change
-    if (publish && setupChanged && typeof publishSessionChanged.agentTerminal === "function") {
+    if (publish && setupChanged) {
       await publishSessionChanged.agentTerminal(sessionId, {
         reason: "workspace-setup-updated",
         session: await runtime.getSession(sessionId, {

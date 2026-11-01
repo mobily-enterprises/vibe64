@@ -20,7 +20,7 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
-/** @typedef {(sessionId: string, payload?: object) => Promise<void>} PublishAgentSessionChanged */
+/** @typedef {import("./types.js").PublishAgentSessionChanged} PublishAgentSessionChanged */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
 

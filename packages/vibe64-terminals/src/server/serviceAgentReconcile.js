@@ -59,13 +59,7 @@ function createServiceAgentReconcile({
         const listOptions = {
           statusGroup: "all"
         };
-        // readable-check: allow method-probe - optional operation: a runtime lists summaries, full sessions or none
-        const sessions = typeof runtime?.listSessionSummaries === "function"
-          ? await runtime.listSessionSummaries(listOptions)
-          // readable-check: allow method-probe - optional operation: a runtime lists summaries, full sessions or none
-          : typeof runtime?.listSessions === "function"
-            ? await runtime.listSessions(listOptions)
-            : [];
+        const sessions = await runtime.listSessionSummaries(listOptions);
         return sessionAgent.unsubscribeSessions(sessions);
       })();
     }
@@ -102,17 +96,12 @@ function createServiceAgentReconcile({
       return session;
     }
     const sessionId = sessionRecordId(session);
-    // readable-check: allow method-probe - optional operation: a project service without runtimes keeps the session it was given
-    if (!sessionId || typeof project.createRuntime !== "function") {
+    if (!sessionId) {
       return session;
     }
     const runtime = await project.createRuntime({
       inspectSource: false
     });
-    // readable-check: allow method-probe - optional operation: a runtime without a session reader keeps the session it was given
-    if (typeof runtime?.getSession !== "function") {
-      return session;
-    }
     return runtime.getSession(sessionId, {
       inspectSource: false
     });

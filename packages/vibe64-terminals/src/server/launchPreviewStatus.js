@@ -258,7 +258,7 @@ async function missingLaunchPreviewStatus({
   context = {},
   outputTargets = [],
   openTarget = null,
-  publishSessionChanged = async () => null,
+  publishSessionChanged,
   sessionId = ""
 } = {}) {
   const lastOutputTarget = outputTargetFromMetadata(context.session?.metadata || {});
@@ -318,7 +318,7 @@ async function resolveLaunchPreviewStatus({
   outputTargets = [],
   markReady = markLaunchTerminalReady,
   options = {},
-  publishSessionChanged = async () => null,
+  publishSessionChanged,
   sessionId = ""
 } = {}) {
   const activeTerminal = latestLaunchTerminal(sessionId);

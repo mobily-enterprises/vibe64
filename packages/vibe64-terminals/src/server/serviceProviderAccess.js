@@ -2,7 +2,7 @@ import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProv
 import { findVibe64AgentProvider } from "@local/vibe64-runtime/shared";
 
 /** @typedef {import("./types.js").ServiceState} ServiceState */
-/** @typedef {ReturnType<typeof import("./agent/providers/claudeConversationHost.js").createClaudeConversationHost>} ClaudeConversationHost */
+/** @typedef {import("./types.js").ClaudeSessionAgentProvider} ClaudeSessionAgentProvider */
 /** @typedef {import("./types.js").CodexSessionRegistration} CodexSessionRegistration */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
 
@@ -11,7 +11,7 @@ import { findVibe64AgentProvider } from "@local/vibe64-runtime/shared";
  * connection, the Codex account, or the host's assistant runtime for every other engine.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
- * @param {ClaudeConversationHost} dependencies.claudeProvider
+ * @param {ClaudeSessionAgentProvider} dependencies.claudeProvider
  * @param {CodexSessionRegistration} dependencies.codex
  * @param {CodexProviderConnectionStore} dependencies.codexProviderConnections
  */

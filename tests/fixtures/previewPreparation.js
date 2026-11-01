@@ -10,6 +10,7 @@ import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-cor
 import { initializeGenesisProject } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "./terminalsServiceCollaborators.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -91,13 +92,13 @@ require("node:http").createServer((_request, response) => {
     runtimeKind: "genesis",
     sessionId
   });
-  const terminals = createTerminalService({
+  const terminals = createTerminalService(terminalsServiceCollaborators({
     codexTerminalController: { codexToolHomeRequired: false },
     env: { VIBE64_RUNTIME_NAMESPACE: "preview-preparation-test" },
     logger: silentLogger,
     project,
     publishSessionChanged
-  });
+  }));
   await terminals.openProjectRuntime();
   return {
     project, root, runtime, sessionId, sourceRoot, stackPath, terminals,

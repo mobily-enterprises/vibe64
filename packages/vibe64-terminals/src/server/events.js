@@ -32,13 +32,13 @@ function createProjectRuntimeChangedPublisher(events) {
  */
 function createTerminalSessionChangedPublishers(events) {
   const sessionChanged = createSessionChangedPublisher(events);
-  return {
+  return Object.freeze({
     agentTerminal: sessionChanged,
     agentTerminalClosed: sessionChanged,
     outputTarget: sessionChanged,
     outputTargetClosed: sessionChanged,
     outputTargetStopped: sessionChanged
-  };
+  });
 }
 
 export {

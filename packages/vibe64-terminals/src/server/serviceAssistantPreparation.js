@@ -23,7 +23,7 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 /** @typedef {import("./types.js").ServiceWorkspacePreparation} ServiceWorkspacePreparation */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {typeof import("@local/vibe64-genesis/server").inspectGenesisSkills} InspectAgentSkills */
+/** @typedef {import("./types.js").InspectAgentSkills} InspectAgentSkills */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 /**

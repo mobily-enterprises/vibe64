@@ -1,13 +1,6 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
 import {
-  VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
-  VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV,
-  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_USER_DOMAIN_ENV
-} from "@local/vibe64-core/server/launchPreviewProxyEnv";
-import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
 import { createTerminalActions } from "./terminalActions.js";
@@ -17,16 +10,17 @@ import {
   createTerminalSessionChangedPublishers
 } from "./events.js";
 import { registerRoutes } from "./registerRoutes.js";
+import { terminalsProviderEnv } from "./terminalsEnv.js";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   NO_PRODUCTION_ENVIRONMENT,
   TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
   assertProductionEnvironmentProvider
 } from "./productionEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS, TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN, assertSavedEnvValueLinks } from "./savedEnvValueLinks.js";
-import {
-  createService,
-  startProjectRuntimeDormancyCleanupSchedule
-} from "./service.js";
+import { createService } from "./service.js";
+import { createProjectServices } from "./projectServices.js";
+import { startProjectRuntimeDormancyCleanupSchedule } from "./projectRuntimeDormancy.js";
 
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
@@ -39,30 +33,6 @@ import {
 /** @typedef {import("./types.js").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
-
-const LIVE_HOST_ENV_KEYS = Object.freeze([
-  VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
-  VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV,
-  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_PROTOCOL_ENV,
-  VIBE64_PUBLIC_USER_DOMAIN_ENV,
-  "VIBE64_PREVIEW_PROXY_SOCKET_DIR",
-  "VIBE64_HOST_AGENT_GUIDANCE",
-  "VIBE64_CLAUDE_COMMAND"
-]);
-
-function terminalsProviderEnv(runtimeEnv = {}, liveEnv = process.env) {
-  const env = {
-    ...(runtimeEnv && typeof runtimeEnv === "object" && !Array.isArray(runtimeEnv) ? runtimeEnv : {})
-  };
-  for (const key of LIVE_HOST_ENV_KEYS) {
-    const value = String(liveEnv?.[key] || "").trim();
-    if (value) {
-      env[key] = value;
-    }
-  }
-  return env;
-}
 
 /**
  * @param {object} dependencies
@@ -131,7 +101,7 @@ function createVibe64TerminalsFeature({
         logger,
         opencodeTerminalController,
         productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,
-        projectServices,
+        projectServices: projectServices ?? createProjectServices(),
         project,
         publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
         publishSessionChanged: createTerminalSessionChangedPublishers(events),
@@ -146,7 +116,12 @@ function createVibe64TerminalsFeature({
         // All feature boot hooks (including hosted execution/auth configuration)
         // have completed before recovery can admit work.
         setImmediate(() => void terminals.recoverActiveGoals().catch(error => {
-          logger.warn({ code: error.code, error: error.message }, "Active goals could not be recovered after server restart.");
+          logOperationalEvent(logger, "warn", {
+            component: "vibe64.agent_goal",
+            event: "vibe64.agent_goal.recovery_failed",
+            code: error.code,
+            error: error.message
+          }, "Active goals could not be recovered after server restart.");
         }));
       });
       return { terminals };
@@ -185,6 +160,5 @@ const Vibe64TerminalsFeature = createVibe64TerminalsFeature();
 
 export {
   Vibe64TerminalsFeature,
-  createVibe64TerminalsFeature,
-  terminalsProviderEnv
+  createVibe64TerminalsFeature
 };

@@ -1,3 +1,4 @@
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import {
   assertSessionRepositoryReview,
   sessionConnectedContribution,
@@ -67,6 +68,7 @@ function createServiceSessionWork({
   workspaceSetup
 }) {
   async function saveSessionWorkInsideWrite(sessionId, input, context) {
+    const { assertConnectedWorkSaved = doNothing, onProgress = doNothing } = input;
     const { execution, normalizedSessionId, runtime, session } = await sessionWorkExecution(
       sessionId,
       context,
@@ -86,8 +88,7 @@ function createServiceSessionWork({
       }
     };
     await assertWorkflow();
-    // readable-check: allow optional-call - input validation: a caller's optional check that connected work is saved
-    const connectedWorkSnapshots = await input.assertConnectedWorkSaved?.();
+    const connectedWorkSnapshots = await assertConnectedWorkSaved();
     const saveMessageInput = await prepareManagedSessionWorkSaveMessage({
       commandOptions: execution.commandOptions,
       connectedWorkSnapshots,
@@ -98,8 +99,7 @@ function createServiceSessionWork({
       runCommand: execution.runCommand,
       session
     });
-    // readable-check: allow optional-call - input validation: a caller's optional progress stream
-    await input.onProgress?.({
+    await onProgress({
       checkpointCommit: saveMessageInput.checkpoint.checkpointCommit,
       checkpointTree: saveMessageInput.checkpoint.checkpointTree,
       kind: "message",
@@ -132,16 +132,14 @@ function createServiceSessionWork({
         operationId: input.operationId,
         sessionId: normalizedSessionId
       }, "Assistant naming was unavailable; Save is using a checkpoint-based version name.");
-      // readable-check: allow optional-call - input validation: a caller's optional progress stream
-      await input.onProgress?.({
+      await onProgress({
         code: error.code || "vibe64_session_save_message_failed",
         kind: "message",
         message: "Assistant naming is unavailable. Saving with a checkpoint-based version name.",
         stage: "message-fallback"
       });
     }
-    // readable-check: allow optional-call - input validation: a caller's optional progress stream
-    await input.onProgress?.({
+    await onProgress({
       executionProfile: commitTitle.executionProfile,
       kind: "message",
       message: "Version name ready.",
@@ -193,6 +191,7 @@ function createServiceSessionWork({
     },
     operation
   ) {
+    const { onRepositoryWriteAcquired = doNothing } = options;
     const result = await sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
       if (sessionHasActiveAgentRun(context.session)) {
         const activityCheck = await sessionAgent.ensureSession(sessionId, context);
@@ -204,8 +203,7 @@ function createServiceSessionWork({
           throw error;
         }
       }
-      // readable-check: allow optional-call - input validation: a caller's optional observer of the repository write lock
-      await options.onRepositoryWriteAcquired?.();
+      await onRepositoryWriteAcquired();
       return operation(context);
     }, { operation: operationName, waitMs: 10_000 });
     return throwIfAgentWriteBusy(result);
@@ -411,6 +409,7 @@ function createServiceSessionWork({
   }
 
   async function createSessionPullRequest(sessionId, input = {}) {
+    const { assertConnectedWorkSaved = doNothing } = input;
     if (
       typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||
       (input.body != null && (typeof input.body !== "string" || input.body.length > 65536)) ||
@@ -454,8 +453,7 @@ function createServiceSessionWork({
       session = recorded?.session || await runtime.getSession(sessionId, { inspectSource: false });
       const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "create-pull-request");
       await prepareSessionPullRequestBranch({
-        // readable-check: allow optional-call - input validation: a caller's optional check that connected work is saved
-        connectedWorkSnapshots: await input.assertConnectedWorkSaved?.(),
+        connectedWorkSnapshots: await assertConnectedWorkSaved(),
         project: await project.readCurrentProject(),
         session,
         commandOptions: execution.commandOptions,

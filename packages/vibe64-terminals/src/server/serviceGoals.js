@@ -33,8 +33,8 @@ import { AGENT_WRITE_WAIT_MS, openProjectRuntimeRecords } from "./serviceSession
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
-/** @typedef {(sessionId: string, payload?: object) => Promise<void>} PublishAgentSessionChanged */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/assistantRoutingStore").createAssistantRoutingStore>["read"]} ReadRoutingConfiguration */
+/** @typedef {import("./types.js").PublishAgentSessionChanged} PublishAgentSessionChanged */
+/** @typedef {import("./types.js").ReadRoutingConfiguration} ReadRoutingConfiguration */
 
 const GOAL_STOP_REQUEST = "assistant_goal_stop_request";
 const MAIN_AI_CHANGED_GOAL_NOTICE = "Goal cancelled because the main AI changed in AI setup. The work done so far is kept. " +
@@ -596,16 +596,16 @@ function createServiceGoals({
           }
         }
       };
-      // readable-check: allow method-probe - optional operation: a project service without a project list recovers only the current project
-      if (typeof project.listProjects === "function") {
-        const listed = await project.listProjects();
-        if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
-        for (const projectRecord of openProjectRuntimeRecords(listed)) {
-          if (state.lifecycle.closing) break;
-          try { await project.runInProjectContext(projectRecord.slug, () => recoverCurrentProject(projectRecord.slug)); }
-          catch (error) { reportFailure(error, { projectSlug: projectRecord.slug }); }
+      const listed = await project.listProjects();
+      if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
+      for (const projectRecord of openProjectRuntimeRecords(listed)) {
+        if (state.lifecycle.closing) break;
+        try {
+          await project.runInProjectContext(projectRecord.slug, () => recoverCurrentProject(projectRecord.slug));
+        } catch (error) {
+          reportFailure(error, { projectSlug: projectRecord.slug });
         }
-      } else await recoverCurrentProject(sessionAccess.projectRuntimeContext().projectSlug);
+      }
       return { ok: results.every(result => result.ok !== false), results };
     })();
     return state.lifecycle.goalRecovery;

@@ -50,6 +50,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
+/** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 
 const AGENT_ENV_COMMAND_NAME = "vibe64-env";
 const AGENT_ENV_COMMAND_SOCKET_NAME = "env-command.sock";
@@ -444,7 +445,7 @@ function createAgentEnvCommandService({
 
 /**
  * @param {object} options
- * @param {ReturnType<typeof createAgentEnvCommandService>} options.commandService
+ * @param {AgentEnvCommandService} options.commandService
  * @param {string} [options.sessionId]
  * @param {string} [options.wrapperHostDir]
  */

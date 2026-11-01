@@ -78,6 +78,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
+/** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
 
 const AGENT_SESSION_COMMAND_RUNNER_NAME = "vibe64-session-command-runner";
 const AGENT_SESSION_COMMAND_SOCKET_NAME = "session-command.sock";
@@ -640,7 +641,7 @@ function createAgentSessionCommandService({
 
 /**
  * @param {object} options
- * @param {ReturnType<typeof createAgentSessionCommandService>} options.commandService
+ * @param {AgentSessionCommandService} options.commandService
  * @param {string} [options.sessionId]
  * @param {string} [options.wrapperHostDir]
  */

@@ -16,7 +16,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {typeof import("@local/vibe64-execution/server").vibe64ManagedExecutionProvider} Vibe64ManagedExecutionProvider */
-/** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64Execution} StopVibe64Execution */
+/** @typedef {import("./types.js").StopVibe64Execution} StopVibe64Execution */
 
 /**
  * A session's browser tests: the one run a session may have at a time, its

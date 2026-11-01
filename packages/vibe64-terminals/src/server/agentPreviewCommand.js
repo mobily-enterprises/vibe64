@@ -39,6 +39,7 @@ import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normali
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
 const AGENT_PLAYWRIGHT_COMMAND_NAME = "vibe64-playwright";
@@ -238,7 +239,7 @@ function browserWorkerToken({
  * @param {number} [options.browserSuspendAfterMs]
  * @param {number} [options.browserControlHealthFailureLimit]
  * @param {number} [options.browserControlHealthIntervalMs]
- * @param {ReturnType<typeof createAgentPreviewCommandService>} options.commandService
+ * @param {AgentPreviewCommandService} options.commandService
  * @param {RuntimeEnv} [options.env]
  * @param {object} [options.project]
  * @param {string} [options.sessionId]

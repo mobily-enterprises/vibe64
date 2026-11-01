@@ -23,6 +23,7 @@ import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
@@ -2380,7 +2381,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
   const actor = { username: "service-owner", uid: 73, role: "owner" };
   let recoveredActorReads = 0;
   const createService = () => {
-    const value = createTerminalService({ project, actions,
+    const value = createTerminalService(terminalsServiceCollaborators({ project, actions,
     logger: { info: recordDeliveryDiagnostic, warn: recordDeliveryDiagnostic, error: recordDeliveryDiagnostic },
     env: { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: command, JSKIT_REALTIME_DEBUG: "1",
       VIBE64_SYSTEM_ROOT: path.join(f.root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
@@ -2390,7 +2391,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       publications.push(event);
       if (event.reason === "assistant-stream" && event.payload.conversationStream.messages.some(message => message.text === "Service progress")) streamed.resolve();
     } }
-  });
+  }));
     value.configureAssistantRuntime({
       resolveAssistantUser: async user => user?.username === actor.username ? actor : user,
       createActionContext(user) {

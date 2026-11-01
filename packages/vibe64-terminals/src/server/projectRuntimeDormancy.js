@@ -1,4 +1,5 @@
 import { timestampMs } from "@local/vibe64-execution/server";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { sessionHasActiveAgentRun, sessionRecordId } from "./serviceSessionRecords.js";
 
@@ -90,7 +91,7 @@ function startProjectRuntimeDormancyCleanupSchedule({
       for (const failure of Array.isArray(result?.failed) ? result.failed : []) {
         const failed = Array.isArray(failure?.failed) ? failure.failed
           : Array.isArray(failure?.closeResult?.failed) ? failure.closeResult.failed : [];
-        logger.warn({
+        logOperationalEvent(logger, "warn", {
           component: "vibe64-project-runtime-cleanup",
           error: String(failure?.error || failed[0]?.error || "Dormant project runtime cleanup failed."),
           event: "vibe64.project_runtime.dormant_close_failed",
@@ -107,7 +108,7 @@ function startProjectRuntimeDormancyCleanupSchedule({
       });
       return result;
     } catch (error) {
-      logger.warn({
+      logOperationalEvent(logger, "warn", {
         component: "vibe64-project-runtime-cleanup",
         error: error instanceof Error ? error.message : String(error || "Dormant project runtime cleanup failed."),
         event: "vibe64.project_runtime.dormant_cleanup_failed"
@@ -130,18 +131,20 @@ function startProjectRuntimeDormancyCleanupSchedule({
   }, normalizedIntervalMs);
   interval?.unref();
 
-  return {
+  function stop() {
+    if (stopped) {
+      return;
+    }
+    stopped = true;
+    clearIntervalImpl(interval);
+  }
+
+  return Object.freeze({
     idleAfterMs: normalizedIdleAfterMs,
     intervalMs: normalizedIntervalMs,
     runNow,
-    stop() {
-      if (stopped) {
-        return;
-      }
-      stopped = true;
-      clearIntervalImpl(interval);
-    }
-  };
+    stop
+  });
 }
 
 export {

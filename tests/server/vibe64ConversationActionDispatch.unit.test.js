@@ -31,7 +31,9 @@ test("standalone Main and temporary conversations use the selected local project
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     const sends = [];
     actions.register({ contributorId: "local-goals", domain: "terminals", actions:
-      createTerminalActions({ terminals: { requestMainGoalControl } }).filter(({ id }) => id === "vibe64.terminals.main-goal.pause")
+      createTerminalActions({ terminals: {
+        pauseMainGoal: (input, context) => requestMainGoalControl("pause", input, context)
+      } }).filter(({ id }) => id === "vibe64.terminals.main-goal.pause")
         .map(definition => ({ surfaces: ["app"], ...definition })) });
     actions.register({ contributorId: "local-sessions", domain: "sessions", actions:
       createSessionActions({ sessions: withMainChatOperations({

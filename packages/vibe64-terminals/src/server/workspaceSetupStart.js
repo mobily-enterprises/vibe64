@@ -266,8 +266,7 @@ function createWorkspaceSetupStart({
       stateBase.recipeHash === recipe.recipeHash &&
       (stateBase.status === "succeeded" || (stateBase.status === "failed" && rerunFailed !== true))
     ) {
-      // readable-check: allow method-probe - optional operation: a project service without environment status has no prepared resources to compare
-      if (stateBase.status === "failed" || typeof project.projectEnvironmentStatus !== "function") {
+      if (stateBase.status === "failed") {
         return { completion: null, state: stateBase };
       }
       const environmentStatus = await project.projectEnvironmentStatus({ sessionId, session });
