@@ -68,7 +68,10 @@ function createParsedFileCache(limit) {
     }
   }
 
-  return Object.freeze({ remember, read });
+  return Object.freeze({
+    remember,
+    read
+  });
 }
 
 async function runCommand(command, args = [], options = {}) {

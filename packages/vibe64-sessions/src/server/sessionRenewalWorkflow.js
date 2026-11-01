@@ -616,7 +616,10 @@ function createRenewalWorkflow({
     return state;
   }
 
-  return Object.freeze({ generateDraft, resumeConfirmedRenewal });
+  return Object.freeze({
+    generateDraft,
+    resumeConfirmedRenewal
+  });
 }
 
 export { createRenewalWorkflow };

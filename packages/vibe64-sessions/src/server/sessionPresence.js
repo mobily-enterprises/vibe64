@@ -220,7 +220,10 @@ function createSessionPresenceService({
 
   async function update(input = {}) {
     if (closed) {
-      return Object.freeze({ ok: true, status: "closed" });
+      return Object.freeze({
+        ok: true,
+        status: "closed"
+      });
     }
     const presence = assertPresenceInput(input);
     const key = presenceKey(presence);

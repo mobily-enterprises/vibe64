@@ -395,7 +395,10 @@ function createRenewalSuccessorSession({
     return successor;
   }
 
-  return Object.freeze({ assertSuccessorCanonicalState, cleanupRenewalSuccessor });
+  return Object.freeze({
+    assertSuccessorCanonicalState,
+    cleanupRenewalSuccessor
+  });
 }
 
 export { assertSuccessorSource, createRenewalSuccessorSession, ensureSuccessorDiscarding };
