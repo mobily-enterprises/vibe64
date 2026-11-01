@@ -42,6 +42,10 @@ import {
 /** @typedef {import("./types.js").SessionArchivePreparation} SessionArchivePreparation */
 /** @typedef {import("./types.js").RenewalActorResolver} RenewalActorResolver */
 
+// Each runtime's core slot registration, released at its shutdown. A feature's outputs hold only its declared
+// capabilities, so the release is kept beside the sessions service it belongs to.
+const slotReleases = new WeakMap();
+
 const Vibe64SessionsFeature = defineFeature({
   id: "vibe64.sessions",
   domain: "vibe64-sessions",
@@ -111,7 +115,7 @@ const Vibe64SessionsFeature = defineFeature({
       sourceEditor,
       terminals
     });
-    registerApprovalCountReader(countWaitingMainChatApprovals);
+    slotReleases.set(sessions, registerApprovalCountReader(countWaitingMainChatApprovals));
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
     project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
     registerRoutes(http);
@@ -139,6 +143,7 @@ const Vibe64SessionsFeature = defineFeature({
    */
   async shutdown({ terminals }, { outputs }) {
     const sessions = outputs.sessions;
+    slotReleases.get(sessions)();
     const operations = [
       Promise.resolve(sessions.closeSessionRenewalWork()),
       Promise.resolve(sessions.closeSessionPresence()),
