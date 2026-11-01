@@ -12,6 +12,8 @@
 // reader that fails is reported and counts as Develop. Without a registered
 // reader (no Learning on this host) there is no mode and nothing is limited.
 
+import { doNothing } from "../shared/doNothing.js";
+
 const LEARNING_MODE_PROJECT_CODE = "vibe64_learning_mode_project";
 const LEARNING_MODE_PROJECT_MESSAGE = "You're in Learn mode. Press L to go back to your projects.";
 const PRACTICE_PROJECT_MODE_MESSAGE = "This is a practice project. Press L to switch to Learn.";
@@ -23,22 +25,25 @@ const DEVELOP_MODE = Object.freeze({
 });
 
 let learningModeReader = null;
-let learningModeReadFailure = null;
+let learningModeReadFailure = doNothing;
 const requestModes = new WeakMap();
 
 /**
- * Returns the unregister function. null also clears the reader, which hosts'
- * existing test cleanup still relies on.
+ * Returns the unregister function. null clears the reader.
+ * @param {Function | null} reader
+ * @param {object} [options]
+ * @param {(error: unknown) => void} [options.onReadFailure]
  */
 // readable-check: allow module-registry - cycle: vibe64.training requires vibe64.project, whose request gate reads it
-function registerLearningModeReader(reader, { onReadFailure = null } = {}) {
+function registerLearningModeReader(reader, options = {}) {
+  const { onReadFailure = doNothing } = options;
   if (reader !== null && typeof reader !== "function") throw new TypeError("Learning mode needs its Training reader.");
   learningModeReader = reader;
-  learningModeReadFailure = typeof onReadFailure === "function" ? onReadFailure : null;
+  learningModeReadFailure = onReadFailure;
   return () => {
     if (reader && learningModeReader === reader) {
       learningModeReader = null;
-      learningModeReadFailure = null;
+      learningModeReadFailure = doNothing;
     }
   };
 }
@@ -64,7 +69,7 @@ async function readLearningModeFor(actor = null, options = {}) {
       practiceSlug: String(value?.practiceSlug || "")
     });
   } catch (error) {
-    learningModeReadFailure?.(error);
+    learningModeReadFailure(error);
   }
   if (thread === "learn" || thread === "develop") mode = Object.freeze({ ...mode, on: thread === "learn" });
   if (request && typeof request === "object") requestModes.set(request, mode);

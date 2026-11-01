@@ -43,7 +43,7 @@ function learnThreadLearnerKey(actor = null) {
 /**
  * One releaser per process; the returned function unregisters it.
  */
-// readable-check: allow module-registry - cycle: vibe64.colleague requires vibe64.core, whose Learn threads it releases
+// readable-check: allow module-registry - optional operation: vibe64.colleague registers it when composed; vibe64.training's learning space releases Learn threads through it
 function registerLearnThreadReleaser(releaser) {
   if (typeof releaser !== "function") throw new TypeError("A Learn thread releaser must be a function.");
   learnThreadReleaser = releaser;

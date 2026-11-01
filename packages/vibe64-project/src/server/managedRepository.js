@@ -75,8 +75,7 @@ function createManagedProjectRepositoryService({
         }
       };
     } catch (error) {
-      // readable-check: allow method-probe - optional operation: a project context without record discarding keeps the record
-      if (created && typeof projectContext.discardWorkspaceProjectRecord === "function") {
+      if (created) {
         await projectContext.discardWorkspaceProjectRecord({
           slug
         });

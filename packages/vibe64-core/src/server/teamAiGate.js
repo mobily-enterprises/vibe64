@@ -13,7 +13,7 @@ const TEAM_AI_REQUIRED_CODE = "vibe64_team_ai_required";
 
 let readiness = null;
 
-// readable-check: allow module-registry - cycle: vibe64.accounts requires vibe64.core, whose project gate reads it
+// readable-check: allow module-registry - cycle: vibe64.accounts requires vibe64.project, whose routes run the project gate that reads it
 function registerTeamAiReadiness(reader) {
   if (typeof reader !== "function") throw new TypeError("Team AI readiness needs its reader.");
   readiness = reader;

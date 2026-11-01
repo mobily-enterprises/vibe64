@@ -237,7 +237,7 @@ test("a Vibe64 route's project scope must match its path", () => {
   assert.throws(() => project.serviceRoute("GET", "/status", {}, () => ({ ok: true })),
     /\/api\/app\/:slug\/vibe64\/status is not project-scoped, so it must not be under \/api\/app\/:slug/u);
   assert.equal(app.registeredRoutes.length, 0);
-  assert.throws(() => vibe64RouteHttp({}), /requires runtime\.http with router\.register/u);
+  assert.equal(Object.isFrozen(vibe64RouteHttp(app.http).router), true);
 });
 
 test("Vibe64 routes refuse requests that are not from this computer before running anything", async () => {

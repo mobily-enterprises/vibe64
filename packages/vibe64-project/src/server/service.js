@@ -224,8 +224,6 @@ function createService({
    * learning space, outside the catalogue that listProjects reads.
    */
   async function listPracticeProjectSlugs() {
-    // readable-check: allow method-probe - optional operation: a project context without a learning space lists no practice projects
-    if (typeof projectContext.listLearningSpaceProjects !== "function") return [];
     return (await projectContext.listLearningSpaceProjects()).map(project => project.slug);
   }
 

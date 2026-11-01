@@ -16,6 +16,7 @@ import { assertTeamAiAllowsProject } from "./teamAiGate.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionPolicyExecution} ActionPolicyExecution */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {import("./types.js").StudioProjectContext} StudioProjectContext */
 
 function actionContextError(code, message, statusCode = 403) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -160,7 +161,7 @@ const vibe64ActionPolicy = Object.freeze({
  * context contributor. Both callers are re-authorized for every execution.
  * @param {ActionCatalogue} actions
  * @param {object} options
- * @param {ReturnType<typeof getStudioProjectContext>} [options.projectContext]
+ * @param {StudioProjectContext} [options.projectContext]
  * @param {(request: { request: any, context: object }) => Promise<object | null> | object | null} options.resolveUser
  * @param {(request: object) => Promise<unknown> | unknown} options.authorizeProject
  * @param {"all" | "learning-only"} [options.admissionScope]

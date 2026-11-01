@@ -1935,11 +1935,17 @@ function delay(timeoutMs) {
 }
 
 function explicitProjectContext(targetRoot) {
+  const noTargetRoot = () => "";
   return {
     projectCatalogEnabled: false,
     selectedProject: { slug: "project" },
     selectionSource: "explicit",
-    targetRoot
+    targetRoot,
+    projectRecordPathForTarget: noTargetRoot,
+    projectRuntimeRootForTarget: noTargetRoot,
+    projectSessionSourceRootForTarget: noTargetRoot,
+    sourceConfigRootForTarget: noTargetRoot,
+    sourceRootForTarget: noTargetRoot
   };
 }
 

@@ -96,10 +96,7 @@ function createProjectSelection({ logger, projectContext }) {
     if (!target) {
       return "";
     }
-    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
-    return typeof projectContext.sourceRootForTarget === "function"
-      ? projectContext.sourceRootForTarget(target)
-      : "";
+    return projectContext.sourceRootForTarget(target);
   }
 
   function selectedSourceConfigRoot() {
@@ -125,11 +122,7 @@ function createProjectSelection({ logger, projectContext }) {
     if (!target) {
       return "";
     }
-    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
-    if (typeof projectContext.projectRuntimeRootForTarget === "function") {
-      return projectContext.projectRuntimeRootForTarget(target);
-    }
-    return "";
+    return projectContext.projectRuntimeRootForTarget(target);
   }
 
   function selectedSessionSourceRoot() {
@@ -138,10 +131,7 @@ function createProjectSelection({ logger, projectContext }) {
       return requestRoot;
     }
     const target = selectedTargetRoot();
-    // readable-check: allow method-probe - optional operation: a project context without per-target roots has none
-    return target && typeof projectContext.projectSessionSourceRootForTarget === "function"
-      ? projectContext.projectSessionSourceRootForTarget(target)
-      : "";
+    return target ? projectContext.projectSessionSourceRootForTarget(target) : "";
   }
 
   function sessionStore() {

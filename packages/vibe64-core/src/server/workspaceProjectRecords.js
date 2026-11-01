@@ -30,7 +30,7 @@ import {
 // Sessions registers how many main-chat messages wait for the owner's approval.
 let approvalCountReader = null;
 
-// readable-check: allow module-registry - cycle: vibe64.sessions requires vibe64.core, whose project list shows the count
+// readable-check: allow module-registry - cycle: vibe64.sessions requires vibe64.project, whose project list shows the count
 function registerApprovalCountReader(reader) {
   if (typeof reader !== "function") throw new TypeError("An approval count reader must be a function.");
   approvalCountReader = reader;

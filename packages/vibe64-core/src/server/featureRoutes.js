@@ -27,8 +27,7 @@ import {
 // route runs. Ordinary product operations belong to named actions: input,
 // business access and execution must be shared by HTTP and automation. Keep
 // serviceRoute for transport adapters (streams, multipart, sockets), not a
-// second operation. Conversation dispatch parity is exercised in
-// vibe64ConversationActionDispatch.
+// second operation.
 const PROJECT_API_BASE = resolveScopedApiBasePath({ routeBase: VIBE64_PROJECT_ROUTE_BASE, strictParams: false });
 
 /**
@@ -39,18 +38,23 @@ const PROJECT_API_BASE = resolveScopedApiBasePath({ routeBase: VIBE64_PROJECT_RO
  * @param {object} [options]
  * @param {string[]} [options.tags]
  */
-function vibe64RouteHttp(http, { tags = [] } = {}) {
-  // readable-check: allow method-probe - test asserts error: an HTTP runtime without router.register() is refused
-  if (!http?.router || typeof http.router.register !== "function") {
-    throw new Error("vibe64RouteHttp requires runtime.http with router.register().");
+function vibe64RouteHttp(http, options = {}) {
+  const { tags = [] } = options;
+
+  /**
+   * Registers one route with the scope's tags and only the options the router reads.
+   * @param {string} method
+   * @param {string} path
+   * @param {object} routeDefinition
+   * @param {Function} handler
+   */
+  function register(method, path, routeDefinition, handler) {
+    return http.router.register(method, path, routeOptions(routeDefinition, tags), handler);
   }
-  return {
-    router: {
-      register(method, path, options, handler) {
-        return http.router.register(method, path, routeOptions(options, tags), handler);
-      }
-    }
-  };
+
+  return Object.freeze({
+    router: Object.freeze({ register })
+  });
 }
 
 function routeOptions({ actionId, body, bodyLimit, meta = {}, params, query, summary, surface = "" }, tags) {

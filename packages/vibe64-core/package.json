@@ -9,7 +9,6 @@
     "./server/Vibe64ActionPolicyProvider": "./src/server/Vibe64ActionPolicyProvider.js",
     "./server/stateUpgradeFiles": "./src/server/stateUpgradeFiles.js",
     "./server/stateUpgrades": "./src/server/stateUpgrades.js",
-    "./server": "./src/server/index.js",
     "./server/types": "./src/server/types.js",
     "./server/atomicFile": "./src/server/atomicFile.js",
     "./server/core": "./src/server/core.js",
