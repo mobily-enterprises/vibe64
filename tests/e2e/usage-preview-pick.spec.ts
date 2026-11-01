@@ -2,9 +2,8 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 import { injectLaunchPreviewBridge } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
+import { buildCallIndex, buildSnapshotIndex } from "../../packages/vibe64-system-graph/src/server/usageIndex.js";
 import {
-  buildCallIndex,
-  buildSnapshotIndex,
   readCallsWeb,
   readEntries,
   readFunction,
