@@ -498,6 +498,7 @@ async function controllerHarness({
         providers: catalogProviders
       };
     },
+    async publishConversation() {},
     async publishSessionChanged(...args) {
       publishedSessionChanges.push(args);
       await onSessionChanged?.(...args);

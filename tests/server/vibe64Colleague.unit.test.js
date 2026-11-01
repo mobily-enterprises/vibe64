@@ -4373,6 +4373,7 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   const oldSelection = { ...selection, engineId: "claude", modelProviderId: "anthropic" };
   const context = { sessionId: scopeId, assistantScope: scope, assistantSelection: oldSelection };
   const producer = createClaudeConversationHost({ env: host.env, command: () => host.commands.claude,
+    publishConversation: async () => {},
     credentialHome: { home: host.env.HOME }, systemRoot: root,
     project: { createRuntime: () => assert.fail("A retained scoped producer cannot borrow a development session") },
     accountStatus: async () => ({ loggedIn: true, authMethod: "claude.ai", email: await readFile(host.env.TEST_ACCOUNT, "utf8") }),

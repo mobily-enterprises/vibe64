@@ -18,6 +18,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("./types.js").OpenCodeConversationEvents} OpenCodeConversationEvents */
 /** @typedef {import("./types.js").OpenCodeConversationPresentation} OpenCodeConversationPresentation */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -333,6 +334,15 @@ async function openMainConversation(conversationRuntime, context, prepareInput, 
   });
 }
 
+/**
+ * Publishes a Main conversation event to the application, then to the conversation runtime.
+ * @param {(sessionId: string) => string} namespaceForSession
+ * @param {PublishSessionChanged} publishApplicationSessionChanged
+ * @param {PublishNativeConversation} publishConversation
+ * @param {string} sessionId
+ * @param {object} event
+ * @param {object} [applicationEvent] the application's copy, when it differs from the conversation's
+ */
 async function publishMainConversationEvent(
   namespaceForSession,
   publishApplicationSessionChanged,
@@ -342,7 +352,7 @@ async function publishMainConversationEvent(
   applicationEvent = event
 ) {
   await publishApplicationSessionChanged(sessionId, applicationEvent);
-  if (publishConversation) await publishConversation({ namespace: namespaceForSession(sessionId), sessionId, event });
+  await publishConversation({ namespace: namespaceForSession(sessionId), sessionId, event });
 }
 
 /**
