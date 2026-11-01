@@ -7,6 +7,7 @@ import {
   operatorCliCommand
 } from "@local/vibe64-execution/server";
 import {
+  codexAppServerControlsLog,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexAppServerRuntimeHost
@@ -156,7 +157,7 @@ function createServiceAssistant({
         executionMode: "", executionRoot: "", workdir: "", project: {}, session: {},
         terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env })), userKey: "" };
       options.runtimeDir ||= codexAppServerRuntimeDir(options);
-      return { ...codexAppServerRuntimeHost(options), options };
+      return { ...codexAppServerRuntimeHost(options), log: codexAppServerControlsLog(logger), options };
     }
 
     return Object.freeze({

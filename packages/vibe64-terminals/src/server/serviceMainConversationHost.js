@@ -43,7 +43,7 @@ function realtimeDebugEnabled(env = {}) {
  * @param {ServiceAssistant} dependencies.assistant
  * @param {ActionCatalogue | null} dependencies.actions
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {SessionConversations} dependencies.sessionConversations

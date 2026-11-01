@@ -49,7 +49,7 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
  * @param {ServiceAgentConversations} dependencies.agentConversations
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {WorkspaceSetupRunner} dependencies.workspaceSetup

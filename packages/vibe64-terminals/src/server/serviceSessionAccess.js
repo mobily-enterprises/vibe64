@@ -88,7 +88,7 @@ function openProjectRuntimeRecords(listed = {}) {
  * How the service's parts reach a session: its runtime context, the main agent write lock, the open
  * project runtime, terminal session publication, and the hidden renewal write.
  * @param {object} dependencies
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  */

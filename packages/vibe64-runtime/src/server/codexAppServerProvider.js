@@ -27,6 +27,8 @@ import { fileURLToPath } from "node:url";
 import { isPlainObject } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
 import {
   CODEX_AUTH_RECONNECTING_CODE,
   CODEX_AUTH_RECONNECTING_MESSAGE,
@@ -464,17 +466,23 @@ function codexAppServerRuntimeHost(options = {}) {
       runtimesHash: codexAppServerEffectiveRuntimesHash(options)
     }
   };
-  return {
-    runtime, parameters, credentials, execution, configuration,
-    log: (event, fields, { threadId, environment = {}, connectionGeneration }) => logOperationalEvent(options.logger,
-      ["recovery_failed", "settings_failed"].includes(event) ? "warn" : "info", {
-        component: "vibe64.codex_controls", event: `vibe64.codex_controls.${event}`,
-        threadId, sessionId: environment.VIBE64_AGENT_SESSION_COMMAND_SESSION_ID || "",
-        generations: Object.fromEntries(Object.entries(environment).filter(([key, value]) =>
-          key.endsWith("_COMMAND_GENERATION") && /^[0-9a-f-]{36}$/iu.test(value))),
-        connectionGeneration, ...fields
-      }, "Codex managed controls changed.")
-  };
+  return { runtime, parameters, credentials, execution, configuration };
+}
+
+/**
+ * How a Codex native host records its managed control changes: a failed
+ * recovery or settings change at warn, everything else at info.
+ * @param {RuntimeLogger} logger
+ */
+function codexAppServerControlsLog(logger) {
+  return (event, fields, { threadId, environment = {}, connectionGeneration }) => logOperationalEvent(logger,
+    ["recovery_failed", "settings_failed"].includes(event) ? "warn" : "info", {
+      component: "vibe64.codex_controls", event: `vibe64.codex_controls.${event}`,
+      threadId, sessionId: environment.VIBE64_AGENT_SESSION_COMMAND_SESSION_ID || "",
+      generations: Object.fromEntries(Object.entries(environment).filter(([key, value]) =>
+        key.endsWith("_COMMAND_GENERATION") && /^[0-9a-f-]{36}$/iu.test(value))),
+      connectionGeneration, ...fields
+    }, "Codex managed controls changed.");
 }
 
 async function ensureCodexAppServerRuntime(options = {}) {
@@ -539,6 +547,7 @@ export {
   codexAppServerHelperHomeDir,
   codexAppServerHelperWorkspaceDir,
   codexAppServerMetadataIsLive,
+  codexAppServerControlsLog,
   codexAppServerRequestIsInvalid,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,

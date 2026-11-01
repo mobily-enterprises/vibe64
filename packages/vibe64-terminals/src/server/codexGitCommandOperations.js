@@ -3,6 +3,9 @@
 import { USER_CREDENTIAL_SCOPE, normalizeText } from "@local/vibe64-execution/server";
 import { logOperationalEvent, sanitizeLogText } from "@local/vibe64-core/server/logging";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+/** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
+
 const CODEX_GIT_COMMAND_TIMEOUT_MS = 30_000;
 const CODEX_LOCAL_GIT_OPERATIONS = new Set([
   "add",
@@ -281,16 +284,25 @@ async function readGithubToken({
   };
 }
 
-// Session-work writes run as the workspace service. Where each person has their
-// own OS account (the user credential scope), the commit author's Git name and
-// email are read as that person, in their tool home, every time a write that
-// creates commits starts, so a name saved in Account applies to the next Save.
-// Elsewhere Vibe64 runs as the person and the command env reads their Git
-// config itself. Git exits 1 when no name or email is set: the commit then
-// carries a stand-in named after the person. A read that fails (a timeout on a
-// busy host, any other error) uses that person's last answered read since the
-// server started, so load neither fails the Save nor records a stand-in for
-// someone whose name Git has; with no answered read yet, the write is refused.
+/**
+ * Session-work writes run as the workspace service. Where each person has their
+ * own OS account (the user credential scope), the commit author's Git name and
+ * email are read as that person, in their tool home, every time a write that
+ * creates commits starts, so a name saved in Account applies to the next Save.
+ * Elsewhere Vibe64 runs as the person and the command env reads their Git
+ * config itself. Git exits 1 when no name or email is set: the commit then
+ * carries a stand-in named after the person. A read that fails (a timeout on a
+ * busy host, any other error) uses that person's last answered read since the
+ * server started, so load neither fails the Save nor records a stand-in for
+ * someone whose name Git has; with no answered read yet, the write is refused.
+ * @param {object} request
+ * @param {object} [request.actor]
+ * @param {Map<string, object>} request.answeredAuthors
+ * @param {RunVibe64Command} request.gatewayCommandRunner
+ * @param {RuntimeLogger} request.logger
+ * @param {object} [request.session]
+ * @param {object} [request.toolHome]
+ */
 async function commitAuthorOptions({
   actor = {},
   answeredAuthors,
@@ -298,7 +310,7 @@ async function commitAuthorOptions({
   logger,
   session = {},
   toolHome = {}
-} = {}) {
+}) {
   const credentialRoot = normalizeText(toolHome.toolHomeSource);
   if (toolHome.ok === false || toolHome.credentialScope !== USER_CREDENTIAL_SCOPE || !credentialRoot) {
     return { ok: true, options: {} };
@@ -360,13 +372,18 @@ async function commitAuthorOptions({
   return { ok: true, options };
 }
 
+/**
+ * @param {RuntimeLogger} logger
+ * @param {object} result
+ * @param {object} fields
+ */
 function logGitCommandResult(logger, result = {}, fields = {}) {
   const ok = result.ok !== false && Number(result.exitCode || 0) === 0;
   const args = Array.isArray(fields.args) ? fields.args : [];
   const stdoutTail = ok ? "" : commandOutputTail(commandOutput({ stdout: result.stdout, outputEncoding: result.outputEncoding }));
   const stderrTail = ok ? "" : commandOutputTail(commandOutput({ stderr: result.stderr, outputEncoding: result.outputEncoding }));
   const outputTail = ok ? "" : commandOutputTail(commandOutput(result));
-  return logOperationalEvent(logger, ok ? "info" : "warn", {
+  logOperationalEvent(logger, ok ? "info" : "warn", {
     code: result.code || "",
     command: normalizeText(fields.command),
     commandKind: normalizeText(fields.command),

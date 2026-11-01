@@ -1,7 +1,16 @@
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
-// Each account or AI connection change leaves one operational line with its
-// duration: completion at info, refusal or failure at warn with its cause.
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
+/**
+ * Each account or AI connection change leaves one operational line with its
+ * duration: completion at info, refusal or failure at warn with its cause.
+ * @param {RuntimeLogger} logger
+ * @param {string} operation
+ * @param {object} fields
+ * @param {object} result
+ * @param {number} [startedAt]
+ */
 function logAccountChange(logger, operation = "", fields = {}, result, startedAt = Date.now()) {
   const failed = result?.ok === false;
   const failures = Array.isArray(result?.failed)
@@ -21,7 +30,13 @@ function logAccountChange(logger, operation = "", fields = {}, result, startedAt
   }, failed ? "Vibe64 account change failed" : "Vibe64 account change completed");
 }
 
-// Runs one change and logs it once it settles; a thrown failure is logged and rethrown.
+/**
+ * Runs one change and logs it once it settles; a thrown failure is logged and rethrown.
+ * @param {RuntimeLogger} logger
+ * @param {string} operation
+ * @param {object} fields
+ * @param {() => Promise<object>} work
+ */
 async function runLoggedAccountChange(logger, operation, fields, work) {
   const startedAt = Date.now();
   try {

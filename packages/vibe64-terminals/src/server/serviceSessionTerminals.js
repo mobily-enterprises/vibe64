@@ -138,7 +138,7 @@ function sessionTerminalAdmissionFailure(sessionId = "", kind = "agent") {
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  * @param {CodexSessionRegistration} dependencies.codex
  * @param {RuntimeEnv} dependencies.env
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {OutputTargetTerminalController} dependencies.outputTarget
  * @param {PreviewDiagnosticRecorder} dependencies.previewDiagnostics
  * @param {ProjectService} dependencies.projectService

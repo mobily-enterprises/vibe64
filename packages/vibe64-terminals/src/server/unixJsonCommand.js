@@ -7,6 +7,27 @@ import { normalizeText } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64ErrorResponse, vibe64StatusCode } from "@local/vibe64-core/server/serverResponses";
 
+/** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
+/** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
+/** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
+/**
+ * The command service a session's control server answers for; its logger
+ * records the control lifecycle.
+ * @typedef {AgentDatabaseCommandService | AgentEnvCommandService | AgentPreviewCommandService | AgentSessionCommandService} SessionCommandService
+ */
+/**
+ * One session's control server and the credentials its agent received.
+ * @typedef {object} SessionCommandServerEntry
+ * @property {SessionCommandService} commandService
+ * @property {string} generationId
+ * @property {string} sessionId
+ * @property {string} socketPath
+ * @property {string} token
+ * @property {import("node:http").Server} [server]
+ * @property {boolean} [readyReported]
+ */
+
 const controlListeners = new Set();
 
 function subscribeUnixCommandControlChanges(listener) {
@@ -14,6 +35,11 @@ function subscribeUnixCommandControlChanges(listener) {
   return () => controlListeners.delete(listener);
 }
 
+/**
+ * @param {SessionCommandServerEntry} entry
+ * @param {string} reason
+ * @param {string} [receivedGeneration]
+ */
 function reportUnixCommandControlChange(entry, reason, receivedGeneration = "") {
   const event = { socketPath: entry.socketPath, sessionId: entry.sessionId,
     generationId: entry.generationId, reason };
@@ -70,7 +96,15 @@ async function unixCommandSocketIsPresent(socketPath = "") {
   }
 }
 
-async function unixJsonCommandServerIsHealthy(entry = {}, {
+/**
+ * @param {SessionCommandServerEntry} entry
+ * @param {object} [probe]
+ * @param {string} [probe.healthPath]
+ * @param {string} [probe.sessionId]
+ * @param {string} [probe.socketPath]
+ * @param {number} [probe.timeoutMs]
+ */
+async function unixJsonCommandServerIsHealthy(entry, {
   healthPath = "",
   sessionId = "",
   socketPath = "",
@@ -244,6 +278,11 @@ function createSessionCommandServers({
     return unixJsonCommandServerIsHealthy(entry, { healthPath, sessionId, socketPath, timeoutMs: healthTimeoutMs });
   }
 
+  /**
+   * @param {SessionCommandService} commandService
+   * @param {string} sessionId
+   * @param {string} socketPath
+   */
   async function prepare(commandService, sessionId, socketPath) {
     const existing = servers.get(socketPath);
     if (existing?.commandService === commandService && existing.sessionId === sessionId &&
@@ -272,10 +311,16 @@ function createSessionCommandServers({
     return entry;
   }
 
-  // Returns the session's live server on socketPath, starting a new one with
-  // fresh credentials when none is healthy. Preparations of one socket run
-  // one at a time.
-  async function ensure({ commandService, sessionId = "", socketPath = "" } = {}) {
+  /**
+   * Returns the session's live server on socketPath, starting a new one with
+   * fresh credentials when none is healthy. Preparations of one socket run
+   * one at a time.
+   * @param {object} request
+   * @param {SessionCommandService} request.commandService
+   * @param {string} [request.sessionId]
+   * @param {string} [request.socketPath]
+   */
+  async function ensure({ commandService, sessionId = "", socketPath = "" }) {
     const normalizedSessionId = normalizeText(sessionId);
     for (let pending = preparations.get(socketPath); pending; pending = preparations.get(socketPath)) {
       await pending.catch(() => null);

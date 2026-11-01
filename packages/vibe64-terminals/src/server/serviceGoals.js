@@ -58,7 +58,7 @@ const goalStopRequestFor = session => {
  * @param {ServiceAssistantPreparation} dependencies.assistantPreparation
  * @param {ActionCatalogue | null} dependencies.actions
  * @param {AssistantRouting} dependencies.assistantRouting
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
  * @param {ReadRoutingConfiguration} dependencies.readRoutingConfiguration

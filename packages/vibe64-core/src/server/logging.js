@@ -213,18 +213,14 @@ function operationalLogFields(fields = {}) {
 }
 
 /**
- * @param {RuntimeLogger | null} logger
- * @param {string} [level]
- * @param {object} [fields]
- * @param {string} [message]
+ * Writes one redacted operational line.
+ * @param {RuntimeLogger} logger
+ * @param {"debug" | "info" | "warn" | "error"} level
+ * @param {object} fields
+ * @param {string} message
  */
-function logOperationalEvent(logger, level = "info", fields = {}, message = "") {
-  const log = logger?.[level];
-  if (typeof log !== "function") {
-    return false;
-  }
-  log.call(logger, operationalLogFields(fields), message);
-  return true;
+function logOperationalEvent(logger, level, fields, message) {
+  logger[level](operationalLogFields(fields), message);
 }
 
 export {

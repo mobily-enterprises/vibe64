@@ -7,6 +7,8 @@ import {
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { record } from "./record.js";
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
 function renewalPredecessorTerminalCleanupContext(session = {}, {
   renewalId = "",
   runtime = null
@@ -116,9 +118,17 @@ async function closeTerminalControllerForSession({
   }
 }
 
-// Every step runs even after an earlier one fails, so one helper whose cleanup
-// cannot finish never leaves the session's services, AI or commands running.
-// The failure then names each step that failed, keeping a single step's fields.
+/**
+ * Every step runs even after an earlier one fails, so one helper whose cleanup
+ * cannot finish never leaves the session's services, AI or commands running.
+ * The failure then names each step that failed, keeping a single step's fields.
+ * @param {string} sessionId
+ * @param {Array<object>} controllers
+ * @param {object} options
+ * @param {object} [options.controllerOptions]
+ * @param {string} [options.eventPrefix]
+ * @param {RuntimeLogger} options.logger
+ */
 async function closeTerminalControllersForSession(sessionId = "", controllers = [], {
   controllerOptions = {},
   eventPrefix = "server.terminals.closeSessionTerminals",

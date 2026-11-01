@@ -24,9 +24,14 @@ import {
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {typeof import("@local/vibe64-core/server/sessionUiSyncState").readSessionUiSyncStateForSession} ReadSessionUiSyncState */
 
+/**
+ * @param {RuntimeLogger} logger
+ * @param {object} result
+ * @param {object} fields
+ */
 function logPreviewCommandResult(logger, result = {}, fields = {}) {
   const ok = result.ok !== false && Number(result.exitCode || 0) === 0;
-  return logOperationalEvent(logger, ok ? "info" : "warn", {
+  logOperationalEvent(logger, ok ? "info" : "warn", {
     code: result.code || "",
     command: trimmedText(fields.command),
     component: "vibe64.agent_preview_command",

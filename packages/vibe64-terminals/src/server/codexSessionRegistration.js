@@ -91,6 +91,7 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import {
+  codexAppServerControlsLog,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexAppServerRuntimeHost,
@@ -288,7 +289,7 @@ function createCodexSessionRegistration({
     providerFactory: codexAppServerProviderFactory === createCodexAppServerAgentProvider
       ? null : codexAppServerProviderFactory,
     prepareNativeHost(parameters) {
-      const host = codexAppServerRuntimeHost(parameters);
+      const host = { ...codexAppServerRuntimeHost(parameters), log: codexAppServerControlsLog(logger) };
       host.parameters.runtimeDir ||= codexAppServerRuntimeDir(parameters);
       return host;
     }

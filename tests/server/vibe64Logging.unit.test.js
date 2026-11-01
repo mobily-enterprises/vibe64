@@ -227,7 +227,7 @@ test("streaming operation output bounds an unterminated line without splitting k
 
 test("Vibe64 operational log helper writes redacted structured payloads", () => {
   const calls = [];
-  const ok = logOperationalEvent({
+  logOperationalEvent({
     warn(data, message) {
       calls.push({
         data,
@@ -240,7 +240,6 @@ test("Vibe64 operational log helper writes redacted structured payloads", () => 
     apiToken: "secret"
   }, "Deployment event.");
 
-  assert.equal(ok, true);
   assert.deepEqual(calls, [
     {
       data: {
@@ -251,7 +250,7 @@ test("Vibe64 operational log helper writes redacted structured payloads", () => 
       message: "Deployment event."
     }
   ]);
-  assert.equal(logOperationalEvent(null, "warn", {}, "Skipped."), false);
+  assert.throws(() => logOperationalEvent(null, "warn", {}, "Skipped."), TypeError);
 });
 
 test("Vibe64 debug streams are opt-in", () => {

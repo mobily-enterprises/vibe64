@@ -33,7 +33,7 @@ import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceWorkspacePreparation} dependencies.workspacePreparation
  * @param {InspectAgentSkills} dependencies.inspectAgentSkills
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
  * @param {SessionAgentManager} dependencies.sessionAgent
  */

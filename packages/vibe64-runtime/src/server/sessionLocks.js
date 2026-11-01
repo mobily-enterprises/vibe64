@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import {
   vibe64Error,
   isPlainObject,
@@ -15,6 +14,8 @@ import {
   readProcessStart
 } from "@local/vibe64-execution/server";
 import { writeJsonFile } from "./sessionFiles.js";
+
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 // Cross-process session locks: a lock is a directory under sessionsRoot/.locks
 // whose owner.json names the holding process, so abandoned locks can be
@@ -192,15 +193,26 @@ async function quarantineAbandonedSessionLock(lockPath = "") {
   return true;
 }
 
+/**
+ * @param {object} sessionPaths
+ * @param {string} [lockName]
+ * @param {object} options
+ * @param {boolean} [options.expectedRefusal]
+ * @param {RuntimeLogger} options.logger
+ * @param {((operation: string) => unknown) | null} [options.onRejected]
+ * @param {string} [options.operation]
+ * @param {string} [options.processPlatform]
+ * @param {number} [options.waitMs]
+ */
 async function acquireSessionLock(sessionPaths, lockName = "", {
   // The caller retries or falls back, so a refusal is routine information.
   expectedRefusal = false,
-  logger = silentLogger,
+  logger,
   onRejected = null,
   operation = "",
   processPlatform = process.platform,
   waitMs = 0
-} = {}) {
+}) {
   const lockPath = sessionLockPath(sessionPaths, lockName);
   const lockRoot = path.dirname(lockPath);
   const processIdentity = await currentSessionLockProcessIdentity(processPlatform);
