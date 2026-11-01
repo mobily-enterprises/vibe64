@@ -5,6 +5,7 @@ import test from "node:test";
 import { ActionProvider } from "@jskit-ai/kernel/server/actions";
 import { Vibe64ActionPolicyProvider } from "@local/vibe64-core/server/Vibe64ActionPolicyProvider";
 import { EventProvider } from "@jskit-ai/kernel/server/runtime";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createCapabilityRuntime, defineProvider } from "@jskit-ai/kernel/shared/capabilities";
 import { RealtimeProvider } from "@jskit-ai/realtime/server/RealtimeProvider";
 import { io as connect } from "socket.io-client";
@@ -97,6 +98,7 @@ test("a Preview change made outside any request reaches the session's viewers", 
   const sessionId = `preview-${crypto.randomUUID()}`;
   const store = { async mutateSession(_id, update) { return update(); }, async writeMetadataValue() {} };
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, sessionAdmissionFailure: () => null,
+    ensureWorkspacePrepared: async () => ({ ok: true }),
     // Outside a request, the project service still knows the project it holds.
     projectService: { currentProjectSlug: () => "alpha", async createRuntime() { return { store }; } },
     publishSessionChanged: createSessionChangedPublisher(events),
@@ -113,6 +115,7 @@ test("a browser test's change made outside any request reaches the session's vie
   const { createAgentPreviewCommandService } = await import("../../packages/vibe64-terminals/src/server/agentPreviewCommand.js");
   const service = createAgentPreviewCommandService({
     launchTarget: { previewTestRunAdmission: () => null },
+    logger: silentLogger,
     projectService: {},
     publishSessionChanged: createSessionChangedPublisher(events)
   });
