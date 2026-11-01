@@ -15,6 +15,7 @@ import { countWaitingMainChatApprovals } from "./mainChatApprovals.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createRepositoryUpdates } from "./repositoryUpdates.js";
 import { createService } from "./service.js";
+import { stopSessionWork } from "./sessionShutdown.js";
 import { SESSION_ARCHIVE_PREPARATION_TOKEN, assertArchivePreparation, prepareNothingForArchive } from "./sessionArchive.js";
 import {
   SESSION_RENEWAL_ACTOR_RESOLVER_TOKEN,
@@ -138,40 +139,13 @@ const Vibe64SessionsFeature = defineFeature({
     }
   },
   /**
+   * Setup always registers the approval count reader, so shutdown always releases it.
    * @param {{ terminals: TerminalsService }} capabilities
    * @param {{ outputs: { sessions: SessionsService } }} context
    */
   async shutdown({ terminals }, { outputs }) {
-    const sessions = outputs.sessions;
-    // readable-check: allow optional-call - optional operation: sessions outputs that setup did not build registered no reader
-    slotReleases.get(sessions)?.();
-    const operations = [
-      Promise.resolve(sessions.closeSessionRenewalWork()),
-      Promise.resolve(sessions.closeSessionPresence()),
-      sessions.stopResumingInterruptedWork(),
-      Promise.resolve().then(async () => {
-        const result = await terminals.invalidateAgentRuntimes({
-          reason: "server-shutdown"
-        });
-        if (result?.ok === false) {
-          const error = new Error("Assistant runtime shutdown did not complete successfully.");
-          error.code = "vibe64_agent_runtime_shutdown_failed";
-          error.details = result;
-          throw error;
-        }
-        return result;
-      })
-    ];
-    const results = await Promise.allSettled(operations);
-    const failures = results.flatMap((result) => (
-      result.status === "rejected" ? [result.reason] : []
-    ));
-    if (failures.length > 0) {
-      throw new AggregateError(
-        failures,
-        "Session renewal work did not stop cleanly."
-      );
-    }
+    slotReleases.get(outputs.sessions)();
+    await stopSessionWork({ sessions: outputs.sessions, terminals });
   }
 });
 

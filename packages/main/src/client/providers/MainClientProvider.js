@@ -28,8 +28,9 @@ const MainClientProvider = defineProvider({
       attachVibe64RealtimeQueryRecovery({ queryClient, realtime })
     );
   },
+  // Setup always attaches the query recovery, so shutdown always detaches it.
   shutdown({ realtime }) {
-    detachQueryRecoveryByRealtime.get(realtime)?.();
+    detachQueryRecoveryByRealtime.get(realtime)();
     detachQueryRecoveryByRealtime.delete(realtime);
   }
 });

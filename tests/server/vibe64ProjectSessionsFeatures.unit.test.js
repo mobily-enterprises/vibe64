@@ -9,6 +9,7 @@ import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createSessionStartupRecovery } from "../../packages/vibe64-sessions/src/server/sessionStartupRecovery.js";
+import { stopSessionWork } from "../../packages/vibe64-sessions/src/server/sessionShutdown.js";
 
 import {
   Vibe64ProjectFeature
@@ -287,6 +288,13 @@ test("project and sessions register routes and captured actions during setup", a
   });
   assert.equal(resumed.ok, true, JSON.stringify(resumed));
   assert.deepEqual(configurationReads, [{ sessionId: "session-1" }]);
+
+  // Shutdown releases the approval count reader setup registered, then stops the sessions' work.
+  const invalidations = [];
+  await Vibe64SessionsFeature.shutdown({
+    terminals: { async invalidateAgentRuntimes(input) { invalidations.push(input); return { ok: true }; } }
+  }, { outputs: sessionOutputs });
+  assert.deepEqual(invalidations, [{ reason: "server-shutdown" }]);
 });
 
 test("sessions start standalone renewal recovery without blocking Feature boot", async () => {
@@ -319,7 +327,8 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(resumeCalls, 1);
   let shutdownSettled = false;
-  const shutdown = Vibe64SessionsFeature.shutdown({
+  const shutdown = stopSessionWork({
+    sessions,
     terminals: {
       async invalidateAgentRuntimes(input) {
         assert.deepEqual(input, { reason: "server-shutdown" });
@@ -328,8 +337,6 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
         return { ok: true };
       }
     }
-  }, {
-    outputs: { sessions }
   }).then(() => {
     shutdownSettled = true;
   });
@@ -444,9 +451,10 @@ test("startup recovery's session changes reach the recovered project's pages", a
 });
 
 function recoveryShutdown(sessions) {
-  return Vibe64SessionsFeature.shutdown({
+  return stopSessionWork({
+    sessions,
     terminals: { async invalidateAgentRuntimes() { return { ok: true }; } }
-  }, { outputs: { sessions } });
+  });
 }
 
 test("startup recovery resumes renewals after archive recovery fails and logs each failure with its session", async () => {
@@ -508,19 +516,16 @@ test("sessions reject a fulfilled but unsuccessful agent-runtime shutdown", asyn
     ok: false
   };
   await assert.rejects(
-    () => Vibe64SessionsFeature.shutdown({
+    () => stopSessionWork({
+      sessions: withStartupRecovery({
+        async closeSessionRenewalWork() {},
+        closeSessionPresence() {}
+      }),
       terminals: {
         async invalidateAgentRuntimes(input) {
           assert.deepEqual(input, { reason: "server-shutdown" });
           return invalidation;
         }
-      }
-    }, {
-      outputs: {
-        sessions: withStartupRecovery({
-          async closeSessionRenewalWork() {},
-          closeSessionPresence() {}
-        })
       }
     }),
     (error) => (

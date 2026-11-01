@@ -470,35 +470,37 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
 });
 
 test("terminals feature owns attachment and dormancy startup and shutdown", async () => {
-  const attachmentRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-terminals-provider-attachments-"));
   let closeCalls = 0;
   let cleanupCalls = 0;
-  const terminals = {
-    async close() {
-      closeCalls += 1;
-    },
-    async closeDormantProjectRuntimes() {
-      cleanupCalls += 1;
-      return { closedCount: 0, failed: [], ok: true, projectCount: 0 };
-    }
-  };
-  const feature = createVibe64TerminalsFeature();
-  const dependencies = {
-    env: {
-      VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot
-    },
-    logger: {
-      error() {},
-      info() {},
-      warn() {}
-    }
-  };
-  try {
-    await feature.boot(dependencies, { outputs: { terminals }, profile: "test" });
-    await feature.shutdown(dependencies, { outputs: { terminals }, profile: "test" });
-  } finally {
-    await rm(attachmentRoot, { force: true, recursive: true });
-  }
+  await withTemporaryRoot(async (root) => {
+    const attachmentRoot = path.join(root, "attachments");
+    // Boot's idle-project sweep lists the projects; shutdown closes every project's services.
+    const project = {
+      async listProjects() {
+        cleanupCalls += 1;
+        return { ok: true, projects: [] };
+      },
+      async listPracticeProjectSlugs() { return []; }
+    };
+    const projectServices = {
+      beginClose() {},
+      async close() {},
+      async closeAll() { closeCalls += 1; },
+      async ensure() {},
+      opened() {}
+    };
+    const dependencies = featureDependencies({
+      env: {
+        VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot,
+        [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services")
+      },
+      project
+    });
+    const feature = createVibe64TerminalsFeature({ projectServices });
+    const outputs = await feature.setup(dependencies, { profile: "test" });
+    await feature.boot(dependencies, { outputs, profile: "test" });
+    await feature.shutdown(dependencies, { outputs, profile: "test" });
+  });
 
   assert.equal(cleanupCalls, 1);
   assert.equal(closeCalls, 1);

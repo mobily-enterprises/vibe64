@@ -112,6 +112,11 @@ function createVibe64TerminalsFeature({
         projectContext: getStudioProjectContext(),
         terminals
       });
+      // The idle-project sweep's timer runs from setup, so shutdown stops it even when boot never ran.
+      cleanupSchedules.set(terminals, startProjectRuntimeDormancyCleanupSchedule({
+        logger,
+        serviceFactory: () => terminals
+      }));
       fastify.addHook("onReady", async () => {
         // Every feature's boot hooks, including execution and sign-in configuration,
         // have completed before recovery can admit work.
@@ -132,24 +137,18 @@ function createVibe64TerminalsFeature({
     /**
      * @param {object} capabilities
      * @param {RuntimeEnv} capabilities.env
-     * @param {RuntimeLogger} capabilities.logger
      * @param {{ outputs: { terminals: TerminalsService } }} context
      */
-    async boot({ env, logger }, { outputs }) {
+    async boot({ env }, { outputs }) {
       await prepareCodexAttachmentStorage({ env });
-      const schedule = startProjectRuntimeDormancyCleanupSchedule({
-        logger,
-        serviceFactory: () => outputs.terminals
-      });
-      cleanupSchedules.set(outputs.terminals, schedule);
-      await schedule.runNow();
+      await cleanupSchedules.get(outputs.terminals).runNow();
     },
     /**
      * @param {object} _dependencies
      * @param {{ outputs: { terminals: TerminalsService } }} context
      */
     async shutdown(_dependencies, { outputs }) {
-      cleanupSchedules.get(outputs.terminals)?.stop();
+      cleanupSchedules.get(outputs.terminals).stop();
       cleanupSchedules.delete(outputs.terminals);
       await outputs.terminals.close();
     }
