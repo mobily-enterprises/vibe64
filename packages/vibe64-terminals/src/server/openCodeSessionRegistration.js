@@ -53,6 +53,7 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 
+/** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
@@ -80,7 +81,7 @@ import {
  * @param {typeof prepareAgentSessionCommandEnvironment} [dependencies.prepareCommandEnvironment]
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {(event: object) => unknown} dependencies.publishConversation
+ * @param {PublishNativeConversation} dependencies.publishConversation
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
  * @param {typeof readOpenCodeCatalog} [dependencies.readCatalogCommand]
  * @param {typeof readOpenCodeZenModelIds} [dependencies.readZenModelsCommand]

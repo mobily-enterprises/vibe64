@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
@@ -125,7 +126,9 @@ function createSessionNaming({
     const context = captureProjectRequestContext();
     const pending = runWithProjectRequestContext(context, () => nameFirstMessage(agentContext, messageId))
       .catch((error) => {
-        logger.warn({
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64.session_naming",
+          event: "vibe64.session_naming.failed",
           error: error.message,
           sessionId: agentContext.session.sessionId
         }, "Session naming failed.");

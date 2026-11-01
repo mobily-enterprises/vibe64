@@ -9,7 +9,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
-// Retain the existing persisted task identity; checkpoints now cover every
+// The persisted task identity keeps its Codex name; checkpoints cover every
 // session assistant, including writable temporary conversations.
 const SESSION_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
 
@@ -21,7 +21,7 @@ async function checkpointSessionTurn({
   outerTurnId,
   outcome = "completed",
   timestamp = new Date().toISOString(),
-  publishSessionChanged = async () => {},
+  publishSessionChanged,
   createCheckpoint = createGitTurnCheckpointAsOneJob
 }) {
   if (!outerTurnId) return { ok: true, processed: false, reason: "outer_turn_unavailable" };

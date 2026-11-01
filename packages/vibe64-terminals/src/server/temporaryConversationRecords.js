@@ -9,6 +9,7 @@ import { sessionConversationKey } from "./assistantChangeover.js";
 import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
 import { temporaryConversationNamespace } from "./temporaryConversationRules.js";
 
+/** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 /**
@@ -16,7 +17,7 @@ import { temporaryConversationNamespace } from "./temporaryConversationRules.js"
  * events, the context its assistant sees, its native bindings and the modes it offers.
  * @param {object} dependencies
  * @param {SessionAgentManager} dependencies.sessionAgent
- * @param {(event: object) => unknown} dependencies.publishConversation
+ * @param {PublishNativeConversation} dependencies.publishConversation
  */
 function createTemporaryConversationRecords({ sessionAgent, publishConversation }) {
   async function recordFor(ctx, conversationId) {

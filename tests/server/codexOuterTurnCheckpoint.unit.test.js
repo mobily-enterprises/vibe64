@@ -15,6 +15,7 @@ test("checkpoint confirmation projects the original outcome after failure cleanu
   } };
   const result = await checkpointSessionTurn({ runtime, session, sessionId: session.sessionId,
     outerTurnId: "failed-claude-turn", outcome: "interrupted", project: { async readCurrentProject() { return {}; } },
+    publishSessionChanged: async () => {},
     createCheckpoint: async () => ({ ok: true, created: false, commit: "a".repeat(40), outcome: "failed" }) });
   assert.equal(result.ok, true);
   assert.equal(task.status, "ready");
@@ -61,7 +62,7 @@ test("shared turn checkpoints preserve outcome and expose recovery failures", as
     store: { writeBackgroundTaskEvent: async (_id, _task, { patch }) => { changes.push(patch); return patch; } }
   };
   const input = { runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
-    outerTurnId: "claude:conversation:turn", outcome: "interrupted" };
+    outerTurnId: "claude:conversation:turn", outcome: "interrupted", publishSessionChanged: async () => {} };
   let received;
   const created = await checkpointSessionTurn({ ...input, createCheckpoint: async (value) => {
     received = value;

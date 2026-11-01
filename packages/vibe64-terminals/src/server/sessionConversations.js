@@ -3,6 +3,10 @@ import { createTemporaryConversationTurns } from "./temporaryConversationTurns.j
 import { createTemporaryConversationLifecycle } from "./temporaryConversationLifecycle.js";
 import { createTemporaryConversationInteraction } from "./temporaryConversationInteraction.js";
 
+/** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
+/** @typedef {import("./types.js").PrepareAssistantSelection} PrepareAssistantSelection */
+/** @typedef {import("./types.js").PrepareAgentSkills} PrepareAgentSkills */
+/** @typedef {import("./types.js").RunMainAgentWrite} RunMainAgentWrite */
 /** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
@@ -20,14 +24,14 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {ActionCatalogue | null} dependencies.actions
  * @param {SessionAttachments} dependencies.attachments
- * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>, lock: object) => Promise<object>} dependencies.runAgentWrite
+ * @param {RunMainAgentWrite} dependencies.runAgentWrite
  * @param {number} dependencies.routingWaitMs
  * @param {ReadSessionContext} dependencies.readSessionContext
- * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareAgentSkills
+ * @param {PrepareAgentSkills} dependencies.prepareAgentSkills
  * @param {string} dependencies.systemRoot
- * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection
+ * @param {PrepareAssistantSelection} dependencies.prepareSelection
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {(event: object) => unknown} dependencies.publishConversation
+ * @param {PublishNativeConversation} dependencies.publishConversation
  * @param {number} [dependencies.temporarySaveDelayMs]
  * @param {number} [dependencies.temporaryCompletionAttempts]
  * @param {number} [dependencies.temporaryCompletionRetryMs]

@@ -17,6 +17,9 @@ import {
 import { requireSuccess, routingRequest, presentation } from "./temporaryConversationRules.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
+/** @typedef {import("./types.js").PrepareAssistantSelection} PrepareAssistantSelection */
+/** @typedef {import("./types.js").PrepareAgentSkills} PrepareAgentSkills */
+/** @typedef {import("./types.js").RunMainAgentWrite} RunMainAgentWrite */
 /** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
@@ -33,12 +36,12 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {SessionAttachments} dependencies.attachments
- * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>, lock: object) => Promise<object>} dependencies.runAgentWrite
+ * @param {RunMainAgentWrite} dependencies.runAgentWrite
  * @param {number} dependencies.routingWaitMs
  * @param {ReadSessionContext} dependencies.readSessionContext
- * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareAgentSkills
+ * @param {PrepareAgentSkills} dependencies.prepareAgentSkills
  * @param {string} dependencies.systemRoot
- * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection
+ * @param {PrepareAssistantSelection} dependencies.prepareSelection
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {number} dependencies.temporarySaveDelayMs
  */
