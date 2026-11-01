@@ -46,4 +46,6 @@ async function runAgentSpecCli(args = [], {
   return 0;
 }
 
-export { VIBE64_AGENT_SPECS, runAgentSpecCli };
+const __testables = Object.freeze({ VIBE64_AGENT_SPECS });
+
+export { runAgentSpecCli, __testables };

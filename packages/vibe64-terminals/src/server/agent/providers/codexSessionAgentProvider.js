@@ -685,8 +685,9 @@ function createCodexSessionAgentProvider({
   });
 }
 
+const __testables = Object.freeze({ CODEX_HELPER_PROFILE_REVISION, resolveCodexHelperExecutionProfile });
+
 export {
-  CODEX_HELPER_PROFILE_REVISION,
   createCodexSessionAgentProvider,
-  resolveCodexHelperExecutionProfile
+  __testables
 };

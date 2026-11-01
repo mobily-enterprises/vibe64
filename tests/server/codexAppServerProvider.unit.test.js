@@ -16,29 +16,25 @@ import {
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
+  __testables,
   CODEX_APP_SERVER_EXECUTION_MODES,
-  CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
-  CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
-  CODEX_APP_SERVER_TRANSPORT,
   CodexAppServerAgentProvider,
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
-  codexAppServerHelperHomeDir,
-  codexAppServerHelperWorkspaceDir,
   codexAppServerMetadataIsLive,
-  codexAppServerRequestIsInvalid,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexCliResumeCommand,
-  codexTurnInput,
   currentCodexAccountIdentitySignature,
   ensureCodexAppServerRuntime,
   readCodexSelectedAccountAccess,
   startCodexAppServerProcess,
   stopCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { codexAppServerRequestIsInvalid, codexTurnInput } from "@jskit-ai/assistant-core/server/codex-provider";
+import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION, CODEX_APP_SERVER_TRANSPORT, codexAppServerHelperHomeDir, codexAppServerHelperWorkspaceDir } from "@jskit-ai/assistant-core/server/codex-process";
 import {
   codexAttachmentHostRoot,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
@@ -58,6 +54,8 @@ import {
 import {
   genesisCommandShimDirectory
 } from "@local/vibe64-genesis/server";
+
+const { CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE } = __testables;
 
 // These tests describe a host with runtime packs and a shared project group.
 const RUNTIME_PACK_ROOT = mkdtempSync(path.join(os.tmpdir(), "vibe64-codex-packs-"));

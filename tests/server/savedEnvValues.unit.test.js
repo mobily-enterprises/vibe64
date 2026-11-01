@@ -6,8 +6,10 @@ import test from "node:test";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { NO_SAVED_ENV_VALUES, assertSavedEnvValues } from "../../packages/vibe64-project/src/server/savedEnvValues.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
-import { runtimeConfigViewRecord } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
+import { __testables } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+const { runtimeConfigViewRecord } = __testables;
 
 function project(targetRoot, options = {}) {
   return createService({ logger: console,

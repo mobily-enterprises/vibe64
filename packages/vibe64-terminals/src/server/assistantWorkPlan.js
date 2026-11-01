@@ -469,12 +469,14 @@ function planProgressUpgradeChanges(files) {
   return Array.from(changes, ([name, text]) => ({ name, text }));
 }
 
+const __testables = Object.freeze({ workPlanPath });
+
 export {
   readWorkPlan,
   readWorkPlanPage,
   readWorkPlanHistory,
   manageWorkPlan,
-  workPlanPath,
   workPlanInstructions,
-  planProgressUpgradeChanges
+  planProgressUpgradeChanges,
+  __testables
 };

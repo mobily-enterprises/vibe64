@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  __testables,
   applicationDatabaseToolEnvironment,
-  normalizeDatabaseToolEnvironment,
   normalizeResourceEnvironment,
   resourceSemanticIsSecret
 } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
+
+const { normalizeDatabaseToolEnvironment } = __testables;
 
 test("secret resource semantics: fixed connection secrets and camelCase secret suffixes", () => {
   const secret = [

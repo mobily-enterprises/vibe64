@@ -229,4 +229,6 @@ function publishingTool(operation) {
 
 const PUBLISHING_ASSISTANT_OPERATIONS = Object.freeze(Object.keys(descriptions));
 
-export { PUBLISHING_ASSISTANT_OPERATIONS, publishingTool };
+const __testables = Object.freeze({ PUBLISHING_ASSISTANT_OPERATIONS });
+
+export { publishingTool, __testables };

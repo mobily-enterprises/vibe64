@@ -197,12 +197,14 @@ async function writeShell({ shellRoot, files, webRoot, iconFile }) {
   await cp(iconFile, path.join(shellRoot, "icon.png"), { errorOnExist: true, force: false });
 }
 
+const __testables = Object.freeze({ shellFiles });
+
 export {
   SHELL_SPEC_FILE,
   generateShell,
   nativePlugins,
   nextVersionCode,
   readContentDependencies,
-  shellFiles,
-  writeShell
+  writeShell,
+  __testables
 };

@@ -12,12 +12,16 @@ import {
   resolveGithubHomeForStoredActor
 } from "../../packages/vibe64-execution/src/server/credentialHomes.js";
 import {
-  resolveRequestGithubTerminalToolHome,
+  __testables,
+  resolveRequestGithubTerminalToolHome
+} from "../../packages/studio-terminal-core/src/server/terminalOwnership.js";
+
+const {
   terminalOwnerForGithubActor,
   terminalOwnerFromMetadata,
   terminalOwnerMatchesRequest,
   terminalOwnerMetadata
-} from "../../packages/studio-terminal-core/src/server/terminalOwnership.js";
+} = __testables;
 
 test("GitHub local actor uses the daemon runner real home", () => {
   const result = resolveGithubHomeForActor({

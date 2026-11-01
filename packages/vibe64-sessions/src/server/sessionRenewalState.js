@@ -602,6 +602,8 @@ function publicSessionRenewalState(value = null) {
   };
 }
 
+const __testables = Object.freeze({ normalizeSessionRenewalState, renewalHandoverHash });
+
 export {
   SESSION_RENEWAL_KIND,
   SESSION_RENEWAL_MAINTENANCE_STEP,
@@ -613,11 +615,10 @@ export {
   createSessionRenewalDraft,
   createSessionRenewalState,
   mutateSessionRenewalState,
-  normalizeSessionRenewalState,
   publicSessionRenewalState,
   readSessionRenewalState,
-  renewalHandoverHash,
   renewalHandoverText,
   renewalOperationKey,
-  writeSessionRenewalState
+  writeSessionRenewalState,
+  __testables
 };

@@ -462,22 +462,23 @@ function vibe64AssistantConversationKey(selection = {}) {
     ? `codex/${selection.modelProviderId}` : selection.engineId;
 }
 
+const __testables = Object.freeze({ assertVibe64AssistantSelectionUpdate, VIBE64_ASSISTANT_SELECTION_ERROR_CODES });
+
 export {
   vibe64AssistantConversationKey,
   VIBE64_ASSISTANT_CAPABILITIES_SCHEMA,
   VIBE64_ASSISTANT_CATALOG_REVISION_PATTERN,
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_ENGINE_ID_SET,
-  VIBE64_ASSISTANT_SELECTION_ERROR_CODES,
   VIBE64_ASSISTANT_SELECTION_IDENTITY_FIELDS,
   VIBE64_ASSISTANT_SELECTION_METADATA,
   VIBE64_ASSISTANT_SELECTION_SCHEMA,
   VIBE64_ASSISTANT_TRANSPORT_IDS,
-  assertVibe64AssistantSelectionUpdate,
   defineVibe64AssistantCapabilities,
   defineVibe64AssistantSelection,
   resolveVibe64AssistantSelection,
   sameVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
-  vibe64AssistantSelectionFromMetadata
+  vibe64AssistantSelectionFromMetadata,
+  __testables
 };

@@ -13,10 +13,12 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  GENERATED_ENV_HEADER,
+  __testables,
   materializeProjectEnvironmentFiles,
   projectEnvironmentFilesAreCurrent
 } from "../../packages/vibe64-project/src/server/projectEnvironmentFiles.js";
+
+const { GENERATED_ENV_HEADER } = __testables;
 
 async function temporarySource(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-project-env-"));

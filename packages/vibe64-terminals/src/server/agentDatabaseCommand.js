@@ -349,13 +349,17 @@ async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wra
   };
 }
 
-export {
+const __testables = Object.freeze({
   AGENT_DATABASE_COMMAND_NAME,
   VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV,
-  VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV,
+  VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV
+});
+
+export {
   createAgentDatabaseCommandService,
-  prepareAgentDatabaseCommand
+  prepareAgentDatabaseCommand,
+  __testables
 };

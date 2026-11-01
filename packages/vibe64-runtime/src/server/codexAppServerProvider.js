@@ -2,17 +2,12 @@ import {
   CodexAppServerAgentProvider as SharedCodexAppServerAgentProvider,
   CODEX_APP_SERVER_INVALID_REQUEST_CODE,
   assertCodexAuthPreflightReady as assertNativeCodexAuthPreflightReady,
-  codexAppServerEndpointForTarget, codexAppServerRequestIsInvalid,
-  codexCliResumeCommand as nativeCodexCliResumeCommand, codexTextInput, codexTurnInput, shellQuote
+  codexAppServerEndpointForTarget, codexCliResumeCommand as nativeCodexCliResumeCommand, codexTextInput, shellQuote
 } from "@jskit-ai/assistant-core/server/codex-provider";
 import { createCodexAccountReader } from "@jskit-ai/assistant-core/server/codex-configuration";
 import {
-  CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_RUNTIME_DIR_NAME,
-  CODEX_APP_SERVER_TRANSPORT,
   codexAppServerExecutionMode,
-  codexAppServerHelperHomeDir,
-  codexAppServerHelperWorkspaceDir,
   codexAppServerIsHelper,
   createCodexAppServerRuntime,
   normalizeCodexAppServerTerminalEnv
@@ -557,22 +552,18 @@ function createCodexAppServerAgentProvider(options = {}) {
   return new CodexAppServerAgentProvider(options);
 }
 
+const __testables = Object.freeze({ CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE });
+
 export {
   CODEX_APP_SERVER_EXECUTION_MODES,
   CODEX_APP_SERVER_INVALID_REQUEST_CODE,
-  CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
-  CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
-  CODEX_APP_SERVER_TRANSPORT,
   CodexAppServerAgentProvider,
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
-  codexAppServerHelperHomeDir,
-  codexAppServerHelperWorkspaceDir,
   codexAppServerMetadataIsLive,
   codexAppServerControlsLog,
-  codexAppServerRequestIsInvalid,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexAppServerRuntimeHost,
@@ -580,9 +571,9 @@ export {
   readCodexSelectedAccountAccess,
   codexCliResumeCommand,
   codexTextInput,
-  codexTurnInput,
   createCodexAppServerAgentProvider,
   ensureCodexAppServerRuntime,
   startCodexAppServerProcess,
-  stopCodexAppServerRuntime
+  stopCodexAppServerRuntime,
+  __testables
 };

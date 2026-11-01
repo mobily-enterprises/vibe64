@@ -94,12 +94,14 @@ function closedProjectRuntimeOpenState(filePath = "") {
   };
 }
 
+const __testables = Object.freeze({ projectRuntimeOpenStatePath });
+
 export {
   PROJECT_RUNTIME_OPEN_STATE_FILE,
   PROJECT_RUNTIME_STATE_DIR,
   clearProjectRuntimeOpenState,
-  projectRuntimeOpenStatePath,
   publicProjectRuntimeOpenState,
   readProjectRuntimeOpenState,
-  writeProjectRuntimeOpenState
+  writeProjectRuntimeOpenState,
+  __testables
 };

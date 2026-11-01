@@ -218,10 +218,11 @@ function searchDatabaseSchema(schema = {}, value = "") {
   });
 }
 
+const __testables = Object.freeze({ MAX_DATABASE_SCHEMA_MATCHES, MAX_DATABASE_SCHEMA_RESULT_BYTES });
+
 export {
-  MAX_DATABASE_SCHEMA_MATCHES,
-  MAX_DATABASE_SCHEMA_RESULT_BYTES,
   MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS,
   databaseSchemaSummary,
-  searchDatabaseSchema
+  searchDatabaseSchema,
+  __testables
 };

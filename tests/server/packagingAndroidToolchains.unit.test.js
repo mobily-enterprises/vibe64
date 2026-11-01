@@ -9,15 +9,17 @@ import test from "node:test";
 import { deflateRawSync } from "node:zlib";
 
 import {
+  __testables,
   androidSdkLicence,
   describeAndroidSdk,
-  installAndroidSdk,
-  licenceFromRepository
+  installAndroidSdk
 } from "../../packages/vibe64-packaging/src/server/toolchains/androidSdk.js";
 import { downloadVerified, extractZip } from "../../packages/vibe64-packaging/src/server/toolchains/download.js";
 import { describeJdk, findJdk } from "../../packages/vibe64-packaging/src/server/toolchains/jdk.js";
 import { fakeToolchains } from "./packagingAndroidTestTools.js";
 import { temporaryFolder } from "./packagingRegistryTestTools.js";
+
+const { licenceFromRepository } = __testables;
 
 const LICENCE = "Terms &amp; Conditions\n\n1. You &lt;must&gt; read this.\n";
 const REPOSITORY = `<?xml version="1.0"?><repo><license id="android-sdk-license" type="text">${LICENCE}</license>`

@@ -45,7 +45,7 @@ export function validateColleagueConversationRecord(record, ownerKey) {
 }
 
 /** Explicit offline copy; never called by normal loading or recovery. */
-export async function prepareCopiedColleagueConversation(record, ownerKey, { at }) {
+async function prepareCopiedColleagueConversation(record, ownerKey, { at }) {
   validateColleagueConversationRecord(record, ownerKey);
   if (record.schemaVersion !== 3) throw new Error("Upgrade the parent's Colleague history before copying it.");
   const copy = structuredClone(record);
@@ -81,3 +81,5 @@ export async function prepareCopiedColleagueConversation(record, ownerKey, { at 
   copy.observations = [];
   return copy;
 }
+
+export const __testables = Object.freeze({ prepareCopiedColleagueConversation });

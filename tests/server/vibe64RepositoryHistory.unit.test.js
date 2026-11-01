@@ -7,13 +7,15 @@ import { promisify } from "node:util";
 import test from "node:test";
 
 import {
+  __testables,
   inspectRepositoryHistory,
-  repositoryReadContext,
   repositoryVersionFileDiff,
   repositoryVersionFiles
 } from "../../packages/vibe64-terminals/src/server/repositoryHistory.js";
 import { commandResult } from "../../packages/vibe64-execution/src/server/result.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
+
+const { repositoryReadContext } = __testables;
 
 const execFileAsync = promisify(execFile);
 const identity = {

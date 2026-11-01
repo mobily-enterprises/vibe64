@@ -21,6 +21,7 @@ import {
 } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 
 import {
+  __testables,
   SESSION_RENEWAL_MAINTENANCE_STEP,
   SESSION_RENEWAL_STAGE,
   SESSION_RENEWAL_STATUS,
@@ -29,13 +30,13 @@ import {
   createSessionRenewalDraft,
   createSessionRenewalState,
   mutateSessionRenewalState,
-  normalizeSessionRenewalState,
   publicSessionRenewalState,
   readSessionRenewalState,
-  renewalHandoverHash,
   renewalHandoverText,
   writeSessionRenewalState
 } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
+
+const { normalizeSessionRenewalState, renewalHandoverHash } = __testables;
 
 const AT = "2026-08-24T03:00:00.000Z";
 const execFileAsync = promisify(execFile);

@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  __testables,
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
-  VIBE64_AGENT_EXECUTION_PROFILE_LIMIT_CEILINGS,
-  VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   Vibe64AgentExecutionProfileError,
   defineVibe64AgentExecutionProfileRequest,
   defineVibe64AgentExecutionProfileResolution,
-  vibe64AgentExecutionProfileAuditSnapshot,
-  vibe64AgentProviderSupportsExecutionProfile
+  vibe64AgentExecutionProfileAuditSnapshot
 } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
+
+const {
+  VIBE64_AGENT_EXECUTION_PROFILE_LIMIT_CEILINGS,
+  VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
+  vibe64AgentProviderSupportsExecutionProfile
+} = __testables;
 
 function validResolution(overrides = {}) {
   const {

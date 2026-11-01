@@ -641,6 +641,8 @@ async function verifyOpenCodeApiKey({
   }
 }
 
+const __testables = Object.freeze({ openCodeInlineConfig, safeOpenCodeEnvironment });
+
 export {
   OPENCODE_HELPER_AGENT_ID,
   OPENCODE_HELPER_SUBAGENT_PREFIX,
@@ -649,9 +651,8 @@ export {
   OPENCODE_HOST,
   OPENCODE_READY_TIMEOUT_MS,
   createOpenCodeServerProcess,
-  openCodeInlineConfig,
   readOpenCodeCatalog,
   readOpenCodeZenModelIds,
-  safeOpenCodeEnvironment,
-  verifyOpenCodeApiKey
+  verifyOpenCodeApiKey,
+  __testables
 };

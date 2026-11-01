@@ -227,4 +227,6 @@ function createClaudeConversationAccounts({
   });
 }
 
-export { claudeCapabilities, claudeProviderAccountIdentity, createClaudeConversationAccounts };
+const __testables = Object.freeze({ claudeCapabilities });
+
+export { claudeProviderAccountIdentity, createClaudeConversationAccounts, __testables };

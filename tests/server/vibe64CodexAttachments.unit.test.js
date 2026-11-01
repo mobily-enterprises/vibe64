@@ -2170,7 +2170,7 @@ test("attachment download route streams bytes and restricts inline previews to r
 });
 
 test("practice session attachments keep their project identity with or without a request context", async () => {
-  const { catalogProjectSlugFromTargetRoot, targetRuntimeIdentity } =
+  const { __testables: { catalogProjectSlugFromTargetRoot }, targetRuntimeIdentity } =
     await import("../../packages/vibe64-core/src/server/projectRuntimeIdentity.js");
   const { configureStudioProjectContext } = await import("../../packages/vibe64-core/src/server/studioProjectContext.js");
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-practice-identity-"));

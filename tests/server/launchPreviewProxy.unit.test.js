@@ -21,10 +21,7 @@ import {
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
-import {
-  PREVIEW_PROXY_PORT_END_ENV,
-  PREVIEW_PROXY_PORT_START_ENV
-} from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
+import { __testables } from "../../packages/vibe64-core/src/server/launchPreviewProxyEnv.js";
 import {
   APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
   PREVIEW_IDENTITY_CONTROL_PATH,
@@ -49,6 +46,8 @@ import {
   proxiedLocation,
   stripPreviewTokenQueryParam
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
+
+const { PREVIEW_PROXY_PORT_END_ENV, PREVIEW_PROXY_PORT_START_ENV } = __testables;
 
 const TEST_PREVIEW_IDENTITY_SECRET = "a".repeat(64);
 

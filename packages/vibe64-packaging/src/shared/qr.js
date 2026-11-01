@@ -687,4 +687,6 @@ function qrSvg(text, options = {}) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${extent} ${extent}" shape-rendering="crispEdges" role="img"${title ? ` aria-label="${escapeAttribute(title)}"` : ""}>${label}<rect width="100%" height="100%" fill="${escapeAttribute(light)}"/><path d="${parts.join("")}" fill="${escapeAttribute(dark)}"/></svg>`;
 }
 
-export { qrMatrix, qrSvg };
+const __testables = Object.freeze({ qrMatrix });
+
+export { qrSvg, __testables };

@@ -3,12 +3,15 @@ import { mkdtemp, mkdir, readFile, readdir, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { upgradeAssistantHelpers, upgradeAssistantHelperSession, upgradeAssistantHelperTurn } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
+import { __testables as assistantHelperUpgradeTestables, upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 
-import { codexHelperThreadRecordId, createCodexHelperThreadLedger, defineCodexHelperThreadRecord }
+import { __testables as codexHelperThreadLedgerTestables, createCodexHelperThreadLedger }
   from "../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js";
+
+const { upgradeAssistantHelperSession, upgradeAssistantHelperTurn } = assistantHelperUpgradeTestables;
+const { codexHelperThreadRecordId, defineCodexHelperThreadRecord } = codexHelperThreadLedgerTestables;
 
 const selection = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
   modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "max",

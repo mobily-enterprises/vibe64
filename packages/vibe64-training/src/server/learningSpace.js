@@ -361,4 +361,6 @@ const NO_LEARNING_SPACE = Object.freeze({
   }
 });
 
-export { createTrainingLearningSpace, KEPT_ARCHIVED_PROJECTS, lessonTitle, MAX_ARCHIVES, NO_LEARNING_SPACE };
+const __testables = Object.freeze({ KEPT_ARCHIVED_PROJECTS, MAX_ARCHIVES });
+
+export { createTrainingLearningSpace, lessonTitle, NO_LEARNING_SPACE, __testables };

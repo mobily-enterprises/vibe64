@@ -2009,7 +2009,7 @@ test("a pre-existing normal training-<hex> project still opens and new projects 
 });
 
 test("Learn opens only the learner's practice projects and Develop refuses them, after practice admission", async (t) => {
-  const { registerLearningModeReader, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE } =
+  const { __testables: { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE }, registerLearningModeReader } =
     await import("../../packages/vibe64-core/src/server/learningMode.js");
   t.after(() => registerLearningModeReader(null));
   const learn = { code: "vibe64_learning_mode_project", statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE };

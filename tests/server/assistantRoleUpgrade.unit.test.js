@@ -5,10 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
-import { upgradeAssistantRoles, upgradeAssistantRoleSession, upgradeAssistantRoleTurn } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
+import { __testables, upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
+
+const { upgradeAssistantRoleSession, upgradeAssistantRoleTurn } = __testables;
 
 const exec = promisify(execFile);
 const senior = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource: "explicit" };

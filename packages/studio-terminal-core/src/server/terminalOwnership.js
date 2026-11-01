@@ -209,6 +209,13 @@ function terminalOwnerMatchesRequest(metadata = {}) {
   };
 }
 
+const __testables = Object.freeze({
+  terminalOwnerForGithubActor,
+  terminalOwnerFromMetadata,
+  terminalOwnerMatchesRequest,
+  terminalOwnerMetadata
+});
+
 export {
   TERMINAL_GITHUB_ACTOR_SCOPE_NONE,
   TERMINAL_OWNER_MISMATCH_CODE,
@@ -219,10 +226,7 @@ export {
   terminalAppOwnerMetadata,
   terminalNoGithubActorMetadata,
   terminalOwnerError,
-  terminalOwnerForGithubActor,
   terminalOwnerFromGithubToolHome,
-  terminalOwnerFromMetadata,
-  terminalOwnerMatchesRequest,
-  terminalOwnerMetadata,
-  resolveRequestGithubTerminalToolHome
+  resolveRequestGithubTerminalToolHome,
+  __testables
 };

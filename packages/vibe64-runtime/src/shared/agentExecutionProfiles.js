@@ -412,12 +412,16 @@ function vibe64AgentProviderSupportsExecutionProfile(provider, profileId) {
     provider.executionProfiles.includes(normalizedProfileId);
 }
 
+const __testables = Object.freeze({
+  VIBE64_AGENT_EXECUTION_PROFILE_LIMIT_CEILINGS,
+  VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
+  vibe64AgentProviderSupportsExecutionProfile
+});
+
 export {
   VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
-  VIBE64_AGENT_EXECUTION_PROFILE_LIMIT_CEILINGS,
-  VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   Vibe64AgentExecutionProfileError,
   defineVibe64AgentExecutionProfileRequest,
@@ -425,6 +429,6 @@ export {
   defineVibe64HelperExecutionProfileResolution,
   emitVibe64AgentExecutionProfile,
   vibe64AgentExecutionProfileAuditSnapshot,
-  vibe64AgentProviderSupportsExecutionProfile,
-  vibe64HelperExecutionProfileRequest
+  vibe64HelperExecutionProfileRequest,
+  __testables
 };

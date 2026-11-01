@@ -23,11 +23,10 @@ import {
 import {
   codexAppServerHelperTurnSettings
 } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
-import {
-  CODEX_HELPER_PROFILE_REVISION,
-  resolveCodexHelperExecutionProfile
-} from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
+import { __testables } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+
+const { CODEX_HELPER_PROFILE_REVISION, resolveCodexHelperExecutionProfile } = __testables;
 
 // These adapter units mock the public runtime boundary. The original actual
 // service/runtime/native-owner cases remain in codexTemporaryConversationLifecycle.

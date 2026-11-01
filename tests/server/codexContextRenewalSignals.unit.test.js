@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  codexContextUsageFromNotification,
   recordCodexContextRenewalSignal,
   recordCodexContextUsageSignal
 } from "../../packages/vibe64-terminals/src/server/codexContextRenewalSignals.js";
+import { codexContextUsageFromNotification } from "@jskit-ai/assistant-core/server/codex-events";
 
 function memoryStore(initial = {}) {
   const values = new Map(Object.entries(initial));

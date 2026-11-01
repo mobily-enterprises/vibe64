@@ -583,13 +583,14 @@ async function deleteDatabaseRow({
   return { affectedRows, ok: true };
 }
 
+const __testables = Object.freeze({ databaseValue, normalizeRawResponse });
+
 export {
   cancelDatabaseQuery,
   deleteDatabaseRow,
-  databaseValue,
   executeDatabaseQuery,
   insertDatabaseRow,
   jsonSafeValue,
-  normalizeRawResponse,
-  updateDatabaseCell
+  updateDatabaseCell,
+  __testables
 };

@@ -5,7 +5,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 
-import { qrMatrix, qrSvg } from "../../packages/vibe64-packaging/src/shared/qr.js";
+import { __testables, qrSvg } from "../../packages/vibe64-packaging/src/shared/qr.js";
+
+const { qrMatrix } = __testables;
 
 function fingerprint(modules) {
   return createHash("sha256").update(modules.map((row) => row.map((dark) => (dark ? 1 : 0)).join("")).join("\n")).digest("hex");

@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  VIBE64_ASSISTANT_SELECTION_ERROR_CODES,
-  assertVibe64AssistantSelectionUpdate
-} from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
+import { __testables } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
   defineVibe64AssistantCapabilities,
@@ -14,6 +11,8 @@ import {
   vibe64AssistantSelectionFromMetadata,
   vibe64ProviderPresentation
 } from "@local/vibe64-runtime/shared";
+
+const { VIBE64_ASSISTANT_SELECTION_ERROR_CODES, assertVibe64AssistantSelectionUpdate } = __testables;
 
 const revision = `sha256:${"a".repeat(64)}`;
 

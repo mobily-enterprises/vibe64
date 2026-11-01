@@ -75,10 +75,12 @@ function vibe64ArchitectureLayout(section) {
   };
 }
 
+const __testables = Object.freeze({ parseVibe64ArchitectureLayoutLines });
+
 export {
   ARCHITECTURE_LAYOUT_KINDS,
   VIBE64_ARCHITECTURE_LAYOUT_CONTRACT,
   VIBE64_ARCHITECTURE_LAYOUT_SECTION,
-  parseVibe64ArchitectureLayoutLines,
-  vibe64ArchitectureLayout
+  vibe64ArchitectureLayout,
+  __testables
 };

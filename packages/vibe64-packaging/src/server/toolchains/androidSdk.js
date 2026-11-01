@@ -202,6 +202,8 @@ async function installAndroidSdk({
   return { ...description, licence: { id: licence.id, hash: licence.hash }, commandLineTools: tools.version };
 }
 
+const __testables = Object.freeze({ licenceFromRepository });
+
 export {
   ANDROID_LICENCE_ID,
   ANDROID_REPOSITORY_URL,
@@ -213,6 +215,6 @@ export {
   describeAndroidSdk,
   findAndroidSdk,
   installAndroidSdk,
-  licenceFromRepository,
-  readAcceptance
+  readAcceptance,
+  __testables
 };

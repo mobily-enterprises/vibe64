@@ -5,8 +5,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {
-  buildIntegrationSetupRequest, INTEGRATION_SETUP_PROTOCOL, parseIntegrationSetupResponse, runIntegrationSetupCommand
+  __testables,
+  buildIntegrationSetupRequest, runIntegrationSetupCommand
 } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
+
+const { INTEGRATION_SETUP_PROTOCOL, parseIntegrationSetupResponse } = __testables;
 
 const request = { protocol: INTEGRATION_SETUP_PROTOCOL, requestId: "request-1", operation: "status" };
 const reply = (values = {}) => ({ protocol: request.protocol, requestId: request.requestId, status: "disconnected", ...values });

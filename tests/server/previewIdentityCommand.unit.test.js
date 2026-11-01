@@ -6,10 +6,12 @@ import {
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL as PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "../../packages/vibe64-genesis/src/server/index.js";
 import {
+  __testables,
   createPreviewIdentityCommandRunner,
-  normalizePreviewIdentityCommandResponse,
   previewIdentityCommandRequest
 } from "../../packages/vibe64-terminals/src/server/previewIdentityCommand.js";
+
+const { normalizePreviewIdentityCommandResponse } = __testables;
 
 // The shape @local/vibe64-genesis returns for an Outputs `#### Preview identity`.
 function capability() {

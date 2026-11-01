@@ -200,9 +200,11 @@ async function inspectDatabaseSchema({
   return databaseDialect(connection.engine).inspectSchema({ connection, knex });
 }
 
+const __testables = Object.freeze({ DATABASE_DIALECTS });
+
 export {
-  DATABASE_DIALECTS,
   databaseDialect,
   driverText,
-  inspectDatabaseSchema
+  inspectDatabaseSchema,
+  __testables
 };

@@ -106,8 +106,10 @@ function databaseServerGuide({ kind, family = "", database = "", username = "", 
   };
 }
 
+const __testables = Object.freeze({ testDatabaseNames });
+
 export {
   databaseServerGuide,
   isAdminUser,
-  testDatabaseNames
+  __testables
 };

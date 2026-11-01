@@ -6,7 +6,7 @@ import path from "node:path";
 
 import test from "node:test";
 
-import { readWorkPlan, readWorkPlanPage, manageWorkPlan, workPlanPath } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { __testables, readWorkPlan, readWorkPlanPage, manageWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 
 import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 
@@ -55,6 +55,8 @@ function openCodePair(f) {
 
 
 import { fixture, planDocument, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
+
+const { workPlanPath } = __testables;
 
 test("working plan pages preserve full Unicode text and reject mixing revisions", async (t) => {
   const f = await fixture(t, undefined, { readyPlan: false });

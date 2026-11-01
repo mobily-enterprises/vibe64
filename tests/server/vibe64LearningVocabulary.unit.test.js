@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createLearningVocabulary, declaredLearningVocabulary, lessonAvailable, lessonStepAvailable, lessonStepNeeds,
-  trainingGuideCommand, trainingGuideRequest, trainingPlaceShown } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
+import { __testables, declaredLearningVocabulary, lessonAvailable, lessonStepAvailable, trainingGuideCommand, trainingGuideRequest, trainingPlaceShown } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 import { beatNeedsPracticeProject, splitStepBeats } from "../../packages/vibe64-training/src/shared/beats.js";
 import { readLearningFact, registerLearningFact } from "../../packages/vibe64-training/src/server/learningFacts.js";
+
+const { createLearningVocabulary, lessonStepNeeds } = __testables;
 
 // A host's own studio and project places, registered by composition.
 const host = {

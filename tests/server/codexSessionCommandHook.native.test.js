@@ -11,7 +11,7 @@ import { gunzipSync, zstdDecompressSync } from "node:zlib";
 import { CodexAppServerJsonRpcClient } from "@jskit-ai/assistant-core/testing/native-codex";
 
 import { CodexAppServerAgentProvider, startCodexAppServerProcess } from "@local/vibe64-runtime/server/codexAppServerProvider";
-import { codexAppServerProjectHookTrustConfig } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import { codexAppServerProjectHookTrustConfig } from "@jskit-ai/assistant-core/server/codex-configuration";
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
 
 test("native Codex code-mode commands enter the session execution wrapper", {

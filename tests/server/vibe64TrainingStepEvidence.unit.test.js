@@ -5,7 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { EVIDENCE_LIMITS, createTrainingStepEvidence } from "../../packages/vibe64-training/src/server/stepEvidence.js";
+import { __testables, createTrainingStepEvidence } from "../../packages/vibe64-training/src/server/stepEvidence.js";
+
+const { EVIDENCE_LIMITS } = __testables;
 
 // The review evidence owner over a real Git clone through real managed
 // execution; only the project runtime and the conversation action are stubs.

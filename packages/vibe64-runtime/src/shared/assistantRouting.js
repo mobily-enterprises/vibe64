@@ -540,6 +540,8 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
   };
 }
 
+const __testables = Object.freeze({ MAIN_CHAT_PURPOSES });
+
 export {
   ASSISTANT_MODES,
   ASSISTANT_FIX_MODE,
@@ -550,7 +552,6 @@ export {
   ASSISTANT_ROLE_DEFAULT_FOLLOWS,
   ASSISTANT_PURPOSE_ROLES,
   ASSISTANT_ROLE_PURPOSES,
-  MAIN_CHAT_PURPOSES,
   ROUTING_REASONS,
   assistantRoutingPreferences,
   assistantRoutingAutomation,
@@ -584,5 +585,6 @@ export {
   assistantWorkflowMessageIds,
   routingError,
   upgradeRequired,
-  withArticle
+  withArticle,
+  __testables
 };

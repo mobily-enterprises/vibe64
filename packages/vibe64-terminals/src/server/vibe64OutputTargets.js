@@ -421,6 +421,8 @@ function outputResultsMarkerLineSeen(output = "", marker = "") {
     .some((line) => line.trim() === marker);
 }
 
+const __testables = Object.freeze({ vibe64OutputCommand, vibe64OutputTargetView, vibe64WebOutputDescriptor });
+
 export {
   OUTPUT_RESULTS_READY_MARKER_PREFIX,
   VIBE64_RUNTIME_PACKS,
@@ -432,8 +434,6 @@ export {
   listVibe64OutputTargets,
   normalizedRuntimeRequirements,
   outputResultsMarkerLineSeen,
-  vibe64OutputCommand,
-  vibe64OutputTargetView,
   vibe64RuntimePacks,
-  vibe64WebOutputDescriptor
+  __testables
 };

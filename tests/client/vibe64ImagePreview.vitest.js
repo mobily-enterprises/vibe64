@@ -3,7 +3,9 @@ import { createRenderer, nextTick, ssrContextKey } from "vue";
 import { afterEach, describe, expect, it } from "vitest";
 
 import Vibe64ImagePreview from "../../src/components/studio/files/Vibe64ImagePreview.vue";
-import { FILE_PREVIEW_IMAGE_TYPES, filePreviewImageType } from "../../packages/vibe64-source-editor/src/shared/fileTypes.js";
+import { __testables, filePreviewImageType } from "../../packages/vibe64-source-editor/src/shared/fileTypes.js";
+
+const { FILE_PREVIEW_IMAGE_TYPES } = __testables;
 
 let app;
 function mount(props) {

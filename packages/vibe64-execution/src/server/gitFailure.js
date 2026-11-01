@@ -59,8 +59,10 @@ function gitFailureError(result = {}, options = {}) {
   });
 }
 
+const __testables = Object.freeze({ describeGitFailure });
+
 export {
-  describeGitFailure,
   gitFailureError,
-  gitInstallCommand
+  gitInstallCommand,
+  __testables
 };

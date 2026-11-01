@@ -6,8 +6,10 @@ import test from "node:test";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { codexProviderPaths, createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { codexAppServerRuntimeDir } from "@local/vibe64-runtime/server/codexAppServerProvider";
-import { codexAppServerIdentityMetadata, codexAppServerThreadIdForSession, codexAppServerThreadSettings, codexAppServerTurnSettings } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
+import { __testables, codexAppServerThreadIdForSession, codexAppServerThreadSettings, codexAppServerTurnSettings } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 import { serializeVibe64AssistantSelection, vibe64AssistantConversationKey } from "@local/vibe64-runtime/shared";
+
+const { codexAppServerIdentityMetadata } = __testables;
 
 function selection(modelProviderId, modelId) {
   return { engineId: "codex", agentId: "codex", modelProviderId, modelId, variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };

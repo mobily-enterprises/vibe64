@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  __testables,
   createStreamingLogSanitizer,
   createVibe64FastifyLoggerOptions,
   logOperationalEvent,
-  operationalLogFields,
   sanitizeLogText
 } from "../../packages/vibe64-core/src/server/logging.js";
 import {
@@ -16,6 +16,8 @@ import {
 import {
   vibe64SessionDebugLog
 } from "../../packages/vibe64-runtime/src/server/sessionDebugLogCore.js";
+
+const { operationalLogFields } = __testables;
 
 test("Vibe64 log level defaults to warnings and honors env overrides", () => {
   assert.deepEqual(resolveVibe64LogLevel({

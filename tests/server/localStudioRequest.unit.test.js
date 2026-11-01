@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  __testables,
   LOCALHOST_CHECK_BYPASS_ENV,
-  LOCALHOST_CHECK_BYPASS_FLAG,
   isLocalhostCheckBypassEnabled,
   stripLocalhostCheckBypassArgs
 } from "@local/vibe64-core/server/localhostCheckBypass";
@@ -12,6 +12,8 @@ import {
   isTrustedStudioWebSocketRequest,
   originMatchesRequest
 } from "@local/vibe64-core/server/localStudioRequest";
+
+const { LOCALHOST_CHECK_BYPASS_FLAG } = __testables;
 
 test("localhost check bypass is enabled by the explicit CLI flag", () => {
   assert.equal(isLocalhostCheckBypassEnabled({

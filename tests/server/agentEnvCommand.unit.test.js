@@ -7,9 +7,7 @@ import test from "node:test";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 
 import {
-  AGENT_ENV_COMMAND_NAME,
-  VIBE64_AGENT_ENV_COMMAND_CONTRACT_VERSION_ENV,
-  VIBE64_AGENT_ENV_COMMAND_SESSION_ID_ENV,
+  __testables,
   VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV,
   createAgentEnvCommandService,
@@ -18,6 +16,12 @@ import {
 import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS } from "../../packages/vibe64-terminals/src/server/savedEnvValueLinks.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+const {
+  AGENT_ENV_COMMAND_NAME,
+  VIBE64_AGENT_ENV_COMMAND_CONTRACT_VERSION_ENV,
+  VIBE64_AGENT_ENV_COMMAND_SESSION_ID_ENV
+} = __testables;
 
 function createProjectService({
   records = []

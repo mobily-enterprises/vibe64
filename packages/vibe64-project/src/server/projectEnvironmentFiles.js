@@ -278,12 +278,14 @@ async function materializeProjectEnvironmentFiles({
   return results;
 }
 
+const __testables = Object.freeze({ GENERATED_ENV_HEADER });
+
 export {
   assertProjectionPath,
-  GENERATED_ENV_HEADER,
   generatedDotenv,
   generatedDotenvIsOwned,
   materializeProjectEnvironmentFiles,
   projectEnvironmentFilesAreCurrent,
-  writeManagedGitExcludes
+  writeManagedGitExcludes,
+  __testables
 };

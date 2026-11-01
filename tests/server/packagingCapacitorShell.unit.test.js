@@ -9,19 +9,23 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
-import { generateShell, nativePlugins, nextVersionCode, shellFiles } from "../../packages/vibe64-packaging/src/server/packers/capacitor/generateShell.js";
-import { inspectPng, iconProblems } from "../../packages/vibe64-packaging/src/server/packers/capacitor/icons.js";
-import {
+import { __testables as generateShellTestables, generateShell, nativePlugins, nextVersionCode } from "../../packages/vibe64-packaging/src/server/packers/capacitor/generateShell.js";
+import { __testables as iconsTestables, iconProblems } from "../../packages/vibe64-packaging/src/server/packers/capacitor/icons.js";
+import { __testables as shellPatchTestables } from "../../packages/vibe64-packaging/src/server/packers/capacitor/shellPatch.js";
+import { CAPACITOR_SHELL_TEMPLATE } from "../../packages/vibe64-packaging/src/server/packers/capacitor/shellTemplate/index.js";
+import { buildPackage } from "../../packages/vibe64-packaging/src/server/release/buildPackage.js";
+import { canaryFiles, fakeToolchains, lockfile, packagingFor, pngBytes } from "./packagingAndroidTestTools.js";
+import { gitProject, temporaryFolder } from "./packagingRegistryTestTools.js";
+
+const { shellFiles } = generateShellTestables;
+const { inspectPng } = iconsTestables;
+const {
   patchAppBuildGradle,
   patchManifest,
   patchStrings,
   patchWrapperProperties,
   variablesGradle
-} from "../../packages/vibe64-packaging/src/server/packers/capacitor/shellPatch.js";
-import { CAPACITOR_SHELL_TEMPLATE } from "../../packages/vibe64-packaging/src/server/packers/capacitor/shellTemplate/index.js";
-import { buildPackage } from "../../packages/vibe64-packaging/src/server/release/buildPackage.js";
-import { canaryFiles, fakeToolchains, lockfile, packagingFor, pngBytes } from "./packagingAndroidTestTools.js";
-import { gitProject, temporaryFolder } from "./packagingRegistryTestTools.js";
+} = shellPatchTestables;
 
 const run = promisify(execFile);
 const sha = (value) => createHash("sha256").update(value).digest("hex");

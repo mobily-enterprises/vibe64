@@ -12,16 +12,17 @@ import {
 } from "../../packages/vibe64-execution/src/server/index.js";
 
 import {
+  __testables,
   OPENCODE_HELPER_AGENT_ID,
   OPENCODE_EPHEMERAL_AGENT_ID,
   OPENCODE_EXPECTED_VERSION,
   createOpenCodeServerProcess,
-  openCodeInlineConfig,
   readOpenCodeCatalog,
   readOpenCodeZenModelIds,
-  safeOpenCodeEnvironment,
   verifyOpenCodeApiKey
 } from "../../packages/vibe64-terminals/src/server/opencodeServerProcess.js";
+
+const { openCodeInlineConfig, safeOpenCodeEnvironment } = __testables;
 
 const execFile = promisify(execFileCallback);
 

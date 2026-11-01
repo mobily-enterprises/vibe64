@@ -94,9 +94,13 @@ function studioUserStartupScript(commandArgs = ["bash"], options = {}) {
   ].join("\n");
 }
 
-export {
+const __testables = Object.freeze({
   STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV,
   studioMysqlClientConfigSetupLines,
-  studioToolHomeSetupLines,
-  studioUserStartupScript
+  studioToolHomeSetupLines
+});
+
+export {
+  studioUserStartupScript,
+  __testables
 };

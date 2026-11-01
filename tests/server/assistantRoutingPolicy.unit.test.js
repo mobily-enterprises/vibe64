@@ -11,6 +11,7 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { runWithPracticeProjectContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import {
+  __testables,
   assistantModePrompt,
   assistantGoalManagementMessage,
   assistantRoutingPrompt,
@@ -21,7 +22,6 @@ import {
   assistantRoutingSetupFor,
   assistantMainAiChanged,
   ASSISTANT_PURPOSE_ROLES,
-  MAIN_CHAT_PURPOSES,
   assistantRoutingGoalFromMetadata,
   assistantRoutingRequestFromMetadata,
   assistantRoutingRequestForDisplay,
@@ -47,6 +47,8 @@ import { assistantRoutingRequestForMessage } from "../../packages/vibe64-termina
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+
+const { MAIN_CHAT_PURPOSES } = __testables;
 
 const revision = `sha256:${"a".repeat(64)}`;
 function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"], engineId = "codex") {

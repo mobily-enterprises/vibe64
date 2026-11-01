@@ -6,18 +6,18 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
-  CODEX_HELPER_THREAD_LIFECYCLES,
-  codexHelperThreadRecordId,
-  createCodexHelperThreadLedger,
-  defineCodexHelperThreadRecord
+  __testables,
+  createCodexHelperThreadLedger
 } from "../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js";
+import { CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION, CODEX_HELPER_THREAD_LIFECYCLES } from "@jskit-ai/assistant-core/server/codex-turn";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   defineVibe64AgentExecutionProfileResolution,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
+
+const { codexHelperThreadRecordId, defineCodexHelperThreadRecord } = __testables;
 
 function helperProfile() {
   return vibe64AgentExecutionProfileAuditSnapshot(

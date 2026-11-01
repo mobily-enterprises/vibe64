@@ -12,8 +12,7 @@ import {
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
-  WORKSPACE_SETUP_TRANSCRIPT_MAX_LENGTH,
-  WORKSPACE_SETUP_TRANSCRIPT_TRUNCATED_MARKER,
+  __testables,
   workspaceSetupState,
   workspaceSetupStateFromMetadata
 } from "@local/vibe64-runtime/server/workspaceSetupState";
@@ -31,6 +30,8 @@ import {
   sourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+
+const { WORKSPACE_SETUP_TRANSCRIPT_MAX_LENGTH, WORKSPACE_SETUP_TRANSCRIPT_TRUNCATED_MARKER } = __testables;
 
 const execFileAsync = promisify(execFile);
 

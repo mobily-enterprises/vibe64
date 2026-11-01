@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { VIBE64_AGENT_SPECS, runAgentSpecCli } from "../../server/lib/agentSpecCli.js";
+import { __testables as agentSpecCliTestables, runAgentSpecCli } from "../../server/lib/agentSpecCli.js";
 import { DEPLOYMENT_ENTRY_FORMS, parseVibe64DeploymentLines } from "../../packages/vibe64-genesis/src/server/applicationDeployment.js";
-import { ARCHITECTURE_INSPECTOR_FIELDS, parseVibe64ArchitectureInspectionLines } from "../../packages/vibe64-genesis/src/server/architectureInspection.js";
-import { parseVibe64ArchitectureLayoutLines } from "../../packages/vibe64-genesis/src/server/architectureLayout.js";
+import { __testables as architectureInspectionTestables, ARCHITECTURE_INSPECTOR_FIELDS } from "../../packages/vibe64-genesis/src/server/architectureInspection.js";
+import { __testables as architectureLayoutTestables } from "../../packages/vibe64-genesis/src/server/architectureLayout.js";
 import {
   CONNECTED_DEVELOPMENT_ENTRY_FORMS,
   vibe64ConnectedDevelopmentInspection
@@ -17,10 +17,16 @@ import {
   VIBE64_RESOURCE_ESTIMATE_FIELDS,
   parseVibe64ResourceEstimatesLines
 } from "../../packages/vibe64-genesis/src/server/resourceEstimates.js";
-import { SPEC_BY_ERROR_CODE } from "../../packages/vibe64-genesis/src/server/stackOperation.js";
+import { __testables as stackOperationTestables } from "../../packages/vibe64-genesis/src/server/stackOperation.js";
 import { parseVibe64WorkspaceSetupLines } from "../../packages/vibe64-genesis/src/server/workspaceSetup.js";
 import { PREVIEW_APPLICATION_IDENTITY_LIMIT } from "../../packages/vibe64-core/src/server/previewAuth.js";
-import { normalizePreviewIdentityCommandResponse } from "../../packages/vibe64-terminals/src/server/previewIdentityCommand.js";
+import { __testables as previewIdentityCommandTestables } from "../../packages/vibe64-terminals/src/server/previewIdentityCommand.js";
+
+const { VIBE64_AGENT_SPECS } = agentSpecCliTestables;
+const { parseVibe64ArchitectureInspectionLines } = architectureInspectionTestables;
+const { parseVibe64ArchitectureLayoutLines } = architectureLayoutTestables;
+const { SPEC_BY_ERROR_CODE } = stackOperationTestables;
+const { normalizePreviewIdentityCommandResponse } = previewIdentityCommandTestables;
 
 // Each Stack section spec's printed example must parse with its real parser.
 const SECTION_PARSERS = {

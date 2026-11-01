@@ -9,7 +9,9 @@ import { createProjectArchiveService } from "@local/vibe64-project/server/projec
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
-import { createTrainingLearningSpace, KEPT_ARCHIVED_PROJECTS, MAX_ARCHIVES } from "../../packages/vibe64-training/src/server/learningSpace.js";
+import { __testables, createTrainingLearningSpace } from "../../packages/vibe64-training/src/server/learningSpace.js";
+
+const { KEPT_ARCHIVED_PROJECTS, MAX_ARCHIVES } = __testables;
 
 // The attempt lifecycle in the learning space (Rev 4 C2) over the real
 // learner store, core learning space and shared project archive service.

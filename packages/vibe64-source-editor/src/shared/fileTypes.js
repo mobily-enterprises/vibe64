@@ -18,4 +18,6 @@ function filePreviewImageType(fileName = "") {
   return Object.hasOwn(FILE_PREVIEW_IMAGE_TYPES, extension) ? FILE_PREVIEW_IMAGE_TYPES[extension] : "";
 }
 
-export { FILE_PREVIEW_IMAGE_TYPES, filePreviewImageType };
+const __testables = Object.freeze({ FILE_PREVIEW_IMAGE_TYPES });
+
+export { filePreviewImageType, __testables };

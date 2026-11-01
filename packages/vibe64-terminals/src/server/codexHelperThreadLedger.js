@@ -1,6 +1,4 @@
 import {
-  CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
-  CODEX_HELPER_THREAD_LIFECYCLES,
   createCodexHelperThreadLedgerOwner
 } from "@jskit-ai/assistant-core/server/codex-turn";
 import {
@@ -97,11 +95,10 @@ const {
   defineCodexHelperThreadRecord
 } = codexHelperThreadLedgerOwner;
 
+const __testables = Object.freeze({ codexHelperThreadRecordId, defineCodexHelperThreadRecord });
+
 export {
-  CODEX_HELPER_THREAD_LEDGER_SCHEMA_VERSION,
-  CODEX_HELPER_THREAD_LIFECYCLES,
-  codexHelperThreadRecordId,
   codexHelperThreadLedgerOwner,
   createCodexHelperThreadLedger,
-  defineCodexHelperThreadRecord
+  __testables
 };

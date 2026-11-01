@@ -183,4 +183,6 @@ async function upgradeAssistantRoles(context) {
   });
 }
 
-export { upgradeAssistantRoles, upgradeAssistantRoleSession, upgradeAssistantRoleTurn };
+const __testables = Object.freeze({ upgradeAssistantRoleSession, upgradeAssistantRoleTurn });
+
+export { upgradeAssistantRoles, __testables };

@@ -5,11 +5,12 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  __testables,
   cleanupSessionSaveCommitMessage,
-  generateSessionSaveCommitMessage,
-  normalizeSessionSaveCommitMessage,
-  sessionSaveCommitMessagePrompt
+  generateSessionSaveCommitMessage
 } from "../../packages/vibe64-terminals/src/server/sessionSaveCommitMessage.js";
+
+const { normalizeSessionSaveCommitMessage, sessionSaveCommitMessagePrompt } = __testables;
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;
 

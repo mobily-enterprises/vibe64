@@ -9,12 +9,17 @@ import {
   VIBE64_ASSISTANT_ENGINE_IDS,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "../../packages/vibe64-runtime/src/shared/index.js";
-import { VIBE64_AGENT_EXECUTION_TOOL_POLICIES } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
+import { __testables as agentExecutionProfilesTestables } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
 import {
-  OPENCODE_HELPER_PROFILE_REVISION,
-  createOpenCodeSessionAgentProvider,
-  resolveOpenCodeHelperExecutionProfile
+  __testables as opencodeSessionAgentProviderTestables,
+  createOpenCodeSessionAgentProvider
 } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js";
+
+const { VIBE64_AGENT_EXECUTION_TOOL_POLICIES } = agentExecutionProfilesTestables;
+const {
+  OPENCODE_HELPER_PROFILE_REVISION,
+  resolveOpenCodeHelperExecutionProfile
+} = opencodeSessionAgentProviderTestables;
 
 const selection = Object.freeze({
   agentId: "build",

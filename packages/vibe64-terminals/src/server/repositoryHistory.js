@@ -359,9 +359,11 @@ async function repositoryVersionFileDiff({
   };
 }
 
+const __testables = Object.freeze({ repositoryReadContext });
+
 export {
   inspectRepositoryHistory,
-  repositoryReadContext,
   repositoryVersionFileDiff,
-  repositoryVersionFiles
+  repositoryVersionFiles,
+  __testables
 };

@@ -84,11 +84,13 @@ function recordSteps(publishPlan, kind) {
     .map((entry) => ({ id: stepId(entry), status: "pending", message: "" }));
 }
 
+const __testables = Object.freeze({ outputExcerpt });
+
 export {
   bumpVersion,
   changelogSection,
   failureLog,
-  outputExcerpt,
   recordSteps,
-  summarizeRelease
+  summarizeRelease,
+  __testables
 };

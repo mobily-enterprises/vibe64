@@ -8,7 +8,7 @@ const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 
 /** Apply only to an offline disposable copy, never to a live execution owner. */
-export function prepareCopiedClaudeConversationState(serialized) {
+function prepareCopiedClaudeConversationState(serialized) {
   const state = JSON.parse(serialized);
   if (!state || typeof state !== "object" || Array.isArray(state)) throw new Error("Invalid copied Claude conversation state.");
   state.executionId = "";
@@ -176,4 +176,6 @@ function createClaudeConversationStorage({ createError: error }) {
   });
 }
 
-export { createClaudeConversationStorage };
+const __testables = Object.freeze({ prepareCopiedClaudeConversationState });
+
+export { createClaudeConversationStorage, __testables };

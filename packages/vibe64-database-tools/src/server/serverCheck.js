@@ -231,8 +231,10 @@ async function checkDatabaseServer({ endpoint, kind, timeoutMs = CHECK_TIMEOUT_M
   }
 }
 
+const __testables = Object.freeze({ describeFailure });
+
 export {
   CHECK_TIMEOUT_MS,
   checkDatabaseServer,
-  describeFailure
+  __testables
 };

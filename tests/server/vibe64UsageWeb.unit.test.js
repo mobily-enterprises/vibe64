@@ -12,7 +12,7 @@ import {
   buildSnapshotIndex
 } from "../../packages/vibe64-system-graph/src/server/usageIndex.js";
 import {
-  USAGE_QUERY_LIMITS,
+  __testables as usageWebTestables,
   joinFunctions,
   readCallsWeb,
   readEntries,
@@ -20,10 +20,13 @@ import {
   readImportsWeb
 } from "../../packages/vibe64-system-graph/src/server/usageWeb.js";
 import {
-  createCallWebCache,
+  __testables as usageServiceTestables,
   createUsageService,
   releaseCallWeb
 } from "../../packages/vibe64-system-graph/src/server/usageService.js";
+
+const { USAGE_QUERY_LIMITS } = usageWebTestables;
+const { createCallWebCache } = usageServiceTestables;
 
 // Usage queries over the shared usage-map fixtures: a small project, its
 // Machine City with entry points, its call web and one recording's join case.

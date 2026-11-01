@@ -259,6 +259,8 @@ function managedCommandRuntimeEntries() {
   }));
 }
 
+const __testables = Object.freeze({ runtimePackManagedCommands });
+
 export {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
@@ -266,6 +268,6 @@ export {
   runtimePackBinPaths,
   runtimePackGuardBinPaths,
   runtimePackPolicyBinPaths,
-  runtimePackManagedCommands,
-  runtimePackRoot
+  runtimePackRoot,
+  __testables
 };

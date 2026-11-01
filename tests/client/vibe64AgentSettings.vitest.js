@@ -1,27 +1,32 @@
 import { describe, expect, it } from "vitest";
 import {
+  __testables as agentSettingsTestables,
   VIBE64_AGENT_PROVIDERS,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
-  VIBE64_CODEX_GPT_5_5_MODEL,
-  VIBE64_CODEX_SOL_MODEL,
-  VIBE64_CODEX_SPARK_MODEL,
   VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
-  VIBE64_AGENT_PROVIDER_UNKNOWN_CODE,
   defaultVibe64AgentSettings,
-  displayVibe64AgentSetting,
   effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings,
-  normalizeVibe64AgentSettings,
-  vibe64AgentSettingParameters
+  normalizeVibe64AgentSettings
 } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
 import {
-  VIBE64_AGENT_EXECUTION_PROFILE_IDS,
-  vibe64AgentProviderSupportsExecutionProfile
+  __testables as agentExecutionProfilesTestables,
+  VIBE64_AGENT_EXECUTION_PROFILE_IDS
 } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
 import {
   agentSettingsStorageKey
 } from "../../src/composables/useVibe64AgentSettings.js";
+
+const {
+  VIBE64_CODEX_GPT_5_5_MODEL,
+  VIBE64_CODEX_SOL_MODEL,
+  VIBE64_CODEX_SPARK_MODEL,
+  VIBE64_AGENT_PROVIDER_UNKNOWN_CODE,
+  displayVibe64AgentSetting,
+  vibe64AgentSettingParameters
+} = agentSettingsTestables;
+const { vibe64AgentProviderSupportsExecutionProfile } = agentExecutionProfilesTestables;
 
 describe("vibe64AgentSettings", () => {
   it("keeps Automatic as the stored setting and resolves concrete Codex defaults at runtime", () => {

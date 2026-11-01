@@ -6,12 +6,15 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import { manageWorkPlan, readWorkPlan, readWorkPlanPage, readWorkPlanHistory, workPlanPath, workPlanInstructions, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { __testables as assistantWorkPlanTestables, manageWorkPlan, readWorkPlan, readWorkPlanPage, readWorkPlanHistory, workPlanInstructions, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { upgradePlanProgress } from "../../packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js";
-import { upgradePlanSession, upgradeAssistantPlans } from "../../packages/vibe64-terminals/src/server/assistantPlanUpgrade.js";
+import { __testables as assistantPlanUpgradeTestables, upgradeAssistantPlans } from "../../packages/vibe64-terminals/src/server/assistantPlanUpgrade.js";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+const { workPlanPath } = assistantWorkPlanTestables;
+const { upgradePlanSession } = assistantPlanUpgradeTestables;
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-plans-"));

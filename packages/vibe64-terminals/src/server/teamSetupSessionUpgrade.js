@@ -101,4 +101,6 @@ async function upgradeTeamSetupSessions(context) {
   });
 }
 
-export { teamSetupSessionChanges, upgradeTeamSetupSessions };
+const __testables = Object.freeze({ teamSetupSessionChanges });
+
+export { upgradeTeamSetupSessions, __testables };

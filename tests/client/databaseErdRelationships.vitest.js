@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { buildErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/shared/erdRelationships.js";
 import { routeOverviewEdges } from "../../packages/vibe64-database-tools/src/client/dataOverviewModel.js";
 import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/shared/erdRouting.js";
-import { erdCardinality, erdColumns, erdLayoutGroups, erdNeighbours, erdSearch, placeErdNodes } from "../../packages/vibe64-database-tools/src/shared/erdModel.js";
+import { __testables, erdCardinality, erdColumns, erdLayoutGroups, erdSearch, placeErdNodes } from "../../packages/vibe64-database-tools/src/shared/erdModel.js";
+
+const { erdNeighbours } = __testables;
 
 function tableNode(id, x, columns, { collapsed = false, y = 0 } = {}) {
   return {

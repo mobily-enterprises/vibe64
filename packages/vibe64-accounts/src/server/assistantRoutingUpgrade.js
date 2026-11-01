@@ -343,4 +343,6 @@ async function upgradeAssistantRouting(context) {
   });
 }
 
-export { upgradeAssistantRouting, upgradeAssistantRoutingConfiguration };
+const __testables = Object.freeze({ upgradeAssistantRoutingConfiguration });
+
+export { upgradeAssistantRouting, __testables };

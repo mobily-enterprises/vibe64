@@ -113,6 +113,8 @@ function githubTokenGitTransportEnv(env = {}) {
   return githubTokenCredentialHelperGitEnv(githubSshToHttpsGitEnv(env));
 }
 
+const __testables = Object.freeze({ githubSshToHttpsGitEnv, gitSafeDirectoryArgs });
+
 export {
   GITHUB_CREDENTIAL_HELPER_GIT_CONFIG,
   GITHUB_SSH_TO_HTTPS_GIT_CONFIG,
@@ -120,12 +122,11 @@ export {
   absoluteUniqueGitPaths,
   applyGitConfigEntriesToEnv,
   applyGitSafeDirectoriesToEnv,
-  gitSafeDirectoryArgs,
   gitSafeDirectoryEntries,
   githubCredentialHelperGitEnv,
   githubGitNonInteractiveEnv,
   githubHttpsGitTransportEnv,
-  githubSshToHttpsGitEnv,
   githubTokenCredentialHelperGitEnv,
-  githubTokenGitTransportEnv
+  githubTokenGitTransportEnv,
+  __testables
 };

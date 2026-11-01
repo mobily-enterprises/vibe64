@@ -272,4 +272,6 @@ async function upgradeAssistantHelpers(context) {
   });
 }
 
-export { upgradeAssistantHelpers, upgradeAssistantHelperSession, upgradeAssistantHelperTurn };
+const __testables = Object.freeze({ upgradeAssistantHelperSession, upgradeAssistantHelperTurn });
+
+export { upgradeAssistantHelpers, __testables };

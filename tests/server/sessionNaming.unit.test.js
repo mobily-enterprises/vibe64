@@ -4,8 +4,10 @@ import { mkdtemp, rm, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { createSessionNaming, parseSessionName } from "../../packages/vibe64-terminals/src/server/sessionNaming.js";
+import { __testables, createSessionNaming } from "../../packages/vibe64-terminals/src/server/sessionNaming.js";
 import { markHistoricalConversationRewound } from "./vibe64TestHelpers.js";
+
+const { parseSessionName } = __testables;
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-session-name-"));

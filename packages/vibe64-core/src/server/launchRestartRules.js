@@ -92,9 +92,11 @@ function launchRestartRulesMatcherSource() {
     `\n\nconst vibe64LaunchRestartRulesMatcher = ${matcherName};`;
 }
 
+const __testables = Object.freeze({ launchRestartRulesMatcherSource });
+
 export {
   launchRestartRulesMatcher,
-  launchRestartRulesMatcherSource,
   normalizeLaunchRestartPath,
-  normalizeLaunchRestartRules
+  normalizeLaunchRestartRules,
+  __testables
 };

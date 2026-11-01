@@ -3,12 +3,14 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  __testables,
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
   explicitPathIsManagedSessionSource,
-  explicitSessionSourcePath,
   sessionHasSource,
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+
+const { explicitSessionSourcePath } = __testables;
 
 test("session source path rejects explicit source metadata under private session state", () => {
   const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";

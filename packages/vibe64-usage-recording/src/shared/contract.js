@@ -117,6 +117,8 @@ function usageTraceLineProblem(line) {
   return check(line) ? "" : `Invalid ${line.type} trace line.`;
 }
 
+const __testables = Object.freeze({ USAGE_RECORDING_STATES, USAGE_RECORDING_STOP_REASONS, USAGE_TRACER_RUNTIMES });
+
 export {
   USAGE_INTERACTION_ID_PATTERN,
   USAGE_INTERACTION_KINDS,
@@ -129,13 +131,11 @@ export {
   USAGE_RECORDING_REQUEST_HEADER,
   USAGE_RECORDING_RETENTION,
   USAGE_RECORDING_SCHEMA,
-  USAGE_RECORDING_STATES,
-  USAGE_RECORDING_STOP_REASONS,
   USAGE_RECORDING_TARGET_KINDS,
   USAGE_REQUEST_ID_PATTERN,
   USAGE_SCOPE_KINDS,
-  USAGE_TRACER_RUNTIMES,
   USAGE_TRACE_SCHEMA,
   usageScopeKind,
-  usageTraceLineProblem
+  usageTraceLineProblem,
+  __testables
 };

@@ -153,4 +153,6 @@ function createSessionNaming({
   });
 }
 
-export { createSessionNaming, parseSessionName };
+const __testables = Object.freeze({ parseSessionName });
+
+export { createSessionNaming, __testables };

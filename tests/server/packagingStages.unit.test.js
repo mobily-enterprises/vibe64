@@ -5,12 +5,14 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  BUILD_ENVIRONMENT_PASSTHROUGH,
+  __testables,
   publishTarget,
   runBuildStage,
   spawnCommand,
   withStageCredentials
 } from "../../packages/vibe64-packaging/src/server/stages.js";
+
+const { BUILD_ENVIRONMENT_PASSTHROUGH } = __testables;
 
 const PLAN_HASH = `sha256:${"c".repeat(64)}`;
 const TOKEN = "npm_SECRETvalue0123456789";

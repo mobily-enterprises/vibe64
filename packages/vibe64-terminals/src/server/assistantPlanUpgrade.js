@@ -80,4 +80,6 @@ async function upgradeAssistantPlans(context) {
   });
 }
 
-export { upgradeAssistantPlans, upgradePlanSession };
+const __testables = Object.freeze({ upgradePlanSession });
+
+export { upgradeAssistantPlans, __testables };

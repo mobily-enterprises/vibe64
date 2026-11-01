@@ -64,11 +64,13 @@ function sessionHasSource(session = {}) {
   return Boolean(sessionSourcePath(session));
 }
 
+const __testables = Object.freeze({ explicitSessionSourcePath });
+
 export {
   explicitPathIsManagedSessionSource,
-  explicitSessionSourcePath,
   managedSessionSourcePath,
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
   sessionHasSource,
-  sessionSourcePath
+  sessionSourcePath,
+  __testables
 };

@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { layeredGraph, architectureGraph } from '../../packages/vibe64-system-graph/src/client/layeredGraph.js';
 import { architectureOverview, engineOverview, pageStoryboard, subsystemOutline } from '../../packages/vibe64-system-graph/src/client/architectureModel.js';
-import { parseVibe64ArchitectureInspectionLines } from '../../packages/vibe64-genesis/src/server/architectureInspection.js';
-import { parseVibe64ArchitectureLayoutLines, vibe64ArchitectureLayout } from '../../packages/vibe64-genesis/src/server/architectureLayout.js';
+import { __testables as architectureInspectionTestables } from '../../packages/vibe64-genesis/src/server/architectureInspection.js';
+import { __testables as architectureLayoutTestables, vibe64ArchitectureLayout } from '../../packages/vibe64-genesis/src/server/architectureLayout.js';
+
+const { parseVibe64ArchitectureInspectionLines } = architectureInspectionTestables;
+const { parseVibe64ArchitectureLayoutLines } = architectureLayoutTestables;
 
 test('authored architectural groups accept any stack and reject ambiguous placement', () => {
   const lines = ['### Group `work`: Request handling', '- Kind: `layer`', '- Purpose: `Receives application requests.`',

@@ -5,10 +5,12 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  __testables,
   ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES,
-  parseVibe64ArchitectureInspectionLines,
   readArchitecturePreviewLocator
 } from "../../packages/vibe64-genesis/src/server/architectureInspection.js";
+
+const { parseVibe64ArchitectureInspectionLines } = __testables;
 
 const RECIPE = Object.freeze([
   "### Inspector `vue`: Routes and calls",

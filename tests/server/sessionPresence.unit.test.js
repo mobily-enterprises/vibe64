@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  SESSION_PRESENCE_IDLE_MS,
+  __testables,
   VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
-  assertPresenceInput,
   createSessionPresencePublisher,
   createSessionPresenceService,
   presenceActor
 } from "../../packages/vibe64-sessions/src/server/sessionPresence.js";
+
+const { SESSION_PRESENCE_IDLE_MS, assertPresenceInput } = __testables;
 
 function presenceInput(overrides = {}) {
   return {

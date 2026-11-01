@@ -4,6 +4,7 @@ import test from "node:test";
 import { renewalHandoverText } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
 
 import {
+  __testables,
   SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS,
   defineSessionRenewalApprovedHandover,
   defineSessionRenewalOperationId,
@@ -12,11 +13,12 @@ import {
   parseSessionRenewalHandoverOutput,
   sessionRenewalAcknowledgementOutputSchema,
   sessionRenewalClientMessageId,
-  sessionRenewalHandoverHash,
   sessionRenewalHandoverPrompt,
   sessionRenewalManualHandoverTemplate,
   sessionRenewalSeedPrompt
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
+
+const { sessionRenewalHandoverHash } = __testables;
 
 const source = Object.freeze({
   authority: "github",

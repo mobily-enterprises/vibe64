@@ -162,4 +162,6 @@ function claudeConfigRoot({ env = process.env, credentialHome } = {}) {
   return env.CLAUDE_CONFIG_DIR || path.join((credentialHome || appCredentialContext()).home, ".claude");
 }
 
-export { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeConfigRoot, claudeFlagSettings, createClaudeCodeProcess };
+const __testables = Object.freeze({ claudeCodeArguments });
+
+export { CLAUDE_CODE_VERSION, claudeConfigRoot, claudeFlagSettings, createClaudeCodeProcess, __testables };

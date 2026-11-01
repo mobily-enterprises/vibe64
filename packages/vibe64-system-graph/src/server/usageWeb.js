@@ -533,13 +533,15 @@ function joinFunctions(index, callIndex, input) {
   };
 }
 
+const __testables = Object.freeze({ USAGE_QUERY_LIMITS });
+
 export {
   CALL_WEB_CACHE_SESSIONS,
-  USAGE_QUERY_LIMITS,
   joinFunctions,
   readCallsWeb,
   readEntries,
   readFunction,
   readImportsWeb,
-  requireEntry
+  requireEntry,
+  __testables
 };

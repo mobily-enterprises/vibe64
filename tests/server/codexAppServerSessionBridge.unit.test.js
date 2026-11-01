@@ -7,12 +7,11 @@ import test from "node:test";
 
 import { MINIMUM_CODEX_VERSION } from "@local/vibe64-runtime/server/minimumCodexVersion";
 import {
+  __testables as codexAppServerSessionBridgeTestables,
   assertCodexAppServerHelperCompatibility,
   assertCodexAppServerHelperOutputWithinLimit,
   codexAppServerHelperThreadSettings,
   codexAppServerHelperTurnSettings,
-  codexAppServerIdentityMetadata,
-  codexAppServerProjectHookTrustConfig,
   codexAppServerThreadStartSettings,
   codexAppServerThreadSettings,
   codexAppServerTurnSettings,
@@ -25,13 +24,14 @@ import {
   startCodexAppServerHelperThread,
   startFreshCodexAppServerThreadForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import { codexAppServerProjectHookTrustConfig } from "@jskit-ai/assistant-core/server/codex-configuration";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   VIBE64_CODEX_DEFAULT_MODEL
 } from "@local/vibe64-runtime/shared";
-import { VIBE64_CODEX_SPARK_MODEL } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
+import { __testables as agentSettingsTestables } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
 import { defineVibe64AgentExecutionProfileResolution } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
 import {
   createVibe64SessionStore
@@ -2647,6 +2647,9 @@ import {
   codexAppServerToolSchemaIdentityForSession,
   writeCodexAppServerIdentityMetadata
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+
+const { codexAppServerIdentityMetadata } = codexAppServerSessionBridgeTestables;
+const { VIBE64_CODEX_SPARK_MODEL } = agentSettingsTestables;
 
 const boundLearningSchemas = { schemas: [{ type: "function", function: {
   name: "learning_read", description: "Read this exact learning attempt", parameters: { type: "object", properties: {}, additionalProperties: false }

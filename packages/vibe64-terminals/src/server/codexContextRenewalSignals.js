@@ -353,7 +353,6 @@ export {
   clearCodexAppServerContextRefreshPending,
   writeCodexAppServerContextRefreshPending,
   CONTEXT_COMPACTION_REASON,
-  codexContextUsageFromNotification,
   contextCompactionKey,
   recordCodexContextRenewalSignal,
   recordCodexContextUsageSignal

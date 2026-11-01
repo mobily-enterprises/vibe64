@@ -372,8 +372,9 @@ async function publishTarget({
   };
 }
 
+const __testables = Object.freeze({ BUILD_ENVIRONMENT_PASSTHROUGH });
+
 export {
-  BUILD_ENVIRONMENT_PASSTHROUGH,
   VIBE64_PUBLISH_ARTIFACTS_CONTRACT,
   artifactsDigest,
   buildStageEnvironment,
@@ -386,5 +387,6 @@ export {
   spawnCommand,
   storedArtifacts,
   verifyArtifacts,
-  withStageCredentials
+  withStageCredentials,
+  __testables
 };

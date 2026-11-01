@@ -14,8 +14,10 @@ import { createCodexProviderConnectionStore, codexProviderPaths } from "@local/v
 import { createCodexTerminalController } from "../fixtures/codexMainConversation.js";
 import { createCodexAppServerAgentProvider } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
 import { startCodexAppServerHelperThread, sendCodexAppServerHelperTurn } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
-import { resolveCodexHelperExecutionProfile } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
+import { __testables } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
+
+const { resolveCodexHelperExecutionProfile } = __testables;
 
 const version = spawnSync("codex", ["--version"], { encoding: "utf8", timeout: 5000 });
 

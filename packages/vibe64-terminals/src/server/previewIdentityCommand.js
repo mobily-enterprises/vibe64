@@ -255,6 +255,8 @@ function createPreviewIdentityCommandRunner({
   };
 }
 
+const __testables = Object.freeze({ normalizePreviewIdentityCommandResponse });
+
 export {
   COOKIE_NAME_PATTERN as PREVIEW_IDENTITY_COMMAND_COOKIE_NAME_PATTERN,
   PREVIEW_IDENTITY_COMMAND_MAX_COOKIE_BYTES,
@@ -262,7 +264,7 @@ export {
   PREVIEW_IDENTITY_COMMAND_MAX_OUTPUT_BYTES,
   PREVIEW_TOKEN_COOKIE_PREFIX,
   createPreviewIdentityCommandRunner,
-  normalizePreviewIdentityCommandResponse,
   parsePreviewIdentityCommandResponse,
-  previewIdentityCommandRequest
+  previewIdentityCommandRequest,
+  __testables
 };

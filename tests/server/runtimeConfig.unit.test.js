@@ -4,17 +4,15 @@ import test from "node:test";
 import { parseEnv } from "node:util";
 
 import {
+  __testables,
   RUNTIME_CONFIG_OWNERS,
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_SCOPES,
-  RUNTIME_CONFIG_TARGETS,
-  mergeRuntimeConfigRecords,
   normalizeRuntimeConfigKey,
   normalizeRuntimeConfigOwner,
   normalizeRuntimeConfigRecord,
   resolveRuntimeConfig,
   runtimeConfigDotenvFile,
-  runtimeConfigDotenvValue,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
   runtimeConfigKeyIsVibe64Reserved,
@@ -25,6 +23,8 @@ import {
   saveEnvUserValues
 } from "@local/vibe64-core/server/envUserValues";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+const { RUNTIME_CONFIG_TARGETS, mergeRuntimeConfigRecords, runtimeConfigDotenvValue } = __testables;
 
 test("runtime config records normalize technology-neutral metadata", () => {
   const record = normalizeRuntimeConfigRecord({

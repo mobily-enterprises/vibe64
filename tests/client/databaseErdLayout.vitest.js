@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { denseErdSchema } from "../fixtures/denseErdSchema.js";
 import { buildErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/shared/erdRelationships.js";
-import { erdColumns, erdNodeHeight, erdLayoutGroups, placeErdNodes } from "../../packages/vibe64-database-tools/src/shared/erdModel.js";
+import { __testables, erdColumns, erdLayoutGroups, placeErdNodes } from "../../packages/vibe64-database-tools/src/shared/erdModel.js";
 
 import {
   buildErdLayoutGraph,
@@ -10,6 +10,8 @@ import {
   layoutErdGroups,
   layoutErdRings
 } from "../../packages/vibe64-database-tools/src/client/workers/erdLayout.js";
+
+const { erdNodeHeight } = __testables;
 
 const nodes = [
   { height: 180, id: "parent", width: 280 },

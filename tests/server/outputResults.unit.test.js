@@ -15,18 +15,22 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  OUTPUT_RESULTS_RETAINED_MAX_BYTES,
-  OUTPUT_RESULTS_RETAINED_RUNS,
+  __testables,
   listOutputResults,
-  outputResultsRoot,
   readOutputResult,
   removeOutputResults,
-  retainedOutputRuns,
   snapshotDeclaredOutputResults
 } from "../../packages/vibe64-terminals/src/server/outputResults.js";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
+
+const {
+  OUTPUT_RESULTS_RETAINED_MAX_BYTES,
+  OUTPUT_RESULTS_RETAINED_RUNS,
+  outputResultsRoot,
+  retainedOutputRuns
+} = __testables;
 
 async function outputResultFixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-output-results-"));

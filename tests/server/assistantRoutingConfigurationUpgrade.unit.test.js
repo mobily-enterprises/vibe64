@@ -7,7 +7,7 @@ import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/serv
 import { validateAssistantRoutingConfiguration } from "../../packages/vibe64-core/src/server/stateUpgrades/routingV2Format.js";
 import { upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
 import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
-import { upgradeAssistantRouting, upgradeAssistantRoutingConfiguration } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
+import { __testables, upgradeAssistantRouting } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import {
   createVibe64SessionStore,
@@ -15,6 +15,8 @@ import {
 } from "@local/vibe64-runtime/server/sessionStore";
 import { validateAssistantRoutingConfiguration as validateV4Routing } from "../../packages/vibe64-core/src/server/stateUpgrades/routingV4Format.js";
 import routingFormatCompatibility from "../../packages/vibe64-core/src/server/stateUpgrades/20261006-routing-format-compatibility.js";
+
+const { upgradeAssistantRoutingConfiguration } = __testables;
 
 const selection = (engineId, modelProviderId, modelId, selectionSource = "explicit") => ({
   schema: "vibe64.assistant-selection.v1", engineId, modelProviderId, modelId, selectionSource,

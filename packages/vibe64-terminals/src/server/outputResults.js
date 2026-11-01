@@ -454,16 +454,20 @@ async function removeOutputResults(session = {}) {
   await rm(root, { force: true, recursive: true });
 }
 
-export {
-  OUTPUT_RESULT_MAX_BYTES,
+const __testables = Object.freeze({
   OUTPUT_RESULTS_RETAINED_MAX_BYTES,
   OUTPUT_RESULTS_RETAINED_RUNS,
+  outputResultsRoot,
+  retainedOutputRuns
+});
+
+export {
+  OUTPUT_RESULT_MAX_BYTES,
   OUTPUT_RESULTS_DIRECTORY,
   OUTPUT_RUN_MAX_BYTES,
   listOutputResults,
-  outputResultsRoot,
   readOutputResult,
   removeOutputResults,
-  retainedOutputRuns,
-  snapshotDeclaredOutputResults
+  snapshotDeclaredOutputResults,
+  __testables
 };

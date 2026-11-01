@@ -10,9 +10,8 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
-  commandWithHttpReadiness,
-  createVibe64WebLaunchTargetTerminalSpec,
-  httpReadinessProbeCommand
+  __testables as launchTargetTerminalTestables,
+  createVibe64WebLaunchTargetTerminalSpec
 } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
@@ -52,9 +51,12 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
-  launchRestartRulesMatcher,
-  launchRestartRulesMatcherSource
+  __testables as launchRestartRulesTestables,
+  launchRestartRulesMatcher
 } from "../../packages/vibe64-core/src/server/launchRestartRules.js";
+
+const { commandWithHttpReadiness, httpReadinessProbeCommand } = launchTargetTerminalTestables;
+const { launchRestartRulesMatcherSource } = launchRestartRulesTestables;
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 const execFileAsync = promisify(execFile);

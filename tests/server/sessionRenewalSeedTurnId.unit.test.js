@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { sessionRenewalSeedTurnId } from "../../packages/vibe64-terminals/src/server/sessionRenewalReceipts.js";
+import { __testables } from "../../packages/vibe64-terminals/src/server/sessionRenewalReceipts.js";
+
+const { sessionRenewalSeedTurnId } = __testables;
 
 const stored = {
   metadata: {

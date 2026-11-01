@@ -597,10 +597,12 @@ function createCodexSessionRenewalPreparation({
   });
 }
 
+const __testables = Object.freeze({ sessionRenewalSeedTurnId });
+
 export {
   createCodexSessionRenewalPreparation,
   completeClaudeSessionRenewalHandover,
   completeClaudeSessionRenewalSeed,
   sessionRenewalSeedAcknowledgementMetadata,
-  sessionRenewalSeedTurnId
+  __testables
 };

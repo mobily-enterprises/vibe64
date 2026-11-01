@@ -166,12 +166,14 @@ function vibe64ArchitectureInspection(section) {
   };
 }
 
+const __testables = Object.freeze({ parseVibe64ArchitectureInspectionLines });
+
 export {
   ARCHITECTURE_INSPECTOR_FIELDS,
   ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES,
   VIBE64_ARCHITECTURE_INSPECTION_CONTRACT,
   VIBE64_ARCHITECTURE_INSPECTION_SECTION,
-  parseVibe64ArchitectureInspectionLines,
   readArchitecturePreviewLocator,
-  vibe64ArchitectureInspection
+  vibe64ArchitectureInspection,
+  __testables
 };

@@ -74,4 +74,6 @@ async function upgradeCompletedDiscussionPlan(context) {
   });
 }
 
-export { completeDiscussionPlan, upgradeCompletedDiscussionPlan };
+const __testables = Object.freeze({ completeDiscussionPlan });
+
+export { upgradeCompletedDiscussionPlan, __testables };

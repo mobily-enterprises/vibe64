@@ -603,6 +603,8 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
   });
 }
 
+const __testables = Object.freeze({ normalizeDatabaseToolEnvironment });
+
 export {
   DATABASE_TOOL_ENVIRONMENT_CONTRACT,
   LOCAL_PROJECT_RESOURCES,
@@ -613,11 +615,11 @@ export {
   bindingValuePresent,
   localDatabaseServerDeclarations,
   managesProjectResources,
-  normalizeDatabaseToolEnvironment,
   normalizeResourceEnvironment,
   preferredAlternative,
   requiredAlternative,
   resourceKindIsDatabase,
   resourceSemanticIsSecret,
-  satisfiedAlternative
+  satisfiedAlternative,
+  __testables
 };

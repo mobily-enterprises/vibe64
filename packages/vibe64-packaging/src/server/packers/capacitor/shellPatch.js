@@ -200,13 +200,17 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   });
 }
 
-export {
-  applyShellPatch,
-  collectApk,
+const __testables = Object.freeze({
   patchAppBuildGradle,
-  patchCapacitorBuildGradle,
   patchManifest,
   patchStrings,
   patchWrapperProperties,
   variablesGradle
+});
+
+export {
+  applyShellPatch,
+  collectApk,
+  patchCapacitorBuildGradle,
+  __testables
 };

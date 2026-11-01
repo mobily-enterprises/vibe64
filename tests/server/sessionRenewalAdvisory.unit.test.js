@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  SESSION_RENEWAL_THRESHOLDS,
-  contextUsageSignal,
+  __testables,
   sessionContextUsageFromMetadata,
   sessionRenewalAdvisory
 } from "../../packages/vibe64-sessions/src/server/sessionRenewalAdvisory.js";
+
+const { SESSION_RENEWAL_THRESHOLDS, contextUsageSignal } = __testables;
 
 const NOW = new Date("2026-08-24T00:00:00.000Z");
 

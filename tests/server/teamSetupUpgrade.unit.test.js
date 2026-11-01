@@ -6,7 +6,9 @@ import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import ownerTeamAiSetups from "../../packages/vibe64-core/src/server/stateUpgrades/20261023-owner-team-ai-setups.js";
 import { upgradeTeamSetupRouting } from "../../packages/vibe64-accounts/src/server/teamSetupRoutingUpgrade.js";
-import { teamSetupSessionChanges, upgradeTeamSetupSessions } from "../../packages/vibe64-terminals/src/server/teamSetupSessionUpgrade.js";
+import { __testables, upgradeTeamSetupSessions } from "../../packages/vibe64-terminals/src/server/teamSetupSessionUpgrade.js";
+
+const { teamSetupSessionChanges } = __testables;
 
 const S = (engineId, modelProviderId, modelId, variantId = "high") => ({ schema: "vibe64.assistant-selection.v1", engineId, agentId: engineId,
   modelProviderId, modelId, variantId, catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource: "recommended" });

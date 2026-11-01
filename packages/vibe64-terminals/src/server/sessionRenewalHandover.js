@@ -674,6 +674,8 @@ function renewalSuccessorProcessExitProofReleaseContext(sessionId = "", options 
   };
 }
 
+const __testables = Object.freeze({ sessionRenewalHandoverHash });
+
 export {
   renewalCleanupContext,
   renewalArchivedPredecessorContext,
@@ -693,9 +695,9 @@ export {
   prepareSessionRenewalSeedRequest,
   sessionRenewalAcknowledgementOutputSchema,
   sessionRenewalClientMessageId,
-  sessionRenewalHandoverHash,
   sessionRenewalHandoverPrompt,
   sessionRenewalManualHandoverTemplate,
   sessionRenewalProtocolError,
-  sessionRenewalSeedPrompt
+  sessionRenewalSeedPrompt,
+  __testables
 };

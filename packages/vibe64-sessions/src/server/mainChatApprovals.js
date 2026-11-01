@@ -291,4 +291,6 @@ function createMainChatApprovals({
   });
 }
 
-export { MAIN_CHAT_APPROVALS_METADATA, countWaitingMainChatApprovals, createMainChatApprovals };
+const __testables = Object.freeze({ MAIN_CHAT_APPROVALS_METADATA });
+
+export { countWaitingMainChatApprovals, createMainChatApprovals, __testables };

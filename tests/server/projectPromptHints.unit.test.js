@@ -4,14 +4,15 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  normalizeProjectPromptHints,
-  projectPromptHintsPath,
+  __testables,
   readProjectPromptHints,
   saveProjectPromptHints
 } from "@local/vibe64-core/server/projectPromptHints";
 import {
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+
+const { normalizeProjectPromptHints, projectPromptHintsPath } = __testables;
 
 test("project prompt hints default to enabled without creating state", async () => {
   await withTemporaryRoot(async (temporaryRoot) => {

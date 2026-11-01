@@ -4,8 +4,8 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  __testables,
   clearProjectRuntimeOpenState,
-  projectRuntimeOpenStatePath,
   readProjectRuntimeOpenState,
   writeProjectRuntimeOpenState
 } from "@local/vibe64-core/server/projectRuntimeOpenState";
@@ -13,6 +13,8 @@ import {
   projectRuntimeRoot,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+
+const { projectRuntimeOpenStatePath } = __testables;
 
 test("project runtime open state lives under the explicit runtime root", async () => {
   await withTemporaryRoot(async (targetRoot) => {

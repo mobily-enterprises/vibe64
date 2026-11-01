@@ -20,10 +20,12 @@ function isLocalhostCheckBypassEnabled({
   return hasLocalhostCheckBypassArg(argv) || isTruthyEnvValue(env?.[LOCALHOST_CHECK_BYPASS_ENV]);
 }
 
+const __testables = Object.freeze({ LOCALHOST_CHECK_BYPASS_FLAG });
+
 export {
   LOCALHOST_CHECK_BYPASS_ENV,
-  LOCALHOST_CHECK_BYPASS_FLAG,
   hasLocalhostCheckBypassArg,
   isLocalhostCheckBypassEnabled,
-  stripLocalhostCheckBypassArgs
+  stripLocalhostCheckBypassArgs,
+  __testables
 };

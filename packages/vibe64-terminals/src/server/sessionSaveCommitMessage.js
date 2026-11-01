@@ -142,10 +142,11 @@ async function generateSessionSaveCommitMessage({ agent, agentContext = {}, chan
   return { executionProfile: result.executionProfile, subject: parseSessionSaveCommitMessage(result.text) };
 }
 
+const __testables = Object.freeze({ normalizeSessionSaveCommitMessage, sessionSaveCommitMessagePrompt });
+
 export {
   MAX_COMMIT_SUBJECT_LENGTH,
   cleanupSessionSaveCommitMessage,
   generateSessionSaveCommitMessage,
-  normalizeSessionSaveCommitMessage,
-  sessionSaveCommitMessagePrompt
+  __testables
 };

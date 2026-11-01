@@ -8,7 +8,6 @@ import {
   defineCodexRenewalThreadIds,
   codexRenewalThreadError
 } from "@jskit-ai/assistant-core/server/codex-provider";
-import { codexAppServerProjectHookTrustConfig } from "@jskit-ai/assistant-core/server/codex-configuration";
 
 import {
   CODEX_APP_SERVER_PROVIDER_ID,
@@ -633,6 +632,8 @@ async function sendCodexAppServerPromptForSession({
   });
 }
 
+const __testables = Object.freeze({ codexAppServerIdentityMetadata });
+
 export {
   CODEX_SESSION_AGENT_PROVIDER,
   CODEX_SESSION_APPROVAL_POLICY,
@@ -646,8 +647,6 @@ export {
   codexAppServerHelperThreadSettings,
   codexAppServerHelperThreadStartSettings,
   codexAppServerHelperTurnSettings,
-  codexAppServerIdentityMetadata,
-  codexAppServerProjectHookTrustConfig,
   codexAppServerThreadIdForSession,
   codexAppServerThreadPreparationForSession,
   codexAppServerToolSchemaIdentityForSession,
@@ -669,5 +668,6 @@ export {
   sendCodexAppServerPromptForSession,
   startCodexAppServerHelperThread,
   startFreshCodexAppServerThreadForSession,
-  writeCodexAppServerIdentityMetadata
+  writeCodexAppServerIdentityMetadata,
+  __testables
 };

@@ -60,7 +60,7 @@ export function erdColumns(table, relationships = [], mode = "keys", expanded = 
   return (table.columns || []).filter((column) => names.has(column.name));
 }
 
-export function erdNodeHeight(columns = [], collapsed = false) {
+function erdNodeHeight(columns = [], collapsed = false) {
   return ERD_HEADER_HEIGHT + (collapsed ? 0 : Math.max(1, columns.length) * ERD_ROW_HEIGHT + ERD_FOOTER_HEIGHT);
 }
 
@@ -82,7 +82,7 @@ export function erdCardinality(relationship, parent, child) {
   };
 }
 
-export function erdNeighbours(table, relationships = []) {
+function erdNeighbours(table, relationships = []) {
   const ids = new Set(table ? [table] : []);
   for (const relationship of relationships) {
     if (relationship.sourceTable === table) ids.add(relationship.referencedTable);
@@ -192,3 +192,5 @@ export function placeErdNodes(nodes, positions, stored = [], force = false) {
   }
   return result;
 }
+
+export const __testables = Object.freeze({ erdNeighbours, erdNodeHeight });

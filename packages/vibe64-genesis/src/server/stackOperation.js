@@ -240,8 +240,9 @@ function isExplicitlyEmptyStackSection(lines = []) {
   return entries.length === 1 && entries[0] === "- Nothing.";
 }
 
+const __testables = Object.freeze({ SPEC_BY_ERROR_CODE });
+
 export {
-  SPEC_BY_ERROR_CODE,
   Vibe64StackOperationError,
   assertMatchingStackInspections,
   backtickedArguments,
@@ -256,5 +257,6 @@ export {
   stackOperationHash,
   uniqueSorted,
   unknownEntryMessage,
-  urlPath
+  urlPath,
+  __testables
 };

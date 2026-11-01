@@ -285,6 +285,8 @@ function publicAuthSession({
   };
 }
 
+const __testables = Object.freeze({ ghLoginCommandArgs });
+
 export {
   ACCOUNT_AUTH_NAMESPACE,
   accountAuthWorkingDirectory,
@@ -296,7 +298,6 @@ export {
   canReuseAuthTerminal,
   CODEX_API_KEY_ENV,
   codexApiKeyLoginCommandArgs,
-  ghLoginCommandArgs,
   GITHUB_DEVICE_AUTH_URL,
   githubGitIdentityFromInput,
   gitIdentitySaveCommandArgs,
@@ -305,5 +306,6 @@ export {
   publicAuthSession,
   REQUIRED_GITHUB_SCOPES,
   terminalArgsForAuth,
-  unsupportedAuthMode
+  unsupportedAuthMode,
+  __testables
 };

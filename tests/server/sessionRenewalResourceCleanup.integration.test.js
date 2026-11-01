@@ -10,9 +10,9 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
-  CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_PROVIDER_ID
 } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION } from "@jskit-ai/assistant-core/server/codex-process";
 import {
   Vibe64SessionRuntime
 } from "../../packages/vibe64-runtime/src/server/runtime.js";

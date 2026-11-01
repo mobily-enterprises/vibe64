@@ -7,18 +7,22 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  AGENT_DATABASE_COMMAND_NAME,
-  VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV,
-  VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV,
-  VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV,
-  VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV,
-  VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV,
+  __testables,
   createAgentDatabaseCommandService,
   prepareAgentDatabaseCommand
 } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
 import { agentSessionCommandEnvironmentIsHealthy } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
 import { requestUnixJsonCommand } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+const {
+  AGENT_DATABASE_COMMAND_NAME,
+  VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV,
+  VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV,
+  VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV,
+  VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV,
+  VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV
+} = __testables;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 

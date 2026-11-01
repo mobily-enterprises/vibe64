@@ -7,7 +7,9 @@ import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
-import { workPlanPath, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { __testables, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+
+const { workPlanPath } = __testables;
 
 test("plan service reads the actual session without AI and preserves private renewal access", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-plan-read-"));

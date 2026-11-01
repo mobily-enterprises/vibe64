@@ -20,15 +20,17 @@ import {
 } from "@local/vibe64-usage-recording/server/tracers";
 import { Vibe64UsageRecordingFeature } from "../../packages/vibe64-usage-recording/src/server/Vibe64UsageRecordingFeature.js";
 import {
+  __testables,
   USAGE_INTERACTION_ID_PATTERN,
   USAGE_RECORDING_ID_PATTERN,
   USAGE_RECORDING_LIMITS,
   USAGE_REQUEST_ID_PATTERN,
-  USAGE_TRACER_RUNTIMES,
   usageScopeKind,
   usageTraceLineProblem
 } from "@local/vibe64-usage-recording/shared/contract";
 import { readPreviewLocatorSource } from "../../packages/vibe64-terminals/src/server/previewLocator.js";
+
+const { USAGE_TRACER_RUNTIMES } = __testables;
 
 const HASH = `sha256:${"a".repeat(64)}`;
 

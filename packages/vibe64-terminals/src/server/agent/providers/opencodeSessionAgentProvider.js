@@ -413,8 +413,9 @@ function createOpenCodeSessionAgentProvider({
   });
 }
 
+const __testables = Object.freeze({ OPENCODE_HELPER_PROFILE_REVISION, resolveOpenCodeHelperExecutionProfile });
+
 export {
-  OPENCODE_HELPER_PROFILE_REVISION,
   createOpenCodeSessionAgentProvider,
-  resolveOpenCodeHelperExecutionProfile
+  __testables
 };

@@ -309,7 +309,7 @@ for (const final of ["missing", "archive-failure", "obsolete"]) test(`${final} c
   f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: terminal.followup.messageId }, assistant: { text: final === "missing" ? "" : "Final verified explanation." } }];
   if (final === "archive-failure") {
     const { mkdir } = await import("node:fs/promises");
-    const { workPlanPath } = await import("../../packages/vibe64-terminals/src/server/assistantWorkPlan.js");
+    const { __testables: { workPlanPath } } = await import("../../packages/vibe64-terminals/src/server/assistantWorkPlan.js");
     const path = await import("node:path");
     await mkdir(path.join(path.dirname(workPlanPath(f.context)), "archive"), { recursive: true });
     const { writeFile } = await import("node:fs/promises");

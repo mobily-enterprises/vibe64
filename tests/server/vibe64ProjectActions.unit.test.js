@@ -15,10 +15,12 @@ import {
   createVibe64ProjectChangedPublisher,
   createProjectActions
 } from "../../packages/vibe64-project/src/server/projectActions.js";
-import { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
+import { __testables, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 import { underActionPolicy } from "./vibe64TestHelpers.js";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+const { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE } = __testables;
 
 const localUser = { username: "local", role: "owner" };
 

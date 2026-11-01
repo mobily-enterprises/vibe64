@@ -68,10 +68,11 @@ async function saveProjectPromptHints({
   return { filePath, settings: normalized };
 }
 
+const __testables = Object.freeze({ normalizeProjectPromptHints, projectPromptHintsPath });
+
 export {
   PROJECT_PROMPT_HINTS_FILE,
-  normalizeProjectPromptHints,
-  projectPromptHintsPath,
   readProjectPromptHints,
-  saveProjectPromptHints
+  saveProjectPromptHints,
+  __testables
 };

@@ -400,7 +400,7 @@ test("a practice project action admits only its own learner, through the host co
 });
 
 test("Colleague acting for a learner opens only the projects of their mode and relays the exact reason", async (t) => {
-  const { registerLearningModeReader, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE } =
+  const { __testables: { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE }, registerLearningModeReader } =
     await import("@local/vibe64-core/server/learningMode");
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-colleague-mode-"));
   configureStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), explicitSystemRoot: path.join(root, "system"),

@@ -124,8 +124,10 @@ function createUsageService({
   });
 }
 
+const __testables = Object.freeze({ createCallWebCache });
+
 export {
-  createCallWebCache,
   createUsageService,
-  releaseCallWeb
+  releaseCallWeb,
+  __testables
 };

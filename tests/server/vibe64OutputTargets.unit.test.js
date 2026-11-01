@@ -12,25 +12,24 @@ import {
   vibe64OutputsInspection
 } from "../../packages/vibe64-genesis/src/server/outputs.js";
 import {
+  __testables as vibe64OutputTargetsTestables,
   createVibe64OutputTargetTerminalSpec,
   inspectVibe64OutputsForContext,
   inspectVibe64WorkspaceSetupForContext,
   listVibe64OutputTargets,
-  vibe64OutputCommand,
-  vibe64OutputTargetView,
-  vibe64RuntimePacks,
-  vibe64WebOutputDescriptor
+  vibe64RuntimePacks
 } from "../../packages/vibe64-terminals/src/server/vibe64OutputTargets.js";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
-import {
-  runtimePackManagedCommands
-} from "../../packages/vibe64-execution/src/server/runtime/runtimePacks.js";
+import { __testables as runtimePacksTestables } from "../../packages/vibe64-execution/src/server/runtime/runtimePacks.js";
 import {
   listOutputTargets,
   workspaceSetupLaunchDisabledReason
 } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
+
+const { vibe64OutputCommand, vibe64OutputTargetView, vibe64WebOutputDescriptor } = vibe64OutputTargetsTestables;
+const { runtimePackManagedCommands } = runtimePacksTestables;
 
 function outputsInspection(targets = []) {
   return {

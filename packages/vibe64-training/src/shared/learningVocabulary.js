@@ -462,7 +462,8 @@ function lessonAvailable(steps, options) {
   return steps.every(step => !step.required || lessonStepAvailable(step, options));
 }
 
-export { BUILT_IN_FACTS, TRAINING_GUIDE_CAPTION_LIMIT, createLearningVocabulary, declaredLearningVocabulary,
+const __testables = Object.freeze({ createLearningVocabulary, lessonStepNeeds });
+
+export { BUILT_IN_FACTS, TRAINING_GUIDE_CAPTION_LIMIT, declaredLearningVocabulary,
   filePathExpression as TRAINING_GUIDE_FILE_PATH, learningPlaceOpenTo, learningVocabulary, lessonAvailable, lessonStepAvailable,
-  lessonStepNeeds, registerLearningVocabulary,
-  trainingGuideCommand, trainingGuideRequest, trainingGuideSteps, trainingPlaceShown };
+  registerLearningVocabulary, trainingGuideCommand, trainingGuideRequest, trainingGuideSteps, trainingPlaceShown, __testables };

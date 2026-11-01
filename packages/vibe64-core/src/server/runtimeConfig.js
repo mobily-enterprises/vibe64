@@ -415,13 +415,18 @@ function runtimeConfigDotenvFile({
   ].map((lines) => lines.join("\n")).join("\n\n")}\n`;
 }
 
+const __testables = Object.freeze({
+  mergeRuntimeConfigRecords,
+  RUNTIME_CONFIG_TARGETS,
+  runtimeConfigDotenvValue,
+  runtimeConfigViewRecord
+});
+
 export {
   REDACTED_RUNTIME_CONFIG_VALUE,
   RUNTIME_CONFIG_OWNERS,
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_SCOPES,
-  RUNTIME_CONFIG_TARGETS,
-  mergeRuntimeConfigRecords,
   missingRuntimeConfigRecords,
   normalizeRuntimeConfigKey,
   normalizeRuntimeConfigOwner,
@@ -433,12 +438,11 @@ export {
   normalizeRuntimeConfigTargets,
   resolveRuntimeConfig,
   runtimeConfigDotenvFile,
-  runtimeConfigDotenvValue,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
   runtimeConfigKeyIsVibe64Reserved,
   runtimeConfigKeyLooksSecret,
   runtimeConfigRecordsForScope,
-  runtimeConfigViewRecord,
-  runtimeConfigViewModel
+  runtimeConfigViewModel,
+  __testables
 };

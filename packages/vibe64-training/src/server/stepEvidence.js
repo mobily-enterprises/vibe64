@@ -254,4 +254,6 @@ function createTrainingStepEvidence({
   return Object.freeze({ read });
 }
 
-export { EVIDENCE_LIMITS, createTrainingStepEvidence };
+const __testables = Object.freeze({ EVIDENCE_LIMITS });
+
+export { createTrainingStepEvidence, __testables };

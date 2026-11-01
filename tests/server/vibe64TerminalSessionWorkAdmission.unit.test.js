@@ -24,9 +24,9 @@ import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import {
-  CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_PROVIDER_ID
 } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION } from "@jskit-ai/assistant-core/server/codex-process";
 import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "../../packages/vibe64-runtime/src/server/codexAttachmentPaths.js";

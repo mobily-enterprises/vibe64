@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  __testables,
   CODEX_TURN_OUTCOME,
-  codexTurnOutcomeNoticeMessage,
-  codexTurnOutcomeNoticeMessageId,
   writeCodexTurnOutcomeNotice
 } from "../../packages/vibe64-terminals/src/server/codexTurnOutcomeNotice.js";
+
+const { codexTurnOutcomeNoticeMessage, codexTurnOutcomeNoticeMessageId } = __testables;
 
 test("Codex turn outcome notices distinguish terminal outcomes", () => {
   assert.match(

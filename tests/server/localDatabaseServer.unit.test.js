@@ -7,9 +7,12 @@ import { mkdir } from "node:fs/promises";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { localDatabaseServerDeclarations } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
-import { checkDatabaseServer, describeFailure } from "../../packages/vibe64-database-tools/src/server/serverCheck.js";
-import { databaseServerGuide, isAdminUser, testDatabaseNames } from "../../packages/vibe64-database-tools/src/shared/serverGuide.js";
+import { __testables as serverCheckTestables, checkDatabaseServer } from "../../packages/vibe64-database-tools/src/server/serverCheck.js";
+import { __testables as serverGuideTestables, databaseServerGuide, isAdminUser } from "../../packages/vibe64-database-tools/src/shared/serverGuide.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+const { describeFailure } = serverCheckTestables;
+const { testDatabaseNames } = serverGuideTestables;
 
 const DJANGO_MYSQL = {
   component: "django-mysql",

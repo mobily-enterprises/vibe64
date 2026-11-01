@@ -15,11 +15,13 @@ import {
   createSessionActions
 } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import {
-  MAIN_CHAT_APPROVALS_METADATA,
+  __testables,
   countWaitingMainChatApprovals
 } from "../../packages/vibe64-sessions/src/server/mainChatApprovals.js";
 import { registerWorkspaceTeamReader } from "../../packages/vibe64-core/src/server/workspaceTeam.js";
 import { runWithPracticeProjectContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+
+const { MAIN_CHAT_APPROVALS_METADATA } = __testables;
 
 const owner = Object.freeze({ username: "tony", role: "owner", preferredName: "Tony" });
 const ana = Object.freeze({ username: "ana", role: "member", preferredName: "Ana" });

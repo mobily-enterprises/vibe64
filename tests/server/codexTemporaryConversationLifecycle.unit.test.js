@@ -47,13 +47,13 @@ import {
 } from "../../packages/vibe64-source-editor/src/server/service.js";
 import {
   CodexAppServerAgentProvider,
-  CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
   codexAppServerRuntimeDir,
   currentCodexAccountIdentitySignature,
   stopCodexAppServerRuntime
 } from "../../packages/vibe64-runtime/src/server/codexAppServerProvider.js";
+import { CODEX_APP_SERVER_METADATA_SCHEMA_VERSION } from "@jskit-ai/assistant-core/server/codex-process";
 import {
   MINIMUM_CODEX_VERSION
 } from "../../packages/vibe64-runtime/src/server/minimumCodexVersion.js";
@@ -63,9 +63,9 @@ import {
   createVibe64SessionStore
 } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import {
-  CODEX_HELPER_THREAD_LIFECYCLES,
   createCodexHelperThreadLedger
 } from "../../packages/vibe64-terminals/src/server/codexHelperThreadLedger.js";
+import { CODEX_HELPER_THREAD_LIFECYCLES } from "@jskit-ai/assistant-core/server/codex-turn";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
@@ -83,9 +83,7 @@ import {
   currentProjectRequestContext,
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
-import {
-  sessionRenewalHandoverHash
-} from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
+import { __testables } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { installVibe64ManagedExecutionProvider, stableHash } from "@local/vibe64-execution/server";
 import { createCodexGitCommandService, prepareCodexGitCommand } from "../../packages/vibe64-terminals/src/server/codexGitCommand.js";
 import { agentSessionCommandEnvironmentIsHealthy } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
@@ -95,6 +93,8 @@ import { writeCodexAuthMarker } from "../../packages/vibe64-core/src/server/code
 import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+
+const { sessionRenewalHandoverHash } = __testables;
 
 const TEST_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"a".repeat(64)}`;
 const TEST_AUTH_STATE_SIGNATURE = `v1:${"b".repeat(24)}`;

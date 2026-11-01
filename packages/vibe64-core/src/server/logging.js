@@ -224,12 +224,13 @@ function logOperationalEvent(logger, level, fields, message) {
   logger[level](operationalLogFields(fields), message);
 }
 
+const __testables = Object.freeze({ operationalLogFields });
+
 export {
   createVibe64FastifyLoggerOptions,
   createStreamingLogSanitizer,
   DEFAULT_VIBE64_LOG_LEVEL,
   logOperationalEvent,
-  operationalLogFields,
   redactLogValue,
   sanitizeLogText,
   sanitizeOperationText,
@@ -237,5 +238,6 @@ export {
   VIBE64_LOG_REDACT_PATHS,
   VIBE64_LOG_REDACTED_VALUE,
   VIBE64_LOG_SECRET_ASSIGNMENT_PATTERN,
-  VIBE64_LOG_SECRET_FIELD_PATTERN
+  VIBE64_LOG_SECRET_FIELD_PATTERN,
+  __testables
 };

@@ -39,9 +39,7 @@ const sharedDatabaseSelection = { engineId: "opencode", agentId: "build", modelP
   modelId: "deepseek-chat", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
 
 import {
-  DATABASE_ASSISTANT_OUTPUT_SCHEMA,
-  DATABASE_ASSISTANT_TURN_TIMEOUT_MS,
-  databaseSchemaPrompt,
+  __testables as assistantTestables,
   databaseAssistantAvailability,
   runDatabaseAssistant
 } from "../../packages/vibe64-database-tools/src/server/assistant.js";
@@ -49,18 +47,16 @@ import {
   resolveDatabaseConnection
 } from "../../packages/vibe64-database-tools/src/server/connection.js";
 import {
-  DATABASE_DIALECTS,
+  __testables as databaseDialectTestables,
   databaseDialect,
   inspectDatabaseSchema
 } from "../../packages/vibe64-database-tools/src/server/databaseDialect.js";
 import {
-  databaseValue,
-  executeDatabaseQuery,
-  normalizeRawResponse
+  __testables as queryExecutorTestables,
+  executeDatabaseQuery
 } from "../../packages/vibe64-database-tools/src/server/queryExecutor.js";
 import {
-  MAX_DATABASE_SCHEMA_MATCHES,
-  MAX_DATABASE_SCHEMA_RESULT_BYTES,
+  __testables as schemaAccessTestables,
   MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS,
   databaseSchemaSummary,
   searchDatabaseSchema
@@ -78,6 +74,15 @@ import {
 import {
   codexAppServerHelperTurnSettings
 } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
+
+const {
+  DATABASE_ASSISTANT_OUTPUT_SCHEMA,
+  DATABASE_ASSISTANT_TURN_TIMEOUT_MS,
+  databaseSchemaPrompt
+} = assistantTestables;
+const { DATABASE_DIALECTS } = databaseDialectTestables;
+const { databaseValue, normalizeRawResponse } = queryExecutorTestables;
+const { MAX_DATABASE_SCHEMA_MATCHES, MAX_DATABASE_SCHEMA_RESULT_BYTES } = schemaAccessTestables;
 
 function testSchema() {
   return {

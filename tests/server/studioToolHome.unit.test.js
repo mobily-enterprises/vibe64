@@ -7,9 +7,7 @@ import test, { after } from "node:test";
 import { promisify } from "node:util";
 
 import {
-  STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV,
-  studioMysqlClientConfigSetupLines,
-  studioToolHomeSetupLines,
+  __testables,
   studioUserStartupScript
 } from "../../packages/studio-terminal-core/src/server/studioToolHome.js";
 import {
@@ -18,6 +16,8 @@ import {
   VIBE64_SHARED_CACHE_ROOT_ENV
 } from "../../packages/vibe64-execution/src/server/index.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
+
+const { STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV, studioMysqlClientConfigSetupLines, studioToolHomeSetupLines } = __testables;
 
 const execFileAsync = promisify(execFile);
 after(() => configureVibe64Host(null));

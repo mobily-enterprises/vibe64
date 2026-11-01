@@ -644,9 +644,10 @@ async function createVibe64WebLaunchTargetTerminalSpec({
   }
 }
 
+const __testables = Object.freeze({ commandWithHttpReadiness, httpReadinessProbeCommand });
+
 export {
   WEB_LAUNCH_READINESS_TIMEOUT_SECONDS,
   createVibe64WebLaunchTargetTerminalSpec,
-  commandWithHttpReadiness,
-  httpReadinessProbeCommand
+  __testables
 };

@@ -27,15 +27,19 @@ import {
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import { createLaunchPreviewProxyRegistry } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
 import {
-  AGENT_PREVIEW_COMMAND_NAME,
-  VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV,
-  VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV,
-  VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV,
-  VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV,
+  __testables,
   createAgentPreviewCommandService,
   prepareAgentPreviewCommand
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+const {
+  AGENT_PREVIEW_COMMAND_NAME,
+  VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV,
+  VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV,
+  VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV,
+  VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV
+} = __testables;
 
 const execFileAsync = promisify(execFile);
 

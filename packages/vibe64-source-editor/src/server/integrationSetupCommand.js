@@ -372,10 +372,11 @@ async function runIntegrationSetupCommand({
   return parseIntegrationSetupResponse(result.stdout, request);
 }
 
+const __testables = Object.freeze({ INTEGRATION_SETUP_PROTOCOL, parseIntegrationSetupResponse });
+
 export {
   buildIntegrationSetupRequest,
   INTEGRATION_SETUP_OPERATIONS,
-  INTEGRATION_SETUP_PROTOCOL,
-  parseIntegrationSetupResponse,
-  runIntegrationSetupCommand
+  runIntegrationSetupCommand,
+  __testables
 };

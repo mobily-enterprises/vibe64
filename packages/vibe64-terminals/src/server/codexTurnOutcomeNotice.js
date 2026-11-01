@@ -122,10 +122,11 @@ async function writeCodexTurnOutcomeNotice({
   };
 }
 
+const __testables = Object.freeze({ codexTurnOutcomeNoticeMessage, codexTurnOutcomeNoticeMessageId });
+
 export {
   codexAppServerResultDeliveryFailureMessage,
   CODEX_TURN_OUTCOME,
-  codexTurnOutcomeNoticeMessage,
-  codexTurnOutcomeNoticeMessageId,
-  writeCodexTurnOutcomeNotice
+  writeCodexTurnOutcomeNotice,
+  __testables
 };

@@ -112,13 +112,17 @@ async function writeWorkspaceSetupState(store, sessionId = "", value = {}, optio
   return state;
 }
 
+const __testables = Object.freeze({
+  WORKSPACE_SETUP_TRANSCRIPT_MAX_LENGTH,
+  WORKSPACE_SETUP_TRANSCRIPT_TRUNCATED_MARKER
+});
+
 export {
   WORKSPACE_SETUP_METADATA_NAME,
-  WORKSPACE_SETUP_TRANSCRIPT_MAX_LENGTH,
-  WORKSPACE_SETUP_TRANSCRIPT_TRUNCATED_MARKER,
   publicSessionMetadata,
   workspaceSetupState,
   workspaceSetupStateFromMetadata,
   workspaceSetupTranscript,
-  writeWorkspaceSetupState
+  writeWorkspaceSetupState,
+  __testables
 };

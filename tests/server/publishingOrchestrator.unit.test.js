@@ -12,9 +12,11 @@ import test from "node:test";
 import { vibe64PackagingInspection } from "../../packages/vibe64-genesis/src/server/packaging.js";
 import { createConfirmationService } from "../../packages/vibe64-publishing/src/server/confirmationService.js";
 import { createReleaseOrchestrator } from "../../packages/vibe64-publishing/src/server/releaseOrchestrator.js";
-import { changelogSection, outputExcerpt } from "../../packages/vibe64-publishing/src/server/releaseRecords.js";
+import { __testables, changelogSection } from "../../packages/vibe64-publishing/src/server/releaseRecords.js";
 import { createReleaseHistoryStore } from "../../packages/vibe64-publishing/src/server/state/releaseHistoryStore.js";
 import { createTargetsStore } from "../../packages/vibe64-publishing/src/server/state/targetsStore.js";
+
+const { outputExcerpt } = __testables;
 
 const COMMIT = "c".repeat(40);
 const PERSON = { kind: "person", id: "ada" };

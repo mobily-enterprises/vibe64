@@ -29,20 +29,21 @@ import {
 import {
   openCodeAssistantCapabilities
 } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js";
-import {
-  resolveOpenCodeHelperExecutionProfile
-} from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js";
+import { __testables as opencodeSessionAgentProviderTestables } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js";
 import {
   OPENCODE_HELPER_AGENT_ID,
   OPENCODE_EPHEMERAL_AGENT_ID
 } from "../../packages/vibe64-terminals/src/server/opencodeServerProcess.js";
 import {
-  sessionRenewalHandoverHash,
+  __testables as sessionRenewalHandoverTestables,
   sessionRenewalSeedPrompt
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 
 import { agents, controllerHarness, providerDefinition } from "../fixtures/opencodeController.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+
+const { resolveOpenCodeHelperExecutionProfile } = opencodeSessionAgentProviderTestables;
+const { sessionRenewalHandoverHash } = sessionRenewalHandoverTestables;
 
 function throughCommonScopedConversation(controller) {
   const provider = controller.provider;

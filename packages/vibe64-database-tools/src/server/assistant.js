@@ -392,11 +392,15 @@ async function runDatabaseAssistant({
   };
 }
 
-export {
-  DATABASE_ASSISTANT_EXECUTION_PROFILE,
+const __testables = Object.freeze({
   DATABASE_ASSISTANT_OUTPUT_SCHEMA,
   DATABASE_ASSISTANT_TURN_TIMEOUT_MS,
-  databaseSchemaPrompt,
+  databaseSchemaPrompt
+});
+
+export {
+  DATABASE_ASSISTANT_EXECUTION_PROFILE,
   databaseAssistantAvailability,
-  runDatabaseAssistant
+  runDatabaseAssistant,
+  __testables
 };

@@ -4,11 +4,14 @@ import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { prepareVibe64DevelopmentCopy } from "../../packages/vibe64-runtime/src/server/prepareDevelopmentCopy.js";
-import { prepareCopiedClaudeConversationState, prepareCopiedScopedClaudeConversations } from "../../packages/vibe64-terminals/src/server/claudeConversationStorage.js";
+import { __testables as claudeConversationStorageTestables, prepareCopiedScopedClaudeConversations } from "../../packages/vibe64-terminals/src/server/claudeConversationStorage.js";
 import { prepareCopiedSessionConversation } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
-import { prepareCopiedColleagueConversation } from "../../packages/vibe64-colleague/src/server/conversationRecord.js";
+import { __testables as conversationRecordTestables } from "../../packages/vibe64-colleague/src/server/conversationRecord.js";
 import { prepareCopiedAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+const { prepareCopiedClaudeConversationState } = claudeConversationStorageTestables;
+const { prepareCopiedColleagueConversation } = conversationRecordTestables;
 
 test("offline workflow preparation preserves uncertain delivery while stopping scheduling and parent helpers", () => {
   const request = { schemaVersion: 5, status: "working", delivery: "uncertain", attemptedMessageId: "pending",

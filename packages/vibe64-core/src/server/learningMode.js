@@ -117,13 +117,14 @@ async function assertLearningModeAllowsProject({ actor = null, slug = "", reques
   if (!learningModeAllowsProject(mode, slug, { practice })) throw learningModeProjectError(mode);
 }
 
+const __testables = Object.freeze({ LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE });
+
 export {
   LEARNING_MODE_PROJECT_CODE,
-  LEARNING_MODE_PROJECT_MESSAGE,
-  PRACTICE_PROJECT_MODE_MESSAGE,
   assertLearningModeAllowsProject,
   learningModeProjectBlock,
   learningModeProjectError,
   readLearningModeFor,
-  registerLearningModeReader
+  registerLearningModeReader,
+  __testables
 };

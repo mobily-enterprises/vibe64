@@ -5,8 +5,10 @@ import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
-import { buildIntegrationSetupRequest, parseIntegrationSetupResponse } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
+import { __testables, buildIntegrationSetupRequest } from "../../packages/vibe64-source-editor/src/server/integrationSetupCommand.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
+
+const { parseIntegrationSetupResponse } = __testables;
 
 async function withIntegrationTools(run) {
   await withRouteProject(async ({ projectContext, slug }) => {

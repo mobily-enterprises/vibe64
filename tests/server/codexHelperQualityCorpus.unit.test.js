@@ -4,10 +4,9 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import {
-  CODEX_HELPER_PROFILE_REVISION,
-  resolveCodexHelperExecutionProfile
-} from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
+import { __testables } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
+
+const { CODEX_HELPER_PROFILE_REVISION, resolveCodexHelperExecutionProfile } = __testables;
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const corpusPath = path.join(testDirectory, "../fixtures/codex-helper-quality-corpus.json");

@@ -315,23 +315,27 @@ function displayVibe64AgentSetting(providerId = "", parameterId = "", value = ""
   return option?.label || normalizedValue || "Automatic";
 }
 
-export {
-  VIBE64_AGENT_PARAMETER_IDS,
-  VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
+const __testables = Object.freeze({
+  displayVibe64AgentSetting,
   VIBE64_AGENT_PROVIDER_UNKNOWN_CODE,
-  VIBE64_AGENT_PROVIDERS,
-  VIBE64_CODEX_DEFAULT_MODEL,
-  VIBE64_CODEX_DEFAULT_THINKING,
   VIBE64_CODEX_GPT_5_5_MODEL,
   VIBE64_CODEX_SOL_MODEL,
   VIBE64_CODEX_SPARK_MODEL,
+  vibe64AgentSettingParameters
+});
+
+export {
+  VIBE64_AGENT_PARAMETER_IDS,
+  VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
+  VIBE64_AGENT_PROVIDERS,
+  VIBE64_CODEX_DEFAULT_MODEL,
+  VIBE64_CODEX_DEFAULT_THINKING,
   VIBE64_DEFAULT_AGENT_PROVIDER_ID,
   defaultVibe64AgentSettings,
-  displayVibe64AgentSetting,
   effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings,
   findVibe64AgentProvider,
   normalizeVibe64AgentSettings,
   publicVibe64AgentSettings,
-  vibe64AgentSettingParameters
+  __testables
 };

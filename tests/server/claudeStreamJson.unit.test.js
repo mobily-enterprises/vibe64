@@ -9,16 +9,16 @@ import { test } from "node:test";
 import { mkdtemp, rm, readFile, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { claudeCodeArguments, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
+import { __testables as claudeCodeProcessTestables, createClaudeCodeProcess } from "../../packages/vibe64-terminals/src/server/claudeCodeProcess.js";
 import { claudeHistoryPath, readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
 import { createClaudeConversationHost as createNativeClaudeSessionAgentProvider } from "../../packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js";
 import { claudeNativeMessageId as nativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
-import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
+import { __testables as sessionRenewalHandoverTestables, sessionRenewalManualHandoverTemplate } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { readClaudeCodeAuthStatus } from "../../packages/studio-terminal-core/src/server/claudeRuntime.js";
-import { claudeCapabilities, createClaudeConversationAccounts } from "../../packages/vibe64-terminals/src/server/claudeConversationAccounts.js";
+import { __testables as claudeConversationAccountsTestables, createClaudeConversationAccounts } from "../../packages/vibe64-terminals/src/server/claudeConversationAccounts.js";
 import { assertCanUseVibe64Assistant } from "../../packages/vibe64-runtime/src/shared/assistantAccess.js";
-import { VIBE64_ASSISTANT_SELECTION_ERROR_CODES, defineVibe64AssistantCapabilities, defineVibe64AssistantSelection, resolveVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
+import { __testables as assistantSelectionTestables, defineVibe64AssistantCapabilities, defineVibe64AssistantSelection, resolveVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -35,6 +35,11 @@ import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/co
 import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/server/sessionRealtimeEvents.js";
 import { agentTurnRealtimeOverlayFromPayload } from "../../src/lib/vibe64AgentTurnRealtimeOverlay.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
+
+const { claudeCodeArguments } = claudeCodeProcessTestables;
+const { sessionRenewalHandoverHash } = sessionRenewalHandoverTestables;
+const { claudeCapabilities } = claudeConversationAccountsTestables;
+const { VIBE64_ASSISTANT_SELECTION_ERROR_CODES } = assistantSelectionTestables;
 
 test("Claude subscription launch preserves native auth and makes helper tools unavailable", () => {
   const args = claudeCodeArguments({ sessionId: "session", resume: true, model: "sonnet", effort: "high", toolFree: true });

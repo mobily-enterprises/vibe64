@@ -5,14 +5,15 @@ import { test } from "node:test";
 
 import { validateCityDocument } from "@local/vibe64-genesis/server";
 import {
+  __testables,
   USAGE_INTERACTION_ID_PATTERN,
   USAGE_RECORDING_ID_PATTERN,
   USAGE_RECORDING_SCHEMA,
-  USAGE_RECORDING_STATES,
-  USAGE_RECORDING_STOP_REASONS,
   USAGE_REQUEST_ID_PATTERN,
   usageTraceLineProblem
 } from "@local/vibe64-usage-recording/shared/contract";
+
+const { USAGE_RECORDING_STATES, USAGE_RECORDING_STOP_REASONS } = __testables;
 
 // Shared fixtures for the usage map: a small project, its Machine City with
 // entry points and call-web summary, its call web, and one stopped recording.

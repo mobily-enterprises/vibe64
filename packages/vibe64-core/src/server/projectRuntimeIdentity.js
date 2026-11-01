@@ -134,9 +134,11 @@ function targetRuntimeProjectSlug(targetRoot = "") {
   return normalizeProjectSlug(projectSlugFromName(path.basename(resolvedTargetRoot)));
 }
 
+const __testables = Object.freeze({ catalogProjectSlugFromTargetRoot });
+
 export {
-  catalogProjectSlugFromTargetRoot,
   targetRuntimeProjectSlug,
   targetRuntimeIdentity,
-  projectRuntimeIdentity
+  projectRuntimeIdentity,
+  __testables
 };

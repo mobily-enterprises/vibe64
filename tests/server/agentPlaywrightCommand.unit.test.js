@@ -8,7 +8,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
-  AGENT_PLAYWRIGHT_COMMAND_NAME,
+  __testables,
   createAgentPreviewCommandService,
   prepareAgentPreviewCommand
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
@@ -17,6 +17,8 @@ import {
   configureVibe64Host
 } from "../../packages/vibe64-execution/src/server/index.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+
+const { AGENT_PLAYWRIGHT_COMMAND_NAME } = __testables;
 
 const execFileAsync = promisify(execFile);
 test.afterEach(() => configureVibe64Host(null));
