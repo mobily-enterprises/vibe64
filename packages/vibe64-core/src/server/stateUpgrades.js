@@ -259,9 +259,7 @@ async function runStateUpgrades({
     // ledger. State created by a current release without its baseline is not
     // one, and replaying old upgrades against it fails; say so with the error.
     const ledgerMissingHint = await ledgerExists(ledgerPath) ? "" :
-      " This installation has no state upgrade ledger. If a release that already included these upgrades created its state " +
-      "(for example, provisioning that skipped the baseline), its data is current: inspect it and record that history " +
-      "deliberately as docs/state-upgrades.md describes instead of replaying the upgrades.";
+      " This installation has no state upgrade ledger. If a release that already included these upgrades created its state (for example, provisioning that skipped the baseline), its data is current: inspect it and record that history deliberately as docs/state-upgrades.md describes instead of replaying the upgrades.";
     const ledger = await readLedger(ledgerPath);
     const pending = upgrades.slice(ledger.applied.length);
     report("info", `${pending.length} pending state upgrade(s).`);

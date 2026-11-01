@@ -22,9 +22,7 @@ import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normali
 import { commandFailure } from "./commandFailure.js";
 
 const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
-  "Browser checks need Playwright, and neither this project nor this computer has it. Report this and ask the person " +
-  "to install it on this computer (npm install -g playwright, then playwright install chromium). Do not add Playwright " +
-  "to a project that is not already a Node.js project just for these checks.";
+  "Browser checks need Playwright, and neither this project nor this computer has it. Report this and ask the person to install it on this computer (npm install -g playwright, then playwright install chromium). Do not add Playwright to a project that is not already a Node.js project just for these checks.";
 
 const DEFAULT_PLAYWRIGHT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 

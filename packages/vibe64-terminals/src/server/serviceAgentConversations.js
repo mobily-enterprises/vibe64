@@ -60,8 +60,9 @@ function createServiceAgentConversations({
           request?.status === "working" && request.workflow) {
         return {
           ok: false,
-          error: "Wait for the assistant and its review to finish before " +
-            (restoring ? "making a plan current." : "archiving the plan.")
+          error: restoring
+            ? "Wait for the assistant and its review to finish before making a plan current."
+            : "Wait for the assistant and its review to finish before archiving the plan."
         };
       }
       const result = await manageWorkPlan(context, restoring

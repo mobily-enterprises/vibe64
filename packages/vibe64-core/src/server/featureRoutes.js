@@ -84,8 +84,7 @@ function vibe64RouteHandler({
   return function wrapVibe64Route(handler, { method, path, options = {} }) {
     // A project route without its project context would skip that admission.
     if (projectScoped !== isProjectRoutePath(path)) {
-      throw new Error(`Vibe64 route ${method} ${path} is ${projectScoped ? "" : "not "}project-scoped, ` +
-        `so it must ${projectScoped ? "" : "not "}be under ${PROJECT_API_BASE}.`);
+      throw new Error(`Vibe64 route ${method} ${path} is ${projectScoped ? "" : "not "}project-scoped, so it must ${projectScoped ? "" : "not "}be under ${PROJECT_API_BASE}.`);
     }
     return async function handleVibe64Route(request, reply) {
       if (!requireLocalStudioRequest(request, reply, { message: localRequestMessage })) {

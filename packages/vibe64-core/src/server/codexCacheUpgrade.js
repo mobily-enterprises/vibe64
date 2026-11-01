@@ -60,8 +60,7 @@ async function removeUnusedCodexCaches({ systemRoot, apply, report, home = os.ho
     return;
   }
   for (const { label, paths, retired } of found) {
-    report("info", `${label}: ${apply ? "removing" : "would remove"} ${paths.length} unused ` +
-      `${retired ? "cache, temporary and log entries of a removed connection" : "plugin and app cache entries"}.`);
+    report("info", `${label}: ${apply ? "removing" : "would remove"} ${paths.length} unused ${retired ? "cache, temporary and log entries of a removed connection" : "plugin and app cache entries"}.`);
     if (apply) for (const entry of paths) await rm(entry, { recursive: true, force: true });
   }
   report("info", `${apply ? "Removed" : "Found"} unused Codex caches in ${found.length} Codex home(s).`);
