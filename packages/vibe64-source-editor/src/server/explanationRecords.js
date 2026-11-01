@@ -416,11 +416,12 @@ function sourceEditorCleanupRecordAgeMs(record = {}, nowMs = Date.now()) {
   return Number.isFinite(timestampMs) ? Math.max(0, nowMs - timestampMs) : Number.POSITIVE_INFINITY;
 }
 
-function shouldCleanupSourceEditorExplanationRecord(record = {}, {
-  activeIds = new Set(),
-  nowMs = Date.now(),
-  originId = ""
-} = {}) {
+function shouldCleanupSourceEditorExplanationRecord(record = {}, options = {}) {
+  const {
+    activeIds = new Set(),
+    nowMs = Date.now(),
+    originId = ""
+  } = options;
   if (activeIds.has(record.id)) {
     return false;
   }

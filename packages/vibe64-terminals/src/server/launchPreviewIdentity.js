@@ -6,10 +6,11 @@ import { previewTokenCookie } from "./launchPreviewHeaders.js";
 const PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
 const consumedPreviewIdentityGrantNonces = new Map();
 
-async function readStreamBuffer(stream, {
-  maxBytes = 0,
-  tooLargeError = () => new Error("Stream is too large.")
-} = {}) {
+async function readStreamBuffer(stream, options = {}) {
+  const {
+    maxBytes = 0,
+    tooLargeError = () => new Error("Stream is too large.")
+  } = options;
   const chunks = [];
   let totalBytes = 0;
   for await (const chunk of stream) {

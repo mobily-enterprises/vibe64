@@ -381,10 +381,11 @@ function normalizeSessionListOptions(options = {}) {
   };
 }
 
-function sessionStatusMatchesListOptions(status, {
-  statusGroup = "",
-  statuses = new Set()
-} = {}) {
+function sessionStatusMatchesListOptions(status, options = {}) {
+  const {
+    statusGroup = "",
+    statuses = new Set()
+  } = options;
   const normalizedStatus = toText(status) || VIBE64_SESSION_STATUS.ACTIVE;
   if (HIDDEN_VIBE64_SESSION_STATUSES.has(normalizedStatus)) {
     return false;

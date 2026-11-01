@@ -129,12 +129,13 @@ function isProjectRoutePath(path = "") {
   return path === PROJECT_API_BASE || path.startsWith(`${PROJECT_API_BASE}/`);
 }
 
-function responseStatusCode(response, {
-  failureStatus,
-  missingStatus = 404,
-  statusCode,
-  successStatus
-} = {}) {
+function responseStatusCode(response, options = {}) {
+  const {
+    failureStatus,
+    missingStatus = 404,
+    statusCode,
+    successStatus
+  } = options;
   if (typeof statusCode === "function") {
     return statusCode(response);
   }

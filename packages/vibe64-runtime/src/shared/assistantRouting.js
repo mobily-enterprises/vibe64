@@ -196,8 +196,10 @@ const isMainChatPurpose = (purpose, options = {}) => {
  * A team member's main chat waits for the owner, except in their own lesson:
  * a practice project is private to its learner, so it runs on the team setup.
  */
-const needsMainChatApproval = (purpose, actor, { practice = false, ...options } = {}) =>
-  isMainChatPurpose(purpose, options) && !isAssistantRoutingOwner(actor) && !practice;
+const needsMainChatApproval = (purpose, actor, options = {}) => {
+  const { practice = false, ...purposeOptions } = options;
+  return isMainChatPurpose(purpose, purposeOptions) && !isAssistantRoutingOwner(actor) && !practice;
+};
 
 function assistantRoutingSetupFor(purpose, actor, options = {}) {
   return isAssistantRoutingOwner(actor) || needsMainChatApproval(purpose, actor, options) ? "owner" : "nonOwner";

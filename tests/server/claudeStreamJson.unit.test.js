@@ -2508,7 +2508,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       for (;;) {
         result = representation?.canonical
           ? await goalFacade.updateGoal(input)
-          : await service.updateAgentGoal("test", { ...options, ...input }, representation);
+          : await service.updateAgentGoal("test", { ...options, ...input });
         if (result?.ok !== false || result.code !== "vibe64_agent_write_mode_busy" || result.retryable !== true) break;
         assert.equal((await trace()).filter(row => row.frame?.type === "user").length, before,
           "the original write-mode busy response rejects before native goal admission");
@@ -2721,7 +2721,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
         content: "A hook blocked the turn from ending 9 consecutive times — overriding and ending turn." }) + "\n", { flag: "a" });
       const blocked = await service.recoverActiveGoals();
       assert.equal(blocked.results.at(-1).blocked, true, JSON.stringify(blocked));
-      const blockedRead = await service.readAgentGoal("test", options, { canonical: true });
+      const blockedRead = await service.readCanonicalAgentGoal("test", options);
       assert.equal(blockedRead.goal.status, "blocked");
       assert.match(blockedRead.goal.reason, /Resolve the blocker/);
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, true,
@@ -2733,7 +2733,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
           met: false, failed: true, reason: "The remaining checks need credentials from the user." } }) + "\n");
       const impossible = await service.recoverActiveGoals();
       assert.equal(impossible.results.at(-1).blocked, true, JSON.stringify(impossible));
-      const impossibleRead = await service.readAgentGoal("test", options, { canonical: true });
+      const impossibleRead = await service.readCanonicalAgentGoal("test", options);
       assert.equal(impossibleRead.goal.status, "blocked");
       assert.equal(impossibleRead.goal.reason, "The remaining checks need credentials from the user.");
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
@@ -2747,7 +2747,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       const denied = await service.recoverActiveGoals();
       assert.equal(denied.ok, false);
       assert.match(denied.results[0].error, /actor no longer/u);
-      assert.match((await service.readAgentGoal("test", options, { canonical: true })).error, /actor no longer/u,
+      assert.match((await service.readCanonicalAgentGoal("test", options)).error, /actor no longer/u,
         "recovery failure remains visible without removing native goal controls");
       assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate);
       await service.close();
@@ -2805,7 +2805,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
         const timedOut = await service.recoverActiveGoals();
         assert.equal(timedOut.ok, false);
         assert.equal(timedOut.results[0].code, "vibe64_agent_write_mode_busy");
-        assert.match((await service.readAgentGoal("test", options, { canonical: true })).error, /Another assistant operation/u);
+        assert.match((await service.readCanonicalAgentGoal("test", options)).error, /Another assistant operation/u);
         assert.equal((await trace()).filter(row => row.frame?.type === "user").length, nativeMessagesBeforeDuplicate,
           "lock timeout is visible and never dispatches or retries a goal");
       } finally { release.resolve(); runtime.store = store; }
@@ -2864,7 +2864,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal(framesAfterRecovery, nativeMessagesBeforeDuplicate + 1, "restart admits exactly one canonical Resume");
     await service.recoverActiveGoals();
     assert.equal((await trace()).filter(row => row.frame?.type === "user").length, framesAfterRecovery);
-    visible = (await service.readAgentGoal("test", options, { canonical: true })).goal;
+    visible = (await service.readCanonicalAgentGoal("test", options)).goal;
     assert.equal(visible.status, "active");
     if (busyGoal) {
       await service.close();
@@ -2896,12 +2896,12 @@ createInterface({ input: process.stdin }).on('line', async line => {
       modelProviderId: "openai", modelId: "gpt-6-astra" };
     await store.writeMetadataValue("test", "assistant_selection", JSON.stringify(differentSelection));
     const stoppingOptions = { runtime, vibe64User: { username: "reader", role: "member" } };
-    const pinnedRead = await service.readAgentGoal("test", stoppingOptions, { canonical: true });
+    const pinnedRead = await service.readCanonicalAgentGoal("test", stoppingOptions);
     assert.equal(pinnedRead.goal.id, visible.id);
     assert.equal(pinnedRead.target.segmentId, canonicalCommand.expectedSegmentId);
     assert.equal(pinnedRead.routing.selection.engineId, "claude");
-    const stoppedGoal = await service.updateAgentGoal("test", { ...stoppingOptions, action: "pause",
-      expectedSegmentId: canonicalCommand.expectedSegmentId, expectedGoalId: visible.id }, { canonical: true });
+    const stoppedGoal = await service.updateCanonicalAgentGoal("test", { ...stoppingOptions, action: "pause",
+      expectedSegmentId: canonicalCommand.expectedSegmentId, expectedGoalId: visible.id });
     assert.equal(stoppedGoal.status, "paused");
     assert.equal((await store.readSession("test")).metadata.assistant_selection, JSON.stringify(differentSelection),
       "read and Pause retain the pinned goal target without rebinding the visible chat");

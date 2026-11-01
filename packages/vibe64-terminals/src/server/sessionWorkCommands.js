@@ -66,14 +66,15 @@ function scopedSessionWorkCommand(runCommand, context = {}, project = {}, option
   return scoped;
 }
 
-async function saveCommand(runCommand, context, command, args, {
-  additionalAllowedRoots = [],
-  commandOptions = {},
-  cwd = context.worktreePath,
-  env = {},
-  input,
-  project = {}
-} = {}) {
+async function saveCommand(runCommand, context, command, args, options = {}) {
+  const {
+    additionalAllowedRoots = [],
+    commandOptions = {},
+    cwd = context.worktreePath,
+    env = {},
+    input,
+    project = {}
+  } = options;
   const allowedRoots = [
     context.worktreePath,
     path.dirname(context.worktreePath),
@@ -105,11 +106,12 @@ async function saveCommand(runCommand, context, command, args, {
   });
 }
 
-async function git(runCommand, context, args, {
-  required = true,
-  ...options
-} = {}) {
-  const result = await saveCommand(runCommand, context, "git", args, options);
+async function git(runCommand, context, args, options = {}) {
+  const {
+    required = true,
+    ...commandOptions
+  } = options;
+  const result = await saveCommand(runCommand, context, "git", args, commandOptions);
   if (required && result?.ok !== true) {
     throw saveError(
       normalizeText(result?.stderr || result?.stdout || result?.output || result?.error) || "Git Save command failed.",

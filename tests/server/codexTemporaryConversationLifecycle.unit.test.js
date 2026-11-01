@@ -12579,7 +12579,7 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         const providerCount = captures.providerOptions.length;
         const readsBeforeUnavailable = nativeCalls.filter(([kind]) => kind === "read").length;
         assert.deepEqual(await terminals.readAgentGoal(sessionId, options), { status: "unavailable", goal: null });
-        await assert.rejects(terminals.readAgentGoal(sessionId, options, { canonical: true }), {
+        await assert.rejects(terminals.readCanonicalAgentGoal(sessionId, options), {
           code: "conversation_goal_unavailable", statusCode: 503
         });
         assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, exactPin);
@@ -12590,23 +12590,23 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         const differentSelection = { ...selection, engineId: "claude", agentId: "claude", modelProviderId: "anthropic", modelId: "sonnet" };
         await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(differentSelection));
         const stopOptions = { runtime, vibe64User: { username: "reader", role: "member" } };
-        const pinnedRead = await terminals.readAgentGoal(sessionId, stopOptions, { canonical: true });
+        const pinnedRead = await terminals.readCanonicalAgentGoal(sessionId, stopOptions);
         assert.equal(pinnedRead.goal.id, created.id);
         assert.equal(pinnedRead.target.segmentId, segmentId);
         assert.equal(pinnedRead.routing.selection.engineId, "codex");
         const controls = { ...stopOptions, expectedSegmentId: segmentId, expectedGoalId: created.id };
         const callsBeforeStale = nativeCalls.filter(([kind]) => kind !== "read").length;
-        await assert.rejects(terminals.updateAgentGoal(sessionId, { ...controls, action: "pause", expectedGoalId: "stale" }, { canonical: true }), /goal changed/);
+        await assert.rejects(terminals.updateCanonicalAgentGoal(sessionId, { ...controls, action: "pause", expectedGoalId: "stale" }), /goal changed/);
         assert.equal(nativeCalls.filter(([kind]) => kind !== "read").length, callsBeforeStale);
         assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, exactPin);
-        const paused = await terminals.updateAgentGoal(sessionId, { ...controls, action: "pause" }, { canonical: true });
+        const paused = await terminals.updateCanonicalAgentGoal(sessionId, { ...controls, action: "pause" });
         assert.equal(paused.status, "paused");
         assert.deepEqual(nativeCalls.filter(([kind]) => kind === "status"), [["status", threadId, "paused"]]);
         const pausedPin = (await store.readSession(sessionId)).metadata.assistant_routing_goal;
         assert.equal(JSON.parse(pausedPin).status, "paused");
         await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(selection));
-        const resumed = await terminals.updateAgentGoal(sessionId, { ...options, action: "resume",
-          expectedSegmentId: segmentId, expectedGoalId: created.id }, { canonical: true });
+        const resumed = await terminals.updateCanonicalAgentGoal(sessionId, { ...options, action: "resume",
+          expectedSegmentId: segmentId, expectedGoalId: created.id });
         assert.equal(resumed.status, "active");
         assert.equal(resumed.id, created.id);
         assert.deepEqual(nativeCalls.filter(([kind]) => kind === "status"), [["status", threadId, "paused"], ["status", threadId, "active"]]);
@@ -12614,11 +12614,11 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
         assert.equal(JSON.parse(resumedPin).objective, "Keep the original control");
         await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify(differentSelection));
         clearFailure = new Error("Native clear was rejected");
-        await assert.rejects(terminals.updateAgentGoal(sessionId, { ...controls, action: "cancel" }, { canonical: true }), error => error === clearFailure);
+        await assert.rejects(terminals.updateCanonicalAgentGoal(sessionId, { ...controls, action: "cancel" }), error => error === clearFailure);
         assert.equal((await store.readSession(sessionId)).metadata.assistant_routing_goal, resumedPin);
         assert.equal(goal.status, "active");
         clearFailure = null;
-        assert.equal(await terminals.updateAgentGoal(sessionId, { ...controls, action: "cancel" }, { canonical: true }), null);
+        assert.equal(await terminals.updateCanonicalAgentGoal(sessionId, { ...controls, action: "cancel" }), null);
         assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_routing_goal).status, "complete");
         assert.equal((await store.readSession(sessionId)).metadata.assistant_selection, JSON.stringify(differentSelection),
           "pinned read and stop controls do not rebind the visible assistant");
@@ -13634,8 +13634,8 @@ test("Main Codex active goal continues once after service restart and explicit P
       authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user
     });
     configure(terminals);
-    const created = await terminals.updateAgentGoal(sessionId, { ...options, action: "set",
-      expectedSegmentId: null, objective: "Finish the Codex work", tokenBudget: 5000 }, { canonical: true });
+    const created = await terminals.updateCanonicalAgentGoal(sessionId, { ...options, action: "set",
+      expectedSegmentId: null, objective: "Finish the Codex work", tokenBudget: 5000 });
     const initial = JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent);
     assert.equal(initial.active, true);
     assert.equal(initial.native.threadId, captures.provider.threadId);
@@ -13656,14 +13656,14 @@ test("Main Codex active goal continues once after service restart and explicit P
     project.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
     assert.deepEqual(writes.map(([action]) => action), ["set", "active"]);
     assert.equal(writes[0][1], writes[1][1], "restart retains the same native conversation");
-    const resumed = await resumedService.readAgentGoal(sessionId, options, { canonical: true });
+    const resumed = await resumedService.readCanonicalAgentGoal(sessionId, options);
     assert.equal(resumed.goal.id, created.id);
     assert.equal(resumed.goal.tokenBudget, 5000);
     assert.deepEqual(JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent).native, initial.native);
     await resumedService.recoverActiveGoals();
     assert.equal(writes.length, 2, "a repeated startup request cannot dispatch twice");
-    await resumedService.updateAgentGoal(sessionId, { ...options, action: "pause",
-      expectedSegmentId: resumed.target.segmentId, expectedGoalId: resumed.goal.id }, { canonical: true });
+    await resumedService.updateCanonicalAgentGoal(sessionId, { ...options, action: "pause",
+      expectedSegmentId: resumed.target.segmentId, expectedGoalId: resumed.goal.id });
     assert.equal(JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent).active, false);
     await resumedService.close();
     const pausedService = createService();
@@ -13697,8 +13697,8 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
       authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user
     });
     configure(terminals);
-    await terminals.updateAgentGoal(sessionId, { ...options, action: "set",
-      expectedSegmentId: null, objective: "Finish the Codex work" }, { canonical: true });
+    await terminals.updateCanonicalAgentGoal(sessionId, { ...options, action: "set",
+      expectedSegmentId: null, objective: "Finish the Codex work" });
     const metadata = async () => (await store.readSession(sessionId)).metadata;
     const intent = JSON.parse((await metadata()).assistant_goal_intent);
     assert.equal(intent.active, true);
@@ -13767,8 +13767,8 @@ test("a Codex goal paused by an account change resumes on the current account on
       };
     };
     terminals.configureAssistantRuntime({ authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user });
-    await terminals.updateAgentGoal(sessionId, { ...options, action: "set",
-      expectedSegmentId: null, objective: "Finish the Codex work" }, { canonical: true });
+    await terminals.updateCanonicalAgentGoal(sessionId, { ...options, action: "set",
+      expectedSegmentId: null, objective: "Finish the Codex work" });
     const threadId = captures.provider.threadId;
     // The account change paused it natively on the runtime that kept running its turn.
     goal = { ...goal, status: "paused" };
@@ -13802,8 +13802,8 @@ test("a goal that cannot continue after restart is logged with its project and t
       provider.setGoalStatus = async (_threadId, status) => ({ goal: goal = { ...goal, status } });
     };
     terminals.configureAssistantRuntime({ authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user });
-    await terminals.updateAgentGoal(sessionId, { ...options, action: "set",
-      expectedSegmentId: null, objective: "Finish the Codex work" }, { canonical: true });
+    await terminals.updateCanonicalAgentGoal(sessionId, { ...options, action: "set",
+      expectedSegmentId: null, objective: "Finish the Codex work" });
     await terminals.close();
     project.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
     project.runInProjectContext = async (_slug, operation) => operation();

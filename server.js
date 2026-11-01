@@ -262,17 +262,18 @@ async function withProcessEnv(values, fn) {
   }
 }
 
-function resolveServerRuntimeProfile(options = {}, {
-  defaultLocalTargetRoot = process.cwd()
-} = {}) {
-  if (options.runtimeProfile && typeof options.runtimeProfile === "object") {
+function resolveServerRuntimeProfile(serverOptions = {}, options = {}) {
+  const {
+    defaultLocalTargetRoot = process.cwd()
+  } = options;
+  if (serverOptions.runtimeProfile && typeof serverOptions.runtimeProfile === "object") {
     return Object.freeze({
-      ...options.runtimeProfile
+      ...serverOptions.runtimeProfile
     });
   }
-  const explicitTargetRoot = String(options.targetRoot || "").trim();
+  const explicitTargetRoot = String(serverOptions.targetRoot || "").trim();
   return createVibe64RuntimeProfile({
-    mode: options.runtimeMode,
+    mode: serverOptions.runtimeMode,
     targetRoot: explicitTargetRoot || String(defaultLocalTargetRoot || "").trim()
   });
 }

@@ -115,21 +115,22 @@ async function readCodexSelectedAccountAccess(options = {}) {
   });
 }
 
-async function currentCodexAccountIdentitySignature(options = {}, { includeInteractive = false } = {}) {
-  if (options.modelProviderId && options.modelProviderId !== "openai") {
-    const config = await readFile(path.join(options.toolHomeSource, ".codex", "config.toml"), "utf8");
+async function currentCodexAccountIdentitySignature(providerOptions = {}, options = {}) {
+  const { includeInteractive = false } = options;
+  if (providerOptions.modelProviderId && providerOptions.modelProviderId !== "openai") {
+    const config = await readFile(path.join(providerOptions.toolHomeSource, ".codex", "config.toml"), "utf8");
     return `sha256:${createHash("sha256").update(config).digest("hex")}`;
   }
-  const explicit = toText(options.accountIdentitySignature);
+  const explicit = toText(providerOptions.accountIdentitySignature);
   if (explicit) {
     return explicit;
   }
-  if (!codexAppServerIsHelper(options)) {
+  if (!codexAppServerIsHelper(providerOptions)) {
     if (!includeInteractive) {
       return "";
     }
-    await assertCodexAuthGenerationCurrent("", options);
-    const loginId = await readCodexLoginId(options.systemRoot);
+    await assertCodexAuthGenerationCurrent("", providerOptions);
+    const loginId = await readCodexLoginId(providerOptions.systemRoot);
     if (!loginId) {
       throw codexAppServerHelperAuthError(
         "vibe64_codex_login_identity_unavailable",
@@ -139,7 +140,7 @@ async function currentCodexAccountIdentitySignature(options = {}, { includeInter
     // This identifies a Vibe64 login, never an OpenAI account or workspace.
     return codexAccountIdentitySignature("vibe64-login", loginId);
   }
-  return (await readCodexSelectedAccountAuth(options)).identitySignature;
+  return (await readCodexSelectedAccountAuth(providerOptions)).identitySignature;
 }
 
 function codexAppServerRuntimeScope({
@@ -248,15 +249,16 @@ function codexReconnectRequiredError({
   return error;
 }
 
-async function markCodexAppServerReconnectRequired(options = {}, {
-  reason = "codex-app-server",
-  observed = ""
-} = {}) {
-  await markCodexReconnectRequired(options.systemRoot, {
+async function markCodexAppServerReconnectRequired(providerOptions = {}, options = {}) {
+  const {
+    reason = "codex-app-server",
+    observed = ""
+  } = options;
+  await markCodexReconnectRequired(providerOptions.systemRoot, {
     reason
   });
   throw codexReconnectRequiredError({
-    modelProviderId: options.modelProviderId,
+    modelProviderId: providerOptions.modelProviderId,
     observed
   });
 }
@@ -535,9 +537,13 @@ class CodexAppServerAgentProvider extends SharedCodexAppServerAgentProvider {
   }
 }
 
-async function assertCodexAuthPreflightReady(options = {}, { reason = "codex-auth-preflight" } = {}) {
-  const { execution, credentials, parameters } = codexAppServerRuntimeHost(options);
-  return assertNativeCodexAuthPreflightReady({ ...options, codexCommand: parameters.codexCommand }, { reason, execution, credentials });
+async function assertCodexAuthPreflightReady(providerOptions = {}, options = {}) {
+  const { reason = "codex-auth-preflight" } = options;
+  const { execution, credentials, parameters } = codexAppServerRuntimeHost(providerOptions);
+  return assertNativeCodexAuthPreflightReady(
+    { ...providerOptions, codexCommand: parameters.codexCommand },
+    { reason, execution, credentials }
+  );
 }
 
 function codexCliResumeCommand(options = {}) {

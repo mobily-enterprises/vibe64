@@ -447,7 +447,8 @@ function lessonStepNeeds(step, vocabulary = learningVocabulary) {
  * and fact it names is registered by this installation and its places are
  * open to this viewer ({ owner }). Unavailable steps are simply absent.
  */
-function lessonStepAvailable(step, { vocabulary = learningVocabulary, viewer = {} } = {}) {
+function lessonStepAvailable(step, options = {}) {
+  const { vocabulary = learningVocabulary, viewer = {} } = options;
   const needs = lessonStepNeeds(step, vocabulary);
   return needs.places.every(id => {
     const place = vocabulary.place(id);

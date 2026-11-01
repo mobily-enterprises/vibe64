@@ -100,11 +100,12 @@ function sourceEditorVibe64UserIdentity(vibe64User = null) {
     : "";
 }
 
-function sourceEditorAgentOperationOptions(context = {}, options = {}, {
-  providerId = ""
-} = {}) {
+function sourceEditorAgentOperationOptions(context = {}, baseOptions = {}, options = {}) {
+  const {
+    providerId = ""
+  } = options;
   return {
-    ...options,
+    ...baseOptions,
     providerId: toText(providerId || context.agentProviderId),
     runtime: context.runtime || null,
     session: context.session || null,

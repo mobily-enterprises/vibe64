@@ -160,22 +160,23 @@ function createSessionAgentProviderCalls({
    * @param {SessionAgentProviderMethod} method
    * @param {string} sessionId
    * @param {object} input
-   * @param {object} options
-   * @param {object} [settings]
-   * @param {string} [settings.coalesceIdentity] identical calls with this identity share one run
+   * @param {object} callOptions
+   * @param {object} [options]
+   * @param {string} [options.coalesceIdentity] identical calls with this identity share one run
    */
-  async function invokeSessionProvider(method, sessionId = "", input = {}, options = {}, {
-    coalesceIdentity = ""
-  } = {}) {
+  async function invokeSessionProvider(method, sessionId = "", input = {}, callOptions = {}, options = {}) {
+    const {
+      coalesceIdentity = ""
+    } = options;
     let operationOptions = {
-      ...options,
-      agentSettings: options.agentSettings || input.agentSettings || null
+      ...callOptions,
+      agentSettings: callOptions.agentSettings || input.agentSettings || null
     };
     if (AI_METHODS.has(method)) {
-      requireCompletedNativeConversationReplacement(options.session, { requireBriefing: method === "startTerminal" });
+      requireCompletedNativeConversationReplacement(callOptions.session, { requireBriefing: method === "startTerminal" });
     }
     if (["sendMessage", "startTerminal", "generateSessionRenewalHandover"].includes(method)) {
-      requireCompletedConversationRewind(options.session);
+      requireCompletedConversationRewind(callOptions.session);
     }
     const terminalId = toText(input.terminalSessionId);
     const terminalBinding = terminalId ? state.terminalBindings.get(terminalId) : null;
@@ -285,7 +286,7 @@ function createSessionAgentProviderCalls({
           (providerInput.attachments?.length || providerInput.steer)) {
         throw new TypeError("Bounded helpers accept supplied text only; start a new request to change their input.");
       }
-      if (!options.attachmentsPrepared && ["sendMessage", "startConversationTurn"].includes(method)) {
+      if (!callOptions.attachmentsPrepared && ["sendMessage", "startConversationTurn"].includes(method)) {
         if (method === "sendMessage" && provider.conversationOperations?.includes(method) && !context.assistantScope) {
           // The original sender chooses historical attachment IDs before this
           // same authorized storage resolver prepares their native input.

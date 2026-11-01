@@ -214,11 +214,12 @@ function withGenesisCommandShim(shimDirectories = []) {
   ];
 }
 
-function withVibe64StackCatalog(options = {}, {
-  prompt = false
-} = {}) {
+function withVibe64StackCatalog(stackOptions = {}, options = {}) {
+  const {
+    prompt = false
+  } = options;
   return {
-    ...options,
+    ...stackOptions,
     ...(prompt ? { hiddenStackPieces: VIBE64_HIDDEN_ONBOARDING_STACK_PIECES } : {}),
     stackPackages: VIBE64_STACK_PACKAGES
   };

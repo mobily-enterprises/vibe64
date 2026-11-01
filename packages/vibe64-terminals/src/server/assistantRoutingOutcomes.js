@@ -97,11 +97,12 @@ function createAssistantRoutingOutcomes({
     });
   }
 
-  async function afterTurn(sessionId, payload, options, { recovered = false } = {}) {
+  async function afterTurn(sessionId, payload, routingOptions, options = {}) {
+    const { recovered = false } = options;
     const run = payload?.payload?.agentRun;
     if (!run || run.active) return;
     let completed;
-    await exclusive(sessionId, options, async context => {
+    await exclusive(sessionId, routingOptions, async context => {
       const key = records.keyFor(sessionId, context);
       if (admission.isClosing() || routingState.running.has(key)) return;
       const state = await read(context.runtime.store, sessionId);

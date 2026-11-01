@@ -293,10 +293,11 @@ function createCodexSessionRuntimeHost({
     });
   }
 
-  function codexAppServerManagedThreadIdentity(session = {}, {
-    executionRoot = "",
-    workdir = ""
-  } = {}) {
+  function codexAppServerManagedThreadIdentity(session = {}, options = {}) {
+    const {
+      executionRoot = "",
+      workdir = ""
+    } = options;
     return {
       get executionRoot() { return normalizeText(executionRoot) || sessionSourcePath(session); },
       get workdir() { return normalizeText(workdir) || sessionSourcePath(session); }

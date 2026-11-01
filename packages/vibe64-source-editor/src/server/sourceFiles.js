@@ -350,11 +350,12 @@ async function resolveSourceEditorPath(context = {}, input = {}) {
   };
 }
 
-async function runRipgrepLines(args = [], {
-  cwd = "",
-  onLine = () => true,
-  timeoutMs = SOURCE_EDITOR_SEARCH_TIMEOUT_MS
-} = {}) {
+async function runRipgrepLines(args = [], options = {}) {
+  const {
+    cwd = "",
+    onLine = () => true,
+    timeoutMs = SOURCE_EDITOR_SEARCH_TIMEOUT_MS
+  } = options;
   const result = await runVibe64Command({
     actor: "app",
     allowedRoots: [

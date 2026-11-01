@@ -78,11 +78,12 @@ function createAssistantRoutingCancellation({
     });
   }
 
-  async function cancel(sessionId, options, { waitForCleanup = false, expectedMessageId, cleanupTimeoutMs = 30_000 } = {}) {
+  async function cancel(sessionId, routingOptions, options = {}) {
+    const { waitForCleanup = false, expectedMessageId, cleanupTimeoutMs = 30_000 } = options;
     async function cancelRouting() {
       let stop;
       let finished;
-      const result = await exclusive(sessionId, options, async context => {
+      const result = await exclusive(sessionId, routingOptions, async context => {
         const state = await read(context.runtime.store, sessionId);
         if (expectedMessageId !== undefined && state?.messageId !== expectedMessageId) {
           throw failure("The routing request changed. Retry the assistant selection.");
@@ -108,7 +109,7 @@ function createAssistantRoutingCancellation({
       });
       await stop?.();
       if (waitForCleanup) await finished;
-      if (waitForCleanup) await exclusive(sessionId, options, async context => {
+      if (waitForCleanup) await exclusive(sessionId, routingOptions, async context => {
         if ((await read(context.runtime.store, sessionId))?.helper) {
           throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
         }

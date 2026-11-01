@@ -401,12 +401,13 @@ function createSessionRecords({
     return archiveAccess.withReadableSessionPaths(sessionId, recordFiles.readBackgroundTasksFromPaths);
   }
 
-  async function writeBackgroundTaskEvent(sessionId, taskId, {
-    event = {},
-    patch = {},
-    reset = false,
-    shouldWrite = writeEveryEvent
-  } = {}) {
+  async function writeBackgroundTaskEvent(sessionId, taskId, options = {}) {
+    const {
+      event = {},
+      patch = {},
+      reset = false,
+      shouldWrite = writeEveryEvent
+    } = options;
     return mutateSession(sessionId, async (sessionPaths) => {
       const normalizedTaskId = assertSafeBackgroundTaskId(taskId);
       const previous = reset === true

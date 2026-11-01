@@ -257,7 +257,7 @@ function createServiceGoals({
     }
     const observed = await readCanonicalAgentGoal(sessionId, { vibe64User: actor });
     if (!observed.goal || goalStatusIsComplete(observed.goal.status)) return { sessionId, completed: true };
-    const result = await updateAgentGoal(sessionId, {
+    const result = await writeAgentGoal(sessionId, {
       action: "resume",
       vibe64User: actor,
       expectedSegmentId: observed.target.segmentId,
@@ -299,21 +299,29 @@ function createServiceGoals({
     return result;
   }
 
-  async function readAgentGoal(sessionId, options = {}, { canonical = false } = {}) {
+  async function readAgentGoal(sessionId, options = {}) {
+    const context = await assistantContext.assistantSessionOptions(sessionId, options);
+    const result = await sessionAgent.readGoal(sessionId, { ...context, canonicalGoal: false });
+    return applyAgentGoalReadResult(sessionId, context, result);
+  }
+
+  /**
+   * Reads the goal of the session's canonical Main conversation, with the target its update must name.
+   * @param {string} sessionId
+   * @param {object} [options]
+   */
+  async function readCanonicalAgentGoal(sessionId, options = {}) {
     const context = await assistantContext.assistantSessionOptions(sessionId, options);
     let view;
     let target;
     const result = await sessionAgent.readGoal(sessionId, {
       ...context,
-      canonicalGoal: canonical,
-      ...(canonical ? {
-        async onGoalResult(nativeResult, readTarget) {
-          view = await applyAgentGoalReadResult(sessionId, context, nativeResult);
-          target = readTarget;
-        }
-      } : {})
+      canonicalGoal: true,
+      async onGoalResult(nativeResult, readTarget) {
+        view = await applyAgentGoalReadResult(sessionId, context, nativeResult);
+        target = readTarget;
+      }
     });
-    if (!canonical) return applyAgentGoalReadResult(sessionId, context, result);
     return {
       status: view.status,
       goal: result ? { ...result, objective: view.goal.objective } : null,
@@ -323,8 +331,23 @@ function createServiceGoals({
     };
   }
 
-  async function updateAgentGoal(sessionId, input = {}, options = {}) {
-    const { canonical = false, restartIntentId = null } = options;
+  /** Updates the goal of the session's Main conversation. */
+  function updateAgentGoal(sessionId, input) {
+    return writeAgentGoal(sessionId, input, { canonical: false });
+  }
+
+  /**
+   * Updates the goal of the session's canonical Main conversation at the target its read observed.
+   * @param {string} sessionId
+   * @param {object} input
+   */
+  function updateCanonicalAgentGoal(sessionId, input) {
+    return writeAgentGoal(sessionId, input, { canonical: true });
+  }
+
+  /** The one goal write behind the two update methods; a goal restart also names its intent. */
+  async function writeAgentGoal(sessionId, input, options) {
+    const { canonical, restartIntentId = null } = options;
     if (input.action === "resume" && await cancelGoalIfMainAiChanged(sessionId, input.vibe64User || null)) {
       return { ok: false, code: "vibe64_goal_main_ai_changed", error: MAIN_AI_CHANGED_GOAL_NOTICE };
     }
@@ -486,7 +509,9 @@ function createServiceGoals({
     // Validate the selected goal before recording the person's stop intent.
     // Native cleanup may fail, but a restart must never undo that intent.
     if (["pause", "cancel"].includes(input.action)) {
-      const current = await readAgentGoal(sessionId, context, { canonical });
+      const current = canonical
+        ? await readCanonicalAgentGoal(sessionId, context)
+        : await readAgentGoal(sessionId, context);
       const same = canonical
         ? current.target?.segmentId === input.expectedSegmentId && current.goal?.id === input.expectedGoalId
         : current.threadId === input.threadId && current.goal?.createdAt === input.createdAt && current.goal?.objective === input.objective;
@@ -623,24 +648,6 @@ function createServiceGoals({
       goalSettings: result
     }, "Assistant settings prepared for subsequent turns.");
     return result;
-  }
-
-  /**
-   * Reads the goal of the session's canonical Main conversation, with the target its update must name.
-   * @param {string} sessionId
-   * @param {object} [options]
-   */
-  function readCanonicalAgentGoal(sessionId, options) {
-    return readAgentGoal(sessionId, options, { canonical: true });
-  }
-
-  /**
-   * Updates the goal of the session's canonical Main conversation at the target its read observed.
-   * @param {string} sessionId
-   * @param {object} input
-   */
-  function updateCanonicalAgentGoal(sessionId, input) {
-    return updateAgentGoal(sessionId, input, { canonical: true });
   }
 
   return Object.freeze({

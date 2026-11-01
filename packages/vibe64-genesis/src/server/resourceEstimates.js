@@ -34,11 +34,12 @@ function memoryPair(fields, typicalKey, highKey, resourcePath, line) {
   return { typicalBytes, highBytes };
 }
 
-function parseVibe64ResourceEstimatesLines(lines, {
-  path: resourcePath = "genesis/stack.md#Resource estimates",
-  targets = [],
-  hasWorkspaceSetup = false
-} = {}) {
+function parseVibe64ResourceEstimatesLines(lines, options = {}) {
+  const {
+    path: resourcePath = "genesis/stack.md#Resource estimates",
+    targets = [],
+    hasWorkspaceSetup = false
+  } = options;
   if (
     !Array.isArray(lines)
     || lines.length > 2048

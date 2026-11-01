@@ -144,7 +144,8 @@ function requireSystemRoot(systemRoot) {
  * One apply.lock excludes ordinary upgrades, explicit repairs, baselines and
  * backup retention. busy() answers for a held lock; without it, that is an error.
  */
-async function withUpgradeLock(upgradeRoot, operation, { busy = null } = {}) {
+async function withUpgradeLock(upgradeRoot, operation, options = {}) {
+  const { busy = null } = options;
   const lockPath = path.join(upgradeRoot, "apply.lock");
   let lock;
   try {

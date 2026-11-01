@@ -62,11 +62,12 @@ export function normalizeAgentWorkdir(value) {
   return path.resolve(workdir);
 }
 
-export function agentTerminalIdentityForWorkdir(session = {}, {
-  provider = "",
-  validateConversationId = normalizeAgentConversationId,
-  workdir = ""
-} = {}) {
+export function agentTerminalIdentityForWorkdir(session = {}, options = {}) {
+  const {
+    provider = "",
+    validateConversationId = normalizeAgentConversationId,
+    workdir = ""
+  } = options;
   const metadata = session.metadata || {};
   const normalizedProvider = normalizeAgentProvider(provider);
   const recordedProvider = normalizeAgentProvider(metadata.agent_identity_provider);

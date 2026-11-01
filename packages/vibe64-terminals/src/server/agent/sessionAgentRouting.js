@@ -100,7 +100,8 @@ function createSessionAgentRouting({
     };
   }
 
-  async function resolvePurpose(input = {}, options = {}, { facts = new Map(), validateModels = true } = {}) {
+  async function resolvePurpose(input = {}, routingOptions = {}, options = {}) {
+    const { facts = new Map(), validateModels = true } = options;
     /**
      * One availability response shares connection/catalogue reads across its
      * purposes. The cache ends with that response; dispatch resolves afresh.
@@ -112,12 +113,12 @@ function createSessionAgentRouting({
     // Options are supplied by the server, never spread from a request body.
     // Preview and resumed work must retain their explicit actor even inside an
     // owner's request context. Provider execution still checks access itself.
-    const actor = await resolveAssistantUser(assistantUser(options));
-    options = { ...options, vibe64User: actor };
-    const configuration = await routingConfiguration(options);
+    const actor = await resolveAssistantUser(assistantUser(routingOptions));
+    routingOptions = { ...routingOptions, vibe64User: actor };
+    const configuration = await routingConfiguration(routingOptions);
     const { purpose, override, requirements, reviewEnabled, temporaryChat = false } = input;
     // A lesson is private to its learner; the server decides, never the input.
-    const practice = isPracticeProjectRuntime(options.runtime) || currentRequestIsPracticeProject();
+    const practice = isPracticeProjectRuntime(routingOptions.runtime) || currentRequestIsPracticeProject();
     const values = assistantRoutingSetupValues(configuration, purpose, actor, { temporaryChat, practice });
     const role = ASSISTANT_PURPOSE_ROLES[purpose];
     // Team members never reach main chat's models; the resolver says why.
@@ -130,7 +131,7 @@ function createSessionAgentRouting({
     async function readSelectionAccess(assistantSelection) {
       const fact = {
         ...await readFact(`access:${JSON.stringify(assistantSelection)}`,
-          () => routingSelectionAccess(assistantSelection, options))
+          () => routingSelectionAccess(assistantSelection, routingOptions))
       };
       connectionAccess.push(fact);
       return fact;

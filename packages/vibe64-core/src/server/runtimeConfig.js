@@ -311,9 +311,10 @@ function redactRuntimeConfigValue(record = {}) {
   return record.secret ? REDACTED_RUNTIME_CONFIG_VALUE : record.value;
 }
 
-function runtimeConfigViewRecord(record = {}, {
-  missingKeys = new Set()
-} = {}) {
+function runtimeConfigViewRecord(record = {}, options = {}) {
+  const {
+    missingKeys = new Set()
+  } = options;
   const normalizedRecord = normalizeRuntimeConfigRecord(record);
   return {
     editable: normalizedRecord.editable,

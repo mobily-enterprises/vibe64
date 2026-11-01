@@ -144,9 +144,10 @@ async function listOsUsers({
   return users.sort((left, right) => left.username.localeCompare(right.username));
 }
 
-function osUserEligibility(user = {}, {
-  extraServiceNames = []
-} = {}) {
+function osUserEligibility(user = {}, options = {}) {
+  const {
+    extraServiceNames = []
+  } = options;
   const reasons = [];
   const username = normalizeText(user.username);
   const shell = String(user.shell || "").trim();

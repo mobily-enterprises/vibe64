@@ -259,7 +259,8 @@ function createSessionArchiveAccess({
             return { ok: true, paths: [...published].sort() };
           });
         };
-        const pruneArtifacts = async (relativePaths, { beforePrune } = {}) => {
+        const pruneArtifacts = async (relativePaths, options = {}) => {
+          const { beforePrune } = options;
           const requested = artifactExpiryRequest(relativePaths, beforePrune);
           return change(() => pruneExtractedArtifacts(archived, requested, { beforePrune, beforeWork }));
         };
@@ -299,7 +300,8 @@ function createSessionArchiveAccess({
     return target;
   }
 
-  async function publishExtractedSessionArchive(session, { beforePublish = doNothing, beforeWork = doNothing } = {}) {
+  async function publishExtractedSessionArchive(session, options = {}) {
+    const { beforePublish = doNothing, beforeWork = doNothing } = options;
     await beforeWork({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
     const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
     try {

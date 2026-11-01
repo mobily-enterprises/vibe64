@@ -152,12 +152,13 @@ async function acquireAttachmentSessionLock(
 async function acquireAttachmentSessionKeyLock(
   projectKey,
   sessionKey,
-  options = {},
-  {
-    waitMs = 0
-  } = {}
+  lockOptions = {},
+  options = {}
 ) {
-  const lockPath = path.join(attachmentLocksRoot(options), projectKey, `${sessionKey}.lock`);
+  const {
+    waitMs = 0
+  } = options;
+  const lockPath = path.join(attachmentLocksRoot(lockOptions), projectKey, `${sessionKey}.lock`);
   const lockDirectory = path.dirname(lockPath);
   await mkdir(lockDirectory, { mode: vibe64SharedModes().directory, recursive: true });
   const deadline = Date.now() + Math.max(0, waitMs);
