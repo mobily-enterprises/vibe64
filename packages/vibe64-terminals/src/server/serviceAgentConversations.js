@@ -310,7 +310,7 @@ function createServiceAgentConversations({
     return sessionAgent.interruptDetachedChatTurn(sessionId, input, options);
   }
 
-  function readSessionWorkPlan(sessionId, input = {}) {
+  function readSessionWorkPlan(sessionId, input) {
     return vibe64Result(async () => ({
       ok: true,
       sessionId,
@@ -318,11 +318,11 @@ function createServiceAgentConversations({
     }));
   }
 
-  function archiveSessionWorkPlan(sessionId, input = {}) {
+  function archiveSessionWorkPlan(sessionId, input) {
     return changeSessionWorkPlan(sessionId, "archive", input);
   }
 
-  function restoreSessionWorkPlan(sessionId, input = {}) {
+  function restoreSessionWorkPlan(sessionId, input) {
     return changeSessionWorkPlan(sessionId, "restore", input);
   }
 

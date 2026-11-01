@@ -285,11 +285,11 @@ function createServiceAssistant({
     return sessionAgent.interruptTurn(sessionId, input, options);
   }
 
-  function generateSessionPromptHints(sessionId, input = {}) {
+  function generateSessionPromptHints(sessionId, input) {
     return sessionPromptHints.generateSessionPromptHints(sessionId, input);
   }
 
-  function cancelSessionPromptHints(sessionId, input = {}) {
+  function cancelSessionPromptHints(sessionId, input) {
     return sessionPromptHints.cancelSessionPromptHints(sessionId, input);
   }
 
