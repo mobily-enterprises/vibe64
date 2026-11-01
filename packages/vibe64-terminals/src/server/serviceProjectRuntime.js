@@ -10,6 +10,7 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
+import { createKeyedQueue } from "./keyedOperations.js";
 import { PROJECT_RUNTIME_IDLE_TIMEOUT_REASON, projectRuntimeDormancyState } from "./projectRuntimeDormancy.js";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { sessionRecordId } from "./serviceSessionRecords.js";
@@ -98,7 +99,7 @@ function createServiceProjectRuntime({
   publishProjectRuntimeChanged,
   sessionAgent
 }) {
-  const projectRuntimeOpenOperations = new Map();
+  const projectRuntimeOpens = createKeyedQueue();
 
   async function closeProjectRuntimeIfOpenMarkerMissing(eventName = "server.terminals.projectRuntime.markerMissing") {
     const { context, runtime } = await sessionAccess.currentProjectRuntimeOpenState();
@@ -258,10 +259,9 @@ function createServiceProjectRuntime({
     const reason = String(input?.reason || "project-open").trim() || "project-open";
     projectServices.opened(context);
     const key = context.projectRuntimeRoot;
-    const previous = projectRuntimeOpenOperations.get(key) || Promise.resolve();
     // Tabs share a runtime. Serialize opens so they observe one transition,
     // while every visit still refreshes the dormant-runtime grace period.
-    const operation = previous.catch(() => {}).then(async () => {
+    return projectRuntimeOpens.run(key, async () => {
       const previousRuntime = await readProjectRuntimeOpenState({ projectRuntimeRoot: key });
       const runtime = await writeProjectRuntimeOpenState({
         projectRuntimeRoot: key,
@@ -280,14 +280,6 @@ function createServiceProjectRuntime({
       }
       return result;
     });
-    projectRuntimeOpenOperations.set(key, operation);
-    try {
-      return await operation;
-    } finally {
-      if (projectRuntimeOpenOperations.get(key) === operation) {
-        projectRuntimeOpenOperations.delete(key);
-      }
-    }
   }
 
   function closeDormantProjectRuntime(input = {}) {

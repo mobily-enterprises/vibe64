@@ -3,10 +3,13 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseWorkPlanLines, workPlanScope } from "../shared/assistantWorkPlan.js";
+import { createKeyedQueue } from "./keyedOperations.js";
 import { sha256Hex } from "./sha256Hex.js";
 
 const PLAN_LIMIT = 256 * 1024;
-const mutations = new Map();
+// Process-wide: whole pair reads and publication/cleanup of a plan file run
+// one at a time per plan path, whichever service asks.
+const workPlanQueue = createKeyedQueue();
 
 function planError(message, code = "vibe64_work_plan_invalid") {
   return Object.assign(new Error(message), { code, statusCode: 409 });
@@ -208,17 +211,8 @@ async function retireUnreferencedDocuments(context) {
   for (const file of retired) await rm(file);
 }
 
-// Whole pair reads and publication/cleanup share the original per-path queue.
 async function withWorkPlan(context, operation) {
-  const file = workPlanPath(context);
-  const previous = mutations.get(file) || Promise.resolve();
-  const pending = previous.catch(() => {}).then(operation);
-  mutations.set(file, pending);
-  try {
-    return await pending;
-  } finally {
-    if (mutations.get(file) === pending) mutations.delete(file);
-  }
+  return workPlanQueue.run(workPlanPath(context), operation);
 }
 
 function readWorkPlan(context) {
