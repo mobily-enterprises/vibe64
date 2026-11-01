@@ -115,7 +115,10 @@ function createOpenCodeSessionRenewalSeedReceipt({
     };
   }
 
-  return Object.freeze({ acknowledge, complete });
+  return Object.freeze({
+    acknowledge,
+    complete
+  });
 }
 
 /**
@@ -227,7 +230,10 @@ function createOpenCodeSessionRenewalPreparation({
     };
   }
 
-  return Object.freeze({ prepareRenewalHandover, prepareRenewalSeed });
+  return Object.freeze({
+    prepareRenewalHandover,
+    prepareRenewalSeed
+  });
 }
 
 export {

@@ -223,7 +223,12 @@ function createOpenCodeSessionRegistration({
     prepareSessionCleanup,
     runNativeDetachedConversation
   });
-  return { provider, hostPreparation, accounts, terminals };
+  return Object.freeze({
+    provider,
+    hostPreparation,
+    accounts,
+    terminals
+  });
 }
 
 export {

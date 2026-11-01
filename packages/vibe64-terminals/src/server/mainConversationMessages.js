@@ -478,7 +478,7 @@ function createOpenCodeMainMessagePreparation({
           session: context.session,
           sourceRoot: sessionSourcePath(context.session),
           threadId,
-          vibe64User: options.vibe64User || null,
+          vibe64User: options.vibe64User,
           workdir: context.workdir
         });
         if (actor?.ok === false) {
@@ -498,7 +498,7 @@ function createOpenCodeMainMessagePreparation({
         actorMetadata = {
           ...input.turnMetadata,
           ...await conversationActorMetadata({
-            vibe64User: options.vibe64User || null
+            vibe64User: options.vibe64User
           }),
           ...conversationReviewActorMetadata(input.turnMetadata)
         };

@@ -13,6 +13,7 @@ import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
+/** @typedef {import("./types.js").OpenCodeLifecyclePreparation} OpenCodeLifecyclePreparation */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
 /** @typedef {import("./types.js").OpenCodeConversationEvents} OpenCodeConversationEvents */
@@ -86,7 +87,7 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
  * @param {OpenCodeConversationEvents} dependencies.events
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareSessionCleanup
+ * @param {OpenCodeLifecyclePreparation["prepareSessionCleanup"]} dependencies.prepareSessionCleanup
  */
 function createOpenCodeScopedPreparation({
   project,

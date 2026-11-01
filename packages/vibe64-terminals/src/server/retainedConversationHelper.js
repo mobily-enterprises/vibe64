@@ -141,7 +141,10 @@ function createRetainedConversationHelper({
     return responseText;
   }
 
-  return Object.freeze({ cleanup, runHelper });
+  return Object.freeze({
+    cleanup,
+    runHelper
+  });
 }
 
 export { createRetainedConversationHelper };

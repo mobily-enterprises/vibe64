@@ -168,7 +168,7 @@ function createOpenCodeHostPreparation({
   async function configuredConnections(context = {}, options = {}, selected = null) {
     const listed = await listConnections({
       engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-      vibe64User: options.vibe64User || null
+      vibe64User: options.vibe64User
     });
     const providerIds = new Set((Array.isArray(listed) ? listed : [])
       .map((connection) => toText(connection?.modelProviderId || connection?.id))
@@ -182,7 +182,7 @@ function createOpenCodeHostPreparation({
           engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
           modelProviderId,
           sessionId: context.sessionId,
-          vibe64User: options.vibe64User || null
+          vibe64User: options.vibe64User
         }), modelProviderId);
       } catch (error) {
         if (modelProviderId === selected?.modelProviderId) {
@@ -226,7 +226,7 @@ function createOpenCodeHostPreparation({
     const selected = requireOpenCodeConnection(await resolveConnection({
       engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
       modelProviderId: connection.providerId,
-      vibe64User: options.vibe64User || null
+      vibe64User: options.vibe64User
     }), connection.providerId);
     if (selected.apiKey !== connection.apiKey || (selected.canonicalUrl || "") !== (connection.baseURL || "")) {
       throw new Error("The selected OpenCode connection changed. Resolve the current authorized connection before continuing.");
@@ -252,7 +252,7 @@ function createOpenCodeHostPreparation({
       engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
       modelProviderId: context.selection.modelProviderId,
       sessionId: context.sessionId,
-      vibe64User: options.vibe64User || null
+      vibe64User: options.vibe64User
     }), context.selection.modelProviderId);
     const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
     const projectContextRoot = learningRoot || path.resolve(context.runtime.projectContextRoot);
@@ -265,7 +265,7 @@ function createOpenCodeHostPreparation({
         if (!context.assistantScope && getAssistantManager()) {
           const helper = await getAssistantManager().resolveAssistantPurpose({ purpose: "quick_helper" }, {
             ...context,
-            vibe64User: options.vibe64User || null
+            vibe64User: options.vibe64User
           }).catch(() => null);
           if (helper?.available && helper.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&
               helper.effectiveSelection.modelProviderId === context.selection.modelProviderId) {
