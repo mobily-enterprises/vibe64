@@ -448,10 +448,12 @@ function createSessionConversationStore({
           ...saved?.metadata,
           ...message.turnMetadata
         }) : saved?.metadata;
-        if (!saved && !metadata?.assistantSelection && newTurnMetadata) metadata = normalizeConversationTurnMetadata({
-          ...newTurnMetadata,
-          ...metadata
-        });
+        if (!saved && !metadata?.assistantSelection && newTurnMetadata) {
+          metadata = normalizeConversationTurnMetadata({
+            ...newTurnMetadata,
+            ...metadata
+          });
+        }
         if (!saved && !metadata?.assistantSelection) {
           const selection = vibe64AssistantSelectionFromMetadata(
             await recordFiles.readMetadataFromPaths(sessionPaths),

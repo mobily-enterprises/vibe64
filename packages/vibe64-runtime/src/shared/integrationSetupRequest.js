@@ -31,12 +31,14 @@ export function parseIntegrationSetupRequest(message) {
       continue;
     }
     const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(line);
-    if (opening) fence = {
-      character: opening[1][0],
-      length: opening[1].length,
-      start: index,
-      request: opening[1] === "```" && opening[2] === "vibe64-integration"
-    };
+    if (opening) {
+      fence = {
+        character: opening[1][0],
+        length: opening[1].length,
+        start: index,
+        request: opening[1] === "```" && opening[2] === "vibe64-integration"
+      };
+    }
   }
   return null;
 }

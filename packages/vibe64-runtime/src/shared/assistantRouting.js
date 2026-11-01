@@ -507,9 +507,11 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
       "implementation_uncertain"
     ];
     if (![3, 4].includes(previous.schemaVersion) || !statuses.includes(previous.status) ||
-        !previous.messageId || !previous.input || !previous.assignments) throw new Error(
-      "Saved routing request is unsupported. Finish earlier routing upgrades first."
-    );
+        !previous.messageId || !previous.input || !previous.assignments) {
+      throw new Error(
+        "Saved routing request is unsupported. Finish earlier routing upgrades first."
+      );
+    }
     const { continuation, implementationMessage, reviewMessageId, autoExecution, reviewStatus, outcome, ...request } = previous;
     let stage = null;
     if (previous.status.startsWith("planning") || previous.reason === "planning" && !reviewMessageId) stage = "planning";

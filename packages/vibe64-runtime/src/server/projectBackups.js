@@ -96,7 +96,9 @@ async function maintainProjectBackups({ stateRoot, dryRun = false, now = Date.no
           if (!dryRun) {
             await unlink(target);
             result.reclaimedBytes += bytes;
-          } else result.retainedBytes += bytes;
+          } else {
+            result.retainedBytes += bytes;
+          }
         } else {
           result.issues.push({ code: "project_backups_entry_unverified" });
         }

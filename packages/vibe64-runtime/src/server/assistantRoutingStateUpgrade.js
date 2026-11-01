@@ -83,8 +83,9 @@ function validateAssistantRoutingUpgradeRecord(value, options = {}) {
     }
   }
   if (value.override) {
-    if (value.override.schema) selection(value.override, "Saved routing override");
-    else {
+    if (value.override.schema) {
+      selection(value.override, "Saved routing override");
+    } else {
       if (!value.override.selection) throw new Error("Saved routing override has no captured model selection.");
       validateAssistantRoutingUpgradeRecord(value.override, { schemaVersion });
     }
@@ -179,10 +180,12 @@ function upgradeMetadata(metadata, currentSelection, label) {
     validateAssistantRoutingUpgradeRecord(savedGoal, { schemaVersion });
     if (!savedGoal.selection) throw new Error(`${label} has an invalid explicit goal selection.`);
   }
-  if (nativePreferences) validateAssistantRoutingUpgradeRecord(savedPreferences, {
-    preferences: true,
-    schemaVersion: savedPreferences.mode === "intern" ? 3 : 4
-  });
+  if (nativePreferences) {
+    validateAssistantRoutingUpgradeRecord(savedPreferences, {
+      preferences: true,
+      schemaVersion: savedPreferences.mode === "intern" ? 3 : 4
+    });
+  }
   const nativeWorkflows = [
     nativePreferences && savedPreferences.workflowEngineId,
     nativeRequest && !["done", "cancelled"].includes(savedRequest.status) && savedRequest.workflowEngineId,
@@ -236,13 +239,15 @@ function upgradeMetadata(metadata, currentSelection, label) {
     // Legacy direct chats retain their exact destination and editing behavior.
     let next = preferences;
     if (!next && activeGoal) next = { mode: goal.mode, review: false, override: goalSelection };
-    if (!next && unfinished) next = {
-      mode: request.mode,
-      review: request.review === true,
-      ...(request.mode !== "auto" && request.assignments[request.mode]
-        ? { override: selection(request.assignments[request.mode], label) }
-        : {})
-    };
+    if (!next && unfinished) {
+      next = {
+        mode: request.mode,
+        review: request.review === true,
+        ...(request.mode !== "auto" && request.assignments[request.mode]
+          ? { override: selection(request.assignments[request.mode], label) }
+          : {})
+      };
+    }
     next ||= { mode: "code", review: false, ...(currentSelection ? { override: currentSelection } : {}) };
     if (!nativePreferences) changes.assistant_routing = JSON.stringify({ ...next, workflowEngineId });
   } else if (preferences || unfinished || activeGoal) {

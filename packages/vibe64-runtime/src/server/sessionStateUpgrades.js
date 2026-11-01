@@ -122,11 +122,13 @@ function createSessionStateUpgrades({
       for (const plan of next.plans || []) {
         const previous = plans.find(({ conversationId }) => conversationId === plan.conversationId);
         if (!previous || typeof plan.text !== "string") throw new Error("Plan upgrade cannot create an unknown conversation's plan.");
-        if (previous.original !== plan.text) changes.push({
-          filePath: previous.filePath,
-          original: previous.original,
-          contents: plan.text
-        });
+        if (previous.original !== plan.text) {
+          changes.push({
+            filePath: previous.filePath,
+            original: previous.original,
+            contents: plan.text
+          });
+        }
         if (previous.originalOld !== null) changes.push({ filePath: previous.oldPath, original: previous.originalOld, contents: null });
       }
       if (transformPlanProgress) {
@@ -161,9 +163,11 @@ function createSessionStateUpgrades({
           }
           for (const patch of transformPlanProgress(files)) {
             if (!isPlainObject(patch) || !/^(current\.(md|json)|(archive|plan|progress)\/[a-f0-9]{64}\.(md|json))$/u.test(patch.name) ||
-                !(patch.text === null || typeof patch.text === "string")) throw new Error(
-              "Plan-progress upgrade attempted an unrelated write."
-            );
+                !(patch.text === null || typeof patch.text === "string")) {
+              throw new Error(
+                "Plan-progress upgrade attempted an unrelated write."
+              );
+            }
             const original = files.find(file => file.name === patch.name)?.text ?? null;
             if (original !== patch.text) changes.push({ filePath: path.join(root, patch.name), original, contents: patch.text });
           }
@@ -220,11 +224,13 @@ function createSessionStateUpgrades({
             const original = await readRegularText(filePath);
             const record = JSON.parse(original);
             const upgraded = transformHelperRecord(record);
-            if (JSON.stringify(record) !== JSON.stringify(upgraded)) changes.push({
-              filePath,
-              original,
-              contents: `${JSON.stringify(upgraded)}\n`
-            });
+            if (JSON.stringify(record) !== JSON.stringify(upgraded)) {
+              changes.push({
+                filePath,
+                original,
+                contents: `${JSON.stringify(upgraded)}\n`
+              });
+            }
           }
         };
         await inspectHelpers(sessionPaths.backgroundTasksRoot);
@@ -308,11 +314,13 @@ function createSessionStateUpgrades({
           const nextArchiveRecord = transformArchiveRecord ? await transformArchiveRecord({ record: parsed, sessionPaths }) : null;
           if (nextArchiveRecord) archiveRecords.sessionArchiveRecordFromJson(nextArchiveRecord, { archivePath: filePath, metadataPath });
           if (!changes.length) {
-            if (nextArchiveRecord) updates.push({
-              filePath: metadataPath,
-              original: rawRecord,
-              contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n`
-            });
+            if (nextArchiveRecord) {
+              updates.push({
+                filePath: metadataPath,
+                original: rawRecord,
+                contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n`
+              });
+            }
             return;
           }
           for (const change of changes) {
@@ -332,11 +340,13 @@ function createSessionStateUpgrades({
           if (!result.ok) throw new Error(`Cannot stage upgraded archive for ${sessionId}.`);
           await archiveRecords.validateSessionArchive(replacementPath);
           updates.push({ filePath, replacementPath });
-          if (nextArchiveRecord) updates.push({
-            filePath: metadataPath,
-            original: rawRecord,
-            contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n`
-          });
+          if (nextArchiveRecord) {
+            updates.push({
+              filePath: metadataPath,
+              original: rawRecord,
+              contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n`
+            });
+          }
         }, { temporaryRoot });
       }
     };
@@ -460,7 +470,9 @@ function createSessionStateUpgrades({
               `Practice archive ${id} has inconsistent binding and index. Inspect its original transaction before upgrading.`
             );
           }
-        } else files.push({ filePath, kind: "metadata" });
+        } else {
+          files.push({ filePath, kind: "metadata" });
+        }
         if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA)) return [];
         return [{ filePath, original: null, contents: `${binding}\n` }];
       },
