@@ -125,7 +125,13 @@ function projectServiceFor(root, { sessionRoot } = {}) {
             ...(sessionRoot ? { sessionRoot } : {})
           };
         },
-        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); }
+        getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+        // The session store admits the refresh's agent write at once.
+        store: {
+          async runSessionExclusive(_sessionId, _lock, operation) {
+            return { acquired: true, value: await operation() };
+          }
+        }
       };
     },
     createRuntimeWithoutSource(options) { return this.createRuntime(options); }
