@@ -4,6 +4,7 @@ import { registerLearningModeReader } from "@local/vibe64-core/server/learningMo
 import { currentOsUser } from "@local/vibe64-core/server/osUserIdentity";
 import { registerPracticeRequestActor } from "@local/vibe64-core/server/projectRequestContext";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { createTrainingCodeSaveOwner } from "./codeSaveOwner.js";
 import { createTrainingLearnerNotesActions } from "./learnerNotesActions.js";
 import { aiReadyFact, createLearningFacts } from "./learningFacts.js";
@@ -26,6 +27,7 @@ import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js"
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").TrainingService} TrainingService */
 /** @typedef {import("./types.js").LearningFact} LearningFact */
+/** @typedef {import("@local/vibe64-colleague/server/types").ColleagueService} ColleagueService */
 
 const Vibe64TrainingFeature = defineFeature({
   id: "vibe64.training",
@@ -40,6 +42,7 @@ const Vibe64TrainingFeature = defineFeature({
     terminals: "vibe64.terminals"
   },
   optional: {
+    colleague: "vibe64.colleague",
     learningFacts: "vibe64.training.learning-facts",
     trainingHost: "vibe64.training.host",
     sourceEditor: "vibe64.source-editor"
@@ -56,6 +59,7 @@ const Vibe64TrainingFeature = defineFeature({
    * @param {ProjectService} capabilities.project
    * @param {SessionsService} capabilities.sessions
    * @param {TerminalsService} capabilities.terminals
+   * @param {ColleagueService | null} capabilities.colleague releases a closed lesson's teacher thread
    * @param {ReadonlyArray<LearningFact> | null} capabilities.learningFacts a host's own fact readers
    * @param {TrainingService | null} capabilities.trainingHost
    * @param {SourceEditorService | null} capabilities.sourceEditor
@@ -69,6 +73,7 @@ const Vibe64TrainingFeature = defineFeature({
     project,
     sessions,
     terminals,
+    colleague,
     learningFacts,
     trainingHost,
     sourceEditor
@@ -88,7 +93,9 @@ const Vibe64TrainingFeature = defineFeature({
       sessions,
       terminals,
       // The built-in fact readers, then any a host provides.
-      facts: createLearningFacts([aiReadyFact({ terminals }), ...(learningFacts ?? [])])
+      facts: createLearningFacts([aiReadyFact({ terminals }), ...(learningFacts ?? [])]),
+      // Without Colleague no teacher thread is running, so there is nothing to release.
+      releaseLearnThread: colleague ? colleague.releaseLearnThread : doNothing
     });
     registerVibe64ActionContext(actionCatalogue, {
       env,

@@ -39,6 +39,7 @@ import { createTrainingOperations } from "./trainingOperations.js";
  * @param {SessionsService} dependencies.sessions
  * @param {TerminalsService} dependencies.terminals
  * @param {LearningFacts} dependencies.facts
+ * @param {(thread: { learnerKey: string, attemptId: string }) => Promise<void> | void} dependencies.releaseLearnThread
  */
 function createTraining({
   actionCatalogue,
@@ -48,7 +49,8 @@ function createTraining({
   projectContext,
   sessions,
   terminals,
-  facts
+  facts,
+  releaseLearnThread
 }) {
   const systemRoot = projectContext.systemRoot;
   const catalogue = createInstalledTrainingCatalogue({ systemRoot });
@@ -99,7 +101,8 @@ function createTraining({
     learners,
     content,
     projectContext,
-    projectArchive
+    projectArchive,
+    releaseLearnThread
   });
   const exercises = createTrainingService({
     catalogue,

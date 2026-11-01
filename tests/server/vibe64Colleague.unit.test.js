@@ -13,7 +13,6 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { PROJECT_OPERATION, registerVibe64ActionContext, vibe64ActionPolicy, WORKSPACE_OPERATION, WORKSPACE_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { __testables, LEARNING_MODE_PROJECT_CODE, assertLearningModeAllowsProject, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
-import { releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { nameColleague } from "../../packages/vibe64-colleague/src/server/colleagueName.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
@@ -5632,7 +5631,7 @@ test("Training's release ends an attempt's thread, even mid-turn, and leaves its
   await f.send("Finish my lesson", "learn-2");
   await until(() => f.observations.starts.length === 2);
   // Training releases the thread while that very turn runs, then moves the file.
-  await releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
+  await f.service.releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
   const archived = path.join(f.root, "archive.json");
   await fs.rename(file, archived);
   stream.finish();
@@ -5651,7 +5650,7 @@ test("Training's release ends an attempt's thread, even mid-turn, and leaves its
   assert.equal((await f.service.wait(f.context)).messages.at(-1).text, "Lobby answer");
   // Releasing a thread that is not loaded still removes its runtime work.
   await fs.mkdir(path.join(f.root, "colleague", "NDI", "learn", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), { recursive: true });
-  await releaseLearnThread({ learnerKey: "NDI", attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });
+  await f.service.releaseLearnThread({ learnerKey: "NDI", attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });
   assert.equal(await exists(path.join(f.root, "colleague", "NDI", "learn", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")), false);
 });
 
@@ -5669,7 +5668,7 @@ test("Training's release stops the attempt's running teacher turn instead of let
   learnModeFixture(t).learn();
   await f.send("Finish my lesson", "learn-1");
   await until(() => f.observations.starts.length === 1);
-  await releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
+  await f.service.releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
   await until(() => signal.aborted);
   await until(async () => !await exists(path.join(f.root, "colleague", "NDI", "learn", LESSON_ATTEMPT)));
 });
@@ -5850,7 +5849,7 @@ test("a lesson's teacher watches only its attempt's practice project, and the wa
   assert.deepEqual((await f.service.read({}, f.context)).watches, [], "Develop keeps its own watches");
 
   learning.learn();
-  await releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
+  await f.service.releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
   await new Promise(resolve => setTimeout(resolve, 30));
   const reads = f.observations.deploymentReads.length;
   await new Promise(resolve => setTimeout(resolve, 60));

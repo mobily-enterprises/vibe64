@@ -280,7 +280,6 @@ function createColleagueTurns({
 
   async function close() {
     serviceState.lifecycle.closed = true;
-    threads.unregisterReleaser();
     // Each thread stops on its own. One that cannot stop cleanly is reported
     // by name and never keeps the other threads, or the conversation
     // runtimes, from stopping.

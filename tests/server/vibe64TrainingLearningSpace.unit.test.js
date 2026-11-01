@@ -3,7 +3,7 @@ import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { learnThreadFile, registerLearnThreadReleaser } from "@local/vibe64-core/server/learnThreads";
+import { learnThreadFile } from "@local/vibe64-core/server/learnThreads";
 import { createStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { createProjectArchiveService } from "@local/vibe64-project/server/project-archive";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
@@ -48,7 +48,7 @@ async function fixture(t, { headroom = async () => {}, release = async () => {},
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-learning-space-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const released = [];
-  t.after(registerLearnThreadReleaser(async input => { await release(input); released.push(input); }));
+  const releaseLearnThread = async input => { await release(input); released.push(input); };
   const systemRoot = path.join(root, "system");
   const pins = await installTopic(root, systemRoot);
   const installed = createInstalledTrainingContent({ systemRoot });
@@ -74,7 +74,7 @@ async function fixture(t, { headroom = async () => {}, release = async () => {},
       closed.push(slug);
       return { ok: true };
     } });
-  const space = createTrainingLearningSpace({ learners: store, content, projectContext, projectArchive, keptArchivedProjects });
+  const space = createTrainingLearningSpace({ learners: store, content, projectContext, projectArchive, releaseLearnThread, keptArchivedProjects });
 
   let starts = 0;
   // A lesson in progress as preparation leaves it: with its practice project

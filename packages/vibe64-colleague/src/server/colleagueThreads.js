@@ -3,7 +3,7 @@ import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { readLearningModeFor } from "@local/vibe64-core/server/learningMode";
-import { learnThreadFile, learnThreadLearnerKey, registerLearnThreadReleaser } from "@local/vibe64-core/server/learnThreads";
+import { learnThreadFile, learnThreadLearnerKey } from "@local/vibe64-core/server/learnThreads";
 import { createColleagueNavigationCoordination } from "./navigationCoordination.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { failure, requireResult } from "./colleagueFailure.js";
@@ -104,6 +104,8 @@ function createColleagueThreads({
    */
   async function releaseLearnThread({ learnerKey, attemptId }) {
     const file = learnThreadFile({ systemRoot, learnerKey, attemptId });
+    // A closed Colleague has stopped every thread already.
+    if (serviceState.lifecycle.closed) return;
     const key = learnThreadKey({ learnerKey, attemptId });
     serviceState.releasedThreads.add(key);
     const state = await serviceState.users.get(key)?.catch(() => null);
@@ -130,7 +132,6 @@ function createColleagueThreads({
       }
     })().catch(() => {});
   }
-  const unregisterReleaser = registerLearnThreadReleaser(releaseLearnThread);
 
   async function loadState(key, owner, thread) {
     const develop = thread.kind === "develop";
@@ -267,7 +268,7 @@ function createColleagueThreads({
     stateFor,
     assertCurrentConversation,
     actionContext,
-    unregisterReleaser
+    releaseLearnThread
   });
 }
 

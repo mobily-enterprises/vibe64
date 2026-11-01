@@ -1,7 +1,7 @@
 import { lstat, mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { practiceSlug } from "@local/vibe64-core/server/learningSpace";
-import { learnThreadFile, releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
+import { learnThreadFile } from "@local/vibe64-core/server/learnThreads";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { learnerIdentity } from "./learnerState.js";
 import { pinnedLessonKey } from "./installedContent.js";
@@ -40,6 +40,8 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a
  * @param {InstalledTrainingContent} dependencies.content
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {ProjectArchiveService} dependencies.projectArchive
+ * @param {(thread: { learnerKey: string, attemptId: string }) => Promise<void> | void} dependencies.releaseLearnThread
+ *   Colleague's, or a no-op where no Colleague is composed
  * @param {string} [dependencies.systemRoot]
  * @param {number} [dependencies.keptArchivedProjects]
  * @param {typeof rm} [dependencies.removePath]
@@ -49,6 +51,7 @@ function createTrainingLearningSpace({
   content,
   projectContext,
   projectArchive,
+  releaseLearnThread,
   systemRoot = projectContext.systemRoot,
   keptArchivedProjects = KEPT_ARCHIVED_PROJECTS,
   removePath = rm
@@ -204,8 +207,8 @@ function createTrainingLearningSpace({
    */
   async function closeThread(actor, attemptId, archive) {
     const learnerKey = learnerIdentity(actor).key;
-    await releaseLearnThread({ learnerKey, attemptId });
     const file = learnThreadFile({ systemRoot, learnerKey, attemptId });
+    await releaseLearnThread({ learnerKey, attemptId });
     if (!archive) return removePath(file, { force: true });
     if (!await lstat(file).then(() => true, missingAsFalse)) return;
     const destination = path.join(bundleRoot(actor, attemptId), "conversation.json");

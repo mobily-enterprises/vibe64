@@ -143,6 +143,7 @@ function createColleagueService({
     navigate: navigation.navigate,
     guide: navigation.guide,
     acknowledgeNavigation: navigation.acknowledgeNavigation,
+    releaseLearnThread: threads.releaseLearnThread,
     send: turns.send,
     stop: turns.stop,
     wait: turns.wait,
