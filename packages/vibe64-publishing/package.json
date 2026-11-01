@@ -6,7 +6,6 @@
   "type": "module",
   "exports": {
     "./client/publish-page": "./src/client/PublishPage.vue",
-    "./client/publishFormat": "./src/client/publishFormat.js",
     "./server/actions": "./src/server/publishingActions.js",
     "./server/service": "./src/server/service.js",
     "./server/types": "./src/server/types.js",
