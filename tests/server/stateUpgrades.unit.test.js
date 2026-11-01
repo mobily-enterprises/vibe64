@@ -119,6 +119,15 @@ test("Claude command upgrade requires its owner and records completion only afte
   assert.equal(JSON.parse(await readFile(f.ledgerPath)).applied.at(-1).id, clonedDefaultBranchId);
 });
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
+
+/**
+ * The end of the runner's registry as it is laid out, one member per line, from its comma-list form registryTail(", a, b];").
+ * @param {string} commaList
+ */
+function registryTail(commaList) {
+  const names = commaList.replace(/^, /u, "").replace(/\];$/u, "").split(", ");
+  return `,\n${names.map((name) => `  ${name}`).join(",\n")}\n];`;
+}
 async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy, nativeContinuity = upgradeColleagueNativeContinuity, nativeInstructions = upgradeColleagueNativeInstructions, retiredOperation = repairColleagueRetiredOperation, interactiveContinuity = upgradeColleagueHistoricalInteractiveContinuity } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-upgrade-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -199,10 +208,10 @@ test("personal voice policy gate leaves old profiles untouched through check, in
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";\n';
-  const entry = ', personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];';
+  const entry = registryTail(', personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];');
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
-  const olderSource = source.replace(importLine, "").replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
+  const olderSource = source.replace(importLine, "").replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "\n];")
     .replace('import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n', "")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
@@ -556,7 +565,7 @@ test("the pre-training registry rejects the newer boundary ledger without changi
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const currentSource = await readFile(runnerUrl, "utf8");
   const boundaryImport = 'import trainingPreparation from "./stateUpgrades/20261006-training-preparation.js";\n';
-  const boundaryRegistryEntry = ', trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];';
+  const boundaryRegistryEntry = registryTail(', trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];');
   assert.equal(currentSource.split(boundaryImport).length, 2);
   assert.equal(currentSource.split(boundaryRegistryEntry).length, 2);
   // Keep the original runner logic and owners; only emulate its prior registry.
@@ -570,7 +579,7 @@ test("the pre-training registry rejects the newer boundary ledger without changi
     .replace('import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";\n', "")
     .replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "")
     .replace('import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";\n', "")
-    .replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(boundaryRegistryEntry, "];")
+    .replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(boundaryRegistryEntry, "\n];")
     .replace('import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n', "")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
@@ -639,7 +648,7 @@ test("the previous original registry refuses the personal preference boundary le
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const currentSource = await readFile(runnerUrl, "utf8");
   const boundaryImport = 'import personalAssistantPreferences from "./stateUpgrades/20261006-personal-assistant-preferences.js";\n';
-  const boundaryEntry = ', personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];';
+  const boundaryEntry = registryTail(', personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];');
   assert.equal(currentSource.split(boundaryImport).length, 2);
   assert.equal(currentSource.split(boundaryEntry).length, 2);
   // Only the new import/registry entry changes: original runner logic stays intact.
@@ -651,7 +660,7 @@ test("the previous original registry refuses the personal preference boundary le
     .replace('import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";\n', "")
     .replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "")
     .replace('import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";\n', "")
-    .replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(boundaryEntry, "];")
+    .replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(boundaryEntry, "\n];")
     .replace('import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n', "")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
@@ -771,14 +780,14 @@ test("prospective assessment boundary leaves old reservations untouched and olde
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingAssessments from "./stateUpgrades/20261006-training-assessments.js";\n';
-  const entry = ', trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];';
+  const entry = registryTail(', trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];');
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "")
     .replace('import trainingQuestionAdmission from "./stateUpgrades/20261007-training-question-admission.js";\n', "")
     .replace('import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";\n', "")
     .replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "")
-    .replace('import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
+    .replace('import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "\n];")
     .replace('import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n', "")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
@@ -813,7 +822,7 @@ test("prospective attempt-history boundary preserves learner bytes and the prior
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";\n';
-  const entry = ', trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];';
+  const entry = registryTail(', trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];');
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   // Only the exact new import and entry change. This proves registry-version
@@ -821,7 +830,7 @@ test("prospective attempt-history boundary preserves learner bytes and the prior
   const olderSource = source.replace(importLine, "")
     .replace('import trainingQuestionAdmission from "./stateUpgrades/20261007-training-question-admission.js";\n', "")
     .replace('import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";\n', "")
-    .replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
+    .replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "\n];")
     .replace('import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n', "")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
@@ -884,14 +893,14 @@ test("prospective question-admission boundary preserves learner and native histo
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingQuestionAdmission from "./stateUpgrades/20261007-training-question-admission.js";\n';
-  const entry = ', trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];';
+  const entry = registryTail(', trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];');
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   // Remove only this prospective entry; preserve the original runner and owners.
   // This proves registry-version refusal, not a deployed older executable.
   const olderSource = source.replace(importLine, "")
     .replace('import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";\n', "")
-    .replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
+    .replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "\n];")
     .replace('import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n', "")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
@@ -947,10 +956,10 @@ test("Learning practice session boundary preserves existing records through chec
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n';
-  const entry = ', learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];';
+  const entry = registryTail(', learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];');
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
-  const olderSource = source.replace(importLine, "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
+  const olderSource = source.replace(importLine, "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "\n];")
     .replace('import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n', "")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
@@ -1049,10 +1058,10 @@ test("paired Plan/Progress registry requires its typed owner, preserves the ledg
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n';
-  const entry = ', planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];';
+  const entry = registryTail(', planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];');
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
-  const olderSource = source.replace(importLine, "").replace(entry, "];")
+  const olderSource = source.replace(importLine, "").replace(entry, "\n];")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   for (const apply of [false, true]) {
@@ -1153,7 +1162,7 @@ test("independent credential registry requires the real owner, checks before cle
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const olderSource = source.replace('import independentProviderCredentials from "./stateUpgrades/20261009-independent-provider-credentials.js";\n', "")
-    .replace(', independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];', '];')
+    .replace(registryTail(', independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];'), "\n];")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   await assert.rejects(older.runStateUpgrades({ ...options, apply: true }), /newer history; refusing to upgrade or downgrade/);
@@ -1247,7 +1256,7 @@ test("connected project boundary preserves existing source bindings and records 
   const source = await readFile(runnerUrl, "utf8");
   const olderSource = source
     .replace('import connectedProjectBindings from "./stateUpgrades/20261015-connected-project-bindings.js";\n', "")
-    .replace(', connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];', '];')
+    .replace(registryTail(', connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];'), "\n];")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   await assert.rejects(older.runStateUpgrades({ systemRoot: f.systemRoot, report() {} }), /newer history/u);
@@ -1389,7 +1398,7 @@ test("learning-space reset boundary requires both owners, passes the projects ro
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const olderSource = source.replace('import learningSpaceReset from "./stateUpgrades/20261022-learning-space-reset.js";\n', "")
-    .replace(", claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];", ", claudeBlockedGoal];")
+    .replace(registryTail(", claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];"), registryTail(", claudeBlockedGoal];"))
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   const applied = await readFile(f.ledgerPath);
