@@ -108,7 +108,8 @@ function createSessionWork({
         } catch (error) {
           // Receiving status must not hide Main Save. Its separate publication
           // preflight repeats the authorized inspection and refuses unknowns.
-          connectedInspectionError = normalizeText(error?.message) || "Connected repository status is unavailable. Retry Save to check it again.";
+          connectedInspectionError = normalizeText(error?.message) ||
+            "Connected repository status is unavailable. Retry Save to check it again.";
         }
       }
       return {

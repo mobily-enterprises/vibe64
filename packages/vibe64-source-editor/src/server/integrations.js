@@ -136,8 +136,9 @@ async function inspectApplicationIntegrationSetup(context, input) {
   const { configuration: config, baseHash } = await readApplicationIntegrations(context);
   const integration = config.integrations[input.integrationId];
   if (!integration) throw sourceEditorError("Choose an integration saved in this project.", "vibe64_integration_missing", {}, 404);
-  // readable-check: allow optional-call - optional operation: an integration provider definition decides per settings only when it has configurationOnlyForSettings()
-  if (INTEGRATION_PROVIDERS.some((provider) => provider.id === integration.provider && (provider.configurationOnly || provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
+  if (INTEGRATION_PROVIDERS.some((provider) => provider.id === integration.provider
+    // readable-check: allow optional-call - optional operation: an integration provider definition decides per settings only when it has configurationOnlyForSettings()
+    && (provider.configurationOnly || provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
     throw sourceEditorError(
       "This integration uses public configuration, not an account connection. Save its settings and wire them into the application.",
       "vibe64_integration_configuration_only",

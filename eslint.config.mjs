@@ -54,6 +54,26 @@ export default [
     "packages/vibe64-terminals/src/server/**",
     "packages/vibe64-training/src/server/**",
     "packages/vibe64-usage-recording/src/server/**",
-    "packages/vibe64-voice/src/server/**"
+    "packages/vibe64-voice/src/server/**",
+    "packages/*/src/shared/**"
   ]),
+  // One formatter config for the app's server and shared code (width 140; prompt and other long text in
+  // strings and templates is exempt). Published state-upgrade scripts are immutable.
+  {
+    files: ["packages/*/src/server/**/*.js", "packages/*/src/shared/**/*.js", "server/**/*.js", "server.js"],
+    ignores: ["packages/vibe64-core/src/server/stateUpgrades/**"],
+    rules: {
+      "max-len": ["error", {
+        code: 140,
+        ignoreUrls: true,
+        ignoreStrings: true,
+        ignoreTemplateLiterals: true,
+        ignoreRegExpLiterals: true,
+        ignorePattern: "readable-check: allow|eslint-disable|@typedef|@type \\{|@param \\{|@property \\{|@returns \\{"
+      }],
+      semi: ["error", "always"],
+      quotes: ["error", "double", { avoidEscape: true, allowTemplateLiterals: true }],
+      "comma-dangle": ["error", "never"]
+    }
+  }
 ];

@@ -226,7 +226,9 @@ function createService({
     if (inspection?.ok === false) return skipped(normalizeText(inspection.error) || "this session's work could not be inspected.");
     if (!inspection.unsaved) return "Automatic save: nothing new to save.";
     const saved = await service.saveSessionWork(sessionId, { destinationReview: inspection.destination, vibe64User: submittedBy });
-    return saved?.ok === false ? skipped(normalizeText(saved.error) || "Save was refused.") : "Saved automatically after completing the plan.";
+    return saved?.ok === false
+      ? skipped(normalizeText(saved.error) || "Save was refused.")
+      : "Saved automatically after completing the plan.";
   });
   /**
    * @param {object} preparation

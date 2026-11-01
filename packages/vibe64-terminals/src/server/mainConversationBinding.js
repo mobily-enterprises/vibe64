@@ -334,7 +334,14 @@ export async function openMainConversation(conversationRuntime, context, prepare
   });
 }
 
-export async function publishMainConversationEvent(namespaceForSession, publishApplicationSessionChanged, publishConversation, sessionId, event, applicationEvent = event) {
+export async function publishMainConversationEvent(
+  namespaceForSession,
+  publishApplicationSessionChanged,
+  publishConversation,
+  sessionId,
+  event,
+  applicationEvent = event
+) {
   await publishApplicationSessionChanged(sessionId, applicationEvent);
   if (publishConversation) await publishConversation({ namespace: namespaceForSession(sessionId), sessionId, event });
 }

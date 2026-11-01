@@ -822,7 +822,8 @@ function createTrainingLearnerState({
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision, startCommit }, "start");
   }
 
-  return Object.freeze({ readState,
+  return Object.freeze({
+    readState,
     activeAttemptForProject,
     readAttemptRecord,
     reserveAttempt,
@@ -831,17 +832,21 @@ function createTrainingLearnerState({
     runPreparationExclusive,
     beginPreparation,
     recordPreparationReady,
-      recordPreparationFailure,
-      recordPreparationStart,
-      runReviewExclusive: reviews.runReviewExclusive,
+    recordPreparationFailure,
+    recordPreparationStart,
+    runReviewExclusive: reviews.runReviewExclusive,
     readCodeLedger: codeLedgers.readCodeLedger,
     updateCodeLedger: codeLedgers.updateCodeLedger,
-      readStepProgress: steps.readStepProgress,
-      updateStepProgress: steps.updateStepProgress,
-      readReader: steps.readReader,
-      saveReader: steps.saveReader,
+    readStepProgress: steps.readStepProgress,
+    updateStepProgress: steps.updateStepProgress,
+    readReader: steps.readReader,
+    saveReader: steps.saveReader,
+    readTeacherNotes: notes.readTeacherNotes,
+    saveTeacherNotes: notes.saveTeacherNotes,
+    readLearningMode: learningMode.readLearningMode,
     // readable-check: allow setter-seam - not a slot: setLearningMode saves one learner's Learn mode
-    readTeacherNotes: notes.readTeacherNotes, saveTeacherNotes: notes.saveTeacherNotes, readLearningMode: learningMode.readLearningMode, setLearningMode: learningMode.setLearningMode });
+    setLearningMode: learningMode.setLearningMode
+  });
 }
 
 export {

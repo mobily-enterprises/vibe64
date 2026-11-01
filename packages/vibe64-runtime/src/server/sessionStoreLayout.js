@@ -1,7 +1,14 @@
 import { open, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { isMissingPathError, isPlainObject, normalizeTargetRoot, pathExists, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
+import {
+  isMissingPathError,
+  isPlainObject,
+  normalizeTargetRoot,
+  pathExists,
+  pathInsideOrEqual,
+  vibe64Error
+} from "@local/vibe64-core/server/core";
 import { runSourceCommand } from "./sourceCommand.js";
 import { fileIdentity } from "./sessionFiles.js";
 import { resolveVibe64CurrentSessionAliasPath } from "./currentSessionAlias.js";
