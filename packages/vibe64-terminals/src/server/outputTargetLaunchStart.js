@@ -45,7 +45,7 @@ import {
 import { latestLaunchTerminal } from "./launchPreviewStatus.js";
 import { writePreviewDiagnostic } from "./launchPreviewDiagnostics.js";
 import {
-  readLaunchContext,
+  readPreparedLaunchContext,
   findOutputTarget,
   listOutputTargets,
   managedPreviewLaunchPlan
@@ -149,10 +149,8 @@ function createOutputTargetLaunchStart({
             return previewStoppedRefusal();
           }
         }
-        const context = await readLaunchContext(projectService, sessionId, {
-          awaitWorkspacePrepared: true,
+        const context = await readPreparedLaunchContext(projectService, sessionId, {
           ensureWorkspacePrepared,
-          prepareEnvironment: true,
           // An explicit start runs a failed setup again; an automatic one
           // reports the stored failure instead of rerunning it unasked.
           rerunFailedSetup: input.automatic !== true

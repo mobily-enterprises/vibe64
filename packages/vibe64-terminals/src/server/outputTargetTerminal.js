@@ -29,9 +29,6 @@ import { createOutputTargetTerminalSessions } from "./outputTargetTerminalSessio
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").ProjectServicesEnsure} ProjectServicesEnsure */
 
-// Without a browser owner there are no managed Preview browsers to stop.
-const stopNoPreviewBrowsers = async () => ({ ok: true });
-
 /**
  * A session's output target terminals and managed Preview. Each concern is
  * built once, in dependency order, and the controller offers its functions
@@ -45,7 +42,7 @@ const stopNoPreviewBrowsers = async () => ({ ok: true });
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof startResourceWorkflow} [dependencies.startWorkflow]
  * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
- * @param {(sessionId: string) => Promise<object>} [dependencies.stopPreviewBrowsers]
+ * @param {(sessionId: string) => Promise<object>} dependencies.stopPreviewBrowsers
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
  * @param {typeof setVibe64WorkflowPhase} [dependencies.setWorkflowPhase]
  * @param {(sessionId: string) => object | null} dependencies.sessionAdmissionFailure
@@ -59,7 +56,7 @@ function createOutputTargetTerminalController({
   runCommand = runVibe64Command,
   startWorkflow = startResourceWorkflow,
   stopExecution = stopVibe64Execution,
-  stopPreviewBrowsers = stopNoPreviewBrowsers,
+  stopPreviewBrowsers,
   finishWorkflow = finishVibe64Workflow,
   setWorkflowPhase = setVibe64WorkflowPhase,
   sessionAdmissionFailure

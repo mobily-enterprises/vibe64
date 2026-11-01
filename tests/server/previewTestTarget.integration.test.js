@@ -204,9 +204,11 @@ process.stdout.write(JSON.stringify({
     }
   };
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+    ensureWorkspacePrepared: async () => ({ ok: true }),
     env: { TMPDIR: socketRoot },
     projectService,
     runCommand,
+    stopPreviewBrowsers: async () => ({ ok: true }),
     // This standalone fixture runs inside the test execution, not a hosted project.
     startWorkflow: async () => ({ ok: true, workflow: null }),
     ...workflowHooks
@@ -441,7 +443,7 @@ test("explicitly stopped Preview stays stopped after test success, failure and c
     assert.equal((await f.controller.startTerminal(f.sessionId, { automatic: true })).code, "vibe64_preview_stopped");
     assert.equal(await readFile(path.join(f.sourceRoot, "working.json"), "utf8"), originalData);
   }
-  const reopened = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null, env: { TMPDIR: f.socketRoot }, projectService: f.projectService });
+  const reopened = createOutputTargetTerminalController({ ensureWorkspacePrepared: async () => ({ ok: true }), stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null, env: { TMPDIR: f.socketRoot }, projectService: f.projectService });
   t.after(() => reopened.close());
   const afterReopen = await reopened.launchStatus(f.sessionId);
   assert.equal(afterReopen.preview.state, "stopped");

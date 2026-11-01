@@ -216,6 +216,9 @@ async function terminalServiceFixture(t, lock, {
     async readEnv() {
       return { ok: true, records: [] };
     },
+    async readPreviewApplicationIdentities() {
+      return { identities: [], ok: true };
+    },
     async runInProjectContext(_context, operation) {
       return operation();
     },

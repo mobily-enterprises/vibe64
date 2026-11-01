@@ -66,7 +66,7 @@ test("preview status, open, and identity selection reject frozen sessions before
     error: "Session renewal has frozen preview access.",
     ok: false
   };
-  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null,
+  const controller = createOutputTargetTerminalController({ ensureWorkspacePrepared: async () => ({ ok: true }), stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null,
     projectService: {
       async createRuntime() {
         projectReads += 1;
@@ -168,7 +168,7 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
     let prepared = 0;
     let writes = 0;
     const metadata = { output_target_preview_stopped: value };
-    const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+    const controller = createOutputTargetTerminalController({ stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
       ensureWorkspacePrepared() { prepared += 1; },
       projectService: { currentProjectSlug: () => "", async createRuntime() { return {
         store: { async mutateSession() { writes += 1; } },
@@ -186,7 +186,7 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
 
 test("an explicit Preview start reruns a failed setup; an automatic one does not", async (t) => {
   const requests = [];
-  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+  const controller = createOutputTargetTerminalController({ stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared(_sessionId, context) {
       requests.push(context.rerunFailedSetup);
       return { ok: false, error: "Workspace preparation failed." };
@@ -563,7 +563,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       selectedProject: {},
       targetRoot: projectContextRoot
     };
-    controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, sessionAdmissionFailure: () => null,
+    controller = createOutputTargetTerminalController({ stopPreviewBrowsers: async () => ({ ok: true }), ensureProjectServices: async () => {}, sessionAdmissionFailure: () => null,
       async startWorkflow(input) {
         workflowStarts.push(input);
         await changeStackDuringAdmission?.();

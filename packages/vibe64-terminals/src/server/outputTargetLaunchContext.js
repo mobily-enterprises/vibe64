@@ -12,42 +12,17 @@ import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
 // output targets with the workspace-setup gate, and the managed Preview plan.
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 /**
- * Reads what a launch works from: the session (after its workspace preparation,
- * when a preparer is given), its source root, project environment, Preview
- * identities and the project's roots.
+ * What a launch works from, for a session already read: its source root,
+ * project environment, Preview identities and the project's roots.
  * @param {ProjectService} projectService
- * @param {string} sessionId
- * @param {object} [options]
- * @param {boolean} [options.awaitWorkspacePrepared]
- * @param {((sessionId: string, context: object) => Promise<object>) | null} [options.ensureWorkspacePrepared]
- * @param {boolean} [options.prepareEnvironment]
- * @param {boolean} [options.rerunFailedSetup]
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {object} session
+ * @param {boolean} prepareEnvironment
  */
-async function readLaunchContext(projectService, sessionId, {
-  awaitWorkspacePrepared = false,
-  ensureWorkspacePrepared = null,
-  prepareEnvironment = false,
-  rerunFailedSetup = false
-} = {}) {
-  const runtime = await projectService.createRuntime();
-  let session = await runtime.getSession(sessionId);
-  assertSourceInspectionHealthy(session.sourceInspection);
-  if (typeof ensureWorkspacePrepared === "function") {
-    const setup = await ensureWorkspacePrepared(sessionId, {
-      rerunFailedSetup,
-      runtime,
-      session
-    });
-    if (setup?.ok === false) {
-      throw Object.assign(new Error(setup.error || "Workspace preparation could not start."), setup);
-    }
-    if (awaitWorkspacePrepared && setup?.completion) {
-      await setup.completion;
-    }
-    session = await runtime.getSession(sessionId);
-  }
+async function launchContextFor(projectService, runtime, session, prepareEnvironment) {
   const sessionSourceRoot = sessionSourcePath(session);
   const projectEnvironment = await loadProjectExecutionEnv({
     prepare: prepareEnvironment,
@@ -56,19 +31,10 @@ async function readLaunchContext(projectService, sessionId, {
     session,
     target: "output-target"
   });
-  // readable-check: allow method-probe - optional operation: a project service without a target root reads the session source only
-  const projectContextRoot = typeof projectService?.currentTargetRoot === "function"
-    ? String(projectService.currentTargetRoot() || "").trim()
-    : "";
-  // readable-check: allow method-probe - optional operation: a project service without managed app identities offers none
-  const previewIdentitySettings = typeof projectService?.readPreviewApplicationIdentities === "function"
-    ? await projectService.readPreviewApplicationIdentities({
-        sessionId: session.sessionId
-      })
-    : {
-        identities: [],
-        ok: true
-      };
+  const projectContextRoot = String(projectService.currentTargetRoot() || "").trim();
+  const previewIdentitySettings = await projectService.readPreviewApplicationIdentities({
+    sessionId: session.sessionId
+  });
   if (previewIdentitySettings?.ok === false) {
     const error = new Error(
       previewIdentitySettings.errors?.[0]?.message ||
@@ -83,18 +49,55 @@ async function readLaunchContext(projectService, sessionId, {
     projectService,
     previewApplicationIdentities: previewIdentitySettings.identities || [],
     projectEnvironment,
-    projectsRoot: projectService?.selectedProject?.projectsRoot || "",
+    projectsRoot: projectService.selectedProject?.projectsRoot || "",
     projectContextRoot,
     projectSlug: currentProjectSlug(projectService),
     runtime,
-    // readable-check: allow method-probe - optional operation: a project service without service data keeps none
-    serviceDataRoot: typeof projectService?.currentServiceDataRoot === "function"
-      ? projectService.currentServiceDataRoot()
-      : "",
+    serviceDataRoot: projectService.currentServiceDataRoot(),
     session,
     store: runtime.store,
     sessionSourceRoot
   };
+}
+
+/**
+ * Reads what a launch works from: the session, its source root, project
+ * environment, Preview identities and the project's roots.
+ * @param {ProjectService} projectService
+ * @param {string} sessionId
+ */
+async function readLaunchContext(projectService, sessionId) {
+  const runtime = await projectService.createRuntime();
+  const session = await runtime.getSession(sessionId);
+  assertSourceInspectionHealthy(session.sourceInspection);
+  return launchContextFor(projectService, runtime, session, false);
+}
+
+/**
+ * Reads what a launch starts from: the session after its workspace
+ * preparation has completed, with the project environment prepared.
+ * @param {ProjectService} projectService
+ * @param {string} sessionId
+ * @param {object} options
+ * @param {(sessionId: string, context: object) => Promise<object>} options.ensureWorkspacePrepared
+ * @param {boolean} options.rerunFailedSetup
+ */
+async function readPreparedLaunchContext(projectService, sessionId, { ensureWorkspacePrepared, rerunFailedSetup }) {
+  const runtime = await projectService.createRuntime();
+  const session = await runtime.getSession(sessionId);
+  assertSourceInspectionHealthy(session.sourceInspection);
+  const setup = await ensureWorkspacePrepared(sessionId, {
+    rerunFailedSetup,
+    runtime,
+    session
+  });
+  if (setup?.ok === false) {
+    throw Object.assign(new Error(setup.error || "Workspace preparation could not start."), setup);
+  }
+  if (setup?.completion) {
+    await setup.completion;
+  }
+  return launchContextFor(projectService, runtime, await runtime.getSession(sessionId), true);
 }
 
 async function listOutputTargets(context, {
@@ -263,6 +266,7 @@ function managedPreviewLaunchPlan({
 
 export {
   readLaunchContext,
+  readPreparedLaunchContext,
   listOutputTargets,
   workspaceSetupLaunchDisabledReason,
   findOutputTarget,
