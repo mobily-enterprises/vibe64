@@ -162,12 +162,13 @@ test("session cleanup drains admitted preparation, rejects overlapping acquisiti
 
 test("readiness proves live control identity and lifecycle logs exclude credentials", async () => {
   const { createAgentEnvCommandService, prepareAgentEnvCommand } = await import("../../packages/vibe64-terminals/src/server/agentEnvCommand.js");
+  const { NO_PRODUCTION_ENVIRONMENT } = await import("../../packages/vibe64-terminals/src/server/productionEnvironment.js");
   const { subscribeUnixCommandControlChanges } = await import("../../packages/vibe64-terminals/src/server/unixJsonCommand.js");
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-controls-"));
   const entries = [];
   const changes = [];
   const logger = { info: (event) => entries.push(event), warn: (event) => entries.push(event) };
-  const service = createAgentEnvCommandService({ logger, projectService: {
+  const service = createAgentEnvCommandService({ logger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT, projectService: {
     readCurrentProject: async () => ({ slug: "control-test" }),
     readEnv: async () => ({}), saveEnvUserValues: async () => ({}),
     runInProjectContext: async (_slug, operation) => operation()

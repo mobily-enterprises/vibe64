@@ -13,6 +13,14 @@
 /** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
 /** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
 /** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/**
+ * A host's production Env for the agent Env command (vibe64.terminals.production-environment).
+ * @typedef {object} ProductionEnvironmentProvider
+ * @property {(record: object | null) => boolean} isUserValueRecord
+ * @property {(input: { projectSlug: string }) => Promise<object>} readRecords
+ * @property {(input: { key: string, projectSlug: string }) => Promise<object>} removeVariable
+ * @property {(input: { key: string, projectSlug: string, secret: boolean, value: string }) => Promise<object>} setVariable
+ */
 /** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
 /** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */

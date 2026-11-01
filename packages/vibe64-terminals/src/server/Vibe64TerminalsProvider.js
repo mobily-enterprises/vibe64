@@ -18,6 +18,11 @@ import {
 } from "./events.js";
 import { registerRoutes } from "./registerRoutes.js";
 import {
+  NO_PRODUCTION_ENVIRONMENT,
+  TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
+  assertProductionEnvironmentProvider
+} from "./productionEnvironment.js";
+import {
   createService,
   startProjectRuntimeDormancyCleanupSchedule
 } from "./service.js";
@@ -31,6 +36,7 @@ import {
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 
 const LIVE_HOST_ENV_KEYS = Object.freeze([
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
@@ -84,6 +90,10 @@ function createVibe64TerminalsFeature({
       uploads: "runtime.uploads",
       project: "vibe64.project"
     },
+    // A composed host's production Env for the agent Env command.
+    optional: {
+      productionEnvironmentProvider: TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN
+    },
     provides: {
       terminals: "vibe64.terminals"
     },
@@ -98,16 +108,19 @@ function createVibe64TerminalsFeature({
      * @param {RuntimeFastify} capabilities.fastify
      * @param {RuntimeHttp} capabilities.http
      * @param {RuntimeLogger} capabilities.logger
+     * @param {ProductionEnvironmentProvider | null} capabilities.productionEnvironmentProvider
      * @param {ProjectService} capabilities.project
      * @param {{ actionCatalogue: ActionCatalogue }} context
      */
-    setup({ env, events, fastify, http, logger, project }, { actionCatalogue }) {
+    setup({ env, events, fastify, http, logger, productionEnvironmentProvider, project }, { actionCatalogue }) {
+      assertProductionEnvironmentProvider(productionEnvironmentProvider);
       const terminals = createService({
         actions: actionCatalogue,
         codexTerminalController,
         env: terminalsProviderEnv(env),
         logger,
         opencodeTerminalController,
+        productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,
         projectServices,
         projectService: project,
         publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),

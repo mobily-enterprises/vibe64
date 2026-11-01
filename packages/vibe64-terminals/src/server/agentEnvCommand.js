@@ -25,6 +25,7 @@ import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
+import { offersProductionEnvironment } from "./productionEnvironment.js";
 import {
   createSessionCommandServers,
   unixCommandSocketPath
@@ -47,6 +48,7 @@ import {
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
+/** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 
 const AGENT_ENV_COMMAND_NAME = "vibe64-env";
 const AGENT_ENV_COMMAND_SOCKET_NAME = "env-command.sock";
@@ -90,13 +92,12 @@ const commandServers = createSessionCommandServers({
  * @param {object} dependencies
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.projectService
- * @param {object | null} [dependencies.productionEnvironmentProvider] a host's production Env values
+ * @param {ProductionEnvironmentProvider} dependencies.productionEnvironmentProvider a host's production Env values
  */
 function createAgentEnvCommandService({
   logger,
   projectService,
-  // readable-check: allow dependency-default - filled by a composing host repository; convert with its supplier
-  productionEnvironmentProvider = null
+  productionEnvironmentProvider
 }) {
   // The person whose request prepared this agent; a host's saved values
   // apply that person's permissions.
@@ -106,34 +107,12 @@ function createAgentEnvCommandService({
     unbound: ["Vibe64 Env command is not bound to this session project.", "vibe64_agent_env_command_project_binding_missing"],
     changed: ["Vibe64 Env command session project no longer matches its bound project.", "vibe64_agent_env_command_project_binding_changed"]
   }, { capture: () => ({ actor: currentProjectRequestContext()?.vibe64User || null }) });
-  let productionProvider = null;
   let savedValueProvider = null;
 
   // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
   function setSavedEnvValueProvider(provider = null) {
     savedValueProvider = assertSavedEnvValueProvider(provider);
   }
-
-  // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-  function setProductionEnvironmentProvider(provider = null) {
-    if (
-      provider !== null &&
-      (!provider ||
-        // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
-        typeof provider.readRecords !== "function" ||
-        // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
-        typeof provider.isUserValueRecord !== "function" ||
-        // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
-        typeof provider.setVariable !== "function" ||
-        // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
-        typeof provider.removeVariable !== "function")
-    ) {
-      throw new TypeError("Vibe64 production Env provider must expose readRecords(), isUserValueRecord(), setVariable(), and removeVariable(), or be null.");
-    }
-    productionProvider = provider;
-  }
-
-  setProductionEnvironmentProvider(productionEnvironmentProvider);
 
   async function bindSession(sessionId = "") {
     const binding = await projectBinding.bind(sessionId);
@@ -196,11 +175,11 @@ function createAgentEnvCommandService({
   // boundary instead of relying on ambient request context surviving it.
   const productionEnvironment = Object.freeze({
     isUserValueRecord(record = null) {
-      return productionProvider.isUserValueRecord(record);
+      return productionEnvironmentProvider.isUserValueRecord(record);
     },
     async readRecords({ projectSlug = "" } = {}) {
       const result = assertOperationResult(
-        await productionProvider.readRecords({ projectSlug }),
+        await productionEnvironmentProvider.readRecords({ projectSlug }),
         "Production Env could not be read."
       );
       return Array.isArray(result?.records) ? result.records : [];
@@ -210,7 +189,7 @@ function createAgentEnvCommandService({
       projectSlug = ""
     } = {}) {
       assertOperationResult(
-        await productionProvider.removeVariable({ key, projectSlug }),
+        await productionEnvironmentProvider.removeVariable({ key, projectSlug }),
         `Production Env ${key} could not be removed.`
       );
     },
@@ -222,7 +201,7 @@ function createAgentEnvCommandService({
       value = ""
     } = {}) {
       assertOperationResult(
-        await productionProvider.setVariable({ key, projectSlug, secret, value }),
+        await productionEnvironmentProvider.setVariable({ key, projectSlug, secret, value }),
         `Production Env ${key} could not be saved.`
       );
     }
@@ -232,7 +211,7 @@ function createAgentEnvCommandService({
     if (scope === ENV_SCOPE_DEVELOPMENT) {
       return developmentEnvironment;
     }
-    return productionProvider ? productionEnvironment : null;
+    return offersProductionEnvironment(productionEnvironmentProvider) ? productionEnvironment : null;
   }
 
   async function statusResult(parsed = {}, sessionId = "", projectSlug = "") {
@@ -460,8 +439,6 @@ function createAgentEnvCommandService({
     bindSession,
     closeAllForSession,
     run,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setProductionEnvironmentProvider,
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setSavedEnvValueProvider
   });

@@ -24,6 +24,7 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommandText.js`
+- `packages/vibe64-terminals/src/server/productionEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `packages/vibe64-core/src/server/envUserValues.js`
@@ -164,9 +165,9 @@ available; Env values remain usable without one.
 
 Project agents receive the managed `vibe64-helper env` command. It reads configuration
 metadata without exposing values and delegates explicit development mutations
-to the project Env service. A host may contribute a production Env provider
-through the terminal service; public/local Vibe64 otherwise reports production
-as unavailable. Mutations require an explicit scope, accept values only on
+to the project Env service. A host may provide a production Env provider as the
+optional `vibe64.terminals.production-environment` capability; public/local
+Vibe64 otherwise reports production as unavailable. Mutations require an explicit scope, accept values only on
 stdin, never copy values between scopes, and never reveal stored values.
 Successful development Env mutations publish the shared project refresh hint,
 so other tabs reread the protected project state without receiving values or

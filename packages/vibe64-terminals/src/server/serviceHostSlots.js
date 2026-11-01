@@ -51,11 +51,6 @@ function createServiceHostSlots({ state, agentEnvCommand }) {
     state.slots.databaseToolsProvider = provider;
   }
 
-  function setProductionEnvironmentProvider(provider = null) {
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    agentEnvCommand.setProductionEnvironmentProvider(provider);
-  }
-
   function setSavedEnvValueProvider(provider = null) {
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     agentEnvCommand.setSavedEnvValueProvider(provider);
@@ -69,8 +64,6 @@ function createServiceHostSlots({ state, agentEnvCommand }) {
     setDatabaseToolsProvider,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     setPlanCompleted,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setProductionEnvironmentProvider,
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setSavedEnvValueProvider,
     // readable-check: allow setter-seam - cycle: vibe64.source-editor requires vibe64.terminals

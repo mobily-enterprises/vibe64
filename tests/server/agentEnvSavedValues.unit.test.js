@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createAgentEnvCommandService } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
+import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
@@ -43,7 +44,8 @@ function testVault() {
 }
 
 async function boundCommand(records = [], actor = { username: "teammate", role: "member" }) {
-  const command = createAgentEnvCommandService({ logger: silentLogger, projectService: projectService(records) });
+  const command = createAgentEnvCommandService({ logger: silentLogger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
+    projectService: projectService(records) });
   await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("saved-session"));
   return command;
 }

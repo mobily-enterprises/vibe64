@@ -16,6 +16,7 @@ import { createProviderUsage } from "./providerUsage.js";
 import { createSessionAgentManager } from "./agent/sessionAgentManager.js";
 import process from "node:process";
 import { createAgentEnvCommandService } from "./agentEnvCommand.js";
+import { NO_PRODUCTION_ENVIRONMENT } from "./productionEnvironment.js";
 import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
@@ -66,6 +67,7 @@ import { createServiceHostSlots } from "./serviceHostSlots.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").ProjectRuntimeChangedPublisher} ProjectRuntimeChangedPublisher */
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
+/** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 /** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
 
@@ -102,6 +104,7 @@ function codexToolHomeSourceFromEnv(env) {
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
+ * @param {ProductionEnvironmentProvider} [dependencies.productionEnvironmentProvider] a host's production Env
  * @param {ProjectServices | null} [dependencies.projectServices]
  * @param {ProjectService} dependencies.projectService
  * @param {ProjectRuntimeChangedPublisher} [dependencies.publishProjectRuntimeChanged]
@@ -118,6 +121,7 @@ function createService({
   logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
   opencodeTerminalController = {},
+  productionEnvironmentProvider = NO_PRODUCTION_ENVIRONMENT,
   // readable-check: allow dependency-default - optional operation: without supplied project services the service creates its own
   projectServices: suppliedProjectServices = null,
   projectService,
@@ -244,6 +248,7 @@ function createService({
   });
   const agentEnvCommand = createAgentEnvCommandService({
     logger,
+    productionEnvironmentProvider,
     projectService
   });
   const agentDatabaseCommand = createAgentDatabaseCommandService({
@@ -537,8 +542,6 @@ function createService({
     setPlanCompleted: hostSlots.setPlanCompleted,
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider: hostSlots.setDatabaseToolsProvider,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setProductionEnvironmentProvider: hostSlots.setProductionEnvironmentProvider,
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
     setSavedEnvValueProvider: hostSlots.setSavedEnvValueProvider,
     prepareWorkspaceSetup: workspacePreparation.prepareWorkspaceSetup,

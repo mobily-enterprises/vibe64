@@ -15,6 +15,7 @@ import {
   createAgentEnvCommandService,
   prepareAgentEnvCommand
 } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
+import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 function createProjectService({
@@ -300,6 +301,7 @@ test("agent Env creates development values through the project service and never
     }]
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
+    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     projectService: project
   });
   await command.bindSession("development-session");
@@ -376,6 +378,7 @@ test("agent Env refuses system-managed values and unavailable production writes"
     }]
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
+    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     projectService: project
   });
   await command.bindSession("guard-session");
@@ -403,6 +406,7 @@ test("agent Env refuses system-managed values and unavailable production writes"
 test("agent Env refuses a stale session binding after the project identity changes", async () => {
   const project = createProjectService();
   const command = createAgentEnvCommandService({ logger: silentLogger,
+    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     projectService: project
   });
   await command.bindSession("stale-session");
@@ -435,6 +439,7 @@ test("agent Env removes only stored user values", async () => {
     }]
   });
   const command = createAgentEnvCommandService({ logger: silentLogger,
+    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     projectService: project
   });
   await command.bindSession("remove-session");
@@ -462,6 +467,7 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-env-command-"));
   const project = createProjectService();
   const command = createAgentEnvCommandService({ logger: silentLogger,
+    productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
     projectService: project
   });
   const sessionId = "wrapper-session";
@@ -528,7 +534,8 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
 test("agent Env preparation repairs one missing cached socket and fences its old generation", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-env-command-repair-"));
   const project = createProjectService();
-  const command = createAgentEnvCommandService({ logger: silentLogger, projectService: project });
+  const command = createAgentEnvCommandService({ logger: silentLogger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
+    projectService: project });
   const sessionId = "env-repair-session";
   try {
     const options = {

@@ -203,7 +203,6 @@ test("terminals feature creates the direct API from runtime env", async () => {
     }), { profile: "test" });
 
     try {
-      assert.equal(typeof outputs.terminals.setProductionEnvironmentProvider, "function");
       const result = await outputs.terminals.startGlobalCodexTerminal();
       assert.equal(result.ok, false);
       assert.match(result.error, /test Codex authentication unavailable/u);
