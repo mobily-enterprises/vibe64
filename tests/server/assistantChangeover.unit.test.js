@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { sessionConversationKey, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 import { readMainConversationHistory } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";

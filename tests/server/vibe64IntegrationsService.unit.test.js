@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { initializeGenesisProject } from "@local/vibe64-genesis/server";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createService, runApplicationIntegrationSetup } from "../../packages/vibe64-source-editor/src/server/service.js";

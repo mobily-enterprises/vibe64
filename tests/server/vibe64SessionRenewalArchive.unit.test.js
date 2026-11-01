@@ -10,10 +10,10 @@ import {
 } from "@local/vibe64-core/server/core";
 import {
   VIBE64_SESSION_STATUS,
-  Vibe64SessionRuntime,
-  createVibe64SessionStore,
-  renewalSourceStagePath
-} from "@local/vibe64-runtime/server";
+  createVibe64SessionStore
+} from "@local/vibe64-runtime/server/sessionStore";
+import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
+import { renewalSourceStagePath } from "@local/vibe64-runtime/server/sessionWorktreeArchive";
 import {
   projectRuntimeRoot,
   sourceMetadata,

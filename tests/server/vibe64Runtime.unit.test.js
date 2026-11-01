@@ -3,10 +3,8 @@ import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  VIBE64_SESSION_STATUS,
-  Vibe64SessionRuntime
-} from "@local/vibe64-runtime/server";
+import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
+import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
 import {
   WORKSPACE_SETUP_METADATA_NAME,
   writeWorkspaceSetupState

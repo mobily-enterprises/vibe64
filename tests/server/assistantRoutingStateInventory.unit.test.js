@@ -5,7 +5,10 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { listProjectRuntimeRoots } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
-import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server";
+import {
+  createVibe64SessionStore,
+  VIBE64_SESSION_STATUS
+} from "@local/vibe64-runtime/server/sessionStore";
 import { projectRuntimeRoot, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);

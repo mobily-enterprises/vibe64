@@ -12,7 +12,7 @@ import {
   createVibe64SessionStore,
   vibe64SessionStatusIsHidden,
   vibe64SessionStatusIsOpen
-} from "@local/vibe64-runtime/server";
+} from "@local/vibe64-runtime/server/sessionStore";
 import {
   markHistoricalConversationRewound,
   projectRuntimeRoot,

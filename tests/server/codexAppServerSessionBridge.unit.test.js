@@ -29,10 +29,10 @@ import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
-  VIBE64_CODEX_DEFAULT_MODEL,
-  VIBE64_CODEX_SPARK_MODEL,
-  defineVibe64AgentExecutionProfileResolution
+  VIBE64_CODEX_DEFAULT_MODEL
 } from "@local/vibe64-runtime/shared";
+import { VIBE64_CODEX_SPARK_MODEL } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
+import { defineVibe64AgentExecutionProfileResolution } from "../../packages/vibe64-runtime/src/shared/agentExecutionProfiles.js";
 import {
   createVibe64SessionStore
 } from "@local/vibe64-runtime/server/sessionStore";

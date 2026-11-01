@@ -4544,7 +4544,7 @@ for (const failureAt of ["R", "B"]) {
 
 
 test("R20 hidden renewal successor preserves the original invalid-ACK boundary through the real store", { timeout: 15_000 }, async t => {
-  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server/runtime");
   const handover = renewalHandover();
   const handoverHash = sessionRenewalHandoverHash(handover);
   const nativeResponse = { messages: [] };

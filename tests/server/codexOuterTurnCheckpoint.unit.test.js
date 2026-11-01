@@ -101,7 +101,7 @@ test("source-bearing Learning retains the original native source and Git checkpo
       lesson: { code: "V64-START-00", hash: "c".repeat(64) } } };
   const { mkdir, rm, access } = await import("node:fs/promises");
   const path = await import("node:path");
-  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server");
+  const { Vibe64SessionRuntime } = await import("@local/vibe64-runtime/server/runtime");
   const { managedSessionSourceRoot, projectRuntimeRoot, sourceMetadata, sourcePath, withTemporaryRoot } =
     await import("./vibe64TestHelpers.js");
   const { learningSessionExecutionRoot, readSessionConversationContext } =

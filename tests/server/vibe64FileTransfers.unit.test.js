@@ -10,7 +10,7 @@ import multipart from "@fastify/multipart";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "@local/vibe64-core/server/sessionSourcePath";
-import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { BACKUP_RETENTION_MS, maintainProjectBackups, withProjectBackupsLock, withProjectDropZoneLock } from "@local/vibe64-runtime/server/projectBackups";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";

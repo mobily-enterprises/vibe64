@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   VIBE64_ASSISTANT_SELECTION_ERROR_CODES,
+  assertVibe64AssistantSelectionUpdate
+} from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
+import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
-  assertVibe64AssistantSelectionUpdate,
   defineVibe64AssistantCapabilities,
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,

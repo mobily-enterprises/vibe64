@@ -5,7 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { readProjectPreview, sendProjectMessage } from "../../packages/vibe64-terminals/src/server/projectMessage.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";

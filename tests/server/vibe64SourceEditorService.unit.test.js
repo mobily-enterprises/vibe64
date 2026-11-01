@@ -15,9 +15,7 @@ import { readSourceInterpretations } from "../../packages/vibe64-source-editor/s
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "@local/vibe64-core/server/sessionSourcePath";
-import {
-  createVibe64SessionStore
-} from "@local/vibe64-runtime/server";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import {
   VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
   VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT

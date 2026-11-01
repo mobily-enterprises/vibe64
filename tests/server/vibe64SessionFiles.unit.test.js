@@ -12,7 +12,7 @@ import Fastify from "fastify";
 import multipart from "@fastify/multipart";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
-import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { registerRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";

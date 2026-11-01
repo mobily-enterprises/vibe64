@@ -4,7 +4,7 @@ import { once } from "node:events";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { runVibe64AgentWriteExclusive, throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
 import { projectRuntimeRoot, withTemporaryRoot } from "./vibe64TestHelpers.js";
 

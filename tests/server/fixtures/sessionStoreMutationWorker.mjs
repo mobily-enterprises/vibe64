@@ -1,8 +1,6 @@
 import { writeFile } from "node:fs/promises";
 
-import {
-  createVibe64SessionStore
-} from "@local/vibe64-runtime/server";
+import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 
 const [
   projectLocalRoot = "",

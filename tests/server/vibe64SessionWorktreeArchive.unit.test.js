@@ -8,9 +8,7 @@ import { promisify } from "node:util";
 import {
   pathExists
 } from "@local/vibe64-core/server/core";
-import {
-  Vibe64SessionRuntime
-} from "@local/vibe64-runtime/server";
+import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
 import {
   checkpointRefs,
   createGitTurnCheckpoint,
