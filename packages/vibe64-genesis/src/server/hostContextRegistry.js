@@ -38,34 +38,36 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
   }
 
   await save(sessions);
-  return {
-    registryPath,
-    get(providerSessionId) { return structuredClone(sessions.get(providerSessionId)); },
-    async register(providerSessionId, promptContext, workdir = "") {
-      if (closed) throw new Error("The Genesis host context registry is closed.");
-      if (typeof providerSessionId !== "string" || !providerSessionId.trim()) {
-        throw new TypeError("Genesis host context requires a native conversation ID.");
-      }
-      const context = structuredClone(promptContext);
-      vibe64Driver(context);
-      const entry = { upstreamSessionId: providerSessionId, workdir, promptContext: context };
-      // This records delivery ownership, not prompt installation. Publish a
-      // binding only after hooks can read the same durable entry.
-      const write = pending.catch(() => {}).then(async () => {
-        if (JSON.stringify(sessions.get(providerSessionId)) === JSON.stringify(entry)) return;
-        const next = new Map(sessions);
-        next.set(providerSessionId, entry);
-        await save(next);
-        sessions = next;
-      });
-      pending = write;
-      await write;
-    },
-    async close() {
-      closed = true;
-      await pending.catch(() => {});
-      sessions.clear();
-      if (!runtimeDirectory) await rm(directory, { recursive: true, force: true });
+
+  function get(providerSessionId) { return structuredClone(sessions.get(providerSessionId)); }
+
+  async function register(providerSessionId, promptContext, workdir = "") {
+    if (closed) throw new Error("The Genesis host context registry is closed.");
+    if (typeof providerSessionId !== "string" || !providerSessionId.trim()) {
+      throw new TypeError("Genesis host context requires a native conversation ID.");
     }
-  };
+    const context = structuredClone(promptContext);
+    vibe64Driver(context);
+    const entry = { upstreamSessionId: providerSessionId, workdir, promptContext: context };
+    // This records delivery ownership, not prompt installation. Publish a
+    // binding only after hooks can read the same durable entry.
+    const write = pending.catch(() => {}).then(async () => {
+      if (JSON.stringify(sessions.get(providerSessionId)) === JSON.stringify(entry)) return;
+      const next = new Map(sessions);
+      next.set(providerSessionId, entry);
+      await save(next);
+      sessions = next;
+    });
+    pending = write;
+    await write;
+  }
+
+  async function close() {
+    closed = true;
+    await pending.catch(() => {});
+    sessions.clear();
+    if (!runtimeDirectory) await rm(directory, { recursive: true, force: true });
+  }
+
+  return Object.freeze({ registryPath, get, register, close });
 }
