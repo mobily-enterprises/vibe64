@@ -12,6 +12,7 @@ import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-c
 import { normalizeRepositoryUpdateCheck } from "@local/vibe64-core/shared";
 import { runCaptureCommand } from "../../packages/vibe64-execution/src/server/engines/capture.js";
 import { createProjectWatchActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { createRepositoryUpdates } from "../../packages/vibe64-sessions/src/server/repositoryUpdates.js";
 import { registerProjectWatch } from "../../packages/vibe64-sessions/src/server/projectWatch.js";
 import { createRepositoryUpdateProbe } from "../../packages/vibe64-sessions/src/server/repositoryUpdateProbe.js";
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
@@ -305,7 +306,8 @@ test("a browser watch is authorized as an action and released with its connectio
   const watching = new Set();
   const probe = { watch(slug) { watching.add(slug); return () => watching.delete(slug); } };
   actions.register({ contributorId: "repository-updates", domain: "vibe64-sessions",
-    actions: createProjectWatchActions({ probe }).map((action) => ({ ...action, surfaces: ["app"] })) });
+    actions: createProjectWatchActions({ repositoryUpdates: createRepositoryUpdates({ closeWatches() {}, probe }) })
+      .map((action) => ({ ...action, surfaces: ["app"] })) });
   let connect;
   registerProjectWatch({ actions, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
   const socket = new EventEmitter();

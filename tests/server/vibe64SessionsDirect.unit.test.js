@@ -50,7 +50,7 @@ import {
   VIBE64_CODEX_DEFAULT_THINKING,
   vibe64AssistantSelectionFromMetadata
 } from "../../packages/vibe64-runtime/src/shared/index.js";
-import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
+import { createSessionsService as createService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
@@ -244,7 +244,7 @@ function sessionCreationPolicyHarness({
 }
 
 test("sessions expose only direct chat and source actions", () => {
-  assert.deepEqual(createSessionActions({ sessions: {} }).map((action) => action.id), [
+  assert.deepEqual(createSessionActions({ sessions: withMainChatOperations({}) }).map((action) => action.id), [
     "vibe64.sessions.connected.prepare",
     "vibe64.sessions.connected.source",
     "vibe64.sessions.connected.inputs.inspect",
@@ -303,16 +303,16 @@ test("sessions expose only direct chat and source actions", () => {
     ACTION_UPDATE_SESSION_PRESENCE,
     ACTION_BROADCAST_SESSION_PREVIEW_STATE
   ]);
-  const contextRead = createSessionActions({ sessions: {} }).find(action => action.id === ACTION_READ_CONVERSATION_CONTEXT);
+  const contextRead = createSessionActions({ sessions: withMainChatOperations({}) }).find(action => action.id === ACTION_READ_CONVERSATION_CONTEXT);
   assert.deepEqual(contextRead.channels, ["internal"]);
   assert.equal(contextRead.extensions.assistant.exclude, true);
-  const createAction = createSessionActions({ sessions: {} }).find(action => action.id === ACTION_CREATE_SESSION);
+  const createAction = createSessionActions({ sessions: withMainChatOperations({}) }).find(action => action.id === ACTION_CREATE_SESSION);
   const validated = createAction.input.schema.patch({ sessionId: "caller-supplied" });
   assert.equal(validated.errors.sessionId.code, "FIELD_NOT_ALLOWED");
 });
 
 test("every session action names its session with one shared definition", async () => {
-  const actions = createSessionActions({ sessions: {} });
+  const actions = createSessionActions({ sessions: withMainChatOperations({}) });
   const required = { type: "string", noTrim: false, minLength: 1, maxLength: 256, required: true };
   let named = 0;
   for (const action of actions) {
@@ -334,7 +334,7 @@ test("every session action names its session with one shared definition", async 
 // Archiving never Saves; the person archived a session holding an unsaved
 // starter believing it empty. Colleague must check and say so first.
 test("Colleague confirms unsaved work before archiving a session", () => {
-  const actions = createSessionActions({ sessions: {} });
+  const actions = createSessionActions({ sessions: withMainChatOperations({}) });
   const { description } = actions.find((action) => action.id === ACTION_ARCHIVE_SESSION).extensions.assistant;
   assert.match(description, /Archiving never Saves/u);
   assert.match(description, /first inspect .*vibe64\.sessions\.work\.inspect/u);
@@ -451,7 +451,7 @@ test("temporary typing presence requires a saved chat in the requested session",
 });
 
 test("assistant message action accepts attachment lease ids and display details", () => {
-  const action = createSessionActions({ sessions: {} })
+  const action = createSessionActions({ sessions: withMainChatOperations({}) })
     .find((candidate) => candidate.id === ACTION_SEND_AGENT_MESSAGE);
   const attachmentId = "33333333-3333-4333-8333-333333333333";
   const displayAttachments = [{
@@ -545,8 +545,8 @@ test("session publications use the trusted project context and actions do not re
     await publish("same-session-id", { payload: { projectSlug: "untrusted", conversationLogPatch: { text: slug } } });
   })));
   assert.deepEqual(published.map((event) => event.realtime.payload.projectSlug).sort(), ["project-a", "project-b"]);
-  for (const action of createSessionActions({ sessions: {} })) {
-    assert.equal(action.events.length, 0);
+  for (const action of createSessionActions({ sessions: withMainChatOperations({}) })) {
+    assert.deepEqual(action.events ?? [], [], `${action.id} declares no events`);
   }
 });
 
@@ -4256,7 +4256,7 @@ test("integration continuation action forwards only request identity and authent
     } },
     publishSessionChanged: async (...args) => events.push(args)
   });
-  const action = createSessionActions({ sessions }).map(underActionPolicy).find((entry) => entry.id === ACTION_RESUME_INTEGRATION_SETUP);
+  const action = createSessionActions({ sessions: withMainChatOperations(sessions) }).map(underActionPolicy).find((entry) => entry.id === ACTION_RESUME_INTEGRATION_SETUP);
   const actor = { username: "member" };
   const result = await action.execute({
     sessionId: "session-1", turnId: "000001", requestId: "a".repeat(64),
@@ -4286,7 +4286,7 @@ test("integration setup skip needs no AI access and still validates the saved re
       terminals: { async requireAssistantAccess() { throw new Error("AI is unavailable."); } },
       publishSessionChanged: async (...args) => events.push(args)
     });
-    const action = createSessionActions({ sessions }).map(underActionPolicy).find((entry) => entry.id === ACTION_SKIP_INTEGRATION_SETUP);
+    const action = createSessionActions({ sessions: withMainChatOperations(sessions) }).map(underActionPolicy).find((entry) => entry.id === ACTION_SKIP_INTEGRATION_SETUP);
     const input = { sessionId: "skip-request", turnId: turn.turnId, requestId: turn.integrationSetup.requestId,
       vibe64User: { username: "owner" } };
     const context = { requestMeta: { request: { params: { slug: "unit_project" }, vibe64User: { username: "member", role: "member" } } } };
@@ -4602,7 +4602,7 @@ test("working notifications take the trusted project over extra payload or a con
 test("ordinary Working Send retains its original message input and carries only project browser authority", async () => {
   const calls = [];
   const actor = { uid: "42", username: "ada", role: "member" };
-  const definition = createSessionActions({ sessions: { sendAgentMessage(...args) { calls.push(args); return { ok: true }; } } }).map(underActionPolicy)
+  const definition = createSessionActions({ sessions: withMainChatOperations({ sendAgentMessage(...args) { calls.push(args); return { ok: true }; } }) }).map(underActionPolicy)
     .find(value => value.id === ACTION_SEND_AGENT_MESSAGE);
   const input = { projectSlug: "working-project", sessionId: "working-session", message: "My original Working words", messageId: "work-request" };
   await definition.execute(input, { actor: { id: actor.uid }, vibe64Action: { user: actor,
@@ -4819,7 +4819,7 @@ test("incoming change facades require a session before reaching Git", async () =
 });
 
 test("session actions hide people's approvals and undescribed actions from Colleague; exposed ones are described", () => {
-  const actions = createSessionActions({ sessions: {} });
+  const actions = createSessionActions({ sessions: withMainChatOperations({}) });
   for (const id of ["read", "edit", "withdraw", "approve", "decline"].map((name) => `vibe64.sessions.main-chat-approvals.${name}`)) {
     assert.equal(actions.find((action) => action.id === id).extensions.assistant.exclude, true, id);
   }

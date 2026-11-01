@@ -1,12 +1,8 @@
 import { attachDirectRequestActionExecutor } from "@jskit-ai/kernel/server/http";
-import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { vibe64ProjectSessionsRoom, vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../shared/projectWatch.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
-/** @typedef {import("./types.js").RepositoryUpdateProbe} RepositoryUpdateProbe */
-/** @typedef {{ current: () => boolean, hold: (detach: () => void) => void, join: (room: string) => void }} WatchBinding */
 
 const PROJECT_WATCH_ACTION = "vibe64.sessions.project.watch";
 
@@ -68,7 +64,7 @@ function registerProjectWatch({ actions, realtime }) {
           channel: "api",
           surface: "app",
           input: { projectSlug: input.projectSlug, ...(input.sessionId ? { sessionId: input.sessionId } : {}) },
-          deps: { watchBinding: { current, hold, join: (room) => hold(joinRoom(room)) } }
+          context: { watchBinding: { current, hold, join: (room) => hold(joinRoom(room)) } }
         });
         if (current()) reply(result);
       } catch (error) {
@@ -97,36 +93,7 @@ function registerProjectWatch({ actions, realtime }) {
   });
 }
 
-/**
- * What one watch holds: the viewers room of the session it shows, or its
- * project's sessions room and update probe. A watch without a realtime
- * connection's binding is refused.
- * @param {RepositoryUpdateProbe} probe
- * @param {{ sessionId?: string }} input
- * @param {WatchBinding | undefined} binding
- */
-function watchProject(probe, input, binding) {
-  // readable-check: allow method-probe - input validation: the binding comes from the caller that executes the action
-  if (typeof binding?.current !== "function" || typeof binding.hold !== "function" || typeof binding.join !== "function") {
-    throw Object.assign(new Error("Watching a project requires a realtime connection."), {
-      code: "vibe64_project_watch_connection_required",
-      statusCode: 400
-    });
-  }
-  if (!binding.current()) return { ok: true };
-  const slug = currentProjectRequestContext()?.slug;
-  const { sessionId = "" } = input;
-  if (sessionId) {
-    binding.join(vibe64SessionViewersRoom(slug, sessionId));
-  } else {
-    binding.join(vibe64ProjectSessionsRoom(slug));
-    binding.hold(probe.watch(slug));
-  }
-  return { ok: true };
-}
-
 export {
   PROJECT_WATCH_ACTION,
-  registerProjectWatch,
-  watchProject
+  registerProjectWatch
 };

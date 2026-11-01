@@ -26,6 +26,8 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js`
 - `packages/vibe64-sessions/src/server/sessionStartupRecovery.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
+- `packages/vibe64-sessions/src/server/receivingContributions.js`
+- `packages/vibe64-sessions/src/server/connectedContributionActions.js`
 - `packages/vibe64-sessions/src/server/sessionResults.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
 - `packages/vibe64-sessions/src/server/sessionRenewalWorkflow.js`

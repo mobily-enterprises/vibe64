@@ -951,7 +951,7 @@ watches, over its realtime connection, each project it has open and each
 session it shows, visible or in a background tab (`useVibe64ProjectWatch`:
 the repository status registry watches the project, each session runtime host
 its session). The `api`-only action `vibe64.sessions.project.watch`
-(`projectWatch.js`) authorizes the watch like any project action and joins the
+(`projectWatch.js`, `repositoryUpdates.js`) authorizes the watch like any project action and joins the
 connection to that project's or session's realtime room until the page leaves,
 the scope ends or the connection drops; a reconnected page watches again. The
 full `vibe64.session.changed` payload reaches only the session's room. Every
@@ -1277,6 +1277,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
 - `packages/vibe64-sessions/src/server/projectWatch.js`
+- `packages/vibe64-sessions/src/server/repositoryUpdates.js`
 - `packages/vibe64-sessions/src/shared/projectWatch.js`
 - `src/composables/useVibe64ProjectWatch.js`
 

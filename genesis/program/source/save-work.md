@@ -109,6 +109,8 @@ Git commands.
 - `packages/vibe64-sessions/src/server/repositoryUpdates.js`
 - `packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
+- `packages/vibe64-sessions/src/server/receivingContributions.js`
+- `packages/vibe64-sessions/src/server/connectedContributionActions.js`
 - `packages/vibe64-sessions/src/server/sessionActions.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/assistantContracts.js`

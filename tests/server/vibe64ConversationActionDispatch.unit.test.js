@@ -11,6 +11,7 @@ import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-c
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { ACTION_READ_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { requestMainGoalControl } from "../../packages/vibe64-terminals/src/server/mainGoalControl.js";
 import { registerRoutes as registerSessions } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
@@ -33,13 +34,13 @@ test("standalone Main and temporary conversations use the selected local project
       createTerminalActions({ terminals: { requestMainGoalControl } }).filter(({ id }) => id === "vibe64.terminals.main-goal.pause")
         .map(definition => ({ surfaces: ["app"], ...definition })) });
     actions.register({ contributorId: "local-sessions", domain: "sessions", actions:
-      createSessionActions({ sessions: {
+      createSessionActions({ sessions: withMainChatOperations({
         sendAgentMessage(sessionId, input, options) {
           sends.push({ sessionId, input, options });
           assert.equal(currentProjectRequestContext().targetRoot, targetRoot);
           return { ok: true };
         }
-      } }).filter(({ id }) => [ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE].includes(id))
+      }) }).filter(({ id }) => [ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE].includes(id))
         .map(definition => ({ channels: ["internal"], surfaces: ["app"], ...definition })) });
     let reads = 0;
     let subscriptions = 0;
@@ -110,9 +111,9 @@ test("the existing assistant catalogue is actor-authorized without a project or 
     resolveUser: async () => signedIn ? user : null,
     authorizeProject() { throw new Error("Model choices must not require a project."); }
   });
-  actions.register({ contributorId: "sessions", domain: "sessions", actions: createSessionActions({ sessions: {
+  actions.register({ contributorId: "sessions", domain: "sessions", actions: createSessionActions({ sessions: withMainChatOperations({
     listAssistantCapabilities(input) { calls.push(input); return { ok: true, engines: [] }; }
-  } }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+  }) }).map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   const execute = (input, channel = "api") => actions.execute({ actionId: "vibe64.assistants.capabilities.list", input,
     context: { channel, surface: "app" } });
   assert.deepEqual(await execute({ configuredOnly: "true" }), { ok: true, engines: [] });
@@ -139,7 +140,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
     };
     const sessions = Object.fromEntries(["listSessions", "renameSession", "archiveSession", "retryWorkspaceSetup", "broadcastSessionPreviewState", "sendAgentMessage", "interruptAgentTurn", "readSessionConversationLog"].map((name) => [name, record(name)]));
     const terminals = Object.fromEntries(["readSessionWorkPlan", "listTemporaryConversations", "createTemporaryConversation", "readTemporaryConversation", "startTemporaryConversationTurn", "stopTemporaryConversation", "deleteTemporaryConversation"].map((name) => [name, record(name)]));
-    actions.register({ contributorId: "sessions", domain: "sessions", actions: createSessionActions({ sessions }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
+    actions.register({ contributorId: "sessions", domain: "sessions", actions: createSessionActions({ sessions: withMainChatOperations(sessions) }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
     actions.register({ contributorId: "terminals", domain: "terminals", actions: createTerminalActions({ terminals }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
     registerVibe64ActionContext(actions, {
       projectContext,
@@ -150,7 +151,7 @@ test("conversation HTTP handlers and automation execute the same authorized acti
     registerSessions(app.http, routeOptions);
     registerTerminals(app.http, { ...routeOptions, fastify: app.fastify, terminals, uploads: { readSingleMultipartFile() {} } });
     assert.equal(findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/conversation-rewind` }), null);
-    assert.equal(createSessionActions({ sessions }).some(action => action.id === "vibe64.sessions.conversation.rewind"), false);
+    assert.equal(createSessionActions({ sessions: withMainChatOperations(sessions) }).some(action => action.id === "vibe64.sessions.conversation.rewind"), false);
     const cases = [
       ["GET", "/sessions", "vibe64.sessions.list", {}, "listSessions"],
       ["GET", "/sessions/:sessionId/conversation-log", "vibe64.sessions.conversation-log.read", {}, "readSessionConversationLog"],
@@ -252,7 +253,7 @@ test("conversation facades and subscription checks preserve real Fastify request
       async readAgentGoal() { goalReads += 1; return goal; }
     };
     for (const [contributorId, definitions] of [
-      ["cookie-sessions", createSessionActions({ sessions: {} }).filter(({ id }) => id === ACTION_READ_CONVERSATION_CONTEXT)],
+      ["cookie-sessions", createSessionActions({ sessions: withMainChatOperations({}) }).filter(({ id }) => id === ACTION_READ_CONVERSATION_CONTEXT)],
       ["cookie-terminals", createTerminalActions({ terminals }).filter(({ id }) => id === ACTION_READ_CANONICAL_AGENT_GOAL)]
     ]) actions.register({ contributorId, domain: "test", actions: definitions.map(definition => ({ surfaces: ["app"], ...definition })) });
     const conversations = createMainBrowserConversations({ actions, terminals });
@@ -316,7 +317,7 @@ test("browser conversation methods retain fresh project context through delayed 
       }
     });
     actions.register({ contributorId: "project-boundary", domain: "sessions", actions:
-      createSessionActions({ sessions: {} }).filter(({ id }) => id === ACTION_READ_CONVERSATION_CONTEXT)
+      createSessionActions({ sessions: withMainChatOperations({}) }).filter(({ id }) => id === ACTION_READ_CONVERSATION_CONTEXT)
         .map(definition => ({ surfaces: ["app"], ...definition })) });
 
     async function openHandle(kind) {

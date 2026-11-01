@@ -27,7 +27,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
-import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
+import { createSessionsService as createSessionService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/server/sessionRealtimeEvents.js";
@@ -2419,7 +2419,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
   const terminals = new Proxy({}, { get: (_target, key) => service[key] });
   const sessions = createSessionService({ actions, project, terminals });
   actions.register({ contributorId: "test.claude-main-goals", domain: "vibe64",
-    actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals })]
+    actions: [...createSessionActions({ sessions: withMainChatOperations(sessions) }), ...createTerminalActions({ terminals })]
       .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   const goalFacade = await sessions.browserConversations.open({
     id: mainConversationId({ projectSlug: "claude-main-fixture", sessionId: "test" }), context: { channel: "internal", surface: "app", requestMeta: { request: originalGoalRequest } }

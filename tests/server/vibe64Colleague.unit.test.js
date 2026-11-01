@@ -22,6 +22,7 @@ import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions, le
 import { createColleagueNavigationCoordination } from "../../packages/vibe64-colleague/src/server/navigationCoordination.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { Vibe64ColleagueFeature, Vibe64ColleagueFocusFeature } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueFeature.js";
 import { registerColleagueFocus } from "../../packages/vibe64-colleague/src/server/registerColleagueFocus.js";
@@ -250,7 +251,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   });
   const extras = discovery ? Array.from({ length: 33 }, (_, i) => ({ ...operation, kind: discoveryQueries ? "query" : "command", id: `vibe64.test.extra-${i}` })) : [];
   if (watching) extras.push(...createTerminalActions({ terminals }).filter(({ id }) => ["vibe64.terminals.temporary-conversation.read", "vibe64.terminals.outputs.read"].includes(id) ||
-    (assigning && ["vibe64.terminals.temporary-conversation.create", "vibe64.terminals.temporary-conversation.turn.start"].includes(id))), ...createSessionActions({ sessions: {
+    (assigning && ["vibe64.terminals.temporary-conversation.create", "vibe64.terminals.temporary-conversation.turn.start"].includes(id))), ...createSessionActions({ sessions: withMainChatOperations({
     async inspectSession() { observations.reads += 1; return structuredClone(observations.session); },
     async readSessionConversationLog() { return { ok: true, conversationLog: structuredClone(observations.log) }; },
     async sendAgentMessage(sessionId, input) {
@@ -260,7 +261,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       observations.session.agentSession.turn = { id: `agent-${observations.sent.length}`, active: true, state: "inProgress" };
       return { ok: true };
     }
-  } }).filter(({ id }) => ["vibe64.sessions.inspect", "vibe64.sessions.conversation-log.read"].includes(id) || (assigning && id === "vibe64.sessions.agent-message.send")));
+  }) }).filter(({ id }) => ["vibe64.sessions.inspect", "vibe64.sessions.conversation-log.read"].includes(id) || (assigning && id === "vibe64.sessions.agent-message.send")));
   actions.register({ contributorId: "colleague-test", domain: "vibe64", actions: [operation, ...extras, ...extraActions, ...createColleagueActions({ colleague: service })]
     .map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
   const send = (message, messageId = "user-1", extra = {}) => actions.execute({ actionId: "vibe64.colleague.message.send", input: {

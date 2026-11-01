@@ -13,6 +13,7 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createTerminalControls } from "../../packages/vibe64-terminals/src/server/terminalControls.js";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
@@ -281,7 +282,7 @@ test("canonical Main goals reuse internal terminal actions with fresh authority 
       async authorizeProject() { if (!allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); }
     });
     actions.register({ contributorId: "goal-context", domain: "sessions",
-      actions: createSessionActions({ sessions: {} }).filter(definition => definition.id === ACTION_READ_CONVERSATION_CONTEXT)
+      actions: createSessionActions({ sessions: withMainChatOperations({}) }).filter(definition => definition.id === ACTION_READ_CONVERSATION_CONTEXT)
         .map(definition => ({ surfaces: ["app"], ...definition })) });
     const facade = await createMainBrowserConversations({ actions, terminals }).open({
       id: mainConversationId({ projectSlug: slug, sessionId: "session-1" }), context: { channel: "internal", surface: "app" }

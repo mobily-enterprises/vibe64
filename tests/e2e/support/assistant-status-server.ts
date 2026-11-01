@@ -28,6 +28,7 @@ import { createSessionActions } from "../../../packages/vibe64-sessions/src/serv
 import { createTerminalActions } from "@local/vibe64-terminals/server/actions";
 import { mainConversationId, temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { createMainBrowserConversations } from "../../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
+import { withMainChatOperations } from "../../server/vibe64SessionsTestHelpers.js";
 import { Vibe64ConversationsFeature } from "../../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
 import { createSessionConversations } from "../../../packages/vibe64-terminals/src/server/sessionConversations.js";
 import { createSessionAttachments } from "../../../packages/vibe64-terminals/src/server/sessionAttachments.js";
@@ -193,7 +194,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     }
   });
   actions.register({ contributorId: "test.status.sessions", domain: "vibe64-sessions",
-    actions: createSessionActions({ sessions }).filter(action => [
+    actions: createSessionActions({ sessions: withMainChatOperations(sessions) }).filter(action => [
       "vibe64.sessions.conversation.context.read", "vibe64.sessions.agent-message.send",
       "vibe64.sessions.agent-turn.interrupt", "vibe64.sessions.assistant-selection.update"
     ].includes(action.id)).map(action => ({ surfaces: ["app"], channels: ["api", "internal"], ...action })) });

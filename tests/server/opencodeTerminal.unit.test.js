@@ -9,7 +9,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
-import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
+import { createSessionsService as createSessionService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import assert from "node:assert/strict";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -3133,7 +3133,7 @@ test("Main OpenCode browser facade keeps original action authority and live nati
   });
   const sessions = createSessionService({ actions, project: f.project, terminals: f.service });
   actions.register({ contributorId: "test.main-opencode-sessions", domain: "vibe64-sessions",
-    actions: createSessionActions({ sessions }).map(definition => ({
+    actions: createSessionActions({ sessions: withMainChatOperations(sessions) }).map(definition => ({
       channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition
     })) });
   const id = mainConversationId({ projectSlug: "opencode-main-fixture", sessionId: "session-1" });

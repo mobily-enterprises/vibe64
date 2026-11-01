@@ -5,12 +5,21 @@
 /** @typedef {ReturnType<typeof import("./service.js").createService>} SessionsService */
 /** @typedef {ReturnType<typeof import("./repositoryUpdates.js").createRepositoryUpdates>} SessionRepositoryUpdates */
 /** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
+/**
+ * What a project watch's realtime connection lends the watch action: whether
+ * the watch is still current, and holds and rooms it releases on leaving.
+ * @typedef {{ current: () => boolean, hold: (detach: () => void) => void, join: (room: string) => void }} WatchBinding
+ */
 /** @typedef {ReturnType<typeof import("./sessionWorkOperations.js").createSessionWorkOperations>} SessionWorkOperations */
 /** @typedef {ReturnType<typeof import("./sessionPresence.js").createSessionPresenceService>} SessionPresenceService */
 /** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService["initializeModelRouting"]} AccountsInitializeModelRouting */
 /** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createSessionWorkspaceSetup>} SessionWorkspaceSetup */
 /** @typedef {ReturnType<typeof import("./sessionArchive.js").createSessionArchive>} SessionArchive */
+/** @typedef {ReturnType<typeof import("./sessionCreation.js").createSessionCreation>} SessionCreation */
+/** @typedef {ReturnType<typeof import("./sessionRepositoryReads.js").createSessionRepositoryReads>} SessionRepositoryReads */
+/** @typedef {ReturnType<typeof import("./sessionRepositoryUpdates.js").createSessionRepositoryUpdates>} SessionUpdateChecks */
+/** @typedef {ReturnType<typeof import("./sessionWork.js").createSessionWork>} SessionWork */
 /** @typedef {ReturnType<typeof import("./sessionRenewal.js").createSessionRenewalController>} SessionRenewalController */
 /** @typedef {SessionArchive["prepareArchive"]} SessionArchivePrepareArchive */
 /**

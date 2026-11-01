@@ -1,3 +1,4 @@
+import { conversationContextGrant, mainBrowserAuthority } from "../../packages/vibe64-sessions/src/server/mainConversationAuthority.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
 import { prepareNothingForArchive } from "../../packages/vibe64-sessions/src/server/sessionArchive.js";
 import { restoreStandaloneRenewalActor } from "../../packages/vibe64-sessions/src/server/sessionRenewalActors.js";
@@ -50,4 +51,22 @@ function createSessionsService(dependencies) {
   });
 }
 
-export { createSessionsService };
+/**
+ * A sessions double for action tests, completed with the service's own
+ * conversation access grant and its Main chat send and approval, which carry
+ * the person's browser authority to the double's sendAgentMessage and
+ * approveMainChatApproval.
+ * @param {object} sessions
+ */
+function withMainChatOperations(sessions) {
+  return {
+    readConversationContext: conversationContextGrant,
+    sendMainChatMessage: ({ sessionId, ...message }, context) =>
+      sessions.sendAgentMessage(sessionId, message, { browserAuthority: mainBrowserAuthority(sessionId, context) }),
+    approveMainChatMessage: (input, context) => sessions.approveMainChatApproval(input.sessionId, input.approvalId, input,
+      { browserAuthority: mainBrowserAuthority(input.sessionId, context) }),
+    ...sessions
+  };
+}
+
+export { createSessionsService, withMainChatOperations };

@@ -21,7 +21,7 @@ import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/s
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
-import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
+import { createSessionsService as createSessionService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { Vibe64ConversationsFeature } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { Readable } from "node:stream";
@@ -12081,7 +12081,7 @@ test("Main browser facade uses the original native owner and action authority wi
         channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition
       })) });
     actions.register({ contributorId: "test.main-sessions", domain: "vibe64-sessions",
-      actions: createSessionActions({ sessions }).map(definition => ({
+      actions: createSessionActions({ sessions: withMainChatOperations(sessions) }).map(definition => ({
         channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition
       })) });
     const app = Fastify();
@@ -12448,7 +12448,7 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
     });
     const sessions = createSessionService({ actions, project, terminals });
     actions.register({ contributorId: "test.canonical-main-goals", domain: "vibe64",
-      actions: [...createSessionActions({ sessions }), ...createTerminalActions({ terminals })]
+      actions: [...createSessionActions({ sessions: withMainChatOperations(sessions) }), ...createTerminalActions({ terminals })]
         .map(definition => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
     const goalFacade = await sessions.browserConversations.open({
       id: mainConversationId({ projectSlug: "test-project", sessionId }), context: { channel: "internal", surface: "app" }
@@ -13525,7 +13525,7 @@ test("Main browser fresh authorization for a local practice project opened as an
     const requestContext = { channel: "internal", surface: "app", requestMeta: { request: {
       params: { slug }, vibe64User: actor } } };
     actions.register({ contributorId: "original-browser-scope-companion", domain: "vibe64-sessions",
-      actions: createSessionActions({ sessions: {} }).map(definition => ({
+      actions: createSessionActions({ sessions: withMainChatOperations({}) }).map(definition => ({
         channels: ["internal"], surfaces: ["app"], ...definition
       })) });
     // The original action catalogue and grant are retained; only the host's

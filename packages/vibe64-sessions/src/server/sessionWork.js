@@ -12,7 +12,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").SessionWorkOperations} SessionWorkOperations */
 /** @typedef {import("./types.js").SessionWorkspaceSetup} SessionWorkspaceSetup */
 /** @typedef {ReturnType<typeof import("./sessionWorkRecovery.js").createSessionWorkRecovery>} SessionWorkRecovery */
-/** @typedef {ReturnType<typeof import("./sessionRepositoryUpdates.js").createSessionRepositoryUpdates>} SessionRepositoryUpdates */
+/** @typedef {import("./types.js").SessionUpdateChecks} SessionUpdateChecks */
 /** @typedef {ReturnType<typeof import("./connectedContributions.js").createConnectedContributions>} ConnectedContributions */
 
 /**
@@ -24,7 +24,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {SessionWorkRecovery} dependencies.recovery
- * @param {SessionRepositoryUpdates} dependencies.repositoryUpdates
+ * @param {SessionUpdateChecks} dependencies.repositoryUpdates
  * @param {TerminalsService} dependencies.terminals
  * @param {SessionWorkOperations} dependencies.workOperations
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
@@ -41,12 +41,13 @@ function createSessionWork({
 }) {
   const activeWorkInspections = new Map();
 
-  async function inspectSessionWork(sessionId, requestContext = {}, options = {}) {
-    const {
-      includeConnected = true,
-      inspectContributionPublication = false,
-      knownSubmittedCommit = ""
-    } = options;
+  /**
+   * One read of a session's work, shared by the three public reads below.
+   * @param {string} sessionId
+   * @param {object} requestContext
+   * @param {{ includeConnected: boolean, inspectContributionPublication: boolean, knownSubmittedCommit: string }} scope
+   */
+  async function inspectWork(sessionId, requestContext, { includeConnected, inspectContributionPublication, knownSubmittedCommit }) {
     return sessionResult(async () => {
       const runtime = await project.createRuntime({
         inspectSource: false
@@ -129,6 +130,47 @@ function createSessionWork({
         ok: true
       };
     }, "Vibe64 could not inspect this session's work.");
+  }
+
+  /**
+   * A session's work with each connected contribution's status, read through
+   * the person's request to each receiving project.
+   * @param {string} sessionId
+   * @param {object} [requestContext]
+   */
+  function inspectSessionWork(sessionId, requestContext = {}) {
+    return inspectWork(sessionId, requestContext, {
+      includeConnected: true,
+      inspectContributionPublication: false,
+      knownSubmittedCommit: ""
+    });
+  }
+
+  /**
+   * A session's own work, without its connected contributions.
+   * @param {string} sessionId
+   */
+  function inspectOwnWork(sessionId) {
+    return inspectWork(sessionId, {}, {
+      includeConnected: false,
+      inspectContributionPublication: false,
+      knownSubmittedCommit: ""
+    });
+  }
+
+  /**
+   * A receiving session's work as the contribution it holds: its own work and
+   * whether its Save was pushed, knowing the commit the originating session
+   * recorded, if any.
+   * @param {string} sessionId
+   * @param {string} knownSubmittedCommit
+   */
+  function inspectContributedWork(sessionId, knownSubmittedCommit) {
+    return inspectWork(sessionId, {}, {
+      includeConnected: false,
+      inspectContributionPublication: true,
+      knownSubmittedCommit
+    });
   }
 
   async function inspectSessionChanges(sessionId, input) {
@@ -338,7 +380,15 @@ function createSessionWork({
     }, "Vibe64 could not save this session's work.");
   }
 
-  async function updateSessionWork(sessionId, input = {}) {
+  /**
+   * One Update, shared by the person's Update and a connected refresh. A
+   * connected refresh waits for the updated workspace's preparation and
+   * leaves an already current session's setup alone.
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {boolean} connectedRefresh
+   */
+  async function updateWork(sessionId, input, connectedRefresh) {
     return sessionResult(async () => {
       const runtime = await project.createRuntime({ inspectSource: false });
       const session = await runtime.getSession(sessionId, { inspectSource: false });
@@ -405,10 +455,10 @@ function createSessionWork({
         // Keep the update active while automatic preparation is starting so
         // invalidation is presented as pending, not a manual setup failure.
         // A connected refresh that changed nothing leaves its setup alone.
-        if (!(input.connectedRefresh === true && result.status === "already_current")) {
+        if (!(connectedRefresh && result.status === "already_current")) {
           await workspaceSetup.prepareUpdatedWorkspace(runtime, sessionId, {
             originId: input.originId,
-            wait: input.connectedRefresh === true
+            wait: connectedRefresh
           });
         }
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
@@ -473,11 +523,31 @@ function createSessionWork({
     }, "Vibe64 could not update this session.");
   }
 
+  /**
+   * @param {string} sessionId
+   * @param {object} [input]
+   */
+  function updateSessionWork(sessionId, input = {}) {
+    return updateWork(sessionId, input, false);
+  }
+
+  /**
+   * Brings a receiving session up to its integration branch for the session
+   * it serves.
+   * @param {string} sessionId
+   */
+  function refreshContributedWork(sessionId) {
+    return updateWork(sessionId, {}, true);
+  }
+
   return Object.freeze({
-    inspectSessionWork,
-    inspectSessionChanges,
-    inspectSessionChangeDiff,
     createSessionPullRequest,
+    inspectContributedWork,
+    inspectOwnWork,
+    inspectSessionChangeDiff,
+    inspectSessionChanges,
+    inspectSessionWork,
+    refreshContributedWork,
     saveSessionWork,
     updateSessionWork
   });

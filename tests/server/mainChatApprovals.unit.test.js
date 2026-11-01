@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
+import { createSessionsService as createService, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import {
   ACTION_APPROVE_MAIN_CHAT_APPROVAL,
   ACTION_DECLINE_MAIN_CHAT_APPROVAL,
@@ -210,7 +210,7 @@ test("everyone with access reads the queue with their own viewer facts", async (
 });
 
 test("approval operations are people's actions, not assistant tools", () => {
-  const actions = createSessionActions({ sessions: {} });
+  const actions = createSessionActions({ sessions: withMainChatOperations({}) });
   for (const id of [ACTION_READ_MAIN_CHAT_APPROVALS, ACTION_EDIT_MAIN_CHAT_APPROVAL, ACTION_WITHDRAW_MAIN_CHAT_APPROVAL,
     ACTION_APPROVE_MAIN_CHAT_APPROVAL, ACTION_DECLINE_MAIN_CHAT_APPROVAL]) {
     const definition = actions.find((action) => action.id === id);

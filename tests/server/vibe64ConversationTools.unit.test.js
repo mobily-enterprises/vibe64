@@ -4,6 +4,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
@@ -55,7 +56,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   };
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "conversation-tools", domain: "vibe64", actions: [
-    ...createSessionActions({ sessions }), ...createTerminalActions({ terminals })
+    ...createSessionActions({ sessions: withMainChatOperations(sessions) }), ...createTerminalActions({ terminals })
   ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   // Main-chat sends resolve their actor and project through the canonical action context.
   registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => ({ username: "member", uid: 42, role: "member" }),
@@ -224,7 +225,7 @@ test("session lifecycle tools preserve canonical execution, bounded results and 
       return { ok: true, sessionId, ...result, metadata: { credential: "private" }, sourcePath: "/private/repository", log: "x".repeat(20000) };
     }]));
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-    actions.register({ contributorId: "sessions", domain: "vibe64", actions: createSessionActions({ sessions }).map((action) => ({
+    actions.register({ contributorId: "sessions", domain: "vibe64", actions: createSessionActions({ sessions: withMainChatOperations(sessions) }).map((action) => ({
       channels: ["api", "automation"], surfaces: ["app"], ...action
     })) });
     registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => user,

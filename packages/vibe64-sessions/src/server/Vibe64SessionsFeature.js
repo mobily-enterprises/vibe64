@@ -222,7 +222,7 @@ const Vibe64RepositoryUpdatesFeature = defineFeature({
     return { repositoryUpdates: createRepositoryUpdates({ probe, closeWatches }) };
   },
   actions({ repositoryUpdates }) {
-    return createProjectWatchActions({ probe: repositoryUpdates.probe });
+    return createProjectWatchActions({ repositoryUpdates });
   },
   /**
    * @param {object} _deps
