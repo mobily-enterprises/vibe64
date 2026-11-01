@@ -27,7 +27,9 @@
           :color="hostConversation.color" variant="flat"
           aria-current="page"
           :prepend-icon="hostConversation.icon" rounded="pill" height="32" size="small" @click="hostConversation.open()"
-        >{{ hostConversation.label }}</v-btn>
+        >
+          {{ hostConversation.label }}
+        </v-btn>
         <div
           v-for="task in temporary.tasks.value"
           :key="task.id"
@@ -94,8 +96,10 @@
       <span class="vibe64-temporary-ai__tabs-spacer" />
     </nav>
 
-    <v-dialog v-if="newTaskOpen" :model-value="newTaskOpen" aria-label="New temporary chat" max-width="480" :persistent="creatingTask"
-      @update:model-value="value => { if (!value) cancelNewTask(); }">
+    <v-dialog
+      v-if="newTaskOpen" :model-value="newTaskOpen" aria-label="New temporary chat" max-width="480" :persistent="creatingTask"
+      @update:model-value="value => { if (!value) cancelNewTask(); }"
+    >
       <v-card title="New temporary chat">
         <v-card-text>
           <v-checkbox v-model="includeRecentChatContext" :disabled="creatingTask || Boolean(creatingTaskId)" label="Include recent chat context" hide-details />
@@ -114,140 +118,140 @@
       ref="hostComposer" class="vibe64-temporary-ai__host-content"
     />
     <template v-if="!hostConversation?.selected">
-    <div class="vibe64-temporary-ai__recovery-row">
-      <v-alert v-if="temporary.restoreError.value" type="error" variant="tonal" density="compact">
-        {{ temporary.restoreError.value }}
-        <v-btn color="error" variant="text" height="48" @click="temporary.restoreTasks()">Try again</v-btn>
-      </v-alert>
-      <div
-        v-if="activeTask?.recoveryNotice && !activeTaskRecoveryVerified && !props.connectionUnavailable"
-        aria-live="polite"
-        class="vibe64-temporary-ai__recovery"
-        data-temporary-ai-recovery
-        role="status"
-      >
-        <div class="vibe64-temporary-ai__recovery-summary">
-          <strong>{{ activeTaskRecoveryTitle }}</strong>
-          <details v-if="activeTaskRecoveryStatus && !activeTask.busy">
-            <summary>Details</summary>
-            <p>{{ activeTaskRecoveryStatus }}</p>
-          </details>
-        </div>
-        <v-btn
-          v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
-          class="vibe64-temporary-ai__check-update"
-          data-temporary-ai-check-update
-          :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy || activeTask.recoveryOutcome === 'unconfirmed'"
-          :loading="activeTaskRecoveryChecking"
-          :title="props.updateDisabled ? props.updateDisabledReason : 'Check whether the repaired session can update'"
-          size="small"
-          variant="tonal"
-          @click="emit('check-update', activeTask)"
+      <div class="vibe64-temporary-ai__recovery-row">
+        <v-alert v-if="temporary.restoreError.value" type="error" variant="tonal" density="compact">
+          {{ temporary.restoreError.value }}
+          <v-btn color="error" variant="text" height="48" @click="temporary.restoreTasks()">Try again</v-btn>
+        </v-alert>
+        <div
+          v-if="activeTask?.recoveryNotice && !activeTaskRecoveryVerified && !props.connectionUnavailable"
+          aria-live="polite"
+          class="vibe64-temporary-ai__recovery"
+          data-temporary-ai-recovery
+          role="status"
         >
-          Check Update
-        </v-btn>
-        <v-btn
-          v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified && props.canReviewUpdate"
-          class="vibe64-temporary-ai__check-update"
-          data-temporary-ai-review-update
-          :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy || activeTask.recoveryOutcome === 'unconfirmed'"
-          size="small" variant="tonal"
-          @click="emit('review-update')"
-        >
-          Review resolved conflicts
-        </v-btn>
-      </div>
-    </div>
-    <template v-if="activeTask">
-      <Vibe64EphemeralConversationMessages
-        :session-id="props.sessionId"
-        :adapter="activeTask.adapter"
-        :recovery-message="activeTask.recoveryMessage"
-        :routing-request="routingRequest"
-        :working="activeTask.nativeWorking"
-        :scroll-key="activeTask.id"
-        :empty-message="activeTask.recoveryNotice ? '' : 'Ask a focused question or investigate a problem without adding it to the main conversation.'"
-        @resend="sendTask(activeTask.id, { retryMessageId: $event })"
-        @cancel="temporary.cancelMessage(activeTask.id, $event)"
-        @edit="temporary.editMessage(activeTask.id, $event)"
-      >
-        <template #message-text="{ message }">
-          <p v-if="message.messageId === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
-          <p v-else>{{ message.text }}</p>
+          <div class="vibe64-temporary-ai__recovery-summary">
+            <strong>{{ activeTaskRecoveryTitle }}</strong>
+            <details v-if="activeTaskRecoveryStatus && !activeTask.busy">
+              <summary>Details</summary>
+              <p>{{ activeTaskRecoveryStatus }}</p>
+            </details>
+          </div>
           <v-btn
-            v-if="message.messageId === recoveryMessageId && canReturnToMainChat"
-            ref="returnToMainButton"
-            :aria-busy="closingTask"
-            class="vibe64-temporary-ai__return"
-            color="primary"
-            :disabled="props.repositoryBusy || closingTask"
+            v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified"
+            class="vibe64-temporary-ai__check-update"
+            data-temporary-ai-check-update
+            :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy || activeTask.recoveryOutcome === 'unconfirmed'"
+            :loading="activeTaskRecoveryChecking"
+            :title="props.updateDisabled ? props.updateDisabledReason : 'Check whether the repaired session can update'"
             size="small"
             variant="tonal"
-            @click="closeTask(activeTask.id, { returnToMainChat: true })"
+            @click="emit('check-update', activeTask)"
           >
-            Return to main chat
+            Check Update
           </v-btn>
-        </template>
-        <template #hints>
-          <p v-if="activeTask.recentChatContext && !activeTask.messages.length">
-            Copied {{ activeTask.recentChatContext.messages.length }} messages from Main when this chat was created.
-            <span v-if="activeTask.recentChatContext.truncated">Some text was omitted to fit the 64 KiB context limit.</span>
-          </p>
-          <div
-            v-if="activeTaskError || actionErrors[activeTask.id] || activityLabel"
-            class="vibe64-temporary-ai__feedback"
+          <v-btn
+            v-if="activeTask.recoveryOperation === 'update' && !activeTaskRecoveryVerified && props.canReviewUpdate"
+            class="vibe64-temporary-ai__check-update"
+            data-temporary-ai-review-update
+            :disabled="props.updateDisabled || taskInputDisabled(activeTask) || activeTask.busy || activeTask.recoveryOutcome === 'unconfirmed'"
+            size="small" variant="tonal"
+            @click="emit('review-update')"
           >
-            <div v-if="actionErrors[activeTask.id] && !taskToClose" class="vibe64-temporary-ai__error" role="alert">
-              {{ actionErrors[activeTask.id] }}
-            </div>
-            <div
-              v-if="activeTaskError"
-              class="vibe64-temporary-ai__error"
-              :class="{ 'vibe64-temporary-ai__error--recovered': activeTaskRecoveryVerified }"
-              :role="activeTaskRecoveryVerified ? 'status' : 'alert'"
+            Review resolved conflicts
+          </v-btn>
+        </div>
+      </div>
+      <template v-if="activeTask">
+        <Vibe64EphemeralConversationMessages
+          :session-id="props.sessionId"
+          :adapter="activeTask.adapter"
+          :recovery-message="activeTask.recoveryMessage"
+          :routing-request="routingRequest"
+          :working="activeTask.nativeWorking"
+          :scroll-key="activeTask.id"
+          :empty-message="activeTask.recoveryNotice ? '' : 'Ask a focused question or investigate a problem without adding it to the main conversation.'"
+          @resend="sendTask(activeTask.id, { retryMessageId: $event })"
+          @cancel="temporary.cancelMessage(activeTask.id, $event)"
+          @edit="temporary.editMessage(activeTask.id, $event)"
+        >
+          <template #message-text="{ message }">
+            <p v-if="message.messageId === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
+            <p v-else>{{ message.text }}</p>
+            <v-btn
+              v-if="message.messageId === recoveryMessageId && canReturnToMainChat"
+              ref="returnToMainButton"
+              :aria-busy="closingTask"
+              class="vibe64-temporary-ai__return"
+              color="primary"
+              :disabled="props.repositoryBusy || closingTask"
+              size="small"
+              variant="tonal"
+              @click="closeTask(activeTask.id, { returnToMainChat: true })"
             >
-              <template v-if="activeTaskRecoveryVerified">
-                Temporary AI did not report a clean finish: {{ activeTaskError }} The repair was independently verified.
-              </template>
-              <template v-else>{{ activeTaskError }}</template>
+              Return to main chat
+            </v-btn>
+          </template>
+          <template #hints>
+            <p v-if="activeTask.recentChatContext && !activeTask.messages.length">
+              Copied {{ activeTask.recentChatContext.messages.length }} messages from Main when this chat was created.
+              <span v-if="activeTask.recentChatContext.truncated">Some text was omitted to fit the 64 KiB context limit.</span>
+            </p>
+            <div
+              v-if="activeTaskError || actionErrors[activeTask.id] || activityLabel"
+              class="vibe64-temporary-ai__feedback"
+            >
+              <div v-if="actionErrors[activeTask.id] && !taskToClose" class="vibe64-temporary-ai__error" role="alert">
+                {{ actionErrors[activeTask.id] }}
+              </div>
+              <div
+                v-if="activeTaskError"
+                class="vibe64-temporary-ai__error"
+                :class="{ 'vibe64-temporary-ai__error--recovered': activeTaskRecoveryVerified }"
+                :role="activeTaskRecoveryVerified ? 'status' : 'alert'"
+              >
+                <template v-if="activeTaskRecoveryVerified">
+                  Temporary AI did not report a clean finish: {{ activeTaskError }} The repair was independently verified.
+                </template>
+                <template v-else>{{ activeTaskError }}</template>
+              </div>
+              <AssistantComposerSupport
+                v-if="activityLabel"
+                class="vibe64-temporary-ai__activity"
+                :activity="{ label: activityLabel }"
+              />
             </div>
-            <AssistantComposerSupport
-              v-if="activityLabel"
-              class="vibe64-temporary-ai__activity"
-              :activity="{ label: activityLabel }"
-            />
-          </div>
-        </template>
-        <template #composer>
-          <p v-if="activeTask.draftSaveState === 'failed'" class="text-caption" role="status" aria-live="polite">
-            Draft not saved; check the error and retry.
-          </p>
-          <Vibe64AutopilotPromptTextarea
-            v-for="task in temporary.tasks.value"
-            v-show="task.id === activeTask.id"
-            :key="task.id"
-            :saved-attachments="task.attachments"
-            attachments-owned-by-conversation
-            :ref="(element) => setTaskPrompt(task.id, element)"
-            class="vibe64-temporary-ai__composer"
-            :model-value="task.draft && (task.displayMessage || task.draft)"
-            aria-label="Message temporary AI"
-            density="compact"
-            :attachments-enabled="Boolean(props.sessionId) && !taskInputDisabled(task)"
-            :disabled="task.state === 'closing' || task.status === 'closing' || Boolean(taskAccessReason(task))"
-            placeholder="Ask temporary AI…"
-            :rows="2"
-            :session-id="props.sessionId"
-            tab-to-submit
-            @attachments-change="temporary.updateAttachments(task.id, $event)"
-            @blur="typingPresence.blur()"
-            @input-activity="typingPresence.noteInputActivity()"
-            @submit="sendTask(task.id)"
-            @tab-to-submit="focusSendButton"
-            @update:model-value="temporary.updateDraft(task.id, $event)"
-          >
-            <template #footer="{ attachmentState }">
-              <div class="vibe64-temporary-ai__composer-actions">
+          </template>
+          <template #composer>
+            <p v-if="activeTask.draftSaveState === 'failed'" class="text-caption" role="status" aria-live="polite">
+              Draft not saved; check the error and retry.
+            </p>
+            <Vibe64AutopilotPromptTextarea
+              v-for="task in temporary.tasks.value"
+              v-show="task.id === activeTask.id"
+              :key="task.id"
+              :saved-attachments="task.attachments"
+              attachments-owned-by-conversation
+              :ref="(element) => setTaskPrompt(task.id, element)"
+              class="vibe64-temporary-ai__composer"
+              :model-value="task.draft && (task.displayMessage || task.draft)"
+              aria-label="Message temporary AI"
+              density="compact"
+              :attachments-enabled="Boolean(props.sessionId) && !taskInputDisabled(task)"
+              :disabled="task.state === 'closing' || task.status === 'closing' || Boolean(taskAccessReason(task))"
+              placeholder="Ask temporary AI…"
+              :rows="2"
+              :session-id="props.sessionId"
+              tab-to-submit
+              @attachments-change="temporary.updateAttachments(task.id, $event)"
+              @blur="typingPresence.blur()"
+              @input-activity="typingPresence.noteInputActivity()"
+              @submit="sendTask(task.id)"
+              @tab-to-submit="focusSendButton"
+              @update:model-value="temporary.updateDraft(task.id, $event)"
+            >
+              <template #footer="{ attachmentState }">
+                <div class="vibe64-temporary-ai__composer-actions">
                   <Vibe64ChatModeControls
                     v-if="task.id === activeTask.id" :session="modeSession" :goal="task.goal" temporary
                     :required-mode="task.recoveryOperation === 'update' ? 'fix' : ''"
@@ -258,127 +262,131 @@
                     :loading="!task.purposes"
                     @custom="customTarget = $event; customOpen = true"
                   />
-                <v-btn
-                  aria-label="Attach files"
-                  :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles"
-                  :icon="mdiPaperclip"
-                  size="small"
-                  title="Attach files"
-                  type="button"
-                  variant="text"
-                  @click="taskPrompt(task.id)?.openFilePicker?.()"
-                />
-                <v-btn
-                  v-if="previewAttachmentState.captureAvailable"
-                  aria-label="Attach preview screenshot"
-                  :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
-                  :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
-                  :icon="mdiCameraOutline"
-                  size="small"
-                  title="Attach preview screenshot"
-                  variant="text"
-                  @click="previewAttachmentState.capture?.()"
-                />
-                <v-btn
-                  v-if="previewAttachmentState.diagnosticsAvailable"
-                  aria-label="Attach console and network diagnostics"
-                  :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
-                  :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
-                  :icon="mdiConsoleNetworkOutline"
-                  size="small"
-                  title="Attach console and network diagnostics"
-                  variant="text"
-                  @click="previewAttachmentState.attachDiagnostics?.()"
-                />
-                <Vibe64AgentSettingsMenu
-                  v-if="!task.routingMetadata?.assistant_routing"
-                  :agent-settings="task.agentSettings"
-                  :assistant-selection="task.assistantSelection || props.assistantSelection"
-                  :disabled="props.repositoryBusy || task.status === 'closing'"
-                  @update-setting="updateActiveAgentSetting"
-                />
-                <Vibe64ComposerDelivery :ref="element => setTaskSendButton(task.id, element)"
-                  :stop-visible="task.busy" :stop-enabled="Boolean(task.conversationId) && stoppingTaskId !== task.id"
-                  :stopping="stoppingTaskId === task.id" :sending="task.delivery.state.sending"
-                  :can-submit="!props.connectionUnavailable && stoppingTaskId !== task.id && !taskInputDisabled(task) && Boolean(task.draft.trim()) && attachmentState.canSubmit"
-                  :submit-mode="task.busy ? 'steer' : 'send'"
-                  :submit-aria-label="task.busy ? 'Steer assistant' : 'Send message'"
-                  :submit-title="task.busy ? 'Send this guidance to the active assistant turn' : 'Send message'"
-                  @submit="sendTask(task.id)" @stop="stopTask(task.id)" />
-              </div>
-            </template>
-          </Vibe64AutopilotPromptTextarea>
-        </template>
-      </Vibe64EphemeralConversationMessages>
-    </template>
-    <Vibe64SessionAssistantMenu v-model="customOpen" :target="customTarget" :session="modeSession"
-      :can-configure="props.canConfigureRouting" :changes-disabled="props.repositoryBusy || activeTask?.status === 'closing'"
-      :save-selection="(selection) => temporary.updateRouting(activeTask.id, { mode: 'custom', review: false, override: selection })" />
-    <v-dialog
-      v-if="renamingTask"
-      aria-label="Rename chat"
-      :model-value="true"
-      max-width="28rem"
-      :persistent="renamePending"
-      @update:model-value="!$event && (renamingTaskId = '')"
-    >
-      <v-card rounded="xl">
-        <form @submit.prevent="submitRename">
-          <v-card-title class="pa-6 pb-2">
-            <h2 class="text-title-large">Rename chat</h2>
+                  <v-btn
+                    aria-label="Attach files"
+                    :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles"
+                    :icon="mdiPaperclip"
+                    size="small"
+                    title="Attach files"
+                    type="button"
+                    variant="text"
+                    @click="taskPrompt(task.id)?.openFilePicker?.()"
+                  />
+                  <v-btn
+                    v-if="previewAttachmentState.captureAvailable"
+                    aria-label="Attach preview screenshot"
+                    :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles || previewAttachmentState.captureBusy"
+                    :aria-busy="previewAttachmentState.captureBusy ? 'true' : undefined"
+                    :icon="mdiCameraOutline"
+                    size="small"
+                    title="Attach preview screenshot"
+                    variant="text"
+                    @click="previewAttachmentState.capture?.()"
+                  />
+                  <v-btn
+                    v-if="previewAttachmentState.diagnosticsAvailable"
+                    aria-label="Attach console and network diagnostics"
+                    :disabled="taskInputDisabled(task) || !attachmentState.canAddFiles || previewAttachmentState.diagnosticsBusy"
+                    :aria-busy="previewAttachmentState.diagnosticsBusy ? 'true' : undefined"
+                    :icon="mdiConsoleNetworkOutline"
+                    size="small"
+                    title="Attach console and network diagnostics"
+                    variant="text"
+                    @click="previewAttachmentState.attachDiagnostics?.()"
+                  />
+                  <Vibe64AgentSettingsMenu
+                    v-if="!task.routingMetadata?.assistant_routing"
+                    :agent-settings="task.agentSettings"
+                    :assistant-selection="task.assistantSelection || props.assistantSelection"
+                    :disabled="props.repositoryBusy || task.status === 'closing'"
+                    @update-setting="updateActiveAgentSetting"
+                  />
+                  <Vibe64ComposerDelivery
+                    :ref="element => setTaskSendButton(task.id, element)"
+                    :stop-visible="task.busy" :stop-enabled="Boolean(task.conversationId) && stoppingTaskId !== task.id"
+                    :stopping="stoppingTaskId === task.id" :sending="task.delivery.state.sending"
+                    :can-submit="!props.connectionUnavailable && stoppingTaskId !== task.id && !taskInputDisabled(task) && Boolean(task.draft.trim()) && attachmentState.canSubmit"
+                    :submit-mode="task.busy ? 'steer' : 'send'"
+                    :submit-aria-label="task.busy ? 'Steer assistant' : 'Send message'"
+                    :submit-title="task.busy ? 'Send this guidance to the active assistant turn' : 'Send message'"
+                    @submit="sendTask(task.id)" @stop="stopTask(task.id)"
+                  />
+                </div>
+              </template>
+            </Vibe64AutopilotPromptTextarea>
+          </template>
+        </Vibe64EphemeralConversationMessages>
+      </template>
+      <Vibe64SessionAssistantMenu
+        v-model="customOpen" :target="customTarget" :session="modeSession"
+        :can-configure="props.canConfigureRouting" :changes-disabled="props.repositoryBusy || activeTask?.status === 'closing'"
+        :save-selection="(selection) => temporary.updateRouting(activeTask.id, { mode: 'custom', review: false, override: selection })"
+      />
+      <v-dialog
+        v-if="renamingTask"
+        aria-label="Rename chat"
+        :model-value="true"
+        max-width="28rem"
+        :persistent="renamePending"
+        @update:model-value="!$event && (renamingTaskId = '')"
+      >
+        <v-card rounded="xl">
+          <form @submit.prevent="submitRename">
+            <v-card-title class="pa-6 pb-2">
+              <h2 class="text-title-large">Rename chat</h2>
+            </v-card-title>
+            <v-card-text class="px-6">
+              <v-text-field
+                v-model="renameValue"
+                label="Chat name"
+                variant="outlined"
+                maxlength="80"
+                autofocus
+                :disabled="renamePending"
+                :placeholder="`Temporary ${renamingTask.number || ''}`.trim()"
+                hint="Leave empty to use the numbered name."
+                persistent-hint
+                :error-messages="renameError"
+              />
+            </v-card-text>
+            <v-card-actions class="pa-6 pt-2">
+              <v-spacer />
+              <v-btn height="48" variant="text" :disabled="renamePending" @click="renamingTaskId = ''">Cancel</v-btn>
+              <v-btn type="submit" height="48" color="primary" variant="flat" rounded="pill" :loading="renamePending">Rename</v-btn>
+            </v-card-actions>
+          </form>
+        </v-card>
+      </v-dialog>
+      <v-dialog
+        v-if="taskToClose"
+        :model-value="true"
+        :aria-labelledby="closeTitleId"
+        max-width="480"
+        persistent
+      >
+        <v-card>
+          <v-card-title :id="closeTitleId" class="text-wrap">
+            {{ taskToClose.busy ? 'Stop and close repair?' : 'Close incomplete repair?' }}
           </v-card-title>
-          <v-card-text class="px-6">
-            <v-text-field
-              v-model="renameValue"
-              label="Chat name"
-              variant="outlined"
-              maxlength="80"
-              autofocus
-              :disabled="renamePending"
-              :placeholder="`Temporary ${renamingTask.number || ''}`.trim()"
-              hint="Leave empty to use the numbered name."
-              persistent-hint
-              :error-messages="renameError"
-            />
+          <v-card-text>
+            Partial edits will stay in this session and may still need repair.
+            Closing does not undo those edits or complete Update.
+            <p v-if="actionErrors[taskToClose.id]" class="vibe64-temporary-ai__error" role="alert">
+              {{ actionErrors[taskToClose.id] }}
+            </p>
           </v-card-text>
-          <v-card-actions class="pa-6 pt-2">
-            <v-spacer />
-            <v-btn height="48" variant="text" :disabled="renamePending" @click="renamingTaskId = ''">Cancel</v-btn>
-            <v-btn type="submit" height="48" color="primary" variant="flat" rounded="pill" :loading="renamePending">Rename</v-btn>
+          <v-card-actions class="flex-wrap">
+            <v-btn :disabled="closingTask" @click="closeTaskId = ''">Keep chat open</v-btn>
+            <v-btn
+              color="error"
+              :loading="closingTask"
+              @click="closeTask(taskToClose.id)"
+            >
+              {{ taskToClose.busy ? 'Stop and close' : 'Close repair' }}
+            </v-btn>
           </v-card-actions>
-        </form>
-      </v-card>
-    </v-dialog>
-    <v-dialog
-      v-if="taskToClose"
-      :model-value="true"
-      :aria-labelledby="closeTitleId"
-      max-width="480"
-      persistent
-    >
-      <v-card>
-        <v-card-title :id="closeTitleId" class="text-wrap">
-          {{ taskToClose.busy ? 'Stop and close repair?' : 'Close incomplete repair?' }}
-        </v-card-title>
-        <v-card-text>
-          Partial edits will stay in this session and may still need repair.
-          Closing does not undo those edits or complete Update.
-          <p v-if="actionErrors[taskToClose.id]" class="vibe64-temporary-ai__error" role="alert">
-            {{ actionErrors[taskToClose.id] }}
-          </p>
-        </v-card-text>
-        <v-card-actions class="flex-wrap">
-          <v-btn :disabled="closingTask" @click="closeTaskId = ''">Keep chat open</v-btn>
-          <v-btn
-            color="error"
-            :loading="closingTask"
-            @click="closeTask(taskToClose.id)"
-          >
-            {{ taskToClose.busy ? 'Stop and close' : 'Close repair' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+        </v-card>
+      </v-dialog>
     </template>
   </section>
 </template>

@@ -32,8 +32,10 @@ async function confirmThen(key, action) {
 </script>
 
 <template>
-  <section class="vibe64-learning-attempts" :aria-labelledby="`vibe64-learning-attempts-${archived ? 'archived' : 'progress'}`"
-    :data-test="archived ? 'learning-archived' : 'learning-progress'">
+  <section
+    class="vibe64-learning-attempts" :aria-labelledby="`vibe64-learning-attempts-${archived ? 'archived' : 'progress'}`"
+    :data-test="archived ? 'learning-archived' : 'learning-progress'"
+  >
     <h2 :id="`vibe64-learning-attempts-${archived ? 'archived' : 'progress'}`" class="vibe64-learning-attempts__title">
       {{ archived ? "Archived" : "In progress" }}
     </h2>
@@ -42,11 +44,17 @@ async function confirmThen(key, action) {
         ? "Lessons you finished or archived, each with its practice project and conversation."
         : "Your lesson in progress. It stays paused, with its practice project and conversation, until you finish, restart or delete it." }}
     </p>
-    <v-alert v-if="learning.state.attemptsError" type="error" variant="tonal" density="compact" class="vibe64-learning-attempts__error"
-      data-test="learning-attempts-error">{{ learning.state.attemptsError }}</v-alert>
+    <v-alert
+      v-if="learning.state.attemptsError" type="error" variant="tonal" density="compact" class="vibe64-learning-attempts__error"
+      data-test="learning-attempts-error"
+    >
+      {{ learning.state.attemptsError }}
+    </v-alert>
 
-    <div v-if="!practice.loaded && !learning.state.attemptsError" class="vibe64-learning-attempts__loading" role="status"
-      data-test="learning-attempts-loading">
+    <div
+      v-if="!practice.loaded && !learning.state.attemptsError" class="vibe64-learning-attempts__loading" role="status"
+      data-test="learning-attempts-loading"
+    >
       <v-progress-circular indeterminate size="20" width="2" color="primary" />{{ archived ? "Loading archived lessons…" : "Loading your lesson…" }}
     </div>
     <template v-else-if="!archived">
@@ -61,17 +69,29 @@ async function confirmThen(key, action) {
           </span>
         </div>
         <template v-if="current.status !== 'deleting'">
-          <v-btn variant="flat" color="primary" rounded="pill" min-height="48" :disabled="Boolean(busy)"
-            data-test="learning-progress-open" @click="learning.openCurrent()">Open</v-btn>
-          <v-btn :variant="confirming === 'restart' ? 'flat' : 'tonal'" :color="confirming === 'restart' ? 'warning' : undefined"
+          <v-btn
+            variant="flat" color="primary" rounded="pill" min-height="48" :disabled="Boolean(busy)"
+            data-test="learning-progress-open" @click="learning.openCurrent()"
+          >
+            Open
+          </v-btn>
+          <v-btn
+            :variant="confirming === 'restart' ? 'flat' : 'tonal'" :color="confirming === 'restart' ? 'warning' : undefined"
             rounded="pill" min-height="48" :disabled="Boolean(busy)" :loading="busy === 'restart'"
             title="Archive this attempt and start the lesson again" data-test="learning-progress-restart"
-            @click="confirmThen('restart', () => learning.restart())">{{ confirming === "restart" ? "Archive and restart" : "Restart" }}</v-btn>
+            @click="confirmThen('restart', () => learning.restart())"
+          >
+            {{ confirming === "restart" ? "Archive and restart" : "Restart" }}
+          </v-btn>
         </template>
-        <v-btn :variant="confirming === 'current' ? 'flat' : 'text'" :color="confirming === 'current' ? 'error' : undefined"
+        <v-btn
+          :variant="confirming === 'current' ? 'flat' : 'text'" :color="confirming === 'current' ? 'error' : undefined"
           rounded="pill" min-height="48" :disabled="Boolean(busy)" :loading="busy === 'delete'"
           :title="`Delete ${current.name}, its practice project and its conversation`" data-test="learning-progress-delete"
-          @click="confirmThen('current', () => learning.deleteAttempt())">{{ confirming === "current" ? "Delete for good" : "Delete" }}</v-btn>
+          @click="confirmThen('current', () => learning.deleteAttempt())"
+        >
+          {{ confirming === "current" ? "Delete for good" : "Delete" }}
+        </v-btn>
       </div>
     </template>
 
@@ -87,11 +107,17 @@ async function confirmThen(key, action) {
               {{ entry.reason === "finished" ? "Finished" : "Archived" }} {{ dateLabel(entry.archivedAt) }}{{ entry.hasProject ? " · with practice project" : "" }}
             </span>
           </div>
-          <v-btn v-if="confirming === entry.attemptId" variant="flat" color="error" rounded="pill" min-height="48"
-            :disabled="Boolean(busy)" data-test="learning-archived-delete-confirm" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))">Delete for good</v-btn>
-          <v-btn v-else variant="text" :icon="mdiDeleteOutline" min-width="48" min-height="48" :aria-label="`Delete archived ${entry.name}`"
+          <v-btn
+            v-if="confirming === entry.attemptId" variant="flat" color="error" rounded="pill" min-height="48"
+            :disabled="Boolean(busy)" data-test="learning-archived-delete-confirm" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))"
+          >
+            Delete for good
+          </v-btn>
+          <v-btn
+            v-else variant="text" :icon="mdiDeleteOutline" min-width="48" min-height="48" :aria-label="`Delete archived ${entry.name}`"
             :title="`Delete archived ${entry.name}`" :disabled="Boolean(busy)" :loading="busy === `archive-delete:${entry.attemptId}`"
-            data-test="learning-archived-delete" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))" />
+            data-test="learning-archived-delete" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))"
+          />
         </li>
       </ul>
     </template>

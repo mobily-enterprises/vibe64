@@ -83,8 +83,10 @@ async function replace() {
       <span class="text-wrap">Review replacement contribution</span>
     </v-btn>
     <p v-if="error && !review" class="ma-0 text-error" role="alert">{{ error }}</p>
-    <v-dialog :model-value="Boolean(review)" :persistent="pending" max-width="560" scrollable
-      @update:model-value="!$event && !pending && (review = null)">
+    <v-dialog
+      :model-value="Boolean(review)" :persistent="pending" max-width="560" scrollable
+      @update:model-value="!$event && !pending && (review = null)"
+    >
       <v-card v-if="review">
         <v-card-title class="text-wrap">Create replacement contribution?</v-card-title>
         <v-card-text style="overflow-wrap: anywhere">

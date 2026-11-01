@@ -508,13 +508,15 @@
             @open-program="$emit('open-program', $event)"
           >
             <template #explanation="{ savedBody }">
-              <Vibe64SourceExplanationPanel v-if="activeInterfaceInterpretation || activeFileInterpretation" embedded
+              <Vibe64SourceExplanationPanel
+                v-if="activeInterfaceInterpretation || activeFileInterpretation" embedded
                 :saved-body="savedBody"
                 :assistant-available="assistantAvailable" :assistant-unavailable-message="assistantUnavailableMessage"
                 :busy="editor.explanationBusy.value" :closing="editor.explanationClosing.value"
                 :explanation="editor.activeExplanation.value" :followup="editor.explanationFollowup.value" :selected-path="editor.selectedPath.value"
                 @close="closeExplanationPanel" @open-range="openExplanationRange" @open-source-link="openExplanationSourceLink"
-                @retry="retryExplanation" @send-followup="sendExplanationFollowup" @stop="editor.stopExplanation" @update:followup="editor.updateExplanationFollowup" />
+                @retry="retryExplanation" @send-followup="sendExplanationFollowup" @stop="editor.stopExplanation" @update:followup="editor.updateExplanationFollowup"
+              />
             </template>
           </Vibe64SourceInterface>
           <div

@@ -43,24 +43,40 @@ async function clear() {
 </script>
 
 <template>
-  <section class="vibe64-teacher-notes" aria-labelledby="vibe64-teacher-notes-title" :aria-busy="status.loading || status.saving"
-    data-test="teacher-notes">
+  <section
+    class="vibe64-teacher-notes" aria-labelledby="vibe64-teacher-notes-title" :aria-busy="status.loading || status.saving"
+    data-test="teacher-notes"
+  >
     <h2 id="vibe64-teacher-notes-title" class="vibe64-teacher-notes__title">What my teacher knows about me</h2>
     <p class="vibe64-teacher-notes__intro">
       Colleague keeps a short private summary of how you learn, so it can teach you better. Only you can see it,
       and it never changes your lesson results.
     </p>
-    <v-alert v-if="status.error" type="error" variant="tonal" density="compact" class="vibe64-teacher-notes__error"
-      data-test="teacher-notes-error">{{ status.error }}</v-alert>
+    <v-alert
+      v-if="status.error" type="error" variant="tonal" density="compact" class="vibe64-teacher-notes__error"
+      data-test="teacher-notes-error"
+    >
+      {{ status.error }}
+    </v-alert>
     <template v-if="editing">
-      <v-textarea v-model="draft" label="Your notes (Markdown)" variant="outlined" rows="8" auto-grow
+      <v-textarea
+        v-model="draft" label="Your notes (Markdown)" variant="outlined" rows="8" auto-grow
         :counter="VIBE64_LEARNING_NOTES_MAX" :maxlength="VIBE64_LEARNING_NOTES_MAX" :disabled="status.saving"
-        data-test="teacher-notes-draft" />
+        data-test="teacher-notes-draft"
+      />
       <div class="vibe64-teacher-notes__actions">
-        <v-btn color="primary" variant="flat" rounded="pill" min-height="48" :loading="status.saving"
-          :disabled="status.saving || !draft.trim()" data-test="teacher-notes-save" @click="save">Save</v-btn>
-        <v-btn variant="text" rounded="pill" min-height="48" :disabled="status.saving" data-test="teacher-notes-cancel"
-          @click="editing = false">Cancel</v-btn>
+        <v-btn
+          color="primary" variant="flat" rounded="pill" min-height="48" :loading="status.saving"
+          :disabled="status.saving || !draft.trim()" data-test="teacher-notes-save" @click="save"
+        >
+          Save
+        </v-btn>
+        <v-btn
+          variant="text" rounded="pill" min-height="48" :disabled="status.saving" data-test="teacher-notes-cancel"
+          @click="editing = false"
+        >
+          Cancel
+        </v-btn>
       </div>
     </template>
     <template v-else>
@@ -70,16 +86,32 @@ async function clear() {
       </p>
       <p v-if="notes?.text && updated" class="vibe64-teacher-notes__updated">{{ updated }}</p>
       <div class="vibe64-teacher-notes__actions">
-        <v-btn variant="tonal" rounded="pill" min-height="48" :disabled="status.loading || status.saving"
-          data-test="teacher-notes-edit" @click="edit">{{ notes?.text ? "Edit" : "Write notes" }}</v-btn>
+        <v-btn
+          variant="tonal" rounded="pill" min-height="48" :disabled="status.loading || status.saving"
+          data-test="teacher-notes-edit" @click="edit"
+        >
+          {{ notes?.text ? "Edit" : "Write notes" }}
+        </v-btn>
         <template v-if="notes?.text">
-          <v-btn v-if="!confirmingClear" variant="text" rounded="pill" min-height="48" :disabled="status.saving"
-            data-test="teacher-notes-clear" @click="confirmingClear = true">Clear</v-btn>
+          <v-btn
+            v-if="!confirmingClear" variant="text" rounded="pill" min-height="48" :disabled="status.saving"
+            data-test="teacher-notes-clear" @click="confirmingClear = true"
+          >
+            Clear
+          </v-btn>
           <template v-else>
-            <v-btn color="error" variant="flat" rounded="pill" min-height="48" :loading="status.saving" :disabled="status.saving"
-              data-test="teacher-notes-clear-confirm" @click="clear">Clear all notes</v-btn>
-            <v-btn variant="text" rounded="pill" min-height="48" :disabled="status.saving" data-test="teacher-notes-clear-cancel"
-              @click="confirmingClear = false">Keep them</v-btn>
+            <v-btn
+              color="error" variant="flat" rounded="pill" min-height="48" :loading="status.saving" :disabled="status.saving"
+              data-test="teacher-notes-clear-confirm" @click="clear"
+            >
+              Clear all notes
+            </v-btn>
+            <v-btn
+              variant="text" rounded="pill" min-height="48" :disabled="status.saving" data-test="teacher-notes-clear-cancel"
+              @click="confirmingClear = false"
+            >
+              Keep them
+            </v-btn>
           </template>
         </template>
       </div>

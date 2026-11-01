@@ -27,22 +27,22 @@
         <div v-for="symbol in symbols" :key="symbol.id" class="source-interface__symbol-row">
           <button class="source-interface__symbol" type="button" :data-symbol-id="symbol.id" :disabled="!current || dirty" :aria-pressed="symbol.id === selectedId" :class="{ 'source-interface__symbol--selected': symbol.id === selectedId }" @click="$emit('select-symbol', symbol.id)"><small>{{ symbol.kind }}</small><code :title="signature(symbol)">{{ signature(symbol) }}</code><span v-if="symbol.returnType">Returns: {{ symbol.returnType }}</span><span v-if="!symbol.rangeAvailable || symbol.visibilityScope && symbol.visibilityScope !== 'public'">{{ symbol.rangeAvailable ? '' : 'Range unavailable' }}{{ symbol.visibilityScope && symbol.visibilityScope !== 'public' ? ` · Visibility: ${symbol.visibilityScope}` : '' }}</span></button>
           <section v-if="symbol.id === selectedId" class="source-interface__detail" aria-label="Selected symbol">
-        <p v-if="selectedSymbol.returnType" class="source-interface__hint">Returns: {{ selectedSymbol.returnType }}</p>
-        <div class="source-interface__modes" aria-label="Symbol presentation">
-          <h4 v-if="Array.isArray(selectedSymbol.parameters)">Pseudocode</h4>
-          <v-btn v-if="presentation === 'code' && selectedInterpretation" size="small" min-height="44" variant="text" @click="$emit('select-symbol', selectedId)">Pseudocode</v-btn>
-          <v-btn v-if="Array.isArray(selectedSymbol.parameters)" size="small" min-height="44" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty || explanationDisabled" @click="$emit('present-symbol', 'steps', Boolean(selectedInterpretation))">{{ selectedInterpretation ? 'Update pseudocode' : 'Generate pseudocode' }}</v-btn>
-          <v-btn size="small" min-height="44" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty" @click="$emit('present-symbol', 'code')">Code</v-btn>
-        </div>
-        <p v-if="Array.isArray(selectedSymbol.parameters) && !assistantAvailable && !saved('selection', selectedId, 'steps')" class="source-interface__hint">Pseudocode needs an Explain & check model.</p>
-        <pre v-if="presentation === 'code'" class="source-interface__code"><code>{{ source }}</code></pre>
-        <template v-else-if="Array.isArray(selectedSymbol.parameters)">
-          <p v-if="selectedInterpretation" class="source-interface__hint">{{ isCurrentInterpretation(selectedInterpretation) ? 'Saved · matches source' : 'Out of date · source or guidance changed' }}</p>
-          <slot v-if="activeInterpretation" name="explanation" :saved-body="selectedInterpretation?.body || ''" />
-          <LongTextPreviewBlocks v-else-if="selectedInterpretation" :blocks="interpretationBlocks" @link-click="openProgramLink" />
-          <p v-else class="source-interface__hint">No pseudocode yet.</p>
-        </template>
-      </section>
+            <p v-if="selectedSymbol.returnType" class="source-interface__hint">Returns: {{ selectedSymbol.returnType }}</p>
+            <div class="source-interface__modes" aria-label="Symbol presentation">
+              <h4 v-if="Array.isArray(selectedSymbol.parameters)">Pseudocode</h4>
+              <v-btn v-if="presentation === 'code' && selectedInterpretation" size="small" min-height="44" variant="text" @click="$emit('select-symbol', selectedId)">Pseudocode</v-btn>
+              <v-btn v-if="Array.isArray(selectedSymbol.parameters)" size="small" min-height="44" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty || explanationDisabled" @click="$emit('present-symbol', 'steps', Boolean(selectedInterpretation))">{{ selectedInterpretation ? 'Update pseudocode' : 'Generate pseudocode' }}</v-btn>
+              <v-btn size="small" min-height="44" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty" @click="$emit('present-symbol', 'code')">Code</v-btn>
+            </div>
+            <p v-if="Array.isArray(selectedSymbol.parameters) && !assistantAvailable && !saved('selection', selectedId, 'steps')" class="source-interface__hint">Pseudocode needs an Explain & check model.</p>
+            <pre v-if="presentation === 'code'" class="source-interface__code"><code>{{ source }}</code></pre>
+            <template v-else-if="Array.isArray(selectedSymbol.parameters)">
+              <p v-if="selectedInterpretation" class="source-interface__hint">{{ isCurrentInterpretation(selectedInterpretation) ? 'Saved · matches source' : 'Out of date · source or guidance changed' }}</p>
+              <slot v-if="activeInterpretation" name="explanation" :saved-body="selectedInterpretation?.body || ''" />
+              <LongTextPreviewBlocks v-else-if="selectedInterpretation" :blocks="interpretationBlocks" @link-click="openProgramLink" />
+              <p v-else class="source-interface__hint">No pseudocode yet.</p>
+            </template>
+          </section>
         </div>
         <p v-if="!symbols.length" class="source-interface__hint">{{ current ? 'No exports recorded; analysis may be incomplete.' : 'Open whole-file Code.' }}</p>
       </nav>

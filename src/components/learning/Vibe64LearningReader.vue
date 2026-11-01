@@ -60,57 +60,61 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
 
 <template>
   <div class="vibe64-learning-reader-frame">
-  <div class="vibe64-learning-reader" :aria-busy="learning.state.loading">
-    <v-alert v-if="learning.state.lessonError" type="error" variant="tonal" rounded="lg" class="vibe64-learning-reader__alert" role="alert">
-      {{ learning.state.lessonError }}
-      <template #append><v-btn variant="text" min-height="48" @click="learning.loadLesson()">Retry</v-btn></template>
-    </v-alert>
-    <v-skeleton-loader v-if="!lesson && learning.state.loading" type="heading, paragraph, paragraph" aria-label="Loading the lesson" />
+    <div class="vibe64-learning-reader" :aria-busy="learning.state.loading">
+      <v-alert v-if="learning.state.lessonError" type="error" variant="tonal" rounded="lg" class="vibe64-learning-reader__alert" role="alert">
+        {{ learning.state.lessonError }}
+        <template #append><v-btn variant="text" min-height="48" @click="learning.loadLesson()">Retry</v-btn></template>
+      </v-alert>
+      <v-skeleton-loader v-if="!lesson && learning.state.loading" type="heading, paragraph, paragraph" aria-label="Loading the lesson" />
 
-    <template v-else-if="lesson">
-      <nav class="vibe64-learning-reader__steps" aria-label="Lesson steps">
-        <p class="vibe64-learning-reader__lesson">
-          <span class="vibe64-learning-reader__code">{{ lesson.code }}</span>
-          <strong>{{ lesson.title }}</strong>
-        </p>
-        <ol ref="stepList">
-          <li v-for="(value, position) in steps" :key="value.id">
-            <button
-              type="button"
-              class="vibe64-learning-reader__step"
-              :class="[`is-${statusOf(value.id)}`, { 'is-current': value.id === step?.id }]"
-              :aria-current="value.id === step?.id ? 'step' : undefined"
-              :data-step-id="value.id"
-              @click="learning.selectStep(value.id)"
-            >
-              <span class="vibe64-learning-reader__step-mark" aria-hidden="true">{{ statusOf(value.id) === 'passed' ? '✓' : position + 1 }}</span>
-              <span class="vibe64-learning-reader__step-title">{{ value.title }}</span>
-              <span class="vibe64-learning-reader__step-status">{{ value.required ? STEP_STATUS_LABELS[statusOf(value.id)] : statusOf(value.id) === 'passed' ? 'Done' : 'Optional' }}</span>
-            </button>
-          </li>
-        </ol>
-        <div v-if="requiredDone" class="vibe64-learning-reader__summary">
-          <p v-if="requiredDone" class="vibe64-learning-reader__complete" role="status">
-            <span class="vibe64-learning-reader__complete-long">Every required step is passed. This lesson is complete.</span>
-            <span class="vibe64-learning-reader__complete-short">✓ Lesson complete</span>
+      <template v-else-if="lesson">
+        <nav class="vibe64-learning-reader__steps" aria-label="Lesson steps">
+          <p class="vibe64-learning-reader__lesson">
+            <span class="vibe64-learning-reader__code">{{ lesson.code }}</span>
+            <strong>{{ lesson.title }}</strong>
           </p>
-          <v-btn color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
-            @click="learning.showFinished()">Lesson finished</v-btn>
-        </div>
-      </nav>
+          <ol ref="stepList">
+            <li v-for="(value, position) in steps" :key="value.id">
+              <button
+                type="button"
+                class="vibe64-learning-reader__step"
+                :class="[`is-${statusOf(value.id)}`, { 'is-current': value.id === step?.id }]"
+                :aria-current="value.id === step?.id ? 'step' : undefined"
+                :data-step-id="value.id"
+                @click="learning.selectStep(value.id)"
+              >
+                <span class="vibe64-learning-reader__step-mark" aria-hidden="true">{{ statusOf(value.id) === 'passed' ? '✓' : position + 1 }}</span>
+                <span class="vibe64-learning-reader__step-title">{{ value.title }}</span>
+                <span class="vibe64-learning-reader__step-status">{{ value.required ? STEP_STATUS_LABELS[statusOf(value.id)] : statusOf(value.id) === 'passed' ? 'Done' : 'Optional' }}</span>
+              </button>
+            </li>
+          </ol>
+          <div v-if="requiredDone" class="vibe64-learning-reader__summary">
+            <p v-if="requiredDone" class="vibe64-learning-reader__complete" role="status">
+              <span class="vibe64-learning-reader__complete-long">Every required step is passed. This lesson is complete.</span>
+              <span class="vibe64-learning-reader__complete-short">✓ Lesson complete</span>
+            </p>
+            <v-btn
+              color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
+              @click="learning.showFinished()"
+            >
+              Lesson finished
+            </v-btn>
+          </div>
+        </nav>
 
-      <article v-if="step" ref="body" class="vibe64-learning-reader__body" :aria-labelledby="`vibe64-learning-step-${step.id}`" @scroll.passive="onScroll">
-        <Vibe64LearningStep :learning="learning" :heading-id="`vibe64-learning-step-${step.id}`" :read-visual="readVisual" @return="emit('return')">
-          <template #after-actions>
-            <details v-if="lesson.notesText" class="vibe64-learning-reader__notes">
-              <summary>Lesson notes</summary>
-              <Vibe64LearningMarkdown :text="lesson.notesText" />
-            </details>
-          </template>
-        </Vibe64LearningStep>
-      </article>
-    </template>
-  </div>
+        <article v-if="step" ref="body" class="vibe64-learning-reader__body" :aria-labelledby="`vibe64-learning-step-${step.id}`" @scroll.passive="onScroll">
+          <Vibe64LearningStep :learning="learning" :heading-id="`vibe64-learning-step-${step.id}`" :read-visual="readVisual" @return="emit('return')">
+            <template #after-actions>
+              <details v-if="lesson.notesText" class="vibe64-learning-reader__notes">
+                <summary>Lesson notes</summary>
+                <Vibe64LearningMarkdown :text="lesson.notesText" />
+              </details>
+            </template>
+          </Vibe64LearningStep>
+        </article>
+      </template>
+    </div>
   </div>
 </template>
 

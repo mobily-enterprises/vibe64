@@ -218,7 +218,8 @@ function configure() {
   <v-dialog v-if="canConfigure" v-model="routingOpen" max-width="38rem" :persistent="routingSaving" scrollable aria-label="Models" @after-enter="routingFocusRole = decisions.auto?.missingRoles?.[0] || ''" @after-leave="modeMenu?.activatorEl?.focus()">
     <v-card>
       <v-card-text>
-        <ModelRoutingForm v-if="routingOpen" :focus-role="routingFocusRole" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingSaving = false; routingOpen = false"
+        <ModelRoutingForm
+          v-if="routingOpen" :focus-role="routingFocusRole" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingSaving = false; routingOpen = false"
           @add-team-key="openAccountConnections({ providerId: 'ai', section: 'team' })" @connect-provider="openAccountConnections({ providerId: $event })"
         />
       </v-card-text>

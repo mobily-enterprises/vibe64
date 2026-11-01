@@ -107,9 +107,11 @@ function performConfirmed() {
           <p>One ad group, phrase-match keywords, a responsive Search ad, manual maximum CPC, Google Search only, and location presence targeting. Political advertising is not supported by this recipe.</p>
           <v-text-field v-model="draft.name" label="Campaign name" maxlength="100" :disabled="disabled" />
           <v-text-field v-model="draft.finalUrl" label="Public HTTPS landing page" :disabled="disabled" />
-          <v-row><v-col cols="12" sm="4"><v-text-field v-model="draft.currency" label="Account currency" readonly hint="Loaded from Google; match the account before review." persistent-hint /></v-col>
+          <v-row>
+            <v-col cols="12" sm="4"><v-text-field v-model="draft.currency" label="Account currency" readonly hint="Loaded from Google; match the account before review." persistent-hint /></v-col>
             <v-col cols="12" sm="4"><v-text-field v-model="draft.budget" label="Average daily budget" inputmode="decimal" :suffix="draft.currency" :disabled="disabled" /></v-col>
-            <v-col cols="12" sm="4"><v-text-field v-model="draft.cpc" label="Maximum cost per click" inputmode="decimal" :suffix="draft.currency" :disabled="disabled" /></v-col></v-row>
+            <v-col cols="12" sm="4"><v-text-field v-model="draft.cpc" label="Maximum cost per click" inputmode="decimal" :suffix="draft.currency" :disabled="disabled" /></v-col>
+          </v-row>
           <p>The daily budget is an average, not a hard daily spending cap. Review Google's billing rules and your account's limits before launch.</p>
           <v-text-field v-model="locationName" label="Find a target location" :disabled="blocked" />
           <v-btn height="48" variant="outlined" :disabled="blocked || !accountValid || locationName.trim().length < 2" @click="manage('ads-targets', { customerId: draft.customerId, name: locationName.trim() })">Find locations and languages</v-btn>
@@ -155,7 +157,8 @@ function performConfirmed() {
     </section>
     <v-dialog :model-value="Boolean(confirm)" max-width="600" @update:model-value="value => { if (!value) confirm = ''; }">
       <v-card :title="({ conversion: 'Create a website conversion goal?', create: 'Create the reviewed campaign paused?', launch: 'Launch campaign and allow spending?', pause: 'Pause campaign?' })[confirm]">
-        <v-card-text><p>Account {{ confirm === 'conversion' ? draft.customerId : saved?.customerId }} · {{ confirm === 'conversion' ? goalName : confirm === 'create' ? preview?.plan.name : campaignId }}</p>
+        <v-card-text>
+          <p>Account {{ confirm === 'conversion' ? draft.customerId : saved?.customerId }} · {{ confirm === 'conversion' ? goalName : confirm === 'create' ? preview?.plan.name : campaignId }}</p>
           <p v-if="confirm === 'launch'">Google may begin serving ads and charging this account. The application rechecks the campaign review before enabling it.</p>
           <p v-else-if="confirm === 'create'">Create the reviewed budget, campaign, goal association, ad group, keywords and ad together. The campaign starts paused.</p>
           <p v-else-if="confirm === 'pause'">Stop this campaign from serving after Google processes the pause. Already incurred charges remain.</p>

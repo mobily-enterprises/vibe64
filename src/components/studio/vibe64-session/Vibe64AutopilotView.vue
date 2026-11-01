@@ -392,9 +392,11 @@
             </v-btn>
           </template>
         </Vibe64TemporaryActionTerminal>
-        <Vibe64ConnectedReplacement :project-slug="projectSlug" :session-id="sessionId" :failure="saveWorkFailure"
+        <Vibe64ConnectedReplacement
+          :project-slug="projectSlug" :session-id="sessionId" :failure="saveWorkFailure"
           :disabled="saveWorkSending || saveWorkOperationActive || sourceOperationsSuspended || agentActive"
-          @replaced="props.refreshSessionData?.(); props.refreshSessionWork?.()" />
+          @replaced="props.refreshSessionData?.(); props.refreshSessionWork?.()"
+        />
 
         <Vibe64TemporaryActionTerminal
           :active="workspaceSetupRunning || workspaceSetupRetrying"
@@ -678,12 +680,14 @@
                   >
                     Send for approval
                   </v-btn>
-                  <Vibe64ComposerDelivery v-else ref="composerSendButton"
+                  <Vibe64ComposerDelivery
+                    v-else ref="composerSendButton"
                     :stop-visible="agentStopVisible" :stop-enabled="agentStopEnabled" :stopping="interrupting"
                     :can-submit="composerCanSubmit && !composerBlocked && attachmentState.canSubmit"
                     :sending="composerSending" :submit-mode="composerSubmitMode"
                     :submit-aria-label="composerSubmitAriaLabel" :submit-title="composerSubmitTitle"
-                    @stop="requestAgentInterrupt" @submit="sendComposerMessage" />
+                    @stop="requestAgentInterrupt" @submit="sendComposerMessage"
+                  />
                 </div>
                 <div :ref="setVoiceFeedbackTarget" class="studio-autopilot__voice-feedback" />
               </template>
@@ -857,7 +861,8 @@
           </template>
           <template #text="{ text, sourcePath, openSource }"><LongTextPreviewBlocks :blocks="parseLongTextReviewBlocks(text || '')" @open-link="openSubsystemTextLink($event, sourcePath, openSource)" /></template>
           <template #file-interface="{ request, active, architecture, openFile, updateLocation, openProgram }">
-            <Vibe64SessionSourceEditor single-file :active="props.active && active" :agent-active="agentActive"
+            <Vibe64SessionSourceEditor
+              single-file :active="props.active && active" :agent-active="agentActive"
               :architecture-facts="architecture"
               :file-bookmarks="fileBookmarks"
               :assistant-draft-available="assistantDraftAvailable"
@@ -868,19 +873,22 @@
               @open-source-file="openFile"
               @interface-location="updateLocation"
               :assistant-available="assistantCanUsePurpose('source_explanation')"
-              :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'" />
+              :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'"
+            />
           </template>
         </Vibe64ArchitectureView>
         <v-dialog :model-value="Boolean(architectureFileRequest)" max-width="1100" @update:model-value="!$event && (architectureFileRequest = null)">
           <section class="studio-autopilot__architecture-file" aria-label="Architecture file viewer">
             <header><strong>{{ architectureFileRequest?.path }}</strong><v-btn variant="text" aria-label="Close file viewer" @click="architectureFileRequest = null">Close</v-btn></header>
-            <Vibe64SessionSourceEditor v-if="architectureFileRequest" single-file
+            <Vibe64SessionSourceEditor
+              v-if="architectureFileRequest" single-file
               :key="architectureFileRequest.path" :active="props.active" :agent-active="agentActive"
               :open-request="architectureFileRequest" :project-slug="projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
               @open-source-file="openSourceEditorFile"
               :assistant-available="assistantCanUsePurpose('source_explanation')"
-              :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'" />
+              :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'"
+            />
           </section>
         </v-dialog>
       </section>
@@ -976,8 +984,10 @@
         <v-card-text>
           <template v-if="saveWorkConnectedReview">
             <p>Commit and push changed connected sources to these contribution branches, one repository at a time.</p>
-            <v-sheet v-for="item in saveWorkConnectedReview" :key="item.destination.sessionId"
-              color="surface-light" rounded="lg" class="pa-3 mb-2" style="overflow-wrap: anywhere">
+            <v-sheet
+              v-for="item in saveWorkConnectedReview" :key="item.destination.sessionId"
+              color="surface-light" rounded="lg" class="pa-3 mb-2" style="overflow-wrap: anywhere"
+            >
               <strong>{{ item.destination.repository }}:{{ item.destination.branch }}</strong>
             </v-sheet>
             <p>The main project’s changes stay local. Each receiving project can merge or discard its contribution in Incoming changes.</p>

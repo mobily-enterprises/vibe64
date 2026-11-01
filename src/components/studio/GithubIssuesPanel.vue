@@ -71,7 +71,9 @@ function date(value) {
       <v-btn
         v-if="available" :prepend-icon="mdiPlus" color="primary" variant="tonal"
         rounded="pill" size="small" height="48" @click="openEditor()"
-      >New issue</v-btn>
+      >
+        New issue
+      </v-btn>
     </div>
 
     <v-alert v-if="!available" variant="tonal" type="info">Issues are available only for GitHub projects.</v-alert>

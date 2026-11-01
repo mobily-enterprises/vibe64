@@ -127,9 +127,11 @@ async function refresh() {
     <v-alert v-if="!available" type="info" variant="tonal">Incoming changes require a configured GitHub receiving project.</v-alert>
     <v-alert v-else-if="!sessionId" type="info" variant="tonal">Select or create a working session to read this project's Incoming changes. The queue is shared by all sessions.</v-alert>
     <template v-else>
-      <v-select v-if="!id" :model-value="state" label="Contribution state" hide-details variant="outlined"
+      <v-select
+        v-if="!id" :model-value="state" label="Contribution state" hide-details variant="outlined"
         :items="['pending', 'merged', 'discarded', 'unresolved', 'all'].map(value => ({ value, title: value[0].toUpperCase() + value.slice(1) }))"
-        @update:model-value="navigate({ state: $event, offset: undefined })" />
+        @update:model-value="navigate({ state: $event, offset: undefined })"
+      />
       <v-sheet v-if="resource.isInitialLoading.value" border rounded="lg" class="pa-4" aria-label="Loading incoming changes" aria-busy="true">
         <v-skeleton-loader v-for="index in 3" :key="index" :type="id ? 'paragraph' : 'list-item-two-line'" />
       </v-sheet>

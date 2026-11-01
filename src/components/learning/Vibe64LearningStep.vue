@@ -205,8 +205,12 @@ async function markRead() {
       />
       <v-skeleton-loader v-else-if="!visualError" type="image" aria-label="Loading the diagram" />
       <p v-if="visualError" class="vibe64-learning-step__error" role="alert">{{ visualError }}</p>
-      <v-btn v-if="step.visual.play?.length" variant="tonal" rounded="pill" min-height="48" data-test="learning-play"
-        :disabled="!visualResource" :loading="playing" @click="play">Play</v-btn>
+      <v-btn
+        v-if="step.visual.play?.length" variant="tonal" rounded="pill" min-height="48" data-test="learning-play"
+        :disabled="!visualResource" :loading="playing" @click="play"
+      >
+        Play
+      </v-btn>
     </section>
 
     <section v-if="!ended && kind === 'choice'" class="vibe64-learning-step__check" aria-label="Question">
@@ -223,16 +227,24 @@ async function markRead() {
         density="comfortable"
         @update:model-value="toggleOption(optionIndex)"
       />
-      <v-btn color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-answer"
+      <v-btn
+        color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-answer"
         :disabled="!selected.length || Boolean(busy) || statusOf(step.id) === 'passed'" :loading="busy === `answer:${step.id}`"
-        @click="answer">Check answer</v-btn>
+        @click="answer"
+      >
+        Check answer
+      </v-btn>
       <p v-if="checkReason" class="vibe64-learning-step__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
     </section>
     <section v-else-if="!ended && (kind === 'auto' || kind === 'fact')" class="vibe64-learning-step__check" aria-label="Automatic check">
       <p v-if="step.check.files?.length">Make this change yourself in Dashboard → Files. Saving does not check it: press Check now when you are ready.</p>
       <p v-else-if="kind === 'auto'">This step is checked automatically when you do it in your practice project.</p>
-      <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-check"
-        :disabled="Boolean(busy)" :loading="busy === `check:${step.id}`" @click="runCheck">Check now</v-btn>
+      <v-btn
+        variant="tonal" rounded="pill" min-height="48" data-test="learning-check"
+        :disabled="Boolean(busy)" :loading="busy === `check:${step.id}`" @click="runCheck"
+      >
+        Check now
+      </v-btn>
       <p v-if="checkReason" class="vibe64-learning-step__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
     </section>
     <section v-else-if="!ended && kind === 'review'" class="vibe64-learning-step__check" aria-label="Review">
@@ -241,8 +253,12 @@ async function markRead() {
         {{ learning.reviewNote(learning.savedReview(step.id)) || "Passed ✓" }}
       </p>
       <template v-else>
-        <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-review"
-          :disabled="Boolean(busy)" :loading="busy === `review:${step.id}`" @click="runReview">{{ checkReason ? "Check again" : "Check my work" }}</v-btn>
+        <v-btn
+          variant="tonal" rounded="pill" min-height="48" data-test="learning-review"
+          :disabled="Boolean(busy)" :loading="busy === `review:${step.id}`" @click="runReview"
+        >
+          {{ checkReason ? "Check again" : "Check my work" }}
+        </v-btn>
         <p v-if="busy === `review:${step.id}`" class="vibe64-learning-step__hint" role="status">Checking your work with your AI…</p>
         <p v-if="checkReason" class="vibe64-learning-step__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
       </template>
@@ -250,9 +266,13 @@ async function markRead() {
     <section v-else-if="!ended && kind === 'self'" class="vibe64-learning-step__check" aria-label="Self check">
       <!-- The step text says when to press Done; a step already passed is said here, as for questions. -->
       <p v-if="statusOf(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-done-kept">You already passed this step, so it does not need to be marked done again.</p>
-      <v-btn color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-done"
+      <v-btn
+        color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-done"
         :disabled="Boolean(busy) || statusOf(step.id) === 'passed'" :loading="busy === `done:${step.id}`"
-        @click="learning.done(step.id)">Done</v-btn>
+        @click="learning.done(step.id)"
+      >
+        Done
+      </v-btn>
     </section>
     <p v-if="kind !== 'none'" class="vibe64-learning-step__status" :class="`is-${statusOf(step.id)}`" role="status" data-test="learning-step-status">
       {{ STEP_STATUS_LABELS[statusOf(step.id)] }}
@@ -271,8 +291,10 @@ async function markRead() {
     <slot name="after-actions" />
     <div v-if="!ended && kind === 'none' && !readingDone" class="vibe64-learning-step__pager">
       <span class="vibe64-learning-step__pager-end">
-        <v-btn color="primary" variant="tonal" rounded="pill" min-height="48"
-          data-test="learning-mark-read" :disabled="Boolean(busy)" :loading="busy === `done:${step.id}`" @click="markRead">Mark as done</v-btn>
+        <v-btn
+          color="primary" variant="tonal" rounded="pill" min-height="48"
+          data-test="learning-mark-read" :disabled="Boolean(busy)" :loading="busy === `done:${step.id}`" @click="markRead"
+        >Mark as done</v-btn>
       </span>
     </div>
   </div>

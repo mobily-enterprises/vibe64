@@ -1,14 +1,18 @@
 <template>
   <div class="studio-autopilot__composer-delivery">
-    <v-btn v-if="stopVisible" aria-label="Stop" title="Stop assistant"
+    <v-btn
+      v-if="stopVisible" aria-label="Stop" title="Stop assistant"
       :disabled="!stopEnabled" :aria-busy="stopping ? 'true' : undefined"
       :icon="mdiStop" size="small" variant="text" class="studio-autopilot__composer-action"
-      @click="$emit('stop')" />
-    <v-btn ref="sendButton" :aria-label="submitAriaLabel" :title="submitTitle"
+      @click="$emit('stop')"
+    />
+    <v-btn
+      ref="sendButton" :aria-label="submitAriaLabel" :title="submitTitle"
       :disabled="!canSubmit" :aria-busy="sending && !canSubmit ? 'true' : undefined"
       color="primary" size="small" variant="flat"
       :icon="submitMode === 'send' ? mdiSend : mdiArrowTopRight"
-      class="studio-autopilot__composer-action" @click="$emit('submit')" />
+      class="studio-autopilot__composer-action" @click="$emit('submit')"
+    />
   </div>
 </template>
 <script setup>
