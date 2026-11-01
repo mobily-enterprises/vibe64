@@ -93,7 +93,7 @@ async function closeStoppedLaunchTerminals(sessionId = "") {
 }
 
 function releaseLaunchSpecReservation(spec = {}) {
-  // readable-check: allow method-probe - data: only a spec that reserved a port carries its release
+  // readable-check: allow method-probe - optional operation: only a spec that reserved a port carries its release
   if (typeof spec.releasePortReservation !== "function") {
     return;
   }

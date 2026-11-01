@@ -102,7 +102,7 @@ function createColleagueConversations({
         // subscriptions reauthorize independently, so their callback order is
         // deliberately not an application presentation guarantee.
         if (observer.context.colleague?.conversationId !== state.record.scopeId) return;
-        // readable-check: allow optional-call - data: a reply projection exists only while a worker runs
+        // readable-check: allow optional-call - optional operation: a reply projection exists only while a worker runs
         const projected = state.projectReply?.(event);
         const interimReply = state.interimReply;
         if (event.completedEnvelope === true) {

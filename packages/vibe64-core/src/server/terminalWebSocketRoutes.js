@@ -67,7 +67,7 @@ function registerTerminalWebSocketRoute(
           return;
         }
         closed = true;
-        // readable-check: allow optional-call - data: a subscription exists only once the stream started and may not need unsubscribing
+        // readable-check: allow optional-call - optional operation: a subscription exists only once the stream started and may not need unsubscribing
         subscription?.unsubscribe?.();
         subscription = null;
       };
@@ -184,7 +184,7 @@ function registerTerminalWebSocketRoute(
           terminalSessionId,
           toolId
         }))).then((result) => {
-          // readable-check: allow optional-call - data: a subscription result may not need unsubscribing
+          // readable-check: allow optional-call - optional operation: a subscription result may not need unsubscribing
           if (closed) { result?.unsubscribe?.(); return; }
           if (result?.ok === false) {
             closeWithError(

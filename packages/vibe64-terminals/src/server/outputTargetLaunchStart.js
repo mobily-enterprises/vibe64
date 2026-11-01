@@ -462,7 +462,7 @@ function createOutputTargetLaunchStart({
                       });
                     }
                     await releaseEndedLaunchTerminal(context, sessionId, event.id);
-                    // readable-check: allow method-probe - data: a terminal spec may carry a close callback
+                    // readable-check: allow method-probe - optional operation: a terminal spec may carry a close callback
                     if (typeof spec.onClose === "function") {
                       await spec.onClose(event);
                     }
@@ -486,7 +486,7 @@ function createOutputTargetLaunchStart({
                     terminalSessionId: event.id
                   });
                   await releaseEndedLaunchTerminal(context, sessionId, event.id);
-                  // readable-check: allow method-probe - data: a terminal spec may carry a stop callback
+                  // readable-check: allow method-probe - optional operation: a terminal spec may carry a stop callback
                   if (typeof spec.onStop === "function") {
                     await spec.onStop(event);
                   }

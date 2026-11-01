@@ -74,7 +74,7 @@ async function buildPackage({
   const entry = packaging?.packages?.find((candidate) => candidate.id === packageId);
   if (!entry) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Packaging declares no package ${packageId}.`);
   const packer = vibe64Packer(entry.packer);
-  // readable-check: allow method-probe - data: a packer definition has templates() only when it builds from a template
+  // readable-check: allow method-probe - optional operation: a packer definition has templates() only when it builds from a template
   const template = typeof packer.templates === "function" ? packer.templates() : null;
   const key = planHash || buildOnlyKey({ commit, packagingHash: packaging.packagingHash, packageId, version, versionCode, template });
   const stored = await storedArtifacts({ resultStore, planHash: key, packageId });

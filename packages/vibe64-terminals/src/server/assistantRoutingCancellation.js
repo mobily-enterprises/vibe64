@@ -168,7 +168,7 @@ function createAssistantRoutingCancellation({
     const task = routingState.running.get(key);
     if (task?.messageId === messageId) {
       task.cancelled = true;
-      // readable-check: allow optional-call - data: a routing task has a stop once its helper has started
+      // readable-check: allow optional-call - optional operation: a routing task has a stop once its helper has started
       void Promise.resolve(task.stop?.()).catch(() => {});
     }
     // The running turn may be this message's when its routed delivery was

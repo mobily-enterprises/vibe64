@@ -277,7 +277,7 @@ async function withStageCredentials({ credentials = [], obtainCredential, tempRo
 }
 
 function expectedChecksum(destination, artifacts) {
-  // readable-check: allow method-probe - data: a destination definition may compute its own expected checksum
+  // readable-check: allow method-probe - optional operation: a destination definition may compute its own expected checksum
   return typeof destination.expectedChecksum === "function" ? destination.expectedChecksum(artifacts) : artifacts.digest;
 }
 
@@ -286,7 +286,7 @@ function expectedChecksum(destination, artifacts) {
  * private package that needs a sign-in even to be read back).
  */
 function credentialSpecs(destination, field, target) {
-  // readable-check: allow method-probe - data: a destination definition's credential specs are a list or a function of the target
+  // readable-check: allow method-probe - optional operation: a destination definition's credential specs are a list or a function of the target
   const specs = typeof destination[field] === "function" ? destination[field](target) : destination[field];
   return Array.isArray(specs) ? specs : [];
 }
