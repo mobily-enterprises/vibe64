@@ -6,6 +6,7 @@ import {
   completionProjection,
   pick,
   practiceSlug,
+  preparedAttemptId,
   preparedResult,
   signedInLearner,
   toCourseInstallError,
@@ -121,16 +122,17 @@ function createTrainingOperations({
   /**
    * Starting, restarting, resuming or finishing a lesson changes the current
    * lesson. A failure may already have changed it (the mode set, the old
-   * attempt archived), so every tab rereads either way.
+   * attempt archived), so every tab rereads either way: about lessonAttemptId after a failure, and about the attempt
+   * changedAttemptId reads from the result after a success.
    */
-  const announced = async (actor, operation, lessonAttemptId = "") => {
+  const announced = async (actor, operation, lessonAttemptId, changedAttemptId) => {
     let result;
     try { result = await operation(); }
     catch (error) {
       await notifyLearner(actor, lessonAttemptId).catch(() => {});
       throw error;
     }
-    await notifyLearner(actor, result?.active?.attemptId || result?.attempt?.attemptId || lessonAttemptId);
+    await notifyLearner(actor, changedAttemptId(result));
     return result;
   };
 
@@ -280,14 +282,15 @@ function createTrainingOperations({
     return announced(actor, async () => preparedResult(await exercises.startLesson({
       actor,
       ...pick(input, ["courseId", "release", "lessonCode", "requestId", "expectedRevision", "archiveCurrent"])
-    })));
+    })), "", preparedAttemptId);
   }
 
   async function resumeLessonForLearner(input, actor) {
     return announced(
       actor,
       async () => preparedResult(await exercises.prepareLesson({ actor, attemptId: input.attemptId })),
-      input.attemptId
+      input.attemptId,
+      preparedAttemptId
     );
   }
 
@@ -304,12 +307,12 @@ function createTrainingOperations({
     return announced(actor, async () => preparedResult(await exercises.restartLesson({
       actor,
       ...pick(input, ["attemptId", "requestId", "expectedRevision"])
-    })), input.attemptId);
+    })), input.attemptId, preparedAttemptId);
   }
 
   async function finishLessonForLearner(input, actor) {
     const result = await announced(actor, () => exercises.finishLesson({ actor, ...pick(input, ["attemptId", "expectedRevision"]) }),
-      input.attemptId);
+      input.attemptId, () => input.attemptId);
     return { ok: true, available: true, changed: result.closed === true };
   }
 

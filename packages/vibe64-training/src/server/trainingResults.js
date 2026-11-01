@@ -158,6 +158,10 @@ const endedResult = result => ({
   previewReady: false
 });
 /**
+ * The attempt a prepared result changed: the learner's active attempt, or the ended one when none is active.
+ */
+const preparedAttemptId = result => (result.active || result.attempt).attemptId;
+/**
  * The result of a lesson start, resume or restart: its saved attempt, or a refusal when none was returned.
  */
 const preparedResult = result => {
@@ -199,6 +203,7 @@ export {
   endedResult,
   pick,
   practiceSlug,
+  preparedAttemptId,
   preparedResult,
   signedInLearner,
   toCourseInstallError,
