@@ -23,7 +23,7 @@ const requestModes = new WeakMap();
 
 // Returns the unregister function. null also clears the reader, which hosts'
 // existing test cleanup still relies on.
-// readable-check: allow module-registry - filled by a composing host repository; convert with its supplier
+// readable-check: allow module-registry - cycle: vibe64.training requires vibe64.project, whose request gate reads it
 function registerLearningModeReader(reader, { onReadFailure = null } = {}) {
   if (reader !== null && typeof reader !== "function") throw new TypeError("Learning mode needs its Training reader.");
   learningModeReader = reader;
