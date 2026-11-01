@@ -71,6 +71,5 @@ function createSnapshotCache({
 }
 
 export {
-  GENESIS_SNAPSHOT_IDLE_MS,
   createSnapshotCache
 };

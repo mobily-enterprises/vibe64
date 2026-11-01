@@ -17,7 +17,6 @@ function usageRecordingPath(session = {}, recordingId = "") {
 }
 
 export {
-  USAGE_RECORDINGS_DIRECTORY_NAME,
   usageRecordingPath,
   usageRecordingsPath
 };

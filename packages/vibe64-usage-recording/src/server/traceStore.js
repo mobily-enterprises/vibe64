@@ -468,13 +468,11 @@ function pageOf(items, options = {}) {
 }
 
 export {
-  HITS_FILE_PATTERN,
   appendJsonLine,
   createTraceReader,
   pageOf,
   readInteractions,
   readJsonFile,
-  readRegularFile,
   readRequestLog,
   recordedRequestPath,
   recordingRequestRows,
