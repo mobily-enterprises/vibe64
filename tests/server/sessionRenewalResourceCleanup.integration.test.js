@@ -512,9 +512,11 @@ async function renewalHarness(targetRoot, {
     },
     async seedSessionRenewalHandover(_sessionId, input) {
       return {
-        handoverHash: input.handoverHash,
-        message: "Ready to continue.",
-        sourceCommit: commit,
+        acknowledgement: {
+          handoverHash: input.handoverHash,
+          message: "Ready to continue.",
+          sourceCommit: commit
+        },
         threadId: "thread-successor",
         turnId: "turn-seed"
       };

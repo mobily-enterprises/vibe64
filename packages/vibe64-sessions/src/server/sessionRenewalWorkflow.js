@@ -575,16 +575,16 @@ function createRenewalWorkflow({ admission, completion, predecessorSession, rene
         phase: "acknowledgement"
       });
       admission.assertWorkflowAdmissionOpen();
-      const acknowledgement = seeded.acknowledgement || seeded;
+      const { acknowledgement } = seeded;
       state = await mutateSessionRenewalState(runtime, sessionId, (current) => statePatch(current, {
         stage: SESSION_RENEWAL_STAGE.SUCCESSOR_ACKNOWLEDGED,
         successor: {
           ...current.successor,
           acknowledgedAt: normalizeText(seeded.acknowledgedAt) || timestamp(),
           acknowledgement: {
-            handoverHash: normalizeText(acknowledgement?.handoverHash),
-            message: normalizeText(acknowledgement?.message),
-            sourceCommit: normalizeText(acknowledgement?.sourceCommit)
+            handoverHash: normalizeText(acknowledgement.handoverHash),
+            message: normalizeText(acknowledgement.message),
+            sourceCommit: normalizeText(acknowledgement.sourceCommit)
           },
           threadId: normalizeText(seeded.threadId),
           turnId: normalizeText(seeded.turnId)

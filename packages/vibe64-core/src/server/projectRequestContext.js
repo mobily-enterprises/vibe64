@@ -47,9 +47,9 @@ function projectSlugFromRequest(request = {}) {
   return normalizeProjectSlug(request.params?.slug);
 }
 
-// The one default for the project context: the studio's own, when a caller
-// names none.
 /**
+ * The one default for the project context: the studio's own, when a caller
+ * names none.
  * @param {object} [options]
  * @param {StudioProjectContext} [options.projectContext]
  * @param {object} [options.request]

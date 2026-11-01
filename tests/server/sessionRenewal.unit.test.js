@@ -1145,9 +1145,11 @@ function fixture({
         throw error;
       }
       return {
-        handoverHash: input.handoverHash,
-        message: "Ready to continue.",
-        sourceCommit: canonicalCommit,
+        acknowledgement: {
+          handoverHash: input.handoverHash,
+          message: "Ready to continue.",
+          sourceCommit: canonicalCommit
+        },
         threadId: "thread-new",
         turnId: "turn-seed"
       };
