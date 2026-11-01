@@ -1,10 +1,8 @@
+import { normalizeAgentText } from "../shared/normalizeAgentText.js";
+
 const AGENT_PROVIDER_IDS = Object.freeze({
   CODEX_APP_SERVER: "codex_app_server"
 });
-
-function normalizeAgentText(value = "") {
-  return String(value ?? "").trim();
-}
 
 function textAgentInput(text = "") {
   return {

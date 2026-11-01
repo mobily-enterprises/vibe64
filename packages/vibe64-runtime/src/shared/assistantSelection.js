@@ -1,3 +1,5 @@
+import { normalizeAgentText } from "./normalizeAgentText.js";
+
 const VIBE64_ASSISTANT_ENGINE_IDS = Object.freeze({
   CLAUDE: "claude",
   CODEX: "codex",
@@ -29,10 +31,6 @@ function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-function text(value = "") {
-  return String(value ?? "").trim();
-}
-
 function selectionError(code, message, details = {}) {
   const error = new Error(message);
   error.code = code;
@@ -52,7 +50,7 @@ function boundedIdentifier(value, field, {
   allowEmpty = false,
   maxLength = 512
 } = {}) {
-  const normalized = text(value);
+  const normalized = normalizeAgentText(value);
   if (
     (!normalized && !allowEmpty) ||
     normalized.length > maxLength ||
@@ -68,7 +66,7 @@ function boundedIdentifier(value, field, {
 }
 
 function catalogRevision(value, field = "catalogRevision") {
-  const revision = text(value);
+  const revision = normalizeAgentText(value);
   if (!VIBE64_ASSISTANT_CATALOG_REVISION_PATTERN.test(revision)) {
     throw selectionError(
       VIBE64_ASSISTANT_SELECTION_ERROR_CODES.INVALID,
@@ -89,7 +87,7 @@ function defineVibe64AssistantSelection(value = {}) {
       { engineId, field: "engineId" }
     );
   }
-  const schema = text(input.schema) || VIBE64_ASSISTANT_SELECTION_SCHEMA;
+  const schema = normalizeAgentText(input.schema) || VIBE64_ASSISTANT_SELECTION_SCHEMA;
   if (schema !== VIBE64_ASSISTANT_SELECTION_SCHEMA) {
     throw selectionError(
       VIBE64_ASSISTANT_SELECTION_ERROR_CODES.INVALID,
@@ -120,7 +118,7 @@ function serializeVibe64AssistantSelection(value = {}) {
 function vibe64AssistantSelectionFromMetadata(metadata = {}, {
   required = true
 } = {}) {
-  const raw = text(record(metadata)[VIBE64_ASSISTANT_SELECTION_METADATA]);
+  const raw = normalizeAgentText(record(metadata)[VIBE64_ASSISTANT_SELECTION_METADATA]);
   if (!raw && required !== true) {
     return null;
   }
@@ -149,9 +147,9 @@ function normalizedVariant(value = {}) {
   const input = record(value);
   const id = boundedIdentifier(input.id, "variant.id", { maxLength: 256 });
   return Object.freeze({
-    description: text(input.description),
+    description: normalizeAgentText(input.description),
     id,
-    label: text(input.label) || id
+    label: normalizeAgentText(input.label) || id
   });
 }
 
@@ -168,18 +166,18 @@ function normalizedModel(value = {}) {
   }
   return Object.freeze({
     capabilities: Object.freeze({ ...record(input.capabilities) }),
-    description: text(input.description),
+    description: normalizeAgentText(input.description),
     id,
-    label: text(input.label) || id,
-    lockMessage: text(input.lockMessage),
-    status: text(input.status) || "available",
+    label: normalizeAgentText(input.label) || id,
+    lockMessage: normalizeAgentText(input.lockMessage),
+    status: normalizeAgentText(input.status) || "available",
     variants: Object.freeze(variants)
   });
 }
 
 function normalizedModelAccess(value = {}) {
   const input = record(value);
-  const mode = text(input.mode);
+  const mode = normalizeAgentText(input.mode);
   const enabledModelIds = [...new Set((Array.isArray(input.enabledModelIds)
     ? input.enabledModelIds
     : []).map((modelId) => boundedIdentifier(
@@ -190,7 +188,7 @@ function normalizedModelAccess(value = {}) {
   return Object.freeze({
     configurable: input.configurable === true,
     enabledModelIds: Object.freeze(enabledModelIds),
-    label: text(input.label),
+    label: normalizeAgentText(input.label),
     managementOnly: input.managementOnly === true,
     mode: ["recommended", "verified"].includes(mode) ? mode : "all",
     recommendedModelId: boundedIdentifier(
@@ -198,7 +196,7 @@ function normalizedModelAccess(value = {}) {
       "modelProvider.modelAccess.recommendedModelId",
       { allowEmpty: true }
     ),
-    warning: text(input.warning)
+    warning: normalizeAgentText(input.warning)
   });
 }
 
@@ -216,15 +214,15 @@ function normalizedModelProvider(value = {}) {
   return Object.freeze({
     apiKeyCompatible: input.apiKeyCompatible === true,
     connected: input.connected === true,
-    connectionMessage: text(input.connectionMessage),
-    connectionStatus: text(input.connectionStatus) || (input.connected === true ? "connected" : "disconnected"),
+    connectionMessage: normalizeAgentText(input.connectionMessage),
+    connectionStatus: normalizeAgentText(input.connectionStatus) || (input.connected === true ? "connected" : "disconnected"),
     defaultModelId: boundedIdentifier(input.defaultModelId, "modelProvider.defaultModelId", {
       allowEmpty: true
     }),
-    definitionRevision: text(input.definitionRevision),
-    description: text(input.description),
+    definitionRevision: normalizeAgentText(input.definitionRevision),
+    description: normalizeAgentText(input.description),
     id,
-    label: text(input.label) || id,
+    label: normalizeAgentText(input.label) || id,
     modelAccess: normalizedModelAccess(input.modelAccess),
     preferred: input.preferred === true,
     models: Object.freeze(models)
@@ -235,10 +233,10 @@ function normalizedAgent(value = {}) {
   const input = record(value);
   const id = boundedIdentifier(input.id, "agent.id", { maxLength: 256 });
   return Object.freeze({
-    description: text(input.description),
+    description: normalizeAgentText(input.description),
     id,
-    label: text(input.label) || id,
-    mode: text(input.mode) || "primary",
+    label: normalizeAgentText(input.label) || id,
+    mode: normalizeAgentText(input.mode) || "primary",
     modelId: boundedIdentifier(input.modelId, "agent.modelId", {
       allowEmpty: true
     }),
@@ -258,12 +256,12 @@ function normalizedCapabilityPage(value = {}) {
   const limit = Number.parseInt(String(input.limit || ""), 10);
   const total = Number.parseInt(String(input.total || ""), 10);
   return Object.freeze({
-    cursor: text(input.cursor),
+    cursor: normalizeAgentText(input.cursor),
     hasMore: input.hasMore === true,
-    kind: ["models", "providers"].includes(text(input.kind)) ? text(input.kind) : "providers",
+    kind: ["models", "providers"].includes(normalizeAgentText(input.kind)) ? normalizeAgentText(input.kind) : "providers",
     limit: Number.isFinite(limit) && limit > 0 ? limit : 0,
-    nextCursor: text(input.nextCursor),
-    search: text(input.search),
+    nextCursor: normalizeAgentText(input.nextCursor),
+    search: normalizeAgentText(input.search),
     total: Number.isFinite(total) && total >= 0 ? total : 0
   });
 }
@@ -284,7 +282,7 @@ function defineVibe64AssistantCapabilities(value = {}) {
   if (!VIBE64_ASSISTANT_ENGINE_ID_SET.has(engineId)) {
     throw new TypeError(`Unknown assistant engine capabilities: ${engineId}.`);
   }
-  const schema = text(input.schema) || VIBE64_ASSISTANT_CAPABILITIES_SCHEMA;
+  const schema = normalizeAgentText(input.schema) || VIBE64_ASSISTANT_CAPABILITIES_SCHEMA;
   if (schema !== VIBE64_ASSISTANT_CAPABILITIES_SCHEMA) {
     throw new TypeError(`Unsupported assistant capabilities schema: ${schema}.`);
   }
@@ -296,12 +294,12 @@ function defineVibe64AssistantCapabilities(value = {}) {
   assertUniqueIds(agents, "assistant agent");
   const authentication = record(input.authentication);
   const modes = Array.isArray(authentication.modes)
-    ? [...new Set(authentication.modes.map(text).filter(Boolean))]
+    ? [...new Set(authentication.modes.map(normalizeAgentText).filter(Boolean))]
     : [];
   return Object.freeze({
     agents: Object.freeze(agents),
     authentication: Object.freeze({
-      management: text(authentication.management) || "account-owner",
+      management: normalizeAgentText(authentication.management) || "account-owner",
       modes: Object.freeze(modes)
     }),
     defaults: Object.freeze({
@@ -324,10 +322,10 @@ function defineVibe64AssistantCapabilities(value = {}) {
     }),
     engineId,
     health: Object.freeze({
-      message: text(input.health?.message),
-      status: text(input.health?.status) || "unavailable"
+      message: normalizeAgentText(input.health?.message),
+      status: normalizeAgentText(input.health?.status) || "unavailable"
     }),
-    label: text(input.label) || engineId,
+    label: normalizeAgentText(input.label) || engineId,
     modelProviders: Object.freeze(modelProviders),
     page: normalizedCapabilityPage(input.page),
     revision: catalogRevision(input.revision, "revision"),
@@ -337,7 +335,7 @@ function defineVibe64AssistantCapabilities(value = {}) {
 }
 
 function requestedField(input, defaults, field) {
-  return Object.hasOwn(input, field) ? text(input[field]) : text(defaults[field]);
+  return Object.hasOwn(input, field) ? normalizeAgentText(input[field]) : normalizeAgentText(defaults[field]);
 }
 
 function unavailableSelection(message, details = {}) {
@@ -352,7 +350,7 @@ function resolveVibe64AssistantSelection(capabilitiesValue = {}, requestedValue 
   const capabilities = defineVibe64AssistantCapabilities(capabilitiesValue);
   const requested = record(requestedValue);
   const requestedEngineId = Object.hasOwn(requested, "engineId")
-    ? text(requested.engineId)
+    ? normalizeAgentText(requested.engineId)
     : capabilities.engineId;
   if (requestedEngineId !== capabilities.engineId) {
     unavailableSelection(`Assistant engine is unavailable: ${requestedEngineId || "(missing)"}.`, {
@@ -362,14 +360,14 @@ function resolveVibe64AssistantSelection(capabilitiesValue = {}, requestedValue 
   }
   if (
     Object.hasOwn(requested, "catalogRevision") &&
-    text(requested.catalogRevision) !== capabilities.revision
+    normalizeAgentText(requested.catalogRevision) !== capabilities.revision
   ) {
     throw selectionError(
       VIBE64_ASSISTANT_SELECTION_ERROR_CODES.CATALOG_STALE,
       "The assistant catalog changed. Review the current choices and try again.",
       {
         actualRevision: capabilities.revision,
-        expectedRevision: text(requested.catalogRevision)
+        expectedRevision: normalizeAgentText(requested.catalogRevision)
       }
     );
   }

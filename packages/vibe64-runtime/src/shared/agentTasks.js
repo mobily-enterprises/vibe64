@@ -1,3 +1,5 @@
+import { normalizeAgentText } from "./normalizeAgentText.js";
+
 const VIBE64_AGENT_TASK_STATES = Object.freeze({
   COMPLETED: "completed",
   RUNNING: "running",
@@ -39,10 +41,6 @@ const VIBE64_AGENT_TASK_RESULT_SCHEMA = Object.freeze({
   type: "object"
 });
 
-function normalizedAgentTaskText(value = "") {
-  return String(value ?? "").trim();
-}
-
 function normalizeVibe64AgentTaskResult(value = null) {
   let source = value;
   if (typeof source === "string") {
@@ -55,9 +53,9 @@ function normalizeVibe64AgentTaskResult(value = null) {
   if (!source || typeof source !== "object" || Array.isArray(source)) {
     return null;
   }
-  const kind = normalizedAgentTaskText(source.kind);
-  const message = normalizedAgentTaskText(source.message);
-  const report = normalizedAgentTaskText(source.report);
+  const kind = normalizeAgentText(source.kind);
+  const message = normalizeAgentText(source.message);
+  const report = normalizeAgentText(source.report);
   if (!Object.values(VIBE64_AGENT_TASK_RESULT_KINDS).includes(kind) || !message) {
     return null;
   }
@@ -76,7 +74,7 @@ function vibe64AgentTaskIsActive(task = null) {
     task &&
     typeof task === "object" &&
     !Array.isArray(task) &&
-    VIBE64_AGENT_TASK_ACTIVE_STATES.has(normalizedAgentTaskText(task.state))
+    VIBE64_AGENT_TASK_ACTIVE_STATES.has(normalizeAgentText(task.state))
   );
 }
 

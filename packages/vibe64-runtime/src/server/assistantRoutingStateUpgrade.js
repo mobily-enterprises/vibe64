@@ -6,6 +6,7 @@ import {
 import { validateAssistantRoutingConfiguration as validateV2 } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
 import { validateAssistantRoutingConfiguration as validateV3 } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
 import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/stateUpgrades/routingV4Format";
+import { isPlainObject } from "./isPlainObject.js";
 
 const engines = new Set(Object.values(VIBE64_ASSISTANT_ENGINE_IDS));
 const modes = new Set(["plan", "code", "economy", "auto"]);
@@ -17,7 +18,6 @@ const nativeRequestStatuses = new Set([
   ...requestStatuses, "planning", "planning_pending", "planning_sending", "planning_uncertain",
   "implementation_pending", "implementation_sending", "implementation_uncertain"
 ]);
-const record = (value) => value && typeof value === "object" && !Array.isArray(value);
 // Frozen schema-4 purposes and preferences: these published upgrades keep
 // their exact behaviour after later routing formats.
 const V4_PURPOSES = ["custom", "senior", "junior", "helper", "review", "deslop", "commit_title", "conversation_summary",
@@ -40,7 +40,7 @@ function currentPreferences(value = {}) {
 // Validate known native formats without translating their captured decisions.
 // Configuration snapshots omit schemaVersion; the enclosing request supplies it.
 function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, preferences = false, request = false } = {}) {
-  if (!record(value) || ![3, 4].includes(schemaVersion) ||
+  if (!isPlainObject(value) || ![3, 4].includes(schemaVersion) ||
       value.schemaVersion !== undefined && value.schemaVersion !== schemaVersion) {
     throw new Error("Saved routing has an unsupported format. Use the matching release.");
   }
@@ -54,8 +54,8 @@ function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, prefe
   if (preferences) currentPreferences(schemaVersion === 3 && value.mode === "intern" ? { ...value, mode: "junior" } : value);
   if (value.workflowEngineId !== undefined) workflow(value.workflowEngineId, "Saved routing");
   const legacyAdmission = value.configuration === undefined && value.admissionRequired === true;
-  if (request && (!value.mode || !record(value.configuration) && !legacyAdmission ||
-      !record(value.assignments) || !Object.keys(value.assignments).length ||
+  if (request && (!value.mode || !isPlainObject(value.configuration) && !legacyAdmission ||
+      !isPlainObject(value.assignments) || !Object.keys(value.assignments).length ||
       !nativeRequestStatuses.has(value.status))) {
     throw new Error("Saved routing has an unsupported routing request. Inspect it before upgrading.");
   }
@@ -67,7 +67,7 @@ function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, prefe
     validate({ ...value.configuration, schemaVersion: value.configuration.schemaVersion ?? schemaVersion });
   }
   if (value.assignments !== undefined) {
-    if (!record(value.assignments)) throw new Error("Saved routing assignments must be an object.");
+    if (!isPlainObject(value.assignments)) throw new Error("Saved routing assignments must be an object.");
     for (const [role, assigned] of Object.entries(value.assignments)) {
       if (!roles.has(role) || role === "auto") throw new Error("Saved routing contains an unknown assignment role.");
       selection(assigned, "Saved routing assignment");
@@ -85,7 +85,7 @@ function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, prefe
   }
   if (value.decision) validateAssistantRoutingUpgradeRecord(value.decision, { schemaVersion });
   if (value.seniorJuniorPair) {
-    if (!record(value.seniorJuniorPair) || Object.keys(value.seniorJuniorPair).some(role => !["senior", "junior"].includes(role))) {
+    if (!isPlainObject(value.seniorJuniorPair) || Object.keys(value.seniorJuniorPair).some(role => !["senior", "junior"].includes(role))) {
       throw new Error("Saved routing has an invalid workflow pair.");
     }
     for (const destination of Object.values(value.seniorJuniorPair)) validateAssistantRoutingUpgradeRecord(destination, { schemaVersion });
@@ -111,7 +111,7 @@ function readRecord(raw, label) {
   if (!raw) return null;
   try {
     const value = JSON.parse(raw);
-    if (value === null || record(value)) return value;
+    if (value === null || isPlainObject(value)) return value;
   } catch { /* Report the owned field, never stored message content. */ }
   throw new Error(`${label} is not a valid object. Inspect it before upgrading routing.`);
 }
@@ -127,7 +127,7 @@ function workflow(value, label) {
 }
 
 function requestWorkflow(request, label) {
-  if (!modes.has(request.mode) || !requestStatuses.has(request.status) || !record(request.assignments)) {
+  if (!modes.has(request.mode) || !requestStatuses.has(request.status) || !isPlainObject(request.assignments)) {
     throw new Error(`${label} has an unsupported routing request. Inspect it before upgrading routing.`);
   }
   if (request.schemaVersion !== undefined && ![1, 2].includes(request.schemaVersion)) {
@@ -247,15 +247,15 @@ function upgradeAssistantRoutingSession({ sessionId, metadata, conversations, re
   for (const conversation of conversations) {
     const label = `Temporary conversation ${conversation.conversationId} in session ${sessionId}`;
     const selected = conversation.assistantSelection ? selection(conversation.assistantSelection, label) : null;
-    if (conversation.routingMetadata !== undefined && !record(conversation.routingMetadata)) {
+    if (conversation.routingMetadata !== undefined && !isPlainObject(conversation.routingMetadata)) {
       throw new Error(`${label} has invalid routing metadata.`);
     }
     const previousMetadata = conversation.routingMetadata || {};
     const changes = upgradeMetadata(previousMetadata, selected, label);
     const next = { ...conversation, ...(Object.keys(changes).length ? { routingMetadata: { ...previousMetadata, ...changes } } : {}) };
-    if (conversation.nativeBindings !== undefined && !record(conversation.nativeBindings)) throw new Error(`${label} has invalid native bindings.`);
+    if (conversation.nativeBindings !== undefined && !isPlainObject(conversation.nativeBindings)) throw new Error(`${label} has invalid native bindings.`);
     for (const binding of Object.values(conversation.nativeBindings || {})) {
-      if (!record(binding) || typeof binding.conversationId !== "string" || !binding.conversationId.trim()) {
+      if (!isPlainObject(binding) || typeof binding.conversationId !== "string" || !binding.conversationId.trim()) {
         throw new Error(`${label} has an invalid retained native conversation.`);
       }
       selection(binding.assistantSelection, `${label} retained binding`);

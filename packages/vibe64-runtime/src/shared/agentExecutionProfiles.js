@@ -1,3 +1,5 @@
+import { isPlainRecord } from "./isPlainRecord.js";
+
 const VIBE64_AGENT_EXECUTION_PROFILE_IDS = Object.freeze({
   HELPER: "helper"
 });
@@ -108,14 +110,6 @@ class Vibe64AgentExecutionProfileError extends Error {
 
 function executionProfileError(code, message, details = {}) {
   return new Vibe64AgentExecutionProfileError(code, message, details);
-}
-
-function isPlainRecord(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
 
 function requiredRecord(value, fieldName) {
@@ -382,13 +376,17 @@ function defineVibe64HelperExecutionProfileResolution({ executionProfile, limits
   });
 }
 
-/** Reports a resolved profile to the turn's event listener and returns its audit snapshot. */
+/**
+ * Reports a resolved profile to the turn's event listener, when the turn has one, and returns its audit snapshot.
+ * @param {{ onEvent?: ((event: object) => void) | null }} [context]
+ * @param {object | null} [executionProfile]
+ */
 function emitVibe64AgentExecutionProfile(context = {}, executionProfile = null) {
   if (!executionProfile) {
     return null;
   }
   const snapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-  if (typeof context.onEvent === "function") {
+  if (context.onEvent) {
     context.onEvent({ executionProfile: snapshot, type: "execution-profile" });
   }
   return snapshot;

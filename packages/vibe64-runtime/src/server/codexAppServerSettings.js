@@ -2,6 +2,7 @@ import { VIBE64_ASSISTANT_ENGINE_IDS } from "../shared/assistantSelection.js";
 import { VIBE64_CODEX_DEFAULT_MODEL, VIBE64_CODEX_DEFAULT_THINKING, effectiveVibe64AgentExecutionSettings } from "../shared/agentSettings.js";
 import { codexAppServerThreadSettings as nativeCodexAppServerThreadSettings, codexAppServerTurnSettings as nativeCodexAppServerTurnSettings } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { normalizeAgentText } from "./agentProviders.js";
+import { isPlainRecord } from "../shared/isPlainRecord.js";
 
 // Codex session defaults and the thread and turn settings session threads and
 // helper threads share.
@@ -15,14 +16,6 @@ const CODEX_SESSION_READ_ONLY_SANDBOX = "read-only";
 
 function normalizeWorkdir(value = "") {
   return normalizeAgentText(value);
-}
-
-function isPlainRecord(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return false;
-  }
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
 
 function codexEffectiveAgentExecutionSettings(agentSettings = {}) {
