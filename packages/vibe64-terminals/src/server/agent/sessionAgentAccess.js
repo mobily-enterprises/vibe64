@@ -10,13 +10,18 @@ import { assistantUser, providerBindingConflictError, sessionAssistantSelection 
 
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
 
+/** The plan usage of an assistant that reports none, as a fresh value per read. */
+function unsupportedPlanUsage() {
+  return { status: "unsupported", windows: [] };
+}
+
 /**
  * Whether the session's actor may use its assistant: access reads and
  * requirements, plan usage, and the provider's account description.
  * @param {object} dependencies
  * @param {SessionAgentBindings} dependencies.sessionBindings
  * @param {(context: object) => Promise<object>} dependencies.readAssistantAccess
- * @param {(selection: object) => Promise<object | null>} [dependencies.readProviderUsage] without it plan usage reads none
+ * @param {(selection: object) => Promise<object | null>} dependencies.readProviderUsage
  * @param {(user: object | null) => Promise<object | null>} dependencies.resolveAssistantUser
  */
 function createSessionAgentAccess({
@@ -68,13 +73,13 @@ function createSessionAgentAccess({
   async function readPlanUsage(sessionId, options = {}) {
     const provider = sessionBindings.bindSession(sessionId, options);
     const access = await accessFor(provider, sessionId, options);
-    if (!access.canUse) return { status: "unsupported", windows: [] };
-    const usage = await readProviderUsage?.(sessionAssistantSelection(options));
+    if (!access.canUse) return unsupportedPlanUsage();
+    const usage = await readProviderUsage(sessionAssistantSelection(options));
     if (usage) return usage;
     const planUsage = findVibe64AgentProvider(provider.id)?.planUsage;
     // readable-check: allow method-probe - optional operation: a provider without plan usage reads it as unsupported
     if (typeof provider.readPlanUsage !== "function" || !access.ownerOnly || !planUsage) {
-      return { status: "unsupported", windows: [] };
+      return unsupportedPlanUsage();
     }
     return { ...await provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session }),
       providerLabel: planUsage.label, managementUrl: planUsage.managementUrl };

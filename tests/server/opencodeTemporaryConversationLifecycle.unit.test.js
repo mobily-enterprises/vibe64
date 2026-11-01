@@ -8,6 +8,7 @@ import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conve
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 
 import { controllerHarness } from "../fixtures/opencodeController.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 function throughPersistentConversations(harness, controller = harness.controller) {
   const runtime = createConversationRuntime({
@@ -17,7 +18,7 @@ function throughPersistentConversations(harness, controller = harness.controller
       : createSessionConversationBinding(provider, id, context) }
   });
   const provider = controller.provider;
-  const manager = createSessionAgentManager({ providers: [provider], conversationRuntime: runtime, defaultProviderId: "opencode" });
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [provider], conversationRuntime: runtime, defaultProviderId: "opencode" });
   return { ...controller,
     ...Object.fromEntries(["startConversationTurn", "readConversation", "waitForConversationTurn", "stopConversation", "deleteConversation"]
       .map(method => [method, (sessionId, input = {}, options = {}) => {

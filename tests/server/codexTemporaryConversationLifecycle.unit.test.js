@@ -92,6 +92,7 @@ import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src
 import { writeCodexAuthMarker } from "../../packages/vibe64-core/src/server/codexAuthState.js";
 import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { sendWithAssistantChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 const TEST_ACCOUNT_IDENTITY_SIGNATURE = `sha256:${"a".repeat(64)}`;
 const TEST_AUTH_STATE_SIGNATURE = `v1:${"b".repeat(24)}`;
@@ -1659,7 +1660,7 @@ function throughCommonScopedConversation(controller, persistentContext = null) {
     return conversation[method](input);
   };
   if (persistentContext) {
-    const manager = createSessionAgentManager({ providers: [provider], conversationRuntime: runtime });
+    const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [provider], conversationRuntime: runtime });
     return { ...controller, closeAllForSession: () => runtime.close(),
       ...Object.fromEntries(["startConversationTurn", "readConversation", "waitForConversationTurn", "stopConversation", "deleteConversation"]
         .map(method => [method, (sessionId, input = {}, options = {}) => manager[method](sessionId, input, {

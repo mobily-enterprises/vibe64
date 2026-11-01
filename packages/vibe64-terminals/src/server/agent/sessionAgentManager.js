@@ -16,8 +16,8 @@ import { createSessionAgentLifecycle } from "./sessionAgentLifecycle.js";
 /** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
 
 function normalizeProvider(provider) {
-  const id = normalizeText(provider?.id);
-  const transportId = normalizeText(provider?.transportId);
+  const id = normalizeText(provider.id);
+  const transportId = normalizeText(provider.transportId);
   if (!id || !transportId) {
     throw new TypeError("Session agent providers require product provider and transport ids.");
   }
@@ -35,26 +35,22 @@ function normalizeProvider(provider) {
  * @param {SessionAttachments} [dependencies.attachments] the session's attachments; without them messages carry none
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {string} [dependencies.defaultProviderId]
- * @param {(context: object) => Promise<object>} [dependencies.readAssistantAccess]
- * @param {(selection: object) => Promise<object | null>} [dependencies.readProviderUsage] without it plan usage reads none
+ * @param {(context: object) => Promise<object>} dependencies.readAssistantAccess
+ * @param {(selection: object) => Promise<object | null>} dependencies.readProviderUsage
  * @param {(user: object | null) => Promise<object | null>} [dependencies.resolveAssistantUser]
- * @param {() => Promise<object>} [dependencies.readRoutingConfiguration] without it routing uses the configuration it is given
+ * @param {() => Promise<object>} dependencies.readRoutingConfiguration
  * @param {object[]} [dependencies.providers] the session agent providers, one per engine
  */
 function createSessionAgentManager({
   attachments,
   conversationRuntime,
   defaultProviderId = "codex",
-  readAssistantAccess = async () => ({ ownerOnly: false }),
+  readAssistantAccess,
   readProviderUsage,
   resolveAssistantUser = async (user) => user || currentProjectVibe64User() || null,
   readRoutingConfiguration,
   providers = []
 }) {
-  if (typeof readAssistantAccess !== "function") {
-    throw new TypeError("Session agent manager requires an assistant-access reader.");
-  }
-
   const providerById = new Map();
   for (const candidate of providers) {
     const provider = normalizeProvider(candidate);
@@ -72,8 +68,7 @@ function createSessionAgentManager({
     sessionBindings,
     accessChecks,
     conversationOperations,
-    attachments,
-    conversationRuntime
+    attachments
   });
   const routing = createSessionAgentRouting({
     state,
@@ -91,15 +86,30 @@ function createSessionAgentManager({
     providerCalls
   });
 
+  // The admitted operations a bounded turn runs through the shared conversation runtime.
+  const scopedTurnOperations = Object.freeze({
+    createConversation: providerCalls.createConversation,
+    createEphemeralConversation: providerCalls.createEphemeralConversation,
+    deleteConversation: lifecycle.deleteConversation,
+    inspectMessageAdmission: providerCalls.inspectMessageAdmission,
+    readConversation: providerCalls.readConversation,
+    startConversationTurn: providerCalls.startConversationTurn,
+    startEphemeralConversationTurn: providerCalls.startEphemeralConversationTurn,
+    stopConversation: providerCalls.stopConversation,
+    stopEphemeralConversation: providerCalls.stopEphemeralConversation,
+    waitForEphemeralConversationTurn: providerCalls.waitForEphemeralConversationTurn
+  });
+
   async function runEphemeralChatTurn(scope = {}, input = {}, options = {}) {
     const executionProfile = input.executionProfile;
     if (!executionProfile) throw new TypeError("A bounded assistant turn requires an execution profile.");
     const profileSnapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-    return conversationRuntime.runScopedTurn({ operations: manager, scope, input, context: options,
+    return conversationRuntime.runScopedTurn({ operations: scopedTurnOperations, scope, input, context: options,
       executionProfile: profileSnapshot });
   }
 
   const manager = Object.freeze({
+    ...scopedTurnOperations,
     conversationProvider: sessionBindings.conversationProvider,
     resolveAssistantPurpose: routing.resolvePurpose,
     inspectRoutingConfiguration: routing.inspectRoutingConfiguration,
@@ -117,10 +127,7 @@ function createSessionAgentManager({
     closeProject: lifecycle.closeProject,
     closeSession: lifecycle.closeSession,
     closeTerminal: providerCalls.closeTerminal,
-    createConversation: providerCalls.createConversation,
-    createEphemeralConversation: providerCalls.createEphemeralConversation,
     resolveEphemeralExecutionProfile: providerCalls.resolveEphemeralExecutionProfile,
-    deleteConversation: lifecycle.deleteConversation,
     deleteEphemeralConversation: lifecycle.deleteEphemeralConversation,
     deleteAttachment: providerCalls.deleteAttachment,
     deleteDetachedChatThread: providerCalls.deleteDetachedChatThread,
@@ -136,7 +143,6 @@ function createSessionAgentManager({
     reconcileSessions: lifecycle.reconcileSessions,
     prepareSelection: routing.prepareSelection,
     resolveSelection: routing.resolveSelection,
-    readConversation: providerCalls.readConversation,
     readEphemeralConversation: providerCalls.readEphemeralConversation,
     resolveExecutionProfile: providerCalls.resolveExecutionProfile,
     readTerminal: providerCalls.readTerminal,
@@ -148,19 +154,13 @@ function createSessionAgentManager({
     releaseRenewalSuccessorProcessExitProof: lifecycle.releaseRenewalSuccessorProcessExitProof,
     seedSessionRenewalHandover: providerCalls.seedSessionRenewalHandover,
     sendMessage: providerCalls.sendMessage,
-    inspectMessageAdmission: providerCalls.inspectMessageAdmission,
     sessionState: providerCalls.sessionState,
     streamDetachedChatTurn: providerCalls.streamDetachedChatTurn,
-    startConversationTurn: providerCalls.startConversationTurn,
-    startEphemeralConversationTurn: providerCalls.startEphemeralConversationTurn,
     startTerminal: providerCalls.startTerminal,
-    stopConversation: providerCalls.stopConversation,
-    stopEphemeralConversation: providerCalls.stopEphemeralConversation,
     subscribeTerminal: providerCalls.subscribeTerminal,
     unsubscribeSessions: providerCalls.unsubscribeSessions,
     uploadAttachment: providerCalls.uploadAttachment,
     waitForConversationTurn: providerCalls.waitForConversationTurn,
-    waitForEphemeralConversationTurn: providerCalls.waitForEphemeralConversationTurn,
     writeTerminal: providerCalls.writeTerminal
   });
   return manager;

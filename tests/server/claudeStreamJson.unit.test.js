@@ -31,6 +31,7 @@ import { createTerminalActions } from "../../packages/vibe64-terminals/src/serve
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/server/sessionRealtimeEvents.js";
 import { agentTurnRealtimeOverlayFromPayload } from "../../src/lib/vibe64AgentTurnRealtimeOverlay.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 test("Claude subscription launch preserves native auth and makes helper tools unavailable", () => {
   const args = claudeCodeArguments({ sessionId: "session", resume: true, model: "sonnet", effort: "high", toolFree: true });
@@ -109,7 +110,7 @@ function createClaudeSessionAgentProvider(options) {
   provider = createNativeClaudeSessionAgentProvider({ ...nativeOptions, conversationRuntime: conversations,
     runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
     publishConversation: options.publishConversation || (event => conversations.publishNative(event)) });
-  const manager = createSessionAgentManager({ conversationRuntime: conversations, defaultProviderId: "claude",
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime: conversations, defaultProviderId: "claude",
     providers: [provider], readAssistantAccess: async () => ({ available: true, ownerOnly: false }) });
   async function retainedNative(context, input) {
     const opening = context.assistantScope ? { ...context,

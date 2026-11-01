@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createConversationRuntime, createConversationTranscript, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 const reasoning = "I am examining the application source to understand how its session state is persisted.";
 const summary = "Examines session persistence.";
@@ -37,6 +38,7 @@ async function fixture(t, { providers = [], readAccess = null, ...options } = {}
   harness.controller = harness.createController();
   const conversationRuntime = scopedConversationRuntime(harness.controller);
   harness.manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     conversationRuntime,
     providers: [harness.controller.provider, ...providers],
     readRoutingConfiguration: async () => harness.routing,
@@ -182,7 +184,7 @@ test("a fresh controller retries the retained summary cleanup without starting a
   const previous = harness.controller;
   harness.controller = harness.createController();
   const conversationRuntime = scopedConversationRuntime(harness.controller);
-  harness.manager = createSessionAgentManager({ conversationRuntime,
+  harness.manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime,
     providers: [harness.controller.provider] });
   allowDeletion = true;
   await harness.controller.closeAllForSession("session-1");

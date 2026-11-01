@@ -85,6 +85,7 @@ import {
   sourceMetadata,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 function agentWriteLockHarness() {
   const active = new Set();
@@ -3214,7 +3215,7 @@ test("a model chosen in Custom starts the new chat on it, checked against Custom
   // each provider's verified default, under a different catalogue revision.
   const live = `sha256:${"b".repeat(64)}`;
   const reads = [];
-  const manager = createSessionAgentManager({ providers: [{ id: "opencode", transportId: "opencode_server",
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [{ id: "opencode", transportId: "opencode_server",
     async capabilities(_context, input) {
       reads.push(input);
       const savedOnly = input.configuredOnly === "true";

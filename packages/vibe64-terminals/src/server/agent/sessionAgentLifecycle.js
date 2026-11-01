@@ -114,18 +114,22 @@ function createSessionAgentLifecycle({
 
   // Local storage work is explicitly invoked by trusted host code. It neither
   // selects the current assistant nor authorizes a model inference.
-  function retireConversationHistory(sessionId, binding, options = {}) {
+  // One native history operation of the binding's engine, refused with its own message when the engine has none.
+  function callNativeHistoryOperation(method, unavailableMessage, sessionId, binding, options) {
     const provider = state.providerById.get(binding.engineId);
-    const operation = provider && conversationOperations.providerOperation(provider, "retireConversationHistory");
-    if (typeof operation !== "function") throw new TypeError("Native history retirement is unavailable for this engine.");
+    const operation = provider && conversationOperations.providerOperation(provider, method);
+    if (typeof operation !== "function") throw new TypeError(unavailableMessage);
     return operation.call(provider, { ...options, sessionId }, binding);
   }
 
+  function retireConversationHistory(sessionId, binding, options = {}) {
+    return callNativeHistoryOperation("retireConversationHistory", "Native history retirement is unavailable for this engine.",
+      sessionId, binding, options);
+  }
+
   function listNativeConversationStorage(sessionId, binding, options = {}) {
-    const provider = state.providerById.get(binding.engineId);
-    const operation = provider && conversationOperations.providerOperation(provider, "listNativeConversationStorage");
-    if (typeof operation !== "function") throw new TypeError("Native history inventory is unavailable for this engine.");
-    return operation.call(provider, { ...options, sessionId }, binding);
+    return callNativeHistoryOperation("listNativeConversationStorage", "Native history inventory is unavailable for this engine.",
+      sessionId, binding, options);
   }
 
   async function closeProject(input = {}, options = {}) {

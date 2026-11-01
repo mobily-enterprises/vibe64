@@ -36,7 +36,7 @@ function mergeRoutingCatalogPage(catalog, page, revisionError) {
  * @param {SessionAgentManagerState} dependencies.state
  * @param {SessionAgentBindings} dependencies.sessionBindings
  * @param {(context: object) => Promise<object>} dependencies.readAssistantAccess
- * @param {() => Promise<object>} [dependencies.readRoutingConfiguration] without it routing uses the configuration it is given
+ * @param {() => Promise<object>} dependencies.readRoutingConfiguration
  * @param {(user: object | null) => Promise<object | null>} dependencies.resolveAssistantUser
  */
 function createSessionAgentRouting({
@@ -46,6 +46,11 @@ function createSessionAgentRouting({
   readRoutingConfiguration,
   resolveAssistantUser
 }) {
+  // A private copy of the configuration a caller supplies, or else of the saved one.
+  async function routingConfiguration(options) {
+    return structuredClone(options.configuration || await readRoutingConfiguration());
+  }
+
   async function providerCapabilities(provider = {}, input = {}, options = {}) {
     // readable-check: allow method-probe - input validation: every assistant provider declares its capabilities
     if (typeof provider.capabilities !== "function") {
@@ -81,7 +86,7 @@ function createSessionAgentRouting({
     // owner's request context. Provider execution still checks access itself.
     const actor = await resolveAssistantUser(assistantUser(options));
     options = { ...options, vibe64User: actor };
-    const configuration = structuredClone(options.configuration || await readRoutingConfiguration?.());
+    const configuration = await routingConfiguration(options);
     const { purpose, override, requirements, reviewEnabled, temporaryChat = false } = input;
     // A lesson is private to its learner; the server decides, never the input.
     const practice = isPracticeProjectRuntime(options.runtime) || currentRequestIsPracticeProject();
@@ -146,7 +151,7 @@ function createSessionAgentRouting({
   }
 
   async function inspectAssistantPurposes(input = {}, options = {}) {
-    const configuration = structuredClone(options.configuration || await readRoutingConfiguration?.());
+    const configuration = await routingConfiguration(options);
     const facts = new Map();
     const purposes = [...Object.keys(ASSISTANT_PURPOSE_ROLES), "auto"];
     return Object.fromEntries(await Promise.all(purposes.map(async (purpose) => [purpose,

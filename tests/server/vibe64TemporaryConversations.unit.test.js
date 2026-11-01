@@ -28,6 +28,7 @@ import {
   ACTION_STOP_TEMPORARY_CONVERSATION,
   createTerminalActions
 } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 function actionById(actions, id) {
   const action = actions.find((entry) => entry.id === id);
@@ -197,7 +198,7 @@ async function conversationFixture(root, engineId = "codex") {
   const routingStore = createAssistantRoutingStore({ systemRoot: root });
   const role = { ...resolveVibe64AssistantSelection(capabilities, { ...selection, catalogRevision: capabilities.revision }), selectionSource: "explicit" };
   await routingStore.write({ owner: { senior: role, junior: role, quickHelper: role, router: role, fix: { follows: "junior" } }, nonOwner: {} }, 0);
-  const manager = createSessionAgentManager({ providers: [{ id: engineId, transportId: capabilities.transportId, capabilities: async () => capabilities }],
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [{ id: engineId, transportId: capabilities.transportId, capabilities: async () => capabilities }],
     readRoutingConfiguration: () => routingStore.read(),
     readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "fixture-connection" }) });
   Object.assign(sessionAgent, { resolveAssistantPurpose: (input, options) => manager.resolveAssistantPurpose(input, options),
@@ -1162,6 +1163,7 @@ async function temporaryChangeoverFixture(root, actor = { role: "owner", usernam
   const failures = { stop: "", delete: "", loseAdmission: false, read: false };
   let nextId = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: root }).read(),
     providers: [f.capabilities, sharedCatalog].map((catalog) => ({ id: catalog.engineId, transportId: catalog.transportId,
       capabilities: async () => catalog,

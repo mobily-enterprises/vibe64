@@ -13,6 +13,7 @@ import {
   createSessionAgentManager,
   defineEphemeralAssistantScope
 } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;
 
@@ -62,6 +63,7 @@ for (const engineId of ["codex", "opencode"]) {
       ? createCodexSessionAgentProvider({ controller, conversationRuntime })
       : createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} });
     const manager = createSessionAgentManager({
+      ...sessionAgentManagerDefaults,
       conversationRuntime,
       providers: [provider],
       async readAssistantAccess() {
@@ -141,6 +143,7 @@ for (const engineId of ["codex", "opencode"]) {
 test("owner-only assistant access rejects a member before provider creation", async () => {
   let providerCalls = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -180,6 +183,7 @@ test("a foreign scoped helper retains its exact model, profile provenance and in
   const conversationRuntime = scopedConversationRuntime(controller, "opencode");
   const provider = createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} });
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     conversationRuntime,
     providers: [provider, { id: "codex", transportId: "codex_app_server" }],
     readAssistantAccess: async () => ({ available: true, ownerOnly: false,
@@ -239,7 +243,7 @@ test("Codex scoped profile discovery and every lifecycle operation keep the sele
     }
   };
   const conversationRuntime = scopedConversationRuntime(controller);
-  const manager = createSessionAgentManager({ conversationRuntime,
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime,
     providers: [createCodexSessionAgentProvider({ controller, conversationRuntime })] });
   const scope = { id: "codex_helper", environment: {}, workdir: "/tmp/helper", runtimeRoot: "/tmp/runtime",
     stableContext: "Summarize supplied text only." };
@@ -331,7 +335,7 @@ test("a bounded helper turn awaits parent ownership and leaves the working chat 
     return { ok: true, status: "completed", rawText: '{"subject":"Improve search"}' };
   };
   const conversationRuntime = scopedConversationRuntime(controller, "opencode");
-  const manager = createSessionAgentManager({ conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} }),
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} }),
     { id: "codex", transportId: "codex_app_server" }],
     readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "shared" }) });
   const scope = { id: "naming_job", environment: {}, workdir: "/tmp/naming-work", runtimeRoot: "/tmp/naming-runtime",
@@ -388,7 +392,7 @@ for (const phase of ["starting", "waiting"]) {
       return { ok: true };
     };
     const conversationRuntime = scopedConversationRuntime(controller, "opencode");
-    const manager = createSessionAgentManager({ conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} })] });
+    const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime, providers: [createOpenCodeSessionAgentProvider({ mainMessagePreparation: {}, terminals: {}, accounts: {} })] });
     const scope = { id: "cancel_helper", environment: {}, workdir: "/tmp/cancel-work", runtimeRoot: "/tmp/cancel-runtime",
       stableContext: "Supplied text only." };
     const options = { signal: abort.signal, assistantSelection: { engineId: "opencode", agentId: "build", modelProviderId: "opencode",
@@ -408,7 +412,7 @@ for (const phase of ["starting", "waiting"]) {
 
 test("an aborted empty helper scope closes its provider resources and releases its binding", async () => {
   const calls = [];
-  const manager = createSessionAgentManager({ providers: [{ id: "codex", transportId: "codex_app_server",
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [{ id: "codex", transportId: "codex_app_server",
     async closeSession(context) { calls.push(context); return { ok: true, closed: true }; } }] });
   const scope = { id: "aborted_router", runtimeRoot: "/tmp/aborted-runtime", workdir: "/tmp/aborted-work",
     environment: {}, stableContext: "Supplied context only." };

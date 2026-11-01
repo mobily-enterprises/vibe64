@@ -19,6 +19,7 @@ import { sameVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { assistantRoutingRequestForMessage } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 const revision = `sha256:${"a".repeat(64)}`;
 function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"], engineId = "codex") {
@@ -327,6 +328,7 @@ test("Accounts reads and saves both setups for the owner only and refuses person
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-accounts-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{ id: "codex", transportId: "codex_app_server", async capabilities() { return catalog(); } },
       { id: "opencode", transportId: "opencode_server", async capabilities() { return catalog(["deepseek"], "opencode"); } }],
     readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "openai", connectionIdentity: `fixture-${modelProviderId}` })
@@ -517,6 +519,7 @@ test("a team member's lesson runs main chat on the team setup without approval, 
 test("dispatch knows a lesson from its practice project, never from its input", async () => {
   const f = routingFixture();
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{ id: "codex", transportId: "codex_app_server" }, { id: "opencode", transportId: "opencode_server" }],
     readAssistantAccess: async ({ engineId, modelProviderId }) => f.input.connectionAccess
       .find((fact) => fact.engineId === engineId && fact.modelProviderId === modelProviderId)

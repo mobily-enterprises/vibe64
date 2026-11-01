@@ -18,7 +18,6 @@ import {
 } from "./sessionAgentRules.js";
 
 /** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
-/** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
 /** @typedef {import("../types.js").SessionAgentAccess} SessionAgentAccess */
@@ -71,15 +70,13 @@ function operationKey(sessionId = "", providerId = "", operation = "", identity 
  * @param {SessionAgentAccess} dependencies.accessChecks
  * @param {SessionAgentConversationOperations} dependencies.conversationOperations
  * @param {SessionAttachments} [dependencies.attachments] the session's attachments; without them messages carry none
- * @param {ConversationRuntime} dependencies.conversationRuntime
  */
 function createSessionAgentProviderCalls({
   state,
   sessionBindings,
   accessChecks,
   conversationOperations,
-  attachments,
-  conversationRuntime
+  attachments
 }) {
   const operations = new Map();
   // A full profile selects provider-owned execution details. Only the exact
@@ -285,7 +282,7 @@ function createSessionAgentProviderCalls({
         throw new TypeError("Bounded helpers accept supplied text only; start a new request to change their input.");
       }
       if (attachments && !options.attachmentsPrepared && ["sendMessage", "startConversationTurn"].includes(method)) {
-        if (method === "sendMessage" && provider.conversationOperations?.includes(method) && conversationRuntime && !context.assistantScope) {
+        if (method === "sendMessage" && provider.conversationOperations?.includes(method) && !context.assistantScope) {
           // The original sender chooses historical attachment IDs before this
           // same authorized storage resolver prepares their native input.
           context.prepareMessage = input => attachments.prepareMessage(context, input, { durable: true });

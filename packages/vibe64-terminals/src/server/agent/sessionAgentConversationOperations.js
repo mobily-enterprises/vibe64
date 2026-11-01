@@ -15,36 +15,36 @@ const CONVERSATION_COMMANDS = Object.freeze({
   stopConversation: (conversation, request) => conversation.cancel(request.input),
   deleteConversation: (conversation, request) => conversation.dispose(request.input)
 });
-// Operations served directly by the shared conversation runtime: the error when
-// it is absent, whether the provider projects the result, and the runtime call.
+// Operations served directly by the shared conversation runtime: whether the
+// provider projects the result, and the runtime call.
 const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
-  closeProject: { missing: "Native project cleanup requires the shared runtime.", project: true,
+  closeProject: { project: true,
     run: (runtime, context, input) => runtime.closeNativeProject({ context, input }) },
-  invalidateRuntimes: { missing: "Native runtime invalidation requires the shared runtime.", project: true,
+  invalidateRuntimes: { project: true,
     run: (runtime, context, input) => runtime.invalidateNativeRuntimes({ context, input }) },
-  reconcileSessions: { missing: "Native reconciliation requires the shared runtime.", project: true,
+  reconcileSessions: { project: true,
     run: (runtime, context, sessions, options) => runtime.reconcileNativeSessions({ context, sessions, options }) },
-  unsubscribeSessions: { missing: "Native subscription reset requires the shared runtime.", project: true,
+  unsubscribeSessions: { project: true,
     run: (runtime, context, sessions) => runtime.unsubscribeNativeSessions({ context, sessions }) },
-  hasActiveTemporaryConversation: { missing: "Native activity requires the shared runtime.", project: true,
+  hasActiveTemporaryConversation: { project: true,
     run: (runtime, context) => runtime.inspectNativeTemporaryActivity({ id: context.sessionId, context }) },
-  interruptDetachedChatTurn: { missing: "Historical native cleanup requires the shared runtime.",
+  interruptDetachedChatTurn: {
     run: (runtime, context, input) => runtime.interruptNativeDetachedConversation({ id: context.sessionId, context, input }) },
-  deleteDetachedChatThread: { missing: "Historical native cleanup requires the shared runtime.",
+  deleteDetachedChatThread: {
     run: (runtime, context, input) => runtime.deleteNativeDetachedConversation({ id: context.sessionId, context, input }) },
-  listNativeConversationStorage: { missing: "Native history storage requires the shared runtime.",
+  listNativeConversationStorage: {
     run: (runtime, context, binding) => runtime.listNativeConversationStorage({ id: context.sessionId, context, binding }) },
-  retireConversationHistory: { missing: "Native history storage requires the shared runtime.",
+  retireConversationHistory: {
     run: (runtime, context, binding) => runtime.retireNativeConversationHistory({ id: context.sessionId, context, binding }) },
-  updateSessionSettings: { missing: "Native settings require the shared runtime.", project: true,
+  updateSessionSettings: { project: true,
     run: (runtime, context, input) => runtime.updateNativeConversationSettings({ id: context.sessionId, context, input }) },
-  ensureSession: { missing: "Native conversation readiness requires the shared runtime.", project: true,
+  ensureSession: { project: true,
     run: (runtime, context) => runtime.ensureNativeConversation({ id: context.sessionId, context }) },
-  createConversation: { missing: "Native conversation creation requires the shared runtime.",
+  createConversation: {
     run: (runtime, context, input) => runtime.createNativeConversation({ id: context.sessionId, context, input }) },
-  releaseRenewalPredecessorProcessExitProof: { missing: "Native renewal proof release requires the shared runtime.",
+  releaseRenewalPredecessorProcessExitProof: {
     run: (runtime, context, input) => runtime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input }) },
-  releaseRenewalSuccessorProcessExitProof: { missing: "Native renewal proof release requires the shared runtime.",
+  releaseRenewalSuccessorProcessExitProof: {
     run: (runtime, context, input) => runtime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input }) }
 });
 
@@ -64,18 +64,15 @@ function createSessionAgentConversationOperations({ conversationRuntime }) {
     if (!provider.conversationOperations?.includes(method)) return null;
     const runtimeOperation = RUNTIME_CONVERSATION_OPERATIONS[method];
     if (runtimeOperation) return (context, ...args) => {
-      if (!conversationRuntime) throw new TypeError(runtimeOperation.missing);
       const perform = () => runtimeOperation.run(conversationRuntime, context, ...args);
       return runtimeOperation.project ? provider.projectConversationResult(method, perform) : perform();
     };
     if (method === "closeSession") return async context => {
-      if (!conversationRuntime) throw new TypeError("Native conversation cleanup requires the shared runtime.");
       const closed = await conversationRuntime.disposeNative(provider.prepareConversationRequest(method, context));
       if (!closed) throw new TypeError("Native conversation cleanup requires its configured conversation host.");
       return closed.result;
     };
     if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return (context, input) => {
-      if (!conversationRuntime) throw new TypeError("Native renewal requires the shared runtime.");
       // Preserve the provider's original input/options projection before its result boundary.
       const request = provider.prepareConversationRequest(method, context, input);
       const current = request.context === context ? context : {
@@ -94,7 +91,7 @@ function createSessionAgentConversationOperations({ conversationRuntime }) {
     }
     const scoped = SCOPED_CONVERSATION_METHODS.has(method);
     return (context, input) => {
-      if (!conversationRuntime || !scoped && context.assistantScope) {
+      if (!scoped && context.assistantScope) {
         throw new TypeError("Conversation operations require the shared runtime and their original session or scope.");
       }
       // Request normalization retains its original position outside the Codex

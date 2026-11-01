@@ -9,6 +9,7 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileRequest } from "@local/vibe64-runtime/shared";
 import { recommendedRoutingAssignments } from "@local/vibe64-runtime/shared/assistantRouting";
+import { sessionAgentManagerDefaults } from "./sessionAgentManagerDefaults.js";
 
 async function publishPlanFixture(context, text) {
   const root = path.dirname(workPlanPath(context));
@@ -125,6 +126,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const catalogs = [catalog];
   const connections = new Map();
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     resolveAssistantUser,
     providers: ["codex", "opencode", "claude"].map((id) => ({ id, transportId: id === "codex" ? "codex_app_server" : id === "claude" ? "claude_stream_json" : "opencode_server",
       capabilities: async () => catalogs.find((row) => row.engineId === id) })),

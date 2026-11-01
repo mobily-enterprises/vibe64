@@ -27,13 +27,14 @@ import {
   CODEX_HELPER_PROFILE_REVISION,
   resolveCodexHelperExecutionProfile
 } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 // These adapter units mock the public runtime boundary. The original actual
 // service/runtime/native-owner cases remain in codexTemporaryConversationLifecycle.
 function createCodexMainFixture(controller, open) {
   const conversationRuntime = { open };
   const provider = createCodexSessionAgentProvider({ controller, conversationRuntime });
-  return { provider: scopedRequestFixture(provider, controller), manager: createSessionAgentManager({ providers: [provider], conversationRuntime }) };
+  return { provider: scopedRequestFixture(provider, controller), manager: createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [provider], conversationRuntime }) };
 }
 
 // Scoped Start cases below are request-codec units with the original mocked
@@ -247,7 +248,7 @@ test("Codex adapter forwards trusted renewal operations without selecting a help
       return prepareSessionConversationDisposal(provider, id, context, input);
     } }
   });
-  const manager = createSessionAgentManager({ providers: [provider], conversationRuntime });
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [provider], conversationRuntime });
   await manager.closeSession(session.sessionId, context);
   await provider.releaseRenewalPredecessorAttachments(context, {
     renewalId: "renewal-1"

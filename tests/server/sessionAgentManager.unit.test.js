@@ -12,6 +12,7 @@ import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
   VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE
 } from "@local/vibe64-runtime/shared";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 const catalogRevision = `sha256:${"a".repeat(64)}`;
 
@@ -28,7 +29,7 @@ function executionProfileScope(id) {
 
 test("native replacement blocks terminal and goal bypass while permitting ordinary chat admission after preparation", async () => {
   const calls = [];
-  const manager = createSessionAgentManager({ providers: [{ id: "codex", transportId: "codex_app_server",
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [{ id: "codex", transportId: "codex_app_server",
     async sendMessage() { calls.push("send"); return { ok: true }; },
     async startTerminal() { calls.push("terminal"); return { ok: true }; },
     async updateGoal() { calls.push("goal"); return { ok: true }; }
@@ -57,6 +58,7 @@ function routingManagerFixture({ resolveAssistantUser, disconnected = [], withou
   }]));
   const calls = [];
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     resolveAssistantUser,
     readRoutingConfiguration: async () => configuration,
     readAssistantAccess: async (context) => {
@@ -147,6 +149,7 @@ test("native AI admission refreshes the actor and revocation leaves Stop availab
   let current = { username: "member", role: "member", home: "/current-home" };
   const calls = [];
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     resolveAssistantUser: async (actor) => {
       if (!actor?.username || !current) throw Object.assign(new Error("Actor is no longer available."), { code: "actor_unavailable" });
       return current;
@@ -224,6 +227,7 @@ test("lightweight mode previews cannot bypass model validation at dispatch", asy
 
 test("team members' model catalogue leaves out personal plans", async () => {
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "anthropic", connectionIdentity: "c" }),
     providers: [{ id: "claude", transportId: "claude_cli", async capabilities() {
       return { engineId: "claude", transportId: "claude_cli", revision: catalogRevision, agents: [],
@@ -239,7 +243,7 @@ test("team members' model catalogue leaves out personal plans", async () => {
 test("routing preview loads every connected OpenCode model page and refuses mixed catalogue revisions", async () => {
   const calls = [];
   let changed = false;
-  const manager = createSessionAgentManager({ readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "shared-connection" }),
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "shared-connection" }),
     providers: [{ id: "opencode", transportId: "opencode_server", async capabilities(_context, input) {
       calls.push(input);
       const providerId = input.modelProviderId || "opencode";
@@ -374,6 +378,7 @@ test("session agent manager keeps receipt inspection available after personal in
   ]) {
     const calls = [];
     const manager = createSessionAgentManager({
+      ...sessionAgentManagerDefaults,
       readAssistantAccess: async () => ({ ownerOnly: true }),
       providers: [{ id: engineId, transportId,
         async inspectMessageAdmission(context, input) {
@@ -396,6 +401,7 @@ test("session agent manager keeps receipt inspection available after personal in
 test("session agent manager sends a message through the selected provider", async () => {
   let received = null;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -434,6 +440,7 @@ test("session agent manager exposes provider-owned renewal primitives with trust
   const runtime = { stateRoot: "/runtime/project" };
   const session = { sessionId: "session-1" };
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -524,6 +531,7 @@ test("session agent manager exposes focused provider conversations", async () =>
   const calls = [];
   const onEvent = () => null;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -572,6 +580,7 @@ test("session agent manager exposes focused provider conversations", async () =>
 test("session agent manager exposes active Temporary AI conversation state", async () => {
   let receivedContext = null;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -597,6 +606,7 @@ test("session agent manager exposes active Temporary AI conversation state", asy
 
 test("session agent manager rejects unavailable providers", async () => {
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -622,6 +632,7 @@ test("shared assistant verification authorizes every caller before joining provi
   const callers = [];
   let checks = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     async readAssistantAccess(context) {
       callers.push(context.vibe64User.username);
       return { ownerOnly: true };
@@ -662,6 +673,7 @@ test("session agent manager keeps one provider bound to a session", async () => 
     }
   });
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [adapter("codex"), adapter("opencode")]
   });
 
@@ -687,6 +699,7 @@ test("session agent manager treats durable engine metadata as authoritative", as
     }
   });
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [adapter("codex"), adapter("opencode")]
   });
   const selection = {
@@ -732,6 +745,7 @@ test("session agent manager replaces a provisional binding with durable engine m
     }
   });
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [adapter("codex"), adapter("opencode")]
   });
 
@@ -761,6 +775,7 @@ test("session agent manager replaces a provisional binding with durable engine m
 
 test("session agent manager resolves live engine capabilities without fallback", async () => {
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -803,7 +818,7 @@ test("session agent manager resolves live engine capabilities without fallback",
 
 test("a Models choice from the whole catalogue resolves although one provider's page has another revision", async () => {
   const wholeRevision = `sha256:${"c".repeat(64)}`;
-  const manager = createSessionAgentManager({ providers: [{ id: "claude", transportId: "claude_cli", async capabilities(_context, input) {
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [{ id: "claude", transportId: "claude_cli", async capabilities(_context, input) {
     return { engineId: "claude", transportId: "claude_cli", revision: input.modelProviderId ? catalogRevision : wholeRevision,
       agents: [{ id: "claude", mode: "primary" }], defaults: { agentId: "claude", modelProviderId: "deepseek", modelId: "pro" },
       modelProviders: [{ id: "deepseek", connected: true, models: [{ id: "pro", status: "available", variants: [{ id: "high" }] }] }] };
@@ -837,6 +852,7 @@ test("session agent manager reconciles each durable engine separately", async ()
     })
   });
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [adapter("codex"), adapter("opencode")]
   });
 
@@ -855,6 +871,7 @@ test("session agent manager reconciles each durable engine separately", async ()
 
 test("session agent manager describes providers without binding a session", async () => {
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server"
@@ -871,6 +888,7 @@ test("session agent manager describes providers without binding a session", asyn
 test("session agent manager binds and delegates authoritative provider descriptions", async () => {
   let received = null;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -910,6 +928,7 @@ test("session agent manager binds and delegates authoritative provider descripti
 
 test("session agent manager rejects non-fingerprint account descriptions", async () => {
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -933,6 +952,7 @@ test("session agent manager never resolves a live model profile before helper cl
   let deletes = 0;
   let resolutions = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -966,6 +986,7 @@ test("session agent manager never resolves a live model profile before helper cl
 test("session agent manager rejects malformed helper cleanup markers before provider work", async () => {
   let deletes = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -993,6 +1014,7 @@ test("session agent manager resolves semantic execution profiles before provider
   const calls = [];
   const abortController = new AbortController();
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1083,6 +1105,7 @@ test("session agent manager executes its exact pre-resolved profile without reso
     workloadId: "source_explanation"
   };
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1156,6 +1179,7 @@ test("session agent manager rejects copied, forged, and cross-session pre-resolv
     workloadId: "source_explanation"
   };
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1206,6 +1230,7 @@ test("session agent manager rejects copied, forged, and cross-session pre-resolv
 test("session agent manager forwards an exact renewal cleanup context only when explicitly supplied", async () => {
   const closeContexts = [];
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       async closeSession(context) {
         closeContexts.push(context);
@@ -1250,6 +1275,7 @@ test("session agent manager forwards an exact renewal cleanup context only when 
 test("session agent manager rejects malformed provider resolutions before provider work", async () => {
   let detachedTurns = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1360,6 +1386,7 @@ test("session agent manager rejects provider resolution identity mismatches befo
   ]) {
     let detachedTurns = 0;
     const manager = createSessionAgentManager({
+      ...sessionAgentManagerDefaults,
       providers: [{
         id: "codex",
         transportId: "codex_app_server",
@@ -1392,6 +1419,7 @@ test("session agent manager rejects provider resolution identity mismatches befo
 
 test("session agent manager validates direct provider resolution identity before attribution", async () => {
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1442,6 +1470,7 @@ test("session agent manager validates direct provider resolution identity before
 test("session agent manager rejects consumer-owned execution details before provider resolution", async () => {
   let providerCalls = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1472,6 +1501,7 @@ test("session agent manager rejects consumer-owned execution details before prov
 
 test("session agent manager fails closed when a provider cannot resolve a requested profile", async () => {
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1496,6 +1526,7 @@ test("session agent manager fails closed when a provider cannot resolve a reques
 test("session agent manager surfaces required Codex authentication before helper work starts", async () => {
   let detachedTurns = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1534,6 +1565,7 @@ test("session agent manager gates AI work with only the current connection's own
     let descriptions = 0;
     let sends = 0;
     const manager = createSessionAgentManager({
+      ...sessionAgentManagerDefaults,
       readAssistantAccess: async () => ({ ownerOnly }),
       providers: [{
         id: "codex",
@@ -1591,6 +1623,7 @@ test("session agent manager gates AI work with only the current connection's own
 test("session agent manager leaves non-AI reads and cleanup available on personal connections", async () => {
   const calls = [];
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     readAssistantAccess: async () => ({ ownerOnly: true }),
     providers: [{
       id: "codex",
@@ -1631,6 +1664,7 @@ test("session agent manager authorizes terminal input against its captured conne
     sessionId: "session-1"
   };
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     readAssistantAccess: async (context) => {
       accessReads.push(context);
       return { available: true, ownerOnly: false };
@@ -1683,7 +1717,7 @@ test("native terminal input never adopts another actor's access, replacement key
     let writes = 0;
     let closes = 0;
     let starts = 0;
-    const manager = createSessionAgentManager({ defaultProviderId: engineId,
+    const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, defaultProviderId: engineId,
       readAssistantAccess: async ({ assistantSelection }) => {
         assert.equal(assistantSelection.modelProviderId, "deepseek");
         return access;
@@ -1732,6 +1766,7 @@ test("plan allowance is private to authorized native plan users", async () => {
       for (const role of ["owner", "user"]) {
         let reads = 0;
         const manager = createSessionAgentManager({
+          ...sessionAgentManagerDefaults,
           readAssistantAccess: async () => ({ ownerOnly }),
           providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : engineId === "claude" ? "claude_stream_json" : "opencode_server",
             readPlanUsage: engineId === "opencode" ? undefined : async () => { reads += 1; return { status: "available", windows: [] }; }
@@ -1759,6 +1794,7 @@ test("provider balances follow connection access across engines without requirin
           modelId: "deepseek-chat", agentId: engineId, variantId: "", catalogRevision };
         let reads = 0;
         const manager = createSessionAgentManager({
+          ...sessionAgentManagerDefaults,
           readAssistantAccess: async () => ({ ownerOnly }),
           readProviderUsage: async (current) => {
             assert.deepEqual(current, assistantSelection);
@@ -1782,6 +1818,7 @@ test("goal reads and stopping remain available while starting and resuming requi
       let reads = 0;
       let writes = 0;
       const manager = createSessionAgentManager({
+        ...sessionAgentManagerDefaults,
         readAssistantAccess: async () => ({ ownerOnly: true }),
         providers: [{ id: engineId, transportId: engineId === "codex" ? "codex_app_server" : engineId === "claude" ? "claude_stream_json" : "opencode_server",
           readGoal: engineId === "opencode" ? undefined : async () => { reads += 1; return { status: "available", goal: null }; },
@@ -1824,6 +1861,7 @@ test("goal status and Stop target the retained goal selection without rebinding 
     modelId: "model-1", agentId: "build", variantId: "high", catalogRevision };
   const contexts = [];
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     readAssistantAccess: async () => { throw new Error("Inference is unavailable."); },
     providers: [{ id: "codex", transportId: "codex_app_server",
       async readGoal(context) { contexts.push(context); return { status: "available", goal: { status: "active" } }; },
@@ -1901,6 +1939,7 @@ test("Restored detached: session agent manager resolves semantic execution profi
   const calls = [];
   const abortController = new AbortController();
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -1991,6 +2030,7 @@ test("Restored detached: session agent manager executes its exact pre-resolved p
     workloadId: "source_explanation"
   };
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -2064,6 +2104,7 @@ test("Restored detached: session agent manager rejects copied, forged, and cross
     workloadId: "source_explanation"
   };
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -2114,6 +2155,7 @@ test("Restored detached: session agent manager rejects copied, forged, and cross
 test("Restored detached: session agent manager rejects malformed provider resolutions before provider work", async () => {
   let detachedTurns = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -2224,6 +2266,7 @@ test("Restored detached: session agent manager rejects provider resolution ident
   ]) {
     let detachedTurns = 0;
     const manager = createSessionAgentManager({
+      ...sessionAgentManagerDefaults,
       providers: [{
         id: "codex",
         transportId: "codex_app_server",
@@ -2257,6 +2300,7 @@ test("Restored detached: session agent manager rejects provider resolution ident
 test("Restored detached: session agent manager rejects consumer-owned execution details before provider resolution", async () => {
   let providerCalls = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -2287,6 +2331,7 @@ test("Restored detached: session agent manager rejects consumer-owned execution 
 
 test("Restored detached: session agent manager fails closed when a provider cannot resolve a requested profile", async () => {
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -2311,6 +2356,7 @@ test("Restored detached: session agent manager fails closed when a provider cann
 test("Restored detached: session agent manager surfaces required Codex authentication before helper work starts", async () => {
   let detachedTurns = 0;
   const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
     providers: [{
       id: "codex",
       transportId: "codex_app_server",
@@ -2351,7 +2397,7 @@ test("OpenCode credential publication drains pending PTY openings and refuses re
   const calls = [];
   const namespace = "vibe64-opencode:fence-fixture:session";
   let terminal;
-  const manager = createSessionAgentManager({ defaultProviderId: "opencode",
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, defaultProviderId: "opencode",
     readAssistantAccess: async () => { opening.resolve(); await release.promise; return { available: true, ownerOnly: false, connectionIdentity: "old-key" }; },
     providers: [{ id: "opencode", transportId: "opencode_test",
       async startTerminal() {
@@ -2386,7 +2432,7 @@ test("Claude credential publication preserves known other-provider PTYs and refu
     const namespace = `vibe64-claude:credential-fixture:${providerId}`;
     let terminal;
     const calls = [];
-    const manager = createSessionAgentManager({ defaultProviderId: "claude",
+    const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, defaultProviderId: "claude",
       readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "old-key" }),
       providers: [{ id: "claude", transportId: "claude_test",
         async startTerminal() {
@@ -2415,7 +2461,7 @@ test("Claude credential publication preserves known other-provider PTYs and refu
   const namespace = "vibe64-claude:credential-fixture:unknown";
   const unknown = await startTerminalSession({ command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"], cwd: os.tmpdir(), namespace });
   t.after(() => closeTerminalSession(unknown.id, { namespace }));
-  const manager = createSessionAgentManager({ providers: [{ id: "claude", transportId: "claude_test",
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [{ id: "claude", transportId: "claude_test",
     invalidateRuntimes() { assert.fail("Unknown native PTY must refuse before runtime invalidation"); } }] });
   await assert.rejects(manager.invalidateRuntimes({ provider: "claude", modelProviderId: "deepseek", reason: "provider-key-change",
     prepare() { assert.fail("Unknown native PTY must refuse before marker write"); }, publish() { assert.fail("must not write key"); } }), { code: "vibe64_claude_connection_in_use" });
@@ -2428,7 +2474,7 @@ test("Claude credential fence waits for admitted PTY opening and rejects new ope
   const selection = { schema: "vibe64.assistant-selection.v1", engineId: "claude", modelProviderId: "deepseek",
     modelId: "model", agentId: "claude", variantId: "", catalogRevision };
   const namespace = "vibe64-claude:fence-fixture:session";
-  const manager = createSessionAgentManager({ defaultProviderId: "claude",
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, defaultProviderId: "claude",
     readAssistantAccess: async () => { entered.resolve(); await release.promise; return { available: true, ownerOnly: false, connectionIdentity: "old" }; },
     providers: [{ id: "claude", transportId: "claude_test",
       async startTerminal() {
@@ -2460,7 +2506,7 @@ test("connection changes ignore native PTYs that exited or closed outside the ma
     const terminals = new Map();
     let exitCode = null;
     const calls = [];
-    const manager = createSessionAgentManager({ defaultProviderId: engineId,
+    const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, defaultProviderId: engineId,
       readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "old-key" }),
       providers: [{ id: engineId, transportId: `${engineId}_test`,
         async startTerminal(context) {
@@ -2519,7 +2565,7 @@ test("all-provider operations keep every provider's outcome and name the provide
       async closeProject() { await new Promise((resolve) => setTimeout(resolve, 50)); opencodeFinished = true; return { ok: true, closed: 1, stopped: 1 }; },
       async invalidateRuntimes() { await new Promise((resolve) => setTimeout(resolve, 50)); opencodeFinished = true; return { ok: true, stopped: 1 }; } }
   ];
-  const manager = createSessionAgentManager({ providers });
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers });
   for (const run of [() => manager.closeProject({}), () => manager.invalidateRuntimes({ reason: "server-shutdown" })]) {
     opencodeFinished = false;
     const result = await run();

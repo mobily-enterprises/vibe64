@@ -40,6 +40,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 
 import { agents, controllerHarness, providerDefinition } from "../fixtures/opencodeController.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 function throughCommonScopedConversation(controller) {
   const provider = controller.provider;
@@ -2822,7 +2823,7 @@ async function boundMainOpenCodeFixture(t, options = {}) {
     }) }
   });
   const provider = harness.controller.provider;
-  const manager = createSessionAgentManager({ conversationRuntime: conversations, providers: [provider],
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime: conversations, providers: [provider],
     readAssistantAccess: async () => ({ available: true, ownerOnly: false,
       connectionIdentity: harness.connection.fingerprint, endpointCode: harness.connection.endpointCode })
   });

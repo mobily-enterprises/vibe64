@@ -11,6 +11,7 @@ import { codexTurnInput } from "../../packages/vibe64-runtime/src/server/codexAp
 import { sendCodexAppServerPromptForSession } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 import { createOpenCodeServerClient } from "@jskit-ai/assistant-core/testing/native-opencode";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 
 async function fixture(root) {
   const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root) });
@@ -38,6 +39,7 @@ for (const engine of ["codex", "opencode"]) {
       const { attachments, env, projectService, runtime, store } = await fixture(root);
       let delivered;
       const manager = createSessionAgentManager({
+        ...sessionAgentManagerDefaults,
         attachments, defaultProviderId: engine,
         providers: [{ id: engine, transportId: `${engine}_test`, async sendMessage(_context, input) {
           delivered = input;
@@ -98,6 +100,7 @@ test("OpenCode terminal attachments use authorized retained files without submit
     const writes = [];
     let ownerOnly = false;
     const manager = createSessionAgentManager({
+      ...sessionAgentManagerDefaults,
       attachments, defaultProviderId: "opencode",
       readAssistantAccess: async () => ({ available: true, ownerOnly, connectionIdentity: "shared-1" }),
       providers: [{ id: "opencode", transportId: "opencode_test",
@@ -208,6 +211,7 @@ test("temporary conversation sends resolve shared uploads without retaining them
     const { attachments, runtime, store } = await fixture(root);
     let delivered;
     const manager = createSessionAgentManager({
+      ...sessionAgentManagerDefaults,
       attachments,
       providers: [{ id: "codex", transportId: "codex_test", async startConversationTurn(_context, input) {
         delivered = input;
