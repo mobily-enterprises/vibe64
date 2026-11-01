@@ -1,5 +1,5 @@
 import { appCredentialContext, GITHUB_ACCOUNT_MODE_LOCAL, githubCredentialContext } from "@local/vibe64-execution/server";
-import { codexRuntimeContext } from "@local/studio-terminal-core/server/codexRuntimeContext";
+import { codexRuntimeContext, codexRuntimeContextRequiringSystemRoot } from "@local/studio-terminal-core/server/codexRuntimeContext";
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { projectServiceNamespaceRoot } from "@local/vibe64-core/server/projectServiceSelection";
 import { resolveStudioTargetRoot, resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
@@ -120,6 +120,7 @@ function createAccountsRuntime({
         explicitRoot: systemRoot
       });
   const codexAuthModes = normalizeCodexAuthModes(allowedCodexAuthModes);
+  const readCodexRuntimeContext = requireExplicitRoots ? codexRuntimeContextRequiringSystemRoot : codexRuntimeContext;
 
   function currentTargetRoot() {
     const selectedTargetRoot = String(targetRoot || projectServiceNamespaceRoot(project)).trim();
@@ -136,11 +137,10 @@ function createAccountsRuntime({
   }
 
   function readCodexContext() {
-    return codexRuntimeContext({
+    return readCodexRuntimeContext({
       env,
       gid: daemonGid ?? undefined,
       home: daemonHome || undefined,
-      requireSystemRoot: requireExplicitRoots,
       systemRoot: resolvedSystemRoot,
       uid: daemonUid ?? undefined,
       username: daemonUsername

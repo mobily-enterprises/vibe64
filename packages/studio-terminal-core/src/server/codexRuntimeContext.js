@@ -50,19 +50,21 @@ function codexRuntimeIds(value = []) {
   ]);
 }
 
-function codexRuntimeContext({
+/**
+ * The Codex runtime context both public forms share: the second argument says whether a missing system root refuses.
+ */
+function buildCodexRuntimeContext({
   env = process.env,
   gid = currentProcessId("getgid"),
   home = os.homedir(),
   providerOptions = {},
-  requireSystemRoot = false,
   shimDirs = [],
   systemRoot = "",
   terminalEnv = {},
   toolHomeSource = "",
   uid = currentProcessId("getuid"),
   username = ""
-} = {}) {
+}, systemRootRequired) {
   const normalizedProviderOptions = recordValue(providerOptions);
   const runtimes = codexRuntimeIds(normalizedProviderOptions.runtimes);
   const mergedEnv = {
@@ -75,7 +77,7 @@ function codexRuntimeContext({
     normalizedProviderOptions.systemRoot ||
     mergedEnv[VIBE64_SYSTEM_ROOT_ENV]
   );
-  if (requireSystemRoot && !resolvedSystemRoot) {
+  if (systemRootRequired && !resolvedSystemRoot) {
     return {
       code: "vibe64_codex_system_root_required",
       error: "A Vibe64 system root is required for Codex runtime operations.",
@@ -147,6 +149,23 @@ function codexRuntimeContext({
   };
 }
 
+/**
+ * The Codex runtime context: its credential, environments and system root (empty when none is configured).
+ * @param {object} [options]
+ */
+function codexRuntimeContext(options = {}) {
+  return buildCodexRuntimeContext(options, false);
+}
+
+/**
+ * The Codex runtime context, refused with vibe64_codex_system_root_required when no system root is configured.
+ * @param {object} [options]
+ */
+function codexRuntimeContextRequiringSystemRoot(options = {}) {
+  return buildCodexRuntimeContext(options, true);
+}
+
 export {
-  codexRuntimeContext
+  codexRuntimeContext,
+  codexRuntimeContextRequiringSystemRoot
 };

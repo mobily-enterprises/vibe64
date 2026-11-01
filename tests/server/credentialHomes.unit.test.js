@@ -18,7 +18,8 @@ import {
   runtimePackBinPaths
 } from "../../packages/vibe64-execution/src/server/runtime/runtimePacks.js";
 import {
-  codexRuntimeContext
+  codexRuntimeContext,
+  codexRuntimeContextRequiringSystemRoot
 } from "../../packages/studio-terminal-core/src/server/codexRuntimeContext.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 
@@ -160,10 +161,9 @@ test("Codex runtime context exposes the active managed Playwright version and re
 });
 
 test("Codex runtime context rejects missing required system root", () => {
-  const context = codexRuntimeContext({
+  const context = codexRuntimeContextRequiringSystemRoot({
     env: {},
-    home: "/home/owner",
-    requireSystemRoot: true
+    home: "/home/owner"
   });
 
   assert.equal(context.ok, false);
