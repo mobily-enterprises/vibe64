@@ -65,6 +65,9 @@ const NO_HOST_RESOURCES = Object.freeze({
   artifactKinds: Object.freeze({})
 });
 
+/** Without a storage reserve to keep, every archive has headroom. */
+async function assumeArchiveHeadroom() {}
+
 /**
  * The project archive lifecycle shared by every host. A host with project
  * resources of its own (managed databases, resource profiles) supplies them
@@ -74,7 +77,7 @@ const NO_HOST_RESOURCES = Object.freeze({
  *   forget(ctx) after the project's runtime state is gone,
  *   artifactKinds[kind] = { evidence(artifact, file), validate(artifact, file) }.
  * @param {object} dependencies
- * @param {((request: { archiveRoot: string, projectContextRoot: string, projectRuntimeRoot: string, slug: string }) => Promise<unknown>) | null} [dependencies.assertArchiveHeadroom]
+ * @param {(request: { archiveRoot: string, projectContextRoot: string, projectRuntimeRoot: string, slug: string }) => Promise<unknown>} [dependencies.assertArchiveHeadroom]
  * @param {(request: { slug: string, reason: string }) => Promise<object>} dependencies.closeProjectRuntime
  * @param {() => Date} [dependencies.clock]
  * @param {typeof NO_HOST_RESOURCES} [dependencies.hostResources]
@@ -83,8 +86,7 @@ const NO_HOST_RESOURCES = Object.freeze({
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
 function createProjectArchiveService({
-  // readable-check: allow dependency-default - filled by a composing host repository; convert with its supplier
-  assertArchiveHeadroom = null,
+  assertArchiveHeadroom = assumeArchiveHeadroom,
   closeProjectRuntime,
   clock = () => new Date(),
   hostResources = NO_HOST_RESOURCES,
@@ -252,7 +254,7 @@ function createProjectArchiveService({
       }
       // A fresh archive may first ask the host for storage headroom; a resumed
       // one continues, because finishing it is what frees the space.
-      if (input.checkHeadroom === true && !existingState.metadata.deletion && typeof assertArchiveHeadroom === "function") {
+      if (input.checkHeadroom === true && !existingState.metadata.deletion) {
         await assertArchiveHeadroom({ archiveRoot, projectContextRoot, projectRuntimeRoot, slug });
       }
       // The owner's own step before removal, under the lock after every

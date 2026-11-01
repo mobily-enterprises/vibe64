@@ -93,7 +93,7 @@ async function fixture(t) {
     evidence, reviewer: createTrainingStepReviewer({ learners, terminals }) });
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const published = [];
-  const definitions = createTrainingStepActions({ learners, content, steps,
+  const definitions = createTrainingStepActions({ learners, attemptLearners: learners, content, steps,
     publishLearnerChanged: async event => { published.push(event); } });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });

@@ -312,17 +312,14 @@ function createTrainingStepOperations({ learners, attemptLearners, content, step
 /**
  * @param {object} dependencies
  * @param {TrainingLearners} dependencies.learners
- * @param {TrainingLearners} [dependencies.attemptLearners]
+ * @param {TrainingLearners} dependencies.attemptLearners the learners whose attempts the actions read
  * @param {TrainingContent} dependencies.content
  * @param {TrainingService["steps"]} dependencies.steps
  * @param {TrainingExercises | null} dependencies.exercises
  * @param {TrainingLearningSpace | null} dependencies.learningSpace
  * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
  */
-function createTrainingStepActions({ learners,
-  // readable-check: allow dependency-default - filled by a composing host repository; convert with its supplier
-  attemptLearners = learners,
-  content, steps, exercises, learningSpace, publishLearnerChanged }) {
+function createTrainingStepActions({ learners, attemptLearners, content, steps, exercises, learningSpace, publishLearnerChanged }) {
   const operations = createTrainingStepOperations({ learners, attemptLearners, content, steps, learningSpace, publishLearnerChanged });
 
   // The removals: each run deletes, and removePractice confirms and reports it.

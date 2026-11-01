@@ -78,7 +78,7 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
     ...(typeof practice === "object" ? practice : {}) } : null;
   const publishLearnerChanged = createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event); } });
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const definitions = createTrainingStepActions({ learners, content, steps, exercises, learningSpace, publishLearnerChanged });
+  const definitions = createTrainingStepActions({ learners, attemptLearners: learners, content, steps, exercises, learningSpace, publishLearnerChanged });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,
@@ -410,7 +410,7 @@ test("a v2 lesson passes start, resume, learning.read, completion, finish and de
   actions.register({ contributorId: "training", domain: "training", actions: [...createTrainingActions({
     catalogue: { async readCatalogue() { throw new Error("not read by these lifecycle actions"); } },
     learners: f.learners, exercises, publishLearnerChanged: async () => {}
-  }), ...createTrainingStepActions({ learners: f.learners, content: f.content, steps: { read() {} }, exercises,
+  }), ...createTrainingStepActions({ learners: f.learners, attemptLearners: f.learners, content: f.content, steps: { read() {} }, exercises,
     publishLearnerChanged: async () => {} })]
     .filter(definition => definition.id !== "vibe64.training.lesson.read" && !/step\.|reader\./u.test(definition.id))
     .map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
