@@ -336,8 +336,15 @@ function createSessionConversationStore({
     }
   }
 
+  // A record keeps the compaction summary its conversation runtime writes, when it has one.
   function conversationRecordJson(record) {
-    return { version: 1, metadata: record.metadata, rewound: record.rewound, turns: [...record.turns] };
+    return {
+      version: 1,
+      metadata: record.metadata,
+      rewound: record.rewound,
+      turns: [...record.turns],
+      ...(record.summary ? { summary: record.summary } : {})
+    };
   }
 
   function parseConversationRecord(source) {
@@ -363,13 +370,20 @@ function createSessionConversationStore({
             typeof message.text !== "string" || typeof message.at !== "string" || !Number.isFinite(Date.parse(message.at)) ||
             (message.messageId !== undefined && typeof message.messageId !== "string"))) ||
         turnIds.size !== value.turns.length ||
-        value.rewound.some((id) => !turnIds.has(id))) {
+        value.rewound.some((id) => !turnIds.has(id)) ||
+        (value.summary !== undefined && (!isPlainObject(value.summary) || typeof value.summary.text !== "string" ||
+          typeof value.summary.throughTurnId !== "string"))) {
       throw vibe64Error(
         "Conversation storage has an unsupported or damaged format. Restore it before continuing.",
         "vibe64_invalid_conversation_storage"
       );
     }
-    return { metadata: value.metadata, rewound: value.rewound, turns: new Map(value.turns) };
+    return {
+      metadata: value.metadata,
+      rewound: value.rewound,
+      turns: new Map(value.turns),
+      ...(value.summary ? { summary: value.summary } : {})
+    };
   }
 
   async function readConversationRecord(sessionPaths) {
@@ -402,7 +416,12 @@ function createSessionConversationStore({
       },
       async writeRecord(_scope, next) {
         // Transactions cannot change rewind markers; keep the saved ones.
-        next = { metadata: next.metadata, turns: next.turns, rewound: next.rewound ?? record.rewound };
+        next = {
+          metadata: next.metadata,
+          turns: next.turns,
+          rewound: next.rewound ?? record.rewound,
+          summary: next.summary
+        };
         const document = conversationRecordJson(next);
         validateConversationDocument(document);
         // Compact JSON: every reader parses it, and pretty printing a long
