@@ -1,13 +1,3 @@
-// Publishing keys locked with the person's passphrase: tokens, sign-ins and
-// signing keys in one age file (`<folder>/keys.age`, mode 0600, in a 0700
-// folder its caller chooses). A plain index beside it lists what is stored
-// (ids, kinds, labels, public facts), never a secret value.
-//
-// The person unlocks the keys in Vibe64's own interface, for one release or a
-// short window. While unlocked, the decrypted values live only in this process's
-// memory and are never written decrypted to disk; locking (or the window
-// ending) zeroes them. Any program running as the same user can read memory and
-// files of that user, which the Publish page says plainly.
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -47,6 +37,16 @@ function serialized() {
 }
 
 /**
+ * Publishing keys locked with the person's passphrase: tokens, sign-ins and
+ * signing keys in one age file (`<folder>/keys.age`, mode 0600, in a 0700
+ * folder its caller chooses). A plain index beside it lists what is stored
+ * (ids, kinds, labels, public facts), never a secret value.
+ *
+ * The person unlocks the keys in Vibe64's own interface, for one release or a
+ * short window. While unlocked, the decrypted values live only in this process's
+ * memory and are never written decrypted to disk; locking (or the window
+ * ending) zeroes them. Any program running as the same user can read memory and
+ * files of that user, which the Publish page says plainly.
  * @param {object} options
  * @param {string} options.directory the private folder that holds the key file
  * @param {() => number} [options.now]

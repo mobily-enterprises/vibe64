@@ -48,7 +48,8 @@ function buildOnlyKey({ commit, packagingHash, packageId, version, versionCode =
  * @param {object[] | null} [request.contentArtifacts]
  * @param {string} [request.projectSlug]
  * @param {AbortSignal} [request.signal]
- * @param {object} [dependencies] what the build stage runs commands with
+ * @param {object} [commands]
+ * @param {Function} [commands.runCommand] what the build stage runs commands with
  */
 async function buildPackage({
   projectRoot,
@@ -70,7 +71,7 @@ async function buildPackage({
   contentArtifacts = null,
   projectSlug = "",
   signal
-}, dependencies = {}) {
+}, { runCommand } = {}) {
   const entry = packaging?.packages?.find((candidate) => candidate.id === packageId);
   if (!entry) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Packaging declares no package ${packageId}.`);
   const packer = vibe64Packer(entry.packer);
@@ -108,7 +109,7 @@ async function buildPackage({
       cacheDirectory,
       projectSlug,
       signal
-    }, dependencies)).artifacts
+    }, { runCommand })).artifacts
     : contentArtifacts;
   const source = await mkdtemp(path.join(workRoot, "vibe64-release-source-"));
   try {
@@ -142,7 +143,7 @@ async function buildPackage({
       cacheDirectory,
       projectSlug,
       signal
-    }, dependencies);
+    }, { runCommand });
     const check = await packer.checkArtifacts({ artifacts, version });
     return { planHash: key, package: packageId, packer: entry.packer, artifacts, check };
   } finally {

@@ -1,7 +1,3 @@
-// Release creates only tags, on the saved and pushed baseline. Under the project
-// source lock it checks that the baseline is the commit the person reviewed, that
-// it is pushed and that a working tree is clean, then creates every tag in one Git
-// ref transaction that also verifies the baseline did not move.
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { runProjectSourceExclusive } from "@local/vibe64-project/server/projectSourceMutationLock";
 import path from "node:path";
@@ -16,6 +12,12 @@ function refuse(code, message, details) {
   throw publishError(code, message, details);
 }
 
+/**
+ * Release creates only tags, on the saved and pushed baseline. Under the project
+ * source lock it checks that the baseline is the commit the person reviewed, that
+ * it is pushed and that a working tree is clean, then creates every tag in one Git
+ * ref transaction that also verifies the baseline did not move.
+ */
 async function tagSavedCommit({
   repositoryRoot,
   projectRuntimeRoot,

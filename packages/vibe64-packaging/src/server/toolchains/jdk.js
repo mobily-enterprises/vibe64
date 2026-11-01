@@ -77,16 +77,16 @@ async function javaHomeOnPath({ baseEnvironment = process.env } = {}, { runComma
 /**
  * The first usable JDK: Vibe64's own install in `directory`, then JAVA_HOME, then PATH.
  */
-async function findJdk({ directory = null, baseEnvironment = process.env, platform = hostPlatform() } = {}, dependencies = {}) {
+async function findJdk({ directory = null, baseEnvironment = process.env, platform = hostPlatform() } = {}, { runCommand } = {}) {
   const candidates = [];
   const pinned = PINNED_JDKS[platform];
   if (directory && pinned) candidates.push(path.join(directory, pinned.folder));
   if (baseEnvironment.JAVA_HOME) candidates.push(baseEnvironment.JAVA_HOME);
-  const onPath = await javaHomeOnPath({ baseEnvironment }, dependencies);
+  const onPath = await javaHomeOnPath({ baseEnvironment }, { runCommand });
   if (onPath) candidates.push(onPath);
   const tried = [];
   for (const javaHome of [...new Set(candidates)]) {
-    const description = await describeJdk({ javaHome, baseEnvironment }, dependencies);
+    const description = await describeJdk({ javaHome, baseEnvironment }, { runCommand });
     if (description.ok) return description;
     tried.push(description.message);
   }

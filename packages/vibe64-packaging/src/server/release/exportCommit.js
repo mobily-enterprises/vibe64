@@ -1,7 +1,3 @@
-// A release builds from exactly one saved commit, never from a working tree.
-// This writes that commit's files into a fresh folder through a private Git index
-// (the repository's own index, HEAD and worktree are untouched) and gives every
-// file the commit's time, so builds that record file times are reproducible.
 import { mkdir, mkdtemp, readdir, rm, stat, utimes } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -28,6 +24,11 @@ async function setTimes(root, seconds) {
 }
 
 /**
+ * A release builds from exactly one saved commit, never from a working tree.
+ * This writes that commit's files into a fresh folder through a private Git index
+ * (the repository's own index, HEAD and worktree are untouched) and gives every
+ * file the commit's time, so builds that record file times are reproducible.
+ *
  * `exclude` names top-level-relative paths (folders or files) left out of the
  * export, such as the project's Genesis and agent files for a package build.
  */
