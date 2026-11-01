@@ -57,7 +57,6 @@ export default [
   {
     // Over 750 lines, with a factory over 600 whose concerns share mutable state.
     files: [
-      "packages/vibe64-accounts/src/server/service.js",
       "packages/vibe64-runtime/src/server/sessionStore.js"
     ],
     rules: {
