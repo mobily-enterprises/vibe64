@@ -5,12 +5,12 @@ import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState"
 import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { claudeConfigRoot } from "./claudeCodeProcess.js";
+import { isRecord } from "./isRecord.js";
 import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
 import { relativePathInside } from "@local/vibe64-core/server/core";
 
 const rejectedBeforeWrite = "Claude has no active turn for this message.";
-const object = value => value && typeof value === "object" && !Array.isArray(value);
 
 // Only this original pre-write guard is affirmative nondelivery evidence. A
 // timeout, an absent native receipt or a generic interrupted run is not proof.
@@ -18,7 +18,7 @@ export async function rejectedClaudeInputChanges({ metadata, runs, configRoot })
   const raw = metadata.assistant_routing_request;
   if (!raw) return {};
   const request = JSON.parse(raw);
-  if (!object(request)) throw new Error("Saved routing request must be an object.");
+  if (!isRecord(request)) throw new Error("Saved routing request must be an object.");
   if (request.delivery !== "uncertain") return {};
   const run = runs.findLast(value => value.engineId === "claude");
   if (run?.error !== rejectedBeforeWrite) return {};
@@ -26,12 +26,12 @@ export async function rejectedClaudeInputChanges({ metadata, runs, configRoot })
   if (request.schemaVersion !== 5 || request.status !== "waiting" ||
       typeof request.messageId !== "string" || !request.messageId ||
       request.attemptedMessageId !== request.messageId || request.followup ||
-      !object(request.input) || (request.input.messageId !== undefined && request.input.messageId !== request.messageId) ||
+      !isRecord(request.input) || (request.input.messageId !== undefined && request.input.messageId !== request.messageId) ||
       run.id !== "claude_stream_json" || run.active !== false || run.state !== "interrupted" ||
       run.threadId !== request.threadId || runs.some(value => value.active)) refuse();
   const native = JSON.parse(metadata[`claude_conversation_${request.threadId}`] || "null");
   const uuid = claudeNativeMessageId(request.messageId);
-  if (!object(native) || native.executionId !== "" || native.state !== "interrupted" ||
+  if (!isRecord(native) || native.executionId !== "" || native.state !== "interrupted" ||
       native.main !== true || native.lastMessageId !== uuid || native.turnId !== uuid || run.turnId !== uuid ||
       typeof native.nativeWorkdir !== "string" || !path.isAbsolute(native.nativeWorkdir)) refuse();
   // The original guard proves rejection. Current-branch native admission is an

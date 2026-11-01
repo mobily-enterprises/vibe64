@@ -3,13 +3,12 @@ import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState"
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { v4OwnerSetup } from "@local/vibe64-core/server/stateUpgrades/routingV4Format";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-
-const object = (value) => value && typeof value === "object" && !Array.isArray(value);
+import { isRecord } from "./isRecord.js";
 
 function parsed(raw, label) {
   let value;
   try { value = JSON.parse(raw); } catch { throw new Error(`Saved ${label} is unreadable. Inspect it before upgrading.`); }
-  if (!object(value)) throw new Error(`Saved ${label} must be an object.`);
+  if (!isRecord(value)) throw new Error(`Saved ${label} must be an object.`);
   return value;
 }
 
@@ -31,10 +30,10 @@ function preferences(raw, repair) {
 function snapshot(raw, label) {
   if (!raw) return raw;
   const value = parsed(raw, label);
-  if (!object(value.configuration?.orchestrators)) return raw;
+  if (!isRecord(value.configuration?.orchestrators)) return raw;
   const next = { ...value, configuration: { revision: value.configuration.revision,
     owner: v4OwnerSetup(value.configuration.orchestrators[value.workflowEngineId] || {}) } };
-  if (object(value.assignments) && Object.hasOwn(value.assignments, "helper")) {
+  if (isRecord(value.assignments) && Object.hasOwn(value.assignments, "helper")) {
     const { helper, ...assignments } = value.assignments;
     next.assignments = { ...assignments, quickHelper: helper };
   }
@@ -55,7 +54,7 @@ function teamSetupSessionChanges({ metadata = {}, conversations = [], renewal })
     : { ...record, routingMetadata: { ...record.routingMetadata,
       ...changedValues(record.routingMetadata, record.recoveryOperation === "update") } }) };
   const successor = renewal?.successor?.assistantRouting;
-  if (object(successor) && Object.hasOwn(successor, "workflowEngineId")) {
+  if (isRecord(successor) && Object.hasOwn(successor, "workflowEngineId")) {
     const { workflowEngineId: _workflowEngineId, ...assistantRouting } = successor;
     result.renewal = { ...renewal, successor: { ...renewal.successor, assistantRouting } };
   }

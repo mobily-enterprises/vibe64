@@ -1,12 +1,12 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseWorkPlanLines, workPlanScope } from "../shared/assistantWorkPlan.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 const PLAN_LIMIT = 256 * 1024;
 const mutations = new Map();
-const digest = (text) => createHash("sha256").update(text).digest("hex");
 
 function planError(message, code = "vibe64_work_plan_invalid") {
   return Object.assign(new Error(message), { code, statusCode: 409 });
@@ -33,7 +33,7 @@ async function readPlanFile(file, { plainText = false } = {}) {
     if (!status) throw planError("This plan needs the stopped-service state upgrade before it can be used.");
     const items = parseWorkPlanLines(text).filter((item) => item.checked !== undefined);
     return {
-      text, status, revision: digest(text),
+      text, status, revision: sha256Hex(text),
       title: /^# (.+)$/mu.exec(text)?.[1]?.trim() || "Untitled plan",
       checked: items.filter((item) => item.checked).length,
       total: items.length
@@ -52,7 +52,7 @@ function pairPath(context, id = "") {
   return id ? path.join(planDirectory(context), "archive", id + ".json") : path.join(planDirectory(context), "current.json");
 }
 function pairIdentity(record) {
-  return digest("vibe64-plan-progress-v1\0" + JSON.stringify([record.planRevision, record.progressRevision]));
+  return sha256Hex("vibe64-plan-progress-v1\0" + JSON.stringify([record.planRevision, record.progressRevision]));
 }
 function pairRecord(plan, progressRevision) {
   return { schemaVersion: 1, planRevision: plan.revision, progressRevision };
@@ -82,7 +82,7 @@ async function readPair(context, id = "") {
   const plan = await readPlanFile(documentPath(context, "plan", record.planRevision));
   const progressText = record.progressRevision === null ? null : await readPlanFile(documentPath(context, "progress", record.progressRevision), { plainText: true });
   if (!plan || plan.revision !== record.planRevision || (record.progressRevision !== null &&
-      (progressText === null || digest(progressText) !== record.progressRevision))) throw planError("A plan or progress document is missing or changed. Restore the saved pair before continuing.");
+      (progressText === null || sha256Hex(progressText) !== record.progressRevision))) throw planError("A plan or progress document is missing or changed. Restore the saved pair before continuing.");
   return { ...plan, progressText, progressRevision: record.progressRevision, artifactRevision: pairIdentity(record),
     ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}) };
 }
@@ -158,7 +158,7 @@ async function writePlan(file, text) {
 }
 
 async function saveDocument(context, kind, text) {
-  const revision = digest(text);
+  const revision = sha256Hex(text);
   const file = documentPath(context, kind, revision);
   const previous = await readPlanFile(file, { plainText: true });
   if (previous !== null && previous !== text) throw planError("The immutable plan document conflicts with its content identity.");
@@ -201,7 +201,7 @@ async function retireUnreferencedDocuments(context) {
       const revision = name.slice(0, 64);
       const file = documentPath(context, kind, revision);
       const text = await readPlanFile(file, { plainText: true });
-      if (text === null || digest(text) !== revision) throw planError("A plan document has changed; cleanup refused.");
+      if (text === null || sha256Hex(text) !== revision) throw planError("A plan document has changed; cleanup refused.");
       if (!retained[kind].has(revision)) retired.push(file);
     }
   }
@@ -339,11 +339,11 @@ function planProgressUpgradeChanges(files) {
   const validateRecord = (source, id = "") => {
     const record = parsePairRecord(source, id);
     const text = find("plan/" + record.planRevision + ".md");
-    if (text === null || digest(text) !== record.planRevision) throw planError("The paired plan document is missing or changed.");
+    if (text === null || sha256Hex(text) !== record.planRevision) throw planError("The paired plan document is missing or changed.");
     validatePlan(text);
     if (record.progressRevision !== null) {
       const progress = find("progress/" + record.progressRevision + ".md");
-      if (progress === null || Buffer.byteLength(progress) > PLAN_LIMIT || digest(progress) !== record.progressRevision) throw planError("The paired progress document is missing or changed.");
+      if (progress === null || Buffer.byteLength(progress) > PLAN_LIMIT || sha256Hex(progress) !== record.progressRevision) throw planError("The paired progress document is missing or changed.");
     }
     return record;
   };
@@ -353,7 +353,7 @@ function planProgressUpgradeChanges(files) {
   } else if (saved.has("current.md")) {
     const text = saved.get("current.md").text;
     validatePlan(text);
-    const planRevision = digest(text);
+    const planRevision = sha256Hex(text);
     put("plan/" + planRevision + ".md", text);
     put("current.json", JSON.stringify({ schemaVersion: 1, planRevision, progressRevision: null }) + "\n");
     changes.set("current.md", null);
@@ -361,7 +361,7 @@ function planProgressUpgradeChanges(files) {
   for (const file of files.filter(file => /^archive\/[a-f0-9]{64}\.md$/u.test(file.name))) {
     validatePlan(file.text);
     const id = file.name.slice(8, 72);
-    if (digest(file.text) !== id) throw planError("A legacy archive differs from its saved identity.");
+    if (sha256Hex(file.text) !== id) throw planError("A legacy archive differs from its saved identity.");
     const next = "archive/" + id + ".json";
     if (saved.has(next)) throw planError("Both archived formats exist. Finish the original publication retry before upgrading.");
     put("plan/" + id + ".md", file.text);

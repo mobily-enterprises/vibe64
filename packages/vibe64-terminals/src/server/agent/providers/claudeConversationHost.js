@@ -33,6 +33,7 @@ import {
   completeClaudeSessionRenewalHandover, completeClaudeSessionRenewalSeed
 } from "../../sessionRenewalReceipts.js";
 import { claudeConversationError as error, claudeTerminalNamespace } from "../../terminalShared.js";
+import { isoNow } from "../../isoNow.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -47,7 +48,6 @@ import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
-const now = () => new Date().toISOString();
 
 /**
  * @param {object} dependencies
@@ -220,7 +220,7 @@ function createClaudeConversationHost({
     const approved = defineSessionRenewalApprovedHandover(input);
     const prepared = prepareRenewalTurn(input, "seed", sessionRenewalSeedPrompt(approved), sessionRenewalAcknowledgementOutputSchema(approved));
     return { get input() { return prepared.input; }, options: prepared.options, completeResult: nativeResult =>
-      completeClaudeSessionRenewalSeed({ input, prepared, context, metadata, contextFor, approved, now, transport: TRANSPORT }, nativeResult) };
+      completeClaudeSessionRenewalSeed({ input, prepared, context, metadata, contextFor, approved, now: isoNow, transport: TRANSPORT }, nativeResult) };
   }
 
   function runDetachedChatTurn(context, input = {}) {

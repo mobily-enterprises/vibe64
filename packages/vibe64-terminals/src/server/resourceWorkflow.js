@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { open, realpath, stat } from "node:fs/promises";
 import path from "node:path";
@@ -13,14 +12,11 @@ import {
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { openedFileWithin } from "./openedFileWithin.js";
+import { sha256Hex } from "./sha256Hex.js";
 
 const fileDigests = new Map();
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_INPUT_BYTES = 16 * 1024 * 1024;
-
-function digest(value) {
-  return createHash("sha256").update(value).digest("hex");
-}
 
 async function dependencyIdentity(root, file, budget) {
   let actual;
@@ -57,7 +53,7 @@ async function dependencyIdentity(root, file, budget) {
     if (length !== Number(before.size) || after.size !== before.size || after.mtimeNs !== before.mtimeNs || after.ctimeNs !== before.ctimeNs) {
       throw new Error("dependency_identity_changed");
     }
-    const hash = digest(buffer.subarray(0, length));
+    const hash = sha256Hex(buffer.subarray(0, length));
     if (fileDigests.size >= 256) fileDigests.delete(fileDigests.keys().next().value);
     fileDigests.set(actual, { stamp, hash });
     return hash;
@@ -129,7 +125,7 @@ async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], 
         ? await packRuntimeIdentity(name, pack)
         : await installedRuntimeIdentity(pack, env);
       if (pack.managedCommands.length && !identity.commands.some(Boolean)) throw new Error("runtime_identity_unavailable");
-      return { name, fingerprint: digest(JSON.stringify(identity)) };
+      return { name, fingerprint: sha256Hex(JSON.stringify(identity)) };
     }));
     const files = new Set();
     for (const workdir of new Set([".", ...commandSteps.map((step) => step.workdir)])) {
@@ -150,7 +146,7 @@ async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], 
   }
   // No source path, command text, environment value or file contents cross into
   // host profile storage. Incomplete identities permit accounting, not learning.
-  return { compatibilityKey: digest(JSON.stringify(description)), compatibilityStatus, compatibilityDiagnostic };
+  return { compatibilityKey: sha256Hex(JSON.stringify(description)), compatibilityStatus, compatibilityDiagnostic };
 }
 
 async function startResourceWorkflow({ session, sourceRoot, operation, runtimes, steps, configuration, estimates, environment = "development", kind, label, env = process.env }) {

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { claudeCatalogueModels } from "@jskit-ai/assistant-core/server/claude-process";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import {
@@ -13,6 +12,7 @@ import { CLAUDE_CODE_VERSION } from "./claudeCodeProcess.js";
 import { claudeConversationError as error } from "./terminalShared.js";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { sha256Hex } from "./sha256Hex.js";
 
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/claude-turn").createClaudeConversationOwner>} ClaudeConversationOwner */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
@@ -24,10 +24,9 @@ const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 // The person's Claude plan, named as AI Accounts names it.
 const PLAN_LABEL = findVibe64AgentProvider(ENGINE).accountLabel;
-const hash = (value) => createHash("sha256").update(value).digest("hex");
 /** Original provider-key pin, retained for stopped historical conversion. */
 function claudeProviderAccountIdentity(configRoot, providerId, apiKey) {
-  return `sha256:${hash(JSON.stringify([configRoot, providerId, apiKey]))}`;
+  return `sha256:${sha256Hex(JSON.stringify([configRoot, providerId, apiKey]))}`;
 }
 function claudeCapabilities(initialization, connected, connections = []) {
   const models = claudeCatalogueModels(initialization);
@@ -48,7 +47,7 @@ function claudeCapabilities(initialization, connected, connections = []) {
       variantId: selected?.variants.some((variant) => variant.id === "high") ? "high" : "" },
     health: { status: available ? "ready" : "unavailable", message: available ? "" : "Connect Claude Code to use your Claude plan." },
     modelProviders: [{ id: "anthropic", label: PLAN_LABEL, connected, models }, ...external],
-    revision: `sha256:${hash(JSON.stringify({ models, connected, external }))}`
+    revision: `sha256:${sha256Hex(JSON.stringify({ models, connected, external }))}`
   };
 }
 
@@ -95,7 +94,7 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
     if (!account.loggedIn || !email) {
       throw error("Sign in to Claude Code with your Claude account before continuing.", "vibe64_claude_account_required");
     }
-    return `sha256:${hash(JSON.stringify([configRoot, account.authMethod, email]))}`;
+    return `sha256:${sha256Hex(JSON.stringify([configRoot, account.authMethod, email]))}`;
   }
 
   // A session's main and temporary chats follow the workspace's current account

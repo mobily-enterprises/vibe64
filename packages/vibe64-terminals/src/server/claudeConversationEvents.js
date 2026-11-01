@@ -1,6 +1,7 @@
 import { VIBE64_AGENT_RUN_STATE as RUN } from "@local/vibe64-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@local/vibe64-runtime/shared";
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
+import { isoNow } from "./isoNow.js";
 import { claudeConversationError as error } from "./terminalShared.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
@@ -14,7 +15,6 @@ import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
-const now = () => new Date().toISOString();
 
 /**
  * The native owner emits once; Vibe64 persists and publishes its existing effects.
@@ -48,7 +48,7 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
         event: { kind: `claude-${state}`, state, message },
         patch: { engineId: ENGINE, state, error: message, phase: entry.turn.phase, observationError: entry.observationError || "",
           model: selection.modelId, modelProviderId: selection.modelProviderId, threadId: entry.id,
-          turnId: entry.turn.id, startedAt: entry.turn.startedAt, finishedAt: active ? "" : now(), updatedAt: now() }
+          turnId: entry.turn.id, startedAt: entry.turn.startedAt, finishedAt: active ? "" : isoNow(), updatedAt: isoNow() }
       }) }));
     await publishSessionChanged(sessionId, {
       session: { sessionId, revision },
