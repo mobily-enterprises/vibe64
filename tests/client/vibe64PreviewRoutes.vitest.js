@@ -442,7 +442,7 @@ describe("Training courses", () => {
     expect(resume).toHaveBeenCalledExactlyOnceWith({ attemptId: savedId });
     state.startLesson(state.summaries[0].course, state.summaries[0].course.lessons[1]);
     expect(start).toHaveBeenCalledOnce();
-    expect(await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(releasedAttempt()), canStart: true, canResume: true })).toContain(">Continue lesson<");
+    expect(await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(releasedAttempt()), canStart: true, canResume: true })).toMatch(/>\s*Continue lesson\s*</);
     const other = mountPicker({ learningResult: pickerLearning(pickerAttempt()) });
     expect(other.summaries[0].progress.activeHere).toBe(false);
     expect(other.startPossible).toBe(true);
