@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createConversationRuntime, createMemoryConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { genesisCommandShimDirectory } from "@local/vibe64-genesis/server";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 
 async function fixture(t, options = {}) {
   const harness = await controllerHarness(options);
-  harness.controllerOptions.logger = options.logger;
   // The production native server memoizes confirmed stop proof. Model that
   // contract when both conversation observers retire the same dead server.
   const createServer = harness.controllerOptions.createServerProcess;
@@ -48,7 +48,7 @@ async function fixture(t, options = {}) {
 test("main chat and Colleague acquire one OpenCode owner; project close retains the common conversation", async t => {
   const stopEvents = [];
   const f = await fixture(t, { helperResponse: "Colleague reply",
-    logger: { info: fields => stopEvents.push(fields) } });
+    logger: { ...silentLogger, info: fields => stopEvents.push(fields) } });
   const main = await f.controller.ensureSession("session-1");
   await f.colleague.send({ messageId: "first", text: "Hello" });
   assert.equal((await f.colleague.wait()).conversationLog[0].assistant.text, "Colleague reply");

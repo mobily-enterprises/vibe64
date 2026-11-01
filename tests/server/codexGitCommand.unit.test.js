@@ -347,7 +347,7 @@ test("Codex Git wrapper transports the complete command request", async () => {
     await mkdir(sourcePath, { recursive: true });
     const calls = [];
     const prepared = await prepareCodexGitCommand({
-      commandService: {
+      commandService: { logger: silentLogger,
         async run(input) {
           calls.push(input);
           return {
@@ -646,7 +646,7 @@ test("model-visible Git failures retain their stage, budget, execution reference
 test("Git wrapper distinguishes absent control, stale identity and a lost command response", async () => {
   await withTemporaryRoot(async (root) => {
     const prepared = await prepareCodexGitCommand({
-      commandService: { run: async () => ({ ok: true, exitCode: 0, stdout: "connected" }) },
+      commandService: { logger: silentLogger, run: async () => ({ ok: true, exitCode: 0, stdout: "connected" }) },
       env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") },
       sessionId: "transport-diagnostics",
       stateRoot: root
@@ -707,7 +707,7 @@ test("Git wrapper distinguishes absent control, stale identity and a lost comman
 test("Codex Git command preparation preserves unchanged wrappers", async () => {
   await withTemporaryRoot(async (root) => {
     const options = {
-      commandService: {
+      commandService: { logger: silentLogger,
         async run() {
           return {
             exitCode: 0,
@@ -747,6 +747,7 @@ test("Codex Git command preparation coalesces concurrent socket startup and repl
     await mkdir(sourcePath, { recursive: true });
     let firstServiceCalls = 0;
     const firstService = {
+      logger: silentLogger,
       async run() {
         firstServiceCalls += 1;
         return {
@@ -790,6 +791,7 @@ test("Codex Git command preparation coalesces concurrent socket startup and repl
 
     let replacementServiceCalls = 0;
     const replacementService = {
+      logger: silentLogger,
       async run() {
         replacementServiceCalls += 1;
         return {
@@ -829,7 +831,7 @@ test("Codex Git preparation repairs a missing cached socket once and fences the 
     const sourcePath = path.join(root, "source");
     await mkdir(sourcePath, { recursive: true });
     const options = {
-      commandService: {
+      commandService: { logger: silentLogger,
         async run() {
           return {
             exitCode: 0,
