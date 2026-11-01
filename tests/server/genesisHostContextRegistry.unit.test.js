@@ -25,7 +25,7 @@ test("installed host guidance reaches native instructions and stays absent on ot
 });
 
 test("a chat agent answers a message sent while it works in visible text, not only in its thinking", () => {
-  // Hosted Main chat, 2026-10-29: three questions sent mid-task were answered
+  // Main chat incident, 2026-10-29: three questions sent mid-task were answered
   // only inside Claude's thinking, which the chat shows as progress, not a reply.
   for (const conversationKind of ["main", "temporary"]) {
     const output = vibe64Driver(context(conversationKind));

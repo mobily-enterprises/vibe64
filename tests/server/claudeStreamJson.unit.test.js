@@ -3039,7 +3039,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
       }
       assert.equal(goalToolCall.result.ok, true, JSON.stringify(goalToolCall));
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked",
-        "The goal command retains fresh request authority even without a hosted runtime actor or intervening user message");
+        "The goal command retains fresh request authority even without a signed-in runtime actor or intervening user message");
       // The owner saves a different main AI while this project is closed. Once
       // it opens again, nothing changes until the goal would continue: Resume
       // then cancels it through Cancel goal and tells the chat why.

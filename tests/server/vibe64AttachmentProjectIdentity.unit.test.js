@@ -122,7 +122,7 @@ test("standalone runtime identities isolate equal basenames without exposing sou
   });
 });
 
-test("hosted runtime identity remains stable across isolated session checkouts", async () => {
+test("catalogue runtime identity remains stable across isolated session checkouts", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const slug = "hosted-abcdef123456";

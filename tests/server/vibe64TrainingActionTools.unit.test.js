@@ -502,7 +502,7 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   }
 });
 
-test("hosted Training Feature retains exact supplied owners and registers no second actions, authority or lesson routes", async t => {
+test("catalogue Training Feature retains exact supplied owners and registers no second actions, authority or lesson routes", async t => {
   const f = await fixture(t);
   const { Vibe64TrainingFeature } = await import("../../packages/vibe64-training/src/server/Vibe64TrainingFeature.js");
   const registered = [];

@@ -6,7 +6,7 @@ import { connectedPackageTypeListText, isConnectedPackageType } from "@local/vib
 
 const exec = promisify(execFile);
 
-// This is a development input reader, not an authorization boundary. Hosted
+// This is a development input reader, not an authorization boundary. The calling
 // execution has already checked the map against the task's receiving sessions.
 export async function readConnectedDevelopmentSources(sourceFile, { projectRoot } = {}) {
   const file = path.resolve(projectRoot, sourceFile);

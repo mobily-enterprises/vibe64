@@ -426,7 +426,7 @@ async function runGit(cwd, args) {
   });
 }
 
-test("launch start awaits preparation, publishes hosted ingress, and cannot retain its preview child", async (t) => {
+test("launch start awaits preparation, publishes proxied ingress, and cannot retain its preview child", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-workspace-"));
   const sessionId = "session-workspace";
   const projectContextRoot = path.join(root, "project-namespace");
@@ -1114,7 +1114,7 @@ test("web launch rejects preview identity executable symlinks", async () => {
 });
 
 test("the browser's own editor origin wins over rewritten routing headers", async () => {
-  // A dev container rewrites Host to a hosted name while the browser shows the
+  // A dev container rewrites Host to a proxied name while the browser shows the
   // editor on an outer Preview origin; the bridge must talk to the latter.
   const editorOrigin = previewEditorOrigin({
     editorOrigin: "https://v64preview-abc.acme.users.example",
@@ -1205,7 +1205,7 @@ test("independent editor namespaces keep cloned session preview routes distinct"
   assert.match(origin("first"), /^https:\/\/v64preview-[a-z0-9]{12}\.pass\.studio\.example$/u);
 });
 
-test("preview public origin uses hosted workspace configuration without a request host", () => {
+test("preview public origin uses workspace configuration without a request host", () => {
   const env = {
     VIBE64_PREVIEW_PUBLIC_DOMAIN: "studio.example",
     VIBE64_PUBLIC_PROTOCOL: "https",
@@ -1224,7 +1224,7 @@ test("preview public origin uses hosted workspace configuration without a reques
   );
 });
 
-test("preview public origin rejects invalid hosted workspace configuration", () => {
+test("preview public origin rejects invalid workspace configuration", () => {
   assert.equal(previewPublicOriginForLaunch({
     env: {
       VIBE64_PREVIEW_PUBLIC_DOMAIN: "studio.example",
@@ -1274,7 +1274,7 @@ test("preview public origin stays stable across terminal restarts", () => {
   );
 });
 
-test("preview public origin supports explicit localhost hosted routing config", () => {
+test("preview public origin supports explicit localhost proxy routing config", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     env: {},
     previewPublicDomain: "users.localhost:3000",
@@ -1289,7 +1289,7 @@ test("preview public origin supports explicit localhost hosted routing config", 
   assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}\.merc\.users\.localhost:3000$/u);
 });
 
-test("preview public origin supports env-driven localhost hosted routing config", () => {
+test("preview public origin supports env-driven localhost proxy routing config", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     env: {
       VIBE64_PUBLIC_PROTOCOL: "http",

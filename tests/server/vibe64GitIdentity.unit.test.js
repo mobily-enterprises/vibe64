@@ -129,7 +129,7 @@ test("without git on PATH the lookup quietly finds nothing", async (t) => {
   assert.equal(identity.source, "fallback");
 });
 
-// Hosted incident 2026-10-24: an agent's PATH starts with Vibe64's git shim,
+// Incident 2026-10-24: an agent's PATH starts with Vibe64's git shim,
 // which the reading server itself serves; a synchronous read through it froze
 // the server and lost chat subscriptions. The read must never run that shim.
 test("the identity read never runs a git shim that leads the command's PATH", async (t) => {

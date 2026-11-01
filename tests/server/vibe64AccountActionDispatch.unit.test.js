@@ -206,7 +206,7 @@ test("Colleague reads every saved provider's readiness through the original owne
     managedAiConnections: createManagedAiConnections({ aiConnectionService: service, requireAiManagement: requireLocalManagement })
   }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   assert.deepEqual(await localActions.execute({ actionId: tool.actionId, input: {}, context: { channel: "api", surface: "app" } }), api,
-    "standalone loopback account reads retain their existing host policy without a hosted owner identity");
+    "standalone loopback account reads retain their existing host policy without a signed-in owner identity");
   const localApp = testRouteApp();
   registerLocalAiConnectionRoutes(localApp.http, { projectContext: getStudioProjectContext() });
   const localRequest = { hostname: "localhost", ip: "127.0.0.1", query: {},
@@ -218,7 +218,7 @@ test("Colleague reads every saved provider's readiness through the original owne
   await findRegisteredRoute(localApp, { method: "GET", path: "/api/vibe64/accounts/ai-connections" }).handler(localRequest, localReply);
   assert.equal(localReply.statusCode, 200);
   assert.deepEqual(localReply.payload, api);
-  assert.deepEqual(localActors, [undefined, undefined], "the action alone checks management, once per lane, with no hosted actor");
+  assert.deepEqual(localActors, [undefined, undefined], "the action alone checks management, once per lane, with no signed-in actor");
 
   const beforeReads = reads;
   for (const input of [{ vibe64User: owner }, { apiKey: "fixture-private-secret" }, { modelProviderId: "zai-coding-plan" }]) {

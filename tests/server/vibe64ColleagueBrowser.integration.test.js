@@ -149,7 +149,7 @@ test("the installed Public Colleague shares its canonical HTTP and private realt
   assert.equal(event.source, "assistant");
   assert.equal(event.entity, "conversation");
   assert.deepEqual(event.event, { type: "application", interimReply: null });
-  assert.equal(Object.hasOwn(event, "actorId"), false, "Local history must not acquire a fabricated hosted actor");
+  assert.equal(Object.hasOwn(event, "actorId"), false, "Local history must not acquire a fabricated signed-in actor");
   assert.equal(Object.hasOwn(event, "scope"), false);
   assert.equal(Object.hasOwn(event, "navigation"), false, "Product navigation is read by its initiating browser");
   assert.equal((await request("/api/vibe64/colleague?clientId=browser-integration")).status, "interrupted");

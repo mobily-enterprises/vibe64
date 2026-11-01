@@ -18,7 +18,7 @@ import { registerRoutes as registerSessions } from "../../packages/vibe64-sessio
 import { registerRoutes as registerTerminals } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
-test("standalone Main and temporary conversations use the selected local project without hosted authority", async () => {
+test("standalone Main and temporary conversations use the selected local project without signed-in authority", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
     const targetRoot = path.join(projectContext.projectsRoot, slug);
     const configure = projectCatalogEnabled => configureStudioProjectContext({
@@ -94,7 +94,7 @@ test("standalone Main and temporary conversations use the selected local project
       assert.notEqual((await app.inject({ url: "/main?project=another-project", headers })).statusCode, 200);
       configure(true);
       for (const conversation of retained) await assert.rejects(conversation.read(), { statusCode: 403 });
-      assert.equal(reads, 2, "A hosted context without an authority contributor cannot inherit local access");
+      assert.equal(reads, 2, "A catalogue context without an authority contributor cannot inherit local access");
       await assert.rejects(retained[0].send({ text: "Denied", messageId: "local-send-2" }), { statusCode: 403 });
       assert.equal(sends.length, 1, "Lost local authority cannot dispatch another send");
     } finally {

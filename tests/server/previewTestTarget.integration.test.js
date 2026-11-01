@@ -41,7 +41,7 @@ test("shared assistant instructions explain target discovery, safe setup, invoca
 });
 
 async function fixture(t, name, workflowHooks = {}) {
-  // Hosted Git needs a permitted checkout path; control sockets still use the
+  // Managed Git needs a permitted checkout path; control sockets still use the
   // ordinary short OS temp directory, independently of this fixture location.
   const root = await mkdtemp(path.join(process.env.VIBE64_TEST_FIXTURE_ROOT || os.tmpdir(), `vibe64-test-target-${name}-`));
   const sessionId = `target-${name}`;
@@ -212,7 +212,7 @@ process.stdout.write(JSON.stringify({
     project,
     runCommand,
     stopPreviewBrowsers: async () => ({ ok: true }),
-    // This standalone fixture runs inside the test execution, not a hosted project.
+    // This standalone fixture runs inside the test execution, not a catalogue project.
     startWorkflow: async () => ({ ok: true, workflow: null }),
     ...workflowHooks
   });

@@ -216,7 +216,7 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
   }
 });
 
-test("terminal websocket guard requires authenticated same-origin requests for hosted terminals", async () => {
+test("terminal websocket guard requires authenticated same-origin requests for signed-in terminals", async () => {
   const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
   delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
   try {

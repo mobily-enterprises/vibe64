@@ -60,7 +60,7 @@ test("session source path rejects a standalone authority folder presented as ses
   assert.equal(sessionHasSource(session), false);
 });
 
-test("session source path rejects a hosted namespace presented as direct source", () => {
+test("session source path rejects a catalogue namespace presented as direct source", () => {
   const hostedNamespace = "/srv/vibe64/merc/projects/app";
   const session = {
     metadata: {

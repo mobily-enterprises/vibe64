@@ -403,7 +403,7 @@ test("renewed replacement sources use the confirmed owned ref and exact commit",
   });
 });
 
-test("Vibe64 ignores a stale hosted namespace checkout and clones the GitHub authority", async () => {
+test("Vibe64 ignores a stale catalogue namespace checkout and clones the GitHub authority", async () => {
   await withTemporaryRoot(async (root) => {
     const remoteRoot = path.join(root, "remote.git");
     const publisherRoot = path.join(root, "publisher");
@@ -1127,7 +1127,7 @@ test("Vibe64-only sessions clone the canonical bare repository without a namespa
   });
 });
 
-test("hosted GitHub session cloning reads the requester's token but retains the daemon filesystem actor", async () => {
+test("catalogue GitHub session cloning reads the requester's token but retains the daemon filesystem actor", async () => {
   let tokenRequest = null;
   const options = await githubSourceCommandOptions({
     gid: 1001,

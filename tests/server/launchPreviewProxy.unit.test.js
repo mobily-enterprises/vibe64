@@ -91,7 +91,7 @@ test("launch preview target URLs are constrained to loopback HTTP origins", () =
   assert.throws(() => normalizePreviewTargetHref("http://vibe64-launch-notvalid:4103/home"), /must be loopback/u);
 });
 
-test("launch preview bearer cookies are host-only __Host- cookies on hosted HTTPS origins", () => {
+test("launch preview bearer cookies are host-only __Host- cookies on proxied HTTPS origins", () => {
   const hostedCookie = previewTokenCookie("secret", {
     proxyOrigin: "https://v64preview-abc123def456.workspace.studio.example"
   });

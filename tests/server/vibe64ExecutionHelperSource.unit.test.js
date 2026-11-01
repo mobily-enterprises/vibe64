@@ -493,7 +493,7 @@ test("execution helper lets account and GitHub API commands run from the target 
   assert.match(source, /return resolveAllowedUserHomePath\(normalized, targetUser\)/u);
 });
 
-test("execution helper admits hosted project state only for the daemon's own generic commands", async () => {
+test("execution helper admits catalogue project state only for the daemon's own generic commands", async () => {
   const source = await helperSource();
 
   assert.match(source, /operation === "vibe64-command" &&\s+targetUser\.username === ownerUsername/u);

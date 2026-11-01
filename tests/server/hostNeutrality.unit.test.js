@@ -55,7 +55,7 @@ test("public sources name no folders of their own in system locations", () => {
 
 // A host overrides local behaviour by composition, so public code never reads
 // a host's own workspace variables to change what it does.
-test("public sources read no hosting workspace variable", () => {
+test("public sources read no private workspace variable", () => {
   const findings = [];
   for (const file of trackedFiles()) {
     if (file === "tests/server/hostNeutrality.unit.test.js") continue;

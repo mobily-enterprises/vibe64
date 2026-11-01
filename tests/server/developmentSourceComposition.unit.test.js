@@ -77,7 +77,7 @@ test("laptop source development uses current source and one external runtime wit
   await assert.rejects(composePublicDevelopment({ publicRoot: f.publicRoot, appRoot: path.join(f.root, "bad-app"), env: { VIBE64_JSKIT_SOURCE_ROOT: source } }), /requires shared-state/u);
 });
 
-test("hosted source development follows the pin on each composition and fails closed when it disappears", async (t) => {
+test("connected-source development follows the pin on each composition and fails closed when it disappears", async (t) => {
   const f = await fixture(t);
   const first = await f.source("one", "first");
   const second = await f.source("two", "second");
@@ -86,7 +86,7 @@ test("hosted source development follows the pin on each composition and fails cl
   const env = { VIBE64_JSKIT_SOURCE_ROOT: path.join(pin, "source") };
   for (const [number, value] of [[1, "first"], [2, "second"]]) {
     const appRoot = path.join(f.root, `app-${number}`);
-    // Hosted source composition must work without invoking Git in another session.
+    // Connected-source composition must work without invoking Git in another session.
     const composer = new URL("../../tooling/development/compose.mjs", import.meta.url).href;
     await exec(process.execPath, ["--input-type=module", "-e", `
 import { composePublicDevelopment } from ${JSON.stringify(composer)};

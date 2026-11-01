@@ -922,7 +922,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     return value;
   }
 
-  // The current lesson's place (Courses → In progress → Open, hosted
+  // The current lesson's place (Courses → In progress → Open, or
   // Projects): its Lesson pane.
   const openCurrent = () => openLesson();
 

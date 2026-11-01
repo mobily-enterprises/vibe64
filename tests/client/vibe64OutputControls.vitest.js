@@ -379,7 +379,7 @@ describe("Vibe64 launch controls", () => {
     })).toMatchObject({
       displayHref: "http://127.0.0.1:4103/home",
       embedHref: "",
-      unavailableReason: "Waiting for the hosted preview URL."
+      unavailableReason: "Waiting for the preview proxy URL."
     });
     expect(launchPreviewRequiresProxy({
       previewAuth: "application-command"

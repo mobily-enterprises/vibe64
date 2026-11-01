@@ -22,7 +22,7 @@ test("localhost check bypass is enabled by the explicit CLI flag", () => {
   }), true);
 });
 
-test("websocket origins match exact scheme, host and port through direct TLS and hosted proxy requests", () => {
+test("websocket origins match exact scheme, host and port through direct TLS and proxied requests", () => {
   const request = {
     protocol: "https", headers: { host: "workspace.example:8443", origin: "https://workspace.example:8443" },
     ip: "10.0.0.8", vibe64User: { username: "owner" }

@@ -11,7 +11,7 @@ const readJson = async (file) => JSON.parse(await readFile(file, "utf8"));
 const exec = promisify(execFile);
 
 // The ordinary installation remains untouched. Only the disposable app receives
-// source packages, using the same closure and materialization as hosted development.
+// source packages, using the same closure and materialization as connected-source development.
 export async function composePublicDevelopment({ publicRoot, appRoot, env = process.env, includeTests = false,
   connectedSourcesFile = env.VIBE64_CONNECTED_SOURCES_FILE }) {
   publicRoot = await realpath(publicRoot);

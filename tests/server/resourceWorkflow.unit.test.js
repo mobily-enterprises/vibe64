@@ -252,6 +252,6 @@ test("legacy projects without dependency files or resource estimates can start w
   assert.equal(request.compatibilityDiagnostic, "runtime_or_dependency_identity_unavailable");
 });
 
-test("standalone operation does not require hosted resource metadata or a resource store", async () => {
+test("standalone operation does not require managed resource metadata or a resource store", async () => {
   assert.deepEqual(await startResourceWorkflow({}), { ok: true, workflow: null });
 });

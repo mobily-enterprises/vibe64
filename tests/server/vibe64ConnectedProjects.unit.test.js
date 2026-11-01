@@ -206,7 +206,7 @@ test("connection mutations require owner and receiving repository write access",
 
 
 
-test("hosted settings change only the exact session source, preserving the other session's list", async () => {
+test("catalogue settings change only the exact session source, preserving the other session's list", async () => {
   await withTemporaryRoot(async (root) => {
     const projectContext = createStudioProjectContext({
       explicitManagedSourceRoot: path.join(root, "sources"), explicitProjectsRoot: path.join(root, "projects"),

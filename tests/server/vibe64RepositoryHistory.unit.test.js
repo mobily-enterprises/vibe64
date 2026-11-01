@@ -90,7 +90,7 @@ test("a session without a recorded source commit never reads its clone's local b
   }).snapshotRef, "a".repeat(40));
 });
 
-test("hosted history uses repository storage and never the hosted namespace", async () => {
+test("catalogue history uses repository storage and never the catalogue namespace", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-hosted-history-"));
   const hostedNamespace = path.join(root, "namespace");
   const repositoryStorageRoot = path.join(root, "runtime", "github-mirror");

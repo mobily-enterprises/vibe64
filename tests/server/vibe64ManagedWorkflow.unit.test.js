@@ -126,7 +126,7 @@ test("an installed provider without workflow support cannot silently bypass acco
   await assert.rejects(finishVibe64Workflow(randomUUID()), /unavailable/u);
 });
 
-test("standalone execution remains usable but required hosted accounting fails closed", async (t) => {
+test("standalone execution remains usable but required managed accounting fails closed", async (t) => {
   const previous = process.env.VIBE64_MANAGED_EXECUTION_REQUIRED;
   t.after(() => {
     if (previous === undefined) delete process.env.VIBE64_MANAGED_EXECUTION_REQUIRED;

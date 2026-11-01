@@ -24,7 +24,7 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import { underActionPolicy } from "./vibe64TestHelpers.js";
 
-test("project owner actions admit the standalone local owner but not foreign requests or missing hosted authority", async () => {
+test("project owner actions admit the standalone local owner but not foreign requests or missing signed-in authority", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {
     const targetRoot = path.join(projectContext.projectsRoot, slug);
     const configure = (projectCatalogEnabled) => configureStudioProjectContext({

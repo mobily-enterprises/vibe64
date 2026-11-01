@@ -334,7 +334,7 @@ test("a browser watch is authorized as an action and released with its connectio
   assert.deepEqual([...watching], [], "a closed connection watches nothing");
 });
 
-// Hosted Git runs through the managed gateway: the probe's head read must be
+// Managed Git runs through the managed gateway: the probe's head read must be
 // the same daemon job, with the same user token and safe directories, as the
 // update check it replaces.
 test("the probe reads heads through the same gateway request as the update check", async () => {

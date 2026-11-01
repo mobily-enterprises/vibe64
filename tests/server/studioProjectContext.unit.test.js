@@ -306,7 +306,7 @@ test("Studio project context creates and selects workspace project folders under
   });
 });
 
-test("hosted project creation rejects local-source metadata without creating state", async () => {
+test("catalogue project creation rejects local-source metadata without creating state", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -423,7 +423,7 @@ test("Studio project context reserves a project slug atomically", async () => {
   });
 });
 
-test("hosted project updates reject local-source metadata without changing the namespace", async () => {
+test("catalogue project updates reject local-source metadata without changing the namespace", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -455,7 +455,7 @@ test("hosted project updates reject local-source metadata without changing the n
   });
 });
 
-test("hosted project readers reject stored local-source metadata without repairing it", async () => {
+test("catalogue project readers reject stored local-source metadata without repairing it", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -519,7 +519,7 @@ test("project readers reject a stored retired bootstrap field; only its state up
   });
 });
 
-test("hosted project access leaves every legacy root-checkout state inert", async (t) => {
+test("catalogue project access leaves every legacy root-checkout state inert", async (t) => {
   await withTemporaryRoot(async (root) => {
     const authorityRoot = path.join(root, "authority.git");
     const seedRoot = path.join(root, "authority-seed");
@@ -673,7 +673,7 @@ test("hosted project access leaves every legacy root-checkout state inert", asyn
   });
 });
 
-test("normal hosted access does not recreate an explicitly retired root checkout", async () => {
+test("normal catalogue access does not recreate an explicitly retired root checkout", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const firstContext = createStudioProjectContext({
@@ -790,7 +790,7 @@ test("Studio project context lists and creates projects without selecting one", 
   });
 });
 
-test("Studio project listing is read-only; startup maintenance removes private state whose hosted namespace is gone", async () => {
+test("Studio project listing is read-only; startup maintenance removes private state whose catalogue namespace is gone", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -825,7 +825,7 @@ test("Studio project listing is read-only; startup maintenance removes private s
 });
 
 for (const selectionSource of ["workspace", "explicit"]) {
-  test(`Studio project listing clears a deleted hosted ${selectionSource} selection from the context and public service`, async () => {
+  test(`Studio project listing clears a deleted catalogue ${selectionSource} selection from the context and public service`, async () => {
     await withTemporaryRoot(async (root) => {
       const projectsRoot = path.join(root, "projects");
       const slug = "removed-selected-project";
@@ -1916,7 +1916,7 @@ test("admitted practice capture retains only same-owner control after the fresh 
   });
 });
 
-test("hosted practice uses the same learning-space scope, outside the catalogue", async () => {
+test("catalogue practice uses the same learning-space scope, outside the catalogue", async () => {
   await withTemporaryRoot(async root => {
     const context = hostedPracticeContext(root);
     const project = createProjectService({ logger: console, projectContext: context });
@@ -2052,7 +2052,7 @@ test("Learn opens only the learner's practice projects and Develop refuses them,
   }
 });
 
-test("an old v1 practice project in the hosted catalogue never takes the normal projects' listing down", async (t) => {
+test("an old v1 practice project in the project catalogue never takes the normal projects' listing down", async (t) => {
   const warn = t.mock.method(console, "warn", () => {});
   await withTemporaryRoot(async root => {
     const context = hostedPracticeContext(root);
@@ -2062,7 +2062,7 @@ test("an old v1 practice project in the hosted catalogue never takes the normal 
     }
     const normal = (await context.listWorkspaceProjects()).projects;
     assert.deepEqual(normal.map(project => project.slug), ["alpha", "beta"]);
-    // Rev 2 hosted practice: a catalogue namespace and a v1 attemptId marker.
+    // Rev 2 catalogue practice: a catalogue namespace and a v1 attemptId marker.
     const { practiceId, ...rest } = trainingProvenance();
     const v1 = { ...rest, schemaVersion: 1, attemptId: practiceId };
     const slug = practiceSlugOf(trainingProvenance());

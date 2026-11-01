@@ -260,7 +260,7 @@ test("repository identities require a real project source", async () => {
   });
 });
 
-test("hosted engineering settings follow the selected session source and save through Genesis", async () => {
+test("catalogue engineering settings follow the selected session source and save through Genesis", async () => {
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectContext = createStudioProjectContext({
       explicitManagedSourceRoot: path.join(temporaryRoot, "managed-source"),
@@ -862,7 +862,7 @@ test("collaboration validation errors come from Genesis rather than a Vibe64 par
   });
 });
 
-test("hosted collaboration follows the selected session source while prompt hints remain project-wide", async () => {
+test("catalogue collaboration follows the selected session source while prompt hints remain project-wide", async () => {
   await withTemporaryRoot(async (temporaryRoot) => {
     const projectsRoot = path.join(temporaryRoot, "projects");
     const projectContext = createStudioProjectContext({

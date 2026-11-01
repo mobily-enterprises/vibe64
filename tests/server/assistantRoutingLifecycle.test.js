@@ -924,7 +924,7 @@ for (const [role, refusal] of [["owner", null], ["member", "vibe64_main_chat_app
 }
 
 for (const actorFields of [{}, { submittedBy: null }]) {
-  test(`a migrated request with ${Object.hasOwn(actorFields, "submittedBy") ? "null" : "missing"} actor cannot borrow the hosted retry user's identity`, async (t) => {
+  test(`a migrated request with ${Object.hasOwn(actorFields, "submittedBy") ? "null" : "missing"} actor cannot borrow the signed-in retry user's identity`, async (t) => {
     const actors = [];
     const f = await fixture(t, { mode: "junior", review: false }, {
       resolveAssistantUser: async (actor) => {
@@ -953,7 +953,7 @@ for (const actorFields of [{}, { submittedBy: null }]) {
   });
 }
 
-test("standalone admission can retry a migrated request without a hosted actor", async (t) => {
+test("standalone admission can retry a migrated request without a signed-in actor", async (t) => {
   const f = await fixture(t, { mode: "junior", review: false });
   f.context.vibe64User = null;
   f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 5, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
@@ -1438,7 +1438,7 @@ test("routing retains the original definite native validation rejection without 
   assert.equal(await f.context.runtime.store.conversationMessageIdExists("session-1", request.messageId), false);
 });
 
-test("standalone failed delivery inspection rechecks original access without borrowing a hosted actor", async t => {
+test("standalone failed delivery inspection rechecks original access without borrowing a signed-in actor", async t => {
   let hosted = false;
   const actors = [];
   const f = await fixture(t, { mode: "junior", review: false }, {

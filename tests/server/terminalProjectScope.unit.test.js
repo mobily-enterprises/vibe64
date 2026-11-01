@@ -61,7 +61,7 @@ test("Vibe64 terminal roots prefer the selected session source path", () => {
   assert.equal(sessionSourcePath(session), sourcePath);
 });
 
-test("Vibe64 terminal roots never fall back to the hosted namespace", () => {
+test("Vibe64 terminal roots never fall back to the catalogue namespace", () => {
   const hostedNamespace = "/srv/vibe64/merc/projects/demo";
   const session = {
     sessionId: "session-without-source",

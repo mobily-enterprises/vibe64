@@ -142,7 +142,7 @@ test("terminal configuration changes invalidate review; offline failures do not 
   assert.equal((await f.call()).branch, "");
 });
 
-test("hosted GitHub and managed repositories never invoke standalone Git controls", async () => {
+test("catalogue GitHub and managed repositories never invoke standalone Git controls", async () => {
   for (const mode of ["github", "managed_git"]) {
     const project = { repositoryMode: mode, sourceRoot: "/must-not-run" };
     const options = { runCommand: () => { throw new Error("Unexpected Git execution"); }, logger: console };
@@ -180,7 +180,7 @@ test("terminal rebase: review replays only session changes, preserves session wo
   assert.equal(await git(f.root, "--git-dir", f.remote, "show", "trunk:session.txt"), "ongoing session work");
 });
 
-test("history recovery refuses changed reviews and leaves hosted history-rewrite behavior unchanged", async (t) => {
+test("history recovery refuses changed reviews and leaves catalogue history-rewrite behavior unchanged", async (t) => {
   const f = await fixture(t);
   const oldBase = await f.commit(f.source, "local.txt", "saved\n");
   const sourcePath = path.join(f.root, "session");
@@ -196,7 +196,7 @@ test("history recovery refuses changed reviews and leaves hosted history-rewrite
   await assert.rejects(checkSessionUpdatesDirect({ ...input, project }), { code: "vibe64_session_update_history_diverged" });
 });
 
-test("a hosted session that rewrote and published the saved history adopts it as its base", async (t) => {
+test("a catalogue session that rewrote and published the saved history adopts it as its base", async (t) => {
   const f = await fixture(t);
   const sourcePath = path.join(f.root, "session");
   await git(f.root, "clone", f.remote, sourcePath); await git(sourcePath, "checkout", "-b", "vibe64/session");

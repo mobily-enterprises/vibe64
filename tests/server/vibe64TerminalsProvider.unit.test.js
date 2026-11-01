@@ -441,7 +441,7 @@ test("opening one runtime from multiple tabs publishes only its closed-to-open t
     const feature = createVibe64TerminalsFeature();
     const outputs = await feature.setup(dependencies, { profile: "test" });
     try {
-      assert.equal(recovered, 0, "feature setup must not recover before hosted admission is configured");
+      assert.equal(recovered, 0, "feature setup must not recover before catalogue admission is configured");
       await hooks.find(hook => hook.name === "onReady").callback();
       assert.equal(recovered, 0, "recovery does not block Fastify's readiness hook");
       await new Promise(resolve => setImmediate(resolve));

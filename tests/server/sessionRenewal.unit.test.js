@@ -1684,13 +1684,13 @@ test("renewal shutdown clears a pending workflow-lock retry before it can run", 
   assert.equal(context.calls.generate, 0);
 });
 
-test("same-named sessions in two hosted projects schedule by durable renewal identity", async () => {
+test("same-named sessions in two catalogue projects schedule by durable renewal identity", async () => {
   const first = fixture();
   const second = fixture();
   const projectScope = new AsyncLocalStorage();
   const current = () => {
     const context = projectScope.getStore();
-    assert.ok(context, "hosted project context must remain attached");
+    assert.ok(context, "catalogue project context must remain attached");
     return context;
   };
   const project = {

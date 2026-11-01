@@ -1014,9 +1014,9 @@ function workspaceServiceSaveEnv(serviceHome, commandOptions = {}) {
   });
 }
 
-// Hosted incident 2026-10-25: Save runs as the workspace service, whose HOME
+// Incident 2026-10-25: Save runs as the workspace service, whose HOME
 // holds no Git identity and which cannot read the person's home, so every
-// hosted Save carried the stand-in although the person's own ~/.gitconfig had
+// catalogue Save carried the stand-in although the person's own ~/.gitconfig had
 // their name. The person's identity is read as the person and given to Save.
 test("Save run by the workspace service commits under the person's own Git identity", async () => {
   await withTemporaryRoot(async (root) => {

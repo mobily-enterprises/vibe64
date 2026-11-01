@@ -43,7 +43,7 @@ async function loadPreferences(t, initial) {
   return { storage, preferences };
 }
 
-test("standalone Vibe64 shows the same per-assistant default artwork as a new hosted person", async t => {
+test("standalone Vibe64 shows the same per-assistant default artwork as a new catalogue person", async t => {
   const { preferences } = await loadPreferences(t);
   assert.deepEqual(avatarCatalogue.VIBE64_AVATAR_CHOICES.map(choice => [choice.id, choice.label]),
     [["merc", "Merc · male"], ["yu", "Yu · female"]]);

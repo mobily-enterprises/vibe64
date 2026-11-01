@@ -288,7 +288,7 @@ test("invalid label filters fail before contacting GitHub", async () => {
   assert.equal(f.calls.length, 0);
 });
 
-test("rejects non-GitHub projects, absent hosted identity and invalid input before executing", async () => {
+test("rejects non-GitHub projects, absent signed-in identity and invalid input before executing", async () => {
   const f = fixture([]);
   for (const target of [{}, { ...project, repositoryMode: "managed_git" }, { githubRepository: { fullName: "../other/path" } }]) {
     await assert.rejects(githubIssues(target, { vibe64User: user }, f.options), { code: "vibe64_github_project_required" });

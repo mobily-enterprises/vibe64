@@ -68,7 +68,7 @@ async function main() {
   process.env.VIBE64_RUNTIME_NAMESPACE = "__local__";
   const { resolveRuntimeEnv } = await import("../server/lib/runtimeEnv.js");
   resolveRuntimeEnv();
-  const hostedStudioHost = process.env.VIBE64_WORKSPACE && process.env.VIBE64_PUBLIC_USER_DOMAIN
+  const workspaceStudioHost = process.env.VIBE64_WORKSPACE && process.env.VIBE64_PUBLIC_USER_DOMAIN
     ? `${process.env.VIBE64_WORKSPACE}.${process.env.VIBE64_PUBLIC_USER_DOMAIN}` : "";
   // An optional local speech service is a shared host tool, like the Claude command.
   const sharedTools = new Set(["VIBE64_DEVELOPMENT_COMPOSED", "VIBE64_DEVELOPMENT_LOCAL_PACKAGES", "VIBE64_CLAUDE_COMMAND",
@@ -84,7 +84,7 @@ async function main() {
   process.env.VIBE64_SYSTEM_ROOT = path.join(developmentRoot, "state");
   process.env.VIBE64_SERVICE_DATA_ROOT = path.join(developmentRoot, "state", "services");
   process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT = "1";
-  if (!hostedStudioHost) {
+  if (!workspaceStudioHost) {
     process.env.VIBE64_PREVIEW_PROXY_SOCKET_DIR ||= path.join(developmentRoot, "preview-sockets");
   }
   process.env.VIBE64_PREVIEW_PUBLIC_NAMESPACE = `${process.env.VIBE64_PREVIEW_PUBLIC_NAMESPACE || "example"}-${identity}`;
@@ -112,7 +112,7 @@ async function main() {
     // API authorization remains loopback. Only output routing uses the host's
     // configured Studio hostname; it must not become the backend Origin.
     const proxy = { target: apiOrigin, changeOrigin: true, ws: true,
-      headers: { origin: apiOrigin, "x-forwarded-host": hostedStudioHost || new URL(apiOrigin).host,
+      headers: { origin: apiOrigin, "x-forwarded-host": workspaceStudioHost || new URL(apiOrigin).host,
         "x-forwarded-proto": new URL(apiOrigin).protocol.slice(0, -1) },
       rewriteWsOrigin: true };
     const { createServer: createViteServer } = await import("vite");

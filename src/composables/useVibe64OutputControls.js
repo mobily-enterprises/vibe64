@@ -485,7 +485,7 @@ function resolveLaunchPreviewDestination(actions = [], {
       displayHref,
       embedHref: "",
       unavailableReason: requirePreviewProxy && action
-        ? "Waiting for the hosted preview URL."
+        ? "Waiting for the preview proxy URL."
         : ""
     };
   }
@@ -494,7 +494,7 @@ function resolveLaunchPreviewDestination(actions = [], {
       action,
       displayHref,
       embedHref: "",
-      unavailableReason: "This preview URL is only reachable from the server. Restart the preview to create a hosted preview URL."
+      unavailableReason: "This preview URL is only reachable from the server. Restart the preview to create a proxied preview URL."
     };
   }
   if (browserWouldBlockEmbeddedPreview(embedCandidate, studioHref)) {
