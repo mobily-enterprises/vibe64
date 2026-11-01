@@ -101,6 +101,7 @@
  *   | "startTerminal" | "stopConversation" | "streamDetachedChatTurn" | "subscribeTerminal" | "unsubscribeSessions"
  *   | "updateGoal" | "updateSessionSettings" | "uploadAttachment" | "waitForConversationTurn" | "writeTerminal"} SessionAgentProviderMethod
  */
+/** @typedef {ReturnType<typeof import("./openCodeLifecyclePreparation.js").createOpenCodeLifecyclePreparation>} OpenCodeLifecyclePreparation */
 
 /** @typedef {ReturnType<typeof import("./serviceTurnPublication.js").createServiceTurnPublication>} ServiceTurnPublication */
 /** @typedef {ServiceTurnPublication["publishAgentSessionChanged"]} PublishAgentSessionChanged */

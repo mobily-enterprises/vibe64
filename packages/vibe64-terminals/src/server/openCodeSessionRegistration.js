@@ -28,7 +28,7 @@ import {
 } from "./openCodeInteractiveTerminals.js";
 import {
   createOpenCodeSessionRenewalPreparation
-} from "./sessionRenewalReceipts.js";
+} from "./openCodeSessionRenewal.js";
 import {
   createOpenCodeServerProcess,
   createOpenCodeHostPreparation,

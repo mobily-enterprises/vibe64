@@ -1,11 +1,4 @@
-import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
-import { openCodeMessageError } from "./openCodeConversationEvents.js";
-import { upstreamMessageId, writeOpenCodeSessionMetadata } from "./openCodeConversationStorage.js";
-import { openCodeError } from "./terminalShared.js";
 import {
-  defineSessionRenewalApprovedHandover,
-  defineSessionRenewalOperationId,
-  sessionRenewalClientMessageId,
   parseSessionRenewalAcknowledgement,
   parseSessionRenewalHandoverOutput,
   prepareSessionRenewalHandoverRequest,
@@ -22,21 +15,23 @@ import {
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { effectiveVibe64AgentSettings as codexEffectiveAgentSettings } from "@local/vibe64-runtime/shared";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
-import { isRecord, normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
+
+// Session renewal receipts, errors and completion for Codex and Claude, and Codex's renewal turn preparation. This
+// module consumes the session store and the native result; it never invokes a provider.
 
 /**
- * Original application renewal receipt, error and completion policy. This module
- * consumes the existing session store and native result; it never invokes a provider.
+ * The renewal turn's failure as an Error carrying its turn identity in details.
+ * @param {unknown} error
+ * @param {object} [identity]
  */
-function errorMessage(value, fallback = "Codex could not be prepared.") {
-  return normalizeText(value?.error || value?.message || value) || fallback;
-}
-
 function sessionRenewalErrorWithIdentity(error, identity = {}) {
-  const source = error instanceof Error ? error : new Error(errorMessage(error));
+  const source = error instanceof Error
+    ? error
+    : new Error(normalizeText(error?.error || error?.message || error) || "Codex could not be prepared.");
   if (!normalizeText(source.code)) {
     source.code = "vibe64_session_renewal_turn_failed";
     source.retryable = true;
@@ -56,32 +51,18 @@ function sessionRenewalErrorWithIdentity(error, identity = {}) {
 }
 
 /**
- * @param {Vibe64SessionRuntime} runtime
- * @param {string} [sessionId]
- * @param {object} [values]
- * @param {object} [options]
- * @param {boolean} [options.renewalInternal]
+ * Writes the agent_renewal_* entries of values in one session mutation, through the given store access.
+ * @param {string} sessionId
+ * @param {object} values
+ * @param {Vibe64SessionStore["mutateSession"]} mutateSession
+ * @param {Vibe64SessionStore["writeMetadataValue"]} writeMetadataValue
  */
-async function writeSessionRenewalMetadata(runtime, sessionId = "", values = {}, options = {}) {
-  const {
-    renewalInternal = false
-  } = options;
+async function writeRenewalMetadataEntries(sessionId, values, mutateSession, writeMetadataValue) {
   const entries = Object.entries(isRecord(values) ? values : {})
     .map(([name, value]) => [normalizeText(name), normalizeText(value)])
     .filter(([name]) => name.startsWith("agent_renewal_"));
   if (!entries.length) {
     return;
-  }
-  const mutateSession = renewalInternal
-    ? runtime.store.mutateSessionForRenewal?.bind(runtime.store)
-    : runtime.store.mutateSession?.bind(runtime.store);
-  const writeMetadataValue = renewalInternal
-    ? runtime.store.writeMetadataValueForRenewal?.bind(runtime.store)
-    : runtime.store.writeMetadataValue?.bind(runtime.store);
-  if (typeof mutateSession !== "function" || typeof writeMetadataValue !== "function") {
-    throw new TypeError(renewalInternal
-      ? "Renewed assistant metadata requires explicit internal renewal access."
-      : "Assistant renewal metadata access is unavailable.");
   }
   await mutateSession(sessionId, async () => {
     await Promise.all(entries.map(([name, value]) => (
@@ -90,7 +71,40 @@ async function writeSessionRenewalMetadata(runtime, sessionId = "", values = {},
   });
 }
 
-function codexSessionRenewalTurnError(reason, details = {}, providerMessage) {
+/**
+ * Writes renewal metadata on a visible predecessor session.
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} sessionId
+ * @param {object} values
+ */
+function writeSessionRenewalMetadata(runtime, sessionId, values) {
+  const { store } = runtime;
+  return writeRenewalMetadataEntries(sessionId, values,
+    (id, operation) => store.mutateSession(id, operation),
+    (id, name, value) => store.writeMetadataValue(id, name, value));
+}
+
+/**
+ * Writes renewal metadata on a hidden successor session, through the store's internal renewal access.
+ * @param {Vibe64SessionRuntime} runtime
+ * @param {string} sessionId
+ * @param {object} values
+ */
+function writeRenewedSessionMetadata(runtime, sessionId, values) {
+  const { store } = runtime;
+  return writeRenewalMetadataEntries(sessionId, values,
+    (id, operation) => store.mutateSessionForRenewal(id, operation),
+    (id, name, value) => store.writeMetadataValueForRenewal(id, name, value));
+}
+
+/**
+ * The renewal error for a reason the shared native runtime reports. It passes this function by reference and
+ * omits details and the provider's message for most reasons.
+ * @param {string} reason
+ * @param {object} [details]
+ * @param {string} [providerMessage]
+ */
+function codexSessionRenewalTurnError(reason, details = {}, providerMessage = "") {
   if (reason === "handover_turn_missing") {
     return sessionRenewalProtocolError(
       "vibe64_session_renewal_thread_unreadable",
@@ -198,9 +212,8 @@ function writeSessionRenewalSeedTurnMetadata(runtime, sessionId, values) {
     threadId: "agent_renewal_seed_thread_id",
     turnId: "agent_renewal_seed_turn_id"
   };
-  return writeSessionRenewalMetadata(runtime, sessionId,
-    Object.fromEntries(Object.entries(values).map(([name, value]) => [names[name], value])),
-    { renewalInternal: true });
+  return writeRenewedSessionMetadata(runtime, sessionId,
+    Object.fromEntries(Object.entries(values).map(([name, value]) => [names[name], value])));
 }
 
 async function completeSessionRenewalHandover({
@@ -357,97 +370,6 @@ async function completeClaudeSessionRenewalSeed({
     turnId: result.turnId
   }));
   return { ...result, acknowledgement, acknowledgedAt, handoverHash: approved.handoverHash, ok: true, subscriptionDeferred: true };
-}
-
-async function completeOpenCodeSessionRenewalHandover({
-  input,
-  operationId,
-  clientMessageId,
-  context,
-  writeSessionMetadata
-}, nativeResult) {
-  const result = { ...nativeResult, clientMessageId };
-  const parsed = parseSessionRenewalHandoverOutput(result.text, {
-    source: input.source
-  });
-  await writeSessionMetadata(context, {
-    agent_renewal_handover_hash: parsed.handoverHash,
-    agent_renewal_handover_operation_id: operationId,
-    agent_renewal_handover_thread_id: result.threadId,
-    agent_renewal_handover_turn_id: result.turnId
-  });
-  return {
-    ...parsed,
-    ...result,
-    ok: true,
-    operationId,
-    source: input.source
-  };
-}
-
-/**
- * @param {object} dependencies
- * @param {string} dependencies.operationId
- * @param {object} dependencies.approved the approved renewal handover
- * @param {string} dependencies.clientMessageId
- * @param {object} dependencies.context
- * @param {typeof import("./openCodeConversationStorage.js").writeOpenCodeSessionMetadata} dependencies.writeSessionMetadata
- */
-function createOpenCodeSessionRenewalSeedReceipt({
-  operationId,
-  approved,
-  clientMessageId,
-  context,
-  writeSessionMetadata
-}) {
-  let acknowledgement = null;
-  let acknowledgedAt = "";
-
-  async function acknowledge(result) {
-    try {
-      acknowledgement = parseSessionRenewalAcknowledgement(result.text, {
-        handoverHash: approved.handoverHash,
-        source: approved.source
-      });
-    } catch (error) {
-      error.details = {
-        ...(normalizeObject(error.details)),
-        clientMessageId,
-        handoverPromptAccepted: true,
-        threadId: result.threadId,
-        turnId: result.turnId
-      };
-      throw error;
-    }
-    acknowledgedAt = new Date().toISOString();
-    await writeSessionMetadata(context, sessionRenewalSeedAcknowledgementMetadata({
-      acknowledgedAt,
-      handoverHash: approved.handoverHash,
-      operationId,
-      threadId: result.threadId,
-      transport: "opencode_server",
-      turnId: result.turnId
-    }));
-  }
-
-  async function complete(nativeResult) {
-    const result = { ...nativeResult, clientMessageId };
-    const proof = result.processExitProof;
-    return {
-      ...result,
-      acknowledgement,
-      acknowledgedAt,
-      freshThread: result.freshThread,
-      handoverHash: approved.handoverHash,
-      ok: proof?.exited !== false,
-      operationId,
-      processExitProof: proof,
-      source: approved.source,
-      subscriptionDeferred: true
-    };
-  }
-
-  return Object.freeze({ acknowledge, complete });
 }
 
 const CODEX_SESSION_RENEWAL_TURN_TIMEOUT_MS = 10 * 60_000;
@@ -675,125 +597,10 @@ function createCodexSessionRenewalPreparation({
   });
 }
 
-function createOpenCodeSessionRenewalPreparation({
-  mainMessagePreparation,
-  hostPreparation,
-  lifecyclePreparation
-}) {
-  const { contextFor } = mainMessagePreparation;
-  const { prepareProcess, upstreamSessionOptions } = hostPreparation;
-  const { processRelease } = lifecyclePreparation;
-  const OPENCODE_RENEWAL_TIMEOUT_MS = 3 * 60 * 1000;
-
-  function prepareRenewalTurn(target = {}, input = {}, renewal = {}) {
-    const { clientMessageId = "" } = input;
-    return {
-      input: {
-        inputMessageId: upstreamMessageId(clientMessageId),
-        get prompt() { return input.prompt; },
-        agent: toText(target.selection?.agentId),
-        model: openCodeModel(target.selection),
-        timeoutMs: OPENCODE_RENEWAL_TIMEOUT_MS,
-        readError: openCodeMessageError,
-        createError(reason, message, { inputAccepted, ...details }) {
-          if (reason === "thread_mismatch") {
-            return openCodeError("vibe64_session_renewal_thread_mismatch",
-              "The OpenCode predecessor history changed before handover generation.", details);
-          }
-          if (reason === "fresh_thread_required") {
-            return openCodeError("vibe64_session_renewal_fresh_thread_required",
-              "The renewed OpenCode session does not own the expected fresh native history.", details);
-          }
-          if (reason === "unrelated_history") {
-            return openCodeError("vibe64_session_renewal_fresh_thread_required",
-              "The successor OpenCode history contains unrelated conversation and cannot be used for renewal.", details);
-          }
-          return openCodeError(`vibe64_session_renewal_turn_${reason}`, message || (reason === "unreadable"
-            ? "The exact OpenCode renewal turn did not produce a readable result."
-            : "OpenCode did not finish the session renewal turn."),
-          { clientMessageId, handoverPromptAccepted: inputAccepted, ...details }, 502);
-        }
-      },
-      options: renewal
-    };
-  }
-
-  async function prepareRenewalHandover(sessionId = "", input = {}, options = {}) {
-    const operationId = defineSessionRenewalOperationId(input.operationId || input.operationKey);
-    const context = await contextFor(sessionId, options);
-    return {
-      process: () => prepareProcess(context, options),
-      session: () => upstreamSessionOptions(context),
-      turn(target) {
-        const clientMessageId = sessionRenewalClientMessageId("handover", operationId);
-        const prepared = prepareRenewalTurn(target, {
-          clientMessageId,
-          get prompt() { return sessionRenewalHandoverPrompt({ source: input.source }); }
-        }, { expectedThreadId: toText(input.expectedThreadId) });
-        return {
-          ...prepared,
-          completeResult: nativeResult => completeOpenCodeSessionRenewalHandover({
-            input,
-            operationId,
-            clientMessageId,
-            context,
-            writeSessionMetadata: writeOpenCodeSessionMetadata
-          }, nativeResult)
-        };
-      }
-    };
-  }
-
-  async function prepareRenewalSeed(sessionId = "", input = {}, options = {}) {
-    const operationId = defineSessionRenewalOperationId(input.operationId || input.operationKey);
-    const approved = defineSessionRenewalApprovedHandover({
-      handover: input.handover,
-      handoverHash: input.handoverHash,
-      source: input.source
-    });
-    const context = await contextFor(sessionId, options);
-    return {
-      process: () => prepareProcess(context, options),
-      session: () => upstreamSessionOptions(context),
-      turn(target) {
-        const clientMessageId = sessionRenewalClientMessageId("seed", operationId);
-        const receipt = createOpenCodeSessionRenewalSeedReceipt({
-          operationId,
-          approved,
-          clientMessageId,
-          context,
-          writeSessionMetadata: writeOpenCodeSessionMetadata
-        });
-        const prepared = prepareRenewalTurn(target, {
-          clientMessageId,
-          get prompt() { return sessionRenewalSeedPrompt(approved); }
-        }, {
-          expectedThreadId: toText(input.expectedThreadId),
-          forbiddenThreadId: toText(input.forbiddenThreadId || input.oldThreadId),
-          requireFreshHistory: true,
-          completeResult: receipt.acknowledge
-        });
-        return { ...prepared, release: processRelease, completeResult: receipt.complete };
-      }
-    };
-  }
-
-  return Object.freeze({ prepareRenewalHandover, prepareRenewalSeed });
-}
-
 export {
-  createOpenCodeSessionRenewalPreparation,
   createCodexSessionRenewalPreparation,
   completeClaudeSessionRenewalHandover,
   completeClaudeSessionRenewalSeed,
-  completeOpenCodeSessionRenewalHandover,
-  createOpenCodeSessionRenewalSeedReceipt,
-  codexSessionRenewalTurnError,
-  completeSessionRenewalHandover,
-  completeSessionRenewalSeed,
-  sessionRenewalErrorWithIdentity,
-  sessionRenewalHandoverTurnId,
-  sessionRenewalSeedTurnId,
-  writeSessionRenewalHandoverTurnMetadata,
-  writeSessionRenewalSeedTurnMetadata
+  sessionRenewalSeedAcknowledgementMetadata,
+  sessionRenewalSeedTurnId
 };

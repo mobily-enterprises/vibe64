@@ -336,9 +336,10 @@ application-owned; these trusted cleanup operations create no Main handle or bro
 route.
 `sessionRenewalHandover` owns request validation, exact predecessor/successor
 cleanup authorization and the shared handover/hash/ACK protocol. The focused
-`sessionRenewalReceipts` owner applies the original three-engine receipt names,
+`sessionRenewalReceipts` owner applies the Codex and Claude receipt names,
 error identity, handover result and hidden ACK transaction through the existing
-session store. Its Codex preparation factory captures the existing runtime and
+session store; `openCodeSessionRenewal` does the same for OpenCode and prepares
+its renewal turns. The Codex preparation factory captures the existing runtime and
 environment facilities; settings, prompts, receipt reads and proof-result projection
 keep their original lazy phases. The provider supplies authorized context and keeps
 its existing result-error envelope. Claude/OpenCode retain their original application receipt timing;
@@ -1333,6 +1334,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/codexLifecyclePreparation.js`
 - `packages/vibe64-terminals/src/server/codexRuntimeHost.js`
 - `packages/vibe64-terminals/src/server/sessionRenewalReceipts.js`
+- `packages/vibe64-terminals/src/server/openCodeSessionRenewal.js`
 - `packages/vibe64-terminals/src/server/sessionRenewalHandover.js`
 - `packages/vibe64-terminals/src/server/codexSessionProviderHost.js`
 - `packages/vibe64-terminals/src/server/codexHelperPreparation.js`
@@ -3549,7 +3551,7 @@ remain with the same JSKIT owners used by the ordinary driver.
 | [mainConversationMessages.js](../../../packages/vibe64-terminals/src/server/mainConversationMessages.js): `createOpenCodeMainMessagePreparation` | Main input/context/configuration, observation/publication, result/error policy and exact-thread delivery inspection share the common application owner. The original inspection validates its message and thread before preparing the same host and projecting the native receipt. |
 | [openCodeScopedPreparation.js](../../../packages/vibe64-terminals/src/server/openCodeScopedPreparation.js): `createOpenCodeScopedPreparation` | Scoped application preparation preserves profile auditing and bounds, explicit scope and historical message identities, lazy process facts, registry publication, checkpoint and cleanup descriptors. It reuses common context and actual profile/storage/host facilities. Native creation, steering, read-back, Stop and deletion stay in the same shared owner. |
 
-| [sessionRenewalReceipts.js](../../../packages/vibe64-terminals/src/server/sessionRenewalReceipts.js): `createOpenCodeSessionRenewalPreparation` | The original handover/seed application preparation uses the same Main context, host settings and lifecycle release object. Prompt getters, exact native-history constraints, accepted-message errors, ACK write and completion/release order remain unchanged; the shared native runtime performs each renewal turn. |
+| [openCodeSessionRenewal.js](../../../packages/vibe64-terminals/src/server/openCodeSessionRenewal.js): `createOpenCodeSessionRenewalPreparation` | The original handover/seed application preparation uses the same Main context, host settings and lifecycle release object. Prompt getters, exact native-history constraints, accepted-message errors, ACK write and completion/release order remain unchanged; the shared native runtime performs each renewal turn. |
 
 **Existing identity and storage**
 
