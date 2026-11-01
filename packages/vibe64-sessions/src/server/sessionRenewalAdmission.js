@@ -18,7 +18,7 @@ function createRenewalAdmission() {
     return workflowAdmissionOpen;
   }
 
-  function runOnce(state = {}, operation) {
+  function runOnce(state, operation) {
     const key = normalizeText(state.renewalId);
     if (!key) {
       throw new TypeError("Session renewal workflow scheduling requires a renewal id.");
@@ -41,7 +41,7 @@ function createRenewalAdmission() {
     return running;
   }
 
-  async function runConfirmationOnce(renewalId = "", input = {}, operation) {
+  async function runConfirmationOnce(renewalId, input, operation) {
     assertWorkflowAdmissionOpen();
     const key = [
       normalizeText(renewalId),

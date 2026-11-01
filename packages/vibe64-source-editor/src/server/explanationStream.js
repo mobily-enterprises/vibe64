@@ -151,8 +151,8 @@ async function withSourceEditorExplanationFreshness(context = {}, explanation = 
  * @param {object | null} [executionProfile]
  */
 async function cleanupRejectedSourceEditorExplanationThread(
-  context = {},
-  threadId = "",
+  context,
+  threadId,
   terminalService,
   executionProfile = null
 ) {

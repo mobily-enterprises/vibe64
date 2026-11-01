@@ -636,7 +636,7 @@ function sourceEditorHash(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-function sourceEditorFilePayload(relativePath = "", buffer, stats, overrides = {}) {
+function sourceEditorFilePayload(relativePath, buffer, stats, overrides = {}) {
   return {
     hash: sourceEditorHash(buffer),
     language: sourceEditorLanguageForPath(relativePath),

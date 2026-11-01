@@ -308,7 +308,7 @@ function createAuthSessionViews({
     });
   }
 
-  function subscribeAuthTerminal(input = {}, subscriber) {
+  function subscribeAuthTerminal(input, subscriber) {
     const visible = requireVisibleAuthTerminal(input);
     if (visible.ok === false) {
       return visible;

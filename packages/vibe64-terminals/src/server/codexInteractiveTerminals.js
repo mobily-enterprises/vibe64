@@ -385,7 +385,7 @@ function createCodexInteractiveTerminals({
     };
   }
 
-  async function recordCodexTerminalInputGitActor(sessionId = "", data = "", input) {
+  async function recordCodexTerminalInputGitActor(sessionId, data, input) {
     const normalizedSessionId = trimmedText(sessionId);
     if (!input?.trackGitActor || !normalizedSessionId || String(data ?? "").length === 0) {
       return {

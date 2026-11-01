@@ -102,7 +102,7 @@ function createExplanationOperations({
     now: explanationCacheNow
   });
 
-  async function runSourceEditorAgentOperation(input = {}, operation) {
+  async function runSourceEditorAgentOperation(input, operation) {
     const sessionId = normalizeText(input.sessionId);
     if (!sessionId) {
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");

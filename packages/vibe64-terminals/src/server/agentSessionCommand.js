@@ -232,7 +232,7 @@ function createAgentSessionCommandService({
     };
   }
 
-  async function runInSessionProject(sessionId = "", operation) {
+  async function runInSessionProject(sessionId, operation) {
     const normalizedSessionId = normalizeText(sessionId);
     const runBound = () => projectBinding.run(normalizedSessionId, async (binding, project) => {
       const store = await projectService.createSessionStore({

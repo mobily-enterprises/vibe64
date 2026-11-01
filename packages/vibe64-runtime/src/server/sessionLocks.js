@@ -204,7 +204,7 @@ async function quarantineAbandonedSessionLock(lockPath = "") {
  * @param {string} [options.processPlatform]
  * @param {number} [options.waitMs]
  */
-async function acquireSessionLock(sessionPaths, lockName = "", {
+async function acquireSessionLock(sessionPaths, lockName, {
   // The caller retries or falls back, so a refusal is routine information.
   expectedRefusal = false,
   logger,

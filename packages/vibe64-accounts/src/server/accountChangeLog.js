@@ -11,7 +11,7 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
  * @param {object} result
  * @param {number} [startedAt]
  */
-function logAccountChange(logger, operation = "", fields = {}, result, startedAt = Date.now()) {
+function logAccountChange(logger, operation, fields, result, startedAt = Date.now()) {
   const failed = result?.ok === false;
   const failures = Array.isArray(result?.failed)
     ? result.failed.map(({ code, error, providerId, sessionId }) => ({ code, error, providerId, sessionId }))

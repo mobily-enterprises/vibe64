@@ -108,7 +108,7 @@ function createSourceEditorFileObserver({
   function subscribe({
     relativePath = "",
     sourceRoot = ""
-  } = {}, listener) {
+  }, listener) {
     if (typeof listener !== "function") {
       throw new TypeError("Source file observation requires a listener.");
     }

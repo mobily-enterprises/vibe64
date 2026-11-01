@@ -68,7 +68,7 @@ async function learningSessionExecutionRoot(runtime, sessionId, options = {}) {
  * @param {object} [options]
  * @param {object} codexHost the Codex tool home and unavailable-worktree handlers
  */
-async function readSessionConversationContext(engine, projectService, sessionId, options = {}, codexHost) {
+async function readSessionConversationContext(engine, projectService, sessionId, options, codexHost) {
   const id = engine === "codex" ? sessionId : engine === "opencode"
     ? openCodeSessionId(sessionId) : String(sessionId ?? "").trim();
   let codex;

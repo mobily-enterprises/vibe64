@@ -50,7 +50,7 @@ function practiceLearnerActor(learnerKey = "") {
   return id && practiceLearnerKey({ username: id }) === learnerKey ? Object.freeze({ username: id }) : null;
 }
 
-function practiceNamespace(root = "", { learnerKey, practiceId }) {
+function practiceNamespace(root, { learnerKey, practiceId }) {
   const slug = practiceSlug(practiceId);
   const projectsRoot = path.join(root, learnerKey, practiceId);
   return Object.freeze({

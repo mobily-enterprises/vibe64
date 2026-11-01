@@ -347,7 +347,7 @@ function createWorkspaceProjectRecords({
     };
   }
 
-  async function updateWorkspaceProjectState(input = {}, update, options = {}) {
+  async function updateWorkspaceProjectState(input, update, options = {}) {
     const {
       allowDeleting = false
     } = options;

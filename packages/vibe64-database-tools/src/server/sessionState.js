@@ -105,7 +105,7 @@ async function readWorkspace(store, sessionId = "", vibe64User = null) {
   return value ? normalizedWorkspace(value) : emptyWorkspace();
 }
 
-function serializeWrite(key = "", operation) {
+function serializeWrite(key, operation) {
   const previous = writes.get(key) || Promise.resolve();
   const current = previous.catch(() => null).then(operation);
   writes.set(key, current);
@@ -122,7 +122,7 @@ function serializeWrite(key = "", operation) {
  * @param {object | null} [vibe64User]
  * @param {(workspace: object) => object | Promise<object>} operation
  */
-async function mutateWorkspace(store, sessionId = "", vibe64User = null, operation) {
+async function mutateWorkspace(store, sessionId, vibe64User, operation) {
   if (typeof operation !== "function") {
     throw new TypeError("mutateWorkspace requires an operation.");
   }

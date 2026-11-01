@@ -104,7 +104,7 @@ function vibe64OutputSourceRoot(context = {}) {
   return sessionSourcePath(context.session || {});
 }
 
-async function inspectVibe64ForContext(context = {}, inspect, unconfigured) {
+async function inspectVibe64ForContext(context, inspect, unconfigured) {
   const sourceRoot = vibe64OutputSourceRoot(context);
   if (!sourceRoot) {
     return unconfigured;

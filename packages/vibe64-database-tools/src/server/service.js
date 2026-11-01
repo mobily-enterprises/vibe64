@@ -224,7 +224,7 @@ function createService({
     return activeQueries.get(key);
   }
 
-  function releaseSessionQueries(sessionId = "", queries) {
+  function releaseSessionQueries(sessionId, queries) {
     const key = sessionQueryKey(sessionId);
     if (queries?.size === 0 && activeQueries.get(key) === queries) {
       activeQueries.delete(key);

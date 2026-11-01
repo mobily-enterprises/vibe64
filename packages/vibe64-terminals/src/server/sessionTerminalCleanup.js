@@ -131,7 +131,7 @@ async function closeTerminalControllerForSession({
  * @param {string} [options.eventPrefix]
  * @param {RuntimeLogger} options.logger
  */
-async function closeTerminalControllersForSession(sessionId = "", controllers = [], {
+async function closeTerminalControllersForSession(sessionId, controllers, {
   controllerOptions = {},
   eventPrefix = "server.terminals.closeSessionTerminals",
   logger

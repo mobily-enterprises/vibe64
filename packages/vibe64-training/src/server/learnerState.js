@@ -614,7 +614,7 @@ function createTrainingLearnerState({
    * delete) needs only its identity, so a lesson this Vibe64 can no longer
    * teach can still be closed.
    */
-  async function runPreparationExclusive({ actor, attemptId, closing = false } = {}, operation) {
+  async function runPreparationExclusive({ actor, attemptId, closing = false }, operation) {
     const paths = userPaths(actor);
     if (typeof attemptId !== "string" || !uuidPattern.test(attemptId) || typeof operation !== "function") {
       throw new Error("Run preparation for the saved attempt with an admitted server operation.");

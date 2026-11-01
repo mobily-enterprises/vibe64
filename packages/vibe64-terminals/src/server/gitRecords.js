@@ -118,7 +118,7 @@ function pageRecords(items, { offset = 0, limit, defaultLimit, maxLimit }) {
   };
 }
 
-function boundedDiff(output = "", lineLimit) {
+function boundedDiff(output, lineLimit) {
   const lines = String(output || "").replaceAll("\r\n", "\n").split("\n");
   const boundedLimit = boundedInteger(lineLimit, DEFAULT_CHANGE_DIFF_LINE_LIMIT, MAX_CHANGE_DIFF_LINE_LIMIT);
   return {

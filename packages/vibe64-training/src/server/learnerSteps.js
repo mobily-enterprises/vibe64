@@ -79,7 +79,7 @@ function createLearnerSteps({
    * This store only serializes, validates against the pinned lesson and saves
    * the results of the attempt in progress.
    */
-  async function updateStepProgress({ actor, attemptId } = {}, operation) {
+  async function updateStepProgress({ actor, attemptId }, operation) {
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "") || typeof operation !== "function") {
       throw new Error("Record step results for an exact saved attempt.");

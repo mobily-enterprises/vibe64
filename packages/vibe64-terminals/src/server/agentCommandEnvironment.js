@@ -65,7 +65,7 @@ async function agentSessionCommandEnvironmentIsHealthy(env = {}) {
   return results.every(Boolean);
 }
 
-async function prepareOpenCodeSessionCommandEnvironment(context = {}, {
+async function prepareOpenCodeSessionCommandEnvironment(context, {
   agentDatabaseCommand,
   agentEnvCommand,
   agentPreviewCommand,

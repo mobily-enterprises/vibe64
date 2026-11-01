@@ -241,7 +241,7 @@ async function runBuildStage({
  * in a private 0700 directory, stdin values are buffers, and both are removed or
  * zeroed whatever happens.
  */
-async function withStageCredentials({ credentials = [], obtainCredential, tempRoot = os.tmpdir() } = {}, operation) {
+async function withStageCredentials({ credentials = [], obtainCredential, tempRoot = os.tmpdir() }, operation) {
   if (typeof operation !== "function") throw new TypeError("withStageCredentials requires an operation.");
   if (credentials.length && typeof obtainCredential !== "function") {
     throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "This destination needs credentials and none were supplied.");

@@ -24,7 +24,7 @@ function createAiConnectionService({
   /**
    * OpenCode connection changes are account changes too: one line each.
    */
-  function connectionChange(operation, { modelProviderId, vibe64User } = {}, work) {
+  function connectionChange(operation, { modelProviderId, vibe64User }, work) {
     return runLoggedAccountChange(logger, operation,
       { actor: String(vibe64User?.username || ""), engineId: "opencode", modelProviderId: String(modelProviderId || "") }, work);
   }

@@ -75,7 +75,7 @@ function createDefaultAccountRuntime({
  * @param {object} [input]
  * @param {ProjectService} project
  */
-async function connectionAccountStatusInput(input = {}, project) {
+async function connectionAccountStatusInput(input, project) {
   if (hasAccountSelection(input)) {
     return input;
   }

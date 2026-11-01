@@ -450,7 +450,7 @@ function schemaColumn(table = {}, value = "") {
   return column;
 }
 
-function validatedKey(table = {}, input) {
+function validatedKey(table, input) {
   const inputColumns = Array.isArray(input?.columns) ? input.columns : [];
   const names = inputColumns.map((entry) => text(entry?.column));
   const key = table.keys.find((candidate) => (
@@ -522,7 +522,7 @@ async function updateDatabaseCell({
   return { affectedRows, changed: true, ok: true };
 }
 
-function insertRecord(table = {}, values = {}, knex) {
+function insertRecord(table, values, knex) {
   const record = {};
   for (const [name, value] of Object.entries(values && typeof values === "object" ? values : {})) {
     const column = schemaColumn(table, name);

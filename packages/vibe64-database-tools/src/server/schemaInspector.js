@@ -473,7 +473,7 @@ function mysqlConstraintType(value = "") {
   })[normalizeText(value).toUpperCase()] || normalizeText(value).toLowerCase();
 }
 
-function groupedRows(rows = [], keyFn) {
+function groupedRows(rows, keyFn) {
   const groups = new Map();
   for (const row of rows) {
     const key = keyFn(row);

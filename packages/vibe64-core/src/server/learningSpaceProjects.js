@@ -184,7 +184,7 @@ function createLearningSpaceProjects({
     access: practiceAccess = "observe",
     allowDeleting = false,
     requireProject = false
-  } = {}, operation) {
+  }, operation) {
     if (typeof operation !== "function") {
       throw new TypeError("Practice access requires an owning callback.");
     }

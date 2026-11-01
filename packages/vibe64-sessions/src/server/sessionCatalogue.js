@@ -260,7 +260,7 @@ function createSessionCatalogue({
    * The browser publishes each session it opens: the project's selected
    * alias (unless pinned) and the person's last opened session.
    */
-  async function updateCurrentSession(sessionId = "", { vibe64User = null }) {
+  async function updateCurrentSession(sessionId, { vibe64User = null }) {
     return sessionResult(async () => {
       const runtime = await project.createRuntime({
         inspectSource: false

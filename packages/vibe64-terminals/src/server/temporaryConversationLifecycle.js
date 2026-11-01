@@ -129,7 +129,7 @@ function createTemporaryConversationLifecycle({
     };
   }
 
-  async function readTemporaryConversation(sessionId, input = {}, options = {}, transcriptQuery) {
+  async function readTemporaryConversation(sessionId, input, options = {}, transcriptQuery) {
     let deferred = false;
     try {
       await routing.reconcile(sessionId, { ...options, conversationId: input.conversationId, lockWaitMs: 0 });

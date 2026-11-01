@@ -28,7 +28,7 @@ function createLearnerReviews({ createNamespace, userPaths }) {
     return value.helper;
   }
 
-  async function runReviewExclusive({ actor } = {}, operation) {
+  async function runReviewExclusive({ actor }, operation) {
     const paths = userPaths(actor);
     if (typeof operation !== "function") throw new Error("Run a review with an admitted server operation.");
     await createNamespace(paths);

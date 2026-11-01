@@ -35,7 +35,7 @@ function createAccountAccess({
   /**
    * A sign-in, logout or provider key change is logged once it settles.
    */
-  function accountChange(operation, input = {}, fields = {}, work) {
+  function accountChange(operation, input, fields, work) {
     return runLoggedAccountChange(logger, operation, { ...fields, actor: String(input.vibe64User?.username || "") },
       () => accountsResult(work));
   }

@@ -184,13 +184,13 @@ function createServiceSessionWork({
   }
 
   async function runSessionRepositoryWrite(
-    sessionId = "",
-    options = {},
+    sessionId,
+    options,
     {
       operation: operationName = "repository-write",
       activeCode = "vibe64_session_repository_agent_active",
       activeMessage = "Wait for the assistant turn to finish before changing this session's repository."
-    } = {},
+    },
     operation
   ) {
     const result = await sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {

@@ -167,7 +167,7 @@ function createService({
     };
   }
 
-  async function runSourceEditorWriteExclusive(input = {}, operation, options = {}) {
+  async function runSourceEditorWriteExclusive(input, operation, options = {}) {
     const {
       agentOperation = false
     } = options;

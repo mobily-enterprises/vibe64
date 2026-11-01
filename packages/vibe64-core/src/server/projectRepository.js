@@ -311,7 +311,7 @@ function serializeSessionConnectedSources(sources) {
   return serialized;
 }
 
-function sessionRepositoryProject(project = {}, session, options = {}) {
+function sessionRepositoryProject(project, session, options = {}) {
   const { sourcePreparation = false } = options;
   const contribution = sessionConnectedContribution(session);
   if (contribution) {

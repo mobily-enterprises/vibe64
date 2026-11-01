@@ -320,7 +320,7 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
  * @param {typeof runVibe64Command} options.runCommand
  * @param {(targetId: string, operation: (testRunToken: string) => Promise<object>, validate: () => Promise<unknown>) => Promise<object>} options.withTarget
  */
-async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
+async function runRegisteredPlaywrightCommand(sessionId, input, {
   browserWorkers,
   onOutput,
   signal,

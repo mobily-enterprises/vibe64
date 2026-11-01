@@ -291,7 +291,7 @@ function currentProjectScopeKey({
   return String(fallback || "global").trim() || "global";
 }
 
-async function runWithProjectRequestContext(context = {}, operation, options = {}) {
+async function runWithProjectRequestContext(context, operation, options = {}) {
   if (typeof operation !== "function") {
     throw new TypeError("runWithProjectRequestContext requires operation().");
   }
@@ -305,7 +305,7 @@ async function runWithProjectRequestContext(context = {}, operation, options = {
   return projectContextStorage.run(Object.freeze(scopedContext), operation);
 }
 
-async function runWithResolvedProjectRequestContext(options = {}, operation) {
+async function runWithResolvedProjectRequestContext(options, operation) {
   const context = await resolveProjectRequestContext(options);
   return runWithProjectRequestContext(context, operation);
 }

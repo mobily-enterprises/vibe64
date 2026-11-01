@@ -33,9 +33,9 @@ async function renewalSession(runtime, sessionId = "") {
 }
 
 async function runSessionRenewalOperation(
-  input = {},
-  options = {},
-  context = {},
+  input,
+  options,
+  context,
   operation,
   readSession
 ) {
@@ -97,7 +97,7 @@ function createServiceSessionAccess({
   projectService,
   publishSessionChanged
 }) {
-  async function runMainAgentWrite(sessionId = "", options = {}, operation, lockOptions = {}) {
+  async function runMainAgentWrite(sessionId, options, operation, lockOptions = {}) {
     const runtime = options.runtime || await projectService.createRuntime({
       inspectSource: false
     });
@@ -152,9 +152,9 @@ function createServiceSessionAccess({
   }
 
   async function runHiddenSessionRenewalAgentWrite(
-    sessionId = "",
-    input = {},
-    options = {},
+    sessionId,
+    input,
+    options,
     operation
   ) {
     const runtime = options.runtime || await projectService.createRuntime({

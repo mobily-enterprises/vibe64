@@ -63,7 +63,7 @@ function createLearnerCodeLedgers({
     try { return await operation(); } finally { await release(); }
   }
 
-  async function updateCodeLedger({ actor, attemptId } = {}, operation) {
+  async function updateCodeLedger({ actor, attemptId }, operation) {
     const paths = userPaths(actor);
     if (typeof operation !== "function") throw new Error("Update the code ledger of an exact attempt.");
     const attempt = await activeAttemptForProject({ actor, attemptId });

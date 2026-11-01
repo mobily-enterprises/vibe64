@@ -37,7 +37,7 @@ function stripUsageRecordingHeaders(headers) {
   return headers;
 }
 
-function proxyRequestHeaders(headers = {}, targetUrl, options = {}) {
+function proxyRequestHeaders(headers, targetUrl, options = {}) {
   const {
     clientAddress = "",
     freshDocument = false,
@@ -70,7 +70,7 @@ function proxyRequestHeaders(headers = {}, targetUrl, options = {}) {
   return nextHeaders;
 }
 
-function proxyUpgradeHeaders(headers = {}, targetUrl, options = {}) {
+function proxyUpgradeHeaders(headers, targetUrl, options = {}) {
   const {
     clientAddress = "",
     proxyOrigin = "",

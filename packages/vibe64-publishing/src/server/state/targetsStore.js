@@ -29,7 +29,7 @@ function plainSettings(settings = {}) {
   return Object.fromEntries(Object.entries(result).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-function normalizeTarget(input = {}, { now }) {
+function normalizeTarget(input, { now }) {
   const destination = vibe64Destination(input.destination);
   const packageId = String(input.package || "").trim();
   if (!ID.test(packageId)) throw targetError("Choose the package this target publishes.");

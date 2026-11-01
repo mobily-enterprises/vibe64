@@ -319,7 +319,7 @@ function normalizeDatabaseToolEnvironment(value = {}, options = {}) {
   });
 }
 
-function normalizeResourceEnvironment(resources = [], provided, options = {}) {
+function normalizeResourceEnvironment(resources, provided, options = {}) {
   const {
     allowUnprepared = false,
     requireDatabaseTool = true

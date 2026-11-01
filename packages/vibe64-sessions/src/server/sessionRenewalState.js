@@ -551,7 +551,7 @@ async function writeSessionRenewalState(runtime, sessionId = "", value = {}) {
  * @param {string} [sessionId]
  * @param {(state: object) => object | Promise<object>} operation
  */
-async function mutateSessionRenewalState(runtime, sessionId = "", operation) {
+async function mutateSessionRenewalState(runtime, sessionId, operation) {
   return runtime.store.runSessionRenewalStateExclusive(sessionId, async () => {
     const current = await readSessionRenewalState(runtime, sessionId);
     const next = await operation(current);

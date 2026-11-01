@@ -585,7 +585,7 @@ function practiceScopeRequired(slug = "") {
   });
 }
 
-async function withProjectDeletionLock(key = "", operation) {
+async function withProjectDeletionLock(key, operation) {
   const previous = projectDeletionLocks.get(key) || Promise.resolve();
   let release;
   const current = new Promise((resolve) => {

@@ -269,7 +269,7 @@ function createProjectSelection({ logger, projectContext }) {
       : source;
   }
 
-  async function runInProjectContext(slug = "", operation, options = {}) {
+  async function runInProjectContext(slug, operation, options = {}) {
     const {
       allowDeleting = false,
       vibe64User = null

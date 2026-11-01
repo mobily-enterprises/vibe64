@@ -227,7 +227,7 @@ function assistantRoutingSetupValues(configuration, purpose, actor, options = {}
 /**
  * A role's saved value after one level of "Same as".
  */
-function assistantSetupRoleValue(setupValues = {}, role) {
+function assistantSetupRoleValue(setupValues, role) {
   const value = setupValues[role];
   return value?.follows ? { value: setupValues[value.follows] ?? null, followedRole: value.follows }
     : { value: value ?? null, followedRole: "" };
