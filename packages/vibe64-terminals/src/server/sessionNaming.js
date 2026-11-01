@@ -7,9 +7,9 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { cleanupBackgroundTaskHelper, runBackgroundTaskHelperTurn } from "./assistantHelperTurn.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 const TASK_ID = "session-name";
 const PROFILE = defineVibe64AgentExecutionProfileRequest({

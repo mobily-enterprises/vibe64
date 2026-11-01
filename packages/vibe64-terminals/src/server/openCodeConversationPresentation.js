@@ -8,9 +8,9 @@ import { conversationMessageId, upstreamMessageId } from "./openCodeConversation
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 const OPENCODE_AGENT_RUN_ID = "opencode_server";
 const OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS = 1_000;

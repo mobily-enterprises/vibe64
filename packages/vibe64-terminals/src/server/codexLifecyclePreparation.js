@@ -12,13 +12,13 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
+/** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
+/** @typedef {import("./types.js").CodexSessionRuntimeHost} CodexSessionRuntimeHost */
+/** @typedef {import("./types.js").CodexSessionEnvironment} CodexSessionEnvironment */
 /** @typedef {ReturnType<typeof import("./codexSessionProviderHost.js").createCodexSessionProviderHost>} CodexSessionProviderHost */
-/** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
-/** @typedef {ReturnType<typeof import("./codexHelperPreparation.js").createCodexHelperPreparation>} CodexHelperPreparation */
-/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexStartupHealth>} CodexStartupHealth */
+/** @typedef {import("./types.js").CodexConversationPreparation} CodexConversationPreparation */
+/** @typedef {import("./types.js").CodexHelperPreparation} CodexHelperPreparation */
+/** @typedef {import("./types.js").CodexStartupHealth} CodexStartupHealth */
 
 /**
  * @param {ProjectService} projectService

@@ -1,5 +1,5 @@
-/** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
-/** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
+/** @typedef {import("./types.js").ServiceState} ServiceState */
+/** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 
 /**
  * What a composing host fills after construction: the source editor, connected preparation, plan

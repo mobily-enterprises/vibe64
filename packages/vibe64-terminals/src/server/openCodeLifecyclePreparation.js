@@ -10,12 +10,12 @@ import { openCodeError, throwVibe64OpenCodeError as runtimeFailure,
   openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "./terminalShared.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
-/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
-/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
-/** @typedef {ReturnType<typeof import("./openCodeConversationEvents.js").createOpenCodeConversationEvents>} OpenCodeConversationEvents */
-/** @typedef {ReturnType<typeof import("./openCodeConversationPresentation.js").createOpenCodeConversationPresentation>} OpenCodeConversationPresentation */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
+/** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
+/** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
+/** @typedef {import("./types.js").OpenCodeConversationEvents} OpenCodeConversationEvents */
+/** @typedef {import("./types.js").OpenCodeConversationPresentation} OpenCodeConversationPresentation */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 /**
  * Authorized application facts and awaited product cleanup. The supplied native

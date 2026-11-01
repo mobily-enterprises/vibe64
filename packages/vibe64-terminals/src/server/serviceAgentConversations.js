@@ -15,14 +15,14 @@ import { defineSessionRenewalHandoverText, sessionRenewalManualHandoverTemplate 
 import { AGENT_WRITE_WAIT_MS, runSessionRenewalOperation } from "./serviceSessionAccess.js";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
-/** @typedef {ReturnType<typeof import("./serviceAssistantContext.js").createServiceAssistantContext>} ServiceAssistantContext */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./workspaceSetup.js").createWorkspaceSetupRunner>} WorkspaceSetupRunner */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {(sessionId: string, payload?: object) => Promise<void>} PublishAgentSessionChanged */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
-/** @typedef {ReturnType<typeof import("./sessionAttachments.js").createSessionAttachments>} SessionAttachments */
+/** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
 
 function ephemeralInput(input = {}) {
   return { ...input, ephemeral: input.persistent !== true };

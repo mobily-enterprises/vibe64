@@ -13,11 +13,11 @@ import {
 } from "./sessionRecordRules.js";
 import { readDirectoryEntries, sortedDirectoryNames } from "./sessionStoreLayout.js";
 
-/** @typedef {ReturnType<typeof import("./sessionStoreState.js").createSessionStoreState>} SessionStoreState */
-/** @typedef {ReturnType<typeof import("./sessionStorePaths.js").createSessionStorePaths>} SessionStorePaths */
-/** @typedef {ReturnType<typeof import("./sessionArchiveRecords.js").createSessionArchiveRecords>} SessionArchiveRecords */
-/** @typedef {ReturnType<typeof import("./sessionRecords.js").createSessionRecords>} SessionRecords */
-/** @typedef {ReturnType<typeof import("./sessionArchivePublishing.js").createSessionArchivePublishing>} SessionArchivePublishing */
+/** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
+/** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
+/** @typedef {import("./types.js").SessionArchiveRecords} SessionArchiveRecords */
+/** @typedef {import("./types.js").SessionRecords} SessionRecords */
+/** @typedef {import("./types.js").SessionArchivePublishing} SessionArchivePublishing */
 /** @typedef {ReturnType<typeof import("./currentSessionRecords.js").createCurrentSessionRecords>} CurrentSessionRecords */
 
 /**

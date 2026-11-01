@@ -32,13 +32,13 @@ import { sideloadKeyEntryId } from "./credentialBroker.js";
 /** @typedef {ReturnType<typeof import("./state/targetsStore.js").createTargetsStore>} TargetsStore */
 /** @typedef {ReturnType<typeof import("./state/releaseHistoryStore.js").createReleaseHistoryStore>} ReleaseHistoryStore */
 /** @typedef {ReturnType<typeof import("./confirmationService.js").createConfirmationService>} ConfirmationService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-packaging/server/keys").createAgeStore>} AgeStore */
+/** @typedef {import("@local/vibe64-packaging/server/types").AgeStore} AgeStore */
 /** @typedef {ReturnType<typeof import("./service.js").createPublishingToolchains>} PublishingToolchains */
-/** @typedef {ReturnType<typeof import("./projectRepository.js").createProjectRepository>} ProjectRepository */
+/** @typedef {import("./types.js").ProjectRepository} ProjectRepository */
 /** @typedef {ReturnType<typeof import("./verificationRunner.js").createVerificationRunner>} VerificationRunner */
 /** @typedef {ReturnType<typeof import("./credentialBroker.js").createCredentialBroker>} CredentialBroker */
 /** @typedef {ReturnType<typeof import("./sessionReleaseWriter.js").createSessionReleaseWriter>} SessionReleaseWriter */
-/** @typedef {ReturnType<typeof import("./service.js").createPublishingPackaging>} PublishingPackaging */
+/** @typedef {import("./types.js").PublishingPackaging} PublishingPackaging */
 
 function releaseError(message, code, details) {
   return Object.assign(new Error(message), { code, ...(details ? { details } : {}) });

@@ -9,9 +9,9 @@ import { colleagueBrowserStream, releaseObserver, trimIncompleteSurrogate } from
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
-/** @typedef {ReturnType<typeof import("./colleagueRecords.js").createColleagueRecords>} ColleagueRecords */
-/** @typedef {ReturnType<typeof import("./colleagueThreads.js").createColleagueThreads>} ColleagueThreads */
+/** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
+/** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
+/** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
 
 /**
  * A thread's conversation with its model: the API and native conversation

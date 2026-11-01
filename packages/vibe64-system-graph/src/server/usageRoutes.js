@@ -8,7 +8,7 @@ import {
 } from "@local/vibe64-core/server/featureRoutes";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
 // Query fields each usage route accepts; anything else in the request is
 // ignored rather than passed to the action.

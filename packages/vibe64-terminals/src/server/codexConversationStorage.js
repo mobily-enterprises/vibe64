@@ -10,7 +10,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
+/** @typedef {import("./types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
 
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_STATE_METADATA_NAMES = Object.freeze([

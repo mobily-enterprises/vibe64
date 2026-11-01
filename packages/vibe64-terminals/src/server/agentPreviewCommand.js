@@ -35,10 +35,10 @@ import {
   streamPlaywrightRun
 } from "./agentPreviewBrowserWorker.js";
 
-/** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
+/** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
 const AGENT_PLAYWRIGHT_COMMAND_NAME = "vibe64-playwright";

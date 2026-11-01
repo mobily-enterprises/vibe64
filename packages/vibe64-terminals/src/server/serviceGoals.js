@@ -24,15 +24,15 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { AGENT_WRITE_WAIT_MS, openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 
-/** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
-/** @typedef {ReturnType<typeof import("./serviceAssistantContext.js").createServiceAssistantContext>} ServiceAssistantContext */
-/** @typedef {ReturnType<typeof import("./serviceAssistantPreparation.js").createServiceAssistantPreparation>} ServiceAssistantPreparation */
+/** @typedef {import("./types.js").ServiceState} ServiceState */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
+/** @typedef {import("./types.js").ServiceAssistantPreparation} ServiceAssistantPreparation */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./assistantRouting.js").createAssistantRouting>} AssistantRouting */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
 /** @typedef {(sessionId: string, payload?: object) => Promise<void>} PublishAgentSessionChanged */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/assistantRoutingStore").createAssistantRoutingStore>["read"]} ReadRoutingConfiguration */
 

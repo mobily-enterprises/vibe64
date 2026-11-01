@@ -4,10 +4,10 @@ import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { failure, requireResult } from "./colleagueFailure.js";
 import { answerPendingNavigation, colleagueBrowserState } from "./colleaguePresentation.js";
 
-/** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
-/** @typedef {ReturnType<typeof import("./colleagueRecords.js").createColleagueRecords>} ColleagueRecords */
-/** @typedef {ReturnType<typeof import("./colleagueThreads.js").createColleagueThreads>} ColleagueThreads */
-/** @typedef {ReturnType<typeof import("./colleagueWorker.js").createColleagueWorker>} ColleagueWorker */
+/** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
+/** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
+/** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
+/** @typedef {import("./types.js").ColleagueWorker} ColleagueWorker */
 /** @typedef {ReturnType<typeof import("./colleagueWatches.js").createColleagueWatches>} ColleagueWatches */
 
 function hasUserReceipt(chat, messageId) {

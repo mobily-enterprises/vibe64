@@ -9,9 +9,9 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { STATE_KEY, failure, usesWorkPlan, recentVisibleMessages } from "./assistantRoutingRequests.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
-/** @typedef {ReturnType<typeof import("./assistantRoutingState.js").createAssistantRoutingState>} AssistantRoutingState */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
 
 /**
  * A routing request's records: its key, its saved state and change notices, the chat notices it

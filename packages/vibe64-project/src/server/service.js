@@ -37,8 +37,8 @@ import { createProjectSettings } from "./projectSettings.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
-/** @typedef {ReturnType<typeof import("./projectActions.js").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
+/** @typedef {import("./types.js").PublishProjectChanged} PublishProjectChanged */
 
 function catalogUnavailable() {
   return {

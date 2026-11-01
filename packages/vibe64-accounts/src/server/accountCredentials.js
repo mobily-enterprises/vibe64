@@ -9,9 +9,9 @@ import { readGithubStoredStatus, recordGithubAuthInvalidState, writeGithubAuthSt
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
-/** @typedef {ReturnType<typeof import("./authSessionViews.js").createAuthSessionViews>} AuthSessionViews */
-/** @typedef {ReturnType<typeof import("./accountStatusReads.js").createAccountStatusReads>} AccountStatusReads */
-/** @typedef {ReturnType<typeof import("./accountAccess.js").createAccountAccess>} AccountAccess */
+/** @typedef {import("./types.js").AuthSessionViews} AuthSessionViews */
+/** @typedef {import("./types.js").AccountStatusReads} AccountStatusReads */
+/** @typedef {import("./types.js").AccountAccess} AccountAccess */
 
 /**
  * Credential changes outside a sign-in: a GitHub token found invalid, the

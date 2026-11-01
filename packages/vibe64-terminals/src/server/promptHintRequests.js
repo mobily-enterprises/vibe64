@@ -24,8 +24,8 @@ import {
 } from "./promptHintRules.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./promptHintState.js").createPromptHintState>} PromptHintState */
-/** @typedef {ReturnType<typeof import("./promptHintContext.js").createPromptHintContext>} PromptHintContext */
+/** @typedef {import("./types.js").PromptHintState} PromptHintState */
+/** @typedef {import("./types.js").PromptHintContext} PromptHintContext */
 /** @typedef {ReturnType<typeof import("./promptHintJobs.js").createPromptHintJobs>} PromptHintJobs */
 
 /**

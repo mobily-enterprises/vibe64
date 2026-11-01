@@ -5,9 +5,9 @@ import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { currentProjectRequestContext, currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
 import { text } from "./trimmedText.js";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-project/server/actions").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/** @typedef {import("@local/vibe64-project/server/types").PublishProjectChanged} PublishProjectChanged */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 // A team member's main-chat messages wait here, in the chat's own state, until

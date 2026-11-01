@@ -11,9 +11,9 @@ import { publicSession, sessionResult } from "./sessionResults.js";
 import { text } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./sessionPresence.js").createSessionPresenceService>} SessionPresenceService */
+/** @typedef {import("./types.js").SessionPresenceService} SessionPresenceService */
 
 function conversationPageOptions(options = {}) {
   const limit = Number.parseInt(String(options.limit || ""), 10);

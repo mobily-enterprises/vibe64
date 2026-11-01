@@ -3,7 +3,7 @@ import {
   currentActorUser
 } from "@local/vibe64-execution/server";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
 function cleanText(value = "") {
   return String(value || "").replace(/\s+/gu, " ").trim();

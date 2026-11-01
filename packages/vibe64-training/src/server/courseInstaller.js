@@ -9,7 +9,7 @@ import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingContent } from "./installedContent.js";
 import { causedFailure } from "./errors.js";
 
-/** @typedef {ReturnType<typeof import("./installedCatalogue.js").createInstalledTrainingCatalogue>} InstalledTrainingCatalogue */
+/** @typedef {import("./types.js").InstalledTrainingCatalogue} InstalledTrainingCatalogue */
 
 // The official catalogue is the only source this facility reads. Arbitrary
 // repositories, local directories and author snapshots stay with the operator

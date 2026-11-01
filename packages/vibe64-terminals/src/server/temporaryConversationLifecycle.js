@@ -15,11 +15,11 @@ import {
   routingRequest
 } from "./temporaryConversationRules.js";
 
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
-/** @typedef {ReturnType<typeof import("./assistantRouting.js").createAssistantRouting>} AssistantRouting */
-/** @typedef {ReturnType<typeof import("./temporaryConversationRecords.js").createTemporaryConversationRecords>} TemporaryConversationRecords */
-/** @typedef {ReturnType<typeof import("./temporaryConversationTurns.js").createTemporaryConversationTurns>} TemporaryConversationTurns */
+/** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
+/** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
+/** @typedef {import("./types.js").TemporaryConversationTurns} TemporaryConversationTurns */
 
 /**
  * A temporary chat from creation to Close: creating, listing and reading chats, stopping a turn,

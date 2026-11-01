@@ -26,12 +26,12 @@ import { trimmedText as normalizeText } from "./trimmedText.js";
 import { isRecord } from "./isRecord.js";
 import { hasOwn } from "./hasOwn.js";
 
-/** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
-/** @typedef {ReturnType<typeof import("./codexHelperPreparation.js").createCodexHelperPreparation>} CodexHelperPreparation */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
-/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
+/** @typedef {import("./types.js").CodexConversationPreparation} CodexConversationPreparation */
+/** @typedef {import("./types.js").CodexHelperPreparation} CodexHelperPreparation */
+/** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
+/** @typedef {import("./types.js").CodexSessionRuntimeHost} CodexSessionRuntimeHost */
+/** @typedef {import("./types.js").CodexAccountPreparation} CodexAccountPreparation */
+/** @typedef {import("./types.js").CodexSessionEnvironment} CodexSessionEnvironment */
 
 const CODEX_APP_SERVER_EPHEMERAL_PROGRESS_LIMIT = 24;
 

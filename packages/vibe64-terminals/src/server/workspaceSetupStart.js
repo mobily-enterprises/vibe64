@@ -22,8 +22,8 @@ import {
 } from "./workspaceSetupRules.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./workspaceSetupRunnerState.js").createWorkspaceSetupRunnerState>} WorkspaceSetupRunnerState */
-/** @typedef {ReturnType<typeof import("./workspaceSetupExecution.js").createWorkspaceSetupExecution>} WorkspaceSetupExecution */
+/** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
+/** @typedef {import("./types.js").WorkspaceSetupExecution} WorkspaceSetupExecution */
 /** @typedef {ReturnType<typeof import("./workspaceSetupMigration.js").createWorkspaceSetupMigration>} WorkspaceSetupMigration */
 
 /**

@@ -3,16 +3,20 @@ import { assertProjectDirectoryUsable } from "@local/vibe64-core/server/studioPr
 import { bindingValuePresent, requiredAlternative } from "./resourceEnvironment.js";
 import { runProjectSourceExclusive as runProjectSourceMutationExclusive } from "./projectSourceMutationLock.js";
 
+/** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
+/** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
+/** @typedef {import("./types.js").ProjectEnvironment} ProjectEnvironment */
+
 /**
  * A session's onboarding: what the project's source is ready for, the starters it may
  * take with the Env they still need, and applying one.
  * @param {object} dependencies
  * @param {typeof import("@local/vibe64-genesis/server").applyGenesisTemplate} dependencies.applyTemplate
- * @param {ReturnType<typeof import("./projectEnvironment.js").createProjectEnvironment>} dependencies.environment
+ * @param {ProjectEnvironment} dependencies.environment
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisProject} dependencies.inspectProject
  * @param {typeof import("@local/vibe64-genesis/server").listGenesisTemplates} dependencies.listTemplates
- * @param {ReturnType<typeof import("./projectSelection.js").createProjectSelection>} dependencies.selection
- * @param {ReturnType<typeof import("./projectSessionWork.js").createProjectSessionWork>} dependencies.sessionWork
+ * @param {ProjectSelection} dependencies.selection
+ * @param {ProjectSessionWork} dependencies.sessionWork
  */
 function createProjectOnboarding({ applyTemplate, environment, inspectProject, listTemplates, selection, sessionWork }) {
   async function projectOnboardingState(input = {}) {

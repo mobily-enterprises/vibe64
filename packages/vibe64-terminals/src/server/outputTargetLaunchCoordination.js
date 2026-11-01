@@ -7,10 +7,10 @@ import { outputTargetTerminalNamespace } from "./terminalShared.js";
 import { ensureLaunchPreviewProxy, markLaunchTerminalReady } from "./launchPreviewReadiness.js";
 import { resolveLaunchPreviewStatus } from "./launchPreviewStatus.js";
 
-/** @typedef {ReturnType<typeof import("./outputTargetTerminalState.js").createOutputTargetTerminalState>} OutputTargetTerminalState */
+/** @typedef {import("./types.js").OutputTargetTerminalState} OutputTargetTerminalState */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 // One write per key at a time: a second request for the key shares the write
 // in flight, and the key is free again once that write settles.

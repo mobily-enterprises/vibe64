@@ -9,16 +9,19 @@ import {
   runProjectSessionPolicyExclusive as runProjectSessionPolicyMutationExclusive
 } from "./projectSourceMutationLock.js";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
+/** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
+/** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
+/** @typedef {import("./types.js").ProjectServiceSlots} ProjectServiceSlots */
 
 /**
  * The selected project's development database: whether a host manages it, the managed
  * project database's name, the policy open sessions allow, and saving its scope.
  * @param {object} dependencies
  * @param {StudioProjectContext} dependencies.projectContext
- * @param {ReturnType<typeof import("./projectSelection.js").createProjectSelection>} dependencies.selection
- * @param {ReturnType<typeof import("./projectSessionWork.js").createProjectSessionWork>} dependencies.sessionWork
- * @param {ReturnType<typeof import("./projectServiceSlots.js").createProjectServiceSlots>} dependencies.slots
+ * @param {ProjectSelection} dependencies.selection
+ * @param {ProjectSessionWork} dependencies.sessionWork
+ * @param {ProjectServiceSlots} dependencies.slots
  */
 function createProjectDevelopmentDatabase({ projectContext, selection, sessionWork, slots }) {
   async function currentDevelopmentDatabaseScope() {

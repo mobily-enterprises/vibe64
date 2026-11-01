@@ -16,8 +16,8 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { read, failure, recentVisibleMessages } from "./assistantRoutingRequests.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./assistantRoutingRecords.js").createAssistantRoutingRecords>} AssistantRoutingRecords */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
 
 const PROFILE = Object.freeze({
   profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,

@@ -15,9 +15,9 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { trimmedText as normalizeText } from "./trimmedText.js";
 import { isRecord } from "./isRecord.js";
 
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
-/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
+/** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
+/** @typedef {import("./types.js").CodexAccountPreparation} CodexAccountPreparation */
+/** @typedef {import("./types.js").CodexSessionEnvironment} CodexSessionEnvironment */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 

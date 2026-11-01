@@ -14,8 +14,8 @@ import { accountDebugSummary, authDebug } from "./accountsDebug.js";
 import { ACCOUNT_AUTH_NAMESPACE, parseAuthOutput, publicAuthSession } from "./authCommands.js";
 
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
-/** @typedef {ReturnType<typeof import("./accountStatusReads.js").createAccountStatusReads>} AccountStatusReads */
-/** @typedef {ReturnType<typeof import("./accountAccess.js").createAccountAccess>} AccountAccess */
+/** @typedef {import("./types.js").AccountStatusReads} AccountStatusReads */
+/** @typedef {import("./types.js").AccountAccess} AccountAccess */
 /** @typedef {ReturnType<typeof createAuthSessionState>} AuthSessionState */
 
 // The sign-in sessions this process started or found, shared by their readers

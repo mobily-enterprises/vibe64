@@ -9,10 +9,10 @@ import { readLearningFact } from "./learningFacts.js";
 import { availableStepIds } from "./lessonAvailability.js";
 import { trainingFailure } from "./errors.js";
 
-/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
-/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
-/** @typedef {ReturnType<typeof import("./declaredCheck.js").createTrainingDeclaredCheckOwner>} TrainingDeclaredCheckOwner */
-/** @typedef {ReturnType<typeof import("./codeAuthorship.js").createTrainingCodeAuthorship>} TrainingCodeAuthorship */
+/** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
+/** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
+/** @typedef {import("./types.js").TrainingDeclaredCheckOwner} TrainingDeclaredCheckOwner */
+/** @typedef {import("./types.js").TrainingCodeAuthorship} TrainingCodeAuthorship */
 /** @typedef {ReturnType<typeof import("./stepEvidence.js").createTrainingStepEvidence>} TrainingStepEvidence */
 /** @typedef {ReturnType<typeof import("./stepReview.js").createTrainingStepReviewer>} TrainingStepReviewer */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */

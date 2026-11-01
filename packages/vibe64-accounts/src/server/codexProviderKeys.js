@@ -3,8 +3,8 @@ import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/co
 import { accountsResult } from "./accountRecords.js";
 
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
-/** @typedef {ReturnType<typeof import("./modelRouting.js").createModelRouting>} ModelRouting */
-/** @typedef {ReturnType<typeof import("./accountAccess.js").createAccountAccess>} AccountAccess */
+/** @typedef {import("./types.js").ModelRouting} ModelRouting */
+/** @typedef {import("./types.js").AccountAccess} AccountAccess */
 
 /**
  * Codex model provider keys whoever manages AI saves or removes; a saved key

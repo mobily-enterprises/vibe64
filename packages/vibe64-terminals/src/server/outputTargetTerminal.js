@@ -25,8 +25,9 @@ import { createOutputTargetTerminalSessions } from "./outputTargetTerminalSessio
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("./types.js").ProjectServices} ProjectServices */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").ProjectServicesEnsure} ProjectServicesEnsure */
 
 // Without a browser owner there are no managed Preview browsers to stop.
 const stopNoPreviewBrowsers = async () => ({ ok: true });
@@ -37,7 +38,7 @@ const stopNoPreviewBrowsers = async () => ({ ok: true });
  * by name.
  * @param {object} dependencies
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
- * @param {ProjectServices["ensure"]} dependencies.ensureProjectServices
+ * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
  * @param {RuntimeEnv} [dependencies.env]
  * @param {ProjectService} dependencies.projectService
  * @param {PublishSessionChanged} dependencies.publishSessionChanged

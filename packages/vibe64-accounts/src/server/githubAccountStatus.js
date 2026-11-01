@@ -20,7 +20,7 @@ import { hostCommandOptionsForCredentialContext, hostCommandResultOutput } from 
 import { accountConnected, accountDisconnected } from "./accountRecords.js";
 import { REQUIRED_GITHUB_SCOPES } from "./authCommands.js";
 
-/** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64AccountsChangedPublisher>} PublishAccountChanged */
+/** @typedef {import("./types.js").PublishAccountChanged} PublishAccountChanged */
 
 // GitHub's account status: live gh and Git checks with transient retries, the
 // stored status a logout or a rejected token records, and the remembered identity.

@@ -57,17 +57,17 @@ import { createServiceProjectRuntime } from "./serviceProjectRuntime.js";
 import { createServiceShutdown } from "./serviceShutdown.js";
 import { createServiceHostSlots } from "./serviceHostSlots.js";
 
-/** @typedef {ReturnType<typeof import("./serviceGoals.js").createServiceGoals>} ServiceGoals */
-/** @typedef {ReturnType<typeof import("./serviceAssistant.js").createServiceAssistant>} ServiceAssistant */
+/** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
+/** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
 /** @typedef {ReturnType<typeof import("./serviceMainConversationHost.js").createServiceMainConversationHost>} ServiceMainConversationHost */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./events.js").createProjectRuntimeChangedPublisher>} ProjectRuntimeChangedPublisher */
-/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
+/** @typedef {import("./types.js").ProjectRuntimeChangedPublisher} ProjectRuntimeChangedPublisher */
+/** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
-/** @typedef {ReturnType<typeof import("./events.js").createTerminalSessionChangedPublishers>} TerminalSessionChangedPublishers */
+/** @typedef {import("./types.js").TerminalSessionChangedPublishers} TerminalSessionChangedPublishers */
 
 /**
  * @param {object} input

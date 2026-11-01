@@ -3,10 +3,10 @@ import { failure } from "./colleagueFailure.js";
 import { colleagueBrowserState, releaseObserver } from "./colleaguePresentation.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
-/** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
-/** @typedef {ReturnType<typeof import("./colleagueRecords.js").createColleagueRecords>} ColleagueRecords */
-/** @typedef {ReturnType<typeof import("./colleagueThreads.js").createColleagueThreads>} ColleagueThreads */
-/** @typedef {ReturnType<typeof import("./colleagueConversations.js").createColleagueConversations>} ColleagueConversations */
+/** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
+/** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
+/** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
+/** @typedef {import("./types.js").ColleagueConversations} ColleagueConversations */
 
 /**
  * The browser's view of a person's current Colleague conversation: reading,

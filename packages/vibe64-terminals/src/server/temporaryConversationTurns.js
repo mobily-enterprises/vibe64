@@ -16,11 +16,11 @@ import {
 } from "./mainConversationBinding.js";
 import { requireSuccess, routingRequest, presentation } from "./temporaryConversationRules.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
-/** @typedef {ReturnType<typeof import("./sessionAttachments.js").createSessionAttachments>} SessionAttachments */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
-/** @typedef {ReturnType<typeof import("./temporaryConversationRecords.js").createTemporaryConversationRecords>} TemporaryConversationRecords */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").TemporaryConversationRecords} TemporaryConversationRecords */
 
 /**
  * A temporary chat's turns on the shared conversation runtime: the facilities it lends that runtime,

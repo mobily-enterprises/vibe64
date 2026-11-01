@@ -13,7 +13,7 @@ import { colleagueHistoryMessages, publicWatch, releaseObserver } from "./collea
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
+/** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
 
 // Learn threads teach; only Develop delegates work. Develop can still read and
 // switch the mode for the person. Learn threads watch only their lesson's

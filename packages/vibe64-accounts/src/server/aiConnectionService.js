@@ -4,7 +4,7 @@ import { assistantProviderPolicy } from "./assistantProviderPolicy.js";
 import { readAllOpenCodeCapabilityRows } from "./opencodeCatalogPages.js";
 import { runLoggedAccountChange } from "./accountChangeLog.js";
 
-/** @typedef {ReturnType<typeof import("./aiConnectionStore.js").createAiConnectionStore>} AiConnectionStore */
+/** @typedef {import("./types.js").AiConnectionStore} AiConnectionStore */
 /** @typedef {import("./types.js").AccountsService} AccountsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 

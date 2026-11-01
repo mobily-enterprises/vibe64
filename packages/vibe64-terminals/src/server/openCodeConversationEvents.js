@@ -12,9 +12,9 @@ import { conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID } from 
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
-/** @typedef {ReturnType<typeof import("./openCodeConversationPresentation.js").createOpenCodeConversationPresentation>} OpenCodeConversationPresentation */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
+/** @typedef {import("./types.js").OpenCodeConversationPresentation} OpenCodeConversationPresentation */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 function openCodeMessageError(message = {}) {
   const failure = readOpenCodeMessageError(message);

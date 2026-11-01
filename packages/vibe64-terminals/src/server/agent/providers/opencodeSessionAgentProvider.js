@@ -13,15 +13,15 @@ import {
 import { OPENCODE_EXPECTED_VERSION, throwVibe64OpenCodeError as runtimeFailure } from "../../opencodeServerProcess.js";
 import { openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "../../terminalShared.js";
 
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
-/** @typedef {ReturnType<typeof import("../../opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {import("../../types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
+/** @typedef {import("../../types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
 /** @typedef {ReturnType<typeof import("../../openCodeConversationAccounts.js").createOpenCodeConversationAccounts>} OpenCodeConversationAccounts */
-/** @typedef {ReturnType<typeof import("../../mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {import("../../types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
 /** @typedef {ReturnType<typeof import("../../openCodeScopedPreparation.js").createOpenCodeScopedPreparation>} OpenCodeScopedPreparation */
 /** @typedef {ReturnType<typeof import("../../openCodeLifecyclePreparation.js").createOpenCodeLifecyclePreparation>} OpenCodeLifecyclePreparation */
 /** @typedef {ReturnType<typeof import("../../sessionRenewalReceipts.js").createOpenCodeSessionRenewalPreparation>} OpenCodeSessionRenewalPreparation */
 /** @typedef {ReturnType<typeof import("../../openCodeInteractiveTerminals.js").createOpenCodeInteractiveTerminals>} OpenCodeInteractiveTerminals */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 const OPENCODE_HELPER_PROFILE_REVISION =
   `opencode-${OPENCODE_EXPECTED_VERSION}-selected-model-tool-free-v1`;

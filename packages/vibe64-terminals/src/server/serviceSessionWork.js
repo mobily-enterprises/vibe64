@@ -27,16 +27,16 @@ import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLo
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 
-/** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
-/** @typedef {ReturnType<typeof import("./serviceWorkspacePreparation.js").createServiceWorkspacePreparation>} ServiceWorkspacePreparation */
+/** @typedef {import("./types.js").ServiceState} ServiceState */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceWorkspacePreparation} ServiceWorkspacePreparation */
 /** @typedef {ReturnType<typeof import("./serviceAgentConversations.js").createServiceAgentConversations>} ServiceAgentConversations */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./workspaceSetup.js").createWorkspaceSetupRunner>} WorkspaceSetupRunner */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 
 /**
  * A session's work in its repository: the work execution, saving and its recovery, updates and

@@ -17,7 +17,7 @@ import { resolveSourceConfigRoot } from "@local/vibe64-core/server/projectState"
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
 function publicProject(project = {}, {
   context = null,

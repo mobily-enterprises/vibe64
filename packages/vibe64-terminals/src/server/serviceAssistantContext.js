@@ -2,7 +2,7 @@ import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL } from "./assistantContr
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 
 /**

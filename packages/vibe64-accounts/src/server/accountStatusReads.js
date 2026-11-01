@@ -25,10 +25,11 @@ import { readGithubAccountStatus, readGithubStatus } from "./githubAccountStatus
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/personalAiProfile").createPersonalAiProfileStore>} PersonalAiProfileStore */
+/** @typedef {import("@local/vibe64-core/server/types").PersonalAiProfileStore} PersonalAiProfileStore */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./accountAccess.js").createAccountAccess>} AccountAccess */
+/** @typedef {import("./types.js").AccountAccess} AccountAccess */
 /** @typedef {ReturnType<typeof import("./codexAccountStatus.js").createCodexAccountStatus>} CodexAccountStatus */
+/** @typedef {import("./types.js").TerminalsReadClaudeAccountStatus} TerminalsReadClaudeAccountStatus */
 
 /**
  * What Accounts shows: each account's status row, every row of a status
@@ -40,7 +41,7 @@ import { readGithubAccountStatus, readGithubStatus } from "./githubAccountStatus
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
  * @param {PersonalAiProfileStore | null} dependencies.personalProfileStore
- * @param {TerminalsService["readClaudeAccountStatus"] | null} dependencies.readClaudeAccountStatus
+ * @param {TerminalsReadClaudeAccountStatus | null} dependencies.readClaudeAccountStatus
  */
 function createAccountStatusReads({ access, accountRuntime, codexStatus, env, logger, personalProfileStore, readClaudeAccountStatus }) {
   async function readClaudeStatus() {

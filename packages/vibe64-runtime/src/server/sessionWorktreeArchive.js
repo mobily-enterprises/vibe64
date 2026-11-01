@@ -30,7 +30,7 @@ import {
   validateRecoveryBundle
 } from "./sessionSourceRecovery.js";
 
-/** @typedef {ReturnType<typeof import("./sessionStore.js").createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 
 async function validateCleanRenewalRecovery({
   details = {},

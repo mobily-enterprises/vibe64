@@ -19,10 +19,10 @@ import {
   samePromptHintBasis
 } from "./promptHintRules.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
-/** @typedef {ReturnType<typeof import("./promptHintState.js").createPromptHintState>} PromptHintState */
-/** @typedef {ReturnType<typeof import("./promptHintContext.js").createPromptHintContext>} PromptHintContext */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").PromptHintState} PromptHintState */
+/** @typedef {import("./types.js").PromptHintContext} PromptHintContext */
 
 /**
  * Prompt hint jobs: one helper turn per basis and identity, shared by every

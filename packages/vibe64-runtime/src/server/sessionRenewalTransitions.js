@@ -11,14 +11,14 @@ import {
 } from "./sessionRecordRules.js";
 import { metadataFilePath, toDate } from "./sessionStoreLayout.js";
 
-/** @typedef {ReturnType<typeof import("./sessionStoreState.js").createSessionStoreState>} SessionStoreState */
-/** @typedef {ReturnType<typeof import("./sessionStorePaths.js").createSessionStorePaths>} SessionStorePaths */
-/** @typedef {ReturnType<typeof import("./sessionStoreLocks.js").createSessionStoreLocks>} SessionStoreLocks */
-/** @typedef {ReturnType<typeof import("./sessionRecordFiles.js").createSessionRecordFiles>} SessionRecordFiles */
-/** @typedef {ReturnType<typeof import("./sessionArchiveRecords.js").createSessionArchiveRecords>} SessionArchiveRecords */
-/** @typedef {ReturnType<typeof import("./sessionArchiveAccess.js").createSessionArchiveAccess>} SessionArchiveAccess */
-/** @typedef {ReturnType<typeof import("./sessionRecords.js").createSessionRecords>} SessionRecords */
-/** @typedef {ReturnType<typeof import("./sessionRenewalArchives.js").createSessionRenewalArchives>} SessionRenewalArchives */
+/** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
+/** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
+/** @typedef {import("./types.js").SessionStoreLocks} SessionStoreLocks */
+/** @typedef {import("./types.js").SessionRecordFiles} SessionRecordFiles */
+/** @typedef {import("./types.js").SessionArchiveRecords} SessionArchiveRecords */
+/** @typedef {import("./types.js").SessionArchiveAccess} SessionArchiveAccess */
+/** @typedef {import("./types.js").SessionRecords} SessionRecords */
+/** @typedef {import("./types.js").SessionRenewalArchives} SessionRenewalArchives */
 
 /**
  * A renewal's session status changes: quiesce and restore the source session,

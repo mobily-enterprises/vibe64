@@ -5,7 +5,7 @@ import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../shared/projectWatch.js"
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/realtime/server/types").RuntimeRealtime} RuntimeRealtime */
-/** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
+/** @typedef {import("./types.js").RepositoryUpdateProbe} RepositoryUpdateProbe */
 /** @typedef {{ current: () => boolean, hold: (detach: () => void) => void, join: (room: string) => void }} WatchBinding */
 
 const PROJECT_WATCH_ACTION = "vibe64.sessions.project.watch";

@@ -26,13 +26,13 @@ import {
   sessionArchiveRecordExists
 } from "./sessionStoreLayout.js";
 
-/** @typedef {ReturnType<typeof import("./sessionStoreState.js").createSessionStoreState>} SessionStoreState */
-/** @typedef {ReturnType<typeof import("./sessionStorePaths.js").createSessionStorePaths>} SessionStorePaths */
-/** @typedef {ReturnType<typeof import("./sessionStoreLocks.js").createSessionStoreLocks>} SessionStoreLocks */
-/** @typedef {ReturnType<typeof import("./sessionRecordFiles.js").createSessionRecordFiles>} SessionRecordFiles */
-/** @typedef {ReturnType<typeof import("./sessionArchiveRecords.js").createSessionArchiveRecords>} SessionArchiveRecords */
-/** @typedef {ReturnType<typeof import("./sessionArchiveAccess.js").createSessionArchiveAccess>} SessionArchiveAccess */
-/** @typedef {ReturnType<typeof import("./sessionArchivePublishing.js").createSessionArchivePublishing>} SessionArchivePublishing */
+/** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
+/** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
+/** @typedef {import("./types.js").SessionStoreLocks} SessionStoreLocks */
+/** @typedef {import("./types.js").SessionRecordFiles} SessionRecordFiles */
+/** @typedef {import("./types.js").SessionArchiveRecords} SessionArchiveRecords */
+/** @typedef {import("./types.js").SessionArchiveAccess} SessionArchiveAccess */
+/** @typedef {import("./types.js").SessionArchivePublishing} SessionArchivePublishing */
 
 /**
  * The archive side of a renewal: prepares, commits, finalizes and restores

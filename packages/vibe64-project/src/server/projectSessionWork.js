@@ -5,12 +5,15 @@ import {
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 
+/** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
+/** @typedef {import("./types.js").ProjectEnvironment} ProjectEnvironment */
+
 /**
  * The selected project's session runtime, and source work that holds a session's
  * agent write lock while it runs.
  * @param {object} dependencies
- * @param {ReturnType<typeof import("./projectEnvironment.js").createProjectEnvironment>} dependencies.environment
- * @param {ReturnType<typeof import("./projectSelection.js").createProjectSelection>} dependencies.selection
+ * @param {ProjectEnvironment} dependencies.environment
+ * @param {ProjectSelection} dependencies.selection
  */
 function createProjectSessionWork({ environment, selection }) {
   async function runSessionSourceWorkExclusive(input = {}, operation, operationName = "project-source-write", {

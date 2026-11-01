@@ -12,6 +12,9 @@ import {
 } from "./previewApplicationIdentities.js";
 import { runProjectSourceExclusive as runProjectSourceMutationExclusive } from "./projectSourceMutationLock.js";
 
+/** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
+/** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
+
 /**
  * Project settings kept in the project's source: connected projects, collaboration
  * guidance, prompt suggestions, the engineering profile and Preview identities, with
@@ -20,8 +23,8 @@ import { runProjectSourceExclusive as runProjectSourceMutationExclusive } from "
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisCollaboration} dependencies.inspectCollaboration
  * @param {(fullName: string, input: object) => Promise<object>} dependencies.inspectConnectedRepository
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisEngineering} dependencies.inspectEngineering
- * @param {ReturnType<typeof import("./projectSelection.js").createProjectSelection>} dependencies.selection
- * @param {ReturnType<typeof import("./projectSessionWork.js").createProjectSessionWork>} dependencies.sessionWork
+ * @param {ProjectSelection} dependencies.selection
+ * @param {ProjectSessionWork} dependencies.sessionWork
  * @param {typeof import("@local/vibe64-genesis/server").setGenesisCollaboration} dependencies.setCollaboration
  * @param {typeof import("@local/vibe64-genesis/server").setGenesisEngineeringProfile} dependencies.setEngineeringProfile
  */

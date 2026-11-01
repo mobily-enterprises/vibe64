@@ -17,17 +17,18 @@ import { createSessionWorkRecovery } from "./sessionWorkRecovery.js";
 import { createSessionWorkspaceSetup } from "./sessionWorkspaceSetup.js";
 import { text } from "./trimmedText.js";
 
-/** @typedef {ReturnType<typeof import("./sessionPresence.js").createSessionPresenceService>} SessionPresenceService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-project/server/actions").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/** @typedef {import("./types.js").SessionPresenceService} SessionPresenceService */
+/** @typedef {import("@local/vibe64-project/server/types").PublishProjectChanged} PublishProjectChanged */
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
-/** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
+/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 /** @typedef {(actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>} RenewalActorResolver */
+/** @typedef {import("./types.js").AccountsInitializeModelRouting} AccountsInitializeModelRouting */
 
 /** @param {RenewalActorResolver | null} resolver */
 function assertRenewalActorResolver(resolver) {
@@ -42,7 +43,7 @@ function assertRenewalActorResolver(resolver) {
  * of the session that owns it.
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
- * @param {AccountsService["initializeModelRouting"]} dependencies.initializeModelRouting
+ * @param {AccountsInitializeModelRouting} dependencies.initializeModelRouting
  * @param {ProjectService} dependencies.project
  * @param {PublishProjectChanged} dependencies.publishProjectChanged
  * @param {PublishSessionChanged} dependencies.publishSessionChanged

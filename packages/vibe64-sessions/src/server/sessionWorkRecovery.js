@@ -4,8 +4,8 @@ import { text } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
-/** @typedef {ReturnType<typeof import("./sessionWorkOperations.js").createSessionWorkOperations>} SessionWorkOperations */
-/** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createSessionWorkspaceSetup>} SessionWorkspaceSetup */
+/** @typedef {import("./types.js").SessionWorkOperations} SessionWorkOperations */
+/** @typedef {import("./types.js").SessionWorkspaceSetup} SessionWorkspaceSetup */
 
 /**
  * Save and Update records that outlived their operation: an interrupted one

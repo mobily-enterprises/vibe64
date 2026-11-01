@@ -5,7 +5,7 @@ import {
   assistantWorkflowMessageIds
 } from "@local/vibe64-runtime/shared/assistantRouting";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
 const STATE_KEY = "assistant_routing_request";
 // Messages the person cancelled in this chat, newest last and bounded. A send

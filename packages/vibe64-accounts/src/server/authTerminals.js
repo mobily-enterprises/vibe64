@@ -35,11 +35,11 @@ import {
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
-/** @typedef {ReturnType<typeof import("./authSessionViews.js").createAuthSessionViews>} AuthSessionViews */
-/** @typedef {ReturnType<typeof import("./accountStatusReads.js").createAccountStatusReads>} AccountStatusReads */
-/** @typedef {ReturnType<typeof import("./modelRouting.js").createModelRouting>} ModelRouting */
+/** @typedef {import("./types.js").AuthSessionViews} AuthSessionViews */
+/** @typedef {import("./types.js").AccountStatusReads} AccountStatusReads */
+/** @typedef {import("./types.js").ModelRouting} ModelRouting */
 /** @typedef {ReturnType<typeof import("./authSessionViews.js").createAuthSessionState>} AuthSessionState */
-/** @typedef {ReturnType<typeof import("./accountAccess.js").createAccountAccess>} AccountAccess */
+/** @typedef {import("./types.js").AccountAccess} AccountAccess */
 
 /**
  * Sign-in terminals: starting one for an account, and finishing its account

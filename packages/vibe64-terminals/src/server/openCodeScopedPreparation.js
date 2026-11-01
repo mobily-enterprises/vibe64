@@ -13,10 +13,11 @@ import { openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./ter
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
-/** @typedef {ReturnType<typeof import("./openCodeConversationEvents.js").createOpenCodeConversationEvents>} OpenCodeConversationEvents */
-/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
+/** @typedef {import("./types.js").OpenCodeConversationEvents} OpenCodeConversationEvents */
+/** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").OpenCodeMainMessagePreparationContextFor} OpenCodeMainMessagePreparationContextFor */
 
 function openCodeExecutionProfile(input = {}) {
   if (!input?.executionProfile) {
@@ -80,7 +81,7 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
 /**
  * @param {object} dependencies
  * @param {ProjectService} dependencies.projectService
- * @param {OpenCodeMainMessagePreparation["contextFor"]} dependencies.contextFor
+ * @param {OpenCodeMainMessagePreparationContextFor} dependencies.contextFor
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
  * @param {OpenCodeConversationEvents} dependencies.events
  * @param {PublishSessionChanged} dependencies.publishSessionChanged

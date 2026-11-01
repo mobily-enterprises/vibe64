@@ -19,10 +19,10 @@ import {
   recentVisibleMessages
 } from "./assistantRoutingRequests.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./assistantRoutingState.js").createAssistantRoutingState>} AssistantRoutingState */
-/** @typedef {ReturnType<typeof import("./assistantRoutingRecords.js").createAssistantRoutingRecords>} AssistantRoutingRecords */
-/** @typedef {ReturnType<typeof import("./assistantRoutingDecisions.js").createAssistantRoutingDecisions>} AssistantRoutingDecisions */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
+/** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
+/** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
 
 /**
  * Delivery of a routed request, or of its follow-up, to the chosen AI, and the attribution its turn carries.

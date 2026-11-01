@@ -10,8 +10,8 @@ import { codeStepOf, readDeclaredFiles, verifyStepAuthorship } from "./codeAutho
 import { trainingFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
-/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
-/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
+/** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 

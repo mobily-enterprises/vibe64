@@ -28,15 +28,15 @@ import { createTrainingVisualResourceActions } from "./visualResourceActions.js"
 import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js";
 import { aiReadyFact, registerLearningFact } from "./learningFacts.js";
 
-/** @typedef {ReturnType<typeof import("./installedCatalogue.js").createInstalledTrainingCatalogue>} InstalledTrainingCatalogue */
+/** @typedef {import("./types.js").InstalledTrainingCatalogue} InstalledTrainingCatalogue */
 /** @typedef {ReturnType<typeof import("./courseInstaller.js").createTrainingCourseInstaller>} TrainingCourseInstaller */
-/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
-/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
+/** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {ReturnType<typeof import("./preparation.js").createTrainingService>} TrainingExercises */
-/** @typedef {ReturnType<typeof import("./declaredCheck.js").createTrainingDeclaredCheckOwner>} TrainingDeclaredCheckOwner */
-/** @typedef {ReturnType<typeof import("./codeAuthorship.js").createTrainingCodeAuthorship>} TrainingCodeAuthorship */
+/** @typedef {import("./types.js").TrainingDeclaredCheckOwner} TrainingDeclaredCheckOwner */
+/** @typedef {import("./types.js").TrainingCodeAuthorship} TrainingCodeAuthorship */
 /** @typedef {ReturnType<typeof import("./stepChecks.js").createTrainingStepChecks>} TrainingStepChecks */
-/** @typedef {ReturnType<typeof import("./learningSpace.js").createTrainingLearningSpace>} TrainingLearningSpace */
+/** @typedef {import("./types.js").TrainingLearningSpace} TrainingLearningSpace */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */

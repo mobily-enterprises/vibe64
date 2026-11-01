@@ -42,10 +42,12 @@ import { createModelRouting } from "./modelRouting.js";
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/personalAiProfile").createPersonalAiProfileStore>} PersonalAiProfileStore */
-/** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64AccountsChangedPublisher>} PublishAccountChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PersonalAiProfileStore} PersonalAiProfileStore */
+/** @typedef {import("./types.js").PublishAccountChanged} PublishAccountChanged */
 /** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64AccountAuthSessionChangedPublisher>} PublishAuthSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").TerminalsReadClaudeAccountStatus} TerminalsReadClaudeAccountStatus */
+/** @typedef {import("./types.js").TerminalsInspectAssistantRoutingConfiguration} TerminalsInspectAssistantRoutingConfiguration */
 /**
  * How the service tells the rest of Vibe64 that an account changed: pages hear
  * account and sign-in session events, and agents drop what they cached.
@@ -64,10 +66,10 @@ import { createModelRouting } from "./modelRouting.js";
  * @param {TerminalsService["invalidateAgentRuntimes"]} dependencies.invalidateAgentRuntimes
  * @param {RuntimeLogger} dependencies.logger
  * @param {PersonalAiProfileStore | null} dependencies.personalProfileStore
- * @param {TerminalsService["inspectAssistantRoutingConfiguration"] | null} dependencies.inspectRoutingConfiguration
+ * @param {TerminalsInspectAssistantRoutingConfiguration | null} dependencies.inspectRoutingConfiguration
  * @param {PublishAccountChanged} dependencies.publishAccountChanged
  * @param {PublishAuthSessionChanged} dependencies.publishAuthSessionChanged
- * @param {TerminalsService["readClaudeAccountStatus"] | null} dependencies.readClaudeAccountStatus
+ * @param {TerminalsReadClaudeAccountStatus | null} dependencies.readClaudeAccountStatus
  * @param {typeof runDefaultHostCommand} [dependencies.runHostToolCommand]
  * @param {typeof runVibe64Command} [dependencies.runAuthTerminalCommand]
  */

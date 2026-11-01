@@ -13,7 +13,7 @@ import {
 } from "@local/vibe64-runtime/server/sessionStore";
 import { clonedDefaultBranchProof, deleteClonedDefaultBranch, runGit } from "./sessionSource.js";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
 const OUTCOME_METADATA = "source_default_branch_local";
 // Renewal and archive states own their checkout until they finish.

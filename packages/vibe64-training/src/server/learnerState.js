@@ -50,7 +50,7 @@ import { createLearnerCodeLedgers } from "./learnerCodeLedgers.js";
 import { createLearnerReviews } from "./learnerReviews.js";
 import { createLearnerSteps } from "./learnerSteps.js";
 
-/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
 
 /**
  * Callers derive actor from fresh authentication and admit a new start against

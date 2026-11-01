@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import { trimmedText as normalizeText } from "./trimmedText.js";
 
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexStartupHealth>} CodexStartupHealth */
+/** @typedef {import("./types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
+/** @typedef {import("./types.js").CodexSessionRuntimeHost} CodexSessionRuntimeHost */
+/** @typedef {import("./types.js").CodexStartupHealth} CodexStartupHealth */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 export const CODEX_APP_SERVER_TASK_ID = "codex_app_server";

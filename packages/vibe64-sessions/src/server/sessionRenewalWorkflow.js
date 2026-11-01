@@ -28,13 +28,13 @@ import {
 } from "./sessionRenewalRules.js";
 import { assertSuccessorSource, ensureSuccessorDiscarding } from "./sessionRenewalSuccessor.js";
 
-/** @typedef {ReturnType<typeof import("./sessionRenewalAdmission.js").createRenewalAdmission>} RenewalAdmission */
+/** @typedef {import("./types.js").RenewalAdmission} RenewalAdmission */
 /** @typedef {ReturnType<typeof import("./sessionRenewalCompletion.js").createRenewalCompletion>} RenewalCompletion */
-/** @typedef {ReturnType<typeof import("./sessionRenewalPredecessor.js").createRenewalPredecessorSession>} RenewalPredecessorSession */
-/** @typedef {ReturnType<typeof import("./sessionRenewalAccess.js").createRenewalSessionAccess>} RenewalSessionAccess */
-/** @typedef {ReturnType<typeof import("./sessionRenewalRestoration.js").createRenewalRestoration>} RenewalRestoration */
-/** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
-/** @typedef {ReturnType<typeof import("./sessionRenewalSuccessor.js").createRenewalSuccessorSession>} RenewalSuccessorSession */
+/** @typedef {import("./types.js").RenewalPredecessorSession} RenewalPredecessorSession */
+/** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */
+/** @typedef {import("./types.js").RenewalRestoration} RenewalRestoration */
+/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
+/** @typedef {import("./types.js").RenewalSuccessorSession} RenewalSuccessorSession */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 

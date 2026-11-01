@@ -24,10 +24,10 @@ import {
 } from "./sessionStoreLayout.js";
 import { enqueueSessionMutation, SESSION_MUTATION_LOCK_WAIT_MS } from "./sessionStoreLocks.js";
 
-/** @typedef {ReturnType<typeof import("./sessionStoreState.js").createSessionStoreState>} SessionStoreState */
-/** @typedef {ReturnType<typeof import("./sessionStorePaths.js").createSessionStorePaths>} SessionStorePaths */
-/** @typedef {ReturnType<typeof import("./sessionStoreLocks.js").createSessionStoreLocks>} SessionStoreLocks */
-/** @typedef {ReturnType<typeof import("./sessionRecords.js").createSessionRecords>} SessionRecords */
+/** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
+/** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
+/** @typedef {import("./types.js").SessionStoreLocks} SessionStoreLocks */
+/** @typedef {import("./types.js").SessionRecords} SessionRecords */
 /** @typedef {ReturnType<typeof import("./sessionListing.js").createSessionListing>} SessionListing */
 
 /**

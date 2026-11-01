@@ -35,16 +35,16 @@ import { createOpenCodeHostPreparation, requireOpenCodeConnection } from "./open
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
-/** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
-/** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
-/** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
-/** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
-/** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
+/** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
+/** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
+/** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
+/** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 /** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
 /** @typedef {typeof import("@local/vibe64-execution/server").inspectVibe64Service} InspectVibe64Service */
 /** @typedef {typeof import("./agentCommandEnvironment.js").prepareAgentSessionCommandEnvironment} PrepareAgentSessionCommandEnvironment */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 const OPENCODE_HELPER_AGENT_ID = "vibe64-helper";
 const OPENCODE_HELPER_SUBAGENT_PREFIX = "vibe64-helper-";

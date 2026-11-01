@@ -11,10 +11,10 @@ import {
 import { waitForPreviewReady } from "./agentPreviewStatusText.js";
 import { doNothing } from "./doNothing.js";
 
-/** @typedef {ReturnType<typeof import("./agentPreviewCommandState.js").createAgentPreviewCommandState>} AgentPreviewCommandState */
-/** @typedef {ReturnType<typeof import("./agentPreviewWorkerRegistry.js").createAgentPreviewWorkerRegistry>} AgentPreviewWorkerRegistry */
-/** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("./types.js").AgentPreviewCommandState} AgentPreviewCommandState */
+/** @typedef {import("./types.js").AgentPreviewWorkerRegistry} AgentPreviewWorkerRegistry */
+/** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {typeof import("@local/vibe64-execution/server").vibe64ManagedExecutionProvider} Vibe64ManagedExecutionProvider */
 /** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64Execution} StopVibe64Execution */
 

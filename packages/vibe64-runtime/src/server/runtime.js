@@ -48,7 +48,7 @@ import {
   sessionSourceRecoveryWasSaved
 } from "./sessionRuntimeChecks.js";
 
-/** @typedef {ReturnType<typeof createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 
 class Vibe64SessionRuntime {
   /**

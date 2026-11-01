@@ -12,9 +12,9 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { withSelection, failure } from "./assistantRoutingRequests.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./assistantRoutingRecords.js").createAssistantRoutingRecords>} AssistantRoutingRecords */
-/** @typedef {ReturnType<typeof import("./assistantRoutingDecisions.js").createAssistantRoutingDecisions>} AssistantRoutingDecisions */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
+/** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
 
 /**
  * A goal's routing: the selection a goal pins, and its rebinding when the chosen model changes.

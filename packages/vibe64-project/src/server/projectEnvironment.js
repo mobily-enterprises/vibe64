@@ -16,6 +16,8 @@ import { normalizeResourceEnvironment, requiredAlternative, resourceSemanticIsSe
 import { SAVED_ENV_VALUE_SOURCE, savedEnvValueRecords } from "./savedEnvValues.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
+/** @typedef {import("./types.js").ProjectServiceSlots} ProjectServiceSlots */
 
 function envScope(input = {}) {
   return input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
@@ -96,8 +98,8 @@ function genesisEnvironmentIsUnconfigured(error) {
  * @param {object} dependencies
  * @param {RuntimeEnv} dependencies.env
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisEnvironment} dependencies.inspectEnvironment
- * @param {ReturnType<typeof import("./projectSelection.js").createProjectSelection>} dependencies.selection
- * @param {ReturnType<typeof import("./projectServiceSlots.js").createProjectServiceSlots>} dependencies.slots
+ * @param {ProjectSelection} dependencies.selection
+ * @param {ProjectServiceSlots} dependencies.slots
  */
 function createProjectEnvironment({ env, inspectEnvironment, selection, slots }) {
   async function userEnvRecords() {

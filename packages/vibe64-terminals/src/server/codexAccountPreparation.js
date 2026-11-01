@@ -10,8 +10,8 @@ import { errorMessage } from "./codexStartupHealth.js";
 import { codexSelectedModelProviderId } from "./codexRuntimeHost.js";
 import { trimmedText as normalizeText } from "./trimmedText.js";
 
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
+/** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
+/** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
 
 function codexReconnectTerminalFailure(error = null) {
   if (error?.code !== CODEX_RECONNECT_REQUIRED_CODE) {

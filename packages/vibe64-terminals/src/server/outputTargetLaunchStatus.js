@@ -13,8 +13,8 @@ import { outputStatusResponseFromPreviewStatus } from "./launchPreviewStatus.js"
 import { readLatestPreviewDiagnostic } from "./launchPreviewDiagnostics.js";
 import { readLaunchContext, listOutputTargets } from "./outputTargetLaunchContext.js";
 
-/** @typedef {ReturnType<typeof import("./outputTargetTerminalState.js").createOutputTargetTerminalState>} OutputTargetTerminalState */
-/** @typedef {ReturnType<typeof import("./outputTargetLaunchCoordination.js").createOutputTargetLaunchCoordination>} OutputTargetLaunchCoordination */
+/** @typedef {import("./types.js").OutputTargetTerminalState} OutputTargetTerminalState */
+/** @typedef {import("./types.js").OutputTargetLaunchCoordination} OutputTargetLaunchCoordination */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 /**

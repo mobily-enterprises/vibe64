@@ -16,9 +16,9 @@ import { createPromptHintContext } from "./promptHintContext.js";
 import { createPromptHintJobs } from "./promptHintJobs.js";
 import { createPromptHintRequests } from "./promptHintRequests.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 /**
  * A project's prompt hints. Each concern is built once, in dependency order,

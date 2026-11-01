@@ -8,11 +8,11 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { failure, readCancelled, read, usesWorkPlan } from "./assistantRoutingRequests.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./assistantRoutingState.js").createAssistantRoutingState>} AssistantRoutingState */
-/** @typedef {ReturnType<typeof import("./assistantRoutingRecords.js").createAssistantRoutingRecords>} AssistantRoutingRecords */
-/** @typedef {ReturnType<typeof import("./assistantRoutingDecisions.js").createAssistantRoutingDecisions>} AssistantRoutingDecisions */
-/** @typedef {ReturnType<typeof import("./assistantRoutingDelivery.js").createAssistantRoutingDelivery>} AssistantRoutingDelivery */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
+/** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
+/** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
+/** @typedef {import("./types.js").AssistantRoutingDelivery} AssistantRoutingDelivery */
 /** @typedef {ReturnType<typeof import("./assistantRoutingCancellation.js").createAssistantRoutingCancellation>} AssistantRoutingCancellation */
 
 /**

@@ -29,13 +29,13 @@ import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
-/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
-/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexUnavailableWorktreeHandler>} CodexUnavailableWorktreeHandler */
-/** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
+/** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
+/** @typedef {import("./types.js").CodexSessionRuntimeHost} CodexSessionRuntimeHost */
+/** @typedef {import("./types.js").CodexAccountPreparation} CodexAccountPreparation */
+/** @typedef {import("./types.js").CodexSessionEnvironment} CodexSessionEnvironment */
+/** @typedef {import("./types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
+/** @typedef {import("./types.js").CodexUnavailableWorktreeHandler} CodexUnavailableWorktreeHandler */
+/** @typedef {import("./types.js").CodexConversationPreparation} CodexConversationPreparation */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 

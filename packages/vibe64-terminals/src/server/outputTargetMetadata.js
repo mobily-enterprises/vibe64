@@ -2,7 +2,7 @@
 
 import { serializeLaunchRestartBaseline } from "./launchRestart.js";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
 const OUTPUT_METADATA = Object.freeze({
   agentHref: "output_target_agent_href",

@@ -12,9 +12,9 @@ import { normalizeText as text } from "@local/vibe64-core/server/core";
 import { record } from "./record.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
-/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
 /** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
-/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
 
 const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;
 

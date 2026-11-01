@@ -9,7 +9,7 @@ import { sessionConversationKey } from "./assistantChangeover.js";
 import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
 import { temporaryConversationNamespace } from "./temporaryConversationRules.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 /**
  * A temporary chat's saved record: reading and saving it under the session mutation, its change

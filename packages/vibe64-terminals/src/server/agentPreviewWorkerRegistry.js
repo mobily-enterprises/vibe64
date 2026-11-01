@@ -5,7 +5,7 @@ import {
   stopRegisteredBrowserWorkerForInput
 } from "./agentPreviewBrowserWorker.js";
 
-/** @typedef {ReturnType<typeof import("./agentPreviewCommandState.js").createAgentPreviewCommandState>} AgentPreviewCommandState */
+/** @typedef {import("./types.js").AgentPreviewCommandState} AgentPreviewCommandState */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 /** @typedef {ReturnType<typeof import("./unixJsonCommand.js").createSessionCommandServers>} SessionCommandServers */

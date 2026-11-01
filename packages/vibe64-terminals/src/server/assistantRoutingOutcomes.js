@@ -7,12 +7,12 @@ import {
 } from "@local/vibe64-runtime/shared/conversationQuestions";
 import { read, failure, activeMessage, usesWorkPlan } from "./assistantRoutingRequests.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
-/** @typedef {ReturnType<typeof import("./assistantRoutingState.js").createAssistantRoutingState>} AssistantRoutingState */
-/** @typedef {ReturnType<typeof import("./assistantRoutingRecords.js").createAssistantRoutingRecords>} AssistantRoutingRecords */
-/** @typedef {ReturnType<typeof import("./assistantRoutingDecisions.js").createAssistantRoutingDecisions>} AssistantRoutingDecisions */
-/** @typedef {ReturnType<typeof import("./assistantRoutingDelivery.js").createAssistantRoutingDelivery>} AssistantRoutingDelivery */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
+/** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
+/** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
+/** @typedef {import("./types.js").AssistantRoutingDelivery} AssistantRoutingDelivery */
 /** @typedef {ReturnType<typeof import("./assistantRoutingAdmission.js").createAssistantRoutingAdmission>} AssistantRoutingAdmission */
 
 const MAX_WORKFLOW_STEPS = 8;

@@ -3,11 +3,11 @@ import { createTemporaryConversationTurns } from "./temporaryConversationTurns.j
 import { createTemporaryConversationLifecycle } from "./temporaryConversationLifecycle.js";
 import { createTemporaryConversationInteraction } from "./temporaryConversationInteraction.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
-/** @typedef {ReturnType<typeof import("./sessionAttachments.js").createSessionAttachments>} SessionAttachments */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 /**
  * A session's temporary chats. Session storage owns discovery and the

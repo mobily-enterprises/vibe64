@@ -39,7 +39,7 @@ import {
   writeJsonAtomic
 } from "./projectArchiveBundle.js";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
 const PROJECT_ARCHIVE_ROOT = "project-archives";
 const projectDeletionLocks = new Map();

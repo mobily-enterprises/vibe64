@@ -7,7 +7,7 @@ import {
 } from "./projectRequestContext.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
-/** @typedef {ReturnType<typeof import("./studioProjectContext.js").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("./types.js").StudioProjectContext} StudioProjectContext */
 
 function sendSocketJson(socket, payload) {
   if (socket.readyState !== 1) {

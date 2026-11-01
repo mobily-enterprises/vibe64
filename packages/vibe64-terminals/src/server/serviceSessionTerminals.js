@@ -22,26 +22,26 @@ import {
   renewalSuccessorTerminalCleanupContext
 } from "./sessionTerminalCleanup.js";
 
-/** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
-/** @typedef {ReturnType<typeof import("./serviceAssistantContext.js").createServiceAssistantContext>} ServiceAssistantContext */
-/** @typedef {ReturnType<typeof import("./serviceAssistantPreparation.js").createServiceAssistantPreparation>} ServiceAssistantPreparation */
+/** @typedef {import("./types.js").ServiceState} ServiceState */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
+/** @typedef {import("./types.js").ServiceAssistantPreparation} ServiceAssistantPreparation */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
-/** @typedef {ReturnType<typeof import("./codexSessionRegistration.js").createCodexSessionRegistration>} CodexSessionRegistration */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./agentDatabaseCommand.js").createAgentDatabaseCommandService>} AgentDatabaseCommandService */
-/** @typedef {ReturnType<typeof import("./agentEnvCommand.js").createAgentEnvCommandService>} AgentEnvCommandService */
-/** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
-/** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
-/** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
+/** @typedef {import("./types.js").ProjectServices} ProjectServices */
+/** @typedef {import("./types.js").CodexSessionRegistration} CodexSessionRegistration */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
+/** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
+/** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
+/** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
+/** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
 /** @typedef {ReturnType<typeof import("./previewDiagnostics.js").createPreviewDiagnosticRecorder>} PreviewDiagnosticRecorder */
 /** @typedef {ReturnType<typeof import("./providerUsage.js").createProviderUsage>} ProviderUsage */
-/** @typedef {ReturnType<typeof import("./sessionConversations.js").createSessionConversations>} SessionConversations */
-/** @typedef {ReturnType<typeof import("./sessionNaming.js").createSessionNaming>} SessionNaming */
-/** @typedef {ReturnType<typeof import("./sessionPromptHints.js").createSessionPromptHintsService>} SessionPromptHintsService */
+/** @typedef {import("./types.js").SessionConversations} SessionConversations */
+/** @typedef {import("./types.js").SessionNaming} SessionNaming */
+/** @typedef {import("./types.js").SessionPromptHintsService} SessionPromptHintsService */
 
 function terminalNamespaceMatchesProjectScope(namespace = "", projectScope = "") {
   const normalizedNamespace = String(namespace || "").trim();

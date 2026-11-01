@@ -28,7 +28,7 @@ import {
   runWithPracticeProjectContext
 } from "./practiceContext.js";
 
-/** @typedef {ReturnType<typeof import("./studioProjectContext.js").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("./types.js").StudioProjectContext} StudioProjectContext */
 
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 let practiceRequestActor = null;

@@ -30,21 +30,21 @@ import { realtimeDebugEnabled } from "./serviceMainConversationHost.js";
 import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 
-/** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
-/** @typedef {ReturnType<typeof import("./serviceAssistantContext.js").createServiceAssistantContext>} ServiceAssistantContext */
-/** @typedef {ReturnType<typeof import("./serviceGoals.js").createServiceGoals>} ServiceGoals */
+/** @typedef {import("./types.js").ServiceState} ServiceState */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
+/** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {ReturnType<typeof import("./openCodeSessionRegistration.js").createOpenCodeSessionRegistration>} OpenCodeSessionRegistration */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./sessionConversations.js").createSessionConversations>} SessionConversations */
-/** @typedef {ReturnType<typeof import("./sessionNaming.js").createSessionNaming>} SessionNaming */
-/** @typedef {ReturnType<typeof import("./sessionPromptHints.js").createSessionPromptHintsService>} SessionPromptHintsService */
-/** @typedef {ReturnType<typeof import("./assistantRouting.js").createAssistantRouting>} AssistantRouting */
+/** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").SessionConversations} SessionConversations */
+/** @typedef {import("./types.js").SessionNaming} SessionNaming */
+/** @typedef {import("./types.js").SessionPromptHintsService} SessionPromptHintsService */
+/** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
 /** @typedef {ReturnType<typeof import("@local/studio-terminal-core/server/codexRuntimeContext").codexRuntimeContext>["providerOptions"]} CodexAppServerProviderOptions */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
+/** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 
 
 // The runtime proved this message never reached the assistant. Say so in the

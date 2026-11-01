@@ -17,10 +17,10 @@ import {
 } from "./repositoryHistory.js";
 import { GENESIS_DERIVED_ARTIFACT_PATHS } from "@local/vibe64-genesis/server";
 
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {ReturnType<typeof import("./serviceSessionWork.js").createServiceSessionWork>} ServiceSessionWork */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./codexGitCommand.js").createCodexGitCommandService>} CodexGitCommandService */
+/** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
 
 /**
  * Reading a session's work without changing it: updates waiting, authority heads, the work and its

@@ -10,11 +10,11 @@ import { WATCH_UPDATE_NOTICE, trimIncompleteSurrogate } from "./colleaguePresent
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./watchSources.js").createWatchSources>} WatchSources */
-/** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
-/** @typedef {ReturnType<typeof import("./colleagueRecords.js").createColleagueRecords>} ColleagueRecords */
-/** @typedef {ReturnType<typeof import("./colleagueThreads.js").createColleagueThreads>} ColleagueThreads */
-/** @typedef {ReturnType<typeof import("./colleagueConversations.js").createColleagueConversations>} ColleagueConversations */
+/** @typedef {import("./types.js").WatchSources} WatchSources */
+/** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
+/** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
+/** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
+/** @typedef {import("./types.js").ColleagueConversations} ColleagueConversations */
 
 // A completed reply delivered these observations: drop them and settle the
 // watches that were waiting on them.

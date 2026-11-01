@@ -18,8 +18,8 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { sessionRecordId } from "./serviceSessionRecords.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./sessionConversations.js").createSessionConversations>} SessionConversations */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").SessionConversations} SessionConversations */
 
 function reconcileResultWithSourceFailures(result = {}, sourceFailures = []) {
   if (!sourceFailures.length) {

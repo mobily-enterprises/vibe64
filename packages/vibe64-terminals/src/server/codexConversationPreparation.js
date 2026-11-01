@@ -18,14 +18,14 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { trimmedText as normalizeText } from "./trimmedText.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexRuntimeHost>} CodexRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexRuntimeHost.js").createCodexSessionRuntimeHost>} CodexSessionRuntimeHost */
-/** @typedef {ReturnType<typeof import("./codexAccountPreparation.js").createCodexAccountPreparation>} CodexAccountPreparation */
-/** @typedef {ReturnType<typeof import("./codexSessionEnvironment.js").createCodexSessionEnvironment>} CodexSessionEnvironment */
-/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexStartupHealth>} CodexStartupHealth */
-/** @typedef {ReturnType<typeof import("./codexStartupHealth.js").createCodexUnavailableWorktreeHandler>} CodexUnavailableWorktreeHandler */
-/** @typedef {ReturnType<typeof import("./sessionTurnCheckpoint.js").createCodexSessionTurnCheckpoint>} CodexSessionTurnCheckpoint */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
+/** @typedef {import("./types.js").CodexSessionRuntimeHost} CodexSessionRuntimeHost */
+/** @typedef {import("./types.js").CodexAccountPreparation} CodexAccountPreparation */
+/** @typedef {import("./types.js").CodexSessionEnvironment} CodexSessionEnvironment */
+/** @typedef {import("./types.js").CodexStartupHealth} CodexStartupHealth */
+/** @typedef {import("./types.js").CodexUnavailableWorktreeHandler} CodexUnavailableWorktreeHandler */
+/** @typedef {import("./types.js").CodexSessionTurnCheckpoint} CodexSessionTurnCheckpoint */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 function codexEffectiveAgentSettings(agentSettings = {}) {

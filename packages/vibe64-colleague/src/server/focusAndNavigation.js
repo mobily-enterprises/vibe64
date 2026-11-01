@@ -5,7 +5,7 @@ import { VIBE64_COLLEAGUE_SESSION_PANES } from "../shared/navigationPanes.js";
 import { failure } from "./colleagueFailure.js";
 import { answerPendingNavigation } from "./colleaguePresentation.js";
 
-/** @typedef {ReturnType<typeof import("./colleagueThreads.js").createColleagueThreads>} ColleagueThreads */
+/** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
 
 /**
  * What a person's browser shows Colleague and what Colleague opens there: the

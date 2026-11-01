@@ -23,9 +23,10 @@ import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
+/** @typedef {import("./types.js").AccountsInitializeModelRouting} AccountsInitializeModelRouting */
 
 function publicAssistantAccess(access = {}) {
   return {
@@ -55,7 +56,7 @@ function publicAssistantAccess(access = {}) {
  * resolves, the catalogue and access people choose from, and a chat's
  * selection or mode changed while it may be working.
  * @param {object} dependencies
- * @param {AccountsService["initializeModelRouting"]} dependencies.initializeModelRouting
+ * @param {AccountsInitializeModelRouting} dependencies.initializeModelRouting
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {TerminalsService} dependencies.terminals

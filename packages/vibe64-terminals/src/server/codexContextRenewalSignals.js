@@ -10,8 +10,8 @@ import {
 } from "@local/vibe64-core/server/core";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
-/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("./types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
+/** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
 const CONTEXT_COMPACTION_REASON = "context_compacted";
 const CODEX_CONTEXT_REFRESH_PENDING_METADATA = Object.freeze([

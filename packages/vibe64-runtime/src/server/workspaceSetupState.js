@@ -3,7 +3,7 @@ import {
 } from "@local/vibe64-core/server/core";
 import stripAnsi from "strip-ansi";
 
-/** @typedef {ReturnType<typeof import("./sessionStore.js").createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 
 const WORKSPACE_SETUP_METADATA_NAME = "workspace_setup";
 const WORKSPACE_SETUP_DIAGNOSTIC_MAX_LENGTH = 1600;

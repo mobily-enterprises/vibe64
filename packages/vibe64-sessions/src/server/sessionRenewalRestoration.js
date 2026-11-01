@@ -14,9 +14,9 @@ import {
   timestamp
 } from "./sessionRenewalRules.js";
 
-/** @typedef {ReturnType<typeof import("./sessionRenewalPredecessor.js").createRenewalPredecessorSession>} RenewalPredecessorSession */
-/** @typedef {ReturnType<typeof import("./sessionRenewalAccess.js").createRenewalSessionAccess>} RenewalSessionAccess */
-/** @typedef {ReturnType<typeof import("./sessionRenewalSuccessor.js").createRenewalSuccessorSession>} RenewalSuccessorSession */
+/** @typedef {import("./types.js").RenewalPredecessorSession} RenewalPredecessorSession */
+/** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */
+/** @typedef {import("./types.js").RenewalSuccessorSession} RenewalSuccessorSession */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
 /**

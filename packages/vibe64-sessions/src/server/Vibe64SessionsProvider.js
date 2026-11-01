@@ -23,7 +23,7 @@ import {
 
 /** @typedef {import("./types.js").SessionsService} SessionsService */
 /** @typedef {import("./types.js").SessionRepositoryUpdates} SessionRepositoryUpdates */
-/** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
+/** @typedef {import("./types.js").RepositoryUpdateProbe} RepositoryUpdateProbe */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

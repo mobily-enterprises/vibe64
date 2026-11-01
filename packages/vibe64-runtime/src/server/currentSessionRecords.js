@@ -14,12 +14,12 @@ import {
 import { metadataFilePath, readTextIfExists } from "./sessionStoreLayout.js";
 import { enqueueSessionMutation } from "./sessionStoreLocks.js";
 
-/** @typedef {ReturnType<typeof import("./sessionStoreState.js").createSessionStoreState>} SessionStoreState */
-/** @typedef {ReturnType<typeof import("./sessionStorePaths.js").createSessionStorePaths>} SessionStorePaths */
-/** @typedef {ReturnType<typeof import("./sessionRecordFiles.js").createSessionRecordFiles>} SessionRecordFiles */
-/** @typedef {ReturnType<typeof import("./sessionArchiveAccess.js").createSessionArchiveAccess>} SessionArchiveAccess */
-/** @typedef {ReturnType<typeof import("./sessionRecords.js").createSessionRecords>} SessionRecords */
-/** @typedef {ReturnType<typeof import("./sessionRenewalArchives.js").createSessionRenewalArchives>} SessionRenewalArchives */
+/** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
+/** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
+/** @typedef {import("./types.js").SessionRecordFiles} SessionRecordFiles */
+/** @typedef {import("./types.js").SessionArchiveAccess} SessionArchiveAccess */
+/** @typedef {import("./types.js").SessionRecords} SessionRecords */
+/** @typedef {import("./types.js").SessionRenewalArchives} SessionRenewalArchives */
 
 /**
  * The project's current and pinned session, and their handover in a renewal.

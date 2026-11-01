@@ -32,7 +32,7 @@ import {
 /** @typedef {ReturnType<typeof import("./fileIndex.js").createSourceEditorFileIndex>} SourceEditorFileIndex */
 /** @typedef {ReturnType<typeof import("./searchIndex.js").createSourceEditorSearchIndex>} SourceEditorSearchIndex */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 
 // Project integrations: configuration save and merge-patch, OAuth client

@@ -8,12 +8,13 @@ import {
 } from "./sessionRenewalState.js";
 import { renewalError, renewalFailure, renewalTransitionActor, statePatch, timestamp } from "./sessionRenewalRules.js";
 
-/** @typedef {ReturnType<typeof import("./sessionArchive.js").createSessionArchive>} SessionArchive */
+/** @typedef {import("./types.js").SessionArchive} SessionArchive */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./sessionRenewalPredecessor.js").createRenewalPredecessorSession>} RenewalPredecessorSession */
-/** @typedef {ReturnType<typeof import("./sessionRenewalAccess.js").createRenewalSessionAccess>} RenewalSessionAccess */
+/** @typedef {import("./types.js").RenewalPredecessorSession} RenewalPredecessorSession */
+/** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
+/** @typedef {import("./types.js").SessionArchivePrepareArchive} SessionArchivePrepareArchive */
 
 function pendingRenewalMaintenance(at = timestamp()) {
   return {
@@ -39,7 +40,7 @@ async function updateRenewalMaintenance(runtime, state, operation) {
  * committed, then the committed renewal's maintenance.
  * @param {object} dependencies
  * @param {RenewalPredecessorSession} dependencies.predecessorSession
- * @param {SessionArchive["prepareArchive"]} dependencies.prepareArchive
+ * @param {SessionArchivePrepareArchive} dependencies.prepareArchive
  * @param {ProjectService} dependencies.project
  * @param {RenewalSessionAccess} dependencies.renewalAccess
  * @param {TerminalsService} dependencies.terminals

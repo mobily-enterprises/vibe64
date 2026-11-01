@@ -11,6 +11,11 @@ import {
 } from "./resourceEnvironment.js";
 import { envScope } from "./projectEnvironment.js";
 
+/** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
+/** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
+/** @typedef {import("./types.js").ProjectServiceSlots} ProjectServiceSlots */
+/** @typedef {import("./types.js").ProjectEnvironment} ProjectEnvironment */
+
 function projectEnvironmentResult(resolved, input, userRecords) {
   if (input.includeResourceConfiguration !== true) return resolved.projectEnvironment;
   const values = [];
@@ -42,10 +47,10 @@ function projectEnvironmentResult(resolved, input, userRecords) {
  * status, the person's own database servers, a session's database tools, and
  * releasing a session's managed resources.
  * @param {object} dependencies
- * @param {ReturnType<typeof import("./projectEnvironment.js").createProjectEnvironment>} dependencies.environment
- * @param {ReturnType<typeof import("./projectSelection.js").createProjectSelection>} dependencies.selection
- * @param {ReturnType<typeof import("./projectSessionWork.js").createProjectSessionWork>} dependencies.sessionWork
- * @param {ReturnType<typeof import("./projectServiceSlots.js").createProjectServiceSlots>} dependencies.slots
+ * @param {ProjectEnvironment} dependencies.environment
+ * @param {ProjectSelection} dependencies.selection
+ * @param {ProjectSessionWork} dependencies.sessionWork
+ * @param {ProjectServiceSlots} dependencies.slots
  */
 function createProjectSessionEnvironment({ environment, selection, sessionWork, slots }) {
   const sessionEnvironment = Object.freeze({

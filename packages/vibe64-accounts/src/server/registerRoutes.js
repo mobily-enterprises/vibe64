@@ -25,7 +25,7 @@ import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/termin
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
 /** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
 /** @typedef {import("./types.js").AccountsService} AccountsService */
-/** @typedef {ReturnType<typeof import("./aiConnectionService.js").createAiConnectionService>} AiConnectionService */
+/** @typedef {import("./types.js").AiConnectionService} AiConnectionService */
 
 const ACCOUNT_ROUTE_TAGS = Object.freeze(["studio", "vibe64-accounts"]);
 const LOCAL_REQUEST_MESSAGE = "Vibe64 account routes only accept loopback Studio requests.";

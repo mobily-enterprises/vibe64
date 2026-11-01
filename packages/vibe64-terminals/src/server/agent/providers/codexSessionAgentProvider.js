@@ -32,9 +32,9 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { codexAttachmentLimitResult, renewAcceptedCodexAttachments, validateCodexAttachmentsBeforeDelivery } from "./codexAttachmentDelivery.js";
 
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */
+/** @typedef {import("../../types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-provider").createCodexAppServerProviderOwner>} CodexAppServerProviderOwner */
-/** @typedef {ReturnType<typeof import("../../codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
+/** @typedef {import("../../types.js").CodexConversationPreparation} CodexConversationPreparation */
 /** @typedef {ReturnType<typeof import("../../codexLifecyclePreparation.js").createCodexLifecyclePreparation>} CodexLifecyclePreparation */
 /** @typedef {ReturnType<typeof import("../../sessionRenewalReceipts.js").createCodexSessionRenewalPreparation>} CodexSessionRenewalPreparation */
 /** @typedef {ReturnType<typeof import("../../codexConversationStorage.js").createCodexConversationStorage>} CodexConversationStorage */
@@ -42,8 +42,8 @@ import { codexAttachmentLimitResult, renewAcceptedCodexAttachments, validateCode
 /** @typedef {ReturnType<typeof import("../../codexInteractiveTerminals.js").createCodexInteractiveTerminals>} CodexInteractiveTerminals */
 /** @typedef {ReturnType<typeof import("../../sessionAttachments.js").createCodexSessionAttachmentRenewal>} CodexSessionAttachmentRenewal */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
-/** @typedef {ReturnType<typeof import("../../sessionTurnCheckpoint.js").createCodexSessionTurnCheckpoint>} CodexSessionTurnCheckpoint */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("../../types.js").CodexSessionTurnCheckpoint} CodexSessionTurnCheckpoint */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
 const CODEX_HELPER_PROFILE_REVISION = "codex-helper-selected-v4";
 function codexAssistantSettings(context = {}, input = {}) {

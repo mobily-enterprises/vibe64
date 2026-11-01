@@ -18,7 +18,7 @@ import {
   sessionPathsFromRoot
 } from "./sessionStoreLayout.js";
 
-/** @typedef {ReturnType<typeof import("./sessionStoreState.js").createSessionStoreState>} SessionStoreState */
+/** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 
 /**
  * Where the store keeps sessions, closing trees, archives and renewal state,

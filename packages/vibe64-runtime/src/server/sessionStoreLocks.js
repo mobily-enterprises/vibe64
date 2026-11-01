@@ -11,8 +11,8 @@ import { acquireSessionLock, sessionLockPath } from "./sessionLocks.js";
 import { assertValidVibe64SessionId, SESSION_RENEWAL_STATE_FILE_PATTERN } from "./sessionRecordRules.js";
 import { readDirectoryEntries, readTextIfExists, sortedFileNames } from "./sessionStoreLayout.js";
 
-/** @typedef {ReturnType<typeof import("./sessionStoreState.js").createSessionStoreState>} SessionStoreState */
-/** @typedef {ReturnType<typeof import("./sessionStorePaths.js").createSessionStorePaths>} SessionStorePaths */
+/** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
+/** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
 
 const SESSION_MUTATION_LOCK_WAIT_MS = 60_000;
 const sessionMutationChains = new Map();

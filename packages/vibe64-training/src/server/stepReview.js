@@ -2,7 +2,7 @@ import { createRetainedConversationHelper } from "@local/vibe64-terminals/server
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
 import { trainingFailure } from "./errors.js";
 
-/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
+/** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 // A review check's verdict: the learner's own AI (their Helper route for the

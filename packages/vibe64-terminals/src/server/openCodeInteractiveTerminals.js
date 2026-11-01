@@ -6,18 +6,19 @@ import { opencodeTerminalNamespace, vibe64Result } from "./terminalShared.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
-/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
+/** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
-/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
 /** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+/** @typedef {import("./types.js").OpenCodeMainMessagePreparationContextFor} OpenCodeMainMessagePreparationContextFor */
 
 const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
 
 /**
  * @param {object} dependencies
  * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
- * @param {OpenCodeMainMessagePreparation["contextFor"]} dependencies.contextFor
+ * @param {OpenCodeMainMessagePreparationContextFor} dependencies.contextFor
  * @param {OpenCodeHostPreparation} dependencies.hostPreparation
  * @param {RuntimeEnv} dependencies.env
  * @param {RecordSessionGitCommandActor} dependencies.recordGitActor

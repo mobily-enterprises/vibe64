@@ -9,8 +9,8 @@ import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { failure, requireResult } from "./colleagueFailure.js";
 import { releaseObserver } from "./colleaguePresentation.js";
 
-/** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
-/** @typedef {ReturnType<typeof import("./colleagueRecords.js").createColleagueRecords>} ColleagueRecords */
+/** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
+/** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
 
 /**
  * A person's Colleague threads: which thread a request belongs to, loading its

@@ -7,11 +7,11 @@ import { failure } from "./colleagueFailure.js";
 import { publicWatch } from "./colleaguePresentation.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
-/** @typedef {ReturnType<typeof import("./watchSources.js").createWatchSources>} WatchSources */
-/** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
-/** @typedef {ReturnType<typeof import("./colleagueRecords.js").createColleagueRecords>} ColleagueRecords */
-/** @typedef {ReturnType<typeof import("./colleagueThreads.js").createColleagueThreads>} ColleagueThreads */
-/** @typedef {ReturnType<typeof import("./colleagueWorker.js").createColleagueWorker>} ColleagueWorker */
+/** @typedef {import("./types.js").WatchSources} WatchSources */
+/** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
+/** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
+/** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
+/** @typedef {import("./types.js").ColleagueWorker} ColleagueWorker */
 
 const LEARN_WATCH_REFUSAL = "In Learn mode Colleague watches only this lesson's practice project.";
 

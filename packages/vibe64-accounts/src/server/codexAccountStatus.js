@@ -26,7 +26,7 @@ import { accountDebugSummary, authDebug } from "./accountsDebug.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
-/** @typedef {ReturnType<typeof import("./accountAccess.js").createAccountAccess>} AccountAccess */
+/** @typedef {import("./types.js").AccountAccess} AccountAccess */
 
 // Codex's account status: the local marker, the live CLI read, and the marker
 // turnover that retires runtimes from an earlier sign-in.

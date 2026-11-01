@@ -14,8 +14,8 @@ import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 import { sha256Hex } from "./sha256Hex.js";
 
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/claude-turn").createClaudeConversationOwner>} ClaudeConversationOwner */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
+/** @typedef {import("./types.js").ClaudeConversationOwner} ClaudeConversationOwner */
+/** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 /** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64RestoredService} StopVibe64RestoredService */

@@ -1,11 +1,11 @@
-/** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
-/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
-/** @typedef {ReturnType<typeof import("./sessionConversations.js").createSessionConversations>} SessionConversations */
-/** @typedef {ReturnType<typeof import("./sessionNaming.js").createSessionNaming>} SessionNaming */
-/** @typedef {ReturnType<typeof import("./assistantRouting.js").createAssistantRouting>} AssistantRouting */
-/** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/conversation").createConversationRuntime>} ConversationRuntime */
+/** @typedef {import("./types.js").ServiceState} ServiceState */
+/** @typedef {import("./types.js").ProjectServices} ProjectServices */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
+/** @typedef {import("./types.js").SessionConversations} SessionConversations */
+/** @typedef {import("./types.js").SessionNaming} SessionNaming */
+/** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
+/** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 
 function normalizeAgentProviderId(value = "") {
   return String(value || "").trim().toLowerCase();

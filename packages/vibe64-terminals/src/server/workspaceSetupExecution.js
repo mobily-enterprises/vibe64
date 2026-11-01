@@ -22,7 +22,7 @@ import {
 } from "./workspaceSetupRules.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./workspaceSetupRunnerState.js").createWorkspaceSetupRunnerState>} WorkspaceSetupRunnerState */
+/** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
 
 /**
  * Runs a prepared recipe's steps in an admitted resource workflow, inside the

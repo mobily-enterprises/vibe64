@@ -26,7 +26,8 @@ import { projectResult } from "./projectResult.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
-/** @typedef {ReturnType<typeof import("./projectActions.js").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
+/** @typedef {import("./types.js").PublishProjectChanged} PublishProjectChanged */
+/** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 
 /**
  * The project's repositories: its remote and branches, connected repositories and
@@ -39,7 +40,7 @@ import { projectResult } from "./projectResult.js";
  * @param {RuntimeLogger} dependencies.logger
  * @param {ReturnType<typeof import("./projectSettings.js").createProjectSettings>} dependencies.projectSettings
  * @param {PublishProjectChanged} dependencies.publishProjectChanged
- * @param {ReturnType<typeof import("./projectSelection.js").createProjectSelection>} dependencies.selection
+ * @param {ProjectSelection} dependencies.selection
  */
 function createProjectRepositories({
   env,

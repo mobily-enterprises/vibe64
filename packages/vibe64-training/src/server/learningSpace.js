@@ -6,10 +6,10 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { learnerIdentity } from "./learnerState.js";
 import { pinnedLessonKey } from "./installedContent.js";
 
-/** @typedef {ReturnType<typeof import("./learnerState.js").createTrainingLearnerState>} TrainingLearnerState */
-/** @typedef {ReturnType<typeof import("./installedContent.js").createInstalledTrainingContent>} InstalledTrainingContent */
+/** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
+/** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
 /** @typedef {ReturnType<typeof import("@local/vibe64-project/server/project-archive").createProjectArchiveService>} ProjectArchiveService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
 const MAX_ARCHIVES = 20;
 // Archives keep their record and conversation; only the newest few keep their

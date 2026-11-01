@@ -7,10 +7,10 @@ import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./sessionWorkOperations.js").createSessionWorkOperations>} SessionWorkOperations */
-/** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createSessionWorkspaceSetup>} SessionWorkspaceSetup */
+/** @typedef {import("./types.js").SessionWorkOperations} SessionWorkOperations */
+/** @typedef {import("./types.js").SessionWorkspaceSetup} SessionWorkspaceSetup */
 /** @typedef {ReturnType<typeof import("./sessionWorkRecovery.js").createSessionWorkRecovery>} SessionWorkRecovery */
 /** @typedef {ReturnType<typeof import("./sessionRepositoryUpdates.js").createSessionRepositoryUpdates>} SessionRepositoryUpdates */
 /** @typedef {ReturnType<typeof import("./connectedContributions.js").createConnectedContributions>} ConnectedContributions */

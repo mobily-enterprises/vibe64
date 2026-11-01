@@ -1,10 +1,10 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { findVibe64AgentProvider } from "@local/vibe64-runtime/shared";
 
-/** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
+/** @typedef {import("./types.js").ServiceState} ServiceState */
 /** @typedef {ReturnType<typeof import("./agent/providers/claudeConversationHost.js").createClaudeConversationHost>} ClaudeConversationHost */
-/** @typedef {ReturnType<typeof import("./codexSessionRegistration.js").createCodexSessionRegistration>} CodexSessionRegistration */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/codexProviderConnections").createCodexProviderConnectionStore>} CodexProviderConnectionStore */
+/** @typedef {import("./types.js").CodexSessionRegistration} CodexSessionRegistration */
+/** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
 
 /**
  * Whether a session's assistant can be used: Claude's own account, a curated Codex provider's

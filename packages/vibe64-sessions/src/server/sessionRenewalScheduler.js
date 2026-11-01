@@ -6,9 +6,9 @@ import {
 } from "./sessionRenewalState.js";
 import { actorFromUser, renewalActorsMatch, renewalError, renewalTransitionActor } from "./sessionRenewalRules.js";
 
-/** @typedef {ReturnType<typeof import("./sessionRenewalAdmission.js").createRenewalAdmission>} RenewalAdmission */
-/** @typedef {ReturnType<typeof import("./sessionRenewalAccess.js").createRenewalSessionAccess>} RenewalSessionAccess */
-/** @typedef {ReturnType<typeof import("./sessionRenewalRestoration.js").createRenewalRestoration>} RenewalRestoration */
+/** @typedef {import("./types.js").RenewalAdmission} RenewalAdmission */
+/** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */
+/** @typedef {import("./types.js").RenewalRestoration} RenewalRestoration */
 /** @typedef {ReturnType<typeof import("./sessionRenewalWorkflow.js").createRenewalWorkflow>} RenewalWorkflow */
 
 const SESSION_RENEWAL_WORKFLOW_LOCK_RETRY_MS = 1_000;

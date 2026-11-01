@@ -9,14 +9,15 @@ import { accountsResult } from "./accountRecords.js";
 
 /** @typedef {import("./service.js").AccountNotifications} AccountNotifications */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./accountAccess.js").createAccountAccess>} AccountAccess */
+/** @typedef {import("./types.js").AccountAccess} AccountAccess */
+/** @typedef {import("./types.js").TerminalsInspectAssistantRoutingConfiguration} TerminalsInspectAssistantRoutingConfiguration */
 
 /**
  * Model routing: which model each role of each AI setup uses, read, previewed,
  * saved by whoever manages AI, and filled from recommendations.
  * @param {object} dependencies
  * @param {AccountAccess} dependencies.access
- * @param {TerminalsService["inspectAssistantRoutingConfiguration"] | null} dependencies.inspectRoutingConfiguration
+ * @param {TerminalsInspectAssistantRoutingConfiguration | null} dependencies.inspectRoutingConfiguration
  * @param {AccountNotifications} dependencies.notifications
  */
 function createModelRouting({ access, inspectRoutingConfiguration, notifications }) {

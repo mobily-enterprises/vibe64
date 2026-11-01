@@ -65,12 +65,13 @@ import {
   reusableLaunchTerminal
 } from "./outputTargetLaunchTerminals.js";
 
-/** @typedef {ReturnType<typeof import("./outputTargetTerminalState.js").createOutputTargetTerminalState>} OutputTargetTerminalState */
-/** @typedef {ReturnType<typeof import("./outputTargetLaunchCoordination.js").createOutputTargetLaunchCoordination>} OutputTargetLaunchCoordination */
+/** @typedef {import("./types.js").OutputTargetTerminalState} OutputTargetTerminalState */
+/** @typedef {import("./types.js").OutputTargetLaunchCoordination} OutputTargetLaunchCoordination */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("./types.js").ProjectServices} ProjectServices */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("./types.js").ProjectServicesEnsure} ProjectServicesEnsure */
 
 function previewStoppedRefusal() {
   return { ok: false, code: "vibe64_preview_stopped", error: "Preview was stopped explicitly. Use Start preview to run it again." };
@@ -83,7 +84,7 @@ function previewStoppedRefusal() {
  * @param {OutputTargetTerminalState} dependencies.state
  * @param {OutputTargetLaunchCoordination} dependencies.launchCoordination
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
- * @param {ProjectServices["ensure"]} dependencies.ensureProjectServices
+ * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
  * @param {RuntimeEnv} dependencies.env
  * @param {ProjectService} dependencies.projectService
  * @param {PublishSessionChanged} dependencies.publishSessionChanged

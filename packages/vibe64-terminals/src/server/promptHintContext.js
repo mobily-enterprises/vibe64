@@ -13,7 +13,7 @@ import {
   sessionStateForHints
 } from "./promptHintRules.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 /**

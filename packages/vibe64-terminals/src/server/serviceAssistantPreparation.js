@@ -19,12 +19,12 @@ import { vibe64AssistantConversationKey, vibe64AssistantSelectionFromMetadata } 
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { sessionHasActiveAgentRun } from "./serviceSessionRecords.js";
 
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
-/** @typedef {ReturnType<typeof import("./serviceWorkspacePreparation.js").createServiceWorkspacePreparation>} ServiceWorkspacePreparation */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceWorkspacePreparation} ServiceWorkspacePreparation */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {typeof import("@local/vibe64-genesis/server").inspectGenesisSkills} InspectAgentSkills */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 /**
  * What a session's assistant needs before work reaches it: the previous assistant stopped on a

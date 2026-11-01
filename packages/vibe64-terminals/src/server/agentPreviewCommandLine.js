@@ -18,8 +18,8 @@ import {
   waitForPreviewReady
 } from "./agentPreviewStatusText.js";
 
-/** @typedef {ReturnType<typeof import("./agentPreviewWorkerRegistry.js").createAgentPreviewWorkerRegistry>} AgentPreviewWorkerRegistry */
-/** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
+/** @typedef {import("./types.js").AgentPreviewWorkerRegistry} AgentPreviewWorkerRegistry */
+/** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {typeof import("@local/vibe64-core/server/sessionUiSyncState").readSessionUiSyncStateForSession} ReadSessionUiSyncState */

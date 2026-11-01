@@ -34,16 +34,17 @@ import { SESSION_RENEWAL_WORKFLOW_LOCK_RETRY_MS, createRenewalScheduler } from "
 import { createRenewalSuccessorSession } from "./sessionRenewalSuccessor.js";
 import { createRenewalWorkflow } from "./sessionRenewalWorkflow.js";
 
-/** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createTerminalsSetupRunner>} WorkspaceSetupRunner */
-/** @typedef {ReturnType<typeof import("./sessionArchive.js").createSessionArchive>} SessionArchive */
+/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
+/** @typedef {import("./types.js").SessionArchive} SessionArchive */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/sessionRealtimeEvents").createSessionChangedPublisher>} PublishSessionChanged */
+/** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").SessionArchivePrepareArchive} SessionArchivePrepareArchive */
 
 /**
  * @param {object} dependencies
  * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
- * @param {SessionArchive["prepareArchive"]} dependencies.prepareArchive
+ * @param {SessionArchivePrepareArchive} dependencies.prepareArchive
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {() => ((actor: object, context: { renewalId: string, sessionId: string, stage: string }) => Promise<object | null>) | null} dependencies.renewalActorResolver

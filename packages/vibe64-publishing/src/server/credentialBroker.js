@@ -8,8 +8,8 @@ import { promisify } from "node:util";
 
 import { ANDROID_SIDELOAD_KEYSTORE, ANDROID_SIDELOAD_KEY_PASSWORD } from "@local/vibe64-packaging/server";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-packaging/server/keys").createAgeStore>} AgeStore */
-/** @typedef {ReturnType<typeof import("./service.js").createPublishingPackaging>} PublishingPackaging */
+/** @typedef {import("@local/vibe64-packaging/server/types").AgeStore} AgeStore */
+/** @typedef {import("./types.js").PublishingPackaging} PublishingPackaging */
 
 const run = promisify(execFile);
 const ACCOUNT_ID = /^[a-z0-9][a-z0-9-]{0,62}$/u;

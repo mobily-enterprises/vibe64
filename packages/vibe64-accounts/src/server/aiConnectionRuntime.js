@@ -5,9 +5,10 @@ import { ZAI_FREE_MODEL_ID } from "./assistantProviderPolicy.js";
 import { verifyZaiConnection } from "./zaiConnectionVerifier.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./aiConnectionStore.js").createAiConnectionStore>} AiConnectionStore */
+/** @typedef {import("./types.js").AiConnectionStore} AiConnectionStore */
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
 /** @typedef {ReturnType<typeof import("./accountRealtimeEvents.js").createVibe64ConnectionsChangedPublisher>} PublishConnectionChanged */
+/** @typedef {import("./types.js").AccountsRequireAiManagement} AccountsRequireAiManagement */
 
 /**
  * @param {object} dependencies
@@ -66,7 +67,7 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
  * @param {object} dependencies
  * @param {AiConnectionStore} dependencies.aiConnections
  * @param {TerminalsService} dependencies.terminals
- * @param {AccountsRuntime["requireAiManagement"]} dependencies.requireAiManagement
+ * @param {AccountsRequireAiManagement} dependencies.requireAiManagement
  */
 function configureAiConnectionRuntime({ aiConnections, terminals, requireAiManagement }) {
   terminals.configureAssistantRuntime({

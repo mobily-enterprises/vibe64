@@ -11,11 +11,11 @@ import {
   STATE_KEY
 } from "./assistantRoutingRequests.js";
 
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./assistantRoutingState.js").createAssistantRoutingState>} AssistantRoutingState */
-/** @typedef {ReturnType<typeof import("./assistantRoutingRecords.js").createAssistantRoutingRecords>} AssistantRoutingRecords */
-/** @typedef {ReturnType<typeof import("./assistantRoutingDecisions.js").createAssistantRoutingDecisions>} AssistantRoutingDecisions */
-/** @typedef {ReturnType<typeof import("./assistantRoutingDelivery.js").createAssistantRoutingDelivery>} AssistantRoutingDelivery */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
+/** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
+/** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
+/** @typedef {import("./types.js").AssistantRoutingDelivery} AssistantRoutingDelivery */
 
 /**
  * Stop and Cancel: the inspection of an uncertain delivery, stopping a request's routing, cancelling

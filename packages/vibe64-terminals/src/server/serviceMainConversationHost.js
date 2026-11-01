@@ -19,15 +19,15 @@ import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 
-/** @typedef {ReturnType<typeof import("./serviceAssistantContext.js").createServiceAssistantContext>} ServiceAssistantContext */
-/** @typedef {ReturnType<typeof import("./serviceGoals.js").createServiceGoals>} ServiceGoals */
-/** @typedef {ReturnType<typeof import("./serviceAssistant.js").createServiceAssistant>} ServiceAssistant */
+/** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
+/** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
+/** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./sessionConversations.js").createSessionConversations>} SessionConversations */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").SessionConversations} SessionConversations */
 
 function realtimeDebugEnabled(env = {}) {
   return ["1", "true", "yes", "on"].includes(String(env.JSKIT_REALTIME_DEBUG || "").trim().toLowerCase());

@@ -12,7 +12,7 @@ import { passthroughEnvironment } from "@local/vibe64-packaging/server/stages";
 
 import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 
-/** @typedef {ReturnType<typeof import("./projectRepository.js").createProjectRepository>} ProjectRepository */
+/** @typedef {import("./types.js").ProjectRepository} ProjectRepository */
 
 const VERIFICATION_CONTRACT = "vibe64.publishing-verification.v1";
 const KEEP = 10;

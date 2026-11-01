@@ -15,16 +15,16 @@ import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { sessionRecordId } from "./serviceSessionRecords.js";
 import { closeProjectScopedTerminalNamespaces } from "./serviceSessionTerminals.js";
 
-/** @typedef {ReturnType<typeof import("./serviceSessionAccess.js").createServiceSessionAccess>} ServiceSessionAccess */
+/** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {ReturnType<typeof import("./serviceSessionTerminals.js").createServiceSessionTerminals>} ServiceSessionTerminals */
-/** @typedef {ReturnType<typeof import("./serviceGoals.js").createServiceGoals>} ServiceGoals */
+/** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {ReturnType<typeof import("./serviceAgentReconcile.js").createServiceAgentReconcile>} ServiceAgentReconcile */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
-/** @typedef {ReturnType<typeof import("./events.js").createProjectRuntimeChangedPublisher>} ProjectRuntimeChangedPublisher */
-/** @typedef {ReturnType<typeof import("./projectServices.js").createProjectServices>} ProjectServices */
-/** @typedef {ReturnType<typeof import("./agent/sessionAgentManager.js").createSessionAgentManager>} SessionAgentManager */
-/** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
-/** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */
+/** @typedef {import("./types.js").ProjectRuntimeChangedPublisher} ProjectRuntimeChangedPublisher */
+/** @typedef {import("./types.js").ProjectServices} ProjectServices */
+/** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
+/** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
 
 const PROJECT_RUNTIME_MARKER_MISSING_REASON = "project-runtime-marker-missing";
 

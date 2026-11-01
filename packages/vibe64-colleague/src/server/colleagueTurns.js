@@ -7,11 +7,11 @@ import { COLLEAGUE_MODEL_UNAVAILABLE, failure } from "./colleagueFailure.js";
 import { answerPendingNavigation, releaseObserver } from "./colleaguePresentation.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {ReturnType<typeof import("./colleagueServiceState.js").createColleagueServiceState>} ColleagueServiceState */
-/** @typedef {ReturnType<typeof import("./colleagueRecords.js").createColleagueRecords>} ColleagueRecords */
-/** @typedef {ReturnType<typeof import("./colleagueThreads.js").createColleagueThreads>} ColleagueThreads */
-/** @typedef {ReturnType<typeof import("./colleagueConversations.js").createColleagueConversations>} ColleagueConversations */
-/** @typedef {ReturnType<typeof import("./colleagueWorker.js").createColleagueWorker>} ColleagueWorker */
+/** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
+/** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
+/** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
+/** @typedef {import("./types.js").ColleagueConversations} ColleagueConversations */
+/** @typedef {import("./types.js").ColleagueWorker} ColleagueWorker */
 
 /**
  * A person's turns with Colleague: reading the conversation, sending, choosing
