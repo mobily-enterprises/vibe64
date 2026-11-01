@@ -206,7 +206,9 @@ process.stdout.write(JSON.stringify({
       captureExecutionIds.delete(id);
     }
   };
-  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
+  // The session-changed publisher a test watches, or one that publishes nowhere.
+  const publishSessionChanged = workflowHooks.publishSessionChanged ?? (async () => null);
+  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared: async () => ({ ok: true }),
     env: { TMPDIR: socketRoot },
     project,
@@ -221,7 +223,7 @@ process.stdout.write(JSON.stringify({
     launchTarget: controller, runManagedCommand: runCommand,
     stopManagedExecution: stopDetachedExecution, readSessionUiState: () => null,
     resourceProvider: workflowHooks.resourceProvider,
-    publishSessionChanged: workflowHooks.publishSessionChanged
+    publishSessionChanged
   });
   t.after(async () => {
     for (const id of captureExecutionIds) await stopCaptureExecution(id);
