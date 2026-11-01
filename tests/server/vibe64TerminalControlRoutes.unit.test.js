@@ -206,7 +206,7 @@ test("assistant terminal control text uses the server Vibe64 user instead of bod
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const calls = [];
-      const app = terminalControlRouteApp({
+      const service = {
         async writeAgentTerminal(sessionId, terminalSessionId, data, input) {
           calls.push({
             data,
@@ -221,7 +221,11 @@ test("assistant terminal control text uses the server Vibe64 user instead of bod
             status: "running"
           };
         }
-      });
+      };
+      Object.assign(service, createTerminalControls({
+        writeAgentInput: (...args) => service.writeAgentTerminal(...args)
+      }));
+      const app = terminalControlRouteApp(service);
       registerRoutes(app.http, {
         fastify: app.fastify,
         projectContext,

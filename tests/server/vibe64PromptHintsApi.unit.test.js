@@ -274,9 +274,7 @@ test("prompt-hint cancellation without a draft passes route validation and reach
         }, reply);
         assert.equal(reply.statusCode, 200);
         assert.equal(reply.payload.status, "cancelled");
-        assert.deepEqual(calls.at(-1), ["session-1", {
-          operationId: body.operationId, originId: body.originId || "", sessionId: "session-1", vibe64User
-        }]);
+        assert.deepEqual(calls.at(-1), ["session-1", { ...body, sessionId: "session-1", vibe64User }]);
       }
       assert.equal(calls.length, 2);
     });
