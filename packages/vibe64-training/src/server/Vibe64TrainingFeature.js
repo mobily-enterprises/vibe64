@@ -143,10 +143,13 @@ const Vibe64TrainingFeature = defineFeature({
     ]);
   },
   /**
-   * @param {object} _capabilities
+   * @param {object} capabilities
+   * @param {TrainingService | null} capabilities.trainingHost
    * @param {{ outputs: { training: TrainingService } }} context
    */
-  shutdown(_capabilities, { outputs }) {
+  shutdown({ trainingHost }, { outputs }) {
+    // A host's training is the host's own: setup registered no core slots for it, so there is nothing to release.
+    if (trainingHost) return;
     for (const release of slotReleases.get(outputs.training)) release();
   }
 });
