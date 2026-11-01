@@ -442,5 +442,6 @@ export {
   requestShouldCleanPreviewToken,
   stripPreviewTokenQueryParam,
   targetRequestUrl,
-  tokenMatches
+  tokenMatches,
+  VIBE64_LAUNCH_ALIAS_PATTERN
 };

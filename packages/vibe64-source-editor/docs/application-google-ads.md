@@ -79,7 +79,9 @@ selected Google display fields returned by the service. Keep the entire response
 under 32 KiB. Oversized/unknown results must fail clearly; do not silently truncate
 a launch review. The executable is application code, not a public unauthenticated
 endpoint. Native adapters must map the same operations and enforce the same rules.
-The JSKIT pattern `google-ads-search` provides a dispatch fragment.
+The JSKIT pattern `google-ads-search` provides a dispatch fragment. Pass Vibe64's
+protocol and response limit as its third argument:
+`dispatchAdsSetup(request, service, { protocol: "vibe64.integration-setup.command.v1", maxResponseBytes: 32768 })`.
 
 ## Review, writes and readiness
 
