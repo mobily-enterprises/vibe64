@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { PROJECT_OPERATION, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, PROJECT_OPERATION, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { createColleagueUsageKnowledge, maxGuideCharacters } from "./usageKnowledge.js";
 import { guideReceipt, presentationClientId } from "@local/vibe64-training/shared/presentation-schemas";
 import { TRAINING_GUIDE_CAPTION_LIMIT } from "@local/vibe64-training/shared/learning-vocabulary";
@@ -157,7 +157,7 @@ function createColleagueActions({ colleague, usage = createColleagueUsageKnowled
     Object.freeze({
       id: "vibe64.colleague.state.read", version: 1, kind: "query",
       input: { schema: createSchema({ clientId: { ...clientId, required: false } }), mode: "create" }, output: null, idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.read(input, context)
     }),
     Object.freeze({
@@ -169,7 +169,7 @@ function createColleagueActions({ colleague, usage = createColleagueUsageKnowled
           focus: focusField
         }) }
       }), mode: "create" }, output: null, idempotency: "domain_native",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.startFresh(input, context)
     }),
     Object.freeze({
@@ -177,7 +177,7 @@ function createColleagueActions({ colleague, usage = createColleagueUsageKnowled
       input: { schema: createSchema({
         offset: { type: "integer", min: 0, required: false }, limit: { type: "integer", min: 1, max: 20, required: false }
       }), mode: "create" }, output: null, idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.readHistory(input, context)
     }),
     Object.freeze({
@@ -186,13 +186,13 @@ function createColleagueActions({ colleague, usage = createColleagueUsageKnowled
         conversationId: clientId, beforeTurnId: { ...clientId, required: false },
         limit: { type: "integer", min: 1, max: 100, required: false }
       }), mode: "create" }, output: null, idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.readHistoryPage(input, context)
     }),
     Object.freeze({
       id: "vibe64.colleague.focus.update", version: 1, kind: "command",
       input: { schema: createSchema({ clientId, focus: { ...focusField, required: true } }), mode: "create" }, output: null, idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context, deps) => colleague.focus(input, context, deps)
     }),
     Object.freeze({
@@ -203,19 +203,19 @@ function createColleagueActions({ colleague, usage = createColleagueUsageKnowled
         message: { type: "string", noTrim: false, minLength: 1, maxLength: 24000, required: true },
         assistantSelection: { type: "object", additionalProperties: true, required: false }
       }), mode: "create" }, output: null, idempotency: "domain_native",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context, deps) => colleague.send(input, context, { receiptOnly: deps?.receiptOnly === true })
     }),
     Object.freeze({
       id: "vibe64.colleague.turn.stop", version: 1, kind: "command",
       input: { schema: createSchema({ expectedConversationId: { ...clientId, required: false } }), mode: "create" }, output: null, idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.stop(input, context)
     }),
     Object.freeze({
       id: "vibe64.colleague.model.select", version: 1, kind: "command",
       input: { schema: createSchema({ ...modelSelectionFields, expectedConversationId: { ...clientId, required: false } }), mode: "create" }, output: null, idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.selectModel(input, context)
     }),
     Object.freeze({
@@ -380,7 +380,7 @@ function createColleagueActions({ colleague, usage = createColleagueUsageKnowled
         clientId, commandId: clientId, ok: { type: "boolean", required: true },
         error: { ...text, maxLength: 2000 }, focus: focusField, guide: guideReceipt
       }), mode: "create" }, output: null, idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => colleague.acknowledgeNavigation(input, context)
     }),
     Object.freeze({

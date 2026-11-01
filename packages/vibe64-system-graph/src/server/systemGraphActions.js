@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 
 import { createUsageActions } from "./usageActions.js";
 
@@ -24,7 +24,7 @@ function createSystemGraphActions({ systemGraph }) {
       input: SESSION_INPUT,
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readStatus(input)
     }),
     Object.freeze({
@@ -34,7 +34,7 @@ function createSystemGraphActions({ systemGraph }) {
       input: SESSION_INPUT,
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readArchitecture(input)
     }),
     Object.freeze({
@@ -44,7 +44,7 @@ function createSystemGraphActions({ systemGraph }) {
       input: SESSION_INPUT,
       output: null,
       idempotency: "optional",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.cancelRefresh(input)
     }),
     Object.freeze({
@@ -54,7 +54,7 @@ function createSystemGraphActions({ systemGraph }) {
       input: SESSION_INPUT,
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readRefreshStatus(input)
     }),
     Object.freeze({
@@ -64,7 +64,7 @@ function createSystemGraphActions({ systemGraph }) {
       input: SESSION_INPUT,
       output: null,
       idempotency: "optional",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.refresh(input)
     }),
     ...createUsageActions({ systemGraph })

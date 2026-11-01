@@ -1,10 +1,6 @@
 import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import {
-  authenticatedVibe64User,
-  PROJECT_OPERATION,
-  PROJECT_OWNER_OPERATION
-} from "@local/vibe64-core/server/actionContext";
+import { authenticatedVibe64User, NOT_A_TOOL, PROJECT_OPERATION, PROJECT_OWNER_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { assertLearningModeAllowsProject, learningModeProjectError, readLearningModeFor } from "@local/vibe64-core/server/learningMode";
 import { issueTool, pullRequestTool } from "./assistantContracts.js";
@@ -211,7 +207,7 @@ function createProjectActions({ project }) {
       ...PROJECT_QUERY,
       id: "vibe64.project.repository.remote.read",
       input: emptyProjectInputValidator,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: () => project.repositoryRemote()
     }),
     Object.freeze({
@@ -252,14 +248,14 @@ function createProjectActions({ project }) {
       ...PROJECT_QUERY,
       id: "vibe64.project.env.secret.reveal",
       input: projectEnvSecretRevealInputValidator,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OWNER_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OWNER_OPERATION },
       execute: (input) => project.revealEnvSecret(input)
     }),
     Object.freeze({
       ...PROJECT_QUERY,
       id: "vibe64.project.env.download",
       input: projectEnvDownloadInputValidator,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OWNER_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OWNER_OPERATION },
       execute: (input) => project.downloadEnv(input)
     }),
     Object.freeze({
@@ -394,14 +390,14 @@ function createProjectActions({ project }) {
       id: ACTION_REPOSITORY_REMOTE,
       input: projectRemoteInputValidator,
       events: [projectChangedEvent()],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => project.repositoryRemote(input)
     }),
     Object.freeze({
       ...PROJECT_QUERY,
       id: ACTION_LIST_PROJECTS,
       input: projectsReadInputValidator,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (_input, context) => project.listProjects({ actor: authenticatedVibe64User(context) })
     }),
     Object.freeze({
@@ -410,7 +406,7 @@ function createProjectActions({ project }) {
       id: ACTION_CREATE_PROJECT,
       input: projectCreateInputValidator,
       events: [projectChangedEvent({ operation: "created" })],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OWNER_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OWNER_OPERATION },
       execute: (input, context) => createDevelopProject(project, input, context)
     }),
     Object.freeze({
@@ -418,7 +414,7 @@ function createProjectActions({ project }) {
       id: ACTION_SELECT_PROJECT,
       input: projectSelectInputValidator,
       events: [projectChangedEvent()],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => selectProjectInMode(project, input, context)
     }),
     Object.freeze({

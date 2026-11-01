@@ -1,4 +1,4 @@
-import { authenticatedVibe64User, PROJECT_OPERATION, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { authenticatedVibe64User, NOT_A_TOOL, PROJECT_OPERATION, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { mainConversationRequestContext } from "./mainConversationAuthority.js";
 import { PROJECT_WATCH_ACTION, watchProject } from "./projectWatch.js";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
@@ -167,14 +167,14 @@ function createSessionActions({ sessions }) {
       ...SESSION_COMMAND,
       id: "vibe64.sessions.connected.prepare",
       input: { ...sessionIdInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.prepareConnectedSources(input.sessionId, input, context)
     }),
     Object.freeze({ ...SESSION_QUERY, id: "vibe64.sessions.connected.source", input: { ...sessionCreateInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: input => sessions.inspectConnectedContributionSource(input) }),
     Object.freeze({ ...SESSION_QUERY, id: "vibe64.sessions.connected.inputs.inspect", input: { ...sessionIdInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.inspectConnectedDevelopmentInputs(input.sessionId, input, context) }),
     Object.freeze({ ...SESSION_QUERY, id: "vibe64.sessions.connected.replacement.inspect",
       input: { ...connectedReplacementInspectionInputValidator, mode: "create" },
@@ -184,25 +184,25 @@ function createSessionActions({ sessions }) {
       extensions: { assistant: sessionTool("Only on a request to replace a discarded contribution, pass the exact review from connected.replacement.inspect. Reserve and prepare a new contribution from the discarded commit; preserve the old source, branch and integration requirements. No repository is pushed. Retry the same review after an uncertain result. Prepare the originating workspace before testing the new source."), vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.replaceConnectedSource(input.sessionId, input, context) }),
     Object.freeze({ ...SESSION_QUERY, id: "vibe64.sessions.connected.work.inspect", input: { ...connectedWorkInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.connectedContributionWork("inspect", input, context) }),
     Object.freeze({ ...SESSION_QUERY, id: "vibe64.sessions.connected.work.inputs", input: { ...connectedWorkInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.connectedContributionWork("inputs", input, context) }),
     Object.freeze({ ...SESSION_QUERY, id: "vibe64.sessions.connected.work.incoming", input: { ...connectedWorkInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.connectedContributionWork("incoming", input, context) }),
     Object.freeze({ ...SESSION_COMMAND, id: "vibe64.sessions.connected.work.save", input: { ...connectedWorkInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.connectedContributionWork("save", input, context) }),
     Object.freeze({ ...SESSION_COMMAND, id: "vibe64.sessions.connected.work.update", input: { ...connectedWorkInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.connectedContributionWork("update", input, context) }),
     Object.freeze({ ...SESSION_QUERY, id: "vibe64.sessions.connected.work.check", input: { ...connectedWorkInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sessions.connectedContributionWork("check", input, context) }),
     Object.freeze({ ...SESSION_COMMAND, id: "vibe64.sessions.connected.allocate", input: { ...connectedSourceAllocationInputValidator, mode: "create" }, channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: input => sessions.allocateConnectedSource(input) }),
     Object.freeze({
       ...SESSION_QUERY,
@@ -211,7 +211,7 @@ function createSessionActions({ sessions }) {
       // This grant stays inside the application's conversation adapter. It has
       // no HTTP route or assistant tool projection.
       channels: ["internal"],
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => conversationContextGrant(input, context)
     }),
     Object.freeze({
@@ -233,7 +233,7 @@ function createSessionActions({ sessions }) {
       id: ACTION_RESUME_INTEGRATION_SETUP,
       idempotency: "domain_native",
       input: { ...integrationSetupRequestActionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.resumeIntegrationContinuation(input.sessionId, input)
     }),
     Object.freeze({
@@ -241,7 +241,7 @@ function createSessionActions({ sessions }) {
       id: ACTION_SKIP_INTEGRATION_SETUP,
       idempotency: "domain_native",
       input: { ...integrationSetupRequestActionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.skipIntegrationSetupRequest(input.sessionId, input)
     }),
     Object.freeze({
@@ -262,7 +262,7 @@ function createSessionActions({ sessions }) {
       ...SESSION_QUERY,
       id: ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF,
       input: { ...repositoryVersionFileDiffInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.inspectRepositoryVersionFileDiff(input)
     }),
     Object.freeze({
@@ -283,14 +283,14 @@ function createSessionActions({ sessions }) {
       ...SESSION_QUERY,
       id: ACTION_LIST_ASSISTANT_CAPABILITIES,
       input: { ...assistantCapabilitiesInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => sessions.listAssistantCapabilities(input)
     }),
     Object.freeze({
       ...SESSION_COMMAND,
       id: ACTION_UPDATE_ASSISTANT_MODEL_ACCESS,
       input: { ...assistantModelAccessUpdateActionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.updateAssistantModelAccess(input)
     }),
     Object.freeze({
@@ -304,7 +304,7 @@ function createSessionActions({ sessions }) {
       ...SESSION_COMMAND,
       id: ACTION_UPDATE_CURRENT_SESSION,
       input: { ...currentSessionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.updateCurrentSession(input.sessionId, input)
     }),
     Object.freeze({
@@ -380,14 +380,14 @@ function createSessionActions({ sessions }) {
       ...SESSION_QUERY,
       id: ACTION_INSPECT_SESSION_CHANGES,
       input: { ...sessionChangesInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.inspectSessionChanges(input.sessionId, input)
     }),
     Object.freeze({
       ...SESSION_QUERY,
       id: ACTION_INSPECT_SESSION_CHANGE_DIFF,
       input: { ...sessionChangeDiffInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.inspectSessionChangeDiff(input.sessionId, input)
     }),
     Object.freeze({
@@ -422,7 +422,7 @@ function createSessionActions({ sessions }) {
       ...SESSION_QUERY,
       id: ACTION_REVIEW_INCOMING,
       input: { ...incomingInspectionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: input => sessions.reviewIncomingContribution(input.sessionId, input)
     }),
     Object.freeze({
@@ -479,35 +479,35 @@ function createSessionActions({ sessions }) {
       ...SESSION_QUERY,
       id: ACTION_READ_MAIN_CHAT_APPROVALS,
       input: { ...sessionIdInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.readMainChatApprovals(input.sessionId, input)
     }),
     Object.freeze({
       ...SESSION_COMMAND,
       id: ACTION_EDIT_MAIN_CHAT_APPROVAL,
       input: { ...mainChatApprovalActionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.editMainChatApproval(input.sessionId, input.approvalId, input)
     }),
     Object.freeze({
       ...SESSION_COMMAND,
       id: ACTION_WITHDRAW_MAIN_CHAT_APPROVAL,
       input: { ...mainChatApprovalActionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.withdrawMainChatApproval(input.sessionId, input.approvalId, input)
     }),
     Object.freeze({
       ...SESSION_COMMAND,
       id: ACTION_DECLINE_MAIN_CHAT_APPROVAL,
       input: { ...mainChatApprovalActionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.declineMainChatApproval(input.sessionId, input.approvalId, input)
     }),
     Object.freeze({
       ...SESSION_COMMAND,
       id: ACTION_APPROVE_MAIN_CHAT_APPROVAL,
       input: { ...mainChatApprovalActionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => approveMainChatMessage(sessions, input, context)
     }),
     Object.freeze({
@@ -529,14 +529,14 @@ function createSessionActions({ sessions }) {
       id: ACTION_UPDATE_SESSION_PRESENCE,
       idempotency: "domain_native",
       input: { ...sessionPresenceActionInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.updateSessionPresence(input.sessionId, input)
     }),
     Object.freeze({
       ...SESSION_COMMAND,
       id: ACTION_BROADCAST_SESSION_PREVIEW_STATE,
       input: { ...sessionPreviewStateInputValidator, mode: "create" },
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sessions.broadcastSessionPreviewState(input.sessionId, input)
     })
   ]);
@@ -556,7 +556,7 @@ function createProjectWatchActions({ probe }) {
     input: { ...projectWatchInputValidator, mode: "create" },
     // No HTTP route: a watch lives only as long as its connection.
     channels: ["api"],
-    extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+    extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
     execute: (input, _context, deps) => watchProject(probe, input, deps?.watchBinding)
   })]);
 }

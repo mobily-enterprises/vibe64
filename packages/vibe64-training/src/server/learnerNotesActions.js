@@ -1,6 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { MAX_NOTES_CHARS } from "./learnerState.js";
-import { WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { requestId, text } from "./trainingActions.js";
 import { runLearnerAction } from "./stepActions.js";
 
@@ -71,7 +71,7 @@ function createTrainingLearnerNotesActions({ learners, publishLearnerChanged }) 
       id: "vibe64.training.learner-notes.clear", version: 1, kind: "command", idempotency: "domain_native",
       channels: ["api"], surfaces: ["app"],
       input: { mode: "create", schema: createSchema({ requestId, expectedRevision }) }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => runLearnerAction(clearNotes, input, context)
     })
   ]);

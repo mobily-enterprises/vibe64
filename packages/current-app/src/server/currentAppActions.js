@@ -1,4 +1,4 @@
-import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 import {
   currentAppQueryInputValidator
 } from "./inputSchemas.js";
@@ -18,7 +18,7 @@ function createCurrentAppActions({ currentApp }) {
     kind: "query",
     input: currentAppQueryInputValidator,
     output: null,
-    extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+    extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
     idempotency: "none",
     execute: (input) => currentApp.inspectCurrentApp(input)
   })]);

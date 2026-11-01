@@ -1,6 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { integrationsSchema } from "@jskit-ai/connectors-core/shared/configuration";
-import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { integrationReadTool, integrationSetupTool } from "./integrationAssistantContracts.js";
 import { integrationSetupInputSchema } from "./integrationSetupInput.js";
 import { integrationConfigurationChangesSchema } from "./integrationConfigurationInput.js";
@@ -61,7 +61,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
     Object.freeze({
       id: "vibe64.source-editor.file-areas.read", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "areas")
     }),
     // Project areas need no session; the service requires one for session areas.
@@ -73,7 +73,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         path: filePath,
         offset: text
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "tree", {})
     }),
     Object.freeze({
@@ -83,7 +83,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         area: { ...fileArea, required: true },
         path: { ...filePath, required: true }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "file", {})
     }),
     Object.freeze({
@@ -93,13 +93,13 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         area: { ...fileArea, required: true },
         path: { ...filePath, required: true }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "download", {})
     }),
     Object.freeze({
       id: "vibe64.source-editor.file-area.archive", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: { ...identity, required: false }, area: { ...fileArea, required: true }, path: filePath }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "archive", {})
     }),
     Object.freeze({
@@ -110,7 +110,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         path: filePath,
         names: { type: "array", items: { type: "string" }, required: true }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "conflicts", {})
     }),
     Object.freeze({
@@ -121,7 +121,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         path: filePath,
         conflict: { ...conflict, enum: ["fail", "replace", "keep-both"] }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input, context) => sourceEditor.fileArea(input, "upload", { readUpload: context.sourceEditorUpload?.readUpload })
     }),
     Object.freeze({
@@ -132,7 +132,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         path: { ...filePath, required: true },
         text: { ...text, required: true }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "create", {})
     }),
     Object.freeze({
@@ -144,7 +144,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         baseHash: requiredText,
         text: { ...text, required: true }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "save", {})
     }),
     Object.freeze({
@@ -155,7 +155,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         path: { ...filePath, required: true },
         destination: { ...filePath, required: true }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "rename", {})
     }),
     Object.freeze({
@@ -165,7 +165,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         area: { ...fileArea, required: true },
         path: { ...filePath, required: true }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "mkdir", {})
     }),
     Object.freeze({
@@ -175,7 +175,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         area: { ...fileArea, required: true },
         path: { ...filePath, required: true }
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "delete", {})
     }),
     Object.freeze({
@@ -190,7 +190,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         targetSessionId: { ...identity, required: false },
         conflict
       }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.fileArea(input, "transfer", {})
     }),
     Object.freeze({
@@ -208,7 +208,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
     Object.freeze({
       id: "vibe64.source-editor.integrations.n8n.discover", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity, serverUrl: requiredText }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.discoverN8nIntegration(input)
     }),
     Object.freeze({
@@ -223,7 +223,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
     Object.freeze({
       id: "vibe64.source-editor.integrations.oauth-client.register", version: 1, kind: "command", idempotency: "optional",
       input: { schema: createSchema({ sessionId: identity, ...integration, integrationId: identity, callbackUrl: requiredText }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => announceChange(input.baseHash === null ? "created" : "saved", sourceEditor.registerOAuthIntegration(input))
     }),
     Object.freeze({
@@ -236,79 +236,79 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
     Object.freeze({
       id: "vibe64.source-editor.tree.read", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity, path: filePath, limit: text, offset: text }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.readTree(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.files.find", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity, query: text, limit: text }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.listFiles(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.file.download", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity, path: { ...filePath, required: true } }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.downloadFile(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.stars.read", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.readStarredFiles(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.star.set", version: 1, kind: "command", idempotency: "optional",
       input: { schema: createSchema({ sessionId: identity, path: { ...filePath, required: true }, starred: { type: "boolean", required: true } }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.setStarredFile(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.search", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity, query: text, limit: text }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.search(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.path.resolve", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity, fromPath: filePath, target: requiredText }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.resolvePath(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.explanations.cleanup", version: 1, kind: "command", idempotency: "optional",
       input: { schema: createSchema({ sessionId: identity, activeExplanationIds: { type: "array", items: { type: "string" }, required: false }, originId: text }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.cleanupExplanations(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.explanation.delete", version: 1, kind: "command", idempotency: "optional",
       input: { schema: createSchema({ sessionId: identity, explanationId: identity }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.deleteExplanation(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.explanation.stop", version: 1, kind: "command", idempotency: "optional",
       input: { schema: createSchema({ sessionId: identity, explanationId: identity }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.stopExplanation(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.file.read", version: 1, kind: "query", idempotency: "none",
       input: { schema: createSchema({ sessionId: identity, path: { ...filePath, required: true } }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => sourceEditor.readFile(input)
     }),
     Object.freeze({
       id: "vibe64.source-editor.file.create", version: 1, kind: "command", idempotency: "optional",
       input: { schema: createSchema({ sessionId: identity, ...origin, path: { ...filePath, required: true } }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => announceChange("created", sourceEditor.createFile(input))
     }),
     Object.freeze({
       id: "vibe64.source-editor.file.save", version: 1, kind: "command", idempotency: "optional",
       input: { schema: createSchema({ sessionId: identity, ...origin, path: { ...filePath, required: true }, baseHash: requiredText, text: { ...text, required: true } }), mode: "create" }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => announceChange("saved", sourceEditor.saveFile(input))
     })
   ]);

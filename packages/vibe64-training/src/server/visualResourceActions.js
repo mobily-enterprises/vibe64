@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { authenticatedVibe64User, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { authenticatedVibe64User, NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { pinnedLessonKey } from "./installedContent.js";
 
 /** @typedef {import("./types.js").TrainingService} TrainingService */
@@ -64,7 +64,7 @@ function createTrainingVisualResourceActions({ learners, content }) {
       visualId: { type: "string", required: true, noTrim: true, maxLength: 64,
         pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" }
     }) }, output: null,
-    extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+    extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
     execute: (input, context) => readLessonVisual({ learners, content }, context, input)
   })]);
 }

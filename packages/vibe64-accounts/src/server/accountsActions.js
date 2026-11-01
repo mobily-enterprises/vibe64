@@ -1,6 +1,6 @@
 import { modelRoutingTool } from "./routingAssistantContracts.js";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import {
   aiConnectionInputValidators,
   modelRoutingInputValidator,
@@ -117,7 +117,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.saveModelRouting(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_READ_CODEX_PROVIDERS,
       version: 1,
       kind: "query",
@@ -127,7 +127,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.readCodexProviders(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_SAVE_CODEX_PROVIDER,
       version: 1,
       kind: "command",
@@ -138,7 +138,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.saveCodexProvider(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_REMOVE_CODEX_PROVIDER,
       version: 1,
       kind: "command",
@@ -149,7 +149,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.removeCodexProvider(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_READ_ACCOUNTS,
       version: 1,
       kind: "query",
@@ -159,7 +159,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.getStatus(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_LOGOUT_ACCOUNT,
       version: 1,
       kind: "command",
@@ -187,7 +187,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.saveGitIdentity(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_SAVE_PERSONAL_AI_PROFILE,
       version: 1,
       kind: "command",
@@ -200,7 +200,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.savePersonalAiProfile(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_START_ACCOUNT_AUTH,
       version: 1,
       kind: "command",
@@ -215,7 +215,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.startAuth(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_READ_ACCOUNT_AUTH_SESSION,
       version: 1,
       kind: "query",
@@ -225,7 +225,7 @@ function createAccountsActions({ accounts }) {
       execute: (input) => accounts.readAuthSession(input)
     }),
     Object.freeze({
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       id: ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
       version: 1,
       kind: "command",
@@ -268,7 +268,7 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement })
       input: aiConnectionInputValidators.catalog,
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("catalog", input)
     }),
     Object.freeze({
@@ -278,7 +278,7 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement })
       input: aiConnectionInputValidators.save,
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("save", input)
     }),
     Object.freeze({
@@ -288,7 +288,7 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement })
       input: aiConnectionInputValidators.remove,
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("remove", input)
     }),
     Object.freeze({
@@ -298,7 +298,7 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement })
       input: aiConnectionInputValidators.modelAccess,
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => manageAiConnection("modelAccess", input)
     })
   ]);

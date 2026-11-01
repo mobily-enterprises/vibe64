@@ -54,6 +54,9 @@ const WORKSPACE_OPERATION = Object.freeze({ projectScoped: false, ownerRequired:
 /** An operation of the workspace that only its owner may run. */
 const WORKSPACE_OWNER_OPERATION = Object.freeze({ projectScoped: false, ownerRequired: true, allowDeleting: false });
 
+/** The extensions of an action that is never offered to an assistant as a tool. */
+const NOT_A_TOOL = Object.freeze({ assistant: Object.freeze({ exclude: true }) });
+
 /**
  * The input a Vibe64 operation is registered with: transport never supplies
  * the acting user, and a project's operation may name its project.
@@ -217,6 +220,7 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
 
 export {
   authenticatedVibe64User,
+  NOT_A_TOOL,
   PROJECT_OPERATION,
   PROJECT_OWNER_OPERATION,
   registerVibe64ActionContext,

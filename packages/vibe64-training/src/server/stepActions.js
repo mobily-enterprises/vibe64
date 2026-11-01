@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { authenticatedVibe64User, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { authenticatedVibe64User, NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { attemptId, attemptSummary, id, operationError, pick, practiceSlug, requestId, text } from "./trainingActions.js";
 import { boundedTrainingResult, conflictFailure } from "./errors.js";
@@ -343,7 +343,7 @@ function createTrainingStepActions({ learners,
       ...BROWSER, id: "vibe64.training.step.observe", version: 1, kind: "command", idempotency: "domain_native",
       input: { mode: "create", schema: createSchema({ attemptId, stepId: id,
         observation: { type: "object", required: true, schema: trainingStepObservationSchema } }) }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => runLearnerAction(operations.observeStep, input, context)
     }),
     Object.freeze({
@@ -358,20 +358,20 @@ function createTrainingStepActions({ learners,
       input: { mode: "create", schema: createSchema({ attemptId, stepId: id, requestId,
         selected: { type: "array", required: true, minLength: 1, maxLength: 8, items: { type: "integer", required: true, min: 0, max: 7 } }
       }) }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => runLearnerAction(operations.answerStep, input, context)
     }),
     Object.freeze({
       ...BROWSER, id: "vibe64.training.step.done", version: 1, kind: "command", idempotency: "domain_native",
       input: { mode: "create", schema: createSchema({ attemptId, stepId: id, requestId }) }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => runLearnerAction(operations.markStepDone, input, context)
     }),
     // The learner's own "Check my work" on a review step; Colleague never runs it.
     Object.freeze({
       ...BROWSER, id: "vibe64.training.step.review.run", version: 1, kind: "command", idempotency: "domain_native",
       input: { mode: "create", schema: createSchema({ attemptId, stepId: id, requestId }) }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => runLearnerAction(operations.runStepReview, input, context)
     }),
     Object.freeze({
@@ -385,7 +385,7 @@ function createTrainingStepActions({ learners,
       ...BROWSER, id: "vibe64.training.reader.save", version: 1, kind: "command", idempotency: "none",
       input: { mode: "create", schema: createSchema({ attemptId, stepId: id,
         scroll: { type: "number", required: true, min: 0, max: 10_000_000 } }) }, output: null,
-      extensions: { assistant: { exclude: true }, vibe64: WORKSPACE_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input, context) => runLearnerAction(operations.saveReader, input, context)
     }),
     Object.freeze({

@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { USAGE_INTERACTION_KINDS } from "../shared/contract.js";
 
 /** @typedef {import("./types.js").UsageRecordingService} UsageRecordingService */
@@ -25,7 +25,7 @@ function createUsageRecordingActions({ usageRecording }) {
       input: { schema: createSchema({ sessionId }), mode: "create" },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.readTargets(input)
     }),
     Object.freeze({
@@ -42,7 +42,7 @@ function createUsageRecordingActions({ usageRecording }) {
       },
       output: null,
       idempotency: "optional",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.start(input)
     }),
     Object.freeze({
@@ -52,7 +52,7 @@ function createUsageRecordingActions({ usageRecording }) {
       input: { schema: createSchema({ sessionId }), mode: "create" },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.readCurrent(input)
     }),
     Object.freeze({
@@ -62,7 +62,7 @@ function createUsageRecordingActions({ usageRecording }) {
       input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
       output: null,
       idempotency: "optional",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.stop(input)
     }),
     Object.freeze({
@@ -72,7 +72,7 @@ function createUsageRecordingActions({ usageRecording }) {
       input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
       output: null,
       idempotency: "optional",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.dismiss(input)
     }),
     Object.freeze({
@@ -82,7 +82,7 @@ function createUsageRecordingActions({ usageRecording }) {
       input: { schema: createSchema({ sessionId }), mode: "create" },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.list(input)
     }),
     Object.freeze({
@@ -103,7 +103,7 @@ function createUsageRecordingActions({ usageRecording }) {
       },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.readRequests(input)
     }),
     Object.freeze({
@@ -113,7 +113,7 @@ function createUsageRecordingActions({ usageRecording }) {
       input: { schema: createSchema({ sessionId, recordingId, requestId: text(64), ...page }), mode: "create" },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.readRequestFunctions(input)
     }),
     Object.freeze({
@@ -134,7 +134,7 @@ function createUsageRecordingActions({ usageRecording }) {
       },
       output: null,
       idempotency: "optional",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.recordInteraction(input)
     }),
     Object.freeze({
@@ -144,7 +144,7 @@ function createUsageRecordingActions({ usageRecording }) {
       input: { schema: createSchema({ sessionId, recordingId }), mode: "create" },
       output: null,
       idempotency: "optional",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => usageRecording.delete(input)
     })
   ]);

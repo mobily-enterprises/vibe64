@@ -1,5 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 
 import { USAGE_ENTRY_KINDS } from "./usageWeb.js";
 
@@ -43,7 +43,7 @@ function createUsageActions({ systemGraph }) {
       },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readUsageEntries(input)
     }),
     Object.freeze({
@@ -63,7 +63,7 @@ function createUsageActions({ systemGraph }) {
       },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readUsageWeb(input)
     }),
     Object.freeze({
@@ -79,7 +79,7 @@ function createUsageActions({ systemGraph }) {
       },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.readUsageFunction(input)
     }),
     Object.freeze({
@@ -95,7 +95,7 @@ function createUsageActions({ systemGraph }) {
       },
       output: null,
       idempotency: "none",
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       execute: (input) => systemGraph.joinUsage(input)
     })
   ]);

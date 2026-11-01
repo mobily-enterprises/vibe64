@@ -1,4 +1,4 @@
-import { PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
+import { NOT_A_TOOL, PROJECT_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL, mainGoalPauseTool, mainGoalBlockTool, planUsageTool, temporaryConversationTool, workPlanChangeTool, workPlanTool } from "./assistantContracts.js";
 import { outputStatusTool, outputTerminalTool } from "./outputAssistantContracts.js";
 import {
@@ -66,7 +66,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: emptyInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: () => terminals.globalCodexTerminalState()
     }),
@@ -76,7 +76,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: emptyInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.startGlobalCodexTerminal(input)
     }),
@@ -86,7 +86,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: emptyInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.reconcileOpenAgentSessions(input)
     }),
@@ -96,7 +96,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: projectRuntimeInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.openProjectRuntime(input)
     }),
@@ -116,7 +116,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: previewDiagnosticActionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: input => terminals.recordPreviewDiagnostic(input.sessionId, input)
     }),
@@ -136,7 +136,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: outputResultInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.readOutputResult(input.sessionId, input.resultId)
     }),
@@ -156,7 +156,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: agentTerminalStartInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.startAgentTerminal(input.sessionId, input)
     }),
@@ -176,7 +176,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: agentGoalInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.updateAgentGoal(input.sessionId, input)
     }),
@@ -209,7 +209,7 @@ function createTerminalActions({ terminals }) {
       channels: ["internal"],
       input: sessionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.readAgentGoal(input.sessionId, input, { canonical: true })
     }),
@@ -220,7 +220,7 @@ function createTerminalActions({ terminals }) {
       channels: ["internal"],
       input: canonicalAgentGoalInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.updateAgentGoal(input.sessionId, input, { canonical: true })
     }),
@@ -270,7 +270,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: sessionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.ensureAgentSession(input.sessionId, input)
     }),
@@ -280,7 +280,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: agentAttachmentDeleteActionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.readAgentAttachment(input.sessionId, input.attachmentId)
     }),
@@ -312,7 +312,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: terminalInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.readAgentTerminal(input.sessionId, input.terminalSessionId, input)
     }),
@@ -322,7 +322,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: terminalInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.closeAgentTerminal(input.sessionId, input.terminalSessionId)
     }),
@@ -332,7 +332,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: terminalInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.readAgentTerminalControl(input.sessionId, input.terminalSessionId, input)
     }),
@@ -342,7 +342,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: terminalControlActionInputValidator(false, "text"),
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.checkAgentTerminalText(input.sessionId, input.terminalSessionId, input)
     }),
@@ -352,7 +352,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: terminalControlActionInputValidator(false, "text"),
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.writeAgentTerminalText(input.sessionId, input.terminalSessionId, input)
     }),
@@ -362,7 +362,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: terminalControlActionInputValidator(false, "key"),
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.writeAgentTerminalKey(input.sessionId, input.terminalSessionId, input)
     }),
@@ -372,7 +372,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: globalTerminalInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.readGlobalCodexTerminal(input.terminalSessionId)
     }),
@@ -382,7 +382,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: globalTerminalInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.closeGlobalCodexTerminal(input.terminalSessionId)
     }),
@@ -392,7 +392,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: globalTerminalInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.readGlobalCodexTerminalControl(input.terminalSessionId)
     }),
@@ -402,7 +402,7 @@ function createTerminalActions({ terminals }) {
       kind: "query",
       input: terminalControlActionInputValidator(true, "text"),
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.checkGlobalCodexTerminalText(input.terminalSessionId, input)
     }),
@@ -412,7 +412,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: terminalControlActionInputValidator(true, "text"),
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.writeGlobalCodexTerminalText(input.terminalSessionId, input)
     }),
@@ -422,7 +422,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: terminalControlActionInputValidator(true, "key"),
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.writeGlobalCodexTerminalKey(input.terminalSessionId, input)
     }),
@@ -442,7 +442,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: openOutputTargetActionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.openOutputTarget(input.sessionId)
     }),
@@ -452,7 +452,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: previewIdentityActionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.selectPreviewIdentity(input.sessionId, input)
     }),
@@ -462,7 +462,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: agentAttachmentActionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.uploadAgentAttachment(input.sessionId, input)
     }),
@@ -472,7 +472,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: agentAttachmentDeleteActionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "optional",
       execute: (input) => terminals.deleteAgentAttachment(input.sessionId, input)
     }),
@@ -552,7 +552,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: sessionPromptHintsActionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.generateSessionPromptHints(input.sessionId, input)
     }),
@@ -562,7 +562,7 @@ function createTerminalActions({ terminals }) {
       kind: "command",
       input: sessionPromptHintsActionInputValidator,
       output: null,
-      extensions: { assistant: { exclude: true }, vibe64: PROJECT_OPERATION },
+      extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
       idempotency: "none",
       execute: (input) => terminals.cancelSessionPromptHints(input.sessionId, input)
     })
