@@ -6,9 +6,9 @@ import { effectiveVibe64AgentSettings } from "@local/vibe64-runtime/shared";
 import {
   codexAppServerThreadPreparationForSession, codexAppServerThreadSettings
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
-import {
-  createMainConversationBinding, readSessionConversationContext, sessionBriefingIsDelivered, learningSessionExecutionRoot
-} from "./mainConversationBinding.js";
+import { createMainConversationBinding } from "./mainConversationBinding.js";
+import { readSessionConversationContext, learningSessionExecutionRoot } from "./mainConversationContext.js";
+import { sessionBriefingIsDelivered } from "./mainConversationMessages.js";
 import { codexAppServerAdmissionError, codexAppServerFrozenTurnInterruptResponse } from "./codexSessionProviderHost.js";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import {

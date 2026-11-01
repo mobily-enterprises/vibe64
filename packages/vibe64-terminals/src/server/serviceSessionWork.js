@@ -6,10 +6,8 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { requireCompletedConversationRewind } from "./assistantChangeover.js";
 import { changeIncomingContribution as changeManagedIncomingContribution } from "./sessionIncomingContributions.js";
-import {
-  recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate,
-  updateSessionWork as updateManagedSessionWork
-} from "./sessionWorkUpdate.js";
+import { updateSessionWork as updateManagedSessionWork } from "./sessionWorkUpdate.js";
+import { recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate } from "./sessionWorkUpdateRecovery.js";
 import {
   prepareSessionPullRequestBranch,
   prepareSessionWorkSaveMessage as prepareManagedSessionWorkSaveMessage,

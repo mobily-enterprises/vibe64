@@ -142,6 +142,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
+/** @typedef {import("./types.js").PublishNativeConversation} PublishNativeConversation */
 /** @typedef {import("./types.js").ContinueGoalAfterAccountChange} ContinueGoalAfterAccountChange */
 
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
@@ -170,7 +171,7 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
- * @param {ConversationRuntime["publishNative"]} dependencies.publishConversation
+ * @param {PublishNativeConversation} dependencies.publishConversation
  * @param {ContinueGoalAfterAccountChange} dependencies.continueGoalAfterAccountChange
  * @param {ConversationRuntime["runNativeDetachedConversation"]} dependencies.runNativeDetachedConversation
  * @param {PublishSessionChanged} dependencies.publishSessionChanged

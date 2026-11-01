@@ -118,9 +118,7 @@ function createOpenCodeScopedPreparation({
     };
   }
 
-  async function prepareDetachedTarget(sessionId = "", input = {}, options = {}, {
-    createIfMissing = true
-  } = {}) {
+  async function prepareDetachedTarget(sessionId = "", input = {}, options = {}) {
     const context = await contextFor(sessionId, options);
     const executionProfile = openCodeExecutionProfile(input);
     return {
@@ -135,7 +133,7 @@ function createOpenCodeScopedPreparation({
         return {
           conversationId: toText(input.conversationId || input.threadId),
           scoped: Boolean(context.assistantScope),
-          createIfMissing,
+          createIfMissing: true,
           profileChanged: () =>
             openCodeError("vibe64_opencode_execution_profile_changed", "The scoped helper profile changed. Start a new helper.", {}, 409),
           identityRequired: () =>
@@ -191,9 +189,8 @@ function createOpenCodeScopedPreparation({
     );
   }
 
-  async function prepareDetachedChatTurn(sessionId = "", input = {}, options = {}, {
-    waitForCompletion = true
-  } = {}) {
+  async function prepareDetachedChatTurn(sessionId = "", input = {}, options = {}) {
+    const { waitForCompletion = true } = options;
     // The provider call passes onEvent: null when its caller gave no event stream.
     const onEvent = options.onEvent ?? doNothing;
     const { onPromptSending = doNothing } = input;

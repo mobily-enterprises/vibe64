@@ -3,7 +3,7 @@ import test from "node:test";
 import path from "node:path";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
-import { readSessionConversationContext } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { readSessionConversationContext } from "../../packages/vibe64-terminals/src/server/mainConversationContext.js";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";

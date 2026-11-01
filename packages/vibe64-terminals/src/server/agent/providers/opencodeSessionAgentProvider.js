@@ -10,16 +10,16 @@ import {
   emitVibe64AgentExecutionProfile,
   vibe64HelperExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
-import { OPENCODE_EXPECTED_VERSION, throwVibe64OpenCodeError } from "../../opencodeServerProcess.js";
-import { openCodeSessionId, opencodeTerminalNamespace } from "../../terminalShared.js";
+import { OPENCODE_EXPECTED_VERSION } from "../../opencodeServerProcess.js";
+import { openCodeSessionId, opencodeTerminalNamespace, throwVibe64OpenCodeError } from "../../terminalShared.js";
 
 /** @typedef {import("../../types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("../../types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
 /** @typedef {ReturnType<typeof import("../../openCodeConversationAccounts.js").createOpenCodeConversationAccounts>} OpenCodeConversationAccounts */
 /** @typedef {import("../../types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
 /** @typedef {ReturnType<typeof import("../../openCodeScopedPreparation.js").createOpenCodeScopedPreparation>} OpenCodeScopedPreparation */
-/** @typedef {ReturnType<typeof import("../../openCodeLifecyclePreparation.js").createOpenCodeLifecyclePreparation>} OpenCodeLifecyclePreparation */
-/** @typedef {ReturnType<typeof import("../../sessionRenewalReceipts.js").createOpenCodeSessionRenewalPreparation>} OpenCodeSessionRenewalPreparation */
+/** @typedef {import("../../types.js").OpenCodeLifecyclePreparation} OpenCodeLifecyclePreparation */
+/** @typedef {ReturnType<typeof import("../../openCodeSessionRenewal.js").createOpenCodeSessionRenewalPreparation>} OpenCodeSessionRenewalPreparation */
 /** @typedef {ReturnType<typeof import("../../openCodeInteractiveTerminals.js").createOpenCodeInteractiveTerminals>} OpenCodeInteractiveTerminals */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 
@@ -174,7 +174,8 @@ function createOpenCodeSessionAgentProvider({
           preparation: {
             cleanup: current => prepareSessionCleanup(sessionId, current),
             creation: (input, options) => prepareConversationCreation(sessionId, input, options),
-            turn: (input, options) => prepareDetachedChatTurn(sessionId, input, options, { waitForCompletion: mode === "detached" }),
+            turn: (input, options) =>
+              prepareDetachedChatTurn(sessionId, input, { ...options, waitForCompletion: mode === "detached" }),
             existing: (input, options, { operation } = {}) => prepareExistingDetachedTarget(sessionId,
               operation === "delete" ? { ...input, persistent: input.persistent || Boolean(options?.assistantScope) } : input,
               options)

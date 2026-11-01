@@ -212,8 +212,8 @@ function detachedOpenCodeFixture({ controller }) {
     runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
     sharedRuntime: { runPreparedConversationTurn: prepared =>
       controller.runDetachedChatTurn(prepared.sessionId, prepared.input, prepared.options) },
-    scopedPreparation: { prepareDetachedChatTurn(sessionId, input, options, policy) {
-      assert.equal(policy.waitForCompletion, true);
+    scopedPreparation: { prepareDetachedChatTurn(sessionId, input, options) {
+      assert.equal(options.waitForCompletion, true);
       return { sessionId, input, options };
     } }
   });

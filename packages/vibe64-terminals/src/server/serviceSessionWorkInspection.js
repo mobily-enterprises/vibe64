@@ -2,9 +2,9 @@ import { sessionConnectedContribution } from "@local/vibe64-core/server/projectR
 import { inspectIncomingContributions as inspectManagedIncomingContributions } from "./sessionIncomingContributions.js";
 import {
   checkSessionUpdates as checkManagedSessionUpdates,
-  inspectSessionUpdateFailure as inspectManagedSessionUpdateFailure,
   readSessionAuthorityHeads as readManagedSessionAuthorityHeads
 } from "./sessionWorkUpdate.js";
+import { inspectSessionUpdateFailure as inspectManagedSessionUpdateFailure } from "./sessionWorkUpdateRecovery.js";
 import {
   inspectSessionChangeDiff as inspectManagedSessionChangeDiff,
   inspectSessionChanges as inspectManagedSessionChanges,

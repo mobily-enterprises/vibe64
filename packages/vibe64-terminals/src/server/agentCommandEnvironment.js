@@ -5,7 +5,7 @@ import { requestUnixJsonCommand } from "./unixJsonCommand.js";
 import { codexTerminalNamespace, openCodeError } from "./terminalShared.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { prepareAgentHelperCommand } from "./agentHelperCommand.js";
-import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import {
   prepareAgentDatabaseCommand
 } from "./agentDatabaseCommand.js";

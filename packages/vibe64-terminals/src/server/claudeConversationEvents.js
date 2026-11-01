@@ -9,7 +9,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {ReturnType<typeof import("./claudeConversationStorage.js").createClaudeConversationStorage>} ClaudeConversationStorage */
-/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createClaudeConversationMessagePolicy>} ClaudeConversationMessagePolicy */
+/** @typedef {ReturnType<typeof import("./mainConversationMessages.js").createClaudeConversationMessagePolicy>} ClaudeConversationMessagePolicy */
 /** @typedef {import("./types.js").ClaudeConversationOwner} ClaudeConversationOwner */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */

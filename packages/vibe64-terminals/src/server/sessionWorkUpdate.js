@@ -37,7 +37,6 @@ import {
   readAuthorityBranchHeads,
   readCanonical
 } from "./sessionWorkAuthority.js";
-import { inspectSessionUpdateFailure, recoverSessionWorkUpdate } from "./sessionWorkUpdateRecovery.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
@@ -693,10 +692,8 @@ export {
   captureSessionWorkUpdateCheckpointDirect,
   checkSessionUpdates,
   checkSessionUpdatesDirect,
-  inspectSessionUpdateFailure,
   prepareSessionWorkUpdateDirect,
   readSessionAuthorityHeads,
-  recoverSessionWorkUpdate,
   regenerateSessionWorkUpdateDirect,
   updateSessionWork,
   updateSessionWorkDirect

@@ -22,11 +22,13 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import {
   checkSessionUpdates,
-  inspectSessionUpdateFailure,
-  recoverSessionWorkUpdate,
   updateSessionWork as updateManagedSessionWork,
   updateSessionWorkDirect as updateSessionWork
 } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
+import {
+  inspectSessionUpdateFailure,
+  recoverSessionWorkUpdate
+} from "../../packages/vibe64-terminals/src/server/sessionWorkUpdateRecovery.js";
 import {
   changeIncomingContribution,
   changeIncomingContributionDirect,

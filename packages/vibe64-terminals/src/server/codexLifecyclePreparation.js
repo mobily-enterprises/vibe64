@@ -7,7 +7,7 @@ import { codexThreadIdForWorkdir, withCodexState } from "./codexConversationStor
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import { renewalCleanupContext, renewalArchivedPredecessorContext } from "./sessionRenewalHandover.js";
 import { codexTerminalNamespace } from "./terminalShared.js";
-import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 

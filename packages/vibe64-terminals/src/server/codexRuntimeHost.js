@@ -9,7 +9,7 @@ import { VIBE64_ASSISTANT_ENGINE_IDS, vibe64AssistantSelectionFromMetadata } fro
 import { stableHash } from "@local/vibe64-execution/server";
 import { codexGitCommandShimDirs } from "./codexTerminalAccess.js";
 import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecutionEnv.js";
-import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import { VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV, VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV } from "./agentEnvCommand.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";

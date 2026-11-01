@@ -1,4 +1,15 @@
-import { readSessionConversationContext, createSessionConversationBinding, prepareSessionConversationDisposal, prepareSessionConversationRenewal, prepareSessionConversationReadiness, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation, prepareSessionConversationStorage, prepareSessionConversationActivity } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import {
+  createSessionConversationBinding,
+  prepareSessionConversationDisposal,
+  prepareSessionConversationRenewal,
+  prepareSessionConversationReadiness,
+  prepareProjectConversationCleanup,
+  prepareConversationRuntimeInvalidation,
+  prepareConversationReconciliation,
+  prepareSessionConversationStorage,
+  prepareSessionConversationActivity
+} from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { readSessionConversationContext } from "../../packages/vibe64-terminals/src/server/mainConversationContext.js";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { createConversationRuntime, createConversationStreams } from "@jskit-ai/assistant-core/server/conversation";

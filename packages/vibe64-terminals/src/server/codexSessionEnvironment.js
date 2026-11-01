@@ -4,7 +4,7 @@ import { prepareAgentSessionCommandEnvironment } from "./agentCommandEnvironment
 import { VIBE64_CODEX_ATTACHMENTS_ROOT_ENV } from "./codexAttachments.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
-import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import {
   CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE,
   codexSessionWorktreeUnavailableFailure,

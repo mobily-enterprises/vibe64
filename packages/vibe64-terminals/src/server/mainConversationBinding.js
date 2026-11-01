@@ -540,14 +540,3 @@ export {
   createMainConversationBinding,
   readMainConversationHistory
 };
-export {
-  learningSessionExecutionRoot,
-  readClaudeConversationOwnerContext,
-  readSessionConversationContext,
-  requireCompletedNativeConversationReplacement
-} from "./mainConversationContext.js";
-export {
-  createClaudeConversationMessagePolicy,
-  createOpenCodeMainMessagePreparation,
-  sessionBriefingIsDelivered
-} from "./mainConversationMessages.js";

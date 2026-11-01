@@ -2,10 +2,10 @@ import {
   createMainConversationBinding,
   readMainConversationHistory,
   MAIN_CONVERSATION_PRESENTATION,
-  requireCompletedNativeConversationReplacement,
   requireCompletedConversationRewind,
   requireMainConversationAdmission
 } from "./mainConversationBinding.js";
+import { requireCompletedNativeConversationReplacement } from "./mainConversationContext.js";
 import { createConversationChangeover } from "@jskit-ai/assistant-core/server/conversation";
 import { vibe64AssistantConversationKey, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 export function sessionConversationKey(session) {

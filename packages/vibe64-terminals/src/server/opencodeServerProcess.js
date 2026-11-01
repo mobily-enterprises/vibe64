@@ -15,7 +15,6 @@ import {
 } from "@local/vibe64-execution/server";
 
 import { genesisParserEnvironment } from "@local/vibe64-genesis/server";
-import { throwVibe64OpenCodeError } from "./terminalShared.js";
 
 import {
   OPENCODE_EXPECTED_VERSION,
@@ -29,7 +28,6 @@ import {
   readOpenCodeZenModelIds as readNativeOpenCodeZenModelIds,
   verifyOpenCodeApiKey as verifyNativeOpenCodeApiKey
 } from "@jskit-ai/assistant-core/server/opencode-process";
-import { createOpenCodeHostPreparation } from "./openCodeHostPreparation.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -651,8 +649,6 @@ export {
   OPENCODE_HOST,
   OPENCODE_READY_TIMEOUT_MS,
   createOpenCodeServerProcess,
-  createOpenCodeHostPreparation,
-  throwVibe64OpenCodeError,
   openCodeInlineConfig,
   readOpenCodeCatalog,
   readOpenCodeZenModelIds,

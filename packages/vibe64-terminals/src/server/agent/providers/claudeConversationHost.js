@@ -4,8 +4,9 @@ import { createClaudeConversationEnvironment } from "../../claudeConversationEnv
 import { createClaudeConversationEvents } from "../../claudeConversationEvents.js";
 import { createClaudeConversationAccounts } from "../../claudeConversationAccounts.js";
 import { requireCompletedNativeConversationReplacement } from "../../assistantChangeover.js";
-import { createClaudeConversationMessagePolicy, publishMainConversationEvent, readClaudeConversationOwnerContext,
-  readSessionConversationContext } from "../../mainConversationBinding.js";
+import { publishMainConversationEvent } from "../../mainConversationBinding.js";
+import { readClaudeConversationOwnerContext, readSessionConversationContext } from "../../mainConversationContext.js";
+import { createClaudeConversationMessagePolicy } from "../../mainConversationMessages.js";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { randomUUID } from "node:crypto";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";

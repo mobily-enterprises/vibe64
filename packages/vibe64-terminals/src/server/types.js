@@ -36,8 +36,8 @@
 /** @typedef {ReturnType<typeof import("./codexConversationPreparation.js").createCodexConversationPreparation>} CodexConversationPreparation */
 /** @typedef {ReturnType<typeof import("./sessionTurnCheckpoint.js").createCodexSessionTurnCheckpoint>} CodexSessionTurnCheckpoint */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/opencode-process").createOpenCodeSharedRuntime>} OpenCodeSharedRuntime */
-/** @typedef {ReturnType<typeof import("./opencodeServerProcess.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
-/** @typedef {ReturnType<typeof import("./mainConversationBinding.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
+/** @typedef {ReturnType<typeof import("./openCodeHostPreparation.js").createOpenCodeHostPreparation>} OpenCodeHostPreparation */
+/** @typedef {ReturnType<typeof import("./mainConversationMessages.js").createOpenCodeMainMessagePreparation>} OpenCodeMainMessagePreparation */
 /** @typedef {ReturnType<typeof import("./agentPreviewCommandState.js").createAgentPreviewCommandState>} AgentPreviewCommandState */
 /** @typedef {ReturnType<typeof import("./agentPreviewWorkerRegistry.js").createAgentPreviewWorkerRegistry>} AgentPreviewWorkerRegistry */
 /** @typedef {ReturnType<typeof import("./outputTargetTerminal.js").createOutputTargetTerminalController>} OutputTargetTerminalController */

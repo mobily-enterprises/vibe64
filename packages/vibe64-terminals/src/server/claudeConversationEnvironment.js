@@ -13,7 +13,7 @@ import { claudeFlagSettings } from "./claudeCodeProcess.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { claudeConversationError, claudeTerminalNamespace } from "./terminalShared.js";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
-import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import {
   closeTerminalSession, readTerminalSession, resizeTerminalSession,
   subscribeTerminalSession, writeTerminalSessionText
