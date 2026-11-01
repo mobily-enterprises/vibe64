@@ -42,6 +42,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-sessions/src/server/sessionRenewalRules.js`
 - `src/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue`
 - `packages/vibe64-runtime/src/server/runtime.js`
+- `packages/vibe64-runtime/src/server/sessionRuntimeRenewal.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/server/sessionRecords.js`
 - `packages/vibe64-runtime/src/server/sessionCreation.js`
