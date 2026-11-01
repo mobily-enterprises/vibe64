@@ -31,7 +31,7 @@ function accountsResult(operation) {
   });
 }
 
-function refreshRequested(input = {}) {
+function refreshRequested(input) {
   return input?.refresh === true || input?.refresh === "true" || input?.refresh === "1";
 }
 

@@ -228,7 +228,7 @@ function createAuthSessionViews({ access, notifications, state, statusReads }) {
     reason = "",
     terminal = {}
   } = {}) {
-    if (!metadata?.accountId || !terminal?.id) {
+    if (!metadata.accountId || !terminal.id) {
       return null;
     }
     const session = await authSessionSnapshot({

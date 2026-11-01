@@ -6,11 +6,11 @@ import { GITHUB_ACCOUNT_MODE_USER, USER_CREDENTIAL_SCOPE } from "@local/vibe64-e
 // tool home folder itself, which only an app credential context owns.
 
 function isUserCredentialContext(context = {}) {
-  return context?.scope === USER_CREDENTIAL_SCOPE || context?.accountMode === GITHUB_ACCOUNT_MODE_USER;
+  return context.scope === USER_CREDENTIAL_SCOPE || context.accountMode === GITHUB_ACCOUNT_MODE_USER;
 }
 
 async function ensureToolHomeSource(context = {}) {
-  if (!context?.toolHomeSource) {
+  if (!context.toolHomeSource) {
     return;
   }
   if (isUserCredentialContext(context)) {

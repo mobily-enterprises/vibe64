@@ -225,7 +225,7 @@ function githubActionInput(method, validator) {
   };
 }
 
-function envSecretStatusCode(response = {}) {
+function envSecretStatusCode(response) {
   if (response?.ok === true) {
     return 200;
   }
@@ -238,7 +238,7 @@ function envSecretStatusCode(response = {}) {
   return 400;
 }
 
-function projectSettingsMutationStatusCode(response = {}) {
+function projectSettingsMutationStatusCode(response) {
   if (response?.ok === true) {
     return 200;
   }

@@ -4,7 +4,7 @@ import { runVibe64Command } from "@local/vibe64-execution/server";
 // Host commands an account operation runs: who runs them, with which runtimes,
 // and what their output says.
 
-function hostCommandResultOutput(result = {}) {
+function hostCommandResultOutput(result) {
   return [result?.output, result?.stderr, result?.stdout].filter(Boolean).join("\n");
 }
 
@@ -14,10 +14,10 @@ function commandArgv(commandArgs) {
 
 function hostCommandOptionsForCredentialContext(context = {}) {
   return {
-    hostGid: context?.gid ?? context?.hostGid ?? "",
-    hostUid: context?.uid ?? context?.hostUid ?? "",
-    toolHomeSource: context?.toolHomeSource || "",
-    username: context?.username || context?.ownerUserKey || ""
+    hostGid: context.gid ?? context.hostGid ?? "",
+    hostUid: context.uid ?? context.hostUid ?? "",
+    toolHomeSource: context.toolHomeSource || "",
+    username: context.username || context.ownerUserKey || ""
   };
 }
 

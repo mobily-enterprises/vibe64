@@ -127,7 +127,7 @@ function authCommandPreview(commandArgs = []) {
   return commandArgs.map(shellQuote).join(" ");
 }
 
-function accountAuthWorkingDirectory(providerContext = {}, fallback = process.cwd()) {
+function accountAuthWorkingDirectory(providerContext, fallback = process.cwd()) {
   return String(providerContext?.toolHomeSource || providerContext?.home || fallback || process.cwd());
 }
 
@@ -228,7 +228,7 @@ function canReuseAuthTerminal(accountId, mode, githubContext = null) {
   return authTerminalRunningLimitFilter(accountId, mode, githubContext);
 }
 
-function authTerminalCredentialHome(providerContext = {}) {
+function authTerminalCredentialHome(providerContext) {
   return {
     gid: providerContext?.gid ?? providerContext?.hostGid ?? null,
     home: providerContext?.toolHomeSource || providerContext?.home || "",

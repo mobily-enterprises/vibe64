@@ -23,7 +23,7 @@ const DEFAULT_MANAGED_GIT_BRANCH = "main";
 function createManagedProjectRepositoryService({ initializeManagedProject = initializePublicManagedProject,
   projectContext, projectService, configureProject }) {
   // Internal preparation options are separate from action and HTTP input.
-  async function createManagedGitProject(input = {}, { initializeProject } = {}) {
+  async function createManagedGitProject(input, { initializeProject } = {}) {
     assertProjectEffectAdmission();
     const slug = normalizeProjectSlug(input?.slug || projectSlugFromName(input?.name || "New Project"));
     // readable-check: allow optional-call - optional operation: a project context without practice scopes has none

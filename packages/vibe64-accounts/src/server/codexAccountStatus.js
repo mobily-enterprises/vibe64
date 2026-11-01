@@ -215,8 +215,8 @@ function createCodexAccountStatus({ access, env, notifications }) {
     const existingLoginId = await readCodexLoginId(access.systemRoot);
     const existingAuthStatus = await readCodexAuthStatus(access.systemRoot);
     const transitionPending = existingAuthStatus?.status === "reconnecting";
-    const preserveReconnectRequired = account?.status === "reconnect_required";
-    if (account?.connected === true) {
+    const preserveReconnectRequired = account.status === "reconnect_required";
+    if (account.connected === true) {
       if (existingConnected && !rotateMarker && !transitionPending) {
         authDebug("server.auth.codex_marker.unchanged", {
           account: accountDebugSummary(account),

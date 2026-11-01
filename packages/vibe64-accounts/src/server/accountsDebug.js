@@ -22,7 +22,7 @@ function authDebug(event, fields = {}) {
   console.info(`[${AUTH_DEBUG_MARKER}] ${JSON.stringify(payload)}`);
 }
 
-function accountDebugSummary(account = {}) {
+function accountDebugSummary(account) {
   return {
     code: String(account?.code || ""),
     connected: account?.connected === true,

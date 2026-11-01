@@ -10,7 +10,7 @@ function redactGithubCliOutput(value = "") {
     .replace(/\bgh[pousr]_[A-Za-z0-9_]{20,}\b/gu, "[REDACTED]");
 }
 
-function githubCliCommandOutput(result = {}) {
+function githubCliCommandOutput(result) {
   return redactGithubCliOutput(result?.output || result?.stderr || result?.stdout || "").trim();
 }
 

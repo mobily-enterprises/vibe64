@@ -119,7 +119,7 @@ function vibe64AccountAuthSessionRealtimePayload(session = {}) {
 }
 
 function authSessionRealtimeAudience({ context = {} } = {}) {
-  return normalizeAccountValue(context?.actor?.id)
+  return normalizeAccountValue(context.actor?.id)
     ? "actor_user"
     : VIBE64_ACCOUNT_REALTIME_AUDIENCE;
 }

@@ -39,7 +39,7 @@ const GITHUB_HOSTS_RELATIVE_PATH = Object.freeze([".config", "gh", "hosts.yml"])
 
 const GITHUB_GITCONFIG_RELATIVE_PATH = Object.freeze([".gitconfig"]);
 
-function hostCommandResultTransientFailure(result = {}) {
+function hostCommandResultTransientFailure(result) {
   return result?.ok !== true && GITHUB_STATUS_TRANSIENT_FAILURE_PATTERN.test(hostCommandResultOutput(result));
 }
 
@@ -344,7 +344,7 @@ async function readGithubAccountStatus({
   });
 }
 
-function githubAuthStatusKey(githubContext = {}) {
+function githubAuthStatusKey(githubContext) {
   return String(githubContext?.userKey || githubContext?.username || githubContext?.accountMode || "local").trim();
 }
 
@@ -439,7 +439,7 @@ async function recordGithubAuthInvalidState({
   };
 }
 
-function rememberedGithubIdentity(value = {}) {
+function rememberedGithubIdentity(value) {
   const login = String(value?.login || "").trim();
   if (!login) {
     return null;
