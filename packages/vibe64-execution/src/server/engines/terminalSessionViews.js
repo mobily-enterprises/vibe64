@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { timestampMs } from "../normalize.js";
 
 // Terminal session limits and the plain views of a session: its size, output,
 // response, control snapshot and idle timing.
@@ -161,11 +162,6 @@ function normalizeQuietThresholdMs(value = DEFAULT_QUIET_THRESHOLD_MS) {
     return DEFAULT_QUIET_THRESHOLD_MS;
   }
   return Math.min(threshold, MAX_QUIET_THRESHOLD_MS);
-}
-
-function timestampMs(value = "") {
-  const ms = Date.parse(String(value || ""));
-  return Number.isFinite(ms) ? ms : 0;
 }
 
 function normalizeDetachedIdleTimeoutMs(value = 0) {

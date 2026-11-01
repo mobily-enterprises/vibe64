@@ -53,6 +53,12 @@ function uniqueStrings(values = []) {
   return output;
 }
 
+// Milliseconds since the epoch for a stored timestamp; 0 when it is empty or unreadable.
+function timestampMs(value) {
+  const ms = Date.parse(String(value || "").trim());
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 function firstText(...values) {
   for (const value of values) {
     const normalized = normalizeText(value);
@@ -71,5 +77,6 @@ export {
   normalizeText,
   pathInsideOrEqual,
   recordValue,
+  timestampMs,
   uniqueStrings
 };

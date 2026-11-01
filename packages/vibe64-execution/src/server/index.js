@@ -138,6 +138,7 @@ export {
   envRecord,
   normalizeText,
   recordValue,
+  timestampMs,
   uniqueStrings
 } from "./normalize.js";
 export {

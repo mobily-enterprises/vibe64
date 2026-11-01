@@ -1,3 +1,4 @@
+import { timestampMs } from "@local/vibe64-execution/server";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { sessionHasActiveAgentRun, sessionRecordId } from "./serviceSessionRecords.js";
 
@@ -8,11 +9,6 @@ const PROJECT_RUNTIME_IDLE_TIMEOUT_REASON = "idle-timeout";
 function normalizePositiveDurationMs(value, fallback) {
   const normalized = Number.parseInt(String(value ?? "").trim(), 10);
   return Number.isSafeInteger(normalized) && normalized > 0 ? normalized : fallback;
-}
-
-function timestampMs(value = "") {
-  const parsed = Date.parse(String(value || "").trim());
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function timestampIso(ms = 0) {
