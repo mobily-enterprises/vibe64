@@ -129,7 +129,7 @@ test("assistant attachment route reads one bounded multipart file into the uploa
   }
 });
 
-test("assistant attachment route fails closed without strict multipart iteration", async () => {
+test("assistant attachment route stores nothing when the request has no multipart iteration", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-route-no-parts-test-"));
   const app = testApp();
   const executeAction = test.mock.fn();
@@ -153,10 +153,7 @@ test("assistant attachment route fails closed without strict multipart iteration
         sessionId: "session-1",
         slug: "project"
       }
-    }, testReply()), {
-      message: "Attachment uploads require strict multipart iteration support.",
-      name: "TypeError"
-    });
+    }, testReply()), { name: "TypeError" });
     assert.equal(executeAction.mock.callCount(), 0);
   } finally {
     await rm(root, { force: true, recursive: true });
