@@ -15,6 +15,7 @@ connection and share one query-ownership boundary.
 - `tests/server/vibe64DatabaseActionDispatch.unit.test.js`
 
 - `packages/vibe64-database-tools/src/server/service.js`
+- `packages/vibe64-database-tools/src/server/sessionQueries.js`
 - `packages/vibe64-database-tools/src/server/assistant.js`
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
 - Main: `packages/vibe64-database-tools/src/server/queryExecutor.js`

@@ -200,6 +200,7 @@ Changing the composer selection never rewrites historical attribution.
 - `packages/vibe64-database-tools/src/server/databaseDialect.js`
 - `packages/vibe64-database-tools/src/server/schemaAccess.js`
 - `packages/vibe64-database-tools/src/server/service.js`
+- `packages/vibe64-database-tools/src/server/assistantTasks.js`
 - `packages/vibe64-terminals/src/server/codexHelperThreadLedger.js`
 - `packages/vibe64-terminals/src/server/codexScopedConversationPreparation.js`
 - `packages/vibe64-terminals/src/server/codexHelperPreparation.js`
