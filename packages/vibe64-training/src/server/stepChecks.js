@@ -120,8 +120,8 @@ function requireLearnerChannel(context, what) {
  * @param {TrainingDeclaredCheckOwner} dependencies.checks
  * @param {TrainingCodeAuthorship} dependencies.authorship
  * @param {ActionCatalogue} dependencies.actions
- * @param {TrainingStepEvidence | null} dependencies.evidence
- * @param {TrainingStepReviewer | null} dependencies.reviewer
+ * @param {TrainingStepEvidence} dependencies.evidence
+ * @param {TrainingStepReviewer} dependencies.reviewer
  */
 function createTrainingStepChecks({
   learners,

@@ -8,6 +8,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
+import { createTrainingCodeAuthorship } from "../../packages/vibe64-training/src/server/codeAuthorship.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
@@ -72,7 +73,8 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
     innerCalls.push({ actionId, input, context });
     return actionId === "vibe64.terminals.outputs.read" ? { ok: true, activeTerminal: { id: "terminal-1" } } : { ok: true };
   } };
-  const steps = createTrainingStepChecks({ learners, content, checks, actions: inner });
+  const authorship = createTrainingCodeAuthorship({ learners, content, project: { runInProjectContext() { throw new Error("no code step in these tests"); } } });
+  const steps = createTrainingStepChecks({ learners, content, checks, authorship, actions: inner });
   // Without a learning space, the exercise host cannot close the lesson.
   const exercises = practice ? { async deleteLesson(value) { removed.push(value); return { ok: true, attemptId: value.attemptId, closed: true }; },
     ...(typeof practice === "object" ? practice : {}) } : { deleteLesson: value => NO_LEARNING_SPACE.closeAttempt(value) };

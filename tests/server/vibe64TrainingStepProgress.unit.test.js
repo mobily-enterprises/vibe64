@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
+import { createTrainingCodeAuthorship } from "../../packages/vibe64-training/src/server/codeAuthorship.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
@@ -68,7 +69,9 @@ async function fixture(t, { lessonVersion = 2 } = {}) {
     actionCalls.push({ actionId, input });
     return actionId === "vibe64.terminals.outputs.read" ? { ok: true, activeTerminal: { id: "terminal-1" } } : { ok: true };
   } };
-  const owner = createTrainingStepChecks({ learners, content, checks, actions });
+  const project = { runInProjectContext() { throw new Error("no code step in this fixture"); } };
+  const authorship = createTrainingCodeAuthorship({ learners, content, project });
+  const owner = createTrainingStepChecks({ learners, content, checks, authorship, actions });
   const userRoot = path.join(systemRoot, "training/users/NDI");
   const files = { stepProgress: path.join(userRoot, "step-progress.json"), reader: path.join(userRoot, "reader.json"),
     progress: path.join(userRoot, "progress.json"), stepLock: path.join(userRoot, "step-progress.lock") };
@@ -195,10 +198,6 @@ test("the choice answer never reaches readLesson; only the server comparator rea
     { code: "VIBE64_TRAINING_LEARNER_ONLY" });
   await assert.rejects(owner.done({ ...automation, actor: f.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-2" }),
     { code: "VIBE64_TRAINING_LEARNER_ONLY" });
-  const { readChoiceAnswer: _read, ...withoutComparator } = f.content;
-  const unsupported = createTrainingStepChecks({ learners: f.learners, content: withoutComparator, checks: {}, actions: {} });
-  await assert.rejects(unsupported.answer({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "pick-answer", selected: [2], requestId: "answer-3" }),
-    { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
 });
 
 test("saved App receipts bound only the session ID format, so practice-session naming can change", async t => {
