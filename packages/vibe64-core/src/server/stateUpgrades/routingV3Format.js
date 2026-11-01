@@ -1,15 +1,16 @@
+import { isPlainObject } from "../isPlainObject.js";
+
 // Frozen validation for the published schema-3 upgrade.
 const routingRoles = ["senior", "junior", "intern", "router", "sharedBackup"];
 // eslint-disable-next-line no-control-regex -- Routing identifiers must exclude ASCII control characters.
 const controlCharacters = /[\x00-\x1f\x7f]/u;
-const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 
 function validateAssistantRoutingConfiguration(value) {
   const invalid = () => { throw new Error("Saved model routing has an unsupported shape. Restore or repair the settings before changing them."); };
-  if (!object(value) || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
-      !object(value.orchestrators) || value.schemaVersion !== 3) invalid();
+  if (!isPlainObject(value) || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
+      !isPlainObject(value.orchestrators) || value.schemaVersion !== 3) invalid();
   const assignment = (entry) => {
-    if (!object(entry) || entry.schema !== "vibe64.assistant-selection.v1" ||
+    if (!isPlainObject(entry) || entry.schema !== "vibe64.assistant-selection.v1" ||
         Object.keys(entry).some((key) => !["schema", "engineId", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision", "selectionSource"].includes(key)) ||
         !["codex", "claude", "opencode"].includes(entry.engineId) ||
         !/^sha256:[a-f0-9]{64}$/u.test(entry.catalogRevision || "") ||
@@ -19,7 +20,7 @@ function validateAssistantRoutingConfiguration(value) {
         !["recommended", "explicit"].includes(entry.selectionSource)) invalid();
   };
   for (const [engineId, roles] of Object.entries(value.orchestrators)) {
-    if (!["codex", "claude", "opencode"].includes(engineId) || !object(roles) ||
+    if (!["codex", "claude", "opencode"].includes(engineId) || !isPlainObject(roles) ||
         Object.keys(roles).some((key) => ![...routingRoles, "helperRoutingReview"].includes(key))) invalid();
     for (const role of routingRoles) {
       if (roles[role] == null) continue;
@@ -28,9 +29,9 @@ function validateAssistantRoutingConfiguration(value) {
     }
     if (roles.helperRoutingReview !== undefined) {
       const review = roles.helperRoutingReview;
-      if (!object(review) || Object.keys(review).some((key) => !["reason", "previous", "proposed"].includes(key)) ||
+      if (!isPlainObject(review) || Object.keys(review).some((key) => !["reason", "previous", "proposed"].includes(key)) ||
           review.reason !== "helper_choices_differ" || !Array.isArray(review.previous) ||
-          !review.previous.length || review.previous.some((entry) => !object(entry) ||
+          !review.previous.length || review.previous.some((entry) => !isPlainObject(entry) ||
             Object.keys(entry).some((key) => !["engineId", "modelProviderId", "modelId", "selectionSource"].includes(key)) ||
             !["codex", "claude", "opencode"].includes(entry.engineId) ||
             !["modelProviderId", "modelId"].every((key) => typeof entry[key] === "string" && entry[key].length > 0 && entry[key].length <= 512 && !controlCharacters.test(entry[key])) ||

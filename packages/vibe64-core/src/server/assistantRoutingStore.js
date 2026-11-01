@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { serializeByKey, writeFileAtomic } from "./atomicFile.js";
+import { isPlainObject } from "./isPlainObject.js";
 
 const writes = new Map();
 const setupRoles = Object.freeze({
@@ -10,18 +11,17 @@ const setupRoles = Object.freeze({
 const followingRoles = ["colleague", "fix", "explain"];
 // eslint-disable-next-line no-control-regex -- Routing identifiers must exclude ASCII control characters.
 const controlCharacters = /[\x00-\x1f\x7f]/u;
-const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 
 // Schema 5: the owner's setup (main chat and the owner's helpers) and the team
 // setup (everyone else's helpers). A role is absent, null (off), a selection,
 // or { follows } naming another role of the same setup, one level deep.
 function validateAssistantRoutingConfiguration(value) {
   const invalid = () => { throw new Error("Saved model routing has an unsupported shape. Restore or repair the settings before changing them."); };
-  if (!object(value) || value.schemaVersion !== 5 || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
+  if (!isPlainObject(value) || value.schemaVersion !== 5 || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
       Object.keys(value).some((key) => !["schemaVersion", "revision", "owner", "nonOwner"].includes(key)) ||
-      !object(value.owner) || !object(value.nonOwner)) invalid();
+      !isPlainObject(value.owner) || !isPlainObject(value.nonOwner)) invalid();
   const assignment = (entry) => {
-    if (!object(entry) || entry.schema !== "vibe64.assistant-selection.v1" ||
+    if (!isPlainObject(entry) || entry.schema !== "vibe64.assistant-selection.v1" ||
         Object.keys(entry).some((key) => !["schema", "engineId", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision", "selectionSource"].includes(key)) ||
         !["codex", "claude", "opencode"].includes(entry.engineId) ||
         !/^sha256:[a-f0-9]{64}$/u.test(entry.catalogRevision || "") ||
@@ -35,14 +35,14 @@ function validateAssistantRoutingConfiguration(value) {
     if (Object.keys(values).some((key) => !roles.includes(key))) invalid();
     for (const [role, entry] of Object.entries(values)) {
       if (entry === null) continue;
-      if (!object(entry) || !Object.hasOwn(entry, "follows")) { assignment(entry); continue; }
+      if (!isPlainObject(entry) || !Object.hasOwn(entry, "follows")) { assignment(entry); continue; }
       const target = values[entry.follows];
       if (Object.keys(entry).length !== 1 || !followingRoles.includes(role) || entry.follows === role ||
-          !roles.includes(entry.follows) || object(target) && Object.hasOwn(target, "follows")) invalid();
+          !roles.includes(entry.follows) || isPlainObject(target) && Object.hasOwn(target, "follows")) invalid();
     }
   }
   const { senior, junior } = value.owner;
-  if (object(senior) && object(junior) && senior.engineId !== junior.engineId) {
+  if (isPlainObject(senior) && isPlainObject(junior) && senior.engineId !== junior.engineId) {
     throw new Error("Senior and Junior must run in the same tool.");
   }
   return value;

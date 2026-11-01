@@ -1,4 +1,4 @@
-import { trimmedText as normalizeSourceEditorFileValue } from "./trimmedText.js";
+import { trimmedText } from "../shared/trimmedText.js";
 
 const VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT = "vibe64.source-editor.file.changed";
 const VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT = "vibe64.source-editor.sync.error";
@@ -23,11 +23,11 @@ function sourceEditorFileRealtimePayload({ result = {} } = {}) {
   if (!fileChange) {
     return {};
   }
-  const hash = normalizeSourceEditorFileValue(fileChange.hash);
-  const originId = normalizeSourceEditorFileValue(fileChange.originId);
-  const path = normalizeSourceEditorFileValue(fileChange.path);
-  const projectSlug = normalizeSourceEditorFileValue(fileChange.projectSlug);
-  const sessionId = normalizeSourceEditorFileValue(fileChange.sessionId);
+  const hash = trimmedText(fileChange.hash);
+  const originId = trimmedText(fileChange.originId);
+  const path = trimmedText(fileChange.path);
+  const projectSlug = trimmedText(fileChange.projectSlug);
+  const sessionId = trimmedText(fileChange.sessionId);
   if (!hash || !originId || !path || !projectSlug || !sessionId) {
     return {};
   }
@@ -41,7 +41,7 @@ function sourceEditorFileRealtimePayload({ result = {} } = {}) {
     projectSlug,
     sessionId,
     ...(size === null ? {} : { size }),
-    updatedAt: normalizeSourceEditorFileValue(fileChange.updatedAt)
+    updatedAt: trimmedText(fileChange.updatedAt)
   };
 }
 

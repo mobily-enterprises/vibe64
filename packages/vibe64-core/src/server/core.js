@@ -1,13 +1,10 @@
 import { access } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { isPlainObject } from "./isPlainObject.js";
 
 function normalizeText(value) {
   return String(value ?? "").trim();
-}
-
-function isPlainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value);
 }
 
 function plainClone(value) {

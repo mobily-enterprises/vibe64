@@ -3,8 +3,8 @@ import { createReadStream } from "node:fs";
 import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { isPlainObject } from "./isPlainObject.js";
 
-const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
@@ -27,7 +27,7 @@ export async function verifyUpgradeParents(root, filePath) {
 }
 function parse(source, label) {
   if (source === null) return null;
-  try { const value = JSON.parse(source); if (object(value)) return value; } catch { /* Do not log saved content. */ }
+  try { const value = JSON.parse(source); if (isPlainObject(value)) return value; } catch { /* Do not log saved content. */ }
   throw new Error(`${label} is invalid. Inspect it before upgrading state.`);
 }
 async function fileDigest(filePath) {
@@ -114,7 +114,7 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
       new Set(manifest.files.map((entry) => entry?.path)).size !== manifest.files.length) throw new Error("State upgrade backup manifest is unsupported.");
   // Preflight every original, replacement and destination before resuming writes.
   for (const entry of manifest.files) {
-    if (!object(entry) || typeof entry.path !== "string" || relativeFile(path.join(systemRoot, entry.path)) !== entry.path ||
+    if (!isPlainObject(entry) || typeof entry.path !== "string" || relativeFile(path.join(systemRoot, entry.path)) !== entry.path ||
         [entry.before, entry.after].some((value) => value !== null && !/^[a-f0-9]{64}$/u.test(value))) throw new Error("State upgrade backup manifest has an invalid file entry.");
     await verifyUpgradeParents(systemRoot, path.join(systemRoot, entry.path));
     for (const side of ["before", "after"]) {
