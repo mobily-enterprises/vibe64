@@ -44,8 +44,8 @@ function configuration(value) {
 
 function routingRecord(value) {
   if (!isPlainObject(value)) throw new Error("Saved routing must be an object.");
-  if (value.schemaVersion === 4 || ["custom", "helper"].some(role =>
-    [value.mode, value.requestedMode, value.resolvedMode, value.role].includes(role))) {
+  if (value.schemaVersion === 4 || ["custom", "helper"].some(retiredRole =>
+    [value.mode, value.requestedMode, value.resolvedMode, value.role].includes(retiredRole))) {
     return validateAssistantRoutingUpgradeRecord(value, { schemaVersion: value.schemaVersion ?? 4,
       request: value.schemaVersion === 4 });
   }

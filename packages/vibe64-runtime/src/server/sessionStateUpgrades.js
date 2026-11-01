@@ -168,8 +168,8 @@ function createSessionStateUpgrades({
             if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
             const original = await readRegularText(filePath);
             const record = JSON.parse(original);
-            const next = transformHelperRecord(record);
-            if (JSON.stringify(record) !== JSON.stringify(next)) changes.push({ filePath, original, contents: `${JSON.stringify(next)}\n` });
+            const upgraded = transformHelperRecord(record);
+            if (JSON.stringify(record) !== JSON.stringify(upgraded)) changes.push({ filePath, original, contents: `${JSON.stringify(upgraded)}\n` });
           }
         };
         await inspectHelpers(sessionPaths.backgroundTasksRoot);
@@ -390,8 +390,8 @@ function createSessionStateUpgrades({
           if (!root.isDirectory()) throw new Error(`Frozen practice archive ${id} has an unsafe metadata root.`);
           const entries = await readdir(sessionPaths.metadataRoot, { withFileTypes: true });
           for (const entry of entries) {
-            const info = await lstat(path.join(sessionPaths.metadataRoot, entry.name));
-            if (!info.isFile() || info.nlink !== 1) throw new Error(`Frozen practice archive ${id} has unsafe metadata paths.`);
+            const entryInfo = await lstat(path.join(sessionPaths.metadataRoot, entry.name));
+            if (!entryInfo.isFile() || entryInfo.nlink !== 1) throw new Error(`Frozen practice archive ${id} has unsafe metadata paths.`);
           }
           const metadata = await recordFiles.readUnboundMetadataFromPaths(sessionPaths);
           learningSessionBinding(metadata, scope, id);

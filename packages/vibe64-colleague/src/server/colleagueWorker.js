@@ -192,7 +192,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
       admission.resolve(receipt);
       const result = await conversation.wait();
       if (!isCurrent()) return;
-      const turn = result.conversationLog.find(turn => turn.turnId === receipt.turnId);
+      const turn = result.conversationLog.find(candidate => candidate.turnId === receipt.turnId);
       if (turn?.metadata?.runtime?.status !== "complete") throw failure(result.error || "Colleague's response did not complete. Your message is kept.");
       markObservationsDelivered(state.record, observations);
       state.record.status = "ready";

@@ -173,12 +173,12 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     uncertainWriteMessage: "The result could not be confirmed. Refresh this pull request or view it on GitHub before trying again."
   });
   if (operation === "ready") {
-    const result = await write("graphql", {
+    const marked = await write("graphql", {
       query: `mutation($id:ID!) {
         markPullRequestReadyForReview(input:{pullRequestId:$id}) { pullRequest { id isDraft } }
       }`, variables: { id: pullRequest.id }
     });
-    const ready = result.data?.markPullRequestReadyForReview?.pullRequest;
+    const ready = marked.data?.markPullRequestReadyForReview?.pullRequest;
     if (ready?.id !== pullRequest.id || ready.isDraft !== false) {
       throw vibe64Error("Ready for review could not be confirmed. Refresh the pull request before trying again.",
         "vibe64_pull_request_result_unconfirmed");

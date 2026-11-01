@@ -39,8 +39,8 @@ function uploadAddress(address) {
 // The PyPI instance whose upload address this is, or null for another index.
 function pypiInstanceForAddress(address = "") {
   if (!address) return "pypi";
-  const upload = uploadAddress(address);
-  return Object.keys(INSTANCES).find((id) => INSTANCES[id].repository === upload) || null;
+  const repository = uploadAddress(address);
+  return Object.keys(INSTANCES).find((id) => INSTANCES[id].repository === repository) || null;
 }
 
 // Target settings for a PyPI account's upload address: one of INSTANCES, or a
@@ -48,8 +48,8 @@ function pypiInstanceForAddress(address = "") {
 function pypiSettingsForAddress(address = "") {
   const instance = pypiInstanceForAddress(address);
   if (instance) return { instance };
-  const upload = uploadAddress(address);
-  return { repository: upload, index: new URL("simple/", new URL("../", upload)).href };
+  const repository = uploadAddress(address);
+  return { repository, index: new URL("simple/", new URL("../", repository)).href };
 }
 
 const CREDENTIAL = Object.freeze({ id: "pypi-token", label: "PyPI token", delivery: "file" });

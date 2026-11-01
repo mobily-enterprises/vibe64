@@ -137,7 +137,7 @@ async function runCaptureCommand(command = "", args = [], {
     const ended = outcome?.timedOut ? "The command timed out"
       : signal?.aborted ? "The command was cancelled" : "The command finished";
     const remaining = remainingProcesses.length
-      ? `: ${remainingProcesses.map(({ command, pid }) => `${command} (pid ${pid})`).join(", ")} still running`
+      ? `: ${remainingProcesses.map(member => `${member.command} (pid ${member.pid})`).join(", ")} still running`
       : "";
     return {
       ...commandErrorResult(

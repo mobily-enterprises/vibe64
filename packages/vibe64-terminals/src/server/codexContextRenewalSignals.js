@@ -282,9 +282,6 @@ async function clearCodexAppServerContextRefreshPending(store, sessionId = "", {
  */
 function createCodexContextRefreshMarker({ projectService, runOwner }) {
   const { readAgentRunForSession: readCodexAppServerAgentRunForSession } = runOwner;
-  function normalizeText(value) {
-    return String(value || "").trim();
-  }
 
   async function markCodexAppServerContextRefreshPending(sessionId = "", threadId = "", notification = {}, {
     reason = codexAppServerContextRefreshReason(notification)

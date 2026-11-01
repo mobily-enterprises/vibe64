@@ -221,10 +221,10 @@ async function runVibe64Command(input = {}) {
     });
     assertManagedSourceFilesystemActor(actor, request, cwd);
     // readable-check: allow method-probe - input validation: arguments are a list or a function of the command input
-    const resolveArgs = (input = {}) => typeof request.args === "function"
-      ? request.args(input)
+    const resolveArgs = (commandInput = {}) => typeof request.args === "function"
+      ? request.args(commandInput)
       : request.args;
-    const resolveEnv = (input = {}) => executionEnv(request.envFactory
+    const resolveEnv = (commandInput = {}) => executionEnv(request.envFactory
       ? resolveCommandEnv({
           actor,
           baseEnv,
@@ -232,7 +232,7 @@ async function runVibe64Command(input = {}) {
           resolvedGitIdentityEnv,
           request: {
             ...request,
-            env: request.envFactory(input),
+            env: request.envFactory(commandInput),
             envFactory: null
           }
         })

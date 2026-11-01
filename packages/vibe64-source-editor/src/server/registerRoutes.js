@@ -125,7 +125,7 @@ function registerRoutes(http, {
   });
   const session = (request) => sourceInput(request);
   const body = (request) => sourceInput(request, requestBody(request));
-  const query = (request) => sourceInput(request, requestQuery(request));
+  const queryInput = (request) => sourceInput(request, requestQuery(request));
   const searched = (request) => {
     const query = requestQuery(request);
     const { q, ...rest } = query;
@@ -185,7 +185,7 @@ function registerRoutes(http, {
     summary: "Read portable integration configuration."
   });
   routes.actionRoute("GET", "/sessions/:sessionId/integrations/providers", {
-    actionId: "vibe64.source-editor.integrations.providers.read", buildInput: query,
+    actionId: "vibe64.source-editor.integrations.providers.read", buildInput: queryInput,
     summary: "Search available integration providers."
   });
   routes.actionRoute("POST", "/sessions/:sessionId/integrations/n8n/discovery", {
@@ -208,7 +208,7 @@ function registerRoutes(http, {
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/source-editor/tree", {
-    actionId: "vibe64.source-editor.tree.read", buildInput: query, summary: "Read the editable source tree."
+    actionId: "vibe64.source-editor.tree.read", buildInput: queryInput, summary: "Read the editable source tree."
   });
   routes.actionRoute("GET", "/sessions/:sessionId/source-editor/files", {
     actionId: "vibe64.source-editor.files.find", buildInput: searched, summary: "Find editable source files."
@@ -219,7 +219,7 @@ function registerRoutes(http, {
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
     summary: "Download an original source file."
   }, async (request, reply) => {
-    const { inline, ...input } = query(request);
+    const { inline, ...input } = queryInput(request);
     return sendFileDownload(reply, await request.executeAction({
       actionId: "vibe64.source-editor.file.download", input }), { inline: inline === "1" });
   });
@@ -244,7 +244,7 @@ function registerRoutes(http, {
     bodyLimit: 128 * 1024, summary: "Operate the selected temporary source explanation."
   });
   routes.actionRoute("GET", "/sessions/:sessionId/source-editor/file", {
-    actionId: "vibe64.source-editor.file.read", buildInput: query, summary: "Read an editable source file."
+    actionId: "vibe64.source-editor.file.read", buildInput: queryInput, summary: "Read an editable source file."
   });
   routes.actionRoute("POST", "/sessions/:sessionId/source-editor/file", {
     actionId: "vibe64.source-editor.file.create", buildInput: body, bodyLimit: 32 * 1024, summary: "Create an editable source file."

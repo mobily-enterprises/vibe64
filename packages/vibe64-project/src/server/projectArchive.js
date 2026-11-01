@@ -240,9 +240,9 @@ function createProjectArchiveService({
       const commandRoot = await pathExists(projectContextRoot)
         ? projectContextRoot
         : projectRuntimeRoot;
-      const runArchiveCommand = (input = {}) => runCommand({
-        ...input,
-        allowedRoots: [...(input.allowedRoots || []), commandRoot],
+      const runArchiveCommand = (request = {}) => runCommand({
+        ...request,
+        allowedRoots: [...(request.allowedRoots || []), commandRoot],
         cwd: commandRoot
       });
       const pinnedSessionId = await readPinnedSessionId({ projectContextRoot, projectRuntimeRoot, slug });

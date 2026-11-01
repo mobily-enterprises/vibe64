@@ -137,11 +137,11 @@ function createOpenCodeLifecyclePreparation({
         }, { operation: "prepare-agent-session", waitMs: 10_000 });
       },
       observation: {
-        get run() { return (context.session.agentRuns || []).find(run => run.id === OPENCODE_AGENT_RUN_ID); },
+        get run() { return (context.session.agentRuns || []).find(agentRun => agentRun.id === OPENCODE_AGENT_RUN_ID); },
         write(operation) {
           return runVibe64AgentWriteExclusive(context.runtime, sessionId, async () => {
             context = await contextFor(sessionId, { ...options, session: null });
-            const run = (context.session.agentRuns || []).find(run => run.id === OPENCODE_AGENT_RUN_ID);
+            const run = (context.session.agentRuns || []).find(agentRun => agentRun.id === OPENCODE_AGENT_RUN_ID);
             await operation(run, async commit => {
               await context.runtime.store.mutateSession(sessionId, async () => {
                 const latest = await context.runtime.getSession(sessionId, { inspectSource: false });

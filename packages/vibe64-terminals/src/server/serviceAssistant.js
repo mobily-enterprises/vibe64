@@ -126,7 +126,7 @@ function createServiceAssistant({
     const steering = sessionHasActiveAgentRun(context.session);
     const available = currentMode && !steering ? purposes[currentMode]?.available === true : native.available;
     const canUse = currentMode && !steering ? purposes[currentMode]?.available === true : native.canUse;
-    return { ...native, available, canUse, nativeCanUse: native.canUse, steering, canUseAny: Object.values(purposes).some(({ available }) => available),
+    return { ...native, available, canUse, nativeCanUse: native.canUse, steering, canUseAny: Object.values(purposes).some(purpose => purpose.available),
       currentMode, purposes };
   }
 

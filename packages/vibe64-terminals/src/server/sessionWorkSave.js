@@ -191,7 +191,7 @@ async function assertSessionWorkSaveCheckpoint(runCommand, context, checkpoint, 
 async function prepareSessionWorkSave(runCommand, context, {
   checkpoint = {},
   commandOptions = {},
-  connectedWorkSnapshots = [],
+  connectedWorkSnapshots: workSnapshots = [],
   derivedArtifactPaths = [],
   message = "",
   operationId,
@@ -240,7 +240,7 @@ async function prepareSessionWorkSave(runCommand, context, {
   const derivedPathSet = new Set(normalizedDerivedArtifactPaths(derivedArtifactPaths));
   const changedPaths = comparison.changedPaths.filter((filePath) => !derivedPathSet.has(filePath));
   if (!changedPaths.length) {
-    await assertConnectedSubmissionsIntegrated(runCommand, context, { commandOptions, connectedWorkSnapshots, project });
+    await assertConnectedSubmissionsIntegrated(runCommand, context, { commandOptions, connectedWorkSnapshots: workSnapshots, project });
     throw saveError(
       "This session has no work to save.",
       "vibe64_session_save_no_changes"
@@ -295,7 +295,7 @@ async function prepareSessionWorkSave(runCommand, context, {
 
 async function publishPreparedSessionWorkSave(runCommand, context, {
   commandOptions = {},
-  connectedWorkSnapshots = [],
+  connectedWorkSnapshots: workSnapshots = [],
   onPublicationAttempt,
   prepared = {},
   project = {}
@@ -308,7 +308,7 @@ async function publishPreparedSessionWorkSave(runCommand, context, {
       contributionAuthority: prepared.contributionAuthority,
       saveCommit: trimmedText(prepared.saveCommit)
     },
-    { commandOptions, connectedWorkSnapshots, onPublicationAttempt, project }
+    { commandOptions, connectedWorkSnapshots: workSnapshots, onPublicationAttempt, project }
   );
 }
 

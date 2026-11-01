@@ -270,7 +270,7 @@ function createSessionAgentProviderCalls({
         if (method === "sendMessage" && provider.conversationOperations?.includes(method) && !context.assistantScope) {
           // The original sender chooses historical attachment IDs before this
           // same authorized storage resolver prepares their native input.
-          context.prepareMessage = input => attachments.prepareMessage(context, input, { durable: true });
+          context.prepareMessage = message => attachments.prepareMessage(context, message, { durable: true });
         } else providerInput = await attachments.prepareMessage(context, providerInput, { durable: method === "sendMessage" });
       }
       if (method === "writeTerminal" && provider.id === "opencode") {

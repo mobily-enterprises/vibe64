@@ -585,15 +585,15 @@ function resourceReason(diagnostic, { resourcesPreparing = false } = {}) {
   const details = diagnostic.details || {};
   const missing = Array.isArray(details.missing) ? details.missing : [];
   // Each alternative by the names still missing from it (defaults may fill the rest).
-  const choices = (Array.isArray(details.alternatives) ? details.alternatives : []).map((alternative, index) => (
+  const alternatives = (Array.isArray(details.alternatives) ? details.alternatives : []).map((alternative, index) => (
     Array.isArray(missing[index]) && missing[index].length ? missing[index].join(" and ") : String(alternative)
   )).filter(Boolean);
-  if (diagnostic.code !== "STACK_RESOURCE_MISSING" || !choices.length) return diagnostic.message;
+  if (diagnostic.code !== "STACK_RESOURCE_MISSING" || !alternatives.length) return diagnostic.message;
   const resource = String(details.resource || "").trim() || "resources";
   if (resourcesPreparing) {
     return `Vibe64 is still setting up this app's ${resource}. Preview can start when workspace setup finishes; then press Check again.`;
   }
-  return `This app needs its ${resource} before Preview can start: set ${choices.join(", or ")} in Env (in Dash, under Development), then press Check again.`;
+  return `This app needs its ${resource} before Preview can start: set ${alternatives.join(", or ")} in Env (in Dash, under Development), then press Check again.`;
 }
 
 function vibe64OutputsInspection({ environment = {}, section = {}, resourcesPreparing = false } = {}) {

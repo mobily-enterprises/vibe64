@@ -152,11 +152,11 @@ function createCodexRuntimeHost({
     };
   }
 
-  function codexAppServerProviderIdentityEnv(env = {}) {
-    if (!env || typeof env !== "object" || Array.isArray(env)) {
+  function codexAppServerProviderIdentityEnv(providerEnv = {}) {
+    if (!providerEnv || typeof providerEnv !== "object" || Array.isArray(providerEnv)) {
       return {};
     }
-    return Object.fromEntries(Object.entries(env)
+    return Object.fromEntries(Object.entries(providerEnv)
       .filter(([key]) => !CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS.has(String(key || "").trim())));
   }
 

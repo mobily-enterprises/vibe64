@@ -1,7 +1,7 @@
 import { nativeAiModel, nativeAiProvider } from "@jskit-ai/assistant-core/shared/native-providers";
 
 // Product choices and presentation. JSKIT owns native routes and capabilities.
-const model = (providerId, id, label, defaultThinking) => {
+const curatedModel = (providerId, id, label, defaultThinking) => {
   const { modelProviderId: _provider, ...definition } = nativeAiModel(id, providerId);
   return Object.freeze({ ...definition, label, defaultThinking });
 };
@@ -13,8 +13,8 @@ const CURATED_CODEX_PROVIDERS = Object.freeze([
     guideUrl: "https://api-docs.deepseek.com/quick_start/agent_integrations/codex/",
     ownerOnly: false,
     models: Object.freeze([
-      model("deepseek", "deepseek-flash", "DeepSeek V4.1 Flash", "high"),
-      model("deepseek", "deepseek-v4-pro", "DeepSeek V4 Pro", "high")
+      curatedModel("deepseek", "deepseek-flash", "DeepSeek V4.1 Flash", "high"),
+      curatedModel("deepseek", "deepseek-v4-pro", "DeepSeek V4 Pro", "high")
     ])
   }),
   Object.freeze({
@@ -24,7 +24,7 @@ const CURATED_CODEX_PROVIDERS = Object.freeze([
     guideUrl: "https://docs.z.ai/devpack/tool/codex",
     ownerOnly: true,
     models: Object.freeze([
-      model("zai-coding-plan", "glm-5.3", "GLM 5.3", "max")
+      curatedModel("zai-coding-plan", "glm-5.3", "GLM 5.3", "max")
     ])
   }),
   Object.freeze({
@@ -35,7 +35,7 @@ const CURATED_CODEX_PROVIDERS = Object.freeze([
     setupNote: "Use a key from a Z.AI account without a Coding Plan. Pay-as-you-go access through Codex and Claude Code still needs live verification; a successful check confirms model access, not billing.",
     ownerOnly: false,
     models: Object.freeze([
-      model("zai", "glm-5.3", "GLM 5.3", "max")
+      curatedModel("zai", "glm-5.3", "GLM 5.3", "max")
     ])
   })
 ]);

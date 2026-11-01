@@ -464,14 +464,14 @@ function codexAppServerRenewalSeedPreparation({
         threadIds,
         workdir: normalizedWorkdir
       }),
-      async write({ appServerRuntime, threadId, workdir }) {
+      async write({ appServerRuntime, threadId, workdir: threadWorkdir }) {
         if (!persistedClaim) {
           await writeCodexSessionRenewalThreadClaim({
             operationId: normalizedOperationId,
             runtime,
             sessionId: session.sessionId,
             threadId,
-            workdir
+            workdir: threadWorkdir
           });
         }
         await writeCodexAppServerIdentityMetadata({
@@ -487,7 +487,7 @@ function codexAppServerRenewalSeedPreparation({
           runtime,
           sessionId: session.sessionId,
           threadId,
-          workdir
+          workdir: threadWorkdir
         });
       }
     }
@@ -571,9 +571,9 @@ function codexAppServerThreadPreparationForSession({
       },
       get pauseGoal() { return session.metadata?.codex_changeover_pause_goal === "yes"; },
       clearPause() { return runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", ""); },
-      write({ appServerRuntime, threadId, toolSchemaIdentity, workdir }) {
+      write({ appServerRuntime, threadId, toolSchemaIdentity, workdir: threadWorkdir }) {
         return writeCodexAppServerIdentityMetadata({
-          appServerRuntime, runtime, sessionId: session.sessionId, threadId, toolSchemaIdentity, workdir
+          appServerRuntime, runtime, sessionId: session.sessionId, threadId, toolSchemaIdentity, workdir: threadWorkdir
         });
       }
     },

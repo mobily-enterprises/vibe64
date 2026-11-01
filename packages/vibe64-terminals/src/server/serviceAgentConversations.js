@@ -73,8 +73,8 @@ function createServiceAgentConversations({
   async function listAgentConversationStorage(sessionId, options = {}) {
     const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
     // A summary names an archived session's status without extracting it.
-    const session = await runtime.store.readSessionSummary(sessionId);
-    if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+    const summary = await runtime.store.readSessionSummary(sessionId);
+    if (summary.status === VIBE64_SESSION_STATUS.ARCHIVED) {
       return runtime.store.withArchivedSession(sessionId, (archived) => nativeConversationBindings(archived));
     }
     return sessionAccess.runMainAgentWrite(sessionId, { ...options, runtime }, ({ session }) =>
@@ -113,8 +113,8 @@ function createServiceAgentConversations({
         throw new Error("Native history retirement requires an idle open session or a finalized archive.");
       }
       const bindings = nativeConversationBindings(session, { retiredOnly: !archived });
-      let binding = bindings.find((binding) =>
-        binding.engineId === input.engineId && binding.conversationId === input.conversationId);
+      let binding = bindings.find((candidate) =>
+        candidate.engineId === input.engineId && candidate.conversationId === input.conversationId);
       // Native /new and forks may have no Vibe64 binding. Only a finalized
       // archive can nominate an additional native id in an exact saved scope.
       // The provider re-reads its real directory; the host must still prove
@@ -156,8 +156,8 @@ function createServiceAgentConversations({
       return retire(session, true, publishArtifacts);
     }
     // A summary names an archived session's status without extracting it.
-    const session = await runtime.store.readSessionSummary(sessionId);
-    if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+    const summary = await runtime.store.readSessionSummary(sessionId);
+    if (summary.status === VIBE64_SESSION_STATUS.ARCHIVED) {
       return runtime.store.withArchivedSession(sessionId, (archived, { publishArtifacts }) => retire(archived, true, publishArtifacts), {
         beforeWork: options.beforeArchiveWork
       });

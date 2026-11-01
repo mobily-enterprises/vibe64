@@ -217,7 +217,7 @@ async function dryRun({ target, version, artifacts, credentials }) {
     channel,
     integrity: integrityOf(bytes),
     size: bytes.length,
-    files: entries.map(({ path: file, size }) => ({ path: file, size })),
+    files: entries.map((entry) => ({ path: entry.path, size: entry.size })),
     previousVersion,
     diff: previousVersion ? diffFileLists(previousEntries, entries) : null,
     alreadyPublished,

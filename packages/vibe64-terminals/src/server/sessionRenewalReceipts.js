@@ -1,6 +1,6 @@
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
-import { upstreamMessageId, writeOpenCodeSessionMetadata as writeSessionMetadata } from "./openCodeConversationStorage.js";
+import { upstreamMessageId, writeOpenCodeSessionMetadata } from "./openCodeConversationStorage.js";
 import { openCodeError } from "./terminalShared.js";
 import {
   defineSessionRenewalApprovedHandover,
@@ -651,7 +651,7 @@ function createOpenCodeSessionRenewalPreparation({ mainMessagePreparation, hostP
           get prompt() { return sessionRenewalHandoverPrompt({ source: input.source }); }
         }, { expectedThreadId: text(input.expectedThreadId) });
         return { ...prepared, completeResult: nativeResult => completeOpenCodeSessionRenewalHandover({
-          input, operationId, clientMessageId, context, writeSessionMetadata
+          input, operationId, clientMessageId, context, writeSessionMetadata: writeOpenCodeSessionMetadata
         }, nativeResult) };
       }
     };
@@ -671,7 +671,7 @@ function createOpenCodeSessionRenewalPreparation({ mainMessagePreparation, hostP
       turn(target) {
         const clientMessageId = sessionRenewalClientMessageId("seed", operationId);
         const receipt = createOpenCodeSessionRenewalSeedReceipt({
-          operationId, approved, clientMessageId, context, writeSessionMetadata
+          operationId, approved, clientMessageId, context, writeSessionMetadata: writeOpenCodeSessionMetadata
         });
         const prepared = prepareRenewalTurn(target, {
           clientMessageId,

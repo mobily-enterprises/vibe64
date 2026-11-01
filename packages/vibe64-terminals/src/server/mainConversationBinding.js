@@ -227,9 +227,9 @@ export async function createSessionConversationBinding(provider, sessionId, opti
     ...(engine === "codex" ? { selection } : {}),
     async admission(current) {
       if (engine !== "codex") return requireMainConversationAdmission(runtime, sessionId, current);
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
-      requireCompletedConversationRewind(session);
-      if (vibe64AssistantSelectionFromMetadata(session.metadata).engineId !== "codex") {
+      const latest = await runtime.getSession(sessionId, { inspectSource: false });
+      requireCompletedConversationRewind(latest);
+      if (vibe64AssistantSelectionFromMetadata(latest.metadata).engineId !== "codex") {
         throw new Error("The selected assistant changed. Open its current conversation.");
       }
     },

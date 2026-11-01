@@ -75,13 +75,13 @@ function createVerificationRunner({
           if (event?.code === "VERIFICATION_STARTED") current = String(event.details?.label || "");
         };
         const outcome = await repository.withCheckout(repositoryRoot, commit, (root) => verify({ projectRoot: root, environment: checkEnvironment(home), onEvent, processRunner }));
-        const status = outcome?.status === "passed" ? "passed" : outcome?.status === "unconfigured" ? "unconfigured" : "failed";
+        const result = outcome?.status === "passed" ? "passed" : outcome?.status === "unconfigured" ? "unconfigured" : "failed";
         return await record({
           commit,
-          status,
+          status: result,
           summary: String(outcome?.summary || "").slice(0, 2000),
           commands: (outcome?.commands || []).map(({ label }) => label).slice(0, 50),
-          ...(status === "failed" ? { failedCommand: current.slice(0, 200), output: failureOutput(outcome, home) } : {}),
+          ...(result === "failed" ? { failedCommand: current.slice(0, 200), output: failureOutput(outcome, home) } : {}),
           startedAt,
           finishedAt: now()
         });

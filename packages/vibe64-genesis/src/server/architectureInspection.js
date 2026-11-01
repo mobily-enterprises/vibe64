@@ -33,8 +33,8 @@ const ARCHITECTURE_INSPECTOR_FIELDS = Object.freeze({
 });
 const FIELD_LINE = new RegExp(`^- (${Object.keys(ARCHITECTURE_INSPECTOR_FIELDS).join("|")}): (.+)$`, "u");
 
-function parseVibe64ArchitectureInspectionLines(lines, { path = SECTION_PATH } = {}) {
-  if (!Array.isArray(lines)) invalidStackOperation(ERROR_CODE, path, "Architecture inspection requires exact Stack section lines.");
+function parseVibe64ArchitectureInspectionLines(lines, { path: sectionPath = SECTION_PATH } = {}) {
+  if (!Array.isArray(lines)) invalidStackOperation(ERROR_CODE, sectionPath, "Architecture inspection requires exact Stack section lines.");
   if (isExplicitlyEmptyStackSection(lines)) return [];
   const inspectors = [];
   const ids = new Set();
@@ -42,7 +42,7 @@ function parseVibe64ArchitectureInspectionLines(lines, { path = SECTION_PATH } =
   function finish() {
     if (!current) return;
     for (const name of REQUIRED_FIELDS) {
-      if (current[name] === undefined) invalidStackOperation(ERROR_CODE, path, `${current.id} is missing ${name}.`);
+      if (current[name] === undefined) invalidStackOperation(ERROR_CODE, sectionPath, `${current.id} is missing ${name}.`);
     }
     inspectors.push(current);
     current = null;
@@ -53,44 +53,44 @@ function parseVibe64ArchitectureInspectionLines(lines, { path = SECTION_PATH } =
     const heading = line.match(/^### Inspector `([a-z0-9]+(?:-[a-z0-9]+)*)`: (.+)$/u);
     if (heading) {
       finish();
-      if (ids.has(heading[1])) invalidStackOperation(ERROR_CODE, path, "Duplicate inspector id.", index + 1);
+      if (ids.has(heading[1])) invalidStackOperation(ERROR_CODE, sectionPath, "Duplicate inspector id.", index + 1);
       ids.add(heading[1]);
       current = { id: heading[1], title: heading[2] };
       continue;
     }
-    if (!current) invalidStackOperation(ERROR_CODE, path, "Expected an Inspector heading.", index + 1);
+    if (!current) invalidStackOperation(ERROR_CODE, sectionPath, "Expected an Inspector heading.", index + 1);
     const field = line.match(FIELD_LINE);
     if (!field) {
       const forms = Object.entries(ARCHITECTURE_INSPECTOR_FIELDS).map(([label, [, value]]) => `- ${label}: ${value}`).join("; ");
-      invalidStackOperation(ERROR_CODE, path, `Unknown architecture inspector field. Use one of: ${forms}.`, index + 1);
+      invalidStackOperation(ERROR_CODE, sectionPath, `Unknown architecture inspector field. Use one of: ${forms}.`, index + 1);
     }
     const [key] = ARCHITECTURE_INSPECTOR_FIELDS[field[1]];
-    if (current[key] !== undefined) invalidStackOperation(ERROR_CODE, path, `Duplicate ${field[1]}.`, index + 1);
+    if (current[key] !== undefined) invalidStackOperation(ERROR_CODE, sectionPath, `Duplicate ${field[1]}.`, index + 1);
     if (key === "runtimeRequirements") {
-      current[key] = runtimeArguments(field[2], ERROR_CODE, path, "Inspector runtime", index + 1);
+      current[key] = runtimeArguments(field[2], ERROR_CODE, sectionPath, "Inspector runtime", index + 1);
     } else if (key === "argv") {
-      current[key] = processArguments(field[2], ERROR_CODE, path, "Inspector command", index + 1);
+      current[key] = processArguments(field[2], ERROR_CODE, sectionPath, "Inspector command", index + 1);
     } else if (key === "entryFiles" || key === "requiredFiles") {
-      current[key] = backtickedArguments(field[2], ERROR_CODE, path, field[1], index + 1)
-        .map(value => projectPath(value, ERROR_CODE, path, field[1], index + 1));
+      current[key] = backtickedArguments(field[2], ERROR_CODE, sectionPath, field[1], index + 1)
+        .map(value => projectPath(value, ERROR_CODE, sectionPath, field[1], index + 1));
     } else {
-      const [value] = backtickedArguments(field[2], ERROR_CODE, path, field[1], index + 1, { count: 1 });
+      const [value] = backtickedArguments(field[2], ERROR_CODE, sectionPath, field[1], index + 1, { count: 1 });
       if (key === "workdir") {
-        current[key] = projectPath(value, ERROR_CODE, path, "Inspector directory", index + 1);
+        current[key] = projectPath(value, ERROR_CODE, sectionPath, "Inspector directory", index + 1);
       } else if (key === "previewLocator") {
-        current[key] = previewLocatorPath(value, path, index + 1);
+        current[key] = previewLocatorPath(value, sectionPath, index + 1);
       } else {
         const number = Number(value);
         const max = key === "timeout" ? MAX_TIMEOUT_SECONDS : MAX_OUTPUT_BYTES;
         if (!/^[1-9][0-9]*$/u.test(value) || !Number.isSafeInteger(number) || number > max) {
-          invalidStackOperation(ERROR_CODE, path, `${field[1]} must be from 1 to ${max}.`, index + 1);
+          invalidStackOperation(ERROR_CODE, sectionPath, `${field[1]} must be from 1 to ${max}.`, index + 1);
         }
         current[key] = key === "timeout" ? number * 1000 : number;
       }
     }
   }
   finish();
-  if (!inspectors.length) invalidStackOperation(ERROR_CODE, path, "Use an Inspector entry or - Nothing.");
+  if (!inspectors.length) invalidStackOperation(ERROR_CODE, sectionPath, "Use an Inspector entry or - Nothing.");
   return inspectors;
 }
 

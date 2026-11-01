@@ -74,15 +74,6 @@ async function vibe64HostContextRegistry(runtimeRoot) {
   return hostContextRegistries.get(directory);
 }
 
-async function vibe64HostContextEnvironment(runtimeRoot) {
-  const registry = await vibe64HostContextRegistry(runtimeRoot);
-  return {
-    [HOST_CONTEXT_RESOLVER_ENV]: vibe64HostContextResolverPath(),
-    [HOST_CONTEXT_RESOLVER_DATA_ENV]: JSON.stringify({ registryPath: registry.registryPath }),
-    GENESIS_TURN_CONTEXT_ENABLED: "0"
-  };
-}
-
 const {
   GENESIS_CONTRACTS,
   HOST_CONTEXT_RESOLVER_DATA_ENV,
@@ -121,6 +112,15 @@ const {
   PROGRAM_CITY_SCHEMA,
   CITY_SCHEMA_VERSION
 } = genesisCompiler;
+
+async function vibe64HostContextEnvironment(runtimeRoot) {
+  const registry = await vibe64HostContextRegistry(runtimeRoot);
+  return {
+    [HOST_CONTEXT_RESOLVER_ENV]: vibe64HostContextResolverPath(),
+    [HOST_CONTEXT_RESOLVER_DATA_ENV]: JSON.stringify({ registryPath: registry.registryPath }),
+    GENESIS_TURN_CONTEXT_ENABLED: "0"
+  };
+}
 
 const GENESIS_BLUEPRINT_PATH = "genesis/blueprint.md";
 const GENESIS_SUBSYSTEMS_PATH = "genesis/subsystems.md";

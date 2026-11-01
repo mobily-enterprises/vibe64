@@ -26,6 +26,7 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
     const user = authenticatedVibe64User(context);
     return Buffer.from(String(user?.uid ?? user?.username ?? "local")).toString("base64url");
   }
+  const learnThreadKey = ({ learnerKey, attemptId }) => `${learnerKey}:learn${attemptId ? `:${attemptId}` : ""}`;
   // The thread is decided on the server only: Develop's one conversation, or
   // in Learn mode the current attempt's teacher thread (the lobby without one,
   // or while Training is closing the attempt after releasing its thread).
@@ -38,7 +39,6 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
       ? "" : mode.currentAttemptId;
     return { kind: "learn", learnerKey, ...(attemptId ? { attemptId } : {}) };
   }
-  const learnThreadKey = ({ learnerKey, attemptId }) => `${learnerKey}:learn${attemptId ? `:${attemptId}` : ""}`;
 
   async function stateFor(context) {
     const owner = userKey(context);

@@ -185,12 +185,12 @@ function createCodexConversationPreparation({
     } = context;
     let healthAttempt = null;
     try {
-      const health = await writeCodexAppServerRunning(runtime, sessionId, {
+      const started = await writeCodexAppServerRunning(runtime, sessionId, {
         kind: "app_server_started",
         message: "Preparing Codex app-server for this session."
       });
-      healthAttempt = health.healthAttempt;
-      const { currentSession, thread, briefingWasDelivered } = await operation(sessionId, context, {
+      healthAttempt = started.healthAttempt;
+      const prepared = await operation(sessionId, context, {
         managedIdentity: codexAppServerManagedThreadIdentity(session, { executionRoot, workdir }),
         threadId: currentSession => codexThreadIdForWorkdir(currentSession, workdir),
         async providerOptions(currentSession) {
@@ -203,7 +203,7 @@ function createCodexConversationPreparation({
             workdir
           });
         },
-        gate: operation => withCodexSessionStartupGate({ operation, runtime, session, sessionId }),
+        gate: startup => withCodexSessionStartupGate({ operation: startup, runtime, session, sessionId }),
         preparation(currentSession) {
           return codexAppServerThreadPreparationForSession({
             agentSettings: { ...codexAgentSettingsFromSession(currentSession), ...agentSettings },
@@ -234,13 +234,13 @@ function createCodexConversationPreparation({
       return {
         ...withCodexState({
           ok: true
-        }, currentSession),
-        appServerEndpoint: thread.appServerRuntime?.endpoint || "",
+        }, prepared.currentSession),
+        appServerEndpoint: prepared.thread.appServerRuntime?.endpoint || "",
         codexAppServerThreadReady: true,
-        codexIdentityReady: Boolean(codexConversationIdForWorkdir(currentSession, workdir)),
-        codexThreadReady: Boolean(codexThreadIdForWorkdir(currentSession, workdir)),
-        codexThreadId: thread.threadId,
-        codexSessionBriefingDelivered: briefingWasDelivered,
+        codexIdentityReady: Boolean(codexConversationIdForWorkdir(prepared.currentSession, workdir)),
+        codexThreadReady: Boolean(codexThreadIdForWorkdir(prepared.currentSession, workdir)),
+        codexThreadId: prepared.thread.threadId,
+        codexSessionBriefingDelivered: prepared.briefingWasDelivered,
         terminalSessionId: ""
       };
     } catch (error) {
@@ -311,11 +311,11 @@ function createCodexConversationPreparation({
             };
           },
           async running() {
-            const health = await writeCodexAppServerRunning(runtime, sessionId, {
+            const started = await writeCodexAppServerRunning(runtime, sessionId, {
               kind: "app_server_started",
               message: "Connecting to Codex for this session."
             });
-            prepared.healthAttempt = health.healthAttempt;
+            prepared.healthAttempt = started.healthAttempt;
           },
           preparation(currentSession) {
             const conversation = createMainConversationBinding(runtime.store, currentSession.sessionId, {

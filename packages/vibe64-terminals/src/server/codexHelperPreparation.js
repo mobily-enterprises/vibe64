@@ -148,7 +148,7 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
         }
         if (refused.length) {
           const error = new Error(`Low-cost assistant cleanup could not be recorded for ${refused
-            .map(({ error: reason, sessionId }) => `session ${sessionId} (${trimmedText(reason?.message || reason)})`)
+            .map(({ error: reason, sessionId: refusedId }) => `session ${refusedId} (${trimmedText(reason?.message || reason)})`)
             .join("; ")}.`);
           error.code = trimmedText(refused[0].error?.code);
           error.retryable = true;

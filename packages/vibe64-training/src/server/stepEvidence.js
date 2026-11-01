@@ -109,8 +109,8 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
       let section = "";
       if (file.binary) file.omitted = "binary";
       else if (file.status === "new") {
-        const read = await untrackedSection(source, file.path);
-        if (read.omitted) file.omitted = read.omitted; else { file.added = read.added; file.removed = 0; section = read.section; }
+        const added = await untrackedSection(source, file.path);
+        if (added.omitted) file.omitted = added.omitted; else { file.added = added.added; file.removed = 0; section = added.section; }
       } else section = sections.get(file.path) || "";
       if (!section) continue;
       if (section.length > EVIDENCE_LIMITS.fileDiffCharacters) { file.omitted = "large"; continue; }

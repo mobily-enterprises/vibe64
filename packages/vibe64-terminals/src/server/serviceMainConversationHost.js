@@ -154,7 +154,7 @@ function createServiceMainConversationHost({
       const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
       const binding = await createSessionConversationBinding(provider, id, {
         ...context, runtime,
-        prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
+        prepareInput: (message, current) => current.prepareInput ? current.prepareInput(message) : message
       });
       if (engine === "claude" && !runtime.learningScope && !binding.native?.scoped && !context.temporaryConversationId && actions) {
         binding.applicationTools = {
@@ -173,13 +173,13 @@ function createServiceMainConversationHost({
             await assistant.requireAssistantSelectionAccess(current.assistantSelection, { vibe64User: grant.user });
             admitted.assertCurrent();
             async function retainGoal(action, reason) {
-              const options = { runtime, vibe64User: grant.user };
-              const observed = await goals.readAgentGoal(id, options);
+              const goalOptions = { runtime, vibe64User: grant.user };
+              const observed = await goals.readAgentGoal(id, goalOptions);
               if (observed.threadId !== admitted.nativeThreadId || !observed.goal || observed.goal.status !== "active") {
                 throw new Error("This admitted Main turn no longer owns an active goal.");
               }
               admitted.assertCurrent();
-              const result = await goals.updateAgentGoal(id, { ...options, action, reason,
+              const result = await goals.updateAgentGoal(id, { ...goalOptions, action, reason,
                 threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
               const status = action === "block" ? "blocked" : "paused";
               if (result?.ok === false || result?.goal?.status !== status) {

@@ -116,8 +116,8 @@ function createSessionAgentRouting({
     const preflight = resolveAssistantPurpose({ ...resolution, validateModels: false });
     if (!preflight.available || !validateModels) return preflight;
     const catalogs = [];
-    const readCatalog = (provider, input) => readFact(`catalog:${provider.id}:${JSON.stringify(input)}`,
-      () => providerCapabilities(provider, input, { vibe64User: actor }));
+    const readCatalog = (provider, catalogInput) => readFact(`catalog:${provider.id}:${JSON.stringify(catalogInput)}`,
+      () => providerCapabilities(provider, catalogInput, { vibe64User: actor }));
     const catalogEngines = new Set(accessible.map((selection) => selection.engineId));
     for (const engineId of catalogEngines) {
       const selectionsForEngine = accessible.filter((selection) => selection.engineId === engineId);

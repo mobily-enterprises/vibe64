@@ -45,6 +45,8 @@ const MAX_REVIEW_HELPER_BYTES = 16 * 1024;
 
 const STEP_LOCK_WAIT_MS = 2000;
 
+const isoTime = value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+
 // Browser receipts and Preview output starts hold the preparation barrier only
 // briefly. Wait this long before reporting a genuinely long operation as busy.
 const PREPARATION_BUSY_WAIT_MS = 5000;
@@ -214,8 +216,6 @@ const notesSchema = createSchema({
   // Recent writes for request-ID replay; the oldest identity leaves this window.
   requests: list(createSchema({ requestId: { ...text, maxLength: 64 }, textHash: { ...text, maxLength: 64 }, revision }), MAX_NOTES_REQUESTS)
 });
-
-const isoTime = value => Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 
 const byteSize = value => Buffer.byteLength(`${JSON.stringify(value, null, 2)}\n`);
 

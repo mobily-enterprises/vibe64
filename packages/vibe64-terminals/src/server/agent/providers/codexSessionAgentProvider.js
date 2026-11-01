@@ -283,12 +283,10 @@ function createCodexSessionAgentProvider({
     if (mode === "renewalProof") return {
       native: { providerOwner: codexAppServerProviderOwner, preparation: {
         predecessor(options) {
-          const context = renewalArchivedPredecessorContext(sessionId, options);
-          return prepareRenewalProcessExitProof(context.session);
+          return prepareRenewalProcessExitProof(renewalArchivedPredecessorContext(sessionId, options).session);
         },
         successor(options) {
-          const context = renewalSuccessorProcessExitProofReleaseContext(sessionId, options);
-          return prepareRenewalProcessExitProof(context.session);
+          return prepareRenewalProcessExitProof(renewalSuccessorProcessExitProofReleaseContext(sessionId, options).session);
         }
       } }
     };
@@ -382,7 +380,7 @@ function createCodexSessionAgentProvider({
           readGoalContext: options => codexConversationPreparation.readGoal(sessionId, options),
           goalPreparation: {
             readiness: operation => codexConversationPreparation.threadReadiness(sessionId, {}, operation),
-            project: (context, options) => codexConversationPreparation.goalContext(sessionId, context, options)
+            project: (goalRequest, options) => codexConversationPreparation.goalContext(sessionId, goalRequest, options)
           },
           inspectionPreparation: (input, options) => codexConversationPreparation.inspection(sessionId, input, options),
           namespace: codexTerminalNamespace(sessionId),
@@ -451,8 +449,8 @@ function createCodexSessionAgentProvider({
           message: input,
           vibe64User: context.vibe64User || null
         };
-    return { input: message, async prepareInput(input) {
-      const prepared = { ...message, ...input };
+    return { input: message, async prepareInput(changes) {
+      const prepared = { ...message, ...changes };
       return context.prepareMessage ? context.prepareMessage(prepared) : prepared;
     } };
   }

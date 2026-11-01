@@ -13,6 +13,7 @@ import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { CONNECTED_PROJECTS_LIMIT } from "../shared/contracts.js";
 
 const CONNECTED_PROJECTS_FILE = "vibe64.connections.json";
+const GITHUB_REPOSITORY_URL_PREFIX = "https://github.com/";
 const CONNECTED_PROJECTS_MAX_BYTES = 64 * 1024;
 
 function invalid(message) {
@@ -105,8 +106,6 @@ async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   await writeJsonFileAtomic(connectionsPath(sourceRoot), normalized, { directoryMode: vibe64SharedModes().inheritingDirectory, fileMode: vibe64SharedModes().file });
   return readConnectedProjects(sourceRoot);
 }
-
-const GITHUB_REPOSITORY_URL_PREFIX = "https://github.com/";
 
 // The owner/name of a normalized connected repository URL.
 function githubRepositoryFullName(repository) {

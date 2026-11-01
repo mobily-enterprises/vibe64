@@ -28,6 +28,10 @@ const restoredNative = selection => selection?.engineId === "claude" &&
   (nativeClaude(selection) || Boolean(curatedCodexProvider(selection.modelProviderId))) || selection?.engineId === "opencode" ||
   selection?.engineId === "codex" && (selection.modelProviderId === "openai" || Boolean(curatedCodexProvider(selection.modelProviderId)));
 const nativeClaim = (engine, id) => `${engine}:${id}`;
+// Original shipped search/contract/execute descriptors; native thread tool shape
+// is immutable. Only that exact historical policy has this bounded correction.
+const oldCodexToolSchema = "565d936fcb00d90ddef65fa80b1db8ed6d3bb4faec815cf15dc8723e4d259a16";
+const emptyCodexToolSchema = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 // Frozen869ebb protocol.outputSchema: historical prompt bytes, not today's
 // bounded output schema. Use its original native formatter to identify only
 // this known suffix; never strip arbitrary instructions or alter native files.
@@ -311,9 +315,9 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
       const latestInput = originalOpenCodeInput(rows[0]);
       if (!autonomous) {
         const authored = lastTurn.messages.find(message => message.role === "user");
-        const native = lastAuthoredInput?.userMessages?.at(-1);
+        const nativeAuthored = lastAuthoredInput?.userMessages?.at(-1);
         if (latestInput?.autonomous !== false || typeof latestInput.readOnly !== "boolean" || !Array.isArray(latestInput.userMessages) ||
-            !authored || native?.messageId !== authored.messageId || native?.text !== authored.text) {
+            !authored || nativeAuthored?.messageId !== authored.messageId || nativeAuthored?.text !== authored.text) {
           refuse("The original OpenCode input does not match the last authored product request.");
         }
       }
@@ -489,11 +493,6 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
     return prepared;
   } });
 }
-
-// Original shipped search/contract/execute descriptors; native thread tool shape
-// is immutable. Only that exact historical policy has this bounded correction.
-const oldCodexToolSchema = "565d936fcb00d90ddef65fa80b1db8ed6d3bb4faec815cf15dc8723e4d259a16";
-const emptyCodexToolSchema = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945";
 
 /** Stopped application metadata only; no native writer, file or goal is changed. */
 export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, backupRoot, report }) {

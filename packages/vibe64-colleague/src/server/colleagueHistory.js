@@ -41,7 +41,7 @@ function createColleagueHistory({ serviceState, records, threads, worker, watche
       }
       threads.assertCurrentConversation(state, input.expectedConversationId);
       for (const message of reported) {
-        const saved = state.record.conversationLog.flatMap(turn => turn.messages).find(saved => saved.messageId === message.messageId);
+        const saved = state.record.conversationLog.flatMap(turn => turn.messages).find(candidate => candidate.messageId === message.messageId);
         if (saved && saved.text !== message.text) throw failure("An unconfirmed message ID belongs to different saved words. Keep the original request before starting fresh.", "ACTION_VALIDATION_FAILED", 400);
       }
       const scopeId = `colleague_${randomUUID().replaceAll("-", "")}`;

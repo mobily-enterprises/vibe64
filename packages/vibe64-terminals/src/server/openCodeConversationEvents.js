@@ -278,12 +278,12 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
             get recoveryMessageId() { return upstreamMessageId(`${turn.id}:final-response`); },
             readError: openCodeMessageError
           },
-          writeRun: (turn, state, error) => writeRun(context, turn, state, error),
+          writeRun: (runTurn, state, error) => writeRun(context, runTurn, state, error),
           projectMessages: (messages, input) => writeConversationProjection(context, messages, input),
-          async completeResult(turn, { credentialFailure, providerApiFailure, finalState, failure }) {
+          async completeResult(completedTurn, { credentialFailure, providerApiFailure, finalState, failure }) {
             if (credentialFailure) {
               failure = openCodeCredentialFailureNoticeMessage();
-              await writeOpenCodeFailureNotice(context, turn, {
+              await writeOpenCodeFailureNotice(context, completedTurn, {
                 message: failure,
                 reason: "opencode-credential-failure"
               }).catch((error) => {
@@ -293,7 +293,7 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
                 });
               });
             } else if (providerApiFailure && finalState === VIBE64_AGENT_RUN_STATE.FAILED) {
-              await writeOpenCodeFailureNotice(context, turn, {
+              await writeOpenCodeFailureNotice(context, completedTurn, {
                 message: openCodeProviderApiFailureNoticeMessage(failure)
               }).catch((error) => {
                 vibe64SessionDebugLog("server.opencode.provider-notice.error", {
@@ -302,7 +302,7 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
                 });
               });
             } else if (finalState === VIBE64_AGENT_RUN_STATE.FAILED) {
-              await writeOpenCodeFailureNotice(context, turn, {
+              await writeOpenCodeFailureNotice(context, completedTurn, {
                 message: openCodeFailureNoticeMessage(failure)
               }).catch((error) => {
                 vibe64SessionDebugLog("server.opencode.failure-notice.error", {
