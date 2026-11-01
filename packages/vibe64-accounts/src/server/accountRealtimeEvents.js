@@ -5,16 +5,12 @@ import {
   VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
   VIBE64_CONNECTIONS_CHANGED_EVENT
 } from "../shared/accountEvents.js";
-import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 const VIBE64_ACCOUNT_EVENT_ENTITY = "account";
 const VIBE64_ACCOUNT_EVENT_SOURCE = "vibe64";
 const VIBE64_ACCOUNT_REALTIME_AUDIENCE = "all_clients";
-
-function plainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
-}
 
 /**
  * Every account, connection and auth-session change is a global
@@ -59,33 +55,32 @@ function publishGlobalEntityChanged(events, {
 }
 
 function accountIdFromResult(result = {}) {
-  const source = plainObject(result) || {};
-  const account = plainObject(source.account);
+  const source = normalizeObject(result);
   return normalizeText(
     source.accountId ||
-    account?.id ||
+    (isRecord(source.account) ? source.account.id : "") ||
     (typeof source.account === "string" ? source.account : "") ||
     ""
   );
 }
 
 function accountIdFromInput(input = {}) {
-  const source = plainObject(input) || {};
+  const source = normalizeObject(input);
   return normalizeText(source.accountId || "");
 }
 
 function authSessionIdFromResult(result = {}) {
-  const source = plainObject(result) || {};
+  const source = normalizeObject(result);
   return normalizeText(source.id || source.sessionId || "");
 }
 
-function accountIdFromExecution({ input = {}, result = {} } = {}) {
+function accountIdFromExecution({ input, result }) {
   return accountIdFromResult(result) || accountIdFromInput(input) || "accounts";
 }
 
-function vibe64AccountsRealtimePayload({ input = {}, result = {} } = {}) {
+function vibe64AccountsRealtimePayload({ input, result }) {
   const accountId = accountIdFromResult(result) || accountIdFromInput(input);
-  const source = plainObject(result) || {};
+  const source = normalizeObject(result);
   return {
     ...(accountId ? { accountId } : {}),
     ...(typeof source.account?.connected === "boolean" ? { connected: source.account.connected } : {}),
@@ -94,7 +89,7 @@ function vibe64AccountsRealtimePayload({ input = {}, result = {} } = {}) {
   };
 }
 
-function vibe64ConnectionsRealtimePayload(execution = {}) {
+function vibe64ConnectionsRealtimePayload(execution) {
   const payload = vibe64AccountsRealtimePayload(execution);
   return {
     ...payload,
@@ -103,7 +98,7 @@ function vibe64ConnectionsRealtimePayload(execution = {}) {
 }
 
 function vibe64AccountAuthSessionRealtimePayload(session = {}) {
-  const source = plainObject(session) || {};
+  const source = normalizeObject(session);
   const accountId = normalizeText(source.account?.id || "");
   const sessionId = normalizeText(source.id || source.sessionId || "");
   return {
@@ -115,7 +110,7 @@ function vibe64AccountAuthSessionRealtimePayload(session = {}) {
   };
 }
 
-function authSessionRealtimeAudience({ context = {} } = {}) {
+function authSessionRealtimeAudience({ context }) {
   return normalizeText(context.actor?.id)
     ? "actor_user"
     : VIBE64_ACCOUNT_REALTIME_AUDIENCE;
@@ -140,11 +135,11 @@ function vibe64AccountAuthSessionChangedActionEvent({ operation = "updated" } = 
     source: VIBE64_ACCOUNT_EVENT_SOURCE,
     entity: "account-auth-session",
     operation,
-    entityId: ({ result = {} } = {}) => authSessionIdFromResult(result),
+    entityId: ({ result }) => authSessionIdFromResult(result),
     realtime: {
       event: VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
       audience: authSessionRealtimeAudience,
-      payload: ({ result = {} } = {}) => vibe64AccountAuthSessionRealtimePayload(result)
+      payload: ({ result }) => vibe64AccountAuthSessionRealtimePayload(result)
     }
   });
 }
@@ -182,7 +177,7 @@ function createVibe64AccountsChangedPublisher({ events }) {
       return null;
     }
     const result = {
-      account: plainObject(account) || {
+      account: isRecord(account) ? account : {
         id: normalizedAccountId
       },
       ...(authSessionId ? { id: authSessionId } : {}),
@@ -284,7 +279,7 @@ function createVibe64AccountAuthSessionChangedPublisher({ events }) {
 }
 
 function resultStatusFromAccount(account = null) {
-  return plainObject(account) ? normalizeText(account.status) : "";
+  return isRecord(account) ? normalizeText(account.status) : "";
 }
 
 export {

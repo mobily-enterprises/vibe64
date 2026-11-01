@@ -7,7 +7,7 @@ import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe
 import { validateAssistantRoutingUpgradeRecord } from "@local/vibe64-runtime/server/assistantRoutingStateUpgrade";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
-import { isPlainObject } from "./upgradeValues.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 const oldRoles = { plan: "senior", code: "junior", economy: "intern" };
 const roles = new Set(["senior", "junior", "intern", "router", "auto", "review", "deslop"]);
@@ -20,7 +20,7 @@ function role(value) {
 }
 
 function roleMap(value) {
-  if (!isPlainObject(value)) throw new Error("Routing assignments must be an object.");
+  if (!isRecord(value)) throw new Error("Routing assignments must be an object.");
   const result = Object.create(null);
   for (const [key, entry] of Object.entries(value)) {
     const nextKey = Object.hasOwn(oldRoles, key) ? oldRoles[key] : key;
@@ -36,7 +36,7 @@ function roleMap(value) {
 }
 
 function configuration(value) {
-  if (!isPlainObject(value) || !isPlainObject(value.orchestrators) ||
+  if (!isRecord(value) || !isRecord(value.orchestrators) ||
       value.schemaVersion !== undefined && ![1, 2, 3].includes(value.schemaVersion)) {
     throw new Error("Routing configuration has an unsupported shape.");
   }
@@ -48,7 +48,7 @@ function configuration(value) {
 }
 
 function routingRecord(value) {
-  if (!isPlainObject(value)) throw new Error("Saved routing must be an object.");
+  if (!isRecord(value)) throw new Error("Saved routing must be an object.");
   if (value.schemaVersion === 4 || ["custom", "helper"].some(retiredRole =>
     [value.mode, value.requestedMode, value.resolvedMode, value.role].includes(retiredRole))) {
     return validateAssistantRoutingUpgradeRecord(value, {
@@ -97,7 +97,7 @@ function metadata(value) {
 
 function upgradeAssistantRoleSession({ metadata: saved, conversations, renewal }) {
   for (const conversation of conversations) {
-    if (conversation.routingMetadata !== undefined && !isPlainObject(conversation.routingMetadata)) {
+    if (conversation.routingMetadata !== undefined && !isRecord(conversation.routingMetadata)) {
       throw new Error("Temporary conversation routing metadata must be an object. Inspect it before upgrading.");
     }
   }
@@ -148,7 +148,7 @@ async function upgradeAssistantRoles(context) {
         try { parsed = JSON.parse(original); } catch { throw new Error(
           "Model routing is invalid JSON. Repair it before upgrading roles."
         ); }
-        if (!isPlainObject(parsed)) throw new Error("Model routing must be an object. Repair it before upgrading roles.");
+        if (!isRecord(parsed)) throw new Error("Model routing must be an object. Repair it before upgrading roles.");
         if (parsed.schemaVersion === 4) validateV4(parsed);
         else if (parsed.schemaVersion === 3) validateAssistantRoutingConfiguration(parsed);
         else {

@@ -6,11 +6,12 @@ import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { validateAssistantRoutingUpgradeRecord } from "@local/vibe64-runtime/server/assistantRoutingStateUpgrade";
-import { isPlainObject, upgradeFileText } from "./upgradeValues.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { upgradeFileText } from "./upgradeValues.js";
 
 
 function helperAssignments(value) {
-  if (!isPlainObject(value)) throw new Error("Saved model assignments must be an object.");
+  if (!isRecord(value)) throw new Error("Saved model assignments must be an object.");
   const next = { ...value };
   if (Object.hasOwn(next, "intern")) {
     if (Object.hasOwn(next, "helper")) {
@@ -23,8 +24,8 @@ function helperAssignments(value) {
 }
 
 function helperConfiguration(value) {
-  if (!isPlainObject(value) ||
-      !isPlainObject(value.orchestrators) ||
+  if (!isRecord(value) ||
+      !isRecord(value.orchestrators) ||
       value.schemaVersion !== undefined && ![3, 4].includes(value.schemaVersion)) {
     throw new Error("Run the preceding model-routing upgrades before upgrading Helper settings.");
   }
@@ -41,11 +42,11 @@ function helperConfiguration(value) {
  */
 function upgradeHelperProfiles(value) {
   if (Array.isArray(value)) return value.map(upgradeHelperProfiles);
-  if (!isPlainObject(value)) return value;
+  if (!isRecord(value)) return value;
   const next = { ...value };
   for (const key of ["executionProfile", "executionProfileRequest", "commitTitleExecutionProfile"]) {
     const profile = next[key];
-    if (isPlainObject(profile) && ["economy", "intern"].includes(profile.profileId)) {
+    if (isRecord(profile) && ["economy", "intern"].includes(profile.profileId)) {
       next[key] = { ...profile, profileId: "helper" };
     }
   }
@@ -57,7 +58,7 @@ function upgradeHelperProfiles(value) {
 
 function routingRecord(value, options = {}) {
   const { preferences = false, history = false } = options;
-  if (!isPlainObject(value)) throw new Error("Saved routing must be an object.");
+  if (!isRecord(value)) throw new Error("Saved routing must be an object.");
   const previousConfiguration = value.configuration?.schemaVersion === 3 ||
     Object.values(value.configuration?.orchestrators || {}).some(roles => Object.hasOwn(roles, "intern"));
   const currentRole = ["custom", "helper"].some(role =>
@@ -200,9 +201,9 @@ async function upgradeAssistantHelpers(context) {
       const connectionsSource = await readOptional(connectionsPath);
       if (connectionsSource !== null) {
         const connections = JSON.parse(connectionsSource);
-        if (!isPlainObject(connections) || !isPlainObject(connections.connections) ||
+        if (!isRecord(connections) || !isRecord(connections.connections) ||
             Object.values(connections.connections)
-              .some(entry => !isPlainObject(entry))) throw new Error("AI connections have an unsupported shape.");
+              .some(entry => !isRecord(entry))) throw new Error("AI connections have an unsupported shape.");
         let changed = false;
         for (const entry of Object.values(connections.connections)) {
           if (!Object.hasOwn(entry, "economyModelId")) continue;
@@ -244,7 +245,7 @@ async function upgradeAssistantHelpers(context) {
           const source = await readOptional(from);
           const target = path.join(projectRuntimeRoot, "codex-helper-thread-ownership", entry.name);
           const record = upgradeHelperProfiles(JSON.parse(source));
-          if (!isPlainObject(record) || !record.threadId || !record.ownershipId || !record.executionProfile) {
+          if (!isRecord(record) || !record.threadId || !record.ownershipId || !record.executionProfile) {
             throw new Error("Helper ownership is incomplete. Inspect it before upgrading.");
           }
           vibe64AgentExecutionProfileAuditSnapshot(record.executionProfile);

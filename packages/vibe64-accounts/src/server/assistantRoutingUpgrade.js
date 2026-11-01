@@ -13,7 +13,8 @@ import { upgradeAssistantRoutingSession } from "@local/vibe64-runtime/server/ass
 import routingScores from "./routingV2Scores.json" with { type: "json" };
 import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createAiConnectionStore } from "./aiConnectionStore.js";
-import { isPlainObject, upgradeFileText } from "./upgradeValues.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { upgradeFileText } from "./upgradeValues.js";
 
 // Historical defaults belong to this offline upgrade, never to live routing.
 const CODEX_RECOMMENDED_HELPER_MODEL = "gpt-5.6-luna";
@@ -177,7 +178,7 @@ function parse(source, label) {
   if (source === null) return null;
   try {
     const value = JSON.parse(source);
-    if (isPlainObject(value)) return value;
+    if (isRecord(value)) return value;
   } catch { /* Do not log saved content. */ }
   throw new Error(`${label} is invalid. Inspect it before upgrading routing.`);
 }
@@ -190,7 +191,7 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
   const connectionsSource = await readUpgradeFile(connectionsPath);
   const connectionState = parse(connectionsSource, "AI connections");
   if (connectionState && (!Number.isInteger(connectionState.version) || connectionState.version < 1 || connectionState.version > 5 ||
-      !isPlainObject(connectionState.connections) || Object.values(connectionState.connections).some((value) => !isPlainObject(value) ||
+      !isRecord(connectionState.connections) || Object.values(connectionState.connections).some((value) => !isRecord(value) ||
         typeof value.apiKey !== "string" ||
         !value.apiKey ||
         value.helperModelId !== undefined && (typeof value.helperModelId !== "string" || value.helperModelId.length > 512 ||
