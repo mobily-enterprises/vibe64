@@ -266,7 +266,9 @@ export function createVibe64ConversationExecution({
           error.stopProof = { scopeEmpty: false };
         }
         if (error.stopProof?.scopeEmpty !== true) error.cleanupFailed = true;
-      } else await rm(root, { recursive: true, force: true });
+      } else {
+        await rm(root, { recursive: true, force: true });
+      }
       throw error;
     }
   }
