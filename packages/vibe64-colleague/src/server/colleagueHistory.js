@@ -73,6 +73,7 @@ function createColleagueHistory({
         error: state.record.error,
         conversationLog: structuredClone(state.record.conversationLog),
         ...(state.record.conversationMetadata ? { conversationMetadata: structuredClone(state.record.conversationMetadata) } : {}),
+        ...(state.record.conversationSummary ? { conversationSummary: structuredClone(state.record.conversationSummary) } : {}),
         ...(state.record.retiredConversation ? { retiredConversation: structuredClone(state.record.retiredConversation) } : {}),
         archivedAt: new Date().toISOString(),
         unconfirmedMessages: structuredClone(reported),
@@ -85,6 +86,7 @@ function createColleagueHistory({
         error: "",
         conversationLog: [],
         conversationMetadata: {},
+        conversationSummary: undefined,
         retiredConversation: undefined,
         previousConversations: [...state.record.previousConversations, old]
       };
@@ -112,6 +114,7 @@ function createColleagueHistory({
         state.host = null;
         old.conversationLog = structuredClone(state.record.conversationLog);
         if (state.record.conversationMetadata) old.conversationMetadata = structuredClone(state.record.conversationMetadata);
+        if (state.record.conversationSummary) old.conversationSummary = structuredClone(state.record.conversationSummary);
         old.archivedAt = new Date().toISOString();
         await records.persist(state, patch, old.runtimeId);
         state.streamingReply = null;

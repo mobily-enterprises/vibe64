@@ -96,12 +96,14 @@ function createColleagueRecords({
       if (!state) throw failure("This Colleague history is unavailable.", "conversation_forbidden", 403);
       const record = state.record.runtimeId === key ? state.record :
         state.record.previousConversations.find(old => old.runtimeId === key);
+      // A record keeps the compaction summary its conversation runtime writes, when it has one.
       return {
         metadata: record.conversationMetadata || {},
-        turns: new Map(record.conversationLog.map(turn => [turn.turnId, turn]))
+        turns: new Map(record.conversationLog.map(turn => [turn.turnId, turn])),
+        ...(record.conversationSummary ? { summary: record.conversationSummary } : {})
       };
     },
-    async writeRecord(key, { turns, metadata }, transaction) {
+    async writeRecord(key, { turns, metadata, summary }, transaction) {
       const state = serviceState.conversationOwners.get(key);
       if (!state || state.record.runtimeId !== key) {
         throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
@@ -115,7 +117,8 @@ function createColleagueRecords({
       await persist(state, {
         conversationLog,
         ...(committedSelection ? { assistantSelection: selected.assistantSelection } : {}),
-        ...(Object.keys(metadata).length || state.record.conversationMetadata ? { conversationMetadata: metadata } : {})
+        ...(Object.keys(metadata).length || state.record.conversationMetadata ? { conversationMetadata: metadata } : {}),
+        ...(summary ? { conversationSummary: summary } : {})
       }, key);
     }
   });

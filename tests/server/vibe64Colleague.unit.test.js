@@ -83,7 +83,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   const nativeCommands = native === true ? await createControlledColleagueNativeCommands(root, responses) : native || null;
   if (nativeCommands && native !== true) await nativeCommands.enqueue(responses);
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const observations = { starts: [], mutations: [], creates: 0, allow: true, projectAllowed: true, reads: 0,
+  const observations = { starts: [], summaries: [], mutations: [], creates: 0, allow: true, projectAllowed: true, reads: 0,
     helperCalls: [], sent: [], conversations: {}, deniedProjects: new Set(), projectChecks: [],
     target: { ok: true, status: "inProgress", runId: "work-1", messages: [{ id: "question", role: "user", text: "What happened?" }] },
     session: { ok: true, status: "active", agentSession: { turn: { id: "main-1", active: true, state: "inProgress" } } }, log: [] };
@@ -212,11 +212,14 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   if (!nativeCommands) t.mock.method(globalThis, "fetch", async (_url, request) => {
     const body = JSON.parse(request.body);
     // The engine's own unstreamed calls are not Colleague's scripted steps: its claims
-    // check finds nothing unsupported, and its account of a stopped reply falls back to
-    // its plain words.
+    // check finds nothing unsupported, a compaction summary is the test's, and its account
+    // of a stopped reply falls back to its plain words.
     if (!body.stream) {
-      if (!body.messages[0].content.startsWith("You check an assistant's reply")) throw new Error("This fixture writes no accounts.");
-      return modelAnswer(JSON.stringify({ unsupported: [] }));
+      const system = body.messages[0].content;
+      if (system.startsWith("You check an assistant's reply")) return modelAnswer(JSON.stringify({ unsupported: [] }));
+      if (!system.startsWith("You keep the memory of a long conversation")) throw new Error("This fixture writes no accounts.");
+      observations.summaries.push(body);
+      return modelAnswer(observations.summary);
     }
     // Colleague's own request frame; the engine's checks add their notes after it.
     const current = body.messages.findLast(message => message.role === "user" && message.content.startsWith("[Application data]")).content;
@@ -555,6 +558,43 @@ test("Colleague retains canonical history and turn metadata directly across rest
   assert.deepEqual(next.conversationLog[0], saved.conversationLog[0]);
   assert.equal(next.schemaVersion, saved.schemaVersion);
   assert.equal(next.conversationMetadata.runtime.version, 3);
+});
+
+// The engine compacts a long API conversation; Colleague's record keeps the summary with the
+// last turn it covers, so later turns, after a restart too, read only what follows it.
+test("Colleague keeps the API engine's compaction summary across turns and a restart", async t => {
+  const request = index => `Request ${index}: ${"Plan the grocery list in careful detail. ".repeat(500)}`;
+  const answer = index => `Answer ${index}: ${"The list has milk, bread and apples. ".repeat(380)}`;
+  const first = await fixture(t, Array.from({ length: 10 }, (_, index) => reply(answer(index + 1))));
+  first.observations.summary = "The person is planning a grocery list of milk, bread and apples.";
+  let compactedAt = 0;
+  for (let index = 1; index <= 10; index += 1) {
+    await first.send(request(index), `request-${index}`);
+    assert.equal((await first.service.wait(first.context)).status, "ready");
+    compactedAt ||= first.observations.summaries.length && index;
+  }
+  assert.ok(compactedAt > 1 && compactedAt < 10, "The conversation is compacted before its last turn");
+  assert.equal(first.observations.summaries.length, 1, "Later turns reuse the stored summary");
+  await first.service.close();
+  const file = path.join(first.root, "colleague", "NDI", "conversation.json");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  const covered = saved.conversationLog.findIndex(turn => turn.turnId === saved.conversationSummary.throughTurnId);
+  assert.equal(saved.conversationSummary.text, first.observations.summary);
+  assert.ok(covered > 0 && covered < saved.conversationLog.length - 1, "The summary ends at a turn before the newest");
+  const resumed = await fixture(t, [reply("Continued.")], { systemRoot: first.root });
+  await resumed.send("Continue", "continued-request");
+  assert.equal((await resumed.service.wait(resumed.context)).status, "ready");
+  assert.deepEqual(resumed.observations.summaries, [], "The stored summary is read back, not written again");
+  const { messages } = resumed.observations.starts[0].body;
+  assert.match(messages[0].content, /The person is planning a grocery list of milk, bread and apples\./);
+  assert.equal(messages.some(message => message.content.includes?.("Request 1:")), false, "Summarized turns are not read again");
+  assert.ok(messages.some(message => message.content.includes?.(`Request ${covered + 2}:`)), "Later turns are read word for word");
+  const { conversationId } = await resumed.service.read({}, resumed.context);
+  await freshAction(resumed, { operationId: "summary-rotation", expectedConversationId: conversationId });
+  const rotated = JSON.parse(await readFile(file, "utf8"));
+  assert.equal(rotated.conversationSummary, undefined, "A fresh conversation starts without a summary");
+  assert.deepEqual(rotated.previousConversations.at(-1).conversationSummary, saved.conversationSummary,
+    "The archived conversation keeps its summary");
 });
 
 test("a failed Colleague record write cannot admit an in-memory-only message", async t => {

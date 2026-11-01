@@ -11,7 +11,9 @@ export function validateColleagueConversationRecord(record, ownerKey) {
     if (!value || typeof value.scopeId !== "string" || !/^colleague_[\w-]+$/u.test(value.scopeId) ||
         !Array.isArray(value.conversationLog) || value.conversationLog.some(turn =>
       !turn || typeof turn.turnId !== "string" || !Array.isArray(turn.messages) ||
-          turn.messages.some(message => !message || typeof message.text !== "string" || typeof message.role !== "string"))) invalid();
+          turn.messages.some(message => !message || typeof message.text !== "string" || typeof message.role !== "string")) ||
+        (value.conversationSummary !== undefined && (typeof value.conversationSummary?.text !== "string" ||
+          typeof value.conversationSummary.throughTurnId !== "string"))) invalid();
   };
   if (![1, 2, 3].includes(record?.schemaVersion)) invalid();
   chat(record);
@@ -56,10 +58,12 @@ async function prepareCopiedColleagueConversation(record, ownerKey, { at }) {
     const storage = createConversationStorage({
       readRecord: async () => ({
         metadata: chat.conversationMetadata || {},
-        turns: new Map(chat.conversationLog.map(turn => [turn.turnId, turn]))
+        turns: new Map(chat.conversationLog.map(turn => [turn.turnId, turn])),
+        ...(chat.conversationSummary ? { summary: chat.conversationSummary } : {})
       }),
-      async writeRecord(_key, { turns, metadata }, transaction) {
+      async writeRecord(_key, { turns, metadata, summary }, transaction) {
         chat.conversationMetadata = metadata;
+        if (summary) chat.conversationSummary = summary;
         chat.conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));
       }
     });
