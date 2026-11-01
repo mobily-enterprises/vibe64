@@ -3,9 +3,16 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { prepareConversationRuntimeCopy, prepareCopiedConversationAgentRun } from "@jskit-ai/assistant-core/server/conversation";
 
-/** Explicitly prepare one session in an offline disposable copy. The caller
+/** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
+
+/**
+ * Explicitly prepare one session in an offline disposable copy. The caller
  * owns destination isolation and pauses native goals before this operation.
  * Nothing here launches, resumes or stops an execution on either machine.
+ * @param {object} request
+ * @param {Vibe64SessionStore} request.store
+ * @param {string} request.sessionId
+ * @param {string} [request.at]
  */
 export async function prepareVibe64DevelopmentCopy({ store, sessionId, at = new Date().toISOString() }) {
   // A copied PID can be alive on the parent or collide with an unrelated guest

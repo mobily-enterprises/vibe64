@@ -49,6 +49,8 @@ import {
 } from "./codexAppServerHelperThreads.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
+/** @typedef {import("./runtime.js").Vibe64SessionRuntime} Vibe64SessionRuntime */
+
 const CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE =
   "vibe64_session_renewal_thread_unreadable";
 const CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE =
@@ -120,6 +122,13 @@ function codexAppServerIdentityMetadata({
   };
 }
 
+/**
+ * Records a Codex app-server binding on the session and reports the runtime directory a new sign-in supersedes.
+ * @param {object} request
+ * @param {Vibe64SessionRuntime} request.runtime
+ * @param {string} [request.sessionId]
+ * @param {boolean} [request.renewalInternal] writes through the store's renewal-only metadata access
+ */
 async function writeCodexAppServerIdentityMetadata({
   additionalMetadata = {},
   appServerRuntime = {},
@@ -260,6 +269,12 @@ function persistedCodexSessionRenewalThreadClaim(session = {}, options = {}) {
   });
 }
 
+/**
+ * Records the threads a renewal starts from, through the store's renewal-only metadata access.
+ * @param {object} request
+ * @param {Vibe64SessionRuntime} request.runtime
+ * @param {string} [request.sessionId]
+ */
 async function writeCodexSessionRenewalThreadBaseline({
   operationId = "",
   runtime,
@@ -283,6 +298,12 @@ async function writeCodexSessionRenewalThreadBaseline({
   return baseline;
 }
 
+/**
+ * Records the fresh thread a renewal claimed, through the store's renewal-only metadata access.
+ * @param {object} request
+ * @param {Vibe64SessionRuntime} request.runtime
+ * @param {string} [request.sessionId]
+ */
 async function writeCodexSessionRenewalThreadClaim({
   operationId = "",
   runtime,
@@ -515,6 +536,12 @@ function codexAppServerToolSchemaIdentityForSession(session = {}, workdir = "") 
   return identity;
 }
 
+/**
+ * What preparing the session's Codex app-server thread needs.
+ * @param {object} request
+ * @param {Vibe64SessionRuntime} request.runtime
+ * @param {object} [request.session]
+ */
 function codexAppServerThreadPreparationForSession({
   agentSettings = {},
   hostContext = null,

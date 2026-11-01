@@ -23,6 +23,12 @@ function startedSessionsForNamespace(namespace) {
   return stores.get(normalizedNamespace);
 }
 
+/**
+ * Forgets a closed session, and its namespace once that held its last session.
+ * @param {Map<string, object>} sessions the namespace's sessions
+ * @param {string} namespace
+ * @param {string} id
+ */
 function forgetTerminalSession(sessions, namespace, id) {
   sessions.delete(id);
   const normalizedNamespace = normalizeNamespace(namespace);

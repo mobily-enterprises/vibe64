@@ -23,10 +23,17 @@ import {
 } from "./sessionWorktreeGit.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
+/** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
+
 /**
  * Recovery of a session's source before it is archived: its uncommitted work,
  * branch and checkpoints as bundles and artifacts, and the details saved for
  * restoring them.
+ * @param {object} request
+ * @param {string} [request.artifactsRoot]
+ * @param {object} [request.session]
+ * @param {Vibe64SessionStore} request.store
+ * @param {string} [request.worktreePath]
  */
 async function writeDirtyRecoveryArtifacts({
   artifactsRoot = "",
