@@ -49,14 +49,18 @@ const githubRepositoryMatches = definePreflightCheck({
   run: ({ plan, baseline }) => {
     const remote = baseline?.remote?.githubRepository || null;
     const wrong = plan.targets.filter((target) => target.destination === "github-releases" && target.settings?.repository !== remote);
-    if (!remote) return {
-      ok: false,
-      message: "GitHub Releases needs this project's remote on GitHub, so the release tag can be pushed there."
-    };
-    if (wrong.length) return {
-      ok: false,
-      message: `${wrong.map(({ id }) => id).join(", ")} publishes to another repository than this project's remote (${remote}).`
-    };
+    if (!remote) {
+      return {
+        ok: false,
+        message: "GitHub Releases needs this project's remote on GitHub, so the release tag can be pushed there."
+      };
+    }
+    if (wrong.length) {
+      return {
+        ok: false,
+        message: `${wrong.map(({ id }) => id).join(", ")} publishes to another repository than this project's remote (${remote}).`
+      };
+    }
     return { ok: true, message: `The tag goes to ${remote} with the release.` };
   }
 });

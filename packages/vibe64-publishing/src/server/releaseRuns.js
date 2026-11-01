@@ -215,12 +215,14 @@ function createReleaseRuns({
       );
       const pushed = await repository.pushTags(facts, current.plan.tags);
       if (pushed.pushed.length) await history.appendLog(recordId, `Pushed ${pushed.pushed.join(", ")} to ${facts.remote.name}.`);
-      for (const tag of current.plan.tags) await step(
-        recordId,
-        `tag:${tag}`,
-        "done",
-        pushed.pushed.includes(tag) ? `Pushed to ${facts.remote.name}` : "In the project"
-      );
+      for (const tag of current.plan.tags) {
+        await step(
+          recordId,
+          `tag:${tag}`,
+          "done",
+          pushed.pushed.includes(tag) ? `Pushed to ${facts.remote.name}` : "In the project"
+        );
+      }
     }
     const record = await history.read(recordId);
     let proven = 0;
