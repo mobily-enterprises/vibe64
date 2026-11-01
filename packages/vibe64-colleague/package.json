@@ -23,8 +23,9 @@
       ],
       "requires": [
         "runtime.actions",
-        "runtime.http",
         "runtime.events",
+        "runtime.http",
+        "runtime.logger",
         "runtime.realtime",
         "vibe64.accounts",
         "vibe64.terminals"

@@ -27,7 +27,8 @@
         "runtime.actions",
         "runtime.env",
         "runtime.events",
-        "runtime.http"
+        "runtime.http",
+        "runtime.logger"
       ]
     },
     "runtime": {
