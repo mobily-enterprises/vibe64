@@ -42,12 +42,10 @@ function previewIdentityCommandRequest(selection = {}, options = {}) {
   const normalizedSelection = normalizePreviewIdentitySelection(selection);
   const href = String(targetHref || "").trim();
   const target = new URL(href);
+  // Vibe64 builds the target from its own Preview address: another protocol is an internal failure, so the caller
+  // sees "Internal server error." rather than this text.
   if (!["http:", "https:"].includes(target.protocol)) {
-    throw previewIdentityCommandError(
-      "Application preview identity target must use HTTP.",
-      "vibe64_preview_identity_command_target_invalid",
-      500
-    );
+    throw new Error("Application preview identity target must use HTTP.");
   }
   return {
     operation: normalizedSelection.operation,
