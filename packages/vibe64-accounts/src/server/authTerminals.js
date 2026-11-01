@@ -95,14 +95,13 @@ function createAuthTerminals({
       const finalizedCodexAuthSession = authSessionViews.rotateCodexMarkerForFinalizedAuthSession(id, {
         accountId
       }, exitCode);
-      const account = await statusReads.accountStatus(accountId, {
-        codexMarkerReason: finalizedCodexAuthSession
-          ? reason || "terminal-close"
-          : "terminal-close-status",
-        githubContext,
-        previousGithub,
-        rotateCodexMarker: finalizedCodexAuthSession
-      });
+      const account = finalizedCodexAuthSession
+        ? await statusReads.codexStatusWithNewMarker(reason || "terminal-close")
+        : await statusReads.accountStatus(accountId, {
+            codexMarkerReason: "terminal-close-status",
+            githubContext,
+            previousGithub
+          });
       if (["codex", "claude"].includes(accountId) && account?.connected === true && exitCode === 0) {
         account.routing = await modelRouting.initializeModelRouting({ vibe64User });
       }

@@ -136,11 +136,9 @@ function createAccountCredentials({
           systemRoot: access.systemRoot
         });
       } else {
-        account = await statusReads.accountStatus(accountId, {
-          codexMarkerReason: accountId === "codex" ? "logout" : "",
-          githubContext,
-          rotateCodexMarker: accountId === "codex"
-        });
+        account = accountId === "codex"
+          ? await statusReads.codexStatusWithNewMarker("logout")
+          : await statusReads.accountStatus(accountId, { githubContext });
       }
       if (result.ok) await authSessionViews.forgetFinishedAuthSessions(accountId, String(githubContext?.userKey || ""));
       authDebug("server.auth.logout.done", {

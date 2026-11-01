@@ -72,19 +72,41 @@ function createAccountStatusReads({
     };
   }
 
+  /**
+   * Codex's status after a sign-in finished or a sign-out: a new login marker tells every reader the account changed.
+   * @param {string} reason
+   */
+  async function codexStatusWithNewMarker(reason) {
+    authDebug("server.auth.account_status.start", {
+      accountId: "codex",
+      codexMarkerReason: reason,
+      githubContextOk: null,
+      previousGithubPresent: false,
+      rotateCodexMarker: true
+    });
+    const account = await codexStatus.readLiveCodexStatus({
+      reason,
+      rotateMarker: true
+    });
+    authDebug("server.auth.account_status.done", {
+      account: accountDebugSummary(account),
+      accountId: "codex"
+    });
+    return account;
+  }
+
   async function accountStatus(accountId, options = {}) {
     const {
       codexMarkerReason = "",
       githubContext = null,
-      previousGithub = null,
-      rotateCodexMarker = false
+      previousGithub = null
     } = options;
     authDebug("server.auth.account_status.start", {
       accountId,
       codexMarkerReason,
       githubContextOk: githubContext ? githubContext.ok === true : null,
       previousGithubPresent: Boolean(previousGithub),
-      rotateCodexMarker
+      rotateCodexMarker: false
     });
     let account;
     if (accountId === "github") {
@@ -110,10 +132,7 @@ function createAccountStatusReads({
     }
     if (accountId === "claude") return readClaudeStatus();
     if (accountId === "codex") {
-      account = await codexStatus.readLiveCodexStatus({
-        reason: codexMarkerReason || "codex-status-refresh",
-        rotateMarker: rotateCodexMarker
-      });
+      account = await codexStatus.readLiveCodexStatus({ reason: codexMarkerReason || "codex-status-refresh" });
       authDebug("server.auth.account_status.done", {
         account: accountDebugSummary(account),
         accountId
@@ -250,6 +269,7 @@ function createAccountStatusReads({
 
   return Object.freeze({
     accountStatus,
+    codexStatusWithNewMarker,
     getStatus,
     getClaudeStatus,
     getCodexStatus,

@@ -178,12 +178,13 @@ function createAuthSessionViews({
       ? rotateCodexMarkerForFinalizedAuthSession(sessionId, metadata, terminal.exitCode)
       : false;
     const account = terminal.status === "exited"
-      ? metadata.account || await statusReads.accountStatus(metadata.accountId, {
-          codexMarkerReason: finalizedCodexAuthSession ? "auth-session-exited" : "auth-session-status",
-          githubContext: metadata.githubContext,
-          previousGithub: access.previousGithubForInput(input),
-          rotateCodexMarker: finalizedCodexAuthSession
-        })
+      ? metadata.account || await (finalizedCodexAuthSession
+        ? statusReads.codexStatusWithNewMarker("auth-session-exited")
+        : statusReads.accountStatus(metadata.accountId, {
+            codexMarkerReason: "auth-session-status",
+            githubContext: metadata.githubContext,
+            previousGithub: access.previousGithubForInput(input)
+          }))
       : authenticatingAccount(metadata.accountId);
     authDebug("server.auth.read.account_status", {
       account: accountDebugSummary(account),
