@@ -7,7 +7,7 @@ import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
-/** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
+/** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
 const SCHEMA_ARTIFACT_PATH = "database/schema.json";
 const ERD_LAYOUT_ARTIFACT_PATH = "database/erd-layout.json";

@@ -24,7 +24,7 @@ import {
 } from "./databaseActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
 function sessionInput(request) {
   return {
