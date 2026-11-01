@@ -1,4 +1,5 @@
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { GENESIS_STACK_SECTION_AMBIGUOUS } from "@local/vibe64-genesis/server";
 import { workspaceSetupState } from "@local/vibe64-runtime/server/workspaceSetupState";
@@ -185,7 +186,7 @@ function createWorkspaceSetupStart({
   async function startRecipe({
     migrationStartedAt,
     migrationTranscript,
-    onProgress = null,
+    onProgress = doNothing,
     projectContext,
     renewal,
     rerunFailed = false,
@@ -204,7 +205,7 @@ function createWorkspaceSetupStart({
         const prepared = await connectedPreparation({ mode: "prepare", runtime, session, onProgress });
         if (prepared?.ok === false) throw Object.assign(new Error(prepared.error), { code: prepared.code });
         connectedUpdates = (prepared?.prepared || []).map(connectedUpdateLine).filter(Boolean);
-        await onProgress?.("Checking connected sources");
+        await onProgress("Checking connected sources");
         session = await runtime.getSession(sessionId, { inspectSource: false });
         setup = await runnerState.inspect({ session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment() });
         await setupExecution.connectedSourceRoots(setup, runtime, session);
