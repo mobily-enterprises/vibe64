@@ -331,163 +331,163 @@ function createService({
     };
   }
 
-  return Object.freeze({
-    async readStatus(input = {}) {
-      return systemResult(async () => {
-        const context = await systemContext(input.sessionId);
-        const [machineResult, programResult] = await Promise.allSettled([
-          cityReader(context.sourceRoot, "machine"),
-          cityReader(context.sourceRoot, "program")
-        ]);
-        const cities = {
-          machine: settledCityStatus(machineResult, "machine"),
-          program: settledCityStatus(programResult, "program")
-        };
-        return {
-          cities,
-          ok: true,
-          status: combinedStatus(cities)
-        };
-      });
-    },
+  async function readStatus(input = {}) {
+    return systemResult(async () => {
+      const context = await systemContext(input.sessionId);
+      const [machineResult, programResult] = await Promise.allSettled([
+        cityReader(context.sourceRoot, "machine"),
+        cityReader(context.sourceRoot, "program")
+      ]);
+      const cities = {
+        machine: settledCityStatus(machineResult, "machine"),
+        program: settledCityStatus(programResult, "program")
+      };
+      return {
+        cities,
+        ok: true,
+        status: combinedStatus(cities)
+      };
+    });
+  }
 
-    async readArchitecture(input = {}) {
-      return systemResult(async () => {
-        const context = await systemContext(input.sessionId);
-        const record = await cityReader(context.sourceRoot, "machine");
-        const machine = requireGenesisCity(record, "machine");
-        const native = machine.architecture;
-        const sourceMetrics = new Map((machine.buildings || []).filter(file => file.role === 'source').map(file => [file.id, file]));
-        // Stack supplies application entry identity; the renderer never guesses
-        // server/main filenames. Reading declarations executes no inspector.
-        let inspection = null;
-        let layout = null;
-        let layoutDiagnostic = '';
-        let entryPointDiagnostic = '';
-        if (native) {
-          try { inspection = await inspectorReader({ projectRoot: context.sourceRoot }); }
-          catch (error) { entryPointDiagnostic = `Entry point declarations need attention: ${error.message}`; }
-          try { layout = await layoutReader({ projectRoot: context.sourceRoot }); }
-          catch (error) { layoutDiagnostic = `Architecture layout needs attention: ${error.message}`; }
-        }
-        const entryPaths = [...new Set((inspection?.inspectors || []).flatMap(inspector => inspector.entryFiles || []))];
-        const entryPoints = entryPaths.map(file => {
-          const source = native.files.find(candidate => candidate.path === file);
-          return { file, fileId: source?.id || null, subsystemId: source?.subsystemId || null, resolution: source ? 'resolved' : 'unresolved' };
-        });
-        const architecture = native ? {
-          ...native,
-          layout,
-          layoutDiagnostic,
-          entryPoints,
-          entryPointStatus: inspection?.status || 'unconfigured',
-          entryPointDiagnostic,
-          files: native.files.map(file => fileView(file, sourceMetrics)),
-          symbols: native.symbols.filter(symbol => symbol.visibility === 'public').map(publicSymbolView),
-          relations: native.relations.map(relationView),
-        } : null;
-        return { ok: true, architecture };
+  async function readArchitecture(input = {}) {
+    return systemResult(async () => {
+      const context = await systemContext(input.sessionId);
+      const record = await cityReader(context.sourceRoot, "machine");
+      const machine = requireGenesisCity(record, "machine");
+      const native = machine.architecture;
+      const sourceMetrics = new Map((machine.buildings || []).filter(file => file.role === 'source').map(file => [file.id, file]));
+      // Stack supplies application entry identity; the renderer never guesses
+      // server/main filenames. Reading declarations executes no inspector.
+      let inspection = null;
+      let layout = null;
+      let layoutDiagnostic = '';
+      let entryPointDiagnostic = '';
+      if (native) {
+        try { inspection = await inspectorReader({ projectRoot: context.sourceRoot }); }
+        catch (error) { entryPointDiagnostic = `Entry point declarations need attention: ${error.message}`; }
+        try { layout = await layoutReader({ projectRoot: context.sourceRoot }); }
+        catch (error) { layoutDiagnostic = `Architecture layout needs attention: ${error.message}`; }
+      }
+      const entryPaths = [...new Set((inspection?.inspectors || []).flatMap(inspector => inspector.entryFiles || []))];
+      const entryPoints = entryPaths.map(file => {
+        const source = native.files.find(candidate => candidate.path === file);
+        return { file, fileId: source?.id || null, subsystemId: source?.subsystemId || null, resolution: source ? 'resolved' : 'unresolved' };
       });
-    },
+      const architecture = native ? {
+        ...native,
+        layout,
+        layoutDiagnostic,
+        entryPoints,
+        entryPointStatus: inspection?.status || 'unconfigured',
+        entryPointDiagnostic,
+        files: native.files.map(file => fileView(file, sourceMetrics)),
+        symbols: native.symbols.filter(symbol => symbol.visibility === 'public').map(publicSymbolView),
+        relations: native.relations.map(relationView),
+      } : null;
+      return { ok: true, architecture };
+    });
+  }
 
-    async readRefreshStatus(input = {}) {
-      return systemResult(async () => {
-        const context = await systemContext(input.sessionId);
-        return { ok: true, refresh: refreshSnapshot(refreshes.get(context.sourceRoot)) };
-      });
-    },
+  async function readRefreshStatus(input = {}) {
+    return systemResult(async () => {
+      const context = await systemContext(input.sessionId);
+      return { ok: true, refresh: refreshSnapshot(refreshes.get(context.sourceRoot)) };
+    });
+  }
 
-    async cancelRefresh(input = {}) {
-      return systemResult(async () => {
-        const context = await systemContext(input.sessionId);
-        const pending = refreshes.get(context.sourceRoot);
-        if (pending?.progress.status !== "running") return { ok: true, cancelled: false, completed: pending?.progress.status === "complete" };
-        pending.progress = { ...pending.progress, message: "Stopping analysis…", updatedAt: Date.now() };
-        pending.controller.abort();
+  async function cancelRefresh(input = {}) {
+    return systemResult(async () => {
+      const context = await systemContext(input.sessionId);
+      const pending = refreshes.get(context.sourceRoot);
+      if (pending?.progress.status !== "running") return { ok: true, cancelled: false, completed: pending?.progress.status === "complete" };
+      pending.progress = { ...pending.progress, message: "Stopping analysis…", updatedAt: Date.now() };
+      pending.controller.abort();
+      await publishRefresh(context);
+      await pending.done;
+      return { ok: true, cancelled: pending.cancelled === true, completed: !pending.cancelled };
+    });
+  }
+
+  async function refresh(input = {}) {
+    return systemResult(async () => {
+      const context = await systemContext(input.sessionId);
+      const existing = refreshes.get(context.sourceRoot);
+      if (existing?.progress.status === "running") return { ok: true, alreadyRunning: true, refresh: refreshSnapshot(existing) };
+      const controller = new AbortController();
+      let complete;
+      const pending = { controller, cancelled: false, progress: { id: randomUUID(), status: "running", startedAt: Date.now(), updatedAt: Date.now(), message: "Checking analysis prerequisites…" }, done: new Promise(resolve => { complete = resolve; }) };
+      const progress = async message => {
+        pending.progress = { ...pending.progress, message, updatedAt: Date.now() };
         await publishRefresh(context);
-        await pending.done;
-        return { ok: true, cancelled: pending.cancelled === true, completed: !pending.cancelled };
-      });
-    },
-
-    async refresh(input = {}) {
-      return systemResult(async () => {
-        const context = await systemContext(input.sessionId);
-        const existing = refreshes.get(context.sourceRoot);
-        if (existing?.progress.status === "running") return { ok: true, alreadyRunning: true, refresh: refreshSnapshot(existing) };
-        const controller = new AbortController();
-        let complete;
-        const pending = { controller, cancelled: false, progress: { id: randomUUID(), status: "running", startedAt: Date.now(), updatedAt: Date.now(), message: "Checking analysis prerequisites…" }, done: new Promise(resolve => { complete = resolve; }) };
-        const progress = async message => {
-          pending.progress = { ...pending.progress, message, updatedAt: Date.now() };
-          await publishRefresh(context);
-        };
-        refreshes.set(context.sourceRoot, pending);
-        try {
-          await publishRefresh(context);
-          const exclusive = await runVibe64AgentWriteExclusive(context.runtime, context.sessionId, async () => {
-            const current = await systemContext(context.sessionId);
-            // This scan supersedes the loaded snapshot; do not hold it through the scan.
-            releaseGenesisCities(current.sourceRoot);
-            releaseCallWeb(current.sourceRoot);
-            const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
-            if (inspection.status === "blocked") throw systemError("Architecture inspection declarations need attention.", "vibe64_architecture_inspection_blocked", { diagnostics: inspection.diagnostics });
-            const realSourceRoot = await realpath(current.sourceRoot);
-            for (const inspector of inspection.inspectors || []) {
-              await assertInspectorPrerequisites(current.sourceRoot, realSourceRoot, inspector, runtimeReader);
+      };
+      refreshes.set(context.sourceRoot, pending);
+      try {
+        await publishRefresh(context);
+        const exclusive = await runVibe64AgentWriteExclusive(context.runtime, context.sessionId, async () => {
+          const current = await systemContext(context.sessionId);
+          // This scan supersedes the loaded snapshot; do not hold it through the scan.
+          releaseGenesisCities(current.sourceRoot);
+          releaseCallWeb(current.sourceRoot);
+          const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
+          if (inspection.status === "blocked") throw systemError("Architecture inspection declarations need attention.", "vibe64_architecture_inspection_blocked", { diagnostics: inspection.diagnostics });
+          const realSourceRoot = await realpath(current.sourceRoot);
+          for (const inspector of inspection.inspectors || []) {
+            await assertInspectorPrerequisites(current.sourceRoot, realSourceRoot, inspector, runtimeReader);
+          }
+          await progress("Scanning project source and existing Genesis documents…");
+          const observations = inspection.inspectors?.length ? async architecture => {
+            const documents = [];
+            for (const inspector of inspection.inspectors) {
+              const request = architectureInspectionRequest(architecture, inspection, await inspectorCacheDirectory(current, realSourceRoot, inspector));
+              documents.push(await runArchitectureInspector({ inspector, request, current, signal: controller.signal, progress, runCommand, projectService, runtimeReader }));
             }
-            await progress("Scanning project source and existing Genesis documents…");
-            const observations = inspection.inspectors?.length ? async architecture => {
-              const documents = [];
-              for (const inspector of inspection.inspectors) {
-                const request = architectureInspectionRequest(architecture, inspection, await inspectorCacheDirectory(current, realSourceRoot, inspector));
-                documents.push(await runArchitectureInspector({ inspector, request, current, signal: controller.signal, progress, runCommand, projectService, runtimeReader }));
-              }
-              await progress("Validating UI observations…");
-              const merged = mergeArchitectureObservations(documents, { files: architecture.files, packages: architecture.packages || [] });
-              const finalInspection = await inspectorReader({ projectRoot: current.sourceRoot });
-              if (finalInspection.stackHash !== inspection.stackHash) throw systemError("Stack changed during architecture inspection. Retry after changes settle.", "vibe64_architecture_stack_changed");
-              await progress("Updating the browsing index…");
-              return merged;
-            } : null;
-            if (controller.signal.aborted) throw architectureCancelled();
-            await excludeCallWeb(current.sourceRoot);
-            return refresher({ projectRoot: current.sourceRoot, write: true, callWeb: true, ...(observations ? { observations } : {}), signal: controller.signal });
-          }, { operation: "architecture-refresh" });
-          if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
-          const result = exclusive.value;
-          const machine = validateGenesisCity(result?.machine, "machine");
-          const program = validateGenesisCity(result?.program, "program");
-          pending.progress = { ...pending.progress, status: "complete", message: "Analysis complete." };
-          // Report the new Cities' status like readStatus; views read the
-          // documents themselves, so the large native results end here.
-          return {
-            changedFiles: Array.isArray(result.changedFiles) ? result.changedFiles : [],
-            cities: {
-              machine: cityStatus({ city: machine, exists: true, path: GENESIS_MACHINE_CITY_PATH }),
-              program: cityStatus({ city: program, exists: true, path: GENESIS_PROGRAM_CITY_PATH })
-            },
-            diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
-            ok: true,
-            status: normalizeText(result.status) || "ready",
-            summary: normalizeText(result.summary)
-          };
-        } catch (error) {
-          pending.cancelled = controller.signal.aborted;
-          const failure = pending.cancelled ? architectureCancelled() : error;
-          pending.progress = { ...pending.progress, status: pending.cancelled ? "cancelled" : "failed", message: String(failure.message), code: String(failure.code || "vibe64_system_graph_failed"), commandOutput: String(failure.details?.commandOutput || "") };
-          throw failure;
-        } finally {
-          pending.progress = { ...pending.progress, finishedAt: Date.now(), updatedAt: Date.now() };
-          // Keep only the last small status for this source, never the City results.
-          // A returning view can observe completion or failure without replaying work.
-          pending.controller = null;
-          complete();
-          await publishRefresh(context);
-        }
-      });
-    }
-  });
+            await progress("Validating UI observations…");
+            const merged = mergeArchitectureObservations(documents, { files: architecture.files, packages: architecture.packages || [] });
+            const finalInspection = await inspectorReader({ projectRoot: current.sourceRoot });
+            if (finalInspection.stackHash !== inspection.stackHash) throw systemError("Stack changed during architecture inspection. Retry after changes settle.", "vibe64_architecture_stack_changed");
+            await progress("Updating the browsing index…");
+            return merged;
+          } : null;
+          if (controller.signal.aborted) throw architectureCancelled();
+          await excludeCallWeb(current.sourceRoot);
+          return refresher({ projectRoot: current.sourceRoot, write: true, callWeb: true, ...(observations ? { observations } : {}), signal: controller.signal });
+        }, { operation: "architecture-refresh" });
+        if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
+        const result = exclusive.value;
+        const machine = validateGenesisCity(result?.machine, "machine");
+        const program = validateGenesisCity(result?.program, "program");
+        pending.progress = { ...pending.progress, status: "complete", message: "Analysis complete." };
+        // Report the new Cities' status like readStatus; views read the
+        // documents themselves, so the large native results end here.
+        return {
+          changedFiles: Array.isArray(result.changedFiles) ? result.changedFiles : [],
+          cities: {
+            machine: cityStatus({ city: machine, exists: true, path: GENESIS_MACHINE_CITY_PATH }),
+            program: cityStatus({ city: program, exists: true, path: GENESIS_PROGRAM_CITY_PATH })
+          },
+          diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
+          ok: true,
+          status: normalizeText(result.status) || "ready",
+          summary: normalizeText(result.summary)
+        };
+      } catch (error) {
+        pending.cancelled = controller.signal.aborted;
+        const failure = pending.cancelled ? architectureCancelled() : error;
+        pending.progress = { ...pending.progress, status: pending.cancelled ? "cancelled" : "failed", message: String(failure.message), code: String(failure.code || "vibe64_system_graph_failed"), commandOutput: String(failure.details?.commandOutput || "") };
+        throw failure;
+      } finally {
+        pending.progress = { ...pending.progress, finishedAt: Date.now(), updatedAt: Date.now() };
+        // Keep only the last small status for this source, never the City results.
+        // A returning view can observe completion or failure without replaying work.
+        pending.controller = null;
+        complete();
+        await publishRefresh(context);
+      }
+    });
+  }
+
+  return Object.freeze({ readStatus, readArchitecture, readRefreshStatus, cancelRefresh, refresh });
 }
 
 export {

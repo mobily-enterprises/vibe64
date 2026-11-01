@@ -319,20 +319,40 @@ function createTraceReader(directory) {
     return states;
   }
 
-  return {
+  function copyDiagnosticCodes() {
+    return new Map(diagnosticCodes);
+  }
+
+  function readHitsBytes() {
+    return hitsBytes;
+  }
+
+  function copyProblems() {
+    return { ...problems };
+  }
+
+  function readScopes() {
+    return scopes;
+  }
+
+  function readTruncated() {
+    return truncated;
+  }
+
+  return Object.freeze({
     counts,
-    diagnosticCodes: () => new Map(diagnosticCodes),
-    hitsBytes: () => hitsBytes,
+    diagnosticCodes: copyDiagnosticCodes,
+    hitsBytes: readHitsBytes,
     backgroundScopes,
     listedScopes,
     plumbingKeys,
     poll,
-    problems: () => ({ ...problems }),
+    problems: copyProblems,
     scopeFunctions,
-    scopes: () => scopes,
+    scopes: readScopes,
     tracerStates,
-    truncated: () => truncated
-  };
+    truncated: readTruncated
+  });
 }
 
 // The Preview proxy's request log and the recorded interactions, capped by

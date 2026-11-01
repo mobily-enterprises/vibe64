@@ -22,13 +22,22 @@ import { createUsageService } from "./usageService.js";
  * @param {ProjectService} dependencies.project
  */
 function createSystemGraph({ events, logger, project }) {
+  const { readStatus, readArchitecture, readRefreshStatus, cancelRefresh, refresh } = createService({
+    projectService: project,
+    logger,
+    publishSessionChanged: createSessionChangedPublisher(events)
+  });
+  const { readUsageEntries, readUsageWeb, readUsageFunction, joinUsage } = createUsageService({ projectService: project });
   return Object.freeze({
-    ...createService({
-      projectService: project,
-      logger,
-      publishSessionChanged: createSessionChangedPublisher(events)
-    }),
-    ...createUsageService({ projectService: project })
+    readStatus,
+    readArchitecture,
+    readRefreshStatus,
+    cancelRefresh,
+    refresh,
+    readUsageEntries,
+    readUsageWeb,
+    readUsageFunction,
+    joinUsage
   });
 }
 

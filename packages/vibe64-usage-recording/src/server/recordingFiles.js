@@ -6,7 +6,7 @@ import { USAGE_RECORDING_ID_PATTERN } from "../shared/contract.js";
 // it. A host's storage report and cleanup find them through this module.
 const USAGE_RECORDINGS_DIRECTORY_NAME = "usage-recordings";
 
-function usageRecordingsPath(session = {}) {
+function usageRecordingsPath(session) {
   const sessionRoot = String(session?.sessionRoot || "").trim();
   return sessionRoot ? path.join(sessionRoot, USAGE_RECORDINGS_DIRECTORY_NAME) : "";
 }

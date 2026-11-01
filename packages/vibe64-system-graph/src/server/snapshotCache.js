@@ -47,12 +47,22 @@ function createSnapshotCache({ capacity, idleMs = GENESIS_SNAPSHOT_IDLE_MS, now 
     return entry.promise;
   }
 
+  function deleteEntry(key) {
+    entries.delete(key);
+  }
+
+  function clear() {
+    entries.clear();
+    clearTimeout(timer);
+    timer = null;
+  }
+
   return Object.freeze({
     read,
     sweep,
-    delete(key) { entries.delete(key); },
+    delete: deleteEntry,
     get size() { return entries.size; },
-    clear() { entries.clear(); clearTimeout(timer); timer = null; }
+    clear
   });
 }
 

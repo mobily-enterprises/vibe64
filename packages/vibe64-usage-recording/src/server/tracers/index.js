@@ -34,7 +34,7 @@ function recordingUnavailableReason(runtimes = []) {
 // the existing one, and any other value is joined with one separator. So PHP's
 // "<ours>:" keeps its trailing empty segment (the default scan directory), and
 // a person's own leading empty segment is kept too.
-function mergePrependEnvironment(prepend = {}, environment = {}, separator = path.delimiter) {
+function mergePrependEnvironment(prepend, environment, separator = path.delimiter) {
   const merged = {};
   for (const [name, value] of Object.entries(prepend || {})) {
     const ours = String(value);

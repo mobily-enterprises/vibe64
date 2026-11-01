@@ -22,7 +22,31 @@ import { createService } from "./service.js";
  * @param {TerminalsService} dependencies.terminals
  */
 function createUsageRecording({ admission, events, logger, projectService, terminals }) {
-  return Object.freeze({ admit: admission, ...createService({ admission, events, logger, projectService, terminals }) });
+  const {
+    readTargets,
+    start,
+    readCurrent,
+    stop,
+    dismiss,
+    list,
+    readRequests,
+    readRequestFunctions,
+    recordInteraction,
+    delete: deleteRecording
+  } = createService({ admission, events, logger, projectService, terminals });
+  return Object.freeze({
+    admit: admission,
+    readTargets,
+    start,
+    readCurrent,
+    stop,
+    dismiss,
+    list,
+    readRequests,
+    readRequestFunctions,
+    recordInteraction,
+    delete: deleteRecording
+  });
 }
 
 const Vibe64UsageRecordingProvider = defineFeature({

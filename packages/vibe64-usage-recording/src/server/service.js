@@ -497,201 +497,212 @@ function createService({
     }
   }
 
-  return Object.freeze({
-    async readTargets({ sessionId }) {
-      const context = await sessionContext(sessionId);
-      return { targets: (await recordingTargets.targetsFor(context)).map(({ outputTarget: _outputTarget, ...target }) => target) };
-    },
-
-    async start({ sessionId, targetId = "", parameters }) {
-      const context = await sessionContext(sessionId);
-      assertActiveSession(context);
-      assertNoActiveRecording(context);
-      const sessionKey = `${context.projectScope}\n${context.sessionId}`;
-      startingSessions.add(sessionKey);
-      try {
-        const target = (await recordingTargets.targetsFor(context)).find((candidate) => candidate.id === String(targetId || ""));
-        if (!target) throw recordingError(422, "This target cannot be recorded.", "vibe64_usage_recording_target_unknown");
-        if (!target.available) throw recordingError(422, target.reason, "vibe64_usage_recording_target_unavailable");
-        let outputParameters;
-        if (target.kind === "terminal") {
-          try {
-            outputParameters = resolveVibe64OutputParameters(target.outputTarget, parameters ?? {});
-          } catch (error) {
-            throw recordingError(422, error.message, "vibe64_usage_recording_parameters_invalid");
-          }
-        } else if (parameters && Object.keys(parameters).length) {
-          throw recordingError(422, "Preview takes no parameters.", "vibe64_usage_recording_parameters_invalid");
-        }
-        const decision = await admission({
-          sessionId: context.sessionId, projectSlug: context.projectSlug, targetKind: target.kind, runtimes: target.runtimes
-        });
-        if (decision?.admitted !== true) {
-          const reason = String(decision?.reason || "Recording cannot start right now.");
-          throw recordingError(503, reason, "vibe64_usage_recording_refused", { reason });
-        }
-
-        const id = newRecordingId();
-        const directory = path.join(context.directory, id);
-        await mkdir(context.directory, { recursive: true, mode: 0o2770 });
-        await chmod(context.directory, 0o2770);
-        await mkdir(directory, { mode: 0o2770 });
-        await chmod(directory, 0o2770);
-        const tracers = [];
-        const tracerRecords = [];
-        for (const tracer of usageTracersForRuntimes(target.runtimes)) {
-          const prepared = tracer.prepare({ recordingDirectory: directory, sourceRoot: context.sourceRoot, recordingId: id, targetKind: target.kind });
-          if (prepared.available && prepared.nodePreload) prepared.realPreload = await realpath(prepared.nodePreload);
-          if (prepared.available) tracers.push({ tracer, prepared });
-          tracerRecords.push({ runtime: tracer.runtime, state: prepared.available ? "starting" : "unavailable", reason: prepared.available ? "" : prepared.reason });
-        }
-        const record = {
-          id,
-          sessionId: context.sessionId,
-          state: "starting",
-          target: { id: target.id, kind: target.kind, label: target.label },
-          runtimes: target.runtimes,
-          tracers: tracerRecords,
-          startedAt: isoNow(now),
-          stoppedAt: null,
-          stopReason: null,
-          counts: { requests: 0, functions: 0 },
-          truncated: false,
-          dismissedAt: null,
-          sourceIdentity: await readSourceIdentity(context.sourceRoot),
-          highestInteraction: 0,
-          requestLog: { assets: 0, full: false }
-        };
-        const entry = liveEntry({
-          context, record, directory, tracers, outputParameters,
-          target: { ...target, outputTargetId: target.outputTarget.id }
-        });
-        // Registered before its files exist, so no reader takes it for a
-        // recording an earlier server process left behind. Tracers read the
-        // control file and the target label as soon as the target starts.
-        live.set(id, entry);
-        try {
-          await writeJsonFile(path.join(directory, "control.json"), { state: "recording" });
-          await records.writeRecord(entry);
-        } catch (error) {
-          live.delete(id);
-          await rm(directory, { force: true, recursive: true });
-          throw error;
-        }
-        entry.unregister = registerActiveUsageRecording(context.projectScope, context.sessionId, entry.active);
-        entry.timers.poll = setInterval(() => void poll(entry), times.pollMs);
-        entry.timers.limit = setTimeout(() => void stopEntry(entry, "time-limit"), times.durationMs);
-        entry.timers.poll.unref();
-        entry.timers.limit.unref();
-        await applyRetention(context.directory);
-        await records.publish(entry);
-        // The target's start can take a while; the recording reports it.
-        const requestContext = captureProjectRequestContext();
-        void runWithProjectRequestContext(requestContext || {}, () => entry.launchTarget());
-        return { recording: publicRecording(record) };
-      } finally {
-        startingSessions.delete(sessionKey);
-      }
-    },
-
-    async readCurrent({ sessionId }) {
-      const context = await sessionContext(sessionId);
-      await applyRetention(context.directory);
-      const recordings = await storedRecordings(context);
-      const current = recordings.find((record) => ACTIVE_STATES.has(record.state)) ||
-        recordings.find((record) => !record.dismissedAt && record.stoppedAt && now() - Date.parse(record.stoppedAt) <= CURRENT_WINDOW_MS);
-      return { recording: current ? publicRecording(current) : null, serverTime: isoNow(now) };
-    },
-
-    async stop({ sessionId, recordingId }) {
-      const context = await sessionContext(sessionId);
-      const { entry, record } = await recordingFor(context, recordingId);
-      if (entry) return { recording: publicRecording(await stopEntry(entry, "person")) };
-      const [stored] = (await storedRecordings(context)).filter((candidate) => candidate.id === record.id);
-      return { recording: publicRecording(stored || record) };
-    },
-
-    async dismiss({ sessionId, recordingId }) {
-      const context = await sessionContext(sessionId);
-      const { directory, entry, record } = await recordingFor(context, recordingId);
-      record.dismissedAt ||= isoNow(now);
-      if (entry) await records.writeRecord(entry);
-      else await writeJsonFile(path.join(directory, "recording.json"), record);
-      return { recording: publicRecording(record) };
-    },
-
-    async list({ sessionId }) {
-      const context = await sessionContext(sessionId);
-      return { recordings: (await storedRecordings(context)).slice(0, USAGE_RECORDING_RETENTION.maxRecordings).map(publicRecording) };
-    },
-
-    // Oldest first unless order is "newest"; total counts every matching row.
-    // A requestId reads that one row, whatever the other filters say.
-    async readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false, order = "oldest", requestId = "" }) {
-      const context = await sessionContext(sessionId);
-      const { directory, entry, record } = await recordingFor(context, recordingId);
-      const index = entry ? null : await readJsonFile(path.join(directory, "index.json"), USAGE_RECORDING_LIMITS.indexBytes);
-      const rows = Array.isArray(index?.requests)
-        ? index.requests
-        : await recordingRequestRows(directory, await readerFor(directory), { runLabel: record.target.label });
-      const query = String(q || "").trim().toLowerCase();
-      const matching = rows.filter((row) => (requestId ? row.id === requestId : (includeEmpty === true || row.functionCount > 0) &&
-        (!query || `${row.method || ""} ${row.path || ""}`.toLowerCase().includes(query))));
-      const page = pageOf(order === "newest" ? matching.reverse() : matching, { cursor, limit, maxLimit: 200 });
-      const referenced = new Set(page.items.map((row) => row.interaction).filter(Boolean));
-      const interactions = (await readInteractions(directory)).filter((row) => referenced.has(row.id))
-        .map(({ id, label, kind, componentFile }) => ({ id, label, kind: kind || "click", componentFile: componentFile ?? null }));
-      return { requests: page.items, interactions, nextCursor: page.more ? page.next : null, total: matching.length };
-    },
-
-    async readRequestFunctions({ sessionId, recordingId, requestId, cursor, limit }) {
-      const context = await sessionContext(sessionId);
-      const { directory } = await recordingFor(context, recordingId);
-      if (!usageScopeKind(requestId)) {
-        throw recordingError(404, "This request is not part of the recording.", "vibe64_usage_recording_request_not_found");
-      }
-      const functions = (await readerFor(directory)).scopeFunctions(String(requestId));
-      const page = pageOf(functions, { cursor, limit: limit ?? 1500, maxLimit: 1500 });
-      return { functions: page.items, total: functions.length, truncated: page.more };
-    },
-
-    async recordInteraction({ sessionId, recordingId, id, at, label, kind = "click", componentFile = null }) {
-      const context = await sessionContext(sessionId);
-      const { entry } = await recordingFor(context, recordingId);
-      if (!entry || entry.stopRequested || entry.record.target.kind !== "web") {
-        throw recordingError(409, "Interactions are recorded only while Preview is being recorded.", "vibe64_usage_recording_not_recording");
-      }
-      const valid = USAGE_INTERACTION_ID_PATTERN.test(String(id || "")) && Number.isFinite(Date.parse(at)) &&
-        typeof label === "string" && label.length > 0 && label.length <= 80 && USAGE_INTERACTION_KINDS.includes(kind) &&
-        (componentFile === null || (typeof componentFile === "string" && componentFile.length <= 512 &&
-          !componentFile.startsWith("/") && !componentFile.split("/").some((part) => !part || part === "." || part === "..")));
-      if (!valid) throw recordingError(422, "This interaction is not valid.", "vibe64_usage_recording_interaction_invalid");
-      // Another Preview page of this recording already used this number; it
-      // continues from the next free one.
-      if (entry.interactions.has(id)) {
-        throw recordingError(409, "This interaction number is already recorded.", "vibe64_usage_recording_interaction_taken",
-          { nextInteraction: entry.record.highestInteraction + 1 });
-      }
-      if (entry.interactions.size >= USAGE_RECORDING_LIMITS.interactions) {
-        throw recordingError(422, "This recording has reached its interaction limit.", "vibe64_usage_recording_interaction_limit");
-      }
-      entry.interactions.add(id);
-      entry.record.highestInteraction = Math.max(entry.record.highestInteraction, Number(id.slice(2)));
-      await entry.append("interactions.ndjson", { id, at: new Date(Date.parse(at)).toISOString(), label, kind, componentFile });
-      return { ok: true };
-    },
-
-    async delete({ sessionId, recordingId }) {
-      const context = await sessionContext(sessionId);
-      const { directory, entry } = await recordingFor(context, recordingId);
-      if (entry) {
-        await stopEntry(entry, "person");
-        await entry.finished;
-      }
-      await rm(directory, { force: true, recursive: true });
-      finishedReaders.delete(directory);
-      return { ok: true };
+  async function deleteRecording({ sessionId, recordingId }) {
+    const context = await sessionContext(sessionId);
+    const { directory, entry } = await recordingFor(context, recordingId);
+    if (entry) {
+      await stopEntry(entry, "person");
+      await entry.finished;
     }
+    await rm(directory, { force: true, recursive: true });
+    finishedReaders.delete(directory);
+    return { ok: true };
+  }
+
+  async function readTargets({ sessionId }) {
+    const context = await sessionContext(sessionId);
+    return { targets: (await recordingTargets.targetsFor(context)).map(({ outputTarget: _outputTarget, ...target }) => target) };
+  }
+
+  async function start({ sessionId, targetId = "", parameters }) {
+    const context = await sessionContext(sessionId);
+    assertActiveSession(context);
+    assertNoActiveRecording(context);
+    const sessionKey = `${context.projectScope}\n${context.sessionId}`;
+    startingSessions.add(sessionKey);
+    try {
+      const target = (await recordingTargets.targetsFor(context)).find((candidate) => candidate.id === String(targetId || ""));
+      if (!target) throw recordingError(422, "This target cannot be recorded.", "vibe64_usage_recording_target_unknown");
+      if (!target.available) throw recordingError(422, target.reason, "vibe64_usage_recording_target_unavailable");
+      let outputParameters;
+      if (target.kind === "terminal") {
+        try {
+          outputParameters = resolveVibe64OutputParameters(target.outputTarget, parameters ?? {});
+        } catch (error) {
+          throw recordingError(422, error.message, "vibe64_usage_recording_parameters_invalid");
+        }
+      } else if (parameters && Object.keys(parameters).length) {
+        throw recordingError(422, "Preview takes no parameters.", "vibe64_usage_recording_parameters_invalid");
+      }
+      const decision = await admission({
+        sessionId: context.sessionId, projectSlug: context.projectSlug, targetKind: target.kind, runtimes: target.runtimes
+      });
+      if (decision?.admitted !== true) {
+        const reason = String(decision?.reason || "Recording cannot start right now.");
+        throw recordingError(503, reason, "vibe64_usage_recording_refused", { reason });
+      }
+
+      const id = newRecordingId();
+      const directory = path.join(context.directory, id);
+      await mkdir(context.directory, { recursive: true, mode: 0o2770 });
+      await chmod(context.directory, 0o2770);
+      await mkdir(directory, { mode: 0o2770 });
+      await chmod(directory, 0o2770);
+      const tracers = [];
+      const tracerRecords = [];
+      for (const tracer of usageTracersForRuntimes(target.runtimes)) {
+        const prepared = tracer.prepare({ recordingDirectory: directory, sourceRoot: context.sourceRoot, recordingId: id, targetKind: target.kind });
+        if (prepared.available && prepared.nodePreload) prepared.realPreload = await realpath(prepared.nodePreload);
+        if (prepared.available) tracers.push({ tracer, prepared });
+        tracerRecords.push({ runtime: tracer.runtime, state: prepared.available ? "starting" : "unavailable", reason: prepared.available ? "" : prepared.reason });
+      }
+      const record = {
+        id,
+        sessionId: context.sessionId,
+        state: "starting",
+        target: { id: target.id, kind: target.kind, label: target.label },
+        runtimes: target.runtimes,
+        tracers: tracerRecords,
+        startedAt: isoNow(now),
+        stoppedAt: null,
+        stopReason: null,
+        counts: { requests: 0, functions: 0 },
+        truncated: false,
+        dismissedAt: null,
+        sourceIdentity: await readSourceIdentity(context.sourceRoot),
+        highestInteraction: 0,
+        requestLog: { assets: 0, full: false }
+      };
+      const entry = liveEntry({
+        context, record, directory, tracers, outputParameters,
+        target: { ...target, outputTargetId: target.outputTarget.id }
+      });
+      // Registered before its files exist, so no reader takes it for a
+      // recording an earlier server process left behind. Tracers read the
+      // control file and the target label as soon as the target starts.
+      live.set(id, entry);
+      try {
+        await writeJsonFile(path.join(directory, "control.json"), { state: "recording" });
+        await records.writeRecord(entry);
+      } catch (error) {
+        live.delete(id);
+        await rm(directory, { force: true, recursive: true });
+        throw error;
+      }
+      entry.unregister = registerActiveUsageRecording(context.projectScope, context.sessionId, entry.active);
+      entry.timers.poll = setInterval(() => void poll(entry), times.pollMs);
+      entry.timers.limit = setTimeout(() => void stopEntry(entry, "time-limit"), times.durationMs);
+      entry.timers.poll.unref();
+      entry.timers.limit.unref();
+      await applyRetention(context.directory);
+      await records.publish(entry);
+      // The target's start can take a while; the recording reports it.
+      const requestContext = captureProjectRequestContext();
+      void runWithProjectRequestContext(requestContext || {}, () => entry.launchTarget());
+      return { recording: publicRecording(record) };
+    } finally {
+      startingSessions.delete(sessionKey);
+    }
+  }
+
+  async function readCurrent({ sessionId }) {
+    const context = await sessionContext(sessionId);
+    await applyRetention(context.directory);
+    const recordings = await storedRecordings(context);
+    const current = recordings.find((record) => ACTIVE_STATES.has(record.state)) ||
+      recordings.find((record) => !record.dismissedAt && record.stoppedAt && now() - Date.parse(record.stoppedAt) <= CURRENT_WINDOW_MS);
+    return { recording: current ? publicRecording(current) : null, serverTime: isoNow(now) };
+  }
+
+  async function stop({ sessionId, recordingId }) {
+    const context = await sessionContext(sessionId);
+    const { entry, record } = await recordingFor(context, recordingId);
+    if (entry) return { recording: publicRecording(await stopEntry(entry, "person")) };
+    const [stored] = (await storedRecordings(context)).filter((candidate) => candidate.id === record.id);
+    return { recording: publicRecording(stored || record) };
+  }
+
+  async function dismiss({ sessionId, recordingId }) {
+    const context = await sessionContext(sessionId);
+    const { directory, entry, record } = await recordingFor(context, recordingId);
+    record.dismissedAt ||= isoNow(now);
+    if (entry) await records.writeRecord(entry);
+    else await writeJsonFile(path.join(directory, "recording.json"), record);
+    return { recording: publicRecording(record) };
+  }
+
+  async function list({ sessionId }) {
+    const context = await sessionContext(sessionId);
+    return { recordings: (await storedRecordings(context)).slice(0, USAGE_RECORDING_RETENTION.maxRecordings).map(publicRecording) };
+  }
+
+  // Oldest first unless order is "newest"; total counts every matching row.
+  // A requestId reads that one row, whatever the other filters say.
+  async function readRequests({ sessionId, recordingId, cursor, limit, q = "", includeEmpty = false, order = "oldest", requestId = "" }) {
+    const context = await sessionContext(sessionId);
+    const { directory, entry, record } = await recordingFor(context, recordingId);
+    const index = entry ? null : await readJsonFile(path.join(directory, "index.json"), USAGE_RECORDING_LIMITS.indexBytes);
+    const rows = Array.isArray(index?.requests)
+      ? index.requests
+      : await recordingRequestRows(directory, await readerFor(directory), { runLabel: record.target.label });
+    const query = String(q || "").trim().toLowerCase();
+    const matching = rows.filter((row) => (requestId ? row.id === requestId : (includeEmpty === true || row.functionCount > 0) &&
+      (!query || `${row.method || ""} ${row.path || ""}`.toLowerCase().includes(query))));
+    const page = pageOf(order === "newest" ? matching.reverse() : matching, { cursor, limit, maxLimit: 200 });
+    const referenced = new Set(page.items.map((row) => row.interaction).filter(Boolean));
+    const interactions = (await readInteractions(directory)).filter((row) => referenced.has(row.id))
+      .map(({ id, label, kind, componentFile }) => ({ id, label, kind: kind || "click", componentFile: componentFile ?? null }));
+    return { requests: page.items, interactions, nextCursor: page.more ? page.next : null, total: matching.length };
+  }
+
+  async function readRequestFunctions({ sessionId, recordingId, requestId, cursor, limit }) {
+    const context = await sessionContext(sessionId);
+    const { directory } = await recordingFor(context, recordingId);
+    if (!usageScopeKind(requestId)) {
+      throw recordingError(404, "This request is not part of the recording.", "vibe64_usage_recording_request_not_found");
+    }
+    const functions = (await readerFor(directory)).scopeFunctions(String(requestId));
+    const page = pageOf(functions, { cursor, limit: limit ?? 1500, maxLimit: 1500 });
+    return { functions: page.items, total: functions.length, truncated: page.more };
+  }
+
+  async function recordInteraction({ sessionId, recordingId, id, at, label, kind = "click", componentFile = null }) {
+    const context = await sessionContext(sessionId);
+    const { entry } = await recordingFor(context, recordingId);
+    if (!entry || entry.stopRequested || entry.record.target.kind !== "web") {
+      throw recordingError(409, "Interactions are recorded only while Preview is being recorded.", "vibe64_usage_recording_not_recording");
+    }
+    const valid = USAGE_INTERACTION_ID_PATTERN.test(String(id || "")) && Number.isFinite(Date.parse(at)) &&
+      typeof label === "string" && label.length > 0 && label.length <= 80 && USAGE_INTERACTION_KINDS.includes(kind) &&
+      (componentFile === null || (typeof componentFile === "string" && componentFile.length <= 512 &&
+        !componentFile.startsWith("/") && !componentFile.split("/").some((part) => !part || part === "." || part === "..")));
+    if (!valid) throw recordingError(422, "This interaction is not valid.", "vibe64_usage_recording_interaction_invalid");
+    // Another Preview page of this recording already used this number; it
+    // continues from the next free one.
+    if (entry.interactions.has(id)) {
+      throw recordingError(409, "This interaction number is already recorded.", "vibe64_usage_recording_interaction_taken",
+        { nextInteraction: entry.record.highestInteraction + 1 });
+    }
+    if (entry.interactions.size >= USAGE_RECORDING_LIMITS.interactions) {
+      throw recordingError(422, "This recording has reached its interaction limit.", "vibe64_usage_recording_interaction_limit");
+    }
+    entry.interactions.add(id);
+    entry.record.highestInteraction = Math.max(entry.record.highestInteraction, Number(id.slice(2)));
+    await entry.append("interactions.ndjson", { id, at: new Date(Date.parse(at)).toISOString(), label, kind, componentFile });
+    return { ok: true };
+  }
+
+  return Object.freeze({
+    readTargets,
+    start,
+    readCurrent,
+    stop,
+    dismiss,
+    list,
+    readRequests,
+    readRequestFunctions,
+    recordInteraction,
+    delete: deleteRecording
   });
 }
 
