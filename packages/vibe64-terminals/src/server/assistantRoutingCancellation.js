@@ -54,8 +54,8 @@ function createAssistantRoutingCancellation({
         const actor = state.submittedBy;
         if (actor ? (actor.id !== undefined ? actor.id !== context.vibe64User?.id
           : !actor.username || actor.username !== context.vibe64User?.username) : context.vibe64User) return null;
-        // Standalone has no hosted actor. The original decision still rechecks
-        // access below; a hosted resolver must reject an unavailable actor.
+        // A message sent without a signed-in actor has none to compare. The original decision
+        // still rechecks access below; the configured actor resolver must reject an unavailable actor.
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned } = await records.currentGoal(sessionId, context);
         const workflow = assistantGoalIsActive(goal) && pinned?.workflowEngineId;

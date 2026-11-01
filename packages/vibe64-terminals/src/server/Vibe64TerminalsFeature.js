@@ -113,7 +113,7 @@ function createVibe64TerminalsFeature({
         terminals
       });
       fastify.addHook("onReady", async () => {
-        // All feature boot hooks (including hosted execution/auth configuration)
+        // Every feature's boot hooks, including execution and sign-in configuration,
         // have completed before recovery can admit work.
         setImmediate(() => void terminals.recoverActiveGoals().catch(error => {
           logOperationalEvent(logger, "warn", {

@@ -103,8 +103,8 @@ function previewPublicOriginForLaunch({
     currentProjectScopeKey(),
     sessionId
   ];
-  // Independently hosted editors may share a preview domain and cloned project
-  // identities. Their host-supplied namespace keeps those routes independent.
+  // Separate Vibe64 installations may share a preview domain and cloned project
+  // identities. Each one's configured namespace keeps those routes independent.
   const namespace = String(env?.[VIBE64_PREVIEW_PUBLIC_NAMESPACE_ENV] || "").trim();
   if (namespace) hashInput.push(`namespace:${namespace}`);
   const publicPort = publicDomainPort(baseDomain, protocol);
