@@ -18,6 +18,8 @@ source editing.
 - `packages/vibe64-project/src/server/registerRoutes.js`
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
+- `packages/vibe64-terminals/src/server/workspaceSetupStart.js`
+- `packages/vibe64-terminals/src/server/workspaceSetupExecution.js`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `src/components/studio/ConnectedProjectsSettings.vue`
 - `src/components/studio/ProjectSettingsPanel.vue`

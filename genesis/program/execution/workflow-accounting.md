@@ -20,6 +20,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
+- `packages/vibe64-terminals/src/server/workspaceSetupExecution.js`
 - `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchStart.js`

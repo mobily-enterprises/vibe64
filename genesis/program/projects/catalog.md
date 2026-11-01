@@ -22,6 +22,7 @@ workspace.
 - `packages/vibe64-training/src/server/preparation.js`
 - `packages/vibe64-training/src/server/Vibe64TrainingProvider.js`
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
+- `packages/vibe64-terminals/src/server/workspaceSetupStart.js`
 - `tests/server/vibe64ManagedProject.unit.test.js`
 - `tests/server/vibe64TrainingPreparation.unit.test.js`
 - `tests/server/vibe64WorkspaceSetup.unit.test.js`

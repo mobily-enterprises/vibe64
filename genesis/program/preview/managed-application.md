@@ -114,6 +114,8 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/serviceSessionTerminals.js`
 - `packages/vibe64-terminals/src/server/serviceProjectRuntime.js`
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
+- `packages/vibe64-terminals/src/server/workspaceSetupStart.js`
+- `packages/vibe64-terminals/src/server/workspaceSetupStatus.js`
 - `packages/vibe64-terminals/src/server/outputResults.js`
 - `packages/vibe64-terminals/src/server/launchPreviewProxy.js`
 - `packages/vibe64-terminals/src/server/launchPreviewForwarding.js`
