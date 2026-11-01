@@ -259,7 +259,7 @@ function childEnv(runtime = {}, preview = {}, authentication = null) {
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
     VIBE64_MANAGED_PLAYWRIGHT_TEST: "1",
     ...(preview.managed ? {
-      VIBE64_PLAYWRIGHT_STORAGE_STATE: authentication?.storageStatePath || ""
+      PLAYWRIGHT_STORAGE_STATE: authentication?.storageStatePath || ""
     } : {})
   };
 }
@@ -314,7 +314,7 @@ function managedExecution(runtime = {}, applicationRoot = "", {
         ...childEnv(runtime),
         VIBE64_PLAYWRIGHT_OUTPUT_TARGET: targetId,
         VIBE64_PLAYWRIGHT_RESTORE_PREVIEW: "1",
-        VIBE64_PLAYWRIGHT_STORAGE_STATE: "",
+        PLAYWRIGHT_STORAGE_STATE: "",
         VIBE64_PLAYWRIGHT_TARGET_IDENTITY: identityExplicit ? identity : ""
       }
     };
@@ -454,8 +454,8 @@ if (!runtime) {
     unsupportedRecovery() + " Do not install a browser in this session."
   );
 }
-if (targetId && (String(process.env.PLAYWRIGHT_BASE_URL || "").trim() || String(process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || "").trim())) {
-  fail("--target uses its own managed Preview URL and identity. Remove PLAYWRIGHT_BASE_URL and VIBE64_PLAYWRIGHT_STORAGE_STATE.", 64);
+if (targetId && (String(process.env.PLAYWRIGHT_BASE_URL || "").trim() || String(process.env.PLAYWRIGHT_STORAGE_STATE || "").trim())) {
+  fail("--target uses its own managed Preview URL and identity. Remove PLAYWRIGHT_BASE_URL and PLAYWRIGHT_STORAGE_STATE.", 64);
 }
 let runner;
 let runnerArgs;

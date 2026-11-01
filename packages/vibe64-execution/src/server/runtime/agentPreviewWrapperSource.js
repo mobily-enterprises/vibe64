@@ -493,7 +493,7 @@ try {
         "PLAYWRIGHT_BROWSERS_PATH",
         "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
         "VIBE64_MANAGED_PLAYWRIGHT_TEST",
-        "VIBE64_PLAYWRIGHT_STORAGE_STATE"
+        "PLAYWRIGHT_STORAGE_STATE"
       ].filter((name) => Object.hasOwn(process.env, name)).map((name) => [name, process.env[name]])),
       runner,
       workerScriptPath

@@ -172,7 +172,7 @@ process.stdout.write(JSON.stringify({
   const socketRoot = await mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "v64-test-sockets-"));
   const commandEnv = {
     ...process.env,
-    PLAYWRIGHT_BASE_URL: "", VIBE64_PLAYWRIGHT_STORAGE_STATE: "", VIBE64_PLAYWRIGHT_TARGET_RUN: "",
+    PLAYWRIGHT_BASE_URL: "", PLAYWRIGHT_STORAGE_STATE: "", VIBE64_PLAYWRIGHT_TARGET_RUN: "",
     TMPDIR: socketRoot,
     NPM_CONFIG_PREFIX: path.join(root, "tools"),
     VIBE64_SHARED_CACHE_ROOT: path.join(root, "cache"),
@@ -264,7 +264,7 @@ async function browserCommands(f) {
   await writeFile(path.join(f.sourceRoot, "playwright.config.mjs"), `export default {
     testDir: '.', testMatch: 'browser.spec.mjs', workers: 1,
     reporter: 'line', timeout: 30000,
-    use: { baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || undefined }
+    use: { baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: process.env.PLAYWRIGHT_STORAGE_STATE || undefined }
   };`);
   await writeFile(path.join(f.sourceRoot, "browser.spec.mjs"), `
 import { test, expect } from '@playwright/test';
@@ -325,7 +325,7 @@ try {
         env: {
           ...process.env, ...prepared.env, VIBE64_EXECUTION_ID: "test-parent",
           // This fixture owns a different Preview and identity from its outer suite.
-          PLAYWRIGHT_BASE_URL: "", VIBE64_PLAYWRIGHT_STORAGE_STATE: "", VIBE64_PLAYWRIGHT_TARGET_RUN: ""
+          PLAYWRIGHT_BASE_URL: "", PLAYWRIGHT_STORAGE_STATE: "", VIBE64_PLAYWRIGHT_TARGET_RUN: ""
         },
         stdio: ["ignore", "pipe", "pipe"]
       });

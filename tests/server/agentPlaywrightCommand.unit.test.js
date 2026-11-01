@@ -61,7 +61,7 @@ async function createProject(projectRoot, version) {
   }), "utf8");
   await writeFile(path.join(packageRoot, "cli.js"), [
     "const { existsSync, readFileSync } = require(\"node:fs\");",
-    "const storageStatePath = process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || \"\";",
+    "const storageStatePath = process.env.PLAYWRIGHT_STORAGE_STATE || \"\";",
     "process.stdout.write(JSON.stringify({",
     "  args: process.argv.slice(2),",
     "  baseUrl: process.env.PLAYWRIGHT_BASE_URL,",
@@ -154,7 +154,7 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
     [
       "#!/usr/bin/env node",
       "const { existsSync, readFileSync } = require(\"node:fs\");",
-      "const storageStatePath = process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || \"\";",
+      "const storageStatePath = process.env.PLAYWRIGHT_STORAGE_STATE || \"\";",
       "process.stdout.write(JSON.stringify({",
       "  args: process.argv.slice(2),",
       "  baseUrl: process.env.PLAYWRIGHT_BASE_URL,",
@@ -588,7 +588,7 @@ test("managed Playwright test command uses the exact versioned browser runtime w
           ...fixture.prepared.env,
           PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-override",
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0",
-          VIBE64_PLAYWRIGHT_STORAGE_STATE: "/tmp/stale-managed-state.json"
+          PLAYWRIGHT_STORAGE_STATE: "/tmp/stale-managed-state.json"
         }
       }
     )).stdout);
@@ -637,7 +637,7 @@ test("managed Playwright test command uses the exact versioned browser runtime w
           ...process.env,
           ...fixture.prepared.env,
           PLAYWRIGHT_BASE_URL: "http://127.0.0.1:6200/custom",
-          VIBE64_PLAYWRIGHT_STORAGE_STATE: "/tmp/explicit-state.json"
+          PLAYWRIGHT_STORAGE_STATE: "/tmp/explicit-state.json"
         }
       }
     )).stdout);

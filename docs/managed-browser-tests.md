@@ -143,7 +143,7 @@ database before resolving identities or producing cookies. Do not reuse an
 identity executable that still reads the normal database.
 
 The Playwright configuration must use `PLAYWRIGHT_BASE_URL` and
-`VIBE64_PLAYWRIGHT_STORAGE_STATE` when supplied, and omit its own `webServer` in
+`PLAYWRIGHT_STORAGE_STATE` when supplied, and omit its own `webServer` in
 that case. Keep standalone execution working with the application's own setup.
 Do not overwrite `DB_NAME` in the test runner just to satisfy a safety check:
 that cannot prove which database the independently running server uses.

@@ -160,7 +160,7 @@ test("Playwright uses the direct managed-preview environment contract", async ()
   const configSource = await readFile(path.join(APP_ROOT, "playwright.config.mjs"), "utf8");
 
   assert.match(configSource, /PLAYWRIGHT_BASE_URL/u);
-  assert.match(configSource, /VIBE64_PLAYWRIGHT_STORAGE_STATE/u);
+  assert.match(configSource, /PLAYWRIGHT_STORAGE_STATE/u);
   assert.match(configSource, /VIBE64_LIVE_E2E/u);
   assert.match(configSource, /tests\/e2e\/support\/start-web-server\.mjs/u);
   assert.doesNotMatch(configSource, /node \.\/bin\/server\.js/u);

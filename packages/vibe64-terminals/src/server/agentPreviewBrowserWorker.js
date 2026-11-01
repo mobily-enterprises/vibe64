@@ -424,7 +424,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
       "vibe64_managed_playwright_runtime_invalid"
     );
   }
-  const storageStatePath = trimmedText(requestedEnv.VIBE64_PLAYWRIGHT_STORAGE_STATE);
+  const storageStatePath = trimmedText(requestedEnv.PLAYWRIGHT_STORAGE_STATE);
   if (storageStatePath && !path.isAbsolute(storageStatePath)) {
     return responseError(
       "The managed Playwright storage-state path must be absolute.",
@@ -443,7 +443,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
       VIBE64_MANAGED_PLAYWRIGHT_TEST: "1",
       ...(storageStatePath ? {
-        VIBE64_PLAYWRIGHT_STORAGE_STATE: storageStatePath
+        PLAYWRIGHT_STORAGE_STATE: storageStatePath
       } : {})
     },
     envPolicy: "preview",
@@ -500,7 +500,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
       ...request.env, ...descriptor.env,
       VIBE64_PLAYWRIGHT_TARGET_RUN: testRunToken,
       PLAYWRIGHT_BASE_URL: "",
-      VIBE64_PLAYWRIGHT_STORAGE_STATE: ""
+      PLAYWRIGHT_STORAGE_STATE: ""
     }
   }), validate);
 }
