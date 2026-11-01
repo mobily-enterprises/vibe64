@@ -36,7 +36,7 @@ function fakeClock() {
   return {
     now: () => time,
     setTimer(callback, delay) {
-      const timer = { at: time + delay, callback };
+      const timer = { at: time + delay, callback, unref() {} };
       timers.add(timer);
       return timer;
     },

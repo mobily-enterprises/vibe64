@@ -112,8 +112,7 @@ function createRenewalScheduler({
         // bounded retry; a real workflow failure is persisted by the runner.
       });
     }, retryDelayMs);
-    // readable-check: allow optional-call - platform object: an injected timer need not be a Node timer
-    timer.unref?.();
+    timer.unref();
     pendingWorkflowLockRetries.set(key, timer);
     return true;
   }

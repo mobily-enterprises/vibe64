@@ -71,8 +71,7 @@ function createRepositoryUpdateProbe({
       entry.timer = null;
       void run(slug, entry);
     }, delay);
-    // readable-check: allow optional-call - platform object: an injected timer need not be a Node timer
-    entry.timer?.unref?.();
+    entry.timer.unref();
   }
 
   async function run(slug, entry) {

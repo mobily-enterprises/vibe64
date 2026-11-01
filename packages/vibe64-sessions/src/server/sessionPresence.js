@@ -197,8 +197,7 @@ function createSessionPresenceService({
     entry.timer = setTimer(() => {
       void expireEntry(key, entry);
     }, delay);
-    // readable-check: allow optional-call - platform object: an injected timer need not be a Node timer
-    entry.timer?.unref?.();
+    entry.timer.unref();
   }
 
   async function evictOldestEntry() {
