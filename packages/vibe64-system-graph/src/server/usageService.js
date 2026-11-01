@@ -84,7 +84,11 @@ function createUsageService({
       snapshotIndexes.set(machine, (async () => {
         let layout = null;
         // Groups only arrange cards; an invalid layout leaves them alphabetical.
-        try { layout = await layoutReader({ projectRoot: sourceRoot }); } catch { layout = null; }
+        try {
+          layout = await layoutReader({ projectRoot: sourceRoot });
+        } catch {
+          layout = null;
+        }
         return buildSnapshotIndex(record, layout);
       })());
       snapshotIndexes.get(machine).catch(() => snapshotIndexes.delete(machine));

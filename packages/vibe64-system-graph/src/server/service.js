@@ -230,21 +230,27 @@ async function runArchitectureInspector({ inspector, request, current, signal, p
     signal
   });
   if (signal.aborted) throw architectureCancelled();
-  if (!execution?.ok) throw systemError(execution?.timedOut
-    ? `${inspector.title} timed out.`
-    : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ""}.`,
+  if (!execution?.ok) throw systemError(
+    execution?.timedOut
+      ? `${inspector.title} timed out.`
+      : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ""}.`,
     "vibe64_architecture_inspector_failed",
     {
-    inspectorId: inspector.id,
-    commandOutput: String(execution?.stderr || execution?.error || "").slice(-2000)
-  });
+      inspectorId: inspector.id,
+      commandOutput: String(execution?.stderr || execution?.error || "").slice(-2000)
+    }
+  );
   if (typeof execution.stdout !== "string" || Buffer.byteLength(execution.stdout) > inspector.maxBuffer) {
     throw systemError(`${inspector.title} returned oversized output.`, "vibe64_architecture_output_too_large");
   }
-  try { return JSON.parse(execution.stdout); } catch { throw systemError(
-    `${inspector.title} must return one JSON observation document.`,
-    "vibe64_architecture_output_invalid"
-  ); }
+  try {
+    return JSON.parse(execution.stdout);
+  } catch {
+    throw systemError(
+      `${inspector.title} must return one JSON observation document.`,
+      "vibe64_architecture_output_invalid"
+    );
+  }
 }
 
 /**
@@ -400,10 +406,16 @@ function createService({
       let layoutDiagnostic = "";
       let entryPointDiagnostic = "";
       if (native) {
-        try { inspection = await inspectorReader({ projectRoot: context.sourceRoot }); }
-        catch (error) { entryPointDiagnostic = `Entry point declarations need attention: ${error.message}`; }
-        try { layout = await layoutReader({ projectRoot: context.sourceRoot }); }
-        catch (error) { layoutDiagnostic = `Architecture layout needs attention: ${error.message}`; }
+        try {
+          inspection = await inspectorReader({ projectRoot: context.sourceRoot });
+        } catch (error) {
+          entryPointDiagnostic = `Entry point declarations need attention: ${error.message}`;
+        }
+        try {
+          layout = await layoutReader({ projectRoot: context.sourceRoot });
+        } catch (error) {
+          layoutDiagnostic = `Architecture layout needs attention: ${error.message}`;
+        }
       }
       const entryPaths = [...new Set((inspection?.inspectors || []).flatMap(inspector => inspector.entryFiles || []))];
       const entryPoints = entryPaths.map(file => {
@@ -467,7 +479,9 @@ function createService({
           updatedAt: Date.now(),
           message: "Checking analysis prerequisites…"
         },
-        done: new Promise(resolve => { complete = resolve; })
+        done: new Promise(resolve => {
+          complete = resolve;
+        })
       };
       const progress = async message => {
         pending.progress = { ...pending.progress, message, updatedAt: Date.now() };

@@ -46,7 +46,9 @@ function createSnapshotCache({
     const entry = { identity, usedAt: now(), promise: Promise.resolve().then(load) };
     entries.set(key, entry);
     while (entries.size > capacity) entries.delete(entries.keys().next().value);
-    entry.promise.catch(() => { if (entries.get(key) === entry) entries.delete(key); });
+    entry.promise.catch(() => {
+      if (entries.get(key) === entry) entries.delete(key);
+    });
     sweep();
     return entry.promise;
   }
@@ -65,7 +67,9 @@ function createSnapshotCache({
     read,
     sweep,
     delete: deleteEntry,
-    get size() { return entries.size; },
+    get size() {
+      return entries.size;
+    },
     clear
   });
 }

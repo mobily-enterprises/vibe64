@@ -104,8 +104,11 @@ async function readGenesisCity(projectRoot, kind) {
   return cityReads.read(filePath, revision, async () => {
     const source = await readFile(filePath, "utf8");
     let city;
-    try { city = JSON.parse(source); }
-    catch { throw genesisCityError(kind, "contains invalid JSON."); }
+    try {
+      city = JSON.parse(source);
+    } catch {
+      throw genesisCityError(kind, "contains invalid JSON.");
+    }
     validateGenesisCity(city, kind);
     if (identity(await stat(filePath, { bigint: true })) !== revision) {
       throw genesisCityError(kind, "changed while loading. Reload to read the new snapshot.");
@@ -189,8 +192,11 @@ async function readGenesisCallWeb(projectRoot, architecture, options = {}) {
     throw callWebError("changed since this scan. Reload Architecture.", "vibe64_genesis_call_web_changed");
   }
   let document;
-  try { document = JSON.parse(source.toString("utf8")); }
-  catch { throw callWebError("contains invalid JSON."); }
+  try {
+    document = JSON.parse(source.toString("utf8"));
+  } catch {
+    throw callWebError("contains invalid JSON.");
+  }
   return validate(document, architecture.files);
 }
 
