@@ -45,8 +45,9 @@ async function readSourceIdentity(sourceRoot) {
         if (!match) break;
         index = end + 1;
         const found = match[0];
-        if (found === "\\") escaped = true;
-        else if (found === "\"" && !inString) {
+        if (found === "\\") {
+          escaped = true;
+        } else if (found === "\"" && !inString) {
           inString = true;
           text = "";
         } else if (found === "\"") {
@@ -64,7 +65,9 @@ async function readSourceIdentity(sourceRoot) {
         } else if (found === "}" || found === "]") {
           keys.pop();
           if (!keys.length) return null;
-        } else afterColon = false;
+        } else {
+          afterColon = false;
+        }
       }
     }
     return null;
