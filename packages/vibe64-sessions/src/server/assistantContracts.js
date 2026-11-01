@@ -235,17 +235,21 @@ function incomingContributionTool(description) {
     transformResult(result) {
       const output = { ok: result.ok === true, ...pickStrings(result, strings), ...pickIntegers(result, counts) };
       if (Number.isSafeInteger(result.nextOffset) || result.nextOffset === null) output.nextOffset = result.nextOffset;
-      if (result.actions) output.actions = {
-        merge: String(result.actions.merge || "").slice(0, 512),
-        discard: String(result.actions.discard || "").slice(0, 512)
-      };
-      if (Array.isArray(result.contributions)) output.contributions = result.contributions.slice(0, 50).map(entry => ({
-        ...Object.fromEntries(Object.keys(fields).map(key => [key, String(entry[key] || "").slice(0, 512)])),
-        fileCount: entry.fileCount,
-        review: Object.fromEntries(
-          ["repository", "targetBranch", "targetHead", "id", "activeHead", "discardedHead"].map(key => [key, entry.review?.[key]])
-        )
-      }));
+      if (result.actions) {
+        output.actions = {
+          merge: String(result.actions.merge || "").slice(0, 512),
+          discard: String(result.actions.discard || "").slice(0, 512)
+        };
+      }
+      if (Array.isArray(result.contributions)) {
+        output.contributions = result.contributions.slice(0, 50).map(entry => ({
+          ...Object.fromEntries(Object.keys(fields).map(key => [key, String(entry[key] || "").slice(0, 512)])),
+          fileCount: entry.fileCount,
+          review: Object.fromEntries(
+            ["repository", "targetBranch", "targetHead", "id", "activeHead", "discardedHead"].map(key => [key, entry.review?.[key]])
+          )
+        }));
+      }
       return output;
     }
   });
@@ -325,18 +329,22 @@ function sessionWorkTool(description) {
         // These are exact confirmation identities, not display excerpts.
         if (record) output[name] = Object.fromEntries(fields.map((key) => [key, record[key]]));
       }
-      if (Array.isArray(result.connectedReview)) output.connectedReview = result.connectedReview.map(item => ({
-        projectSlug: item.projectSlug,
-        destination: Object.fromEntries(["sessionId", "mode", "repository", "branch"].map(key => [key, item.destination[key]]))
-      }));
+      if (Array.isArray(result.connectedReview)) {
+        output.connectedReview = result.connectedReview.map(item => ({
+          projectSlug: item.projectSlug,
+          destination: Object.fromEntries(["sessionId", "mode", "repository", "branch"].map(key => [key, item.destination[key]]))
+        }));
+      }
       const connected = result.connected || result.details?.connected;
-      if (Array.isArray(connected)) output.connected = connected.slice(0, 64).map(item => ({
-        projectSlug: item.projectSlug,
-        repository: item.repository || item.contribution?.repository,
-        sessionId: item.sessionId || item.contribution?.id,
-        ...Object.fromEntries(["saveCommit", "status", "needsSave", "recorded", "reconciled"]
-          .flatMap(key => item[key] === undefined ? [] : [[key, item[key]]]))
-      }));
+      if (Array.isArray(connected)) {
+        output.connected = connected.slice(0, 64).map(item => ({
+          projectSlug: item.projectSlug,
+          repository: item.repository || item.contribution?.repository,
+          sessionId: item.sessionId || item.contribution?.id,
+          ...Object.fromEntries(["saveCommit", "status", "needsSave", "recorded", "reconciled"]
+            .flatMap(key => item[key] === undefined ? [] : [[key, item[key]]]))
+        }));
+      }
       if (result.details?.failedRepository) output.failedRepository = result.details.failedRepository;
       for (const name of ["operation", "updateOperation", "activeOperation"]) {
         if (!result[name]) continue;

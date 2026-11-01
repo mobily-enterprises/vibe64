@@ -101,10 +101,12 @@ function createSessionAssistant({
     const preferences = assistantRoutingPreferences(explicitSelection ? { mode: "custom", override: explicitSelection }
       : { mode: startMode });
     const routingSetup = await initializeModelRouting({ vibe64User });
-    if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), {
-      code: routingSetup.code,
-      statusCode: routingSetup.statusCode
-    });
+    if (routingSetup?.ok === false) {
+      throw Object.assign(new Error(routingSetup.error), {
+        code: routingSetup.code,
+        statusCode: routingSetup.statusCode
+      });
+    }
     // Outside a lesson, a team member's session records main chat's starting
     // model only; their messages wait for the owner, so nothing runs as them here.
     const purpose = preferences.mode === "auto" ? "senior" : preferences.mode;

@@ -93,15 +93,17 @@ function createConnectedContributions({
         contribution: binding.contribution,
         ...(submittedCommit ? { submittedCommit } : {})
       }, requestContext);
-      if (work?.ok !== true) throw Object.assign(new Error(work?.error || "The connected source could not be inspected."), {
-        code: work?.code || "vibe64_connected_source_unavailable",
-        details: {
-          repository: binding.contribution.repository,
-          projectSlug: binding.projectSlug,
-          sessionId: binding.contribution.id,
-          ...work?.details
-        }
-      });
+      if (work?.ok !== true) {
+        throw Object.assign(new Error(work?.error || "The connected source could not be inspected."), {
+          code: work?.code || "vibe64_connected_source_unavailable",
+          details: {
+            repository: binding.contribution.repository,
+            projectSlug: binding.projectSlug,
+            sessionId: binding.contribution.id,
+            ...work?.details
+          }
+        });
+      }
       const publishedCommit = work.publishedCommit === binding.contribution.baseCommit ? "" : normalizeText(work.publishedCommit);
       connected.push({
         ...binding,
@@ -145,26 +147,30 @@ function createConnectedContributions({
         { contribution: binding.contribution },
         requestContext
       );
-      if (check?.ok !== true) throw Object.assign(new Error(check?.error || "The connected source could not be checked for updates."), {
-        code: check?.code || "vibe64_connected_source_unavailable",
-        details: { repository: binding.contribution.repository, projectSlug: binding.projectSlug, ...check?.details }
-      });
+      if (check?.ok !== true) {
+        throw Object.assign(new Error(check?.error || "The connected source could not be checked for updates."), {
+          code: check?.code || "vibe64_connected_source_unavailable",
+          details: { repository: binding.contribution.repository, projectSlug: binding.projectSlug, ...check?.details }
+        });
+      }
       checks.push({ binding, check });
     }
     const connected = await inspectConnectedWork(current, requestContext, sessionConnectedSources(current), true);
     const pending = connected.find(item => item.needsSave || !item.reconciled);
-    if (pending) throw Object.assign(new Error(
-      pending.needsSave
-        ? `Save connected work in ${pending.contribution.repository} before saving the main project.`
-        : `Reconcile the pushed work in ${pending.contribution.repository} before saving the main project.`
-    ), {
-      code: "vibe64_connected_save_required",
-      details: {
-        repository: pending.contribution.repository,
-        projectSlug: pending.projectSlug,
-        sessionId: pending.sessionId
-      }
-    });
+    if (pending) {
+      throw Object.assign(new Error(
+        pending.needsSave
+          ? `Save connected work in ${pending.contribution.repository} before saving the main project.`
+          : `Reconcile the pushed work in ${pending.contribution.repository} before saving the main project.`
+      ), {
+        code: "vibe64_connected_save_required",
+        details: {
+          repository: pending.contribution.repository,
+          projectSlug: pending.projectSlug,
+          sessionId: pending.sessionId
+        }
+      });
+    }
     const behind = checks.find(({ check }) => check.behind > 0);
     if (behind) {
       const { binding, check } = behind;
@@ -212,10 +218,12 @@ function createConnectedContributions({
             destinationReview: item.destination
           }, requestContext)
           : { ok: true, status: "already_published", saveCommit: item.publishedCommit, reconciled: item.reconciled };
-        if (publication?.ok !== true) throw Object.assign(new Error(publication?.error || "Connected Save was not confirmed."), {
-          code: publication?.code || "vibe64_connected_save_failed",
-          details: publication?.details
-        });
+        if (publication?.ok !== true) {
+          throw Object.assign(new Error(publication?.error || "Connected Save was not confirmed."), {
+            code: publication?.code || "vibe64_connected_save_failed",
+            details: publication?.details
+          });
+        }
         const entry = { contribution: item.contribution, submittedCommit: publication.saveCommit };
         const previous = submissions.findIndex(value => value.contribution.id === item.contribution.id);
         if (previous < 0) submissions.push(entry);
@@ -289,11 +297,13 @@ function createConnectedContributions({
       const allocated = await Promise.allSettled(targets.map(async (target, index) => {
         const repository = target.fullName;
         const source = await executeConnectedAction(target.projectSlug, ACTION_INSPECT_CONTRIBUTION_SOURCE, {}, requestContext);
-        if (source.repository !== repository) throw Object.assign(new Error(
-          "The receiving project changed repositories. Review the connection before preparing it."
-        ), {
-          code: "vibe64_contribution_authority_changed"
-        });
+        if (source.repository !== repository) {
+          throw Object.assign(new Error(
+            "The receiving project changed repositories. Review the connection before preparing it."
+          ), {
+            code: "vibe64_contribution_authority_changed"
+          });
+        }
         let binding = sources.find(item => item.contribution.repository === repository);
         if (binding &&
             (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
@@ -367,11 +377,13 @@ function createConnectedContributions({
           workspaceSetup: allocation.workspaceSetup,
           update: connectedUpdateOutcome(update, binding.contribution.integrationBranch)
         });
-        if (allocation.sourceReady !== true) return {
-          ok: false,
-          code: "vibe64_connected_source_unavailable",
-          error: `The contribution source for ${repository} is not ready. Open its session in ${binding.projectSlug} and recover the source before retrying.`
-        };
+        if (allocation.sourceReady !== true) {
+          return {
+            ok: false,
+            code: "vibe64_connected_source_unavailable",
+            error: `The contribution source for ${repository} is not ready. Open its session in ${binding.projectSlug} and recover the source before retrying.`
+          };
+        }
         resolvedSources.push({ repository: target.repository, projectSlug: binding.projectSlug, session: allocation });
       }
       if (targets.length) report("Linking connected sources");
@@ -393,9 +405,11 @@ function createConnectedContributions({
 
   async function inspectConnectedReplacement(session, input, requestContext) {
     const binding = sessionConnectedSources(session).find(item => item.contribution.repository === input.repository);
-    if (!binding) throw Object.assign(new Error("This session no longer uses that connected source. Refresh its work before retrying."), {
-      code: "vibe64_connected_replacement_changed"
-    });
+    if (!binding) {
+      throw Object.assign(new Error("This session no longer uses that connected source. Refresh its work before retrying."), {
+        code: "vibe64_connected_replacement_changed"
+      });
+    }
     const targets = await project.connectedProjectTargets({ sessionId: session.sessionId, vibe64User: trustedAssistantUser(input) });
     if (!targets.some(target => target.projectSlug === binding.projectSlug &&
         target.fullName === binding.contribution.repository)) {
@@ -406,9 +420,11 @@ function createConnectedContributions({
     const incoming = await executeConnectedAction(binding.projectSlug, ACTION_INSPECT_CONTRIBUTION_INCOMING, {
       contribution: binding.contribution
     }, requestContext);
-    if (incoming?.ok !== true) throw Object.assign(new Error(incoming?.error || "The discarded contribution could not be inspected."), {
-      code: incoming?.code || "vibe64_connected_replacement_unavailable"
-    });
+    if (incoming?.ok !== true) {
+      throw Object.assign(new Error(incoming?.error || "The discarded contribution could not be inspected."), {
+        code: incoming?.code || "vibe64_connected_replacement_unavailable"
+      });
+    }
     const entry = incoming.contributions.find(item => item.id === binding.contribution.id);
     if (entry?.status !== "discarded" || entry.activeHead || !entry.discardedHead) {
       throw Object.assign(new Error("Only a discarded, unmerged contribution can be replaced. Refresh its Incoming changes."), {
@@ -480,11 +496,13 @@ function createConnectedContributions({
       const projects = [];
       for (const target of targets) {
         const binding = bindings.find(item => item.contribution.repository === target.fullName);
-        if (!binding || binding.projectSlug !== target.projectSlug) throw Object.assign(new Error(
-          "The connected project list no longer matches this task. Prepare connected sources again."
-        ), {
-          code: "vibe64_connected_inputs_required"
-        });
+        if (!binding || binding.projectSlug !== target.projectSlug) {
+          throw Object.assign(new Error(
+            "The connected project list no longer matches this task. Prepare connected sources again."
+          ), {
+            code: "vibe64_connected_inputs_required"
+          });
+        }
         const receiving = await executeConnectedAction(binding.projectSlug, ACTION_INSPECT_CONTRIBUTION_INPUTS, {
           contribution: binding.contribution
         }, requestContext);

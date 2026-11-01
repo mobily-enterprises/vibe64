@@ -182,11 +182,13 @@ function createSessionCreation({
         // Allocation prepares a receiving checkout only. The originating
         // recipe treats its direct sources; starting the receiver's setup
         // here would recursively allocate its connections (including cycles).
-        if (!contribution && !runtime.learningScope?.noExercise) setup = await setupRunner.start({
-          retry: true,
-          runtime,
-          session: created.session
-        });
+        if (!contribution && !runtime.learningScope?.noExercise) {
+          setup = await setupRunner.start({
+            retry: true,
+            runtime,
+            session: created.session
+          });
+        }
       } catch (error) {
         vibe64SessionDebugLog("server.sessions.workspaceSetup.start.error", {
           error: vibe64SessionDebugError(error),
