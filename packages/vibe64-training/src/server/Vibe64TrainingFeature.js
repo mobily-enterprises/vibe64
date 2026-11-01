@@ -29,6 +29,10 @@ import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js"
 /** @typedef {import("./types.js").LearningFact} LearningFact */
 /** @typedef {import("@local/vibe64-colleague/server/types").ColleagueService} ColleagueService */
 
+// Each runtime's core slot registrations, released at its shutdown. A feature's outputs hold only its declared
+// capabilities, so the releases are kept beside the training service they belong to.
+const slotReleases = new WeakMap();
+
 const Vibe64TrainingFeature = defineFeature({
   id: "vibe64.training",
   domain: "vibe64-training",
@@ -109,15 +113,16 @@ const Vibe64TrainingFeature = defineFeature({
       }
     });
     // The person of a local practice project request is this computer's user.
-    registerPracticeRequestActor(({ request }) => localLearnerActor(request));
+    const releasePracticeActor = registerPracticeRequestActor(({ request }) => localLearnerActor(request));
     // Learn mode: the local learner is this computer's user, whatever the request says.
-    registerLearningModeReader(() => training.learners.readLearningMode({ actor: currentOsUser() }), {
+    const releaseLearningMode = registerLearningModeReader(() => training.learners.readLearningMode({ actor: currentOsUser() }), {
       onReadFailure: error => logger.warn({ error: String(error?.message || error) }, "Learn mode could not be read; Develop applies.")
     });
     // The learner's ordinary Files editor saves in a practice project record
     // their code authorship in the learner's code ledger.
     // readable-check: allow setter-seam - cycle: vibe64.training requires vibe64.source-editor
     sourceEditor?.setFileSaveOwner(createTrainingCodeSaveOwner({ authorship: training.codeAuthorship }));
+    slotReleases.set(training, [releasePracticeActor, releaseLearningMode]);
     return { training };
   },
   /**
@@ -134,6 +139,13 @@ const Vibe64TrainingFeature = defineFeature({
       ...createTrainingLearnerNotesActions({ learnerNotes: training.learnerNotes }),
       ...createTrainingVisualResourceActions({ lessonVisuals: training.lessonVisuals })
     ]);
+  },
+  /**
+   * @param {object} _capabilities
+   * @param {{ outputs: { training: TrainingService } }} context
+   */
+  shutdown(_capabilities, { outputs }) {
+    for (const release of slotReleases.get(outputs.training)) release();
   }
 });
 

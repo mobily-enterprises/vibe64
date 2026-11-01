@@ -15,6 +15,10 @@ import { setupAccounts } from "./accountsSetup.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
+// Each runtime's team AI readiness registration, released at its shutdown. A feature's outputs hold only its
+// declared capabilities, so the release is kept beside the accounts service it belongs to.
+const slotReleases = new WeakMap();
+
 const Vibe64AccountsFeature = defineFeature({
   id: "vibe64.accounts",
   domain: "vibe64-accounts",
@@ -56,7 +60,7 @@ const Vibe64AccountsFeature = defineFeature({
     project,
     terminals
   }, { actionCatalogue }) {
-    return setupAccounts({
+    const { outputs, releaseTeamAiReadiness } = setupAccounts({
       accountRuntime,
       actionCatalogue,
       env,
@@ -67,6 +71,8 @@ const Vibe64AccountsFeature = defineFeature({
       project,
       terminals
     });
+    slotReleases.set(outputs.accounts, releaseTeamAiReadiness);
+    return outputs;
   },
   /**
    * @param {object} capabilities
@@ -74,6 +80,13 @@ const Vibe64AccountsFeature = defineFeature({
    */
   actions({ accounts }) {
     return createAccountsActions({ accounts });
+  },
+  /**
+   * @param {object} _capabilities
+   * @param {{ outputs: { accounts: AccountsService } }} context
+   */
+  shutdown(_capabilities, { outputs }) {
+    slotReleases.get(outputs.accounts)();
   }
 });
 

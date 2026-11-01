@@ -28,6 +28,7 @@ import {
 } from "@local/vibe64-core/server/studioProjectContext";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
@@ -93,12 +94,13 @@ function setupAccounts({
   });
 
   // Project admission's team AI gate reads the team setup through live access.
+  let releaseTeamAiReadiness = doNothing;
   if (resolvedAccountRuntime.systemRoot) {
     const teamAi = createTeamAiReadiness({
       routingStore: createAssistantRoutingStore({ systemRoot: resolvedAccountRuntime.systemRoot }),
       terminals
     });
-    registerTeamAiReadiness(teamAi.ready);
+    releaseTeamAiReadiness = registerTeamAiReadiness(teamAi.ready);
     events.register({
       id: "vibe64.accounts.team-ai-readiness",
       matches: (event) => event?.source === "vibe64" && ["account", "connection"].includes(event.entity),
@@ -148,8 +150,11 @@ function setupAccounts({
   });
 
   return {
-    accounts,
-    connections
+    outputs: {
+      accounts,
+      connections
+    },
+    releaseTeamAiReadiness
   };
 }
 
