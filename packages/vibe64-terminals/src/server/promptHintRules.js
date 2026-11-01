@@ -84,7 +84,7 @@ function canonicalHash(value = null) {
 }
 
 function visibleConversation(conversation = {}) {
-  const turns = Array.isArray(conversation?.conversationLog)
+  const turns = Array.isArray(conversation.conversationLog)
     ? conversation.conversationLog.slice(-PROMPT_HINT_RECENT_TURN_LIMIT)
     : [];
   let remaining = PROMPT_HINT_CONVERSATION_MAX_CHARACTERS;
@@ -118,7 +118,7 @@ function normalizedPromptHints(value = {}) {
 }
 
 function sessionAgentActive(session = {}) {
-  return (Array.isArray(session?.agentRuns) ? session.agentRuns : []).some((run) => {
+  return (Array.isArray(session.agentRuns) ? session.agentRuns : []).some((run) => {
     if (run?.active === true) {
       return true;
     }
@@ -134,12 +134,12 @@ function sessionStateForHints(session = {}, {
   repositoryOperationActive = false,
   sourceAvailable = false
 } = {}) {
-  const workspaceSetupStatus = normalizeText(session?.workspaceSetup?.status) || "unconfigured";
+  const workspaceSetupStatus = normalizeText(session.workspaceSetup?.status) || "unconfigured";
   return {
     agentActive: sessionAgentActive(session),
     repositoryOperationActive,
     sourceAvailable,
-    status: normalizeText(session?.status),
+    status: normalizeText(session.status),
     workspaceSetupStatus
   };
 }
@@ -194,7 +194,7 @@ function promptHintResponse(status = "unavailable", {
 }
 
 function promptHintStaticSuggestions(context = {}) {
-  const existingProject = normalizeText(context?.sessionState?.workspaceSetupStatus) !== "unconfigured";
+  const existingProject = normalizeText(context.sessionState?.workspaceSetupStatus) !== "unconfigured";
   return existingProject
     ? VIBE64_PROMPT_HINT_STATIC_STARTERS.existingProject
     : VIBE64_PROMPT_HINT_STATIC_STARTERS.greenfield;

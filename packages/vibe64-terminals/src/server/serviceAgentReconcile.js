@@ -26,9 +26,9 @@ function reconcileResultWithSourceFailures(result = {}, sourceFailures = []) {
     return result;
   }
   return {
-    ...(result || {}),
+    ...result,
     failed: [
-      ...(Array.isArray(result?.failed) ? result.failed : []),
+      ...(Array.isArray(result.failed) ? result.failed : []),
       ...sourceFailures
     ],
     ok: false

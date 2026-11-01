@@ -254,7 +254,7 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
   };
 }
 
-function openCodeSelection(session = {}) {
+function openCodeSelection(session) {
   const selection = vibe64AssistantSelectionFromMetadata(session?.metadata, {
     required: false
   });

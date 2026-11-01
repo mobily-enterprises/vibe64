@@ -253,7 +253,7 @@ function createServiceProjectRuntime({
     );
   }
 
-  async function openProjectRuntime(input = {}) {
+  async function openProjectRuntime(input) {
     const context = sessionAccess.projectRuntimeContext();
     const reason = String(input?.reason || "project-open").trim() || "project-open";
     projectServices.opened(context);
@@ -355,7 +355,7 @@ function createServiceProjectRuntime({
     };
   }
 
-  async function closeProjectRuntime(input = {}, { dormant = false } = {}) {
+  async function closeProjectRuntime(input, { dormant = false } = {}) {
     const startedAtMs = Date.now();
     const context = sessionAccess.projectRuntimeContext();
     const projectScope = currentProjectScopeKey();

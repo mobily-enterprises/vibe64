@@ -546,7 +546,7 @@ const RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND =
   "vibe64.session_renewal_successor_process_exit_proof_release";
 
 function renewalCleanupContext(sessionId = "", options = {}) {
-  const renewalCleanup = options?.renewalCleanup;
+  const renewalCleanup = options.renewalCleanup;
   if (!renewalCleanup) {
     return null;
   }

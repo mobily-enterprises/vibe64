@@ -109,7 +109,7 @@ function renewalTerminalAdmissionNamespaces(sessionId = "") {
 }
 
 function assertTerminalAdmissionResult(result = {}) {
-  if (result?.ok !== false) {
+  if (result.ok !== false) {
     return result;
   }
   const error = new Error(result.error || "Terminal admission could not be changed.");

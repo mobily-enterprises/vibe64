@@ -393,6 +393,7 @@ function saveState(store, sessionId, state) {
 }
 
 function turnConversationKey(turn) {
+  // readable-check: allow no-dual-shape - data: a turn names its assistant in metadata.assistantSelection, and a changeover notice only by its metadata's own engineId
   const selection = turn.metadata?.assistantSelection || turn.metadata;
   return selection?.engineId === "codex" ? "codex" : vibe64AssistantConversationKey(selection);
 }

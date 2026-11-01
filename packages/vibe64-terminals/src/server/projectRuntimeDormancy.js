@@ -20,14 +20,14 @@ function timestampIso(ms = 0) {
 }
 
 function sessionActivityTimestamps(session = {}) {
-  const manifest = session?.manifest && typeof session.manifest === "object" && !Array.isArray(session.manifest)
+  const manifest = session.manifest && typeof session.manifest === "object" && !Array.isArray(session.manifest)
     ? session.manifest
     : {};
   return [
     timestampMs(session.updatedAt),
     timestampMs(manifest.updatedAt),
-    ...(Array.isArray(session?.agentRuns) ? session.agentRuns.map((run) => timestampMs(run?.updatedAt)) : []),
-    ...(Array.isArray(session?.backgroundTasks) ? session.backgroundTasks.map((task) => timestampMs(task?.updatedAt)) : [])
+    ...(Array.isArray(session.agentRuns) ? session.agentRuns.map((run) => timestampMs(run?.updatedAt)) : []),
+    ...(Array.isArray(session.backgroundTasks) ? session.backgroundTasks.map((task) => timestampMs(task?.updatedAt)) : [])
   ].filter((value) => value > 0);
 }
 
@@ -52,7 +52,7 @@ function projectRuntimeDormancyState({
   ].filter((value) => value > 0);
   const lastActivityMs = activityMs.length ? Math.max(...activityMs) : 0;
   const idleMs = lastActivityMs > 0 ? Math.max(0, normalizedNowMs - lastActivityMs) : 0;
-  const open = runtime?.open === true;
+  const open = runtime.open === true;
   return {
     activeAgentSessionIds,
     dormant: open && activeAgentSessionIds.length === 0 && lastActivityMs > 0 && idleMs >= normalizedIdleAfterMs,

@@ -90,107 +90,117 @@ function createSessionAttachments({ projectService, env = process.env }) {
     });
   }
 
-  return {
-    async uploadAttachment(context, input) {
-      const { executionRoot, runtime, sessionId } = await attachmentContext(context);
-      return storeUpload({ executionRoot, sessionId, input, env, beforeCreate: async () => {
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
-        if (sessionIsClosing(session) || !vibe64SessionStatusIsOpen(session.status)) {
-          const closingReason = sessionClosingReason(session);
-          throw Object.assign(new Error(closingReason
-            ? `Session is ${closingReason}. Attachments cannot be added while it is closing.`
-            : "This session is closing. Attachments cannot be added now."), {
-            code: "vibe64_agent_attachment_session_unavailable", statusCode: 409
+  async function uploadAttachment(context, input) {
+    const { executionRoot, runtime, sessionId } = await attachmentContext(context);
+    return storeUpload({ executionRoot, sessionId, input, env, beforeCreate: async () => {
+      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      if (sessionIsClosing(session) || !vibe64SessionStatusIsOpen(session.status)) {
+        const closingReason = sessionClosingReason(session);
+        throw Object.assign(new Error(closingReason
+          ? `Session is ${closingReason}. Attachments cannot be added while it is closing.`
+          : "This session is closing. Attachments cannot be added now."), {
+          code: "vibe64_agent_attachment_session_unavailable", statusCode: 409
+        });
+      }
+    } });
+  }
+
+  async function deleteAttachment(context, input) {
+    const { executionRoot, runtime, sessionId } = await attachmentContext(context);
+    const saved = await runtime.store.withReadableSessionPaths(sessionId, (paths) => readSavedAttachment(paths, input.attachmentId));
+    if (saved) {
+      return { ok: false, statusCode: 409, code: "vibe64_agent_attachment_retained", error: "Sent attachments stay with the conversation." };
+    }
+    await cleanupUploads(executionRoot, sessionId, input.attachmentId, { env });
+    return { ok: true, attachmentId: input.attachmentId };
+  }
+
+  async function prepareMessage(context, input, { durable = true, conversationId = "" } = {}) {
+    const ids = [...new Set(Array.isArray(input.attachmentIds) ? input.attachmentIds : [])];
+    if (ids.length > 10) throw Object.assign(new Error("A message can include at most 10 attachments."), { statusCode: 400 });
+    const attachments = [];
+    if (ids.length) {
+      const resolved = await attachmentContext(context);
+      for (const id of ids) {
+        if (durable) {
+          attachments.push(await retainAttachment(resolved, id, conversationId));
+        } else {
+          attachments.push(await withUploadedAgentAttachment(resolved.executionRoot, resolved.sessionId, id, async (upload) => {
+            const now = new Date();
+            await utimes(upload.path, now, now);
+            return upload;
+          }, { env }));
+        }
+      }
+    }
+    let imageNumber = 0;
+    let fileNumber = 0;
+    for (const attachment of attachments) {
+      attachment.contentType = conversationAttachmentContentType(attachment.fileName);
+      const number = attachment.contentType.startsWith("image/") ? ++imageNumber : ++fileNumber;
+      attachment.reference = conversationAttachmentReference(attachment, number);
+    }
+    return prepareConversationAttachmentMessage(input, attachments, normalizeVibe64ConversationAttachments(attachments));
+  }
+
+  async function deleteConversationAttachments(context, { conversationId }) {
+    const { runtime, executionRoot, sessionId } = await attachmentContext(context);
+    await runtime.store.mutateSession(sessionId, async (paths) => {
+      let entries;
+      try {
+        entries = await readdir(path.join(paths.artifactsRoot, "attachments"), { withFileTypes: true });
+      } catch (error) {
+        if (error.code === "ENOENT") return;
+        throw error;
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.includes(".")) continue;
+        const saved = await readSavedAttachment(paths, entry.name);
+        if (saved?.conversationId !== conversationId) continue;
+        // Retain the ownership record until uploaded-file cleanup also succeeds.
+        await cleanupUploads(executionRoot, sessionId, entry.name, { env });
+        await rm(attachmentDirectory(paths, entry.name), { recursive: true, force: true });
+      }
+    });
+  }
+
+  async function readAttachment(context, id) {
+    const { sessionId } = context;
+    const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
+    const session = context.session || await runtime.getSession(sessionId, { inspectSource: false });
+    const openAttachment = async (attachment) => ({
+      attachment: { ...attachment, contentType: conversationAttachmentContentType(attachment.fileName) },
+      fileHandle: await open(attachment.path, constants.O_RDONLY | constants.O_NOFOLLOW)
+    });
+    return runtime.store.withReadableSessionPaths(sessionId, async (paths) => {
+      const saved = await readSavedAttachment(paths, id);
+      if (!saved) {
+        const executionRoot = sessionSourcePath(session);
+        if (!executionRoot || !vibe64SessionStatusIsOpen(session.status)) {
+          throw Object.assign(new Error("This session has no such attachment."), { statusCode: 404 });
+        }
+        return withUploadedAgentAttachment(executionRoot, sessionId, id, openAttachment, { env });
+      }
+      try {
+        return await openAttachment(saved);
+      } catch (error) {
+        if (error.code === "ENOENT" && !vibe64SessionStatusIsOpen(session.status)) {
+          throw Object.assign(new Error("This attachment is no longer retained. Its description remains in the chat."), {
+            code: "vibe64_agent_attachment_expired", statusCode: 410
           });
         }
-      } });
-    },
-    async deleteAttachment(context, input) {
-      const { executionRoot, runtime, sessionId } = await attachmentContext(context);
-      const saved = await runtime.store.withReadableSessionPaths(sessionId, (paths) => readSavedAttachment(paths, input.attachmentId));
-      if (saved) {
-        return { ok: false, statusCode: 409, code: "vibe64_agent_attachment_retained", error: "Sent attachments stay with the conversation." };
+        throw error;
       }
-      await cleanupUploads(executionRoot, sessionId, input.attachmentId, { env });
-      return { ok: true, attachmentId: input.attachmentId };
-    },
-    async prepareMessage(context, input, { durable = true, conversationId = "" } = {}) {
-      const ids = [...new Set(Array.isArray(input.attachmentIds) ? input.attachmentIds : [])];
-      if (ids.length > 10) throw Object.assign(new Error("A message can include at most 10 attachments."), { statusCode: 400 });
-      const attachments = [];
-      if (ids.length) {
-        const resolved = await attachmentContext(context);
-        for (const id of ids) {
-          if (durable) {
-            attachments.push(await retainAttachment(resolved, id, conversationId));
-          } else {
-            attachments.push(await withUploadedAgentAttachment(resolved.executionRoot, resolved.sessionId, id, async (upload) => {
-              const now = new Date();
-              await utimes(upload.path, now, now);
-              return upload;
-            }, { env }));
-          }
-        }
-      }
-      let imageNumber = 0;
-      let fileNumber = 0;
-      for (const attachment of attachments) {
-        attachment.contentType = conversationAttachmentContentType(attachment.fileName);
-        const number = attachment.contentType.startsWith("image/") ? ++imageNumber : ++fileNumber;
-        attachment.reference = conversationAttachmentReference(attachment, number);
-      }
-      return prepareConversationAttachmentMessage(input, attachments, normalizeVibe64ConversationAttachments(attachments));
-    },
-    async deleteConversationAttachments(context, { conversationId }) {
-      const { runtime, executionRoot, sessionId } = await attachmentContext(context);
-      await runtime.store.mutateSession(sessionId, async (paths) => {
-        let entries;
-        try {
-          entries = await readdir(path.join(paths.artifactsRoot, "attachments"), { withFileTypes: true });
-        } catch (error) {
-          if (error.code === "ENOENT") return;
-          throw error;
-        }
-        for (const entry of entries) {
-          if (!entry.isDirectory() || entry.name.includes(".")) continue;
-          const saved = await readSavedAttachment(paths, entry.name);
-          if (saved?.conversationId !== conversationId) continue;
-          // Retain the ownership record until uploaded-file cleanup also succeeds.
-          await cleanupUploads(executionRoot, sessionId, entry.name, { env });
-          await rm(attachmentDirectory(paths, entry.name), { recursive: true, force: true });
-        }
-      });
-    },
-    async readAttachment(context, id) {
-      const { sessionId } = context;
-      const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
-      const session = context.session || await runtime.getSession(sessionId, { inspectSource: false });
-      const openAttachment = async (attachment) => ({
-        attachment: { ...attachment, contentType: conversationAttachmentContentType(attachment.fileName) },
-        fileHandle: await open(attachment.path, constants.O_RDONLY | constants.O_NOFOLLOW)
-      });
-      return runtime.store.withReadableSessionPaths(sessionId, async (paths) => {
-        const saved = await readSavedAttachment(paths, id);
-        if (!saved) {
-          const executionRoot = sessionSourcePath(session);
-          if (!executionRoot || !vibe64SessionStatusIsOpen(session.status)) {
-            throw Object.assign(new Error("This session has no such attachment."), { statusCode: 404 });
-          }
-          return withUploadedAgentAttachment(executionRoot, sessionId, id, openAttachment, { env });
-        }
-        try {
-          return await openAttachment(saved);
-        } catch (error) {
-          if (error.code === "ENOENT" && !vibe64SessionStatusIsOpen(session.status)) {
-            throw Object.assign(new Error("This attachment is no longer retained. Its description remains in the chat."), {
-              code: "vibe64_agent_attachment_expired", statusCode: 410
-            });
-          }
-          throw error;
-        }
-      });
-    }
-  };
+    });
+  }
+
+  return Object.freeze({
+    uploadAttachment,
+    deleteAttachment,
+    prepareMessage,
+    deleteConversationAttachments,
+    readAttachment
+  });
 }
 
 function createCodexSessionAttachmentRenewal({ sessionRuntimeHost, sessionEnvironment }) {
