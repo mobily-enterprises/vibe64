@@ -1,6 +1,6 @@
 import {
   createMainConversationBinding,
-  readMainConversationHistory as history,
+  readMainConversationHistory,
   MAIN_CONVERSATION_PRESENTATION,
   requireCompletedNativeConversationReplacement,
   requireCompletedConversationRewind,
@@ -47,7 +47,7 @@ export async function replaceNativeConversation(sessionId, input, context, agent
     reason: "renewal",
     briefing: handover
   });
-  const messages = await history(store, sessionId);
+  const messages = await readMainConversationHistory(store, sessionId);
   return changeoverFor(store, sessionId, { agent, context }).replace({
     engineId,
     messages,
@@ -76,7 +76,7 @@ function changeoverFor(store, sessionId, { agent, context, log, maximumInitialMe
 
 export async function rememberAssistantBeforeChangeover({ runtime, session }, engineId) {
   requireCompletedConversationRewind(session);
-  const messages = await history(runtime.store, session.sessionId);
+  const messages = await readMainConversationHistory(runtime.store, session.sessionId);
   await changeoverFor(runtime.store, session.sessionId).remember({ engineId, messages });
 }
 
@@ -92,7 +92,7 @@ export async function sendWithAssistantChangeover(sessionId, input, context, age
   requireCompletedConversationRewind(context.session);
   const store = context.runtime.store;
   const engineId = sessionConversationKey(context.session);
-  const messages = [...initialMessages, ...await history(store, sessionId)];
+  const messages = [...initialMessages, ...await readMainConversationHistory(store, sessionId)];
   return changeoverFor(store, sessionId, {
     agent,
     context,

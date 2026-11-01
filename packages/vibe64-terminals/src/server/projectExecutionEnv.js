@@ -1,8 +1,8 @@
 import { stableHash } from "@local/vibe64-execution/server";
-import { executionEnvRecord as normalizeExecutionEnvRecord } from "./executionEnvRecord.js";
+import { executionEnvRecord } from "./executionEnvRecord.js";
 
 function executionEnvFingerprint(env = {}) {
-  return stableHash(JSON.stringify(Object.entries(normalizeExecutionEnvRecord(env))
+  return stableHash(JSON.stringify(Object.entries(executionEnvRecord(env))
     .sort(([left], [right]) => left.localeCompare(right))));
 }
 
@@ -32,7 +32,7 @@ async function loadProjectExecutionEnvRecords({
     target: String(target || "").trim()
   });
   return {
-    runtimeConfigEnv: normalizeExecutionEnvRecord(includeResourceConfiguration ? env.environment : env),
+    runtimeConfigEnv: executionEnvRecord(includeResourceConfiguration ? env.environment : env),
     ...(includeResourceConfiguration && Object.hasOwn(env, "resourcePreparation")
       ? { resourcePreparation: env.resourcePreparation } : {}),
     ...(includeResourceConfiguration ? { resourceConfigurationFingerprint: env.resourceConfigurationFingerprint ?? null } : {})
@@ -42,7 +42,7 @@ async function loadProjectExecutionEnvRecords({
 function projectExecutionEnvFromRecords({
   runtimeConfigEnv = {}
 } = {}) {
-  return normalizeExecutionEnvRecord(runtimeConfigEnv);
+  return executionEnvRecord(runtimeConfigEnv);
 }
 
 async function loadProjectExecutionEnv(input = {}) {
@@ -53,6 +53,5 @@ export {
   executionEnvFingerprint,
   loadProjectExecutionEnv,
   loadProjectExecutionEnvRecords,
-  normalizeExecutionEnvRecord,
   projectExecutionEnvFromRecords
 };

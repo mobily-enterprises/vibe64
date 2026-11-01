@@ -7,12 +7,12 @@ import { readSessionConversationContext } from "../../packages/vibe64-terminals/
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { executionEnvRecord } from "../../packages/vibe64-terminals/src/server/executionEnvRecord.js";
 
 import {
   executionEnvFingerprint,
   loadProjectExecutionEnv,
   loadProjectExecutionEnvRecords,
-  normalizeExecutionEnvRecord,
   projectExecutionEnvFromRecords
 } from "../../packages/vibe64-terminals/src/server/projectExecutionEnv.js";
 
@@ -174,7 +174,7 @@ test("project execution environment is empty when the project declares none", as
 });
 
 test("execution environment normalization keeps only named scalar entries", () => {
-  assert.deepEqual(normalizeExecutionEnvRecord({
+  assert.deepEqual(executionEnvRecord({
     "": "ignored",
     COUNT: 2,
     NULL: null,
@@ -184,7 +184,7 @@ test("execution environment normalization keeps only named scalar entries", () =
     NULL: "",
     VALUE: "yes"
   });
-  assert.deepEqual(normalizeExecutionEnvRecord(null), {});
+  assert.deepEqual(executionEnvRecord(null), {});
   assert.deepEqual(projectExecutionEnvFromRecords({
     runtimeConfigEnv: {
       VALUE: "yes"
