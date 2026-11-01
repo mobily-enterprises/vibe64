@@ -47,15 +47,21 @@ function projectSlugFromRequest(request = {}) {
   return normalizeProjectSlug(request.params?.slug);
 }
 
+// The one default for the project context: the studio's own, when a caller
+// names none.
+/**
+ * @param {object} [options]
+ * @param {StudioProjectContext} [options.projectContext]
+ * @param {object} [options.request]
+ */
 async function resolveProjectRequestContext({
   projectContext = getStudioProjectContext(),
   request = {}
 } = {}) {
   const slug = projectSlugFromRequest(request);
-  const resolvedProjectContext = projectContext || getStudioProjectContext();
   const projectsRoot = String(
-    resolvedProjectContext?.projectsRoot ||
-    (resolvedProjectContext?.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
+    projectContext.projectsRoot ||
+    (projectContext.projectCatalogEnabled === false ? "" : resolveStudioProjectsRoot())
   ).trim();
   const vibe64User = request?.vibe64User || null;
   // A person's own page or session request (HTTP or WebSocket, which carry
@@ -69,12 +75,12 @@ async function resolveProjectRequestContext({
     await assertTeamAiAllowsProject({ actor: vibe64User });
   };
   // readable-check: allow optional-call - optional operation: a project context without practice scopes has none
-  const practice = resolvedProjectContext.currentPracticeProjectScope?.();
+  const practice = projectContext.currentPracticeProjectScope?.();
   if (practice) {
     if (slug !== practice.slug) {
       throw Object.assign(new Error("Practice access belongs to the exact saved project."), { code: "vibe64_practice_scope_mismatch" });
     }
-    const { project } = await resolvedProjectContext.readWorkspaceProject({
+    const { project } = await projectContext.readWorkspaceProject({
       ...(request.allowDeleting === true ? { allowDeleting: true } : {}), slug });
     return Object.freeze({
       projectRecordPath: project.projectRecordPath,
@@ -90,15 +96,15 @@ async function resolveProjectRequestContext({
       [practiceScopeKey]: currentProjectRequestContext()[practiceScopeKey]
     });
   }
-  const explicitContext = explicitProjectRequestContextForSlug(resolvedProjectContext, slug, projectsRoot);
+  const explicitContext = explicitProjectRequestContextForSlug(projectContext, slug, projectsRoot);
   if (practiceIdFromSlug(slug)) {
-    const admitted = await admitPracticeRequest({ projectContext: resolvedProjectContext, request, slug, vibe64User });
+    const admitted = await admitPracticeRequest({ projectContext, request, slug, vibe64User });
     if (admitted) {
       await assertMode(true);
       return admitted;
     }
     // Not in the learning space: only a pre-existing project of that name opens.
-    if (!explicitContext && !(resolvedProjectContext.projectCatalogEnabled !== false &&
+    if (!explicitContext && !(projectContext.projectCatalogEnabled !== false &&
         await pathExists(resolveProjectContextRoot({ projectsRoot, slug })))) {
       throw practiceProjectDeletedError();
     }
@@ -116,14 +122,14 @@ async function resolveProjectRequestContext({
       vibe64User
     });
   }
-  if (resolvedProjectContext?.projectCatalogEnabled === false) {
+  if (projectContext.projectCatalogEnabled === false) {
     const error = new Error("Local editor mode only serves the selected project.");
     error.code = "vibe64_project_route_unavailable";
     throw error;
   }
   let result;
   try {
-    result = await resolvedProjectContext.readWorkspaceProject({
+    result = await projectContext.readWorkspaceProject({
       allowDeleting: request.allowDeleting === true,
       slug
     });
@@ -151,7 +157,7 @@ async function resolveProjectRequestContext({
     slug,
     sourceConfigRoot,
     sourceRoot,
-    systemRoot: String(resolvedProjectContext?.systemRoot || "").trim(),
+    systemRoot: String(projectContext.systemRoot || "").trim(),
     targetRoot,
     vibe64User
   });

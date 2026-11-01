@@ -18,7 +18,7 @@ import {
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
-function projectRoutes(app, { projectContext = null, localRequestMessage, tags = ["studio", "unit-test"] } = {}) {
+function projectRoutes(app, { projectContext, localRequestMessage, tags = ["studio", "unit-test"] } = {}) {
   return createActionRouteScope(vibe64RouteHttp(app.http, { tags }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "vibe64",
