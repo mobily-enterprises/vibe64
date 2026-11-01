@@ -9,11 +9,16 @@ import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
-function renewalPredecessorTerminalCleanupContext(session = {}, options = {}) {
-  const {
-    renewalId = "",
-    runtime = null
-  } = options;
+/**
+ * The cleanup context for a renewal's predecessor, refused unless the session is that renewal's exact active or
+ * quiesced predecessor and a runtime is given.
+ * @param {object} session
+ * @param {object} options
+ * @param {string} options.renewalId
+ * @param {object} options.runtime
+ */
+function renewalPredecessorTerminalCleanupContext(session, options) {
+  const { renewalId, runtime } = options;
   const sessionRecord = normalizeObject(session);
   const normalizedRenewalId = String(renewalId || "").trim();
   const sessionId = String(sessionRecord.sessionId || "").trim();
@@ -49,11 +54,16 @@ function renewalPredecessorTerminalCleanupContext(session = {}, options = {}) {
   };
 }
 
-function renewalSuccessorTerminalCleanupContext(session = {}, options = {}) {
-  const {
-    renewalId = "",
-    runtime = null
-  } = options;
+/**
+ * The cleanup context for a renewal's hidden successor, refused unless the session is that renewal's exact pending
+ * successor and a runtime is given.
+ * @param {object} session
+ * @param {object} options
+ * @param {string} options.renewalId
+ * @param {object} options.runtime
+ */
+function renewalSuccessorTerminalCleanupContext(session, options) {
+  const { renewalId, runtime } = options;
   const sessionRecord = normalizeObject(session);
   const normalizedRenewalId = String(renewalId || "").trim();
   const sessionId = String(sessionRecord.sessionId || "").trim();
@@ -80,20 +90,22 @@ function renewalSuccessorTerminalCleanupContext(session = {}, options = {}) {
   };
 }
 
+/**
+ * Closes one controller's terminals for the session, with debug timing around it.
+ * @param {object} step
+ * @param {{ closeAllForSession: (sessionId: string, options: object) => Promise<object> }} step.controller
+ * @param {object} step.controllerOptions
+ * @param {string} step.eventPrefix
+ * @param {string} step.label
+ * @param {string} step.sessionId
+ */
 async function closeTerminalControllerForSession({
   controller,
-  controllerOptions = {},
-  eventPrefix = "server.terminals.closeSessionTerminals",
-  label = "",
-  sessionId = ""
-} = {}) {
-  // readable-check: allow method-probe - optional operation: an engine without session terminals has none to close
-  if (typeof controller?.closeAllForSession !== "function") {
-    return {
-      closed: 0,
-      ok: true
-    };
-  }
+  controllerOptions,
+  eventPrefix,
+  label,
+  sessionId
+}) {
   const startedAtMs = Date.now();
   vibe64SessionDebugLog(`${eventPrefix}.controller.start`, {
     controller: label,

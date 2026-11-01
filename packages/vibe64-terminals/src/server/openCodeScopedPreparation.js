@@ -9,8 +9,9 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
 import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencodeServerProcess.js";
-import { openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./terminalShared.js";
+import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
@@ -96,7 +97,7 @@ export function createOpenCodeScopedPreparation({
   prepareSessionCleanup
 }) {
   const { prepareProcess, sharedRoots, promptContext, writeSessionEnvironmentRegistry } = hostPreparation;
-  const { observationProjection } = events;
+  const { detachedObservationProjection } = events;
 
   async function prepareConversationCreation(sessionId = "", input = {}, options = {}) {
     const context = await contextFor(sessionId, options);
@@ -173,7 +174,7 @@ export function createOpenCodeScopedPreparation({
         messageId: conversationMessageId,
         get inputMessageId() { return input.messageId ? upstreamMessageId(input.messageId) : ""; }
       },
-      failure: runtimeFailure,
+      failure: throwVibe64OpenCodeError,
       onRemoved: writeSessionEnvironmentRegistry,
       get scoped() { return context.assistantScope; },
       get cleanupAfterDelete() { return context.assistantScope ? prepareSessionCleanup(context.sessionId, context) : null; }
@@ -192,6 +193,8 @@ export function createOpenCodeScopedPreparation({
   async function prepareDetachedChatTurn(sessionId = "", input = {}, options = {}, {
     waitForCompletion = true
   } = {}) {
+    const { onEvent = doNothing } = options;
+    const { onPromptSending = doNothing } = input;
     const prompt = openCodeDetachedPrompt(input);
     if (!prompt) {
       throw openCodeError("vibe64_opencode_prompt_empty", "OpenCode prompt input is empty.", {}, 400);
@@ -199,7 +202,7 @@ export function createOpenCodeScopedPreparation({
     boundedOpenCodeExecutionInput(prompt, openCodeExecutionProfile(input));
     const prepared = await prepareDetachedTarget(sessionId, input, options);
     const { context, executionProfile } = prepared;
-    prepared.failure = runtimeFailure;
+    prepared.failure = throwVibe64OpenCodeError;
     prepared.turn = ({ conversationId, tracked }) => {
       return {
         input: {
@@ -215,17 +218,15 @@ export function createOpenCodeScopedPreparation({
         options: {
           waitForCompletion,
           get signal() { return options.signal; },
-          observation: () => observationProjection(context, options.onEvent, false),
+          observation: () => detachedObservationProjection(context, onEvent),
           get readiness() { return {
             timeoutError: openCodeError(
               "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504
             )
           }; },
           async beforeDispatch() {
-            // readable-check: allow optional-call - input validation: a caller's optional event stream
-            await options.onEvent?.({ threadId: conversationId, type: "thread" });
-            // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
-            await input.onPromptSending?.({ threadId: conversationId });
+            await onEvent({ threadId: conversationId, type: "thread" });
+            await onPromptSending({ threadId: conversationId });
           },
           get completion() {
             return {
@@ -235,8 +236,7 @@ export function createOpenCodeScopedPreparation({
                 messageId: conversationMessageId,
                 async onMessages(messages, admittedInputId) {
                   for (const message of messages) {
-                    // readable-check: allow optional-call - input validation: a caller's optional event stream
-                    await options.onEvent?.({ type: "message", message, threadId: conversationId, turnId: admittedInputId });
+                    await onEvent({ type: "message", message, threadId: conversationId, turnId: admittedInputId });
                   }
                 }
               } : {}),

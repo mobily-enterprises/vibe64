@@ -10,7 +10,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
-/** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+/** @typedef {import("./types.js").RecordSessionGitCommandActor} RecordSessionGitCommandActor */
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparationContextFor} OpenCodeMainMessagePreparationContextFor */
 
 const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;

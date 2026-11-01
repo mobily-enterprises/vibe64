@@ -608,12 +608,6 @@ async function regenerateDerivedArtifactTree(runCommand, context, {
   if (!paths.length) {
     return tree;
   }
-  if (typeof refreshDerivedArtifacts !== "function") {
-    throw saveError(
-      "The project declares generated artifacts but their owning tool is unavailable.",
-      "vibe64_session_derived_artifact_refresh_unavailable"
-    );
-  }
   const sourceCommit = await createVirtualCommit(runCommand, context, {
     baseCommit,
     commandOptions,

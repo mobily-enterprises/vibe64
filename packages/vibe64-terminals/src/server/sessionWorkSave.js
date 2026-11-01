@@ -45,6 +45,7 @@ import {
 } from "./sessionWorkPublication.js";
 import { recoverSessionWorkSave } from "./sessionWorkSaveRecovery.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 async function prepareSessionPullRequestBranch({
   project,
@@ -206,7 +207,7 @@ async function prepareSessionWorkSave(runCommand, context, options = {}) {
     message = "",
     operationId,
     project = {},
-    refreshDerivedArtifacts = null
+    refreshDerivedArtifacts
   } = options;
   const checkpointTree = normalizeText(checkpoint.checkpointTree);
   const [canonical, sessionHead] = await Promise.all([
@@ -432,10 +433,10 @@ async function saveSessionWorkDirect({
   message = "",
   operationId = crypto.randomUUID(),
   project = {},
-  refreshDerivedArtifacts = null,
+  refreshDerivedArtifacts,
   runCommand = runVibe64Command,
   runProjectSourceExclusive = async (operation) => operation(),
-  onProgress = async () => null,
+  onProgress = doNothing,
   session = {}
 } = {}) {
   const context = repositoryContext(session, project);
@@ -611,13 +612,13 @@ async function saveSessionWork({
   commandOptions = {},
   derivedArtifactPaths = [],
   message = "",
-  onCacheMaintenance = async () => null,
+  onCacheMaintenance = doNothing,
   operationId = crypto.randomUUID(),
   project = {},
   readConnectedWorkSnapshots = async () => [],
   runCommand = runVibe64Command,
   runProjectSourceExclusive = async (operation) => operation(),
-  onProgress = async () => null,
+  onProgress = doNothing,
   session = {}
 } = {}) {
   const context = repositoryContext(session, project);

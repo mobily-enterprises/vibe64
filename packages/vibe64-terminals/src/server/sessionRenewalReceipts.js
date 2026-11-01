@@ -13,7 +13,7 @@ import {
   codexAppServerRenewalSeedPreparation,
   codexAppServerTurnSettings
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
-import { effectiveVibe64AgentSettings as codexEffectiveAgentSettings } from "@local/vibe64-runtime/shared";
+import { effectiveVibe64AgentSettings } from "@local/vibe64-runtime/shared";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -463,7 +463,7 @@ function createCodexSessionRenewalPreparation({
           workdir
         } = context;
         const agentSettings = codexAppServerRenewalAgentSettings(session);
-        const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
+        const effectiveSettings = effectiveVibe64AgentSettings(agentSettings);
         const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
           runtime,
           executionRoot,
@@ -533,7 +533,7 @@ function createCodexSessionRenewalPreparation({
           workdir
         } = context;
         const agentSettings = codexAppServerRenewalAgentSettings(session);
-        const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
+        const effectiveSettings = effectiveVibe64AgentSettings(agentSettings);
         return {
           input: {
             clientMessageId,

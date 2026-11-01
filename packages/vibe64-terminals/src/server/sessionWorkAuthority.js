@@ -177,9 +177,9 @@ async function assertLocalAuthority(runCommand, context, options) {
  * changes no checkout, so it needs no source lock; a moved head is then read
  * by the ordinary update check.
  */
-async function readAuthorityBranchHeads(runCommand, context, branches, options, readRemoteHeads = null) {
+async function readAuthorityBranchHeads(runCommand, context, branches, options, readRemoteHeads) {
   const refs = [...new Set(branches.map(normalizeText).filter(Boolean))].map((branch) => `refs/heads/${branch}`);
-  const listing = typeof readRemoteHeads === "function" && githubHttpsRemote(context.remoteUrl)
+  const listing = readRemoteHeads && githubHttpsRemote(context.remoteUrl)
     ? await readRemoteHeads(context.remoteUrl, refs, { timeoutMs: options?.commandOptions?.timeout })
     : (await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, ...refs], options))
       .split("\n").filter(Boolean).map((line) => {

@@ -74,12 +74,12 @@ async function readSessionConversationContext(engine, project, sessionId, option
   let codex;
   let scope;
   if (engine === "codex") {
-    const { allowClosing = false, runtime = null, session = null } = options;
+    const { allowClosing = false, runtime, session } = options;
     codex = { allowClosing, runtime, session };
     const admissionFailure = terminalNamespaceAdmissionFailure(codexTerminalNamespace(id));
     if (admissionFailure) return admissionFailure;
   } else if (engine === "opencode") {
-    scope = options.assistantScope || null;
+    scope = options.assistantScope;
     if (scope) return scopedOpenCodeContext(id, scope, options);
   } else {
     scope = claudeConversationScope(id, options);

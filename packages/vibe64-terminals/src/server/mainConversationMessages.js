@@ -8,12 +8,13 @@ import { clearCodexAppServerContextRefreshPending } from "./codexContextRenewalS
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
 import { conversationActorMetadata, conversationReviewActorMetadata } from "./conversationActor.js";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
-import { claudeConversationError, openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./terminalShared.js";
+import { claudeConversationError, openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { codexAppServerTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { learningSessionExecutionRoot, readSessionConversationContext } from "./mainConversationContext.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -21,7 +22,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("./types.js").OpenCodeConversationEvents} OpenCodeConversationEvents */
 /** @typedef {import("./types.js").OpenCodeConversationPresentation} OpenCodeConversationPresentation */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
-/** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+/** @typedef {import("./types.js").RecordSessionGitCommandActor} RecordSessionGitCommandActor */
 
 /**
  * Main message policy runs at the existing native owner's preparation and
@@ -368,6 +369,7 @@ function createOpenCodeMainMessagePreparation({
   }
 
   async function prepareMessage(sessionId = "", input = {}, options = {}) {
+    const { onPromptRejected = doNothing } = input;
     const prepared = await prepareMessageInput(sessionId, input, options);
     if (Object.hasOwn(prepared, "value")) return prepared;
     const { context, message, messageId } = prepared;
@@ -376,8 +378,7 @@ function createOpenCodeMainMessagePreparation({
       get id() { return upstreamMessageId(messageId); },
       get threadId() { return storedUpstreamSessionId(context); },
       get workdir() { return context.workdir; },
-      // readable-check: allow optional-call - input validation: a caller's optional prompt-rejection observer
-      onPromptRejected: () => input.onPromptRejected?.()
+      onPromptRejected: () => onPromptRejected()
     }, application: {
       writeRun: (turn, state, error) => writeRun(context, turn, state, error),
       monitor: messageMonitorProjection(context),
@@ -403,7 +404,7 @@ function createOpenCodeMainMessagePreparation({
       }
       if (result.failure) {
         const { error, threadId: currentThreadId, recovery } = result.failure;
-        if (recovery) return runtimeFailure(error);
+        if (recovery) return throwVibe64OpenCodeError(error);
         if (actorFailure) {
           return actorFailure;
         }
@@ -456,6 +457,7 @@ function createOpenCodeMainMessagePreparation({
   }
 
   async function prepareDeliveredMessage(sessionId = "", input = {}, options = {}) {
+    const { onPromptSending = doNothing } = input;
     const prepared = await prepareMessage(sessionId, input, options);
     if (Object.hasOwn(prepared, "value")) return prepared;
     const { context, message, messageId } = prepared;
@@ -523,8 +525,7 @@ function createOpenCodeMainMessagePreparation({
           get model() { return openCodeModel(context.selection); },
           get prompt() { return { text: renderedPrompt }; },
           get attachments() { return input.attachments; },
-          // readable-check: allow optional-call - input validation: a caller's optional prompt-sending observer
-          beforeDispatch: threadId => input.onPromptSending?.({
+          beforeDispatch: threadId => onPromptSending({
             threadId, displayAttachments: input.displayAttachments, turnMetadata: actorMetadata
           })
         };

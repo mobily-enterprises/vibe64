@@ -102,6 +102,9 @@
  *   | "updateGoal" | "updateSessionSettings" | "uploadAttachment" | "waitForConversationTurn" | "writeTerminal"} SessionAgentProviderMethod
  */
 /** @typedef {ReturnType<typeof import("./openCodeLifecyclePreparation.js").createOpenCodeLifecyclePreparation>} OpenCodeLifecyclePreparation */
+/** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
+/** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
+/** @typedef {(sessionId: string, options?: object) => Promise<object>} ReadSessionContext the session context the temporary chats read */
 
 /** @typedef {ReturnType<typeof import("./serviceTurnPublication.js").createServiceTurnPublication>} ServiceTurnPublication */
 /** @typedef {ServiceTurnPublication["publishAgentSessionChanged"]} PublishAgentSessionChanged */

@@ -29,9 +29,9 @@ import {
 import {
   createOpenCodeSessionRenewalPreparation
 } from "./openCodeSessionRenewal.js";
+import { createOpenCodeHostPreparation } from "./openCodeHostPreparation.js";
 import {
   createOpenCodeServerProcess,
-  createOpenCodeHostPreparation,
   readOpenCodeCatalog,
   readOpenCodeZenModelIds,
   verifyOpenCodeApiKey
@@ -41,7 +41,7 @@ import {
   prepareAgentSessionCommandEnvironment
 } from "./agentCommandEnvironment.js";
 import {
-  recordSessionGitCommandActor as writeSessionGitCommandActor
+  recordSessionGitCommandActor
 } from "./sessionGitCommandActor.js";
 import {
   opencodeTerminalNamespace
@@ -107,7 +107,7 @@ function createOpenCodeSessionRegistration({
   runNativeDetachedConversation,
   readCatalogCommand = readOpenCodeCatalog,
   readZenModelsCommand = readOpenCodeZenModelIds,
-  recordGitActor = writeSessionGitCommandActor,
+  recordGitActor = recordSessionGitCommandActor,
   resolveConnection,
   verifyConnectionCommand = verifyOpenCodeApiKey
 }) {

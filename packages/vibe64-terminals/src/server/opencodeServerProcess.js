@@ -15,7 +15,6 @@ import {
 } from "@local/vibe64-execution/server";
 
 import { genesisParserEnvironment } from "@local/vibe64-genesis/server";
-import { openCodeFingerprint } from "./openCodeConversationStorage.js";
 import { throwVibe64OpenCodeError } from "./terminalShared.js";
 
 import {
@@ -30,7 +29,7 @@ import {
   readOpenCodeZenModelIds as readNativeOpenCodeZenModelIds,
   verifyOpenCodeApiKey as verifyNativeOpenCodeApiKey
 } from "@jskit-ai/assistant-core/server/opencode-process";
-import { createOpenCodeHostPreparation, requireOpenCodeConnection } from "./openCodeHostPreparation.js";
+import { createOpenCodeHostPreparation } from "./openCodeHostPreparation.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -41,9 +40,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
-/** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
 /** @typedef {typeof import("@local/vibe64-execution/server").inspectVibe64Service} InspectVibe64Service */
-/** @typedef {typeof import("./agentCommandEnvironment.js").prepareAgentSessionCommandEnvironment} PrepareAgentSessionCommandEnvironment */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
 const OPENCODE_HELPER_AGENT_ID = "vibe64-helper";
@@ -653,12 +650,9 @@ export {
   OPENCODE_EXPECTED_VERSION,
   OPENCODE_HOST,
   OPENCODE_READY_TIMEOUT_MS,
-  canonicalProviderUrl,
   createOpenCodeServerProcess,
   createOpenCodeHostPreparation,
-  openCodeFingerprint,
   throwVibe64OpenCodeError,
-  requireOpenCodeConnection,
   openCodeInlineConfig,
   readOpenCodeCatalog,
   readOpenCodeZenModelIds,

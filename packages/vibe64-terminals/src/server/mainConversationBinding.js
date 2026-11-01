@@ -10,6 +10,7 @@ import {
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { requireCompletedNativeConversationReplacement, STATE_KEY } from "./mainConversationContext.js";
 import { createCodexMainMessagePreparation } from "./mainConversationMessages.js";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -17,7 +18,6 @@ import { createCodexMainMessagePreparation } from "./mainConversationMessages.js
 /** @typedef {import("./types.js").OpenCodeConversationEvents} OpenCodeConversationEvents */
 /** @typedef {import("./types.js").OpenCodeConversationPresentation} OpenCodeConversationPresentation */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
-/** @typedef {typeof import("./sessionGitCommandActor.js").recordSessionGitCommandActor} RecordSessionGitCommandActor */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -53,8 +53,7 @@ export async function requireMainConversationAdmission(runtime, sessionId, curre
 
 function synchronousConversationHost(provider, sessionId, context, purpose, label) {
   const host = provider.prepareConversationHost(sessionId, context, purpose);
-  // readable-check: allow method-probe - data: a conversation host is prepared synchronously, never as a promise
-  if (!host || typeof host.then === "function") {
+  if (!host || host instanceof Promise) {
     throw new TypeError(`${label} requires synchronous native host facilities.`);
   }
   return host;
@@ -224,12 +223,12 @@ export async function createSessionConversationBinding(provider, sessionId, opti
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
   const binding = {
     ...conversation, namespace: host.namespace, engine,
-    prepareInput: engine === "codex" && typeof prepareInput === "function" ? async (input, current) => {
+    prepareInput: engine === "codex" && prepareInput ? async (input, current) => {
       const prepared = await prepareInput(input, current);
       return { ...prepared, actorContext: prepared.vibe64User || null };
     } : prepareInput,
     ...(host.readContextUsage ? {
-      async maximumHistoryBytes({ context, signal, input, handover, setPhase }) {
+      async maximumHistoryBytes({ context, signal, input, handover, setPhase = doNothing }) {
         /**
          * Count UTF-8 bytes conservatively instead of assuming English text's
          * usual characters/token ratio. Keep normal model settings unchanged.
@@ -252,7 +251,7 @@ export async function createSessionConversationBinding(provider, sessionId, opti
         // own automatic compaction would, before the missed history is sized.
         if (bytes < 32_768 && host.compactContext) {
           try {
-            await setPhase?.("compacting");
+            await setPhase("compacting");
             // A working turn cannot be summarised, but it compacts itself as
             // it works, so the message joins it with the history that fits.
             if (await host.compactContext({ context, signal, input }) === false) return Math.max(bytes, 1024);
@@ -263,7 +262,7 @@ export async function createSessionConversationBinding(provider, sessionId, opti
             ),
               { code: "vibe64_assistant_context_full", statusCode: 409 });
           } finally {
-            await setPhase?.("preparing");
+            await setPhase("preparing");
           }
           bytes = await room();
         }
@@ -429,8 +428,7 @@ export function createMainConversationBinding(store, sessionId, context) {
       }
     },
     conversation({ publish, checkpoint, engine = "codex" }) {
-      if (!context?.runtime || context.runtime.store !== store || context.session?.sessionId !== sessionId ||
-          typeof publish !== "function" || checkpoint !== undefined && typeof checkpoint !== "function") {
+      if (!context?.runtime || context.runtime.store !== store || context.session?.sessionId !== sessionId) {
         throw new TypeError("A main conversation requires its original runtime, session and publication facilities.");
       }
       const { runtime, session } = context;

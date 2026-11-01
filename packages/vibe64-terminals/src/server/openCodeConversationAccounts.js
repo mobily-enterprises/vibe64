@@ -7,13 +7,13 @@ import {
   openCodeHasConnection
 } from "./agent/providers/opencodeAssistantCatalog.js";
 import { openCodeError } from "./terminalShared.js";
-import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
+import { requireOpenCodeConnection } from "./openCodeHostPreparation.js";
 import { toText } from "@local/vibe64-core/shared/toText";
 import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
-/** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
+/** @typedef {import("./types.js").CreateOpenCodeServerProcess} CreateOpenCodeServerProcess */
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
 
 const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;

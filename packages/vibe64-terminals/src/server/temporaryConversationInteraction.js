@@ -25,6 +25,7 @@ import {
   teamTemporaryModesRefusal
 } from "./temporaryConversationRules.js";
 
+/** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
@@ -46,7 +47,7 @@ import {
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {ActionCatalogue | null} dependencies.actions
  * @param {SessionAttachments} dependencies.attachments
- * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.readSessionContext
+ * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {AssistantRouting} dependencies.routing
  */
@@ -90,7 +91,10 @@ function createTemporaryConversationInteraction({
       sessionId, namespace: temporaryConversationNamespace(runtime, sessionId, conversationId),
       engine: record.assistantSelection.engineId,
       async read(context, query = { limit: 12 }) {
-        const observed = requireSuccess(await chatLifecycle.readTemporaryConversation(sessionId, { conversationId }, context, query));
+        const observed = requireSuccess(await chatLifecycle.readTemporaryConversation(sessionId, { conversationId }, {
+          ...context,
+          transcriptQuery: query
+        }));
         const {
           conversationLog,
           pagination,
@@ -185,7 +189,7 @@ function createTemporaryConversationInteraction({
     });
   }
 
-  async function updateTemporaryConversation(sessionId, input = {}, options = {}) {
+  async function updateTemporaryConversation(sessionId, input, options = {}) {
     // Drafts and names save while the assistant works, without its write lock.
     const presentationOnly = input.presentation && Object.keys(input.presentation).length === 1 &&
       ["draft", "title"].includes(Object.keys(input.presentation)[0]) &&

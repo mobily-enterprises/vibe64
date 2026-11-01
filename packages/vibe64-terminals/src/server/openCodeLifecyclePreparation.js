@@ -7,11 +7,11 @@ import {
   listTerminalSessions,
   terminalNamespaceAdmissionFailure
 } from "@local/vibe64-execution/server/terminalSessions";
-import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
+import { requireOpenCodeConnection } from "./openCodeHostPreparation.js";
 import { upstreamMessageId } from "./openCodeConversationStorage.js";
 import { OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
-import { openCodeError, throwVibe64OpenCodeError as runtimeFailure,
-  openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "./terminalShared.js";
+import { openCodeError, throwVibe64OpenCodeError,
+  openCodeSessionId, opencodeTerminalNamespace } from "./terminalShared.js";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
@@ -77,11 +77,11 @@ function createOpenCodeLifecyclePreparation({
       sessionEnvironments.delete(target.key);
       await writeSessionEnvironmentRegistry();
     },
-    failure: runtimeFailure
+    failure: throwVibe64OpenCodeError
   };
 
   function prepareSessionCleanup(sessionId = "", options = {}) {
-    const id = safeSessionId(sessionId);
+    const id = openCodeSessionId(sessionId);
     return {
       sessionId: id,
       /**
@@ -113,7 +113,7 @@ function createOpenCodeLifecyclePreparation({
       key: context.key,
       get threadId() { return storedUpstreamSessionId(context); },
       writeRun: (turn, state, error) => writeRun(context, turn, state, error),
-      failure: runtimeFailure
+      failure: throwVibe64OpenCodeError
     };
   }
 
@@ -158,7 +158,7 @@ function createOpenCodeLifecyclePreparation({
                 get session() { return upstreamSessionOptions(current); }
               };
             }
-          }).catch(runtimeFailure);
+          }).catch(throwVibe64OpenCodeError);
         }, { operation: "prepare-agent-session", waitMs: 10_000 });
       },
       observation: {
@@ -195,7 +195,7 @@ function createOpenCodeLifecyclePreparation({
         monitor: messageMonitorProjection(context),
         get fallbackTurnId() { return upstreamMessageId(randomUUID()); }
       }; },
-      failure: runtimeFailure
+      failure: throwVibe64OpenCodeError
     };
   }
 

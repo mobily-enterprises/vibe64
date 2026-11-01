@@ -11,7 +11,7 @@ import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironm
 import { openCodeFingerprint, recordOpenCodeSessionIdentity } from "./openCodeConversationStorage.js";
 import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
-import { normalizePlainObject as record } from "@local/vibe64-core/server/serverResponses";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -22,7 +22,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
 /** @typedef {import("./types.js").CodexGitCommandService} CodexGitCommandService */
-/** @typedef {typeof import("./opencodeServerProcess.js").createOpenCodeServerProcess} CreateOpenCodeServerProcess */
+/** @typedef {import("./types.js").CreateOpenCodeServerProcess} CreateOpenCodeServerProcess */
 /** @typedef {typeof import("./agentCommandEnvironment.js").prepareAgentSessionCommandEnvironment} PrepareAgentSessionCommandEnvironment */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 
@@ -34,7 +34,7 @@ function connectionIdentity(connection = {}, apiKey = "") {
 }
 
 function requireOpenCodeConnection(value = null, modelProviderId = "") {
-  const connection = record(value);
+  const connection = normalizeObject(value);
   const apiKey = String(connection.apiKey || connection.key || "");
   const actualProviderId = toText(
     connection.modelProviderId || connection.providerId || connection.id || modelProviderId

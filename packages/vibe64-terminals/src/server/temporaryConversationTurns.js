@@ -15,7 +15,9 @@ import {
   MAIN_CONVERSATION_PRESENTATION
 } from "./mainConversationBinding.js";
 import { requireSuccess, routingRequest, presentation } from "./temporaryConversationRules.js";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
+/** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
@@ -33,7 +35,7 @@ import { requireSuccess, routingRequest, presentation } from "./temporaryConvers
  * @param {SessionAttachments} dependencies.attachments
  * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>, lock: object) => Promise<object>} dependencies.runAgentWrite
  * @param {number} dependencies.routingWaitMs
- * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.readSessionContext
+ * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareAgentSkills
  * @param {string} dependencies.systemRoot
  * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection
@@ -108,14 +110,14 @@ function createTemporaryConversationTurns({
     else temporarySaves.delete(sessionId);
   }
   function savingTemporaryOutput(sessionId, conversationId, ctx) {
-    const forward = ctx.onEvent;
+    const { onEvent = doNothing } = ctx;
     return {
       ...ctx,
       onEvent(event) {
         if (event?.type === "message" && event.message?.complete !== false && String(event.message?.text || "").trim()) {
           scheduleTemporarySave(sessionId, conversationId, ctx.runtime);
         }
-        return forward?.(event);
+        return onEvent(event);
       }
     };
   }

@@ -7,9 +7,10 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { openCodeError } from "./terminalShared.js";
-import { openCodeFingerprint as fingerprint } from "./opencodeServerProcess.js";
+import { openCodeFingerprint } from "./openCodeConversationStorage.js";
 import { conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
@@ -150,7 +151,7 @@ function createOpenCodeConversationEvents({
       reason = "opencode-provider-failure"
     } = options;
     const written = await context.runtime.store.writeConversationSystemMessage(context.sessionId, {
-      messageId: `${reason}-${fingerprint(
+      messageId: `${reason}-${openCodeFingerprint(
         context.sessionId,
         turn.threadId,
         turn.id,
@@ -233,17 +234,21 @@ function createOpenCodeConversationEvents({
     return written;
   }
 
-  function observationProjection(context = {}, onEvent = null, publish = true) {
+  /**
+   * The observation a turn's event stream reports to: the caller's onEvent, plus Main progress when publish is set.
+   * @param {object} context
+   * @param {(event: object) => unknown} onEvent
+   * @param {boolean} publish
+   */
+  function projectObservation(context, onEvent, publish) {
     return {
       readError: openCodeMessageError,
       async onEvent(summary, target) {
-        if (typeof onEvent === "function") {
-          await onEvent({
-            ...summary,
-            threadId: target.upstreamSessionId,
-            turnId: turns.get(context.key)?.id || ""
-          });
-        }
+        await onEvent({
+          ...summary,
+          threadId: target.upstreamSessionId,
+          turnId: turns.get(context.key)?.id || ""
+        });
         if (publish) publishOpenCodeProgress(context.sessionId, summary);
       },
       failure(error) {
@@ -251,6 +256,24 @@ function createOpenCodeConversationEvents({
       },
       closed() { dropOpenCodeProgress(context.sessionId); }
     };
+  }
+
+  /**
+   * The observation of a Main conversation turn, which also publishes its progress.
+   * @param {object} context
+   * @param {(event: object) => unknown} [onEvent]
+   */
+  function observationProjection(context, onEvent = doNothing) {
+    return projectObservation(context, onEvent, true);
+  }
+
+  /**
+   * The observation of a detached chat turn, which publishes no Main progress.
+   * @param {object} context
+   * @param {(event: object) => unknown} onEvent
+   */
+  function detachedObservationProjection(context, onEvent) {
+    return projectObservation(context, onEvent, false);
   }
 
   function messageMonitorProjection(context) {
@@ -351,7 +374,7 @@ function createOpenCodeConversationEvents({
 
   return Object.freeze({
     writeRun,
-    observationProjection,
+    detachedObservationProjection,
     messageMonitorProjection
   });
 }

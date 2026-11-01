@@ -15,6 +15,7 @@ import {
   routingRequest
 } from "./temporaryConversationRules.js";
 
+/** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
@@ -28,7 +29,7 @@ import {
  * @param {TemporaryConversationRecords} dependencies.chatRecords
  * @param {TemporaryConversationTurns} dependencies.chatTurns
  * @param {ConversationRuntime} dependencies.conversationRuntime
- * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.readSessionContext
+ * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {number} dependencies.temporaryCompletionAttempts
  * @param {number} dependencies.temporaryCompletionRetryMs
@@ -44,7 +45,7 @@ function createTemporaryConversationLifecycle({
   temporaryCompletionRetryMs,
   routing
 }) {
-  async function createTemporaryConversation(sessionId, input = {}, options = {}) {
+  async function createTemporaryConversation(sessionId, input, options = {}) {
     let created = false;
     const result = await chatTurns.writeSnapshot(sessionId, options, async (ctx) => {
       const conversationId = input.conversationId || randomUUID();
@@ -129,19 +130,28 @@ function createTemporaryConversationLifecycle({
     };
   }
 
-  async function readTemporaryConversation(sessionId, input, options = {}, transcriptQuery) {
+  /**
+   * A temporary chat as its views show it, or the requested page of its messages. `options.transcriptQuery` narrows
+   * the transcript the conversation runtime reads.
+   * @param {string} sessionId
+   * @param {object} input
+   * @param {object} [options]
+   * @param {object} [options.transcriptQuery]
+   */
+  async function readTemporaryConversation(sessionId, input, options = {}) {
+    const { transcriptQuery, ...context } = options;
     let deferred = false;
     try {
-      await routing.reconcile(sessionId, { ...options, conversationId: input.conversationId, lockWaitMs: 0 });
+      await routing.reconcile(sessionId, { ...context, conversationId: input.conversationId, lockWaitMs: 0 });
     } catch (error) {
       if (error.code !== "vibe64_agent_write_mode_busy") throw error;
       deferred = true;
     }
     let result = deferred ? { code: "vibe64_agent_write_mode_busy" }
-      : await chatTurns.writeSnapshot(sessionId, { ...options, lockWaitMs: 0 }, async (ctx) =>
+      : await chatTurns.writeSnapshot(sessionId, { ...context, lockWaitMs: 0 }, async (ctx) =>
         chatTurns.displaySnapshot(ctx, await chatRecords.recordFor(ctx, input.conversationId), transcriptQuery));
     if (result?.code === "vibe64_agent_write_mode_busy") {
-      const ctx = await readSessionContext(sessionId, options);
+      const ctx = await readSessionContext(sessionId, context);
       result = await chatTurns.savedSnapshot(ctx, await chatRecords.recordFor(ctx, input.conversationId), transcriptQuery);
     }
     if (result.ok === false || (!input.beforeMessageId && input.messageLimit === undefined)) return result;
@@ -155,7 +165,7 @@ function createTemporaryConversationLifecycle({
     return { ...result, messages: messages.slice(start, end), earlierMessages: start > 0 };
   }
 
-  async function stopTemporaryConversation(sessionId, input = {}, options = {}) {
+  async function stopTemporaryConversation(sessionId, input, options = {}) {
     await routing.cancel(sessionId, { ...options, conversationId: input.conversationId });
     return chatTurns.write(sessionId, options, async (ctx) => {
       const record = await chatRecords.recordFor(ctx, input.conversationId);

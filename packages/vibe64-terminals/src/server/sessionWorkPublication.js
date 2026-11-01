@@ -25,6 +25,7 @@ import {
   readContributionHead
 } from "./sessionWorkAuthority.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 async function createSaveCommit(runCommand, context, {
   canonicalCommit,
@@ -53,6 +54,7 @@ async function createSaveCommit(runCommand, context, {
 }
 
 async function publishSaveCommit(runCommand, context, { canonicalCommit, contributionAuthority, saveCommit }, options) {
+  const { onPublicationAttempt = doNothing } = options;
   await assertConnectedSubmissionsIntegrated(runCommand, context, options);
   if (context.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
     const current = await assertLocalAuthority(runCommand, context, options);
@@ -67,8 +69,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
       cwd: context.standaloneSourceRoot
     });
     await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots || [], options);
-    // readable-check: allow optional-call - input validation: a caller's optional publication-attempt observer
-    options.onPublicationAttempt?.();
+    onPublicationAttempt();
     await git(runCommand, context, ["merge", "--ff-only", saveCommit], {
       ...options,
       cwd: context.standaloneSourceRoot
@@ -105,8 +106,7 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
   // This is a final read, not a lock on receiving repositories. It catches
   // changes during preparation without claiming exclusion after this check.
   await assertConnectedWorkSnapshotsUnchanged(runCommand, options.connectedWorkSnapshots || [], options);
-  // readable-check: allow optional-call - input validation: a caller's optional publication-attempt observer
-  options.onPublicationAttempt?.();
+  onPublicationAttempt();
   try {
     pushed = await git(runCommand, context, pushArgs, { ...options, required: false });
   } catch (error) {

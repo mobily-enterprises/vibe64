@@ -3,6 +3,7 @@ import { createTemporaryConversationTurns } from "./temporaryConversationTurns.j
 import { createTemporaryConversationLifecycle } from "./temporaryConversationLifecycle.js";
 import { createTemporaryConversationInteraction } from "./temporaryConversationInteraction.js";
 
+/** @typedef {import("./types.js").ReadSessionContext} ReadSessionContext */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("./types.js").SessionAttachments} SessionAttachments */
@@ -21,7 +22,7 @@ import { createTemporaryConversationInteraction } from "./temporaryConversationI
  * @param {SessionAttachments} dependencies.attachments
  * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>, lock: object) => Promise<object>} dependencies.runAgentWrite
  * @param {number} dependencies.routingWaitMs
- * @param {(sessionId: string, options?: object) => Promise<object>} dependencies.readSessionContext
+ * @param {ReadSessionContext} dependencies.readSessionContext
  * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareAgentSkills
  * @param {string} dependencies.systemRoot
  * @param {(sessionId: string, selection: object, context: object) => Promise<unknown>} dependencies.prepareSelection

@@ -12,9 +12,9 @@ import { vibe64Result } from "./terminalShared.js";
 import { sessionClosingReason, sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import {
-  cleanupCodexAttachments as cleanupUploads,
+  cleanupCodexAttachments,
   renewCodexAttachments,
-  storeCodexAttachment as storeUpload,
+  storeCodexAttachment,
   withUploadedAgentAttachment
 } from "./codexAttachments.js";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
@@ -95,7 +95,7 @@ function createSessionAttachments({ project, env = process.env }) {
 
   async function uploadAttachment(context, input) {
     const { executionRoot, runtime, sessionId } = await attachmentContext(context);
-    return storeUpload({
+    return storeCodexAttachment({
       executionRoot,
       sessionId,
       input,
@@ -126,7 +126,7 @@ function createSessionAttachments({ project, env = process.env }) {
         error: "Sent attachments stay with the conversation."
       };
     }
-    await cleanupUploads(executionRoot, sessionId, input.attachmentId, { env });
+    await cleanupCodexAttachments(executionRoot, sessionId, input.attachmentId, { env });
     return { ok: true, attachmentId: input.attachmentId };
   }
 
@@ -174,7 +174,7 @@ function createSessionAttachments({ project, env = process.env }) {
         const saved = await readSavedAttachment(paths, entry.name);
         if (saved?.conversationId !== conversationId) continue;
         // Retain the ownership record until uploaded-file cleanup also succeeds.
-        await cleanupUploads(executionRoot, sessionId, entry.name, { env });
+        await cleanupCodexAttachments(executionRoot, sessionId, entry.name, { env });
         await rm(attachmentDirectory(paths, entry.name), { recursive: true, force: true });
       }
     });
