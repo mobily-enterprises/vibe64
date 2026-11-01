@@ -1,4 +1,5 @@
 import { attachDirectRequestActionExecutor } from "@jskit-ai/kernel/server/http";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../shared/focusRealtime.js";
 import { ACTION_COLLEAGUE_FOCUS_UPDATE } from "./colleagueActions.js";
 
@@ -34,7 +35,7 @@ function registerColleagueFocus({
       if (typeof acknowledge !== "function" || closed) return;
       try {
         if (typeof input?.clientId !== "string" || !input.clientId || input.clientId.length > 200) {
-          throw Object.assign(new Error("A browser client identity is required."), { statusCode: 400 });
+          throw new AppError(400, "A browser client identity is required.");
         }
         const binding = bindings.get(input.clientId) || { owner: { connected: true }, revision: 0 };
         bindings.set(input.clientId, binding);

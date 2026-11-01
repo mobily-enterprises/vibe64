@@ -12,6 +12,12 @@ import { projectNoReply, releaseObserver } from "./colleaguePresentation.js";
 /** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
 /** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
 
+// A plain error, not a refusal: the API answers this 503 with its generic server-error text.
+const invalidHistory = () => Object.assign(
+  new Error("Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry."),
+  { code: "colleague_history_invalid", statusCode: 503 }
+);
+
 /**
  * A person's Colleague threads: which thread a request belongs to, loading its
  * saved record, showing it and hiding the one it replaces, releasing a closed
@@ -143,11 +149,7 @@ function createColleagueThreads({
     try { saved = JSON.parse(await readFile(file, "utf8")); }
     catch (error) {
       if (error.code === "ENOENT") saved = undefined;
-      else if (error instanceof SyntaxError) throw failure(
-        "Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.",
-        "colleague_history_invalid",
-        503
-      );
+      else if (error instanceof SyntaxError) throw invalidHistory();
       else throw error;
     }
     if (saved && saved.schemaVersion !== 3) {
@@ -167,11 +169,7 @@ function createColleagueThreads({
     };
     try { validateColleagueConversationRecord(record, key); }
     catch {
-      throw failure(
-        "Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.",
-        "colleague_history_invalid",
-        503
-      );
+      throw invalidHistory();
     }
     record.watches ||= [];
     record.observations ||= [];

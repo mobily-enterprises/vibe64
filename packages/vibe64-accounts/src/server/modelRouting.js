@@ -4,6 +4,7 @@ import {
 } from "@local/vibe64-core/server/assistantRoutingStore";
 import { ASSISTANT_SETUP_ROLES, assistantSetupRoleValue } from "@local/vibe64-runtime/shared/assistantRouting";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 
 import { accountsResult } from "./accountRecords.js";
 
@@ -118,13 +119,11 @@ function createModelRouting({
    */
   async function routingDraft(input) {
     const saved = await routingStore().read();
-    if (input.revision !== saved.revision) throw Object.assign(new Error(
-      "Models changed in another tab. Reload and review the current choices."
-    ),
-      {
-      code: "vibe64_assistant_routing_stale",
-      statusCode: 409
-    });
+    if (input.revision !== saved.revision) {
+      throw new AppError(409, "Models changed in another tab. Reload and review the current choices.", {
+        code: "vibe64_assistant_routing_stale"
+      });
+    }
     const configuration = { schemaVersion: 5, revision: saved.revision, owner: { ...saved.owner }, nonOwner: { ...saved.nonOwner } };
     for (const setup of Object.keys(ASSISTANT_SETUP_ROLES)) {
       const changes = input[setup];

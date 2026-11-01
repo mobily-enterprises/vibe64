@@ -155,8 +155,9 @@ function createColleagueRecords({
         const input = discovered && payload.input && typeof payload.input === "object" && !Array.isArray(payload.input)
           ? payload.input : payload;
         const focus = context.colleague?.focus || {};
+        // The action's project: the one its input names, else the operation context's (the focused project).
         const target = Object.fromEntries([
-          ["projectSlug", receiptText(input.projectSlug || context.projectSlug || focus.projectSlug, 200)],
+          ["projectSlug", receiptText(input.projectSlug || context.projectSlug, 200)],
           ["sessionId", receiptText(input.sessionId || focus.sessionId, 200)],
           ["conversationId", receiptText(input.conversationId || focus.conversationId, 200)]
         ].filter(([, value]) => value));
