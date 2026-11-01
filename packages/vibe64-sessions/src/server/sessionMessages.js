@@ -4,8 +4,8 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createMainChatApprovals } from "./mainChatApprovals.js";
 import { sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -15,7 +15,7 @@ import { trustedAssistantUser } from "./trustedAssistantUser.js";
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 
 function messageText(input = {}) {
-  return text(input.message);
+  return normalizeText(input.message);
 }
 
 /**
@@ -63,7 +63,7 @@ function createSessionMessages({
         return {
           ...await mainChatApprovals.enqueue(sessionId, {
             message: request,
-            messageId: text(input.messageId),
+            messageId: normalizeText(input.messageId),
             attachmentIds: input.attachmentIds || []
           }, { vibe64User }),
           sessionId
@@ -72,7 +72,7 @@ function createSessionMessages({
       const startedAt = Date.now();
       await setupRunner.wait(sessionId);
       const runtime = await project.createRuntime({ inspectSource: false });
-      const messageId = text(input.messageId) || crypto.randomUUID();
+      const messageId = normalizeText(input.messageId) || crypto.randomUUID();
       vibe64SessionDebugLog("server.sessions.sendAgentMessage.dispatching", {
         durationMs: Date.now() - startedAt,
         messageId,
@@ -92,7 +92,7 @@ function createSessionMessages({
         });
         const accepted = result?.ok !== false;
         await publishSessionChanged(sessionId, {
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: accepted
             ? "session-agent-message-accepted"
             : "session-agent-message-failed",
@@ -145,7 +145,7 @@ function createSessionMessages({
         });
         if (result?.ok !== false) {
           await publishSessionChanged(sessionId, {
-            originId: text(input.originId),
+            originId: normalizeText(input.originId),
             reason: "session-agent-turn-interrupted"
           });
         }

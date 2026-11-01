@@ -6,7 +6,7 @@ import { VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -108,9 +108,9 @@ function createOpenCodeConversationPresentation({
       expectedConnectionIdentity: helper.connectionIdentity,
       signal,
       async onEvent(event) {
-        if (event.type === "thread") helper.conversationId = normalizeText(event.threadId);
-        else if (event.type === "turn") helper.runId = normalizeText(event.turnId);
-        else if (event.type === "helper-execution") helper.executionId = normalizeText(event.executionId);
+        if (event.type === "thread") helper.conversationId = toText(event.threadId);
+        else if (event.type === "turn") helper.runId = toText(event.turnId);
+        else if (event.type === "helper-execution") helper.executionId = toText(event.executionId);
         else return;
         await retain();
       }
@@ -139,7 +139,7 @@ function createOpenCodeConversationPresentation({
       failure = error;
     }
     if (failure) throw failure;
-    return normalizeText(result.text);
+    return toText(result.text);
   }
 
   async function cleanupReasoningSummary(context) {
@@ -282,7 +282,7 @@ function createOpenCodeConversationPresentation({
       state.completion = state.completion.then(async () => {
         if (state.closed || entry.written) return;
         let headline = "";
-        if (normalizeText(entry.value).length >= OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS) {
+        if (toText(entry.value).length >= OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS) {
           try {
             headline = openCodeReasoningHeadline(await requestReasoningSummary(state, entry.value));
           } catch (error) {

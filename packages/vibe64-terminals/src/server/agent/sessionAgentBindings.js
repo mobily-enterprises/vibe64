@@ -1,11 +1,11 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE } from "@local/vibe64-runtime/shared";
 import { bindingKey, providerBindingConflictError, sessionAgentProviderId, sessionAssistantSelection } from "./sessionAgentRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
 
 function providerNotImplementedError(providerId = "") {
-  const id = normalizeText(providerId);
+  const id = toText(providerId);
   const error = new Error(`Assistant provider is not implemented: ${id || "(missing)"}.`);
   error.code = VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE;
   error.providerId = id;
@@ -37,15 +37,15 @@ function createSessionAgentBindings({ state }) {
   }
 
   function bindSession(sessionId = "", options = {}) {
-    const id = normalizeText(sessionId);
+    const id = toText(sessionId);
     if (!id) {
       throw new TypeError("Session agent operations require a session id.");
     }
     const key = bindingKey(id, options);
     const currentProviderId = bindings.get(key);
     const selection = sessionAssistantSelection(options);
-    const durableProviderId = normalizeText(selection?.engineId);
-    const explicitEngineId = normalizeText(options.engineId);
+    const durableProviderId = toText(selection?.engineId);
+    const explicitEngineId = toText(options.engineId);
     if (selection && explicitEngineId && selection.engineId !== explicitEngineId) {
       throw providerBindingConflictError(id, selection.engineId, explicitEngineId);
     }

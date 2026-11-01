@@ -1,4 +1,3 @@
-import { normalizeAgentText } from "../shared/normalizeAgentText.js";
 
 const AGENT_PROVIDER_IDS = Object.freeze({
   CODEX_APP_SERVER: "codex_app_server"
@@ -13,6 +12,5 @@ function textAgentInput(text = "") {
 
 export {
   AGENT_PROVIDER_IDS,
-  normalizeAgentText,
   textAgentInput
 };

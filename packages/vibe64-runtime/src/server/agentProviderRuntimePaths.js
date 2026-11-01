@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
-import { normalizeAgentText } from "./agentProviders.js";
 import { isPlainObject } from "./isPlainObject.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /**
  * Existing runtime path policy moved without change so the offline upgrade
@@ -14,7 +14,7 @@ function hasOwn(object = {}, property = "") {
 function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
   const primaryEnv = isPlainObject(env) ? env : {};
   const fallbackEnv = isPlainObject(hostEnv) ? hostEnv : {};
-  return normalizeAgentText(hasOwn(primaryEnv, name) ? primaryEnv[name] : fallbackEnv[name]);
+  return toText(hasOwn(primaryEnv, name) ? primaryEnv[name] : fallbackEnv[name]);
 }
 
 function processUid() {
@@ -34,7 +34,7 @@ function codexAppServerRuntimeBaseDir({
   if (xdgRuntimeDir && path.isAbsolute(xdgRuntimeDir)) {
     return path.join(xdgRuntimeDir, "vibe64", "agent-providers");
   }
-  const homeDir = normalizeAgentText(os.homedir());
+  const homeDir = toText(os.homedir());
   if (homeDir && path.isAbsolute(homeDir)) {
     return path.join(homeDir, ".cache", "vibe64", "agent-providers");
   }

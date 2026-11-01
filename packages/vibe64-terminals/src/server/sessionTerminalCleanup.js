@@ -5,7 +5,7 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
-import { record } from "./record.js";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
@@ -14,10 +14,10 @@ function renewalPredecessorTerminalCleanupContext(session = {}, options = {}) {
     renewalId = "",
     runtime = null
   } = options;
-  const sessionRecord = record(session);
+  const sessionRecord = normalizeObject(session);
   const normalizedRenewalId = String(renewalId || "").trim();
   const sessionId = String(sessionRecord.sessionId || "").trim();
-  const metadata = record(sessionRecord.metadata);
+  const metadata = normalizeObject(sessionRecord.metadata);
   const status = String(sessionRecord.status || "").trim();
   const quiescedId = String(metadata.renewal_quiesced_id || "").trim();
   const isActive = status === VIBE64_SESSION_STATUS.ACTIVE;
@@ -54,10 +54,10 @@ function renewalSuccessorTerminalCleanupContext(session = {}, options = {}) {
     renewalId = "",
     runtime = null
   } = options;
-  const sessionRecord = record(session);
+  const sessionRecord = normalizeObject(session);
   const normalizedRenewalId = String(renewalId || "").trim();
   const sessionId = String(sessionRecord.sessionId || "").trim();
-  const metadata = record(sessionRecord.metadata);
+  const metadata = normalizeObject(sessionRecord.metadata);
   if (
     !runtime ||
     !sessionId ||

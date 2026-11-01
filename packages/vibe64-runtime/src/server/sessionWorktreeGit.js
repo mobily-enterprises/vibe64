@@ -1,12 +1,13 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 
-import { normalizeText, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command, writeGitWorktreeTree } from "@local/vibe64-execution/server";
 
 import { assertRenewalId as assertSessionRenewalId } from "./sessionRenewalIds.js";
 import { runSourceCommand } from "./sourceCommand.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -49,13 +50,13 @@ async function runGit(cwd, args = [], options = {}) {
 }
 
 function metadataValue(session = {}, name = "") {
-  return normalizeText(session.metadata?.[name]);
+  return toText(session.metadata?.[name]);
 }
 
 function recoverySessionName(session = {}) {
-  return normalizeText(session.sessionName) ||
+  return toText(session.sessionName) ||
     metadataValue(session, "source_recovery_session_name") ||
-    normalizeText(session.sessionId);
+    toText(session.sessionId);
 }
 
 function recoveryWorktreePath(session = {}) {
@@ -66,7 +67,7 @@ function recoveryWorktreePath(session = {}) {
 function parseNullSeparatedPaths(value = "") {
   return String(value || "")
     .split("\0")
-    .map((entry) => normalizeText(entry).replaceAll("\\", "/").replace(/^\.\//u, ""))
+    .map((entry) => toText(entry).replaceAll("\\", "/").replace(/^\.\//u, ""))
     .filter(Boolean);
 }
 
@@ -85,7 +86,7 @@ async function readWorktreeGitFact(worktreePath, args = [], fallback = "") {
   const result = await runGit(worktreePath, args, {
     timeout: 15_000
   });
-  return result.ok ? normalizeText(result.stdout || result.output) : fallback;
+  return result.ok ? toText(result.stdout || result.output) : fallback;
 }
 
 function sameResolvedPath(left = "", right = "") {
@@ -96,7 +97,7 @@ function renewalSourceStagePath(session = {}, renewalId = "") {
   const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
     throw vibe64Error(
-      `Session ${normalizeText(session.sessionId) || "(unknown)"} has no managed source to stage for renewal.`,
+      `Session ${toText(session.sessionId) || "(unknown)"} has no managed source to stage for renewal.`,
       "vibe64_session_source_required"
     );
   }
@@ -114,7 +115,7 @@ async function isExactGitWorktree(worktreePath = "") {
   const result = await runGit(worktreePath, ["rev-parse", "--show-toplevel"], {
     timeout: 15_000
   });
-  return result.ok && sameResolvedPath(normalizeText(result.stdout || result.output), worktreePath);
+  return result.ok && sameResolvedPath(toText(result.stdout || result.output), worktreePath);
 }
 
 async function inspectWorktreeDirty(worktreePath = "") {
@@ -127,7 +128,7 @@ async function inspectWorktreeDirty(worktreePath = "") {
     });
   } catch (error) {
     throw vibe64Error(
-      `Cannot inspect session worktree before archive: ${normalizeText(error?.message)}`,
+      `Cannot inspect session worktree before archive: ${toText(error?.message)}`,
       "vibe64_worktree_archive_status_failed"
     );
   }
@@ -152,8 +153,8 @@ async function inspectWorktreeDirty(worktreePath = "") {
       "vibe64_worktree_archive_status_failed"
     );
   }
-  return Boolean(normalizeText(statusResult.stdout)) ||
-    normalizeText(worktreeTree) !== normalizeText(headTreeResult.stdout);
+  return Boolean(toText(statusResult.stdout)) ||
+    toText(worktreeTree) !== toText(headTreeResult.stdout);
 }
 
 function sessionOwnsWorktreePath(session = {}, worktreePath = "") {

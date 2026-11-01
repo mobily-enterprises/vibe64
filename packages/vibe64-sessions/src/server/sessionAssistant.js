@@ -17,10 +17,9 @@ import {
   assistantRoutingStatusIsPending,
   isAssistantRoutingOwner
 } from "@local/vibe64-runtime/shared/assistantRouting";
-import { record } from "./record.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -30,24 +29,24 @@ import { trustedAssistantUser } from "./trustedAssistantUser.js";
 
 function publicAssistantAccess(access = {}) {
   return {
-    accessLabel: text(access.accessLabel) || "Unavailable",
+    accessLabel: normalizeText(access.accessLabel) || "Unavailable",
     available: access.available === true,
     canUse: access.canUse === true,
     nativeCanUse: access.nativeCanUse === true,
     canUseAny: access.canUseAny === true,
-    currentMode: text(access.currentMode),
+    currentMode: normalizeText(access.currentMode),
     steering: access.steering === true,
     // Chat needs each decision and effective selection, not duplicated server
     // dispatch plans. Routing still resolves those afresh when work is sent.
     purposes: JSON.parse(JSON.stringify(access.purposes || {}, (key, value) =>
       ["connectionIdentity", "routerConnectionIdentity", "configuredSelection",
         "seniorJuniorPair", "executionProfileRequest", "router"].includes(key) ? undefined : value)),
-    endpointCode: text(access.endpointCode),
-    engineId: text(access.engineId),
-    modelProviderId: text(access.modelProviderId),
+    endpointCode: normalizeText(access.endpointCode),
+    engineId: normalizeText(access.engineId),
+    modelProviderId: normalizeText(access.modelProviderId),
     ok: true,
     ownerOnly: access.ownerOnly === true,
-    transportId: text(access.transportId)
+    transportId: normalizeText(access.transportId)
   };
 }
 
@@ -72,7 +71,7 @@ function createSessionAssistant({
    * @param {object | null} vibe64User
    */
   async function resolveAssistantSelection(input, vibe64User) {
-    return defineVibe64AssistantSelection(await terminals.resolveAssistantSelection(record(input), { vibe64User }));
+    return defineVibe64AssistantSelection(await terminals.resolveAssistantSelection(normalizeObject(input), { vibe64User }));
   }
 
   /**
@@ -134,8 +133,8 @@ function createSessionAssistant({
   async function updateAssistantModelAccess(input) {
     return sessionResult(async () => {
       return terminals.updateAssistantModelAccess({
-        engineId: text(input.engineId),
-        modelProviderId: text(input.modelProviderId),
+        engineId: normalizeText(input.engineId),
+        modelProviderId: normalizeText(input.modelProviderId),
         unlocked: input.unlocked === true
       }, {
         vibe64User: trustedAssistantUser(input)
@@ -213,8 +212,8 @@ function createSessionAssistant({
               ? input.assistantRouting.override : input.assistantSelection;
             if (!requestedSelection) throw new Error("Choose an assistant or a chat mode.");
             resolved = await resolveAssistantSelection({
-              ...record(requestedSelection),
-              engineId: text(requestedSelection.engineId) || current.engineId
+              ...normalizeObject(requestedSelection),
+              engineId: normalizeText(requestedSelection.engineId) || current.engineId
             }, vibe64User);
           }
           await terminals.requireAssistantSelectionAccess(resolved, {
@@ -273,7 +272,7 @@ function createSessionAssistant({
         if (exclusive.value?.ok === false) return exclusive.value;
         await publishSessionChanged(sessionId, {
           operation: "updated",
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: "session-assistant-selection-updated",
           session: exclusive.value.session
         });

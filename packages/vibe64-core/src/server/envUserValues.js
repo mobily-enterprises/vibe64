@@ -3,18 +3,14 @@ import path from "node:path";
 
 import { serializeByKey, writeJsonFileAtomic } from "./atomicFile.js";
 
-import {
-  isMissingPathError,
-  isPlainObject,
-  normalizeText,
-  vibe64Error
-} from "./core.js";
+import { isMissingPathError, isPlainObject, vibe64Error } from "./core.js";
 import {
   RUNTIME_CONFIG_OWNERS,
   normalizeRuntimeConfigKey,
   normalizeRuntimeConfigRecord,
   normalizeRuntimeConfigScope
 } from "./runtimeConfig.js";
+import { toText } from "../shared/toText.js";
 
 const ENV_USER_VALUES_DIR = "env";
 const ENV_USER_VALUES_FILE = "user-values.json";
@@ -24,7 +20,7 @@ const ENV_USER_VALUE_SOURCE = "user";
 const envUserValuesUpdates = new Map();
 
 function envUserValuesPath(projectRuntimeRoot = "") {
-  const root = normalizeText(projectRuntimeRoot);
+  const root = toText(projectRuntimeRoot);
   if (!root) {
     throw vibe64Error(
       "Env user values require projectRuntimeRoot.",

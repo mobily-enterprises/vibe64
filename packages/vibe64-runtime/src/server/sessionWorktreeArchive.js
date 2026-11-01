@@ -1,11 +1,7 @@
 import { rename, rm } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  normalizeText,
-  pathExists,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 import { assertRenewalId as assertSessionRenewalId } from "./sessionRenewalIds.js";
@@ -29,6 +25,7 @@ import {
   saveSessionSourceRecovery,
   validateRecoveryBundle
 } from "./sessionSourceRecovery.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -92,15 +89,15 @@ async function prepareRenewalSessionSource({
   ]);
   if (sourceExists && stageExists) {
     throw vibe64Error(
-      `Renewal source exists in both active and staged locations: ${normalizeText(session.sessionId)}`,
+      `Renewal source exists in both active and staged locations: ${toText(session.sessionId)}`,
       "vibe64_session_renewal_source_stage_conflict"
     );
   }
   if (!sourceExists) {
     throw vibe64Error(
       stageExists
-        ? `Renewal source was staged before its durable commit: ${normalizeText(session.sessionId)}`
-        : `Renewal source is missing from its active location: ${normalizeText(session.sessionId)}`,
+        ? `Renewal source was staged before its durable commit: ${toText(session.sessionId)}`
+        : `Renewal source is missing from its active location: ${toText(session.sessionId)}`,
       stageExists
         ? "vibe64_session_renewal_source_prematurely_staged"
         : "vibe64_session_renewal_source_missing"
@@ -139,7 +136,7 @@ async function prepareRenewalSessionSource({
       changed: false,
       prepared: true,
       renewalId: assertSessionRenewalId(renewalId),
-      sessionId: normalizeText(session.sessionId),
+      sessionId: toText(session.sessionId),
       sourcePath,
       stagePath,
       staged: false
@@ -173,7 +170,7 @@ async function prepareRenewalSessionSource({
     changed: true,
     prepared: true,
     renewalId: assertSessionRenewalId(renewalId),
-    sessionId: normalizeText(session.sessionId),
+    sessionId: toText(session.sessionId),
     sourcePath,
     stagePath,
     staged: false
@@ -192,13 +189,13 @@ async function stagePreparedRenewalSessionSource({
   ]);
   if (sourceExists && stageExists) {
     throw vibe64Error(
-      `Renewal source exists in both active and staged locations: ${normalizeText(session.sessionId)}`,
+      `Renewal source exists in both active and staged locations: ${toText(session.sessionId)}`,
       "vibe64_session_renewal_source_stage_conflict"
     );
   }
   if (!sourceExists && !stageExists) {
     throw vibe64Error(
-      `Renewal source is missing from both active and staged locations: ${normalizeText(session.sessionId)}`,
+      `Renewal source is missing from both active and staged locations: ${toText(session.sessionId)}`,
       "vibe64_session_renewal_source_missing"
     );
   }
@@ -233,7 +230,7 @@ async function stagePreparedRenewalSessionSource({
   return {
     changed: sourceExists,
     renewalId: assertSessionRenewalId(renewalId),
-    sessionId: normalizeText(session.sessionId),
+    sessionId: toText(session.sessionId),
     sourcePath,
     stagePath,
     staged: true
@@ -252,13 +249,13 @@ async function restoreRenewalSessionSourceStage({
   ]);
   if (sourceExists && stageExists) {
     throw vibe64Error(
-      `Renewal source exists in both active and staged locations: ${normalizeText(session.sessionId)}`,
+      `Renewal source exists in both active and staged locations: ${toText(session.sessionId)}`,
       "vibe64_session_renewal_source_stage_conflict"
     );
   }
   if (!sourceExists && !stageExists) {
     throw vibe64Error(
-      `Renewal source is missing from both active and staged locations: ${normalizeText(session.sessionId)}`,
+      `Renewal source is missing from both active and staged locations: ${toText(session.sessionId)}`,
       "vibe64_session_renewal_source_missing"
     );
   }
@@ -288,7 +285,7 @@ async function restoreRenewalSessionSourceStage({
     changed: stageExists,
     renewalId: assertSessionRenewalId(renewalId),
     restored: true,
-    sessionId: normalizeText(session.sessionId),
+    sessionId: toText(session.sessionId),
     sourcePath,
     stagePath
   };
@@ -300,12 +297,12 @@ async function commitRenewalSessionSourceStage({
 } = {}) {
   if (
     session.archived !== true ||
-    normalizeText(session.archiveStatus || session.status) !== "archived" ||
-    !normalizeText(session.archivePath) ||
-    !normalizeText(session.artifactsRoot)
+    toText(session.archiveStatus || session.status) !== "archived" ||
+    !toText(session.archivePath) ||
+    !toText(session.artifactsRoot)
   ) {
     throw vibe64Error(
-      `Renewal source removal requires the published predecessor archive: ${normalizeText(session.sessionId)}`,
+      `Renewal source removal requires the published predecessor archive: ${toText(session.sessionId)}`,
       "vibe64_session_renewal_source_commit_status_invalid"
     );
   }
@@ -324,7 +321,7 @@ async function commitRenewalSessionSourceStage({
   ]);
   if (stageExists && deletionExists) {
     throw vibe64Error(
-      `Renewal source exists in both staged and deleting locations: ${normalizeText(session.sessionId)}`,
+      `Renewal source exists in both staged and deleting locations: ${toText(session.sessionId)}`,
       "vibe64_session_renewal_source_stage_conflict"
     );
   }
@@ -356,7 +353,7 @@ async function commitRenewalSessionSourceStage({
     deletionPath,
     removed: true,
     renewalId: assertSessionRenewalId(renewalId),
-    sessionId: normalizeText(session.sessionId),
+    sessionId: toText(session.sessionId),
     sourcePath,
     stagePath
   };
@@ -397,7 +394,7 @@ async function archiveSessionSource({
       "vibe64_worktree_archive_path_not_session_owned"
     );
   }
-  const sessionId = normalizeText(session.sessionId);
+  const sessionId = toText(session.sessionId);
   const recovery = await saveSessionSourceRecovery({
     session,
     store,

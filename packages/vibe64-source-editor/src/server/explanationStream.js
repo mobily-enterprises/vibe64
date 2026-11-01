@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 
 import {
   requiredSourceEditorExecutionProfile,
@@ -30,6 +29,7 @@ import {
   sourceEditorTextHash
 } from "./explanationText.js";
 import { isPlainObject, readSourceEditorFile, sourceEditorError, sourceEditorErrorResponse } from "./sourceFiles.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
@@ -53,20 +53,20 @@ const SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA = Object.freeze({
 });
 
 function sourceEditorFollowupThreadError(error = null) {
-  const message = normalizeText(error?.message || error?.error);
+  const message = toText(error?.message || error?.error);
   if (!/thread/iu.test(message) || /regenerate this explanation/iu.test(message)) {
     return error;
   }
   return sourceEditorError(
     `${message} Regenerate this explanation before asking another follow-up.`,
-    normalizeText(error?.code) || "vibe64_source_explanation_agent_thread_unavailable",
+    toText(error?.code) || "vibe64_source_explanation_agent_thread_unavailable",
     isPlainObject(error?.details) ? error.details : {},
     Number(error?.statusCode) || 409
   );
 }
 
 function sourceEditorFailureWithRejectedThread(error = null, rejectedThread = null) {
-  if (!normalizeText(rejectedThread?.threadId)) {
+  if (!toText(rejectedThread?.threadId)) {
     return error;
   }
   let failure = error;
@@ -81,8 +81,8 @@ function sourceEditorFailureWithRejectedThread(error = null, rejectedThread = nu
   }
   failure.sourceEditorRejectedThread = Object.freeze({
     executionProfile: sourceEditorExecutionProfileSnapshot(rejectedThread.executionProfile),
-    threadId: normalizeText(rejectedThread.threadId),
-    turnId: normalizeText(rejectedThread.turnId)
+    threadId: toText(rejectedThread.threadId),
+    turnId: toText(rejectedThread.turnId)
   });
   return failure;
 }
@@ -163,7 +163,7 @@ async function cleanupRejectedSourceEditorExplanationThread(
       context.assistantHelper = null;
       return result;
     } catch (error) {
-      return { ok: false, error: normalizeText(error.message) || "Agent chat cleanup failed." };
+      return { ok: false, error: toText(error.message) || "Agent chat cleanup failed." };
     }
   }
   try {
@@ -180,12 +180,12 @@ async function cleanupRejectedSourceEditorExplanationThread(
       ? cleanup
       : {
           ...(isPlainObject(cleanup) ? cleanup : {}),
-          error: normalizeText(cleanup?.error) || "Agent chat cleanup did not confirm that the thread was deleted.",
+          error: toText(cleanup?.error) || "Agent chat cleanup did not confirm that the thread was deleted.",
           ok: false
         };
   } catch (error) {
     return {
-      error: normalizeText(error?.message) || "Agent chat cleanup failed.",
+      error: toText(error?.message) || "Agent chat cleanup failed.",
       ok: false
     };
   }
@@ -195,9 +195,9 @@ function sourceEditorExplanationMessage(role = "", text = "", createdAt = new Da
   const source = isPlainObject(options) ? options : {};
   return {
     createdAt,
-    id: normalizeText(source.id) || sourceEditorExplanationMessageId(),
+    id: toText(source.id) || sourceEditorExplanationMessageId(),
     role,
-    status: normalizeText(source.status || "complete"),
+    status: toText(source.status || "complete"),
     text: String(text || "")
   };
 }
@@ -220,7 +220,7 @@ function sourceEditorExplanationMessagesForAppend(explanation = {}) {
 }
 
 function sourceEditorClientExplanationId(value = "") {
-  if (!normalizeText(value)) {
+  if (!toText(value)) {
     return "";
   }
   try {
@@ -231,12 +231,12 @@ function sourceEditorClientExplanationId(value = "") {
 }
 
 function sourceEditorClientMessageId(value = "") {
-  const id = normalizeText(value);
+  const id = toText(value);
   return /^[a-z0-9_-]{1,100}$/u.test(id) ? id : "";
 }
 
 function sourceEditorExplanationWithMessage(explanation = {}, messageId = "", patch = {}) {
-  const normalizedMessageId = normalizeText(messageId);
+  const normalizedMessageId = toText(messageId);
   const messages = normalizeSourceEditorMessages(explanation.messages);
   const index = messages.findIndex((message) => message.id === normalizedMessageId);
   if (index === -1) {
@@ -286,7 +286,7 @@ async function streamSourceEditorAgentTurn(context = {}, options = {}) {
   } = options;
   let latestText = "";
   let latestExecutionProfile = null;
-  let latestThreadId = normalizeText(threadId);
+  let latestThreadId = toText(threadId);
   let latestTurnId = "";
   let result = null;
   try {
@@ -305,18 +305,18 @@ async function streamSourceEditorAgentTurn(context = {}, options = {}) {
           await onExecutionProfile?.(eventExecutionProfile);
         }
         if (event.type === "thread") {
-          latestThreadId = normalizeText(event.threadId) || latestThreadId;
+          latestThreadId = toText(event.threadId) || latestThreadId;
           await onThread?.({
-            replacedThreadId: normalizeText(event.replacedThreadId),
+            replacedThreadId: toText(event.replacedThreadId),
             threadId: latestThreadId
           });
           return;
         }
         if (event.type === "turn") {
-          latestThreadId = normalizeText(event.threadId) || latestThreadId;
-          latestTurnId = normalizeText(event.turnId) || latestTurnId;
+          latestThreadId = toText(event.threadId) || latestThreadId;
+          latestTurnId = toText(event.turnId) || latestTurnId;
           await onTurn?.({
-            status: normalizeText(event.status),
+            status: toText(event.status),
             threadId: latestThreadId,
             turnId: latestTurnId
           });
@@ -332,8 +332,8 @@ async function streamSourceEditorAgentTurn(context = {}, options = {}) {
         }
       }
     }));
-    latestThreadId = normalizeText(result?.threadId) || latestThreadId;
-    latestTurnId = normalizeText(result?.turnId) || latestTurnId;
+    latestThreadId = toText(result?.threadId) || latestThreadId;
+    latestTurnId = toText(result?.turnId) || latestTurnId;
     if (result?.ok === false) {
       const failure = threadId ? sourceEditorFollowupThreadError(result) : result;
       throw sourceEditorError(
@@ -359,7 +359,7 @@ async function streamSourceEditorAgentTurn(context = {}, options = {}) {
     });
     return {
       executionProfile,
-      replacedThreadId: normalizeText(result.replacedThreadId),
+      replacedThreadId: toText(result.replacedThreadId),
       text,
       threadId: latestThreadId,
       turnId: latestTurnId
@@ -611,7 +611,7 @@ async function runTrackedSourceEditorAgentTurn(context = {}, options = {}) {
     const rejectedThread = isPlainObject(error?.sourceEditorRejectedThread)
       ? error.sourceEditorRejectedThread
       : null;
-    const rejectedThreadId = normalizeText(rejectedThread?.threadId);
+    const rejectedThreadId = toText(rejectedThread?.threadId);
     const cleanup = rejectedThreadId
       ? await cleanupRejectedSourceEditorExplanationThread(
           context,
@@ -622,7 +622,7 @@ async function runTrackedSourceEditorAgentTurn(context = {}, options = {}) {
       : null;
     const cleanupSucceeded = cleanup?.ok === true;
     const failure = sourceEditorErrorResponse(error);
-    const message = normalizeText(failure.error) || fallbackError;
+    const message = toText(failure.error) || fallbackError;
     const failedExplanation = sourceEditorExplanationWithMessage(
       currentExplanation(),
       assistantMessageId,
@@ -635,7 +635,7 @@ async function runTrackedSourceEditorAgentTurn(context = {}, options = {}) {
       ...(rejectedThreadId
         ? {
             agentThreadId: cleanupSucceeded ? "" : rejectedThreadId,
-            agentTurnId: cleanupSucceeded ? "" : normalizeText(rejectedThread?.turnId)
+            agentTurnId: cleanupSucceeded ? "" : toText(rejectedThread?.turnId)
           }
         : {}),
       error: message,

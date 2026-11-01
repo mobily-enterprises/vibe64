@@ -5,15 +5,12 @@ import {
   VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
   VIBE64_CONNECTIONS_CHANGED_EVENT
 } from "../shared/accountEvents.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 const VIBE64_ACCOUNT_EVENT_ENTITY = "account";
 const VIBE64_ACCOUNT_EVENT_SOURCE = "vibe64";
 const VIBE64_ACCOUNT_REALTIME_AUDIENCE = "all_clients";
-
-function normalizeAccountValue(value = "") {
-  return String(value || "").trim();
-}
 
 function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -45,7 +42,7 @@ function publishGlobalEntityChanged(events, {
     ...(actorId === undefined ? {} : { actorId }),
     source: VIBE64_ACCOUNT_EVENT_SOURCE,
     entity,
-    operation: normalizeAccountValue(operation) || "updated",
+    operation: normalizeText(operation) || "updated",
     entityId,
     scope: {
       kind: "global",
@@ -64,7 +61,7 @@ function publishGlobalEntityChanged(events, {
 function accountIdFromResult(result = {}) {
   const source = plainObject(result) || {};
   const account = plainObject(source.account);
-  return normalizeAccountValue(
+  return normalizeText(
     source.accountId ||
     account?.id ||
     (typeof source.account === "string" ? source.account : "") ||
@@ -74,12 +71,12 @@ function accountIdFromResult(result = {}) {
 
 function accountIdFromInput(input = {}) {
   const source = plainObject(input) || {};
-  return normalizeAccountValue(source.accountId || "");
+  return normalizeText(source.accountId || "");
 }
 
 function authSessionIdFromResult(result = {}) {
   const source = plainObject(result) || {};
-  return normalizeAccountValue(source.id || source.sessionId || "");
+  return normalizeText(source.id || source.sessionId || "");
 }
 
 function accountIdFromExecution({ input = {}, result = {} } = {}) {
@@ -93,7 +90,7 @@ function vibe64AccountsRealtimePayload({ input = {}, result = {} } = {}) {
     ...(accountId ? { accountId } : {}),
     ...(typeof source.account?.connected === "boolean" ? { connected: source.account.connected } : {}),
     ...(authSessionIdFromResult(result) ? { authSessionId: authSessionIdFromResult(result) } : {}),
-    ...(source.status ? { status: normalizeAccountValue(source.status) } : {})
+    ...(source.status ? { status: normalizeText(source.status) } : {})
   };
 }
 
@@ -107,19 +104,19 @@ function vibe64ConnectionsRealtimePayload(execution = {}) {
 
 function vibe64AccountAuthSessionRealtimePayload(session = {}) {
   const source = plainObject(session) || {};
-  const accountId = normalizeAccountValue(source.account?.id || "");
-  const sessionId = normalizeAccountValue(source.id || source.sessionId || "");
+  const accountId = normalizeText(source.account?.id || "");
+  const sessionId = normalizeText(source.id || source.sessionId || "");
   return {
     ...(accountId ? { accountId } : {}),
     ...(sessionId ? { sessionId } : {}),
     ...(source.outputVersion ? { outputVersion: source.outputVersion } : {}),
-    ...(source.status ? { status: normalizeAccountValue(source.status) } : {}),
-    ...(source.terminalStatus ? { terminalStatus: normalizeAccountValue(source.terminalStatus) } : {})
+    ...(source.status ? { status: normalizeText(source.status) } : {}),
+    ...(source.terminalStatus ? { terminalStatus: normalizeText(source.terminalStatus) } : {})
   };
 }
 
 function authSessionRealtimeAudience({ context = {} } = {}) {
-  return normalizeAccountValue(context.actor?.id)
+  return normalizeText(context.actor?.id)
     ? "actor_user"
     : VIBE64_ACCOUNT_REALTIME_AUDIENCE;
 }
@@ -180,7 +177,7 @@ function createVibe64AccountsChangedPublisher({ events }) {
       reason = "",
       status = ""
     } = options;
-    const normalizedAccountId = normalizeAccountValue(accountId) || accountIdFromResult({ account });
+    const normalizedAccountId = normalizeText(accountId) || accountIdFromResult({ account });
     if (!normalizedAccountId) {
       return null;
     }
@@ -236,7 +233,7 @@ function createVibe64ConnectionsChangedPublisher({ events }) {
       reason = "",
       status = ""
     } = options;
-    const normalizedConnectionId = normalizeAccountValue(connectionId);
+    const normalizedConnectionId = normalizeText(connectionId);
     if (!normalizedConnectionId) {
       return null;
     }
@@ -248,8 +245,8 @@ function createVibe64ConnectionsChangedPublisher({ events }) {
       payload: {
         connectionId: normalizedConnectionId,
         ...(typeof connected === "boolean" ? { connected } : {}),
-        ...(reason ? { reason: normalizeAccountValue(reason) } : {}),
-        ...(status ? { status: normalizeAccountValue(status) } : {})
+        ...(reason ? { reason: normalizeText(reason) } : {}),
+        ...(status ? { status: normalizeText(status) } : {})
       }
     });
   };
@@ -267,7 +264,7 @@ function createVibe64AccountAuthSessionChangedPublisher({ events }) {
       reason = ""
     } = options;
     const payload = vibe64AccountAuthSessionRealtimePayload(session);
-    const normalizedActorId = normalizeAccountValue(actorId);
+    const normalizedActorId = normalizeText(actorId);
     if (!payload.sessionId) {
       return null;
     }
@@ -287,7 +284,7 @@ function createVibe64AccountAuthSessionChangedPublisher({ events }) {
 }
 
 function resultStatusFromAccount(account = null) {
-  return plainObject(account) ? normalizeAccountValue(account.status) : "";
+  return plainObject(account) ? normalizeText(account.status) : "";
 }
 
 export {

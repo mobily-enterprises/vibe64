@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { normalizeText, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { assertRenewalId } from "./sessionRenewalIds.js";
 import { writeTextFile } from "./sessionFiles.js";
 import { clearVibe64CurrentSessionAliasIfMatches } from "./currentSessionAlias.js";
@@ -10,6 +10,7 @@ import {
   VIBE64_SESSION_STATUS
 } from "./sessionRecordRules.js";
 import { metadataFilePath, toDate } from "./sessionStoreLayout.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -59,7 +60,7 @@ function createSessionRenewalTransitions({
           recordFiles.readStatusFromPaths(sourcePaths),
           recordFiles.readMetadataFromPaths(sourcePaths)
         ]);
-        const currentQuiescedId = normalizeText(metadata.renewal_quiesced_id);
+        const currentQuiescedId = toText(metadata.renewal_quiesced_id);
         if (status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
           if (currentQuiescedId && currentQuiescedId !== normalizedRenewalId) {
             throw vibe64Error(
@@ -67,7 +68,7 @@ function createSessionRenewalTransitions({
               "vibe64_session_renewal_conflict"
             );
           }
-          const normalizedQuiescedAt = normalizeText(metadata.renewal_quiesced_at) ||
+          const normalizedQuiescedAt = toText(metadata.renewal_quiesced_at) ||
             requestedQuiescedAt;
           await Promise.all([
             writeTextFile(
@@ -137,8 +138,8 @@ function createSessionRenewalTransitions({
           recordFiles.readStatusFromPaths(sourcePaths),
           recordFiles.readMetadataFromPaths(sourcePaths)
         ]);
-        const currentQuiescedId = normalizeText(metadata.renewal_quiesced_id);
-        const currentRestoredId = normalizeText(metadata.renewal_restored_id);
+        const currentQuiescedId = toText(metadata.renewal_quiesced_id);
+        const currentRestoredId = toText(metadata.renewal_restored_id);
         if (
           status === VIBE64_SESSION_STATUS.ACTIVE &&
           currentRestoredId === normalizedRenewalId
@@ -152,14 +153,14 @@ function createSessionRenewalTransitions({
         if (
           status !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
           currentQuiescedId !== normalizedRenewalId ||
-          normalizeText(metadata.renewed_to)
+          toText(metadata.renewed_to)
         ) {
           throw vibe64Error(
             `Session cannot be restored from renewal ${normalizedRenewalId}: ${normalizedSourceSessionId}`,
             "vibe64_session_renewal_transition_invalid"
           );
         }
-        const normalizedRestoredAt = normalizeText(metadata.renewal_restored_at) ||
+        const normalizedRestoredAt = toText(metadata.renewal_restored_at) ||
           requestedRestoredAt;
         await Promise.all([
           writeTextFile(
@@ -200,8 +201,8 @@ function createSessionRenewalTransitions({
         "vibe64_session_renewal_same_session"
       );
     }
-    const acknowledgedTimestamp = normalizeText(acknowledgedAt);
-    const deliveredTimestamp = normalizeText(handoverDeliveredAt);
+    const acknowledgedTimestamp = toText(acknowledgedAt);
+    const deliveredTimestamp = toText(handoverDeliveredAt);
     if (!acknowledgedTimestamp && !deliveredTimestamp) {
       throw vibe64Error(
         "A renewed session cannot become active before its handover reaches the fresh agent thread.",
@@ -227,9 +228,9 @@ function createSessionRenewalTransitions({
             recordFiles.readStatusFromPaths(successorPaths),
             recordFiles.readMetadataFromPaths(successorPaths)
           ]);
-          const successorRenewalId = normalizeText(successorMetadata.renewal_id);
-          const successorRenewedFrom = normalizeText(successorMetadata.renewed_from);
-          const sourceQuiescedId = normalizeText(sourceMetadata.renewal_quiesced_id);
+          const successorRenewalId = toText(successorMetadata.renewal_id);
+          const successorRenewedFrom = toText(successorMetadata.renewed_from);
+          const sourceQuiescedId = toText(sourceMetadata.renewal_quiesced_id);
           if (
             successorRenewalId !== normalizedRenewalId ||
             successorRenewedFrom !== normalizedSourceSessionId ||
@@ -240,16 +241,16 @@ function createSessionRenewalTransitions({
               "vibe64_session_renewal_link_mismatch"
             );
           }
-          if (!normalizeText(successorMetadata.renewal_actor_id)) {
+          if (!toText(successorMetadata.renewal_actor_id)) {
             throw vibe64Error(
               "A renewed session requires actor attribution.",
               "vibe64_session_renewal_actor_required"
             );
           }
-          const transitionActorId = normalizeText(actorId) ||
-            normalizeText(successorMetadata.renewal_actor_id);
-          const transitionActorDisplayName = normalizeText(actorDisplayName) ||
-            normalizeText(successorMetadata.renewal_actor_display_name);
+          const transitionActorId = toText(actorId) ||
+            toText(successorMetadata.renewal_actor_id);
+          const transitionActorDisplayName = toText(actorDisplayName) ||
+            toText(successorMetadata.renewal_actor_display_name);
           if (!transitionActorId) {
             throw vibe64Error(
               "A renewed session requires actor attribution.",
@@ -268,21 +269,21 @@ function createSessionRenewalTransitions({
           const sharedMetadata = {
             ...(normalizedAcknowledgedAt
               ? {
-                  renewal_acknowledged_at: normalizeText(
+                  renewal_acknowledged_at: toText(
                     successorMetadata.renewal_acknowledged_at
                   ) || normalizedAcknowledgedAt
                 }
               : {}),
             renewal_actor_display_name: transitionActorDisplayName,
             renewal_actor_id: transitionActorId,
-            renewal_confirmed_at: normalizeText(successorMetadata.renewal_confirmed_at),
-            renewal_handover_delivered_at: normalizeText(
+            renewal_confirmed_at: toText(successorMetadata.renewal_confirmed_at),
+            renewal_handover_delivered_at: toText(
               successorMetadata.renewal_handover_delivered_at
             ) || normalizedHandoverDeliveredAt,
             renewal_id: normalizedRenewalId,
-            renewal_started_at: normalizeText(successorMetadata.renewal_started_at),
-            renewal_successor_created_at: normalizeText(successorMetadata.renewal_successor_created_at),
-            renewed_at: normalizeText(
+            renewal_started_at: toText(successorMetadata.renewal_started_at),
+            renewal_successor_created_at: toText(successorMetadata.renewal_successor_created_at),
+            renewed_at: toText(
               successorMetadata.renewed_at
             ) || normalizedRenewedAt
           };
@@ -342,7 +343,7 @@ function createSessionRenewalTransitions({
           successorSessionId: normalizedSuccessorSessionId
         });
         if (status === VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING) {
-          if (!normalizeText(metadata.renewal_activation_prepared_at)) {
+          if (!toText(metadata.renewal_activation_prepared_at)) {
             throw vibe64Error(
               `Prepared renewal successor has no activation proof: ${normalizedSuccessorSessionId}`,
               "vibe64_session_renewal_transition_invalid"
@@ -356,7 +357,7 @@ function createSessionRenewalTransitions({
             "vibe64_session_renewal_transition_invalid"
           );
         }
-        const normalizedPreparedAt = normalizeText(metadata.renewal_activation_prepared_at) ||
+        const normalizedPreparedAt = toText(metadata.renewal_activation_prepared_at) ||
           requestedPreparedAt;
         await writeTextFile(
           metadataFilePath(successorPaths, "renewal_activation_prepared_at"),
@@ -446,7 +447,7 @@ function createSessionRenewalTransitions({
           successorSessionId: normalizedSuccessorSessionId
         });
         if (status === VIBE64_SESSION_STATUS.ACTIVE) {
-          if (normalizeText(metadata.renewal_activated_at) !== normalizedCommittedAt) {
+          if (toText(metadata.renewal_activated_at) !== normalizedCommittedAt) {
             throw vibe64Error(
               `Active renewal successor has a different commit marker: ${normalizedSuccessorSessionId}`,
               "vibe64_session_renewal_transition_invalid"
@@ -456,7 +457,7 @@ function createSessionRenewalTransitions({
         }
         if (
           status !== VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING ||
-          !normalizeText(metadata.renewal_activation_prepared_at)
+          !toText(metadata.renewal_activation_prepared_at)
         ) {
           throw vibe64Error(
             `Renewal successor is not prepared for commit: ${normalizedSuccessorSessionId}`,
@@ -505,7 +506,7 @@ function createSessionRenewalTransitions({
         ]);
         if (
           status !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
-          normalizeText(metadata.renewal_id) !== normalizedRenewalId
+          toText(metadata.renewal_id) !== normalizedRenewalId
         ) {
           throw vibe64Error(
             `Session is not the pending successor for renewal ${normalizedRenewalId}: ${normalizedSessionId}`,

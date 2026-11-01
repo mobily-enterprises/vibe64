@@ -27,8 +27,8 @@ import {
   scopedSessionWorkCommand,
   sessionWorkComparison
 } from "./sessionWorkGit.js";
-import { trimmedText } from "./trimmedText.js";
 import { readContributionHead } from "./sessionWorkAuthority.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 async function sessionChangeFiles(runCommand, context, canonicalCommit, worktreeTree, options = {}) {
   const [statusResult, statResult] = await Promise.all([
@@ -182,7 +182,7 @@ async function inspectSessionWorkDirect({
   runCommand = scopedSessionWorkCommand(runCommand, context, project, {
     label: "Inspecting session work"
   });
-  const tree = trimmedText(worktreeTree) || await writeGitWorktreeTree({
+  const tree = normalizeText(worktreeTree) || await writeGitWorktreeTree({
     baseCommit: "HEAD",
     project: commandProject(context, project),
     runCommand,
@@ -240,7 +240,7 @@ async function inspectSessionWorkDirect({
     }, { commandOptions, project })
   ]);
   const derivedPathSet = new Set((Array.isArray(derivedArtifactPaths) ? derivedArtifactPaths : [])
-    .map(trimmedText)
+    .map(normalizeText)
     .filter(Boolean));
   const changedPaths = comparison.changedPaths.filter((filePath) => !derivedPathSet.has(filePath));
   const relationship = repositoryUpdateRelationship(ahead, behind);

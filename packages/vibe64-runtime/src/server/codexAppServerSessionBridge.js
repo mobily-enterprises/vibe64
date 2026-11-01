@@ -14,7 +14,6 @@ import {
   CODEX_APP_SERVER_PROVIDER_ID,
   codexCliResumeCommand
 } from "./codexAppServerProvider.js";
-import { normalizeAgentText } from "./agentProviders.js";
 import { vibe64SessionDebugLog } from "./sessionDebugLog.js";
 
 import {
@@ -48,6 +47,7 @@ import {
   sendCodexAppServerHelperTurn,
   startCodexAppServerHelperThread
 } from "./codexAppServerHelperThreads.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE =
   "vibe64_session_renewal_thread_unreadable";
@@ -64,10 +64,10 @@ const CODEX_SESSION_RENEWAL_THREAD_CLAIM_SCHEMA =
 
 function codexAppServerRuntimeMetadata(runtime = {}) {
   return {
-    endpoint: normalizeAgentText(runtime.endpoint),
-    runtimeDir: normalizeAgentText(runtime.runtimeDir),
-    socketPath: normalizeAgentText(runtime.socketPath),
-    transport: normalizeAgentText(runtime.transport)
+    endpoint: toText(runtime.endpoint),
+    runtimeDir: toText(runtime.runtimeDir),
+    socketPath: toText(runtime.socketPath),
+    transport: toText(runtime.transport)
   };
 }
 
@@ -80,7 +80,7 @@ function codexAppServerIdentityMetadata({
   toolSchemaIdentity,
   workdir = ""
 } = {}) {
-  const normalizedThreadId = normalizeAgentText(threadId);
+  const normalizedThreadId = toText(threadId);
   const normalizedWorkdir = normalizeWorkdir(workdir);
   if (!normalizedThreadId || !normalizedWorkdir) {
     throw new Error("Codex app-server identity requires a thread id and workdir.");
@@ -107,12 +107,12 @@ function codexAppServerIdentityMetadata({
     agent_identity_provider: CODEX_SESSION_AGENT_PROVIDER,
     agent_identity_resume_strategy: "provider-native",
     agent_identity_status: "ready",
-    agent_identity_terminal_session_id: normalizeAgentText(terminalSessionId),
+    agent_identity_terminal_session_id: toText(terminalSessionId),
     agent_identity_updated_at: capturedAt,
     agent_identity_workdir: normalizedWorkdir,
     agent_resume_command: hostCli,
     agent_transport_endpoint: runtimeMetadata.endpoint,
-    agent_transport_execution_id: normalizeAgentText(appServerRuntime.executionId),
+    agent_transport_execution_id: toText(appServerRuntime.executionId),
     agent_transport_id: CODEX_APP_SERVER_PROVIDER_ID,
     agent_transport_kind: runtimeMetadata.transport,
     agent_transport_runtime_dir: runtimeMetadata.runtimeDir,
@@ -138,8 +138,8 @@ async function writeCodexAppServerIdentityMetadata({
     typeof additionalMetadata === "object" &&
     !Array.isArray(additionalMetadata)
     ? Object.fromEntries(Object.entries(additionalMetadata)
-        .filter(([name]) => normalizeAgentText(name).startsWith("agent_renewal_"))
-        .map(([name, value]) => [normalizeAgentText(name), normalizeAgentText(value)]))
+        .filter(([name]) => toText(name).startsWith("agent_renewal_"))
+        .map(([name, value]) => [toText(name), toText(value)]))
     : {};
   const metadata = {
     ...supplemental,
@@ -168,7 +168,7 @@ async function writeCodexAppServerIdentityMetadata({
   const previousRuntimeDir = renewalInternal
     ? ""
     // readable-check: allow optional-call - optional operation: a store without metadata reads has no previous runtime folder
-    : normalizeAgentText((await runtime.store.readMetadata?.(sessionId))?.agent_transport_runtime_dir);
+    : toText((await runtime.store.readMetadata?.(sessionId))?.agent_transport_runtime_dir);
   await mutateSession(sessionId, async () => {
     await Promise.all(Object.entries(metadata).map(([name, value]) => (
       writeMetadataValue(sessionId, name, String(value || ""))
@@ -186,7 +186,7 @@ function persistedCodexSessionRenewalThreadBaseline(session = {}, options = {}) 
     workdir = ""
   } = options;
   const metadata = isPlainRecord(session.metadata) ? session.metadata : {};
-  const rawBaseline = normalizeAgentText(
+  const rawBaseline = toText(
     metadata[CODEX_SESSION_RENEWAL_BASELINE_METADATA]
   );
   if (!rawBaseline) {
@@ -201,12 +201,12 @@ function persistedCodexSessionRenewalThreadBaseline(session = {}, options = {}) 
       "The successor assistant thread baseline is unreadable."
     );
   }
-  const persistedOperationId = normalizeAgentText(baseline?.operationId);
+  const persistedOperationId = toText(baseline?.operationId);
   const persistedWorkdir = normalizeWorkdir(baseline?.workdir);
   if (
     !isPlainRecord(baseline) ||
-    normalizeAgentText(baseline.schemaVersion) !== CODEX_SESSION_RENEWAL_BASELINE_SCHEMA ||
-    persistedOperationId !== normalizeAgentText(operationId) ||
+    toText(baseline.schemaVersion) !== CODEX_SESSION_RENEWAL_BASELINE_SCHEMA ||
+    persistedOperationId !== toText(operationId) ||
     persistedWorkdir !== normalizeWorkdir(workdir) ||
     !Array.isArray(baseline.threadIds)
   ) {
@@ -226,7 +226,7 @@ function persistedCodexSessionRenewalThreadClaim(session = {}, options = {}) {
     workdir = ""
   } = options;
   const metadata = isPlainRecord(session.metadata) ? session.metadata : {};
-  const rawClaim = normalizeAgentText(
+  const rawClaim = toText(
     metadata[CODEX_SESSION_RENEWAL_THREAD_CLAIM_METADATA]
   );
   if (!rawClaim) {
@@ -244,12 +244,12 @@ function persistedCodexSessionRenewalThreadClaim(session = {}, options = {}) {
   const claimedThreadIds = defineCodexRenewalThreadIds([claim?.threadId], {
     errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE
   });
-  const claimedOperationId = normalizeAgentText(claim?.operationId);
+  const claimedOperationId = toText(claim?.operationId);
   const claimedWorkdir = normalizeWorkdir(claim?.workdir);
   if (
     !isPlainRecord(claim) ||
-    normalizeAgentText(claim.schemaVersion) !== CODEX_SESSION_RENEWAL_THREAD_CLAIM_SCHEMA ||
-    claimedOperationId !== normalizeAgentText(operationId) ||
+    toText(claim.schemaVersion) !== CODEX_SESSION_RENEWAL_THREAD_CLAIM_SCHEMA ||
+    claimedOperationId !== toText(operationId) ||
     claimedWorkdir !== normalizeWorkdir(workdir)
   ) {
     throw codexRenewalThreadError(
@@ -278,7 +278,7 @@ async function writeCodexSessionRenewalThreadBaseline({
     );
   }
   const baseline = JSON.stringify({
-    operationId: normalizeAgentText(operationId),
+    operationId: toText(operationId),
     schemaVersion: CODEX_SESSION_RENEWAL_BASELINE_SCHEMA,
     threadIds: defineCodexRenewalThreadIds(threadIds, {
       errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE
@@ -310,7 +310,7 @@ async function writeCodexSessionRenewalThreadClaim({
     errorCode: CODEX_SESSION_RENEWAL_FRESH_THREAD_REQUIRED_CODE
   });
   const claim = JSON.stringify({
-    operationId: normalizeAgentText(operationId),
+    operationId: toText(operationId),
     schemaVersion: CODEX_SESSION_RENEWAL_THREAD_CLAIM_SCHEMA,
     threadId: normalizedThreadId,
     workdir: normalizeWorkdir(workdir)
@@ -333,7 +333,7 @@ function codexAppServerRenewalResumePreparation({
 } = {}) {
   const normalizedWorkdir = normalizeWorkdir(workdir);
   const persistedThreadId = codexAppServerThreadIdForSession(session, normalizedWorkdir);
-  const normalizedExpectedThreadId = normalizeAgentText(expectedThreadId) || persistedThreadId;
+  const normalizedExpectedThreadId = toText(expectedThreadId) || persistedThreadId;
   if (!normalizedExpectedThreadId || persistedThreadId !== normalizedExpectedThreadId) {
     throw codexRenewalThreadError(
       CODEX_SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
@@ -376,18 +376,18 @@ function codexAppServerRenewalSeedPreparation({
   workdir = ""
 } = {}) {
   const normalizedWorkdir = normalizeWorkdir(workdir);
-  const normalizedExpectedThreadId = normalizeAgentText(expectedThreadId);
-  const normalizedForbiddenThreadId = normalizeAgentText(forbiddenThreadId);
-  const normalizedOperationId = normalizeAgentText(operationId);
+  const normalizedExpectedThreadId = toText(expectedThreadId);
+  const normalizedForbiddenThreadId = toText(forbiddenThreadId);
+  const normalizedOperationId = toText(operationId);
   const persistedThreadId = codexAppServerThreadIdForSession(session, normalizedWorkdir);
-  const persistedOperationId = normalizeAgentText(
+  const persistedOperationId = toText(
     session.metadata?.agent_renewal_seed_operation_id
   );
   const persistedClaim = persistedCodexSessionRenewalThreadClaim(session, {
     operationId: normalizedOperationId,
     workdir: normalizedWorkdir
   });
-  const claimedThreadId = normalizeAgentText(persistedClaim?.threadId);
+  const claimedThreadId = toText(persistedClaim?.threadId);
   if (
     persistedOperationId &&
     normalizedOperationId &&
@@ -505,7 +505,7 @@ function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   // Sessions without a Codex agent identity keep the legacy codex_conversation_id fallback.
   if (metadata.agent_identity_provider !== CODEX_SESSION_AGENT_PROVIDER) {
     return normalizeWorkdir(workdir) && normalizeWorkdir(metadata.codex_conversation_workdir) === normalizeWorkdir(workdir)
-      ? normalizeAgentText(metadata.codex_conversation_id) : "";
+      ? toText(metadata.codex_conversation_id) : "";
   }
   if (metadata.agent_transport_id !== CODEX_APP_SERVER_PROVIDER_ID) {
     return "";
@@ -518,7 +518,7 @@ function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   if (metadata.agent_identity_status && metadata.agent_identity_status !== "ready") {
     return "";
   }
-  return normalizeAgentText(metadata.agent_identity_conversation_id);
+  return toText(metadata.agent_identity_conversation_id);
 }
 
 function codexAppServerToolSchemaIdentityForSession(session = {}, workdir = "") {

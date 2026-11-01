@@ -6,7 +6,7 @@ import { lessonHasSteps } from "./contentSchemas.js";
 import { createCourseLock, readPinnedTopic } from "./catalogue.js";
 import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 async function runTrainingCli(args, options = {}) {
   const { write = text => console.log(text) } = options;

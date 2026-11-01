@@ -1,7 +1,6 @@
 import { SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE, EPHEMERAL_ASSISTANT_CONTEXT_MAX_CHARACTERS, defineEphemeralAssistantScope,
   sessionAgentProviderId } from "./sessionAgentRules.js";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { currentProjectVibe64User } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionAgentManagerState } from "./sessionAgentManagerState.js";
 import { createSessionAgentBindings } from "./sessionAgentBindings.js";
@@ -11,13 +10,14 @@ import { createSessionAgentProviderCalls } from "./sessionAgentProviderCalls.js"
 import { createSessionAgentRouting } from "./sessionAgentRouting.js";
 import { createSessionAgentGoals } from "./sessionAgentGoals.js";
 import { createSessionAgentLifecycle } from "./sessionAgentLifecycle.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
 
 function normalizeProvider(provider) {
-  const id = normalizeText(provider.id);
-  const transportId = normalizeText(provider.transportId);
+  const id = toText(provider.id);
+  const transportId = toText(provider.transportId);
   if (!id || !transportId) {
     throw new TypeError("Session agent providers require product provider and transport ids.");
   }

@@ -9,7 +9,7 @@ import { renewalCleanupContext, renewalArchivedPredecessorContext } from "./sess
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
@@ -98,7 +98,7 @@ function createCodexLifecyclePreparation({
     });
     providerOptions.routingModelProviderId = binding.modelProviderId;
     return {
-      providerContext: codexAppServerSessionProviderContext(trimmedText(sessionId), providerOptions),
+      providerContext: codexAppServerSessionProviderContext(normalizeText(sessionId), providerOptions),
       get toolHomeSource() { return providerOptions.toolHomeSource; }
     };
   }
@@ -176,7 +176,7 @@ function createCodexLifecyclePreparation({
   }
 
   function prepareCodexSessionCleanup(sessionId, options = {}) {
-    const normalizedSessionId = trimmedText(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
     const sessionKey = codexTerminalNamespace(normalizedSessionId);
     const renewalCleanup = renewalCleanupContext(normalizedSessionId, options);
     const preserveProcessExitProof = Boolean(

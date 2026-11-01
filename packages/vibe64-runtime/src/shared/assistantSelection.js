@@ -1,4 +1,5 @@
-import { normalizeAgentText } from "./normalizeAgentText.js";
+import { toText } from "@local/vibe64-core/shared/toText";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 
 const VIBE64_ASSISTANT_ENGINE_IDS = Object.freeze({
   CLAUDE: "claude",
@@ -27,10 +28,6 @@ const VIBE64_ASSISTANT_SELECTION_ERROR_CODES = Object.freeze({
   UNAVAILABLE: "vibe64_assistant_selection_unavailable"
 });
 
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
 function selectionError(code, message, details = {}) {
   const error = new Error(message);
   error.code = code;
@@ -51,7 +48,7 @@ function boundedIdentifier(value, field, options = {}) {
     allowEmpty = false,
     maxLength = 512
   } = options;
-  const normalized = normalizeAgentText(value);
+  const normalized = toText(value);
   if (
     (!normalized && !allowEmpty) ||
     normalized.length > maxLength ||
@@ -67,7 +64,7 @@ function boundedIdentifier(value, field, options = {}) {
 }
 
 function catalogRevision(value, field = "catalogRevision") {
-  const revision = normalizeAgentText(value);
+  const revision = toText(value);
   if (!VIBE64_ASSISTANT_CATALOG_REVISION_PATTERN.test(revision)) {
     throw selectionError(
       VIBE64_ASSISTANT_SELECTION_ERROR_CODES.INVALID,
@@ -79,7 +76,7 @@ function catalogRevision(value, field = "catalogRevision") {
 }
 
 function defineVibe64AssistantSelection(value = {}) {
-  const input = record(value);
+  const input = normalizeObject(value);
   const engineId = boundedIdentifier(input.engineId, "engineId", { maxLength: 64 });
   if (!VIBE64_ASSISTANT_ENGINE_ID_SET.has(engineId)) {
     throw selectionError(
@@ -88,7 +85,7 @@ function defineVibe64AssistantSelection(value = {}) {
       { engineId, field: "engineId" }
     );
   }
-  const schema = normalizeAgentText(input.schema) || VIBE64_ASSISTANT_SELECTION_SCHEMA;
+  const schema = toText(input.schema) || VIBE64_ASSISTANT_SELECTION_SCHEMA;
   if (schema !== VIBE64_ASSISTANT_SELECTION_SCHEMA) {
     throw selectionError(
       VIBE64_ASSISTANT_SELECTION_ERROR_CODES.INVALID,
@@ -120,7 +117,7 @@ function vibe64AssistantSelectionFromMetadata(metadata = {}, options = {}) {
   const {
     required = true
   } = options;
-  const raw = normalizeAgentText(record(metadata)[VIBE64_ASSISTANT_SELECTION_METADATA]);
+  const raw = toText(normalizeObject(metadata)[VIBE64_ASSISTANT_SELECTION_METADATA]);
   if (!raw && required !== true) {
     return null;
   }
@@ -146,17 +143,17 @@ function vibe64AssistantSelectionFromMetadata(metadata = {}, options = {}) {
 }
 
 function normalizedVariant(value = {}) {
-  const input = record(value);
+  const input = normalizeObject(value);
   const id = boundedIdentifier(input.id, "variant.id", { maxLength: 256 });
   return Object.freeze({
-    description: normalizeAgentText(input.description),
+    description: toText(input.description),
     id,
-    label: normalizeAgentText(input.label) || id
+    label: toText(input.label) || id
   });
 }
 
 function normalizedModel(value = {}) {
-  const input = record(value);
+  const input = normalizeObject(value);
   const id = boundedIdentifier(input.id, "model.id");
   const variants = Array.isArray(input.variants) ? input.variants.map(normalizedVariant) : [];
   const ids = new Set();
@@ -167,19 +164,19 @@ function normalizedModel(value = {}) {
     ids.add(variant.id);
   }
   return Object.freeze({
-    capabilities: Object.freeze({ ...record(input.capabilities) }),
-    description: normalizeAgentText(input.description),
+    capabilities: Object.freeze({ ...normalizeObject(input.capabilities) }),
+    description: toText(input.description),
     id,
-    label: normalizeAgentText(input.label) || id,
-    lockMessage: normalizeAgentText(input.lockMessage),
-    status: normalizeAgentText(input.status) || "available",
+    label: toText(input.label) || id,
+    lockMessage: toText(input.lockMessage),
+    status: toText(input.status) || "available",
     variants: Object.freeze(variants)
   });
 }
 
 function normalizedModelAccess(value = {}) {
-  const input = record(value);
-  const mode = normalizeAgentText(input.mode);
+  const input = normalizeObject(value);
+  const mode = toText(input.mode);
   const enabledModelIds = [...new Set((Array.isArray(input.enabledModelIds)
     ? input.enabledModelIds
     : []).map((modelId) => boundedIdentifier(
@@ -190,7 +187,7 @@ function normalizedModelAccess(value = {}) {
   return Object.freeze({
     configurable: input.configurable === true,
     enabledModelIds: Object.freeze(enabledModelIds),
-    label: normalizeAgentText(input.label),
+    label: toText(input.label),
     managementOnly: input.managementOnly === true,
     mode: ["recommended", "verified"].includes(mode) ? mode : "all",
     recommendedModelId: boundedIdentifier(
@@ -198,12 +195,12 @@ function normalizedModelAccess(value = {}) {
       "modelProvider.modelAccess.recommendedModelId",
       { allowEmpty: true }
     ),
-    warning: normalizeAgentText(input.warning)
+    warning: toText(input.warning)
   });
 }
 
 function normalizedModelProvider(value = {}) {
-  const input = record(value);
+  const input = normalizeObject(value);
   const id = boundedIdentifier(input.id, "modelProvider.id", { maxLength: 256 });
   const models = Array.isArray(input.models) ? input.models.map(normalizedModel) : [];
   const ids = new Set();
@@ -216,15 +213,15 @@ function normalizedModelProvider(value = {}) {
   return Object.freeze({
     apiKeyCompatible: input.apiKeyCompatible === true,
     connected: input.connected === true,
-    connectionMessage: normalizeAgentText(input.connectionMessage),
-    connectionStatus: normalizeAgentText(input.connectionStatus) || (input.connected === true ? "connected" : "disconnected"),
+    connectionMessage: toText(input.connectionMessage),
+    connectionStatus: toText(input.connectionStatus) || (input.connected === true ? "connected" : "disconnected"),
     defaultModelId: boundedIdentifier(input.defaultModelId, "modelProvider.defaultModelId", {
       allowEmpty: true
     }),
-    definitionRevision: normalizeAgentText(input.definitionRevision),
-    description: normalizeAgentText(input.description),
+    definitionRevision: toText(input.definitionRevision),
+    description: toText(input.description),
     id,
-    label: normalizeAgentText(input.label) || id,
+    label: toText(input.label) || id,
     modelAccess: normalizedModelAccess(input.modelAccess),
     preferred: input.preferred === true,
     models: Object.freeze(models)
@@ -232,13 +229,13 @@ function normalizedModelProvider(value = {}) {
 }
 
 function normalizedAgent(value = {}) {
-  const input = record(value);
+  const input = normalizeObject(value);
   const id = boundedIdentifier(input.id, "agent.id", { maxLength: 256 });
   return Object.freeze({
-    description: normalizeAgentText(input.description),
+    description: toText(input.description),
     id,
-    label: normalizeAgentText(input.label) || id,
-    mode: normalizeAgentText(input.mode) || "primary",
+    label: toText(input.label) || id,
+    mode: toText(input.mode) || "primary",
     modelId: boundedIdentifier(input.modelId, "agent.modelId", {
       allowEmpty: true
     }),
@@ -254,16 +251,16 @@ function normalizedAgent(value = {}) {
 }
 
 function normalizedCapabilityPage(value = {}) {
-  const input = record(value);
+  const input = normalizeObject(value);
   const limit = Number.parseInt(String(input.limit || ""), 10);
   const total = Number.parseInt(String(input.total || ""), 10);
   return Object.freeze({
-    cursor: normalizeAgentText(input.cursor),
+    cursor: toText(input.cursor),
     hasMore: input.hasMore === true,
-    kind: ["models", "providers"].includes(normalizeAgentText(input.kind)) ? normalizeAgentText(input.kind) : "providers",
+    kind: ["models", "providers"].includes(toText(input.kind)) ? toText(input.kind) : "providers",
     limit: Number.isFinite(limit) && limit > 0 ? limit : 0,
-    nextCursor: normalizeAgentText(input.nextCursor),
-    search: normalizeAgentText(input.search),
+    nextCursor: toText(input.nextCursor),
+    search: toText(input.search),
     total: Number.isFinite(total) && total >= 0 ? total : 0
   });
 }
@@ -279,12 +276,12 @@ function assertUniqueIds(values = [], label = "assistant item") {
 }
 
 function defineVibe64AssistantCapabilities(value = {}) {
-  const input = record(value);
+  const input = normalizeObject(value);
   const engineId = boundedIdentifier(input.engineId, "engineId", { maxLength: 64 });
   if (!VIBE64_ASSISTANT_ENGINE_ID_SET.has(engineId)) {
     throw new TypeError(`Unknown assistant engine capabilities: ${engineId}.`);
   }
-  const schema = normalizeAgentText(input.schema) || VIBE64_ASSISTANT_CAPABILITIES_SCHEMA;
+  const schema = toText(input.schema) || VIBE64_ASSISTANT_CAPABILITIES_SCHEMA;
   if (schema !== VIBE64_ASSISTANT_CAPABILITIES_SCHEMA) {
     throw new TypeError(`Unsupported assistant capabilities schema: ${schema}.`);
   }
@@ -294,14 +291,14 @@ function defineVibe64AssistantCapabilities(value = {}) {
   const agents = Array.isArray(input.agents) ? input.agents.map(normalizedAgent) : [];
   assertUniqueIds(modelProviders, "assistant model provider");
   assertUniqueIds(agents, "assistant agent");
-  const authentication = record(input.authentication);
+  const authentication = normalizeObject(input.authentication);
   const modes = Array.isArray(authentication.modes)
-    ? [...new Set(authentication.modes.map(normalizeAgentText).filter(Boolean))]
+    ? [...new Set(authentication.modes.map(toText).filter(Boolean))]
     : [];
   return Object.freeze({
     agents: Object.freeze(agents),
     authentication: Object.freeze({
-      management: normalizeAgentText(authentication.management) || "account-owner",
+      management: toText(authentication.management) || "account-owner",
       modes: Object.freeze(modes)
     }),
     defaults: Object.freeze({
@@ -324,10 +321,10 @@ function defineVibe64AssistantCapabilities(value = {}) {
     }),
     engineId,
     health: Object.freeze({
-      message: normalizeAgentText(input.health?.message),
-      status: normalizeAgentText(input.health?.status) || "unavailable"
+      message: toText(input.health?.message),
+      status: toText(input.health?.status) || "unavailable"
     }),
-    label: normalizeAgentText(input.label) || engineId,
+    label: toText(input.label) || engineId,
     modelProviders: Object.freeze(modelProviders),
     page: normalizedCapabilityPage(input.page),
     revision: catalogRevision(input.revision, "revision"),
@@ -337,7 +334,7 @@ function defineVibe64AssistantCapabilities(value = {}) {
 }
 
 function requestedField(input, defaults, field) {
-  return Object.hasOwn(input, field) ? normalizeAgentText(input[field]) : normalizeAgentText(defaults[field]);
+  return Object.hasOwn(input, field) ? toText(input[field]) : toText(defaults[field]);
 }
 
 function unavailableSelection(message, details = {}) {
@@ -350,9 +347,9 @@ function unavailableSelection(message, details = {}) {
 
 function resolveVibe64AssistantSelection(capabilitiesValue = {}, requestedValue = {}) {
   const capabilities = defineVibe64AssistantCapabilities(capabilitiesValue);
-  const requested = record(requestedValue);
+  const requested = normalizeObject(requestedValue);
   const requestedEngineId = Object.hasOwn(requested, "engineId")
-    ? normalizeAgentText(requested.engineId)
+    ? toText(requested.engineId)
     : capabilities.engineId;
   if (requestedEngineId !== capabilities.engineId) {
     unavailableSelection(`Assistant engine is unavailable: ${requestedEngineId || "(missing)"}.`, {
@@ -362,14 +359,14 @@ function resolveVibe64AssistantSelection(capabilitiesValue = {}, requestedValue 
   }
   if (
     Object.hasOwn(requested, "catalogRevision") &&
-    normalizeAgentText(requested.catalogRevision) !== capabilities.revision
+    toText(requested.catalogRevision) !== capabilities.revision
   ) {
     throw selectionError(
       VIBE64_ASSISTANT_SELECTION_ERROR_CODES.CATALOG_STALE,
       "The assistant catalog changed. Review the current choices and try again.",
       {
         actualRevision: capabilities.revision,
-        expectedRevision: normalizeAgentText(requested.catalogRevision)
+        expectedRevision: toText(requested.catalogRevision)
       }
     );
   }

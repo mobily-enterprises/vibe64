@@ -2,11 +2,7 @@ import { assistantRoutingPreferences } from "@local/vibe64-runtime/shared/assist
 import crypto from "node:crypto";
 import { BROWSER_KEY_PATTERN } from "./inputPatterns.js";
 
-import {
-  isPlainObject,
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import {
   defineVibe64AssistantSelection
 } from "@local/vibe64-runtime/shared";
@@ -14,6 +10,7 @@ import {
   SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS,
   normalizeSessionRenewalHandoverDraft
 } from "@local/vibe64-terminals/server/sessionRenewalHandover";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
@@ -78,7 +75,7 @@ function renewalStateError(message, code, options = {}) {
 }
 
 function renewalTimestamp(value = "") {
-  const timestamp = normalizeText(value);
+  const timestamp = toText(value);
   if (!timestamp || !Number.isFinite(Date.parse(timestamp))) {
     throw renewalStateError(
       "Session renewal has an invalid timestamp.",
@@ -90,7 +87,7 @@ function renewalTimestamp(value = "") {
 }
 
 function renewalOperationKey(value = "") {
-  const key = normalizeText(value);
+  const key = toText(value);
   if (!BROWSER_KEY_PATTERN.test(key)) {
     throw renewalStateError(
       "Session renewal requires a valid operation key.",
@@ -152,7 +149,7 @@ function renewalDraft(value = {}, options = {}) {
     );
   }
   const hash = renewalHandoverHash(handover);
-  if (normalizeText(draft.hash) !== hash) {
+  if (toText(draft.hash) !== hash) {
     throw renewalStateError(
       "Session renewal draft integrity check failed.",
       "vibe64_session_renewal_state_invalid",
@@ -161,8 +158,8 @@ function renewalDraft(value = {}, options = {}) {
   }
   return {
     hash,
-    origin: ["edited", "generated", "manual"].includes(normalizeText(draft.origin))
-      ? normalizeText(draft.origin)
+    origin: ["edited", "generated", "manual"].includes(toText(draft.origin))
+      ? toText(draft.origin)
       : "manual",
     revision,
     text: handover,
@@ -175,8 +172,8 @@ function renewalActor(value = null) {
     return null;
   }
   const actor = {
-    id: normalizeText(value.id),
-    name: normalizeText(value.name)
+    id: toText(value.id),
+    name: toText(value.name)
   };
   return actor.id || actor.name ? actor : null;
 }
@@ -191,14 +188,14 @@ function renewalCommit(value = null, options = {}) {
   }
   const normalized = {
     committedAt: renewalTimestamp(value.committedAt),
-    selectedBeforeArchive: normalizeText(value.selectedBeforeArchive),
-    sourceSessionId: normalizeText(value.sourceSessionId),
-    successorSessionId: normalizeText(value.successorSessionId),
+    selectedBeforeArchive: toText(value.selectedBeforeArchive),
+    sourceSessionId: toText(value.sourceSessionId),
+    successorSessionId: toText(value.successorSessionId),
     successorWillBeSelected: value.successorWillBeSelected === true
   };
   if (
-    normalized.sourceSessionId !== normalizeText(sessionId) ||
-    normalized.successorSessionId !== normalizeText(successorSessionId) ||
+    normalized.sourceSessionId !== toText(sessionId) ||
+    normalized.successorSessionId !== toText(successorSessionId) ||
     ![normalized.sourceSessionId, "none"].includes(normalized.selectedBeforeArchive)
   ) {
     throw renewalStateError(
@@ -214,7 +211,7 @@ function renewalMaintenance(value = null, commit = null) {
   if (!commit || !isPlainObject(value)) {
     return null;
   }
-  const status = normalizeText(value.status);
+  const status = toText(value.status);
   const attempt = Number(value.attempt || 0);
   const steps = isPlainObject(value.steps) ? value.steps : {};
   if (
@@ -268,16 +265,16 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
       { statusCode: 500 }
     );
   }
-  const sessionId = normalizeText(value.sessionId);
-  if (!sessionId || (expectedSessionId && sessionId !== normalizeText(expectedSessionId))) {
+  const sessionId = toText(value.sessionId);
+  if (!sessionId || (expectedSessionId && sessionId !== toText(expectedSessionId))) {
     throw renewalStateError(
       "Session renewal state belongs to a different session.",
       "vibe64_session_renewal_state_invalid",
       { statusCode: 500 }
     );
   }
-  const stage = normalizeText(value.stage);
-  const status = normalizeText(value.status);
+  const stage = toText(value.stage);
+  const status = toText(value.status);
   const revision = Number(value.revision);
   if (!SESSION_RENEWAL_STAGES.has(stage) || !SESSION_RENEWAL_STATUSES.has(status)) {
     throw renewalStateError(
@@ -304,7 +301,7 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
     ...(value.predecessorArchivedAt
       ? { predecessorArchivedAt: renewalTimestamp(value.predecessorArchivedAt) }
       : {}),
-    renewalId: normalizeText(value.renewalId),
+    renewalId: toText(value.renewalId),
     revision,
     schemaVersion: SESSION_RENEWAL_SCHEMA_VERSION,
     sessionId,
@@ -340,7 +337,7 @@ function normalizeSessionRenewalState(value = {}, options = {}) {
         : {})
     };
   }
-  const successorSessionId = normalizeText(value.successor?.sessionId);
+  const successorSessionId = toText(value.successor?.sessionId);
   const commit = renewalCommit(value.commit, {
     sessionId,
     successorSessionId
@@ -431,17 +428,17 @@ function createSessionRenewalState({
   const timestamp = renewalTimestamp(at);
   return normalizeSessionRenewalState({
     actor: {
-      id: normalizeText(actor.id),
-      name: normalizeText(actor.name)
+      id: toText(actor.id),
+      name: toText(actor.name)
     },
     createdAt: timestamp,
     error: null,
     kind: SESSION_RENEWAL_KIND,
     operationKey: renewalOperationKey(operationKey),
-    renewalId: normalizeText(renewalId),
+    renewalId: toText(renewalId),
     revision: 1,
     schemaVersion: SESSION_RENEWAL_SCHEMA_VERSION,
-    sessionId: normalizeText(sessionId),
+    sessionId: toText(sessionId),
     stage: SESSION_RENEWAL_STAGE.DRAFT_GENERATING,
     status: SESSION_RENEWAL_STATUS.RUNNING,
     updatedAt: timestamp
@@ -466,13 +463,13 @@ function createSessionRenewalDraft(text = "", options = {}) {
 
 function assertSessionRenewalOperation(state = {}, operationKey = "") {
   const expected = renewalOperationKey(operationKey);
-  if (normalizeText(state.operationKey) !== expected) {
+  if (toText(state.operationKey) !== expected) {
     throw renewalStateError(
       "Another session renewal operation is already in progress.",
       "vibe64_session_renewal_operation_conflict",
       {
         details: {
-          currentRenewalId: normalizeText(state.renewalId)
+          currentRenewalId: toText(state.renewalId)
         }
       }
     );
@@ -486,7 +483,7 @@ function assertSessionRenewalDraftVersion(state = {}, options = {}) {
     expectedRevision = 0
   } = options;
   const revision = Number(expectedRevision);
-  const hash = normalizeText(expectedHash);
+  const hash = toText(expectedHash);
   if (
     !state.draft ||
     !Number.isSafeInteger(revision) ||
@@ -514,7 +511,7 @@ function assertSessionRenewalDraftVersion(state = {}, options = {}) {
  */
 async function readSessionRenewalState(runtime, sessionId = "") {
   const raw = await runtime.store.readSessionRenewalStateRecord(sessionId);
-  if (!normalizeText(raw)) {
+  if (!toText(raw)) {
     return null;
   }
   try {
@@ -522,7 +519,7 @@ async function readSessionRenewalState(runtime, sessionId = "") {
       expectedSessionId: sessionId
     });
   } catch (error) {
-    if (normalizeText(error?.code).startsWith("vibe64_session_renewal_")) {
+    if (toText(error?.code).startsWith("vibe64_session_renewal_")) {
       throw error;
     }
     throw renewalStateError(
@@ -579,7 +576,7 @@ function publicSessionRenewalState(value = null) {
     draft: state.draft || null,
     error: isPlainObject(state.error) ? state.error : null,
     manualRequired: state.manualRequired === true,
-    manualTemplateHash: normalizeText(state.manualTemplateHash) || null,
+    manualTemplateHash: toText(state.manualTemplateHash) || null,
     maintenance: state.maintenance
       ? {
           error: state.maintenance.error,
@@ -588,7 +585,7 @@ function publicSessionRenewalState(value = null) {
         }
       : null,
     operationKey: state.operationKey,
-    predecessorArchivedAt: normalizeText(state.predecessorArchivedAt) || null,
+    predecessorArchivedAt: toText(state.predecessorArchivedAt) || null,
     renewalId: state.renewalId,
     revision: state.revision,
     sessionId: state.sessionId,
@@ -596,9 +593,9 @@ function publicSessionRenewalState(value = null) {
     status: state.status,
     successor: isPlainObject(state.successor)
       ? {
-          sessionId: normalizeText(state.successor.sessionId),
-          acknowledgedAt: normalizeText(state.successor.acknowledgedAt),
-          availableAt: normalizeText(state.successor.availableAt)
+          sessionId: toText(state.successor.sessionId),
+          acknowledgedAt: toText(state.successor.acknowledgedAt),
+          availableAt: toText(state.successor.availableAt)
         }
       : null,
     updatedAt: state.updatedAt

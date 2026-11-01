@@ -55,14 +55,12 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV,
   runtimeNamespace
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  AGENT_PROVIDER_IDS,
-  normalizeAgentText
-} from "./agentProviders.js";
+import { AGENT_PROVIDER_IDS } from "./agentProviders.js";
 import {
   codexAttachmentHostRoot,
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE = "vibe64_codex_model_catalog_invalid";
@@ -92,7 +90,7 @@ const readBoundedCodexAuthJson = codexAccountReader.readRecord;
 const readCodexSelectedAccountAuth = codexAccountReader.readSelected;
 
 async function readCodexSelectedAccountAccess(options = {}) {
-  const toolHomeSource = normalizeAgentText(options.toolHomeSource);
+  const toolHomeSource = toText(options.toolHomeSource);
   if (!toolHomeSource || !path.isAbsolute(toolHomeSource)) {
     throw codexAppServerHelperAuthError(
       "vibe64_codex_helper_auth_unavailable",
@@ -100,7 +98,7 @@ async function readCodexSelectedAccountAccess(options = {}) {
     );
   }
   const auth = await readBoundedCodexAuthJson(path.join(toolHomeSource, ".codex", "auth.json"));
-  const authMode = normalizeAgentText(auth.auth_mode).toLowerCase();
+  const authMode = toText(auth.auth_mode).toLowerCase();
   if (!["chatgpt", "apikey", "api_key"].includes(authMode)) {
     throw codexAppServerHelperAuthError(
       "vibe64_codex_helper_auth_invalid",
@@ -122,7 +120,7 @@ async function currentCodexAccountIdentitySignature(options = {}, { includeInter
     const config = await readFile(path.join(options.toolHomeSource, ".codex", "config.toml"), "utf8");
     return `sha256:${createHash("sha256").update(config).digest("hex")}`;
   }
-  const explicit = normalizeAgentText(options.accountIdentitySignature);
+  const explicit = toText(options.accountIdentitySignature);
   if (explicit) {
     return explicit;
   }
@@ -148,22 +146,22 @@ function codexAppServerRuntimeScope({
   executionRoot = "",
   workdir = ""
 } = {}) {
-  const normalizedExecutionRoot = normalizeAgentText(executionRoot);
+  const normalizedExecutionRoot = toText(executionRoot);
   if (normalizedExecutionRoot) {
     return path.resolve(normalizedExecutionRoot);
   }
-  const normalizedWorkdir = normalizeAgentText(workdir);
+  const normalizedWorkdir = toText(workdir);
   return normalizedWorkdir ? path.resolve(normalizedWorkdir) : "";
 }
 
 function codexAppServerRuntimeIdentityScope(options = {}) {
   const scope = codexAppServerRuntimeScope(options);
-  const loginGeneration = normalizeAgentText(options.codexLoginGeneration);
-  if (!scope && !options.modelProviderId && !loginGeneration && !normalizeAgentText(process.env[VIBE64_RUNTIME_NAMESPACE_ENV])) {
+  const loginGeneration = toText(options.codexLoginGeneration);
+  if (!scope && !options.modelProviderId && !loginGeneration && !toText(process.env[VIBE64_RUNTIME_NAMESPACE_ENV])) {
     return "";
   }
   const namespace = runtimeNamespace();
-  const runtimeInstanceId = normalizeAgentText(options.runtimeInstanceId);
+  const runtimeInstanceId = toText(options.runtimeInstanceId);
   const executionMode = codexAppServerExecutionMode(options);
   return [
     namespace ? `namespace:${namespace}` : "",
@@ -188,7 +186,7 @@ function codexAppServerRuntimeDir(options = {}) {
 }
 
 async function currentCodexAuthStateSignature(options = {}) {
-  const signature = normalizeAgentText(options.authStateSignature);
+  const signature = toText(options.authStateSignature);
   if (signature) {
     return signature;
   }
@@ -198,9 +196,9 @@ async function currentCodexAuthStateSignature(options = {}) {
 }
 
 async function assertCodexAuthGenerationCurrent(capturedSignature = "", options = {}) {
-  const systemRoot = normalizeAgentText(options.systemRoot);
+  const systemRoot = toText(options.systemRoot);
   if (!systemRoot) {
-    return normalizeAgentText(capturedSignature);
+    return toText(capturedSignature);
   }
   const authStatus = await readCodexAuthStatus(systemRoot);
   if (authStatus?.status === "reconnecting") {
@@ -216,8 +214,8 @@ async function assertCodexAuthGenerationCurrent(capturedSignature = "", options 
     systemRoot
   });
   if (
-    normalizeAgentText(capturedSignature) &&
-    normalizeAgentText(capturedSignature) !== currentSignature
+    toText(capturedSignature) &&
+    toText(capturedSignature) !== currentSignature
   ) {
     const error = new Error("Codex authentication changed while the app-server was starting.");
     error.code = "vibe64_codex_auth_generation_changed";
@@ -243,7 +241,7 @@ function codexReconnectRequiredError({
       message
     }
   ];
-  error.observed = provider ? "" : normalizeAgentText(observed);
+  error.observed = provider ? "" : toText(observed);
   if (cause) {
     error.cause = cause;
   }
@@ -291,7 +289,7 @@ function codexAppServerControlGeneration(terminalEnv = {}) {
     normalized.VIBE64_AGENT_ENV_COMMAND_GENERATION,
     normalized.VIBE64_AGENT_PREVIEW_COMMAND_GENERATION,
     normalized.VIBE64_AGENT_SESSION_COMMAND_GENERATION
-  ].map(normalizeAgentText);
+  ].map(toText);
   return generations.every(Boolean)
     ? stableHash(JSON.stringify(generations))
     : "";
@@ -301,7 +299,7 @@ function codexAppServerShimDirs(terminalEnv = {}) {
   const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
   return withGenesisCommandShim([
     normalizedTerminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV]
-  ].map(normalizeAgentText).filter(Boolean));
+  ].map(toText).filter(Boolean));
 }
 
 function codexAppServerRuntimes(runtimes = []) {
@@ -313,7 +311,7 @@ function codexAppServerRuntimes(runtimes = []) {
   const output = [];
   const seen = new Set();
   for (const value of values) {
-    const normalized = normalizeAgentText(value);
+    const normalized = toText(value);
     if (!normalized || seen.has(normalized)) {
       continue;
     }
@@ -346,7 +344,7 @@ function codexAppServerExecutionContextHash({
   return stableHash(JSON.stringify({
     project: normalizeCodexAppServerContextRecord(project),
     session: normalizeCodexAppServerContextRecord(session),
-    userKey: normalizeAgentText(userKey)
+    userKey: toText(userKey)
   }));
 }
 
@@ -417,7 +415,7 @@ function codexAppServerRuntimeHost(options = {}) {
         runtimes: normalizedRuntimes,
         session: helper || options.session === undefined ? {} : options.session,
         shimDirs: helper ? [] : codexAppServerShimDirs(normalizedTerminalEnv),
-        userKey: helper ? "" : normalizeAgentText(options.userKey)
+        userKey: helper ? "" : toText(options.userKey)
       });
     }
   };
@@ -470,7 +468,7 @@ function codexAppServerRuntimeHost(options = {}) {
     ownedRuntime: options.ownedRuntime,
     verifyOwnerScope: options.verifyOwnerScope,
     reason: options.reason,
-    ownerId: normalizeAgentText(options.runtimeInstanceId || options.session?.sessionId),
+    ownerId: toText(options.runtimeInstanceId || options.session?.sessionId),
     providerHome: Boolean(curatedCodexProvider(options.modelProviderId)),
     compatibility: {
       attachmentHostRoot: codexAttachmentHostRoot({ env: options.env }),
@@ -545,7 +543,7 @@ async function assertCodexAuthPreflightReady(options = {}, { reason = "codex-aut
 function codexCliResumeCommand(options = {}) {
   return nativeCodexCliResumeCommand({
     ...options,
-    codexCommand: normalizeAgentText(options.codexCommand) || operatorCliCommand("codex")
+    codexCommand: toText(options.codexCommand) || operatorCliCommand("codex")
   });
 }
 

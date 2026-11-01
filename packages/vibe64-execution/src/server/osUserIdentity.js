@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { trimmedText as normalizeOsUsername } from "./trimmedText.js";
+import { normalizeText as normalizeOsUsername } from "@jskit-ai/kernel/shared/support/normalize";
 
 const execFile = promisify(execFileCallback);
 

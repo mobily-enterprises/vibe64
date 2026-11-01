@@ -1,6 +1,5 @@
 import { rm } from "node:fs/promises";
 
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
@@ -23,6 +22,7 @@ import {
 } from "./explanationRecords.js";
 import { sourceEditorExplanationWithMessage, withSourceEditorExplanationFreshness } from "./explanationStream.js";
 import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // Stopping, cleaning up and deleting source explanations, with the helper
 // threads they used.
@@ -59,8 +59,8 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", opt
   let explanation = await readSourceEditorExplanationRecord(context, explanationId, { explanationChats });
   const assistantMessageId = explanation.messages.findLast((entry) => entry.role === "assistant")?.id;
   const cleanupRecord = await readSourceEditorExplanationCleanupRecord(context, explanationId);
-  const threadId = normalizeText(explanation.agentThreadId);
-  const turnId = normalizeText(explanation.agentTurnId);
+  const threadId = toText(explanation.agentThreadId);
+  const turnId = toText(explanation.agentTurnId);
   if (!pendingTurn && threadId && turnId && cleanupRecord?.helper) {
     const helper = cleanupRecord.helper;
     sourceEditorHelperRoot(context, helper);
@@ -132,7 +132,7 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, options
     terminalService
   } = options;
   const activeIds = sourceEditorCleanupActiveIds(input.activeExplanationIds);
-  const originId = normalizeText(input.originId);
+  const originId = toText(input.originId);
   const cleaned = [];
   const cleanedHelpers = [];
   const failures = [];
@@ -168,13 +168,13 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, options
         if (record.helper) cleanedHelpers.push(record.helper);
         cleaned.push({
           id: record.id,
-          status: normalizeText(agentCleanup?.status || "deleted"),
+          status: toText(agentCleanup?.status || "deleted"),
           threadId: record.agentThreadId
         });
       } catch (error) {
         failures.push({
-          code: normalizeText(error?.code || "vibe64_source_explanation_cleanup_failed"),
-          error: normalizeText(error?.message || "Source explanation cleanup failed."),
+          code: toText(error?.code || "vibe64_source_explanation_cleanup_failed"),
+          error: toText(error?.message || "Source explanation cleanup failed."),
           id: record.id,
           threadId: record.agentThreadId
         });

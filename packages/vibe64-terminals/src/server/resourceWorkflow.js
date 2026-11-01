@@ -12,7 +12,7 @@ import {
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { openedFileWithin } from "./openedFileWithin.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 const fileDigests = new Map();
 const MAX_FILE_BYTES = 8 * 1024 * 1024;

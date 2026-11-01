@@ -8,7 +8,7 @@ import { declaredStepCheck, lessonHasSteps, validateContent } from "./contentSch
 import { codeStepOf, readDeclaredFiles, verifyStepAuthorship } from "./codeAuthorship.js";
 import { trainingFailure } from "./errors.js";
 import { pinnedLessonKey } from "./installedContent.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 /** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */

@@ -1,8 +1,6 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { VIBE64_PROMPT_HINT_OUTPUT_SCHEMA } from "@local/vibe64-runtime/shared";
 
 import { runAssistantHelperTurn } from "./assistantHelperTurn.js";
-import { isRecord } from "./isRecord.js";
 import {
   PROMPT_HINT_CLEANUP_REASONS,
   PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
@@ -18,6 +16,8 @@ import {
   promptHintResponse,
   samePromptHintBasis
 } from "./promptHintRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -166,11 +166,11 @@ function createPromptHintJobs({
         const generation = error.cause;
         state.reportDiagnostic("vibe64_prompt_hints_cleanup_failed", error, {
           ...(isRecord(error.details) ? error.details : {}),
-          cleanupCode: normalizeText(error.code),
+          cleanupCode: toText(error.code),
           // A cleanup failing before the turn means no generation ran.
           ...(error.beforeTurn ? {} : {
-            generationCode: normalizeText(generation?.code),
-            generationError: normalizeText(generation?.message),
+            generationCode: toText(generation?.code),
+            generationError: toText(generation?.message),
             generationOk: !generation
           }),
           sessionId: job.sessionId

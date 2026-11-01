@@ -21,10 +21,10 @@ import {
   scopedSessionWorkCommand,
   treeWithDerivedArtifactsFromCommit
 } from "./sessionWorkGit.js";
-import { trimmedText } from "./trimmedText.js";
 import {
   captureSessionWorkUpdateCheckpointDirect
 } from "./sessionWorkUpdate.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function incomingRepositoryContext(project, session) {
   // Incoming belongs to the receiving project, independently of the selected
@@ -383,7 +383,7 @@ async function changeIncomingContributionDirect({
   const atomic = await git(runCommand, context, ["push", "--atomic", activeLease, discardedLease,
     context.remoteUrl, createDiscarded, deleteActive], { ...options, required: false });
   if (!atomic.ok) {
-    const reason = trimmedText(atomic.stderr || atomic.output || atomic.error);
+    const reason = normalizeText(atomic.stderr || atomic.output || atomic.error);
     if (!/does not support --atomic push/iu.test(reason)) {
       throw saveError(
         reason || "Discard was not confirmed. Refresh Incoming changes before retrying.",

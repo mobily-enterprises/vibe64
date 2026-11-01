@@ -6,7 +6,7 @@ import { pipeline } from "node:stream/promises";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { link, lstat, lutimes, mkdir, open, readdir, realpath, rename, rm, rmdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isMissingPathError, normalizeText, pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { isMissingPathError, pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { runVibe64Command } from "@local/vibe64-execution/server";
@@ -40,6 +40,7 @@ import {
   sameEntry,
   sameFile
 } from "./fileAreaItems.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 // Files areas: authorization, area-to-root resolution, locking, the
@@ -161,9 +162,9 @@ function createFileArea(projectService, { repoChanged }) {
           }
         }, { operation: "source-editor-write", waitMs });
         if (!exclusive.acquired) {
-          throw sourceEditorError(normalizeText(exclusive.value?.error) ||
+          throw sourceEditorError(toText(exclusive.value?.error) ||
             "Another source-changing operation is starting. Try again in a moment.",
-            normalizeText(exclusive.value?.code) || "vibe64_source_editor_write_busy", {}, 409);
+            toText(exclusive.value?.code) || "vibe64_source_editor_write_busy", {}, 409);
         }
         return exclusive.value;
       };
@@ -226,7 +227,7 @@ function createFileArea(projectService, { repoChanged }) {
         throw sourceEditorError("Files require a project request.", "vibe64_files_access_required", {}, 403);
       }
       const owner = !requestContext.vibe64User || requestContext.vibe64User.role === "owner";
-      const sessionId = normalizeText(input.sessionId);
+      const sessionId = toText(input.sessionId);
       const runtime = await projectService.createRuntime({ sessionId });
       if (operation === "areas") {
         await runtime.store.readSessionSummary(sessionId);
@@ -238,7 +239,7 @@ function createFileArea(projectService, { repoChanged }) {
       }
       if (operation === "transfer") {
         const mode = input.mode === "move" ? "move" : "copy";
-        const targetSessionId = normalizeText(input.targetSessionId) || sessionId;
+        const targetSessionId = toText(input.targetSessionId) || sessionId;
         // Only project areas send into another session, so a transfer never
         // holds two sessions' leases at once.
         if (targetSessionId !== sessionId && FILE_AREAS[area]?.scope !== "project") {

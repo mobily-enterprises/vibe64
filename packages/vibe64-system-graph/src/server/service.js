@@ -14,12 +14,7 @@ import { writeManagedGitExcludes } from "@local/vibe64-project/server/projectEnv
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { vibe64RuntimePacks } from "@local/vibe64-terminals/server/vibe64OutputTargets";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
-import {
-  normalizeText,
-  pathExists,
-  pathInsideOrEqual,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { pathExists, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
@@ -35,6 +30,7 @@ import {
   validateGenesisCity
 } from "./genesisCities.js";
 import { releaseCallWeb } from "./usageService.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -170,7 +166,7 @@ async function assertInspectorPrerequisites(sourceRoot, realSourceRoot, inspecto
  * prepared before every run. It is optional input: without it the inspector runs cold.
  */
 async function inspectorCacheDirectory(current, realSourceRoot, inspector) {
-  const sessionRoot = normalizeText(current.session?.sessionRoot);
+  const sessionRoot = toText(current.session?.sessionRoot);
   if (!sessionRoot) return "";
   const directory = path.join(path.resolve(sessionRoot), "architecture-cache", inspector.id);
   if (pathInsideOrEqual(realSourceRoot, directory) || pathInsideOrEqual(path.resolve(current.sourceRoot), directory)) return "";
@@ -347,7 +343,7 @@ function createService({
   }
 
   async function systemContext(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     if (!normalizedSessionId) {
       throw systemError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
@@ -556,8 +552,8 @@ function createService({
           },
           diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
           ok: true,
-          status: normalizeText(result.status) || "ready",
-          summary: normalizeText(result.summary)
+          status: toText(result.status) || "ready",
+          summary: toText(result.summary)
         };
       } catch (error) {
         pending.cancelled = controller.signal.aborted;

@@ -1,7 +1,8 @@
 // Parses an agent's env command line and words its replies: usage, scope status and mutation results.
 
-import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/server/savedEnvValues";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const ENV_SCOPE_DEVELOPMENT = "development";
 const ENV_SCOPE_PRODUCTION = "production";
@@ -47,8 +48,8 @@ function responseError(message = "", code = "vibe64_agent_env_command_failed", o
 function assertOperationResult(result = {}, fallback = "Vibe64 Env operation failed.") {
   if (result.ok === false) {
     throw vibe64Error(
-      normalizeText(result.error || result.errors?.[0]?.message) || fallback,
-      normalizeText(result.code || result.errors?.[0]?.code) || "vibe64_agent_env_command_failed"
+      toText(result.error || result.errors?.[0]?.message) || fallback,
+      toText(result.code || result.errors?.[0]?.code) || "vibe64_agent_env_command_failed"
     );
   }
   return result;
@@ -58,7 +59,7 @@ function normalizeScope(value = "", options = {}) {
   const {
     allowAll = false
   } = options;
-  const normalized = normalizeText(value).toLowerCase();
+  const normalized = toText(value).toLowerCase();
   if (["dev", ENV_SCOPE_DEVELOPMENT].includes(normalized)) {
     return ENV_SCOPE_DEVELOPMENT;
   }
@@ -76,18 +77,18 @@ function parseCommandArgs(args = []) {
   const flags = values.filter((arg) => arg.startsWith("-"));
   const unsupportedFlags = flags.filter((flag) => !["--help", "-h", "--json", "--secret"].includes(flag));
   const positionals = values.filter((arg) => !arg.startsWith("-"));
-  const command = normalizeText(positionals[0]).toLowerCase();
+  const command = toText(positionals[0]).toLowerCase();
   const help = flags.includes("--help") || flags.includes("-h") || command === "help";
   const scope = normalizeScope(positionals[1], {
     allowAll: command === "status"
   });
   return {
     command,
-    entryId: normalizeText(positionals[3]),
-    fieldId: normalizeText(positionals[4]),
+    entryId: toText(positionals[3]),
+    fieldId: toText(positionals[4]),
     help,
     json: flags.includes("--json"),
-    key: normalizeText(positionals[2]),
+    key: toText(positionals[2]),
     positionals,
     scope,
     secret: flags.includes("--secret"),
@@ -145,7 +146,7 @@ function validateParsedCommand(parsed = {}) {
 }
 
 function recordIsLinked(record = null) {
-  return normalizeText(record?.source) === SAVED_ENV_VALUE_SOURCE;
+  return toText(record?.source) === SAVED_ENV_VALUE_SOURCE;
 }
 
 function statusRecord(record = {}, scope = "", isUserValueRecord = () => false) {
@@ -155,14 +156,14 @@ function statusRecord(record = {}, scope = "", isUserValueRecord = () => false) 
   return {
     configured,
     editable: record.editable === true,
-    key: normalizeText(record.key),
-    ...(linked ? { label: normalizeText(record.label), linked: true } : {}),
+    key: toText(record.key),
+    ...(linked ? { label: toText(record.label), linked: true } : {}),
     missing: record.missing === true || record.valuePresent !== true,
-    owner: normalizeText(record.owner),
-    requiredFor: Array.isArray(record.requiredFor) ? record.requiredFor.map(normalizeText).filter(Boolean) : [],
+    owner: toText(record.owner),
+    requiredFor: Array.isArray(record.requiredFor) ? record.requiredFor.map(toText).filter(Boolean) : [],
     scope,
     secret: record.secret === true,
-    source: normalizeText(record.source),
+    source: toText(record.source),
     state: linked ? "linked" : configured ? "configured" : stored ? "empty" : "missing",
     stored
   };
@@ -267,11 +268,11 @@ function mutationPayload(input = {}, options = {}) {
 }
 
 function recordForKey(records = [], key = "") {
-  return (Array.isArray(records) ? records : []).find((record) => normalizeText(record?.key) === key) || null;
+  return (Array.isArray(records) ? records : []).find((record) => toText(record?.key) === key) || null;
 }
 
 function assertRecordEditable(record = null, scope = "", key = "") {
-  if (!record || record.editable === true && normalizeText(record.owner) !== "system") {
+  if (!record || record.editable === true && toText(record.owner) !== "system") {
     return;
   }
   if (recordIsLinked(record)) {
@@ -282,7 +283,7 @@ function assertRecordEditable(record = null, scope = "", key = "") {
   }
   const label = scope === ENV_SCOPE_PRODUCTION ? "Production" : "Development";
   throw vibe64Error(
-    `${label} Env ${key} is managed by ${normalizeText(record.source) || "Vibe64"} and cannot be changed as a user value.`,
+    `${label} Env ${key} is managed by ${toText(record.source) || "Vibe64"} and cannot be changed as a user value.`,
     "vibe64_agent_env_command_managed_value"
   );
 }

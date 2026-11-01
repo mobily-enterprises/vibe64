@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 
-import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
@@ -9,6 +8,7 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
@@ -88,7 +88,7 @@ function sourceEditorVibe64UserIdentity(vibe64User = null) {
   if (!isPlainObject(vibe64User)) {
     return "";
   }
-  const identity = normalizeText(
+  const identity = toText(
     vibe64User.username ||
     vibe64User.osUsername ||
     vibe64User.email ||
@@ -104,7 +104,7 @@ function sourceEditorAgentOperationOptions(context = {}, options = {}, {
 } = {}) {
   return {
     ...options,
-    providerId: normalizeText(providerId || context.agentProviderId),
+    providerId: toText(providerId || context.agentProviderId),
     runtime: context.runtime || null,
     session: context.session || null,
     vibe64User: context.vibe64User || null
@@ -149,7 +149,7 @@ async function resolveSourceEditorAgentExecutionProfile(terminalService, context
     }
   );
   const executionProfile = requiredSourceEditorExecutionProfile(resolved);
-  if (executionProfile.providerId !== normalizeText(context.agentProviderId)) {
+  if (executionProfile.providerId !== toText(context.agentProviderId)) {
     throw sourceEditorError(
       "The selected assistant provider returned a low-cost profile for a different provider.",
       "vibe64_source_explanation_execution_profile_missing",
@@ -178,15 +178,15 @@ async function runSourceEditorHelperTurn(terminalService, context, input, option
     expectedConnectionIdentity: helper.connectionIdentity,
     signal: context.signal,
     async onEvent(event) {
-      if (event.type === "thread") helper.conversationId = normalizeText(event.threadId);
-      else if (event.type === "turn") helper.runId = normalizeText(event.turnId);
-      else if (event.type === "helper-execution") helper.executionId = normalizeText(event.executionId);
+      if (event.type === "thread") helper.conversationId = toText(event.threadId);
+      else if (event.type === "turn") helper.runId = toText(event.turnId);
+      else if (event.type === "helper-execution") helper.executionId = toText(event.executionId);
       if (["thread", "turn", "helper-execution"].includes(event.type)) await context.retainAssistantHelper();
       await forwardEvent(event);
     }
   });
-  helper.conversationId = normalizeText(result?.threadId) || helper.conversationId;
-  helper.runId = normalizeText(result?.turnId) || helper.runId;
+  helper.conversationId = toText(result?.threadId) || helper.conversationId;
+  helper.runId = toText(result?.turnId) || helper.runId;
   await context.retainAssistantHelper();
   return result;
 }

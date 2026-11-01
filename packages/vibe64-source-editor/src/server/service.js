@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
+import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { pathMatchesPolicyPattern, sourceEditorFilePolicy, sourceEditorPathExcluded } from "./filePolicy.js";
@@ -51,6 +51,7 @@ import {
   sourceEditorInterfacePromptVersion,
   sourceEditorVibe64UserIdentity
 } from "./explanations.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -93,7 +94,7 @@ function createService({
       runtime: existingRuntime = null,
       vibe64User = null
     } = options;
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     if (!normalizedSessionId) {
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
@@ -143,12 +144,12 @@ function createService({
     let agentProviderId = "";
     if (agentOperation) {
       const provider = await describeSourceEditorAgentProvider(terminalService, { runtime, session, vibe64User });
-      agentProviderId = normalizeText(
+      agentProviderId = toText(
         provider?.providerId ||
         session?.agentSession?.providerId ||
         session?.metadata?.agent_identity_provider
       );
-      agentAccountIdentitySignature = normalizeText(provider?.accountIdentitySignature);
+      agentAccountIdentitySignature = toText(provider?.accountIdentitySignature);
       agentRoutingDecision = provider.decision;
     }
 
@@ -171,7 +172,7 @@ function createService({
     const {
       agentOperation = false
     } = options;
-    const sessionId = normalizeText(input.sessionId);
+    const sessionId = toText(input.sessionId);
     if (!sessionId) {
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
@@ -188,8 +189,8 @@ function createService({
     );
     if (!exclusive.acquired) {
       throw sourceEditorError(
-        normalizeText(exclusive.value?.error) || "Another source-changing operation is starting. Try again in a moment.",
-        normalizeText(exclusive.value?.code) || "vibe64_source_editor_write_busy",
+        toText(exclusive.value?.error) || "Another source-changing operation is starting. Try again in a moment.",
+        toText(exclusive.value?.code) || "vibe64_source_editor_write_busy",
         {},
         409
       );

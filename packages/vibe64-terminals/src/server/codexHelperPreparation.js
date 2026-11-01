@@ -4,7 +4,7 @@ import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle"
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function createCodexHelperPreparation({
   runtimeHost,
@@ -29,12 +29,12 @@ function createCodexHelperPreparation({
       runtime = null,
       session = null
     } = options;
-    const projectRuntimeRoot = trimmedText(runtime?.stateRoot);
+    const projectRuntimeRoot = normalizeText(runtime?.stateRoot);
     if (
       !projectRuntimeRoot ||
       record.projectRuntimeRoot !== projectRuntimeRoot ||
-      trimmedText(session?.sessionId) !== record.sessionId ||
-      trimmedText(runtime?.projectContextRoot) !== record.projectContextRoot ||
+      normalizeText(session?.sessionId) !== record.sessionId ||
+      normalizeText(runtime?.projectContextRoot) !== record.projectContextRoot ||
       sessionSourcePath(session) !== record.workdir
     ) {
       throw codexAppServerHelperOwnershipError(
@@ -94,7 +94,7 @@ function createCodexHelperPreparation({
     sessionId = ""
   } = {}) {
     const effectiveRuntime = runtime || await createRuntimeForSession();
-    const projectRuntimeRoot = trimmedText(effectiveRuntime?.stateRoot);
+    const projectRuntimeRoot = normalizeText(effectiveRuntime?.stateRoot);
     if (!projectRuntimeRoot) {
       throw codexAppServerHelperOwnershipError(
         "Vibe64 project runtime state is unavailable for Codex helper ownership."
@@ -103,7 +103,7 @@ function createCodexHelperPreparation({
     return { projectRuntimeRoot, context: {
       get sessionId() { return sessionId || session?.sessionId; },
       async prepareRecord(record, ledger) {
-        const currentSession = trimmedText(session?.sessionId) === record.sessionId
+        const currentSession = normalizeText(session?.sessionId) === record.sessionId
           ? session
           : await effectiveRuntime.getSession(record.sessionId, { inspectSource: false });
         return prepareCodexAppServerHelperThreadRestore(record, {
@@ -157,9 +157,9 @@ function createCodexHelperPreparation({
         }
         if (refused.length) {
           const error = new Error(`Low-cost assistant cleanup could not be recorded for ${refused
-            .map(({ error: reason, sessionId: refusedId }) => `session ${refusedId} (${trimmedText(reason?.message || reason)})`)
+            .map(({ error: reason, sessionId: refusedId }) => `session ${refusedId} (${normalizeText(reason?.message || reason)})`)
             .join("; ")}.`);
-          error.code = trimmedText(refused[0].error?.code);
+          error.code = normalizeText(refused[0].error?.code);
           error.retryable = true;
           throw error;
         }
@@ -171,8 +171,8 @@ function createCodexHelperPreparation({
     runtime = null,
     session = null
   } = {}) {
-    const sessionId = trimmedText(session?.sessionId);
-    const projectRuntimeRoot = trimmedText(runtime?.stateRoot);
+    const sessionId = normalizeText(session?.sessionId);
+    const projectRuntimeRoot = normalizeText(runtime?.stateRoot);
     if (!sessionId || !projectRuntimeRoot) {
       throw codexAppServerHelperOwnershipError(
         "Vibe64 cannot inventory helper threads without project/session ownership."

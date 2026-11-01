@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   assertCanUseVibe64Assistant,
   canUseVibe64Assistant,
@@ -7,6 +6,7 @@ import {
   findVibe64AgentProvider
 } from "@local/vibe64-runtime/shared";
 import { assistantUser, providerBindingConflictError, sessionAssistantSelection } from "./sessionAgentRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
 
@@ -38,7 +38,7 @@ function createSessionAgentAccess({
       engineId: provider.id,
       modelProviderId: assistantSelection?.modelProviderId || "",
       session: options.session || null,
-      sessionId: normalizeText(sessionId),
+      sessionId: toText(sessionId),
       vibe64User
     }));
     return {
@@ -114,7 +114,7 @@ function createSessionAgentAccess({
   }
 
   async function describeProvider(options = {}) {
-    const sessionId = normalizeText(options.session?.sessionId);
+    const sessionId = toText(options.session?.sessionId);
     const provider = sessionId
       ? sessionBindings.bindSession(sessionId, options)
       : sessionBindings.providerFor(options);
@@ -135,8 +135,8 @@ function createSessionAgentAccess({
       transportId: provider.transportId,
       vibe64User: options.vibe64User || null
     });
-    const providerId = normalizeText(described?.providerId);
-    const transportId = normalizeText(described?.transportId);
+    const providerId = toText(described?.providerId);
+    const transportId = toText(described?.transportId);
     if (providerId !== provider.id || transportId !== provider.transportId) {
       throw providerBindingConflictError(
         sessionId,
@@ -144,7 +144,7 @@ function createSessionAgentAccess({
         providerId || "unknown"
       );
     }
-    const accountIdentitySignature = normalizeText(described?.accountIdentitySignature);
+    const accountIdentitySignature = toText(described?.accountIdentitySignature);
     if (!/^sha256:[a-f0-9]{64}$/u.test(accountIdentitySignature)) {
       throw new TypeError(
         `Assistant provider ${provider.id} did not return a stable account identity.`

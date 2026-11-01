@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const CODEX_TURN_OUTCOME = Object.freeze({
   PROVIDER_FAILURE: "provider_failure",
@@ -33,7 +33,7 @@ const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
 function codexAppServerResultDeliveryFailureMessage({
   error = ""
 } = {}) {
-  const normalizedError = trimmedText(error);
+  const normalizedError = normalizeText(error);
   if (!normalizedError) {
     return CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE;
   }
@@ -45,10 +45,10 @@ function codexTurnOutcomeNoticeMessage(outcome = "", detail = "", options = {}) 
   const {
     usageLimitExceeded = false
   } = options;
-  const normalizedOutcome = trimmedText(outcome);
+  const normalizedOutcome = normalizeText(outcome);
   const message = CODEX_TURN_OUTCOME_MESSAGES[normalizedOutcome] ||
     "Codex could not finish. Saved file changes remain; send a message to continue.";
-  const normalizedDetail = trimmedText(detail);
+  const normalizedDetail = normalizeText(detail);
   let notice = message;
   if (normalizedDetail) {
     notice = !normalizedOutcome || normalizedOutcome === CODEX_TURN_OUTCOME.PROVIDER_FAILURE
@@ -61,8 +61,8 @@ function codexTurnOutcomeNoticeMessage(outcome = "", detail = "", options = {}) 
 }
 
 function codexTurnOutcomeNoticeMessageId(threadId = "", turnId = "") {
-  const normalizedThreadId = trimmedText(threadId);
-  const normalizedTurnId = trimmedText(turnId);
+  const normalizedThreadId = normalizeText(threadId);
+  const normalizedTurnId = normalizeText(turnId);
   if (!normalizedThreadId || !normalizedTurnId) {
     return "";
   }
@@ -82,7 +82,7 @@ async function writeCodexTurnOutcomeNotice({
   turnId = "",
   usageLimitExceeded = false
 } = {}) {
-  const normalizedSessionId = trimmedText(sessionId);
+  const normalizedSessionId = normalizeText(sessionId);
   const messageId = codexTurnOutcomeNoticeMessageId(threadId, turnId);
   if (
     !normalizedSessionId ||

@@ -3,7 +3,7 @@ import path from "node:path";
 import { lessonHasSteps, topicSchema, visualSchema, validateContent, validateLesson } from "./contentSchemas.js";
 import { declaredLearningVocabulary, trainingGuideRequest } from "../shared/learningVocabulary.js";
 import { TRAINING_BEAT_CHECKS, beatNeedsPracticeProject, splitStepBeats } from "../shared/beats.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 const excludedExerciseEntries = new Set([".git", "node_modules", ".genesis"]);
 const validId = value => /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u.test(value);

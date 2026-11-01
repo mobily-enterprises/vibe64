@@ -1,7 +1,7 @@
 import mysql from "mysql2/promise";
 import pg from "pg";
 
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // One real sign-in to the database server a project uses, with the values the
 // project's processes get. Nothing counts as working unless the server
@@ -20,11 +20,11 @@ function where(endpoint = {}) {
       return "the address in your settings";
     }
   }
-  return `${normalizeText(endpoint.host)}:${endpoint.port}`;
+  return `${toText(endpoint.host)}:${endpoint.port}`;
 }
 
 function nameIn(endpoint = {}, field = "") {
-  if (!endpoint.url) return normalizeText(endpoint[field]);
+  if (!endpoint.url) return toText(endpoint[field]);
   try {
     const url = new URL(endpoint.url);
     return decodeURIComponent(field === "database" ? url.pathname.replace(/^\/+/u, "") : url.username);
@@ -70,7 +70,7 @@ function describeFailure(error, { kind, endpoint }) {
   if (code === "ENOTFOUND" || code === "EAI_AGAIN") {
     return {
       state: "unreachable",
-      message: `Vibe64 can't find a computer called ${normalizeText(endpoint.host) || address}. Check the host in the settings below.`
+      message: `Vibe64 can't find a computer called ${toText(endpoint.host) || address}. Check the host in the settings below.`
     };
   }
   if (NETWORK_UNREACHABLE.has(code)) {

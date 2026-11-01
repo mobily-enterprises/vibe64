@@ -1,4 +1,4 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const POSTGRES_TABLES_SQL = `
   SELECT
@@ -238,7 +238,7 @@ async function rawRows(knex, sql) {
 }
 
 function tableKey(schema = "", name = "") {
-  return `${normalizeText(schema)}\u0000${normalizeText(name)}`;
+  return `${toText(schema)}\u0000${toText(name)}`;
 }
 
 function qualifiedName(schema = "", name = "") {
@@ -262,7 +262,7 @@ function postgresConstraintType(type = "") {
     p: "primary-key",
     u: "unique",
     x: "exclusion"
-  })[type] || normalizeText(type);
+  })[type] || toText(type);
 }
 
 function postgresReferentialAction(action = "") {
@@ -285,8 +285,8 @@ function columnNamesForIds(table, ids = []) {
 }
 
 function normalizedTable(record = {}, kind = "table") {
-  const schema = normalizeText(record.schema_name);
-  const name = normalizeText(record.table_name);
+  const schema = toText(record.schema_name);
+  const name = toText(record.table_name);
   return {
     columns: [],
     comment: record.comment == null ? "" : String(record.comment),
@@ -295,10 +295,10 @@ function normalizedTable(record = {}, kind = "table") {
     keys: [],
     kind,
     name,
-    physicalId: normalizeText(record.table_id),
+    physicalId: toText(record.table_id),
     qualifiedName: qualifiedName(schema, name),
     schema,
-    storageEngine: normalizeText(record.storage_engine),
+    storageEngine: toText(record.storage_engine),
     updatable: record.is_updatable === true || Number(record.is_updatable) === 1
   };
 }
@@ -366,7 +366,7 @@ function finalSchema(connection = {}, version = "", tables = []) {
     schemaVersion: 1,
     schemas,
     tables,
-    version: normalizeText(version)
+    version: toText(version)
   };
 }
 
@@ -387,25 +387,25 @@ async function inspectPostgresSchema(knex, connection = {}) {
     if (!table) {
       continue;
     }
-    const identityKind = normalizeText(record.identity_kind);
-    const generatedKind = normalizeText(record.generated_kind);
+    const identityKind = toText(record.identity_kind);
+    const generatedKind = toText(record.generated_kind);
     table.columns.push({
       characterSet: "",
       collation: "",
       comment: record.comment == null ? "" : String(record.comment),
-      dataType: normalizeText(record.data_type),
+      dataType: toText(record.data_type),
       databaseIdentity: {
         columnId: Number(record.column_id),
-        tableId: normalizeText(record.table_id)
+        tableId: toText(record.table_id)
       },
       default: record.column_default == null ? null : String(record.column_default),
       generated: Boolean(generatedKind),
-      generatedExpression: generatedKind ? normalizeText(record.column_default) : "",
+      generatedExpression: generatedKind ? toText(record.column_default) : "",
       identity: Boolean(identityKind),
       identityKind,
       immutable: Boolean(identityKind || generatedKind),
-      name: normalizeText(record.column_name),
-      nativeType: normalizeText(record.native_type),
+      name: toText(record.column_name),
+      nativeType: toText(record.native_type),
       nullable: record.is_nullable === true,
       ordinal: Number(record.ordinal_position)
     });
@@ -416,21 +416,21 @@ async function inspectPostgresSchema(knex, connection = {}) {
     if (!table) {
       continue;
     }
-    const referencedTable = byId.get(normalizeText(record.referenced_table_id));
+    const referencedTable = byId.get(toText(record.referenced_table_id));
     table.constraints.push({
       columns: columnNamesForIds(table, record.source_column_ids),
-      definition: normalizeText(record.definition),
+      definition: toText(record.definition),
       deferrable: record.is_deferrable === true,
       deleteAction: postgresReferentialAction(record.delete_action),
       initiallyDeferred: record.initially_deferred === true,
       matchType: postgresMatchType(record.match_type),
-      name: normalizeText(record.constraint_name),
+      name: toText(record.constraint_name),
       referencedColumns: referencedTable
         ? columnNamesForIds(referencedTable, record.referenced_column_ids)
         : [],
       referencedTable: referencedTable?.qualifiedName || qualifiedName(
-        normalizeText(record.referenced_schema_name),
-        normalizeText(record.referenced_table_name)
+        toText(record.referenced_schema_name),
+        toText(record.referenced_table_name)
       ),
       type: postgresConstraintType(record.constraint_type),
       updateAction: postgresReferentialAction(record.update_action)
@@ -443,13 +443,13 @@ async function inspectPostgresSchema(knex, connection = {}) {
       continue;
     }
     table.indexes.push({
-      columns: Array.isArray(record.columns) ? record.columns.map(normalizeText).filter(Boolean) : [],
+      columns: Array.isArray(record.columns) ? record.columns.map(toText).filter(Boolean) : [],
       comment: "",
-      definition: normalizeText(record.definition),
-      id: normalizeText(record.index_id),
-      method: normalizeText(record.method),
-      name: normalizeText(record.index_name),
-      predicate: normalizeText(record.predicate),
+      definition: toText(record.definition),
+      id: toText(record.index_id),
+      method: toText(record.method),
+      name: toText(record.index_name),
+      predicate: toText(record.predicate),
       primary: record.is_primary === true,
       ready: record.is_ready === true,
       unique: record.is_unique === true,
@@ -461,7 +461,7 @@ async function inspectPostgresSchema(knex, connection = {}) {
     table.keys = editableTableKeys(table);
   }
 
-  return { ...finalSchema(connection, versionRows[0]?.version, tables), defaultSchema: normalizeText(versionRows[0]?.default_schema) };
+  return { ...finalSchema(connection, versionRows[0]?.version, tables), defaultSchema: toText(versionRows[0]?.default_schema) };
 }
 
 function mysqlConstraintType(value = "") {
@@ -470,7 +470,7 @@ function mysqlConstraintType(value = "") {
     "FOREIGN KEY": "foreign-key",
     "PRIMARY KEY": "primary-key",
     "UNIQUE": "unique"
-  })[normalizeText(value).toUpperCase()] || normalizeText(value).toLowerCase();
+  })[toText(value).toUpperCase()] || toText(value).toLowerCase();
 }
 
 function groupedRows(rows, keyFn) {
@@ -508,7 +508,7 @@ async function inspectMysqlSchema(knex, connection = {}) {
   ]);
   const tables = tableRows.map((record) => normalizedTable(
     record,
-    normalizeText(record.table_type).toUpperCase() === "VIEW" ? "view" : "table"
+    toText(record.table_type).toUpperCase() === "VIEW" ? "view" : "table"
   ));
   const byKey = new Map(tables.map((table) => [tableKey(table.schema, table.name), table]));
 
@@ -517,15 +517,15 @@ async function inspectMysqlSchema(knex, connection = {}) {
     if (!table) {
       continue;
     }
-    const extra = normalizeText(record.extra).toLowerCase();
-    const generatedExpression = normalizeText(record.generation_expression);
+    const extra = toText(record.extra).toLowerCase();
+    const generatedExpression = toText(record.generation_expression);
     const generated = Boolean(generatedExpression || extra.includes("generated"));
     const identity = extra.includes("auto_increment");
     table.columns.push({
-      characterSet: normalizeText(record.character_set),
-      collation: normalizeText(record.collation_name),
+      characterSet: toText(record.character_set),
+      collation: toText(record.collation_name),
       comment: record.comment == null ? "" : String(record.comment),
-      dataType: normalizeText(record.data_type),
+      dataType: toText(record.data_type),
       databaseIdentity: {
         columnId: Number(record.ordinal_position),
         tableId: table.qualifiedName
@@ -536,23 +536,23 @@ async function inspectMysqlSchema(knex, connection = {}) {
       identity,
       identityKind: identity ? "auto_increment" : "",
       immutable: generated || identity,
-      name: normalizeText(record.column_name),
-      nativeType: normalizeText(record.native_type),
-      nullable: normalizeText(record.is_nullable).toUpperCase() === "YES",
+      name: toText(record.column_name),
+      nativeType: toText(record.native_type),
+      nullable: toText(record.is_nullable).toUpperCase() === "YES",
       ordinal: Number(record.ordinal_position)
     });
   }
 
   const rules = new Map(ruleRows.map((row) => [
-    `${tableKey(row.schema_name, row.table_name)}\u0000${normalizeText(row.constraint_name)}`,
+    `${tableKey(row.schema_name, row.table_name)}\u0000${toText(row.constraint_name)}`,
     row
   ]));
   const checks = new Map(checkRows.map((row) => [
-    `${tableKey(row.schema_name, row.table_name)}\u0000${normalizeText(row.constraint_name)}`,
+    `${tableKey(row.schema_name, row.table_name)}\u0000${toText(row.constraint_name)}`,
     row
   ]));
   const constraintGroups = groupedRows(constraintColumnRows, (row) => (
-    `${tableKey(row.schema_name, row.table_name)}\u0000${normalizeText(row.constraint_name)}`
+    `${tableKey(row.schema_name, row.table_name)}\u0000${toText(row.constraint_name)}`
   ));
   for (const [constraintKey, records] of constraintGroups) {
     const first = records[0] || {};
@@ -564,25 +564,25 @@ async function inspectMysqlSchema(knex, connection = {}) {
     const rule = rules.get(constraintKey) || {};
     const check = checks.get(constraintKey) || {};
     table.constraints.push({
-      columns: sorted.map((record) => normalizeText(record.column_name)).filter(Boolean),
-      definition: normalizeText(check.definition),
+      columns: sorted.map((record) => toText(record.column_name)).filter(Boolean),
+      definition: toText(check.definition),
       deferrable: false,
-      deleteAction: normalizeText(rule.delete_rule),
+      deleteAction: toText(rule.delete_rule),
       initiallyDeferred: false,
-      matchType: normalizeText(rule.match_option),
-      name: normalizeText(first.constraint_name),
-      referencedColumns: sorted.map((record) => normalizeText(record.referenced_column_name)).filter(Boolean),
+      matchType: toText(rule.match_option),
+      name: toText(first.constraint_name),
+      referencedColumns: sorted.map((record) => toText(record.referenced_column_name)).filter(Boolean),
       referencedTable: qualifiedName(
-        normalizeText(first.referenced_schema_name || rule.referenced_schema_name),
-        normalizeText(first.referenced_table_name || rule.referenced_table_name)
+        toText(first.referenced_schema_name || rule.referenced_schema_name),
+        toText(first.referenced_table_name || rule.referenced_table_name)
       ),
       type: mysqlConstraintType(first.constraint_type),
-      updateAction: normalizeText(rule.update_rule)
+      updateAction: toText(rule.update_rule)
     });
   }
 
   const indexGroups = groupedRows(indexRows, (row) => (
-    `${tableKey(row.schema_name, row.table_name)}\u0000${normalizeText(row.index_name)}`
+    `${tableKey(row.schema_name, row.table_name)}\u0000${toText(row.index_name)}`
   ));
   for (const records of indexGroups.values()) {
     const first = records[0] || {};
@@ -592,14 +592,14 @@ async function inspectMysqlSchema(knex, connection = {}) {
     }
     const sorted = [...records].sort((left, right) => Number(left.sequence_in_index || 0) - Number(right.sequence_in_index || 0));
     table.indexes.push({
-      columns: sorted.map((record) => normalizeText(record.column_name)).filter(Boolean),
-      comment: normalizeText(first.comment),
+      columns: sorted.map((record) => toText(record.column_name)).filter(Boolean),
+      comment: toText(first.comment),
       definition: "",
-      id: `${table.qualifiedName}:${normalizeText(first.index_name)}`,
-      method: normalizeText(first.method),
-      name: normalizeText(first.index_name),
+      id: `${table.qualifiedName}:${toText(first.index_name)}`,
+      method: toText(first.method),
+      name: toText(first.index_name),
       predicate: "",
-      primary: normalizeText(first.index_name).toUpperCase() === "PRIMARY",
+      primary: toText(first.index_name).toUpperCase() === "PRIMARY",
       ready: true,
       unique: Number(first.non_unique) === 0,
       valid: true
@@ -641,8 +641,8 @@ async function inspectSqliteSchema(knex, connection = {}) {
         characterSet: "",
         collation: "",
         comment: "",
-        dataType: normalizeText(column.type).toLowerCase(),
-        nativeType: normalizeText(column.type),
+        dataType: toText(column.type).toLowerCase(),
+        nativeType: toText(column.type),
         databaseIdentity: { columnId: Number(column.cid), tableId: record.name },
         default: column.dflt_value == null ? null : String(column.dflt_value),
         generated: Number(column.hidden) > 1,

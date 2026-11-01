@@ -1,7 +1,8 @@
 import { isDeepStrictEqual } from "node:util";
-import { isPlainObject, normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import { SESSION_RENEWAL_ID_PATTERN } from "./sessionRenewalIds.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // What a stored session record may hold: schema versions, statuses, session,
 // metadata, agent-run and background-task ids and states, list filters,
@@ -151,16 +152,16 @@ const ACTIVE_AGENT_RUN_STATES = new Set([
 ]);
 
 function isValidVibe64SessionId(sessionId) {
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = toText(sessionId);
   return SESSION_ID_PATTERN.test(normalizedSessionId);
 }
 
 function isSafeAgentRunId(runId) {
-  return AGENT_RUN_ID_PATTERN.test(normalizeText(runId));
+  return AGENT_RUN_ID_PATTERN.test(toText(runId));
 }
 
 function isSafeBackgroundTaskId(taskId) {
-  return BACKGROUND_TASK_ID_PATTERN.test(normalizeText(taskId));
+  return BACKGROUND_TASK_ID_PATTERN.test(toText(taskId));
 }
 
 /**
@@ -172,7 +173,7 @@ function unknownSessionError(sessionId) {
 }
 
 function assertValidVibe64SessionId(sessionId) {
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = toText(sessionId);
   if (!isValidVibe64SessionId(normalizedSessionId)) {
     throw vibe64Error(`Invalid vibe64 session id: ${normalizedSessionId || "(empty)"}`, "vibe64_invalid_session_id");
   }
@@ -180,7 +181,7 @@ function assertValidVibe64SessionId(sessionId) {
 }
 
 function assertSafeMetadataName(name) {
-  const normalizedName = normalizeText(name);
+  const normalizedName = toText(name);
   if (!METADATA_NAME_PATTERN.test(normalizedName)) {
     throw vibe64Error(`Invalid vibe64 metadata name: ${normalizedName || "(empty)"}`, "vibe64_invalid_metadata_name");
   }
@@ -188,7 +189,7 @@ function assertSafeMetadataName(name) {
 }
 
 function assertSafeAgentRunId(runId) {
-  const normalizedRunId = normalizeText(runId);
+  const normalizedRunId = toText(runId);
   if (!isSafeAgentRunId(normalizedRunId)) {
     throw vibe64Error(
       `Invalid vibe64 agent run id: ${normalizedRunId || "(empty)"}`,
@@ -199,7 +200,7 @@ function assertSafeAgentRunId(runId) {
 }
 
 function assertSafeBackgroundTaskId(taskId) {
-  const normalizedTaskId = normalizeText(taskId);
+  const normalizedTaskId = toText(taskId);
   if (!isSafeBackgroundTaskId(normalizedTaskId)) {
     throw vibe64Error(
       `Invalid vibe64 background task id: ${normalizedTaskId || "(empty)"}`,
@@ -228,16 +229,16 @@ function renewalArchiveMetadata(fromMetadata = {}, options = {}) {
     successorSessionId = ""
   } = options;
   return {
-    renewal_acknowledged_at: normalizeText(fromMetadata.renewal_acknowledged_at),
-    renewal_actor_display_name: normalizeText(fromMetadata.renewal_actor_display_name),
-    renewal_actor_id: normalizeText(fromMetadata.renewal_actor_id),
+    renewal_acknowledged_at: toText(fromMetadata.renewal_acknowledged_at),
+    renewal_actor_display_name: toText(fromMetadata.renewal_actor_display_name),
+    renewal_actor_id: toText(fromMetadata.renewal_actor_id),
     renewal_archived_at: archivedAt,
-    renewal_confirmed_at: normalizeText(fromMetadata.renewal_confirmed_at),
-    renewal_handover_delivered_at: normalizeText(fromMetadata.renewal_handover_delivered_at),
+    renewal_confirmed_at: toText(fromMetadata.renewal_confirmed_at),
+    renewal_handover_delivered_at: toText(fromMetadata.renewal_handover_delivered_at),
     renewal_id: renewalId,
-    renewal_started_at: normalizeText(fromMetadata.renewal_started_at),
-    renewal_successor_created_at: normalizeText(fromMetadata.renewal_successor_created_at),
-    renewed_at: normalizeText(fromMetadata.renewed_at),
+    renewal_started_at: toText(fromMetadata.renewal_started_at),
+    renewal_successor_created_at: toText(fromMetadata.renewal_successor_created_at),
+    renewed_at: toText(fromMetadata.renewed_at),
     renewed_to: successorSessionId,
     [RENEWAL_ARCHIVE_SELECTION_METADATA]: selectedBeforeArchive
   };
@@ -246,8 +247,8 @@ function renewalArchiveMetadata(fromMetadata = {}, options = {}) {
 function assertRenewalSuccessorLink(metadata = {}, options = {}) {
   const { renewalId = "", sourceSessionId = "", successorSessionId = "" } = options;
   if (
-    normalizeText(metadata.renewal_id) !== renewalId ||
-    normalizeText(metadata.renewed_from) !== sourceSessionId
+    toText(metadata.renewal_id) !== renewalId ||
+    toText(metadata.renewed_from) !== sourceSessionId
   ) {
     throw vibe64Error(
       `Renewal successor does not match renewal ${renewalId}: ${successorSessionId}`,
@@ -259,13 +260,13 @@ function assertRenewalSuccessorLink(metadata = {}, options = {}) {
 function sessionIsUnfinishedRenewalRecord(session = {}) {
   const metadata = isPlainObject(session.metadata) ? session.metadata : {};
   const renewalId = session.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED
-    ? normalizeText(metadata.renewal_quiesced_id)
-    : normalizeText(metadata.renewal_id);
+    ? toText(metadata.renewal_quiesced_id)
+    : toText(metadata.renewal_id);
   if (
     !SESSION_RENEWAL_ID_PATTERN.test(renewalId) ||
     (
       session.status !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED &&
-      normalizeText(metadata.renewal_finalized_at)
+      toText(metadata.renewal_finalized_at)
     )
   ) {
     return false;
@@ -277,18 +278,18 @@ function sessionIsUnfinishedRenewalRecord(session = {}) {
     return isValidVibe64SessionId(metadata.renewed_from);
   }
   if (session.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
-    return Boolean(normalizeText(metadata.renewal_quiesced_at));
+    return Boolean(toText(metadata.renewal_quiesced_at));
   }
   if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
     return isValidVibe64SessionId(metadata.renewed_to);
   }
   return session.status === VIBE64_SESSION_STATUS.ACTIVE &&
     isValidVibe64SessionId(metadata.renewed_from) &&
-    !normalizeText(metadata.renewed_to);
+    !toText(metadata.renewed_to);
 }
 
 function normalizeVibe64AgentRunState(state) {
-  const normalizedState = normalizeText(state) || VIBE64_AGENT_RUN_STATE.STARTING;
+  const normalizedState = toText(state) || VIBE64_AGENT_RUN_STATE.STARTING;
   if (!AGENT_RUN_STATES.has(normalizedState)) {
     throw vibe64Error(
       `Invalid vibe64 agent run state: ${normalizedState}`,
@@ -307,7 +308,7 @@ function vibe64AgentRunStateIsTerminal(state) {
 }
 
 function normalizeBackgroundTaskStatus(status) {
-  const normalizedStatus = normalizeText(status) || BACKGROUND_TASK_STATUS.RUNNING;
+  const normalizedStatus = toText(status) || BACKGROUND_TASK_STATUS.RUNNING;
   if (!BACKGROUND_TASK_STATUSES.has(normalizedStatus)) {
     throw vibe64Error(
       `Invalid vibe64 background task status: ${normalizedStatus}`,
@@ -318,7 +319,7 @@ function normalizeBackgroundTaskStatus(status) {
 }
 
 function assertVibe64SessionStatus(status) {
-  const normalizedStatus = normalizeText(status) || VIBE64_SESSION_STATUS.ACTIVE;
+  const normalizedStatus = toText(status) || VIBE64_SESSION_STATUS.ACTIVE;
   if (!VIBE64_SESSION_STATUSES.has(normalizedStatus)) {
     throw vibe64Error(`Invalid vibe64 session status: ${normalizedStatus}`, "vibe64_invalid_session_status");
   }
@@ -337,7 +338,7 @@ function assertNormalSessionIsReadable(session = {}) {
   const status = assertVibe64SessionStatus(session.status);
   if (HIDDEN_VIBE64_SESSION_STATUSES.has(status)) {
     throw vibe64Error(
-      `Vibe64 session is reserved for an in-progress renewal: ${normalizeText(session.sessionId) || "(unknown)"}`,
+      `Vibe64 session is reserved for an in-progress renewal: ${toText(session.sessionId) || "(unknown)"}`,
       "vibe64_session_renewal_private"
     );
   }
@@ -348,7 +349,7 @@ function assertNormalSessionIsMutable(session = {}) {
   const readable = assertNormalSessionIsReadable(session);
   if (readable.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
     throw vibe64Error(
-      `Vibe64 session is read-only while its renewal is in progress: ${normalizeText(session.sessionId) || "(unknown)"}`,
+      `Vibe64 session is read-only while its renewal is in progress: ${toText(session.sessionId) || "(unknown)"}`,
       "vibe64_session_renewal_quiesced"
     );
   }
@@ -356,7 +357,7 @@ function assertNormalSessionIsMutable(session = {}) {
 }
 
 function normalizeSessionListStatusGroup(statusGroup = "") {
-  const normalizedStatusGroup = normalizeText(statusGroup);
+  const normalizedStatusGroup = toText(statusGroup);
   if (!normalizedStatusGroup) {
     return "";
   }
@@ -368,7 +369,7 @@ function normalizeSessionListStatusGroup(statusGroup = "") {
 
 function normalizeSessionListStatuses(statuses = []) {
   return new Set((Array.isArray(statuses) ? statuses : [])
-    .map((status) => normalizeText(status))
+    .map((status) => toText(status))
     .filter(Boolean)
     .map(assertVibe64SessionStatus));
 }
@@ -385,7 +386,7 @@ function sessionStatusMatchesListOptions(status, options = {}) {
     statusGroup = "",
     statuses = new Set()
   } = options;
-  const normalizedStatus = normalizeText(status) || VIBE64_SESSION_STATUS.ACTIVE;
+  const normalizedStatus = toText(status) || VIBE64_SESSION_STATUS.ACTIVE;
   if (HIDDEN_VIBE64_SESSION_STATUSES.has(normalizedStatus)) {
     return false;
   }

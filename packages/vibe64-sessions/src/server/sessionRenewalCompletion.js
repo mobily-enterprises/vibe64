@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import {
   SESSION_RENEWAL_MAINTENANCE_STEP,
@@ -7,6 +6,7 @@ import {
   mutateSessionRenewalState
 } from "./sessionRenewalState.js";
 import { renewalError, renewalFailure, renewalTransitionActor, statePatch, timestamp } from "./sessionRenewalRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionArchive} SessionArchive */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -77,7 +77,7 @@ function createRenewalCompletion({
         { retryable: false, statusCode: 500 }
       );
     }
-    let sourceStatus = normalizeText(
+    let sourceStatus = toText(
       await runtime.store.readStatusForRenewal(sourceSessionId)
     );
     try {
@@ -103,8 +103,8 @@ function createRenewalCompletion({
       const preparedArchive = await runtime.store.prepareRenewalSessionArchive(transition);
       const preparedMetadata = preparedArchive?.index?.metadata;
       if (
-        normalizeText(preparedMetadata?.renewal_id) !== state.renewalId ||
-        normalizeText(preparedMetadata?.renewed_to) !== successorSessionId
+        toText(preparedMetadata?.renewal_id) !== state.renewalId ||
+        toText(preparedMetadata?.renewed_to) !== successorSessionId
       ) {
         throw renewalError(
           "The private predecessor archive does not prove the exact renewal link.",
@@ -134,8 +134,8 @@ function createRenewalCompletion({
           "vibe64_session_renewal_archive_rollback_failed",
           {
             details: {
-              archiveError: normalizeText(error?.message),
-              rollbackError: normalizeText(rollbackError?.message)
+              archiveError: toText(error?.message),
+              rollbackError: toText(rollbackError?.message)
             },
             retryable: true,
             statusCode: 500
@@ -285,7 +285,7 @@ function createRenewalCompletion({
       sourceSessionId: state.sessionId,
       successorSessionId: commit.successorSessionId
     });
-    const predecessorArchivedAt = normalizeText(
+    const predecessorArchivedAt = toText(
       publishedArchive?.index?.metadata?.renewal_archived_at ||
       publishedArchive?.archivedAt
     );
@@ -341,7 +341,7 @@ function createRenewalCompletion({
     const activating = state.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_ACTIVATING
       ? state
       : await completeRenewalArchive(runtime, state);
-    const successorSessionId = normalizeText(activating.successor?.sessionId);
+    const successorSessionId = toText(activating.successor?.sessionId);
     if (!successorSessionId) {
       throw renewalError(
         "Completed session renewal has no successor.",
@@ -366,7 +366,7 @@ function createRenewalCompletion({
       (current) => statePatch(current, {
         commit: {
           committedAt,
-          selectedBeforeArchive: normalizeText(selection.selectedBeforeArchive) || "none",
+          selectedBeforeArchive: toText(selection.selectedBeforeArchive) || "none",
           sourceSessionId: current.sessionId,
           successorSessionId,
           successorWillBeSelected: selection.successorWillBeSelected === true

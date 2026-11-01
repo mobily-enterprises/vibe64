@@ -24,7 +24,7 @@ import {
   saveError,
   saveRef
 } from "./sessionWorkGit.js";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * Returns the canonical commit with the authority evidence it was read from.
@@ -178,7 +178,7 @@ async function assertLocalAuthority(runCommand, context, options) {
  * by the ordinary update check.
  */
 async function readAuthorityBranchHeads(runCommand, context, branches, options, readRemoteHeads = null) {
-  const refs = [...new Set(branches.map(trimmedText).filter(Boolean))].map((branch) => `refs/heads/${branch}`);
+  const refs = [...new Set(branches.map(normalizeText).filter(Boolean))].map((branch) => `refs/heads/${branch}`);
   const listing = typeof readRemoteHeads === "function" && githubHttpsRemote(context.remoteUrl)
     ? await readRemoteHeads(context.remoteUrl, refs, { timeoutMs: options?.commandOptions?.timeout })
     : (await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, ...refs], options))
@@ -310,17 +310,17 @@ function connectedWorkSnapshots(value = []) {
         connected_contribution: JSON.stringify(snapshot?.contribution)
       }
     });
-    if (!contribution || typeof snapshot.sessionId !== "string" || !trimmedText(snapshot.sessionId) ||
-        !path.isAbsolute(trimmedText(snapshot.worktreePath)) ||
+    if (!contribution || typeof snapshot.sessionId !== "string" || !normalizeText(snapshot.sessionId) ||
+        !path.isAbsolute(normalizeText(snapshot.worktreePath)) ||
         [snapshot.baseCommit, snapshot.canonicalCommit, snapshot.sessionHead, snapshot.worktreeTree]
-          .some(commit => !isGitObjectId(trimmedText(commit)))) {
+          .some(commit => !isGitObjectId(normalizeText(commit)))) {
       throw saveError("The connected source could not be captured. Inspect connected work before saving.",
         "vibe64_connected_source_unavailable");
     }
     return {
       contribution,
       sessionId: snapshot.sessionId,
-      worktreePath: trimmedText(snapshot.worktreePath),
+      worktreePath: normalizeText(snapshot.worktreePath),
       baseCommit: snapshot.baseCommit,
       canonicalCommit: snapshot.canonicalCommit,
       sessionHead: snapshot.sessionHead,

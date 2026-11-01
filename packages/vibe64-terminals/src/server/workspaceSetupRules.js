@@ -1,12 +1,13 @@
 import path from "node:path";
 
-import { normalizeText, pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createStreamingLogSanitizer, sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { workspaceSetupTranscript } from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import { vibe64RuntimePacks } from "./vibe64OutputTargets.js";
 import { terminalNamespace } from "./terminalShared.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";
@@ -16,7 +17,7 @@ const DIAGNOSTIC_OMISSION_MARKER = "\n[…]\n";
 
 function diagnosticText(diagnostics = []) {
   return (Array.isArray(diagnostics) ? diagnostics : [])
-    .map((diagnostic) => normalizeText(
+    .map((diagnostic) => toText(
       typeof diagnostic === "string"
         ? diagnostic
         : diagnostic?.message || diagnostic?.code
@@ -26,22 +27,22 @@ function diagnosticText(diagnostics = []) {
 
 function diagnosticsInclude(diagnostics = [], code = "") {
   return (Array.isArray(diagnostics) ? diagnostics : [])
-    .some((diagnostic) => normalizeText(diagnostic?.code) === code);
+    .some((diagnostic) => toText(diagnostic?.code) === code);
 }
 
 function setupStep(step = {}, index = 0, sourcePath = "") {
   const argv = Array.isArray(step.argv) ? step.argv.map((value) => String(value)) : [];
-  if (!normalizeText(argv[0])) {
+  if (!toText(argv[0])) {
     throw new Error(`Workspace preparation step ${index + 1} has no command.`);
   }
-  const cwd = path.resolve(sourcePath, normalizeText(step.workdir) || ".");
+  const cwd = path.resolve(sourcePath, toText(step.workdir) || ".");
   if (!pathInsideOrEqual(sourcePath, cwd)) {
     throw new Error(`Workspace preparation step ${index + 1} has a work directory outside the session source.`);
   }
   return {
     argv,
     cwd,
-    label: normalizeText(step.label) || `Workspace preparation step ${index + 1}`,
+    label: toText(step.label) || `Workspace preparation step ${index + 1}`,
     runtimeRequirements: Array.isArray(step.runtimeRequirements)
       ? step.runtimeRequirements
       : []
@@ -49,7 +50,7 @@ function setupStep(step = {}, index = 0, sourcePath = "") {
 }
 
 function preparedRecipe(setup = {}, sourcePath = "") {
-  const recipeHash = normalizeText(setup.recipeHash);
+  const recipeHash = toText(setup.recipeHash);
   if (!recipeHash) {
     throw new Error("Vibe64 produced a ready workspace preparation recipe without an identity.");
   }
@@ -79,7 +80,7 @@ function operationRedactionSecrets(env = {}) {
 }
 
 function safeSetupLabel(value = "", secrets = []) {
-  return sanitizeOperationText(normalizeText(value), secrets)
+  return sanitizeOperationText(toText(value), secrets)
     .replace(/\s+/gu, " ")
     .slice(0, 160);
 }
@@ -108,10 +109,10 @@ function appendWorkspaceSetupTranscript(transcript = "", ...entries) {
  * One transcript line per connected checkout: updated, current or why not.
  */
 function connectedUpdateLine({ repository = "", update = null } = {}) {
-  const name = `[Connected] ${normalizeText(repository).split("/").pop()}`;
-  if (update?.status === "updated") return `${name} updated to ${normalizeText(update.commit).slice(0, 7)}.`;
+  const name = `[Connected] ${toText(repository).split("/").pop()}`;
+  if (update?.status === "updated") return `${name} updated to ${toText(update.commit).slice(0, 7)}.`;
   if (update?.status === "current") return `${name} is up to date.`;
-  if (update?.status === "skipped") return `${name} was not updated: ${normalizeText(update.reason)}`;
+  if (update?.status === "skipped") return `${name} was not updated: ${toText(update.reason)}`;
   return "";
 }
 
@@ -134,7 +135,7 @@ function boundedDiagnostic(output = "", maxLength = WORKSPACE_SETUP_DIAGNOSTIC_L
 }
 
 function commandDiagnostic(result = {}, label = "", secrets = []) {
-  const output = normalizeText(sanitizeOperationText(
+  const output = toText(sanitizeOperationText(
     result.stderr || result.error || result.output,
     secrets
   ));

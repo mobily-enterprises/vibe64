@@ -2,13 +2,12 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { writeSessionUiSyncPreviewState } from "@local/vibe64-core/server/sessionUiSyncState";
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import { readLastOpenedSessionId, rememberLastOpenedSessionId } from "./lastOpenedSession.js";
-import { record } from "./record.js";
 import { sessionsOccupyingPolicySlots } from "./sessionPolicySlots.js";
 import { presenceActor } from "./sessionPresence.js";
 import { sessionContextUsageFromMetadata, sessionRenewalAdvisory } from "./sessionRenewalAdvisory.js";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -19,7 +18,7 @@ function conversationPageOptions(options = {}) {
   const limit = Number.parseInt(String(options.limit || ""), 10);
   return {
     pageUnit: "messages",
-    beforeTurnId: text(options.beforeTurnId),
+    beforeTurnId: normalizeText(options.beforeTurnId),
     limit: Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 200) : 10
   };
 }
@@ -38,7 +37,7 @@ function conversationPage(result = {}, options = {}) {
   }
   return {
     conversationLog: Array.isArray(result.conversationLog) ? result.conversationLog : [],
-    pagination: record(result.pagination)
+    pagination: normalizeObject(result.pagination)
   };
 }
 
@@ -78,7 +77,7 @@ function createSessionCatalogue({
         })
       ));
       await publishSessionChanged(sessionId, {
-        originId: text(input.originId),
+        originId: normalizeText(input.originId),
         reason: "session-pin-changed",
         payload: { clientRefresh: { includeList: true } }
       });
@@ -91,7 +90,7 @@ function createSessionCatalogue({
       const runtime = await project.createRuntime({ inspectSource: false });
       const sessionName = await runtime.store.writeSessionLabel(sessionId, input.name);
       await publishSessionChanged(sessionId, {
-        originId: text(input.originId),
+        originId: normalizeText(input.originId),
         reason: "session-renamed",
         payload: { clientRefresh: { includeList: true } }
       });
@@ -101,11 +100,11 @@ function createSessionCatalogue({
 
   async function broadcastSessionPreviewState(sessionId, input) {
     const preview = {
-      originId: text(input.originId),
-      projectSlug: text(input.projectSlug),
-      route: text(input.route),
-      sessionId: text(sessionId),
-      title: text(input.title).slice(0, 256),
+      originId: normalizeText(input.originId),
+      projectSlug: normalizeText(input.projectSlug),
+      route: normalizeText(input.route),
+      sessionId: normalizeText(sessionId),
+      title: normalizeText(input.title).slice(0, 256),
       updatedAt: new Date().toISOString()
     };
     if (!preview.sessionId || !preview.projectSlug || !preview.route || !preview.originId) {
@@ -194,8 +193,8 @@ function createSessionCatalogue({
         ok: true,
         unavailableSessions: summaries.filter((session) => session.unavailable),
         sessions: summaries.filter((session) => !session.unavailable).sort((left, right) => (
-          text(right.archivedAt).localeCompare(text(left.archivedAt)) ||
-          text(right.sessionId).localeCompare(text(left.sessionId))
+          normalizeText(right.archivedAt).localeCompare(normalizeText(left.archivedAt)) ||
+          normalizeText(right.sessionId).localeCompare(normalizeText(left.sessionId))
         ))
       };
     });
@@ -224,7 +223,7 @@ function createSessionCatalogue({
       };
     }
     return sessionResult(async () => {
-      const projectSlug = text(currentProjectRequestContext()?.slug);
+      const projectSlug = normalizeText(currentProjectRequestContext()?.slug);
       if (!projectSlug) {
         return {
           ok: true,
@@ -239,7 +238,7 @@ function createSessionCatalogue({
           status: "unavailable"
         };
       }
-      const conversationId = text(input.conversationId);
+      const conversationId = normalizeText(input.conversationId);
       if (conversationId) {
         const conversation = await runtime.store.readSessionConversation(sessionId, conversationId);
         if (!conversation) return { ok: true, status: "unavailable" };
@@ -266,10 +265,10 @@ function createSessionCatalogue({
         inspectSource: false
       });
       const current = await runtime.updateCurrentSession(sessionId);
-      if (text(sessionId)) await rememberLastOpenedSessionId(runtime.stateRoot, vibe64User, text(sessionId));
+      if (normalizeText(sessionId)) await rememberLastOpenedSessionId(runtime.stateRoot, vibe64User, normalizeText(sessionId));
       return {
         ok: true,
-        sessionId: text(current.sessionId)
+        sessionId: normalizeText(current.sessionId)
       };
     });
   }

@@ -1,7 +1,4 @@
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 
 import {
   databaseDialect
@@ -10,13 +7,14 @@ import {
   jsonSafeValue
 } from "./queryExecutor.js";
 import { tableQuery } from "./tableQuery.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const LOOKUP_LIMIT = 25;
 const DISPLAY_COLUMN_NAMES = Object.freeze(["name", "title", "label", "code"]);
 
 function relationship(schema, relationshipId = "") {
   const found = (Array.isArray(schema?.relationships) ? schema.relationships : []).find((candidate) => (
-    candidate.id === normalizeText(relationshipId)
+    candidate.id === toText(relationshipId)
   ));
   if (!found) {
     throw vibe64Error(
@@ -29,7 +27,7 @@ function relationship(schema, relationshipId = "") {
 
 function schemaTable(schema, qualifiedName = "") {
   const found = (Array.isArray(schema?.tables) ? schema.tables : []).find((candidate) => (
-    candidate.qualifiedName === normalizeText(qualifiedName)
+    candidate.qualifiedName === toText(qualifiedName)
   ));
   if (!found) {
     throw vibe64Error(
@@ -57,7 +55,7 @@ function searchableColumns(table = {}, keyColumns = [], selectedDisplayColumn = 
 }
 
 function addSearch(query, columns = [], search = "", engine = "postgresql") {
-  const term = normalizeText(search);
+  const term = toText(search);
   if (!term || columns.length < 1) {
     return query;
   }

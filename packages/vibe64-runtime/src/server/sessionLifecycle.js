@@ -1,13 +1,11 @@
-import {
-  normalizeText
-} from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const VIBE64_SESSION_CLOSING_AT_METADATA = "session_closing_at";
 const VIBE64_SESSION_CLOSING_REASON_METADATA = "session_closing_reason";
 
 function sessionClosingReason(session) {
-  return normalizeText(session?.metadata?.[VIBE64_SESSION_CLOSING_REASON_METADATA]) ||
-    (normalizeText(session?.status) === "renewal_quiesced" ? "renewing" : "");
+  return toText(session?.metadata?.[VIBE64_SESSION_CLOSING_REASON_METADATA]) ||
+    (toText(session?.status) === "renewal_quiesced" ? "renewing" : "");
 }
 
 function sessionIsClosing(session = {}) {
@@ -20,7 +18,7 @@ function sessionClosingMetadata(reason = "closing", options = {}) {
   } = options;
   return {
     [VIBE64_SESSION_CLOSING_AT_METADATA]: closedAt,
-    [VIBE64_SESSION_CLOSING_REASON_METADATA]: normalizeText(reason) || "closing"
+    [VIBE64_SESSION_CLOSING_REASON_METADATA]: toText(reason) || "closing"
   };
 }
 

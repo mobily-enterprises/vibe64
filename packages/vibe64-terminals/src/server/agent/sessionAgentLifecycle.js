@@ -1,5 +1,4 @@
 import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   agentOperationResult,
   assistantUser,
@@ -8,6 +7,7 @@ import {
   defineEphemeralAssistantScope,
   sessionAgentProviderId
 } from "./sessionAgentRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
@@ -70,7 +70,7 @@ function createSessionAgentLifecycle({
   }
 
   async function closeSession(sessionId = "", options = {}) {
-    const id = normalizeText(sessionId);
+    const id = toText(sessionId);
     const provider = sessionBindings.bindSession(id, options);
     const context = {
       changeover: options.changeover === true,
@@ -100,7 +100,7 @@ function createSessionAgentLifecycle({
    * A released renewal predecessor or successor no longer holds its session binding.
    */
   async function releaseAndForgetBinding(method, sessionId = "", input = {}, options = {}) {
-    const id = normalizeText(sessionId);
+    const id = toText(sessionId);
     const result = await providerCalls.callSessionProvider(method, id, input, options);
     if (result.ok !== false) sessionBindings.forgetBinding(id);
     return result;

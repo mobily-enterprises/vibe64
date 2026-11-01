@@ -11,8 +11,8 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionsService} SessionsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
@@ -29,10 +29,10 @@ const CONNECTED_SESSION_NAME_METADATA = "connected_session_name";
  */
 function connectedUpdateOutcome(update, branch) {
   if (update?.status === "updated" || update?.status === "current") {
-    return { status: update.status, commit: text(update.commit) };
+    return { status: update.status, commit: normalizeText(update.commit) };
   }
-  if (update?.status === "skipped") return { status: "skipped", reason: text(update.reason) };
-  return { status: "skipped", reason: text(update?.error) || `It could not be updated to ${branch}.` };
+  if (update?.status === "skipped") return { status: "skipped", reason: normalizeText(update.reason) };
+  return { status: "skipped", reason: normalizeText(update?.error) || `It could not be updated to ${branch}.` };
 }
 
 /**
@@ -100,7 +100,7 @@ function createConnectedContributions({
           ...work?.details
         }
       });
-      const publishedCommit = work.publishedCommit === binding.contribution.baseCommit ? "" : text(work.publishedCommit);
+      const publishedCommit = work.publishedCommit === binding.contribution.baseCommit ? "" : normalizeText(work.publishedCommit);
       connected.push({
         ...binding,
         sessionId: work.sessionId,
@@ -256,7 +256,7 @@ function createConnectedContributions({
           details: { sessionId: session.sessionId }
         });
       }
-      const successorId = text(session.metadata?.renewed_to);
+      const successorId = normalizeText(session.metadata?.renewed_to);
       if (vibe64SessionStatusIsOpen(session.status) && !successorId) return session;
       if (session.status !== "archived" || !successorId) break;
       const state = await readSessionRenewalState(runtime, session.sessionId);
@@ -350,7 +350,7 @@ function createConnectedContributions({
         }
         const allocate = () => executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.allocate", {
           contribution: binding.contribution,
-          sessionName: (text(session.sessionName) || sessionId).slice(0, 120)
+          sessionName: (normalizeText(session.sessionName) || sessionId).slice(0, 120)
         }, requestContext);
         let allocation = await allocate();
         let update = null;
@@ -363,7 +363,7 @@ function createConnectedContributions({
             update = await executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.work.update",
               { contribution: binding.contribution }, requestContext);
           } catch (error) {
-            update = { ok: false, error: text(error?.message) };
+            update = { ok: false, error: normalizeText(error?.message) };
           }
           if (update?.status === "updated") allocation = await allocate();
         }
@@ -427,10 +427,10 @@ function createConnectedContributions({
     const agent = await terminals.agentSessionState(sessionId, { runtime, session });
     if (agent?.turn?.active) return skipped("Its agent is working. Update it once the agent finishes.");
     const check = await sessions().checkSessionUpdates(sessionId, { force: true });
-    if (check?.ok === false) return skipped(text(check.error) || `It could not be checked against ${branch}.`);
-    if (!(check.behind > 0)) return { ok: true, sessionId, status: "current", commit: text(check.canonicalCommit) };
+    if (check?.ok === false) return skipped(normalizeText(check.error) || `It could not be checked against ${branch}.`);
+    if (!(check.behind > 0)) return { ok: true, sessionId, status: "current", commit: normalizeText(check.canonicalCommit) };
     const work = await sessions().inspectSessionWork(sessionId, {}, { includeConnected: false, inspectContributionPublication: true });
-    if (work?.ok === false) return skipped(text(work.error) || "Its work could not be inspected.");
+    if (work?.ok === false) return skipped(normalizeText(work.error) || "Its work could not be inspected.");
     if (work.publishedCommit && work.publishedCommit !== work.baseCommit && work.ahead > 0) {
       return skipped(`Its pushed contribution is not on ${branch} yet. Merge it through Incoming changes, then update again.`);
     }
@@ -441,13 +441,13 @@ function createConnectedContributions({
         return skipped(`Updating it to ${branch} conflicts with its changes${paths.length ? ` in ${paths.join(", ")}` : ""}. ` +
           "Open its session to review the conflict.");
       }
-      return skipped(text(updated.error) || `It could not be updated to ${branch}.`);
+      return skipped(normalizeText(updated.error) || `It could not be updated to ${branch}.`);
     }
     return {
       ok: true,
       sessionId,
       status: updated.status === "already_current" ? "current" : "updated",
-      commit: text(updated.operation?.canonicalCommit || updated.canonicalCommit)
+      commit: normalizeText(updated.operation?.canonicalCommit || updated.canonicalCommit)
     };
   }
 
@@ -577,7 +577,7 @@ function createConnectedContributions({
             : await sessions().inspectSessionWork(session.sessionId, {}, {
               includeConnected: false,
               inspectContributionPublication: true,
-              knownSubmittedCommit: text(input.submittedCommit)
+              knownSubmittedCommit: normalizeText(input.submittedCommit)
             });
         if (work.ok === false) return { ...work, details: { ...work.details, sessionId: session.sessionId } };
         if (work.operation?.status === "failed" && work.operation.code === "vibe64_session_save_publication_unknown") {

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { normalizeText, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { checkpointRefRoot } from "@local/vibe64-execution/server";
 
 import {
@@ -21,6 +21,7 @@ import {
   SNAPSHOT_TIMEOUT_MS,
   writeMetadataValues
 } from "./sessionWorktreeGit.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /**
  * Recovery of a session's source before it is archived: its uncommitted work,
@@ -58,7 +59,7 @@ async function writeDirtyRecoveryArtifacts({
     );
   }
   const patchText = String(patchResult.stdout || "");
-  const patchArtifact = normalizeText(patchText)
+  const patchArtifact = toText(patchText)
     ? RECOVERY_PATCH_ARTIFACT
     : "";
   if (patchArtifact) {
@@ -145,7 +146,7 @@ async function writeBranchRecoveryBundle({
       timeout: 15_000
     });
     if (aheadResult.ok) {
-      const commitsAhead = Number(normalizeText(aheadResult.stdout || aheadResult.output));
+      const commitsAhead = Number(toText(aheadResult.stdout || aheadResult.output));
       if (commitsAhead < 1) {
         return "";
       }
@@ -193,13 +194,13 @@ async function writeCheckpointRecoveryBundle({
   }
   const refs = String(refsResult.stdout || "")
     .split("\n")
-    .map((line) => normalizeText(line))
+    .map((line) => toText(line))
     .filter(Boolean)
     .map((line) => {
       const separator = line.indexOf(" ");
       return {
-        commit: separator > 0 ? normalizeText(line.slice(0, separator)) : "",
-        ref: separator > 0 ? normalizeText(line.slice(separator + 1)) : ""
+        commit: separator > 0 ? toText(line.slice(0, separator)) : "",
+        ref: separator > 0 ? toText(line.slice(separator + 1)) : ""
       };
     });
   if (refs.length < 1) {
@@ -291,7 +292,7 @@ async function writeCheckpointRecoveryBundle({
         "vibe64_worktree_archive_checkpoint_restore_verify_failed"
       );
     }
-    const restoredRefs = restored.stdout.split("\n").map(normalizeText).filter(Boolean).sort();
+    const restoredRefs = restored.stdout.split("\n").map(toText).filter(Boolean).sort();
     const expectedRefs = refs.map(({ commit, ref }) => `${commit} ${ref}`).sort();
     if (restoredRefs.join("\n") !== expectedRefs.join("\n")) {
       throw vibe64Error(

@@ -1,15 +1,7 @@
 import { open, readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import {
-  isMissingPathError,
-  isPlainObject,
-  normalizeTargetRoot,
-  normalizeText,
-  pathExists,
-  pathInsideOrEqual,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { isMissingPathError, isPlainObject, normalizeTargetRoot, pathExists, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 import { runSourceCommand } from "./sourceCommand.js";
 import { fileIdentity } from "./sessionFiles.js";
 import { resolveVibe64CurrentSessionAliasPath } from "./currentSessionAlias.js";
@@ -24,6 +16,7 @@ import {
   SESSION_ARCHIVE_TIMEOUT_MS,
   SESSION_LABEL_MAX_LENGTH
 } from "./sessionRecordRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // Where a session store keeps its files and the helpers that read them:
 // session and archive paths, directory listings, parsed-file caches, manifest
@@ -117,7 +110,7 @@ function normalizeManifest(manifest = {}) {
 }
 
 function withRevisionMarker(value, manifest = {}, sessionId = "") {
-  if (!isPlainObject(value) || normalizeText(value.sessionId) !== sessionId) {
+  if (!isPlainObject(value) || toText(value.sessionId) !== sessionId) {
     return value;
   }
   const normalizedManifest = normalizeManifest(manifest);
@@ -127,11 +120,11 @@ function withRevisionMarker(value, manifest = {}, sessionId = "") {
       ? {
           ...value.manifest,
           revision: normalizedManifest.revision,
-          updatedAt: normalizeText(normalizedManifest.updatedAt)
+          updatedAt: toText(normalizedManifest.updatedAt)
         }
       : value.manifest,
     revision: normalizedManifest.revision,
-    updatedAt: normalizeText(normalizedManifest.updatedAt)
+    updatedAt: toText(normalizedManifest.updatedAt)
   };
 }
 
@@ -179,7 +172,7 @@ function timestampForSessionId(date) {
 }
 
 function isoFromConversationTimestamp(timestamp = "") {
-  const value = normalizeText(timestamp);
+  const value = toText(timestamp);
   const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z$/u);
   if (!match) {
     return "";
@@ -240,7 +233,7 @@ function resolveVibe64SessionPaths({
   const activeSessionsRoot = path.join(sessionsRoot, "active");
   const closingSessionsRoot = path.join(sessionsRoot, "closing");
   const archivedSessionsRoot = path.join(sessionsRoot, "archived");
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = toText(sessionId);
   const sessionRoot = normalizedSessionId ? path.join(activeSessionsRoot, assertValidVibe64SessionId(normalizedSessionId)) : "";
   return sessionPathsFromRoot({
     activeSessionsRoot,
@@ -394,11 +387,11 @@ function metadataFilePath(sessionPaths, name) {
 }
 
 function normalizeSessionLabel(value = "") {
-  return normalizeText(value).slice(0, SESSION_LABEL_MAX_LENGTH);
+  return toText(value).slice(0, SESSION_LABEL_MAX_LENGTH);
 }
 
 function assertSafeArtifactPath(relativePath) {
-  const normalizedPath = normalizeText(relativePath);
+  const normalizedPath = toText(relativePath);
   const segments = normalizedPath.split("/");
   if (
     !normalizedPath
@@ -429,7 +422,7 @@ function backgroundTaskFilePath(sessionPaths, taskId) {
 }
 
 function conversationTurnRoot(sessionPaths, turnId) {
-  const normalizedTurnId = normalizeText(turnId);
+  const normalizedTurnId = toText(turnId);
   if (!CONVERSATION_TURN_ID_PATTERN.test(normalizedTurnId)) {
     throw vibe64Error(`Invalid vibe64 conversation turn id: ${normalizedTurnId || "(empty)"}`, "vibe64_invalid_conversation_turn_id");
   }

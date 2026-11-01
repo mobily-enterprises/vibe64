@@ -3,7 +3,7 @@ import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantR
 import { readActiveSessionMetadataValues } from "@local/vibe64-runtime/server/sessionStore";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { currentProjectRequestContext, currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
-import { text } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").PublishProjectChanged} PublishProjectChanged */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -26,17 +26,17 @@ function failure(message, code, statusCode) {
 }
 
 function person(vibe64User = null) {
-  const id = text(vibe64User?.username || vibe64User?.id);
+  const id = normalizeText(vibe64User?.username || vibe64User?.id);
   if (!id) return null;
   return {
     id,
-    username: text(vibe64User.username) || id,
-    displayName: text(vibe64User.preferredName) || text(vibe64User.displayName) || id
+    username: normalizeText(vibe64User.username) || id,
+    displayName: normalizeText(vibe64User.preferredName) || normalizeText(vibe64User.displayName) || id
   };
 }
 
 function parseApprovals(raw = "") {
-  if (!text(raw)) return { schemaVersion: 1, entries: [] };
+  if (!normalizeText(raw)) return { schemaVersion: 1, entries: [] };
   const value = JSON.parse(raw);
   if (value?.schemaVersion !== 1 || !Array.isArray(value.entries)) {
     throw failure("This chat's approval queue is unreadable.", "vibe64_main_chat_approvals_invalid", 500);
@@ -96,7 +96,7 @@ function createMainChatApprovals({
     });
     const session = await runtime.getSession(sessionId, { inspectSource: false });
     await publishSessionChanged(sessionId, { reason, session, ...(payload ? { payload } : {}) });
-    await publishProjectChanged({ projectSlug: text(currentProjectRequestContext()?.slug) }, { reason: "main-chat-approvals" });
+    await publishProjectChanged({ projectSlug: normalizeText(currentProjectRequestContext()?.slug) }, { reason: "main-chat-approvals" });
     return result;
   }
 
@@ -193,12 +193,12 @@ function createMainChatApprovals({
   }
 
   async function edit(sessionId, approvalId, { text: nextText, expectedRevision }, { vibe64User }) {
-    if (!text(nextText)) throw failure("Write a message, or withdraw it.", "vibe64_agent_message_input_required", 400);
+    if (!normalizeText(nextText)) throw failure("Write a message, or withdraw it.", "vibe64_agent_message_input_required", 400);
     return change(sessionId, "main-chat-approval-updated", (approvals) => {
       const entry = entryFor(approvals, approvalId);
       requireSender(entry, vibe64User);
       requireState(entry, ["waiting"], expectedRevision);
-      Object.assign(entry, { text: text(nextText), revision: entry.revision + 1, updatedAt: new Date().toISOString(), error: "" });
+      Object.assign(entry, { text: normalizeText(nextText), revision: entry.revision + 1, updatedAt: new Date().toISOString(), error: "" });
       return { ok: true, entry };
     });
   }
@@ -215,14 +215,14 @@ function createMainChatApprovals({
 
   async function decline(sessionId, approvalId, { expectedRevision, note = "" }, { vibe64User }) {
     requireOwner(vibe64User);
-    if (text(note).length > NOTE_MAX_LENGTH) {
+    if (normalizeText(note).length > NOTE_MAX_LENGTH) {
       throw failure(`Keep the note under ${NOTE_MAX_LENGTH} characters.`, "vibe64_main_chat_approval_note_invalid", 400);
     }
     return change(sessionId, "main-chat-approval-declined", (approvals) => {
       const entry = entryFor(approvals, approvalId);
       requireState(entry, ["waiting"], expectedRevision);
       decided(entry, vibe64User, "declined");
-      entry.note = text(note);
+      entry.note = normalizeText(note);
       return { ok: true, entry };
     });
   }
@@ -237,13 +237,13 @@ function createMainChatApprovals({
     const entry = await change(sessionId, "main-chat-approval-approved", (approvals) => {
       const current = entryFor(approvals, approvalId);
       requireState(current, ["waiting", "sending"], expectedRevision);
-      const edited = text(editedText) && text(editedText) !== current.text;
+      const edited = normalizeText(editedText) && normalizeText(editedText) !== current.text;
       if (edited && current.status === "sending") {
         throw failure("This message is being sent. Approve it again to retry it unchanged.", "vibe64_main_chat_approval_sending", 409);
       }
       if (edited) {
         current.originalText ||= current.text;
-        current.text = text(editedText);
+        current.text = normalizeText(editedText);
         current.revision += 1;
       }
       decided(current, vibe64User, "sending");
@@ -274,7 +274,7 @@ function createMainChatApprovals({
       Object.assign(current, {
         status: sent ? "sent" : "waiting",
         updatedAt: new Date().toISOString(),
-        error: sent ? "" : text(result?.error) || "The message could not be sent."
+        error: sent ? "" : normalizeText(result?.error) || "The message could not be sent."
       });
     });
     return sent ? { ...result, ok: true, approvalId, status: "sent" }

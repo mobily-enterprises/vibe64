@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 
 import { SOURCE_EDITOR_EXPLANATION_EXECUTION_PROFILE, sourceEditorExecutionProfileSnapshot } from "./explanationProfile.js";
 import { writeSourceEditorExplanation } from "./explanationRecords.js";
@@ -19,6 +18,7 @@ import {
   sourceEditorExplanationSummary
 } from "./explanationText.js";
 import { sourceEditorError } from "./sourceFiles.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */
@@ -39,7 +39,7 @@ const SOURCE_EDITOR_FOLLOWUP_OUTPUT_SCHEMA = Object.freeze({
 });
 
 function sourceEditorHelperFollowupThread(explanation = {}) {
-  const agentThreadId = normalizeText(explanation.agentThreadId);
+  const agentThreadId = toText(explanation.agentThreadId);
   const executionProfile = sourceEditorExecutionProfileSnapshot(explanation.executionProfile);
   if (
     !executionProfile ||
@@ -53,7 +53,7 @@ function sourceEditorHelperFollowupThread(explanation = {}) {
       409
     );
   }
-  if (normalizeText(explanation.status) === "failed") {
+  if (toText(explanation.status) === "failed") {
     throw sourceEditorError(
       "Regenerate this explanation before asking another follow-up. Its previous assistant turn failed, so Vibe64 will not reuse that conversation.",
       "vibe64_source_explanation_agent_thread_failed",
@@ -61,7 +61,7 @@ function sourceEditorHelperFollowupThread(explanation = {}) {
       409
     );
   }
-  if (!agentThreadId && normalizeText(explanation.engine) === "agent-cache") {
+  if (!agentThreadId && toText(explanation.engine) === "agent-cache") {
     return "";
   }
   if (!agentThreadId) {

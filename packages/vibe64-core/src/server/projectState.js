@@ -2,14 +2,12 @@ import { lstat, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
-import {
-  normalizeTargetRoot,
-  normalizeText
-} from "./core.js";
+import { normalizeTargetRoot } from "./core.js";
 import {
   PROJECT_SLUG_MAX_LENGTH,
   PROJECT_SLUG_PATTERN
 } from "../shared/projectSlug.js";
+import { toText } from "../shared/toText.js";
 
 function normalizeProjectSlug(value = "") {
   const slug = String(value || "").trim();
@@ -66,7 +64,7 @@ const PROJECT_RUNTIME_CONFIG_DIR = "runtime-config";
 const PROJECT_INFO_CACHE_FILE = "projectInfoCache.json";
 
 function normalizeProjectStateSlug(value = "") {
-  const slug = normalizeText(value);
+  const slug = toText(value);
   if (!PROJECT_STATE_SLUG_PATTERN.test(slug)) {
     const error = new Error(`Invalid Vibe64 project state slug: ${slug || "(empty)"}`);
     error.code = "vibe64_invalid_project_state_slug";
@@ -84,7 +82,7 @@ function resolveSourceConfigRoot({
 function resolveProjectRuntimeRoot({
   projectRuntimeRoot = ""
 } = {}) {
-  const normalizedProjectRuntimeRoot = normalizeText(projectRuntimeRoot);
+  const normalizedProjectRuntimeRoot = toText(projectRuntimeRoot);
   if (!normalizedProjectRuntimeRoot || !path.isAbsolute(normalizedProjectRuntimeRoot)) {
     const error = new Error("Project state requires an absolute project runtime root.");
     error.code = "vibe64_project_runtime_root_invalid";
@@ -118,7 +116,7 @@ function resolveProjectDeploymentsRoot({
 }
 
 function resolveProjectRepositoryStoragePath(projectRuntimeRoot = "", storageDirectory = "") {
-  const normalizedProjectRuntimeRoot = normalizeText(projectRuntimeRoot);
+  const normalizedProjectRuntimeRoot = toText(projectRuntimeRoot);
   if (!normalizedProjectRuntimeRoot || !path.isAbsolute(normalizedProjectRuntimeRoot)) {
     const error = new Error("Repository storage requires an absolute project runtime root.");
     error.code = "vibe64_repository_storage_project_runtime_root_invalid";

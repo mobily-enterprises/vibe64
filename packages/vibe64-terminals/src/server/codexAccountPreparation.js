@@ -8,7 +8,7 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { directoryExists, nonRetryableTerminalFailure } from "./terminalShared.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { codexSelectedModelProviderId } from "./codexRuntimeHost.js";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
@@ -53,7 +53,7 @@ function createCodexAccountPreparation({
     reason = "codex-terminal",
     toolHomeSource = ""
   } = {}) {
-    const systemRoot = trimmedText(codexRuntimeForTerminalEnv({ toolHomeSource }).providerOptions.systemRoot);
+    const systemRoot = normalizeText(codexRuntimeForTerminalEnv({ toolHomeSource }).providerOptions.systemRoot);
     if (!systemRoot) {
       return;
     }

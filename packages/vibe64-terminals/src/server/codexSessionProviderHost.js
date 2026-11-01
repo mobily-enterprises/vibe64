@@ -22,7 +22,7 @@ import { codexTerminalNamespace } from "./terminalShared.js";
 import { subscribeUnixCommandControlChanges } from "./unixJsonCommand.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -44,7 +44,7 @@ function codexAppServerFrozenThreadDeleteResponse(threadId = "") {
     deleted: false,
     ok: true,
     status: "notFound",
-    threadId: trimmedText(threadId)
+    threadId: normalizeText(threadId)
   };
 }
 
@@ -105,7 +105,7 @@ function createCodexSessionProviderHost(host) {
       if (options.renewalId) {
         const session = await runtime.getSessionForRenewal(sessionId, { inspectSource: false });
         if ([VIBE64_SESSION_STATUS.RENEWAL_PENDING, VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING].includes(session.status)) {
-          if (trimmedText(session.metadata?.renewal_id) !== options.renewalId) {
+          if (normalizeText(session.metadata?.renewal_id) !== options.renewalId) {
             throw Object.assign(new Error("The assistant belongs to a different renewal reservation."), {
               code: "vibe64_session_renewal_private"
             });
@@ -213,10 +213,10 @@ function createCodexSessionProviderHost(host) {
           throw new Error("The assistant session is closing.");
         }
         const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
-        if (learningRoot && trimmedText(params.cwd) && trimmedText(params.cwd) !== learningRoot) {
+        if (learningRoot && normalizeText(params.cwd) && normalizeText(params.cwd) !== learningRoot) {
           throw new Error("The learning thread belongs to a different native execution root.");
         }
-        const workdir = learningRoot || trimmedText(params.cwd || options.workdir) || sessionSourcePath(session);
+        const workdir = learningRoot || normalizeText(params.cwd || options.workdir) || sessionSourcePath(session);
         if (!learningRoot) {
           const registry = await vibe64HostContextRegistry(runtimeRoot);
           await registry.register(

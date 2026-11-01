@@ -1,10 +1,10 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   SESSION_RENEWAL_STAGE,
   SESSION_RENEWAL_STATUS,
   readSessionRenewalState
 } from "./sessionRenewalState.js";
 import { actorFromUser, renewalActorsMatch, renewalTransitionActor } from "./sessionRenewalRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").RenewalAdmission} RenewalAdmission */
 /** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */
@@ -63,7 +63,7 @@ function createRenewalScheduler({
   );
 
   function clearWorkflowLockRetry(renewalId = "") {
-    const key = normalizeText(renewalId);
+    const key = toText(renewalId);
     const timer = pendingWorkflowLockRetries.get(key);
     if (!timer) {
       return false;
@@ -74,7 +74,7 @@ function createRenewalScheduler({
   }
 
   function scheduleWorkflowLockRetry(state = {}, input = {}) {
-    const key = normalizeText(state.renewalId);
+    const key = toText(state.renewalId);
     if (!key) {
       throw new TypeError("Session renewal workflow lock retry requires a renewal id.");
     }
@@ -244,15 +244,15 @@ function createRenewalScheduler({
     const failures = [
       ...reads.flatMap((result, index) => result.status === "rejected"
         ? [{
-            code: normalizeText(result.reason?.code) || "vibe64_session_renewal_state_unreadable",
-            error: normalizeText(result.reason?.message) || "Session renewal state is unreadable.",
+            code: toText(result.reason?.code) || "vibe64_session_renewal_state_unreadable",
+            error: toText(result.reason?.message) || "Session renewal state is unreadable.",
             sessionId: candidateSessionIds[index]
           }]
         : []),
       ...resumes.flatMap((result, index) => result.status === "rejected"
         ? [{
-            code: normalizeText(result.reason?.code) || "vibe64_session_renewal_resume_failed",
-            error: normalizeText(result.reason?.message) || "Session renewal could not resume.",
+            code: toText(result.reason?.code) || "vibe64_session_renewal_resume_failed",
+            error: toText(result.reason?.message) || "Session renewal could not resume.",
             sessionId: resumableStates[index].sessionId
           }]
         : [])

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { isPlainObject, normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { assertRenewalId } from "./sessionRenewalIds.js";
 import { writeJsonFile, writeTextFile } from "./sessionFiles.js";
 import {
@@ -23,6 +23,7 @@ import {
   toDate
 } from "./sessionStoreLayout.js";
 import { enqueueSessionMutation, SESSION_MUTATION_LOCK_WAIT_MS } from "./sessionStoreLocks.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -57,7 +58,7 @@ function createSessionCreation({
         "vibe64_learning_scope_invalid");
     }
     const normalizedMetadata = Object.fromEntries(
-      Object.entries(metadata).map(([name, value]) => [assertSafeMetadataName(name), normalizeText(value)])
+      Object.entries(metadata).map(([name, value]) => [assertSafeMetadataName(name), toText(value)])
     );
     const normalizedStatus = assertVibe64SessionStatus(status);
     const rootPaths = storePaths.paths();
@@ -114,7 +115,7 @@ function createSessionCreation({
               recursive: true
             })
           ]);
-          const normalizedRuntimeKind = normalizeText(runtimeKind);
+          const normalizedRuntimeKind = toText(runtimeKind);
           const manifest = {
             ...(normalizedRuntimeKind ? { runtimeKind: normalizedRuntimeKind } : {}),
             createdAt,
@@ -209,14 +210,14 @@ function createSessionCreation({
         "vibe64_session_renewal_same_session"
       );
     }
-    const normalizedActorId = normalizeText(actorId);
+    const normalizedActorId = toText(actorId);
     if (!normalizedActorId) {
       throw vibe64Error(
         "A renewed session requires actor attribution.",
         "vibe64_session_renewal_actor_required"
       );
     }
-    if (!normalizeText(confirmedAt)) {
+    if (!toText(confirmedAt)) {
       throw vibe64Error(
         "A renewed session requires the confirmation timestamp.",
         "vibe64_session_renewal_confirmation_required"
@@ -228,7 +229,7 @@ function createSessionCreation({
       const sourceSession = await sessionRecords.readSessionForRenewal(sourceSessionId);
       if (
         sourceSession.status !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
-        normalizeText(sourceSession.metadata.renewal_quiesced_id) !== normalizedRenewalId
+        toText(sourceSession.metadata.renewal_quiesced_id) !== normalizedRenewalId
       ) {
         throw vibe64Error(
           `A renewed session can only be prepared from its quiesced predecessor: ${sourceSessionId}`,
@@ -240,7 +241,7 @@ function createSessionCreation({
       const renewalRecords = await listing.listSessionsForRenewal();
       const foreignOwner = renewalRecords.find((session) => (
         session.sessionId !== sourceSessionId &&
-        normalizeText(session.metadata.renewal_quiesced_id) === normalizedRenewalId
+        toText(session.metadata.renewal_quiesced_id) === normalizedRenewalId
       ));
       if (foreignOwner) {
         throw vibe64Error(
@@ -251,21 +252,21 @@ function createSessionCreation({
       const existingSuccessor = renewalRecords.find((session) => (
         session.sessionId !== sourceSessionId &&
         (
-          normalizeText(session.metadata.renewal_id) === normalizedRenewalId ||
-          normalizeText(session.metadata.renewed_from) === sourceSessionId
+          toText(session.metadata.renewal_id) === normalizedRenewalId ||
+          toText(session.metadata.renewed_from) === sourceSessionId
         )
       ));
       if (existingSuccessor) {
         const exactRetry =
           existingSuccessor.status === VIBE64_SESSION_STATUS.RENEWAL_PENDING &&
-          normalizeText(existingSuccessor.metadata.renewal_id) === normalizedRenewalId &&
-          normalizeText(existingSuccessor.metadata.renewed_from) === sourceSessionId &&
-          normalizeText(existingSuccessor.metadata.renewal_actor_id) === normalizedActorId &&
-          normalizeText(existingSuccessor.metadata.renewal_actor_display_name) === normalizeText(actorDisplayName) &&
-          normalizeText(existingSuccessor.metadata.renewal_confirmed_at) === normalizedConfirmedAt &&
+          toText(existingSuccessor.metadata.renewal_id) === normalizedRenewalId &&
+          toText(existingSuccessor.metadata.renewed_from) === sourceSessionId &&
+          toText(existingSuccessor.metadata.renewal_actor_id) === normalizedActorId &&
+          toText(existingSuccessor.metadata.renewal_actor_display_name) === toText(actorDisplayName) &&
+          toText(existingSuccessor.metadata.renewal_confirmed_at) === normalizedConfirmedAt &&
           (
             !normalizedStartedAt ||
-            normalizeText(existingSuccessor.metadata.renewal_started_at) === normalizedStartedAt
+            toText(existingSuccessor.metadata.renewal_started_at) === normalizedStartedAt
           ) &&
           (!successorSessionId || existingSuccessor.sessionId === successorSessionId);
         if (exactRetry) {
@@ -280,7 +281,7 @@ function createSessionCreation({
       return createSessionRecord({
         metadata: {
           ...(isPlainObject(metadata) ? metadata : {}),
-          renewal_actor_display_name: normalizeText(actorDisplayName),
+          renewal_actor_display_name: toText(actorDisplayName),
           renewal_actor_id: normalizedActorId,
           renewal_confirmed_at: normalizedConfirmedAt,
           renewal_id: normalizedRenewalId,

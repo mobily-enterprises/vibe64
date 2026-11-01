@@ -16,7 +16,7 @@ import {
   sha256Pattern,
   validNotesText
 } from "./learnerRecords.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 /**
  * A learner's teacher notes: read and saved under their own lock.

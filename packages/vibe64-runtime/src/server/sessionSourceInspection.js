@@ -1,7 +1,5 @@
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const SOURCE_INSPECTION_KINDS = Object.freeze({
   MERGE_CONFLICT: "merge_conflict",
@@ -12,7 +10,7 @@ function sourceInspectionFailure({
   merge = null
 } = {}) {
   const conflictedFiles = Array.isArray(merge?.conflictedFiles)
-    ? merge.conflictedFiles.map(normalizeText).filter(Boolean)
+    ? merge.conflictedFiles.map(toText).filter(Boolean)
     : [];
   if (conflictedFiles.length > 0) {
     return {
@@ -44,8 +42,8 @@ function sourceInspectionDisabledReason(inspection = {}) {
 
 function sourceInspectionBlockedError(inspection = {}) {
   const error = vibe64Error(
-    normalizeText(inspection.error?.message) || sourceInspectionDisabledReason(inspection),
-    normalizeText(inspection.error?.code) || "vibe64_source_inspection_unavailable"
+    toText(inspection.error?.message) || sourceInspectionDisabledReason(inspection),
+    toText(inspection.error?.code) || "vibe64_source_inspection_unavailable"
   );
   error.sourceInspection = inspection;
   return error;

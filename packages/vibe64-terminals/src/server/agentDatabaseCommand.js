@@ -1,9 +1,6 @@
 import path from "node:path";
 
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
@@ -19,6 +16,7 @@ import {
 import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -74,7 +72,7 @@ function parseArgs(args = []) {
   const flags = values.filter((arg) => arg.startsWith("-"));
   const positionals = values.filter((arg) => !arg.startsWith("-"));
   return {
-    command: normalizeText(positionals[0]).toLowerCase(),
+    command: toText(positionals[0]).toLowerCase(),
     help: flags.includes("--help") || flags.includes("-h") || positionals[0] === "help",
     json: flags.includes("--json"),
     positionals,
@@ -237,14 +235,14 @@ function createAgentDatabaseCommandService({
       ok: true,
       projectContextRoot: binding.projectContextRoot,
       projectSlug: binding.projectSlug,
-      sessionId: normalizeText(sessionId)
+      sessionId: toText(sessionId)
     };
   }
 
   async function run(input = {}) {
     const startedAt = Date.now();
     const parsed = parseArgs(input.args);
-    const sessionId = normalizeText(input.sessionId);
+    const sessionId = toText(input.sessionId);
     let result;
     try {
       result = validateCommand(parsed);
@@ -292,7 +290,7 @@ function createAgentDatabaseCommandService({
       result = { ...payload, exitCode: 1, stderr: `${payload.error}\n` };
     }
     logOperationalEvent(logger, result?.ok === false ? "warn" : "info", {
-      code: normalizeText(result?.code),
+      code: toText(result?.code),
       command: parsed.command,
       component: "vibe64.agent_database_command",
       durationMs: Date.now() - startedAt,
@@ -305,7 +303,7 @@ function createAgentDatabaseCommandService({
   }
 
   async function closeAllForSession(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     const bound = Boolean(projectBinding.forget(normalizedSessionId));
     const closed = await commandServers.closeForSession(normalizedSessionId);
     return { closed: closed + (bound && closed === 0 ? 1 : 0), ok: true };
@@ -326,8 +324,8 @@ function createAgentDatabaseCommandService({
  * @param {string} [options.wrapperHostDir]
  */
 async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wrapperHostDir = "" }) {
-  const normalizedSessionId = normalizeText(sessionId);
-  const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
+  const normalizedSessionId = toText(sessionId);
+  const normalizedWrapperHostDir = toText(wrapperHostDir);
   if (!normalizedSessionId || !normalizedWrapperHostDir) return { env: {}, ok: false };
   await commandService.bindSession(normalizedSessionId);
   await writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource());

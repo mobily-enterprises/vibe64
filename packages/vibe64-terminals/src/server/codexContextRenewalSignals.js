@@ -5,9 +5,7 @@ import {
 import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
 import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
-import {
-  normalizeText
-} from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
@@ -34,10 +32,10 @@ export function sessionContextUsageFromMetadata(metadata, options = {}) {
   const {
     expectedThreadId = ""
   } = options;
-  const providerId = normalizeText(metadata?.agent_context_usage_provider);
-  const threadId = normalizeText(metadata?.agent_context_usage_thread_id);
-  const currentThreadId = normalizeText(expectedThreadId);
-  const updatedAt = normalizeText(metadata?.agent_context_usage_updated_at);
+  const providerId = toText(metadata?.agent_context_usage_provider);
+  const threadId = toText(metadata?.agent_context_usage_thread_id);
+  const currentThreadId = toText(expectedThreadId);
+  const updatedAt = toText(metadata?.agent_context_usage_updated_at);
   const usedTokens = nonNegativeInteger(metadata?.agent_context_used_tokens);
   const windowTokens = nonNegativeInteger(metadata?.agent_context_window_tokens);
   if (
@@ -67,7 +65,7 @@ function contextCompactionKey({
   threadId = "",
   turnId = ""
 } = {}) {
-  const fields = [reason, threadId, turnId, eventId].map(normalizeText);
+  const fields = [reason, threadId, turnId, eventId].map(toText);
   return fields.slice(1).some(Boolean) ? fields.join(":") : "";
 }
 
@@ -84,9 +82,9 @@ async function recordCodexContextUsageSignal(store, sessionId = "", notification
     at = new Date().toISOString(),
     expectedThreadId = ""
   } = options;
-  const id = normalizeText(sessionId);
+  const id = toText(sessionId);
   const usage = codexContextUsageFromNotification(notification);
-  const threadId = normalizeText(expectedThreadId);
+  const threadId = toText(expectedThreadId);
   if (
     !id ||
     !usage ||
@@ -96,12 +94,12 @@ async function recordCodexContextUsageSignal(store, sessionId = "", notification
   ) {
     return null;
   }
-  const recordedAt = normalizeText(at) || new Date().toISOString();
+  const recordedAt = toText(at) || new Date().toISOString();
   return store.mutateSession(id, async () => {
-    const currentThreadId = normalizeText(
+    const currentThreadId = toText(
       await store.readMetadataValue(id, "agent_identity_conversation_id")
     );
-    const previousThreadId = normalizeText(
+    const previousThreadId = toText(
       await store.readMetadataValue(id, "agent_context_usage_thread_id")
     );
     const previousCumulativeTokens = nonNegativeInteger(
@@ -158,8 +156,8 @@ async function recordCodexContextRenewalSignal(store, sessionId = "", options = 
     threadId = "",
     turnId = ""
   } = options;
-  const id = normalizeText(sessionId);
-  const normalizedReason = normalizeText(reason);
+  const id = toText(sessionId);
+  const normalizedReason = toText(reason);
   if (
     !id ||
     normalizedReason !== CONTEXT_COMPACTION_REASON ||
@@ -177,7 +175,7 @@ async function recordCodexContextRenewalSignal(store, sessionId = "", options = 
     return null;
   }
   return store.mutateSession(id, async () => {
-    const previousKey = normalizeText(
+    const previousKey = toText(
       await store.readMetadataValue(id, "agent_context_compaction_last_key")
     );
     const previousCount = nonNegativeInteger(
@@ -185,14 +183,14 @@ async function recordCodexContextRenewalSignal(store, sessionId = "", options = 
     );
     if (previousKey === key) {
       return {
-        at: normalizeText(await store.readMetadataValue(id, "agent_context_compaction_last_at")),
+        at: toText(await store.readMetadataValue(id, "agent_context_compaction_last_at")),
         count: previousCount,
         duplicate: true,
         key
       };
     }
     const count = Math.min(Number.MAX_SAFE_INTEGER, previousCount + 1);
-    const recordedAt = normalizeText(at) || new Date().toISOString();
+    const recordedAt = toText(at) || new Date().toISOString();
     await Promise.all([
       store.writeMetadataValue(id, "agent_context_compaction_count", String(count)),
       store.writeMetadataValue(id, "agent_context_compaction_last_at", recordedAt),
@@ -292,8 +290,8 @@ function createCodexContextRefreshMarker({ projectService, runOwner }) {
     const {
       reason = codexAppServerContextRefreshReason(notification)
     } = options;
-    const normalizedSessionId = normalizeText(sessionId);
-    const normalizedThreadId = normalizeText(threadId);
+    const normalizedSessionId = toText(sessionId);
+    const normalizedThreadId = toText(threadId);
     if (!reason || !normalizedSessionId || !normalizedThreadId) {
       return null;
     }
@@ -308,10 +306,10 @@ function createCodexContextRefreshMarker({ projectService, runOwner }) {
       store.readMetadataValue(normalizedSessionId, "agent_briefing_delivered"),
       store.readMetadataValue(normalizedSessionId, "agent_identity_conversation_id")
     ]);
-    if (normalizeText(briefingDelivered) !== "yes") {
+    if (toText(briefingDelivered) !== "yes") {
       return null;
     }
-    const normalizedCurrentThreadId = normalizeText(currentThreadId);
+    const normalizedCurrentThreadId = toText(currentThreadId);
     if (normalizedCurrentThreadId && normalizedCurrentThreadId !== normalizedThreadId) {
       vibe64SessionDebugLog("server.codexTerminal.appServerContextRefresh.staleThread", {
         currentThreadId: normalizedCurrentThreadId,
@@ -323,9 +321,9 @@ function createCodexContextRefreshMarker({ projectService, runOwner }) {
     }
 
     const turn = codexAppServerTurnStateFromAgentRun(run || {}, normalizeVibe64AgentRunState);
-    const turnId = normalizeText(codexAppServerNotificationTurnId(notification) || turn.turnId);
+    const turnId = toText(codexAppServerNotificationTurnId(notification) || turn.turnId);
     await recordCodexContextRenewalSignal(store, normalizedSessionId, {
-      eventId: normalizeText(
+      eventId: toText(
         codexAppServerNotificationItemId(notification) ||
         codexAppServerNotificationEvent(notification)?.id
       ),

@@ -2,11 +2,10 @@ import crypto from "node:crypto";
 import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { normalizeRepositoryUpdateCheck, REPOSITORY_UPDATE_RELATIONSHIPS } from "@local/vibe64-core/shared";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { record } from "./record.js";
 import { sessionHasActiveAgentRun } from "./sessionRenewalRules.js";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
+import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -18,28 +17,28 @@ const REPOSITORY_UPDATE_CHECK_METADATA = "repository_update_check";
 const REPOSITORY_UPDATE_CHECK_CACHE_MS = 25_000;
 
 function repositoryUpdateCheckIsFresh(value, now = Date.now()) {
-  const checkedAt = Date.parse(text(value?.checkedAt));
+  const checkedAt = Date.parse(normalizeText(value?.checkedAt));
   return Number.isFinite(checkedAt) && now - checkedAt >= 0 &&
     now - checkedAt < REPOSITORY_UPDATE_CHECK_CACHE_MS;
 }
 
 function cachedRepositoryUpdateCheck(session) {
-  const raw = text(session?.metadata?.[REPOSITORY_UPDATE_CHECK_METADATA]);
+  const raw = normalizeText(session?.metadata?.[REPOSITORY_UPDATE_CHECK_METADATA]);
   if (!raw) {
     return null;
   }
   try {
-    const parsed = record(JSON.parse(raw));
-    const checkedAt = text(parsed.checkedAt);
-    const relationship = text(parsed.relationship);
+    const parsed = normalizeObject(JSON.parse(raw));
+    const checkedAt = normalizeText(parsed.checkedAt);
+    const relationship = normalizeText(parsed.relationship);
     if (
       !checkedAt ||
       !Number.isFinite(Date.parse(checkedAt)) ||
       !REPOSITORY_UPDATE_RELATIONSHIPS.has(relationship) ||
       (Number(parsed.behind || 0) > 0 && !Array.isArray(parsed.incomingVersions)) ||
       (
-        text(session.metadata?.canonical_commit) &&
-        text(parsed.canonicalCommit) !== text(session.metadata.canonical_commit)
+        normalizeText(session.metadata?.canonical_commit) &&
+        normalizeText(parsed.canonicalCommit) !== normalizeText(session.metadata.canonical_commit)
       )
     ) {
       return null;
@@ -104,7 +103,7 @@ function createSessionRepositoryUpdates({
     };
     const sourceAuthority = authorityKey(source);
     const deliveries = await Promise.allSettled(sessions.map(async (candidate) => {
-      const candidateId = text(candidate?.sessionId);
+      const candidateId = normalizeText(candidate?.sessionId);
       if (!candidateId || candidateId === sourceSessionId) {
         return;
       }
@@ -116,7 +115,7 @@ function createSessionRepositoryUpdates({
       );
       await publishSessionChanged(candidateId, {
         operation: "updated",
-        originId: text(originId),
+        originId: normalizeText(originId),
         payload: {
           canonicalCommit,
           sourceSessionId
@@ -129,7 +128,7 @@ function createSessionRepositoryUpdates({
       if (delivery.status === "rejected") {
         vibe64SessionDebugLog("server.sessions.repositoryCanonicalChanged.publish.error", {
           error: vibe64SessionDebugError(delivery.reason),
-          sessionId: text(sessions[index]?.sessionId),
+          sessionId: normalizeText(sessions[index]?.sessionId),
           sourceSessionId
         });
       }
@@ -140,7 +139,7 @@ function createSessionRepositoryUpdates({
     publishCanonicalChanged,
     async checkSessionUpdates(sessionId, input = {}) {
       return sessionResult(async () => {
-        const normalizedSessionId = text(sessionId);
+        const normalizedSessionId = normalizeText(sessionId);
         const runtime = await project.createRuntime({ inspectSource: false });
         const session = await runtime.getSession(sessionId, { inspectSource: false });
         const activeCheck = activeRepositoryUpdateChecks.get(normalizedSessionId);
@@ -156,7 +155,7 @@ function createSessionRepositoryUpdates({
           };
         }
         const check = (async () => {
-          const previousCanonicalCommit = text(
+          const previousCanonicalCommit = normalizeText(
             session?.metadata?.canonical_commit || session?.metadata?.base_commit
           );
           const result = await terminals.checkSessionUpdates(sessionId, {
@@ -172,7 +171,7 @@ function createSessionRepositoryUpdates({
           const updateCheck = await persistRepositoryUpdateCheck(runtime, sessionId, result);
           await publishSessionChanged(sessionId, {
             operation: "updated",
-            originId: text(input.originId),
+            originId: normalizeText(input.originId),
             reason: "session-repository-checked",
             payload: { repositoryUpdateCheck: updateCheck },
             session: await runtime.getSession(sessionId, { inspectSource: false })
@@ -246,16 +245,16 @@ function createSessionRepositoryUpdates({
               const check = await updates.checkSessionUpdates(sessionId, { force: true });
               if (check?.ok === false) {
                 failure = {
-                  code: text(check.code),
-                  message: text(check.error) || "The project's repository could not be checked for updates."
+                  code: normalizeText(check.code),
+                  message: normalizeText(check.error) || "The project's repository could not be checked for updates."
                 };
               }
             }
             if (!failure && renewing) continue;
           } catch (error) {
             failure = {
-              code: text(error?.code),
-              message: text(error?.message) || "The project's repository could not be checked for updates."
+              code: normalizeText(error?.code),
+              message: normalizeText(error?.message) || "The project's repository could not be checked for updates."
             };
           }
           if (!failure) {

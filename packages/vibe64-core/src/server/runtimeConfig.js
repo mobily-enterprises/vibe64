@@ -1,8 +1,5 @@
-import {
-  isPlainObject,
-  normalizeText,
-  vibe64Error
-} from "./core.js";
+import { isPlainObject, vibe64Error } from "./core.js";
+import { toText } from "../shared/toText.js";
 
 const RUNTIME_CONFIG_OWNERS = Object.freeze({
   SYSTEM: "system",
@@ -54,7 +51,7 @@ function runtimeConfigError(message, code) {
 }
 
 function normalizeRuntimeConfigKey(key = "") {
-  const normalizedKey = normalizeText(key);
+  const normalizedKey = toText(key);
   if (!RUNTIME_CONFIG_KEY_PATTERN.test(normalizedKey)) {
     throw runtimeConfigError(
       `Invalid runtime config key: ${normalizedKey || "(empty)"}`,
@@ -65,7 +62,7 @@ function normalizeRuntimeConfigKey(key = "") {
 }
 
 function normalizeRuntimeConfigOwner(owner = RUNTIME_CONFIG_OWNERS.USER) {
-  const normalizedOwner = normalizeText(owner || RUNTIME_CONFIG_OWNERS.USER);
+  const normalizedOwner = toText(owner || RUNTIME_CONFIG_OWNERS.USER);
   if (!RUNTIME_CONFIG_OWNER_VALUES.has(normalizedOwner)) {
     throw runtimeConfigError(
       `Invalid runtime config owner: ${normalizedOwner || "(empty)"}`,
@@ -76,7 +73,7 @@ function normalizeRuntimeConfigOwner(owner = RUNTIME_CONFIG_OWNERS.USER) {
 }
 
 function normalizeRuntimeConfigScope(scope = RUNTIME_CONFIG_SCOPES.DEV) {
-  const normalizedScope = normalizeText(scope || RUNTIME_CONFIG_SCOPES.DEV);
+  const normalizedScope = toText(scope || RUNTIME_CONFIG_SCOPES.DEV);
   if (!RUNTIME_CONFIG_SCOPE_VALUES.has(normalizedScope)) {
     throw runtimeConfigError(
       `Invalid runtime config scope: ${normalizedScope || "(empty)"}`,
@@ -87,7 +84,7 @@ function normalizeRuntimeConfigScope(scope = RUNTIME_CONFIG_SCOPES.DEV) {
 }
 
 function normalizeRuntimeConfigPhase(phase = "") {
-  const normalizedPhase = normalizeText(phase);
+  const normalizedPhase = toText(phase);
   if (!RUNTIME_CONFIG_PHASE_VALUES.has(normalizedPhase)) {
     throw runtimeConfigError(
       `Invalid runtime config phase: ${normalizedPhase || "(empty)"}`,
@@ -104,7 +101,7 @@ function normalizeRuntimeConfigPhases(phases = []) {
 }
 
 function normalizeRuntimeConfigTarget(target = "") {
-  const normalizedTarget = normalizeText(target);
+  const normalizedTarget = toText(target);
   if (!RUNTIME_CONFIG_TARGET_VALUES.has(normalizedTarget)) {
     throw runtimeConfigError(
       `Invalid runtime config target: ${normalizedTarget || "(empty)"}`,
@@ -121,13 +118,13 @@ function normalizeRuntimeConfigTargets(targets = []) {
 }
 
 function runtimeConfigKeyLooksSecret(key = "") {
-  const parts = normalizeText(key).split(/[^A-Za-z0-9]+/u).filter(Boolean);
+  const parts = toText(key).split(/[^A-Za-z0-9]+/u).filter(Boolean);
   return parts.includes("DATABASE") && parts.includes("URL") ||
     parts.some((part) => RUNTIME_CONFIG_SECRET_KEY_PARTS.has(part));
 }
 
 function runtimeConfigKeyIsVibe64Reserved(key = "") {
-  return normalizeText(key).startsWith(RUNTIME_CONFIG_VIBE64_RESERVED_PREFIX);
+  return toText(key).startsWith(RUNTIME_CONFIG_VIBE64_RESERVED_PREFIX);
 }
 
 /**
@@ -162,7 +159,7 @@ function normalizeRuntimeConfigRecord(record = {}) {
     requiredFor: normalizeRuntimeConfigPhases(record.requiredFor),
     scope: normalizeRuntimeConfigScope(record.scope),
     secret,
-    source: normalizeText(record.source),
+    source: toText(record.source),
     targets: normalizeRuntimeConfigTargets(record.targets),
     value: String(record.value ?? ""),
     valuePresent: record.valuePresent === undefined
@@ -220,7 +217,7 @@ function resolveRuntimeConfig(records = [], context = {}) {
     : options.phase
       ? [options.phase]
       : []);
-  const target = normalizeText(options.target);
+  const target = toText(options.target);
   const missing = missingRuntimeConfigRecords(normalizedRecords, {
     phases,
     scope,
@@ -247,7 +244,7 @@ function resolveRuntimeConfig(records = [], context = {}) {
 }
 
 function runtimeConfigRecordMatchesTarget(record = {}, target = "") {
-  const normalizedTarget = normalizeText(target);
+  const normalizedTarget = toText(target);
   if (!normalizedTarget) {
     return true;
   }
@@ -361,7 +358,7 @@ function runtimeConfigEnvViewModel(config = {}) {
         missing: source.missing,
         records: source.records,
         scope,
-        target: normalizeText(source.target)
+        target: toText(source.target)
       });
   return {
     environment: scope,

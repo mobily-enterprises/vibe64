@@ -1,10 +1,7 @@
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { createServiceToolCatalog, runBoundedAssistantToolLoop } from "@jskit-ai/assistant-core/server";
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
@@ -18,6 +15,7 @@ import {
   databaseSchemaSummary,
   searchDatabaseSchema
 } from "./schemaAccess.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const MAX_ASSISTANT_SCHEMA_PROMPT_BYTES = 16 * 1024;
 const MAX_ASSISTANT_MESSAGES = 24;
@@ -67,15 +65,15 @@ function databaseAssistantAvailability(decision = {}) {
   const selection = decision.effectiveSelection;
   return {
     available: decision.available === true,
-    engineId: normalizeText(selection?.engineId),
-    model: normalizeText(selection?.modelId),
-    variantId: normalizeText(selection?.variantId),
-    message: normalizeText(decision.message)
+    engineId: toText(selection?.engineId),
+    model: toText(selection?.modelId),
+    variantId: toText(selection?.variantId),
+    message: toText(decision.message)
   };
 }
 
 function databaseSchemaPrompt(schema = {}) {
-  if (!normalizeText(schema.engine) || !Array.isArray(schema.tables)) {
+  if (!toText(schema.engine) || !Array.isArray(schema.tables)) {
     throw vibe64Error(
       "Refresh the database schema before using the database assistant.",
       "vibe64_database_schema_refresh_required"
@@ -118,7 +116,7 @@ function normalizedConversation(messages = [], schema = {}) {
         "vibe64_database_assistant_message_too_large"
       );
     }
-    const table = role === "user" ? normalizeText(message.table) : "";
+    const table = role === "user" ? toText(message.table) : "";
     if (table.length > 512) throw vibe64Error("The selected table name is too long.", "vibe64_database_assistant_table_invalid");
     return { content, role, ...(table ? { table } : {}) };
   }).filter(Boolean);
@@ -157,8 +155,8 @@ function assistantQueryView(result = {}) {
   if (result.kind !== "result-set") {
     return {
       affectedRows: Number(result.affectedRows || 0),
-      command: normalizeText(result.command),
-      kind: normalizeText(result.kind)
+      command: toText(result.command),
+      kind: toText(result.kind)
     };
   }
   return {
@@ -182,8 +180,8 @@ function assistantQueryResult(sql = "", result = {}) {
 }
 
 function contextLimitError(error) {
-  const code = normalizeText(error?.code || error?.error?.code).toLowerCase();
-  const message = normalizeText(error?.message || error?.error?.message).toLowerCase();
+  const code = toText(error?.code || error?.error?.code).toLowerCase();
+  const message = toText(error?.message || error?.error?.message).toLowerCase();
   const details = error?.details || error?.error?.details || {};
   const boundedInputExceeded = (
     code === VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED &&
@@ -230,7 +228,7 @@ async function runDatabaseAssistant({
     "vibe64_database_assistant_response_invalid"
   );
   function searchSchema({ search }) {
-    if (!normalizeText(search)) throw invalidResponseError;
+    if (!toText(search)) throw invalidResponseError;
     const schemaResult = searchDatabaseSchema(schema, search);
     schemaLookups.push({
       matchedCount: schemaResult.matchedCount,
@@ -242,7 +240,7 @@ async function runDatabaseAssistant({
   }
 
   async function readQuery({ sql }) {
-    if (!normalizeText(sql)) throw invalidResponseError;
+    if (!toText(sql)) throw invalidResponseError;
     const queryResult = assistantQueryView(await executeReadQuery(sql));
     queries.push({ result: queryResult, sql });
     return assistantQueryResult(sql, queryResult);
@@ -348,13 +346,13 @@ async function runDatabaseAssistant({
           ...agentContext,
           async onEvent(event = {}) {
             if (event.type === "thread") {
-              threadId = normalizeText(event.threadId) || threadId;
+              threadId = toText(event.threadId) || threadId;
             }
             observedExecutionProfile ||= executionProfileSnapshot(event.executionProfile);
             await forwardEvent(event);
           }
         });
-        threadId = normalizeText(result?.threadId || result?.conversationId) || threadId;
+        threadId = toText(result?.threadId || result?.conversationId) || threadId;
         observedExecutionProfile ||= executionProfileSnapshot(result?.executionProfile);
         return result;
       },
@@ -363,7 +361,7 @@ async function runDatabaseAssistant({
         "vibe64_database_assistant_tool_limit"
       )
     });
-    if (!normalizeText(response.answer)) throw invalidResponseError;
+    if (!toText(response.answer)) throw invalidResponseError;
   } catch (error) {
     throw contextLimitError(error)
       ? vibe64Error(
@@ -384,9 +382,9 @@ async function runDatabaseAssistant({
   }
   return {
     answer: response.answer,
-    engineId: normalizeText(observedExecutionProfile?.providerId || assistant.engineId),
+    engineId: toText(observedExecutionProfile?.providerId || assistant.engineId),
     intent: response.intent,
-    model: normalizeText(observedExecutionProfile?.model || assistant.model),
+    model: toText(observedExecutionProfile?.model || assistant.model),
     ok: true,
     queries,
     schemaLookups,

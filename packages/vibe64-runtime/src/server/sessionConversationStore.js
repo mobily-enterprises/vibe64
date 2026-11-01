@@ -8,7 +8,7 @@ import {
   createConversationStreams,
   createConversationTranscript
 } from "@jskit-ai/assistant-core/server/conversation";
-import { isMissingPathError, isPlainObject, normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { isMissingPathError, isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
 import {
   VIBE64_ASSISTANT_ENGINE_ID_SET,
@@ -34,6 +34,7 @@ import {
   sortedFileNames
 } from "./sessionStoreLayout.js";
 import { enqueueSessionMutation } from "./sessionStoreLocks.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -75,15 +76,15 @@ function createSessionConversationStore({
   sessionRecords
 }) {
   async function readConversationMessage(sessionPaths, turnId, fileName) {
-    const match = normalizeText(fileName).match(CONVERSATION_MESSAGE_FILE_PATTERN);
+    const match = toText(fileName).match(CONVERSATION_MESSAGE_FILE_PATTERN);
     if (!match) {
       return null;
     }
-    const messageId = normalizeText(match[3]);
+    const messageId = toText(match[3]);
     return {
       at: isoFromConversationTimestamp(match[2]),
       role: match[1],
-      text: normalizeText(await readTextIfExists(path.join(conversationTurnRoot(sessionPaths, turnId), fileName))),
+      text: toText(await readTextIfExists(path.join(conversationTurnRoot(sessionPaths, turnId), fileName))),
       ...(messageId ? { messageId } : {})
     };
   }
@@ -263,7 +264,7 @@ function createSessionConversationStore({
       return attachments;
     } catch (error) {
       throw vibe64Error(
-        `Conversation turn ${turnId} attachments are invalid: ${normalizeText(error?.message) || "unknown error"}`,
+        `Conversation turn ${turnId} attachments are invalid: ${toText(error?.message) || "unknown error"}`,
         "vibe64_invalid_conversation_turn_attachments"
       );
     }
@@ -308,8 +309,8 @@ function createSessionConversationStore({
     ]) delete other[key];
     return {
       ...other,
-      actorDisplayName: normalizeText(value.actorDisplayName),
-      actorId: normalizeText(value.actorId),
+      actorDisplayName: toText(value.actorDisplayName),
+      actorId: toText(value.actorId),
       ...(VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) ? { engineId: value.engineId } : {}),
       ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
       ...(isPlainObject(value.assistantRouting) &&

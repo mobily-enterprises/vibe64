@@ -2,16 +2,13 @@ import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readlink, rename, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  isMissingPathError,
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { isMissingPathError, vibe64Error } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const VIBE64_CURRENT_SESSION_ALIAS_NAME = "selected";
 
 function resolveVibe64CurrentSessionAliasPath(sessionsRoot = "") {
-  const normalizedSessionsRoot = normalizeText(sessionsRoot);
+  const normalizedSessionsRoot = toText(sessionsRoot);
   if (!normalizedSessionsRoot) {
     throw vibe64Error(
       "Current Vibe64 session alias requires sessionsRoot.",
@@ -22,7 +19,7 @@ function resolveVibe64CurrentSessionAliasPath(sessionsRoot = "") {
 }
 
 function requireCurrentSessionAliasPath(aliasPath = "") {
-  const normalizedAliasPath = normalizeText(aliasPath);
+  const normalizedAliasPath = toText(aliasPath);
   if (!normalizedAliasPath) {
     throw vibe64Error(
       "Current Vibe64 session alias requires aliasPath.",
@@ -52,7 +49,7 @@ async function updateVibe64CurrentSessionAlias({
   sessionId = ""
 } = {}) {
   const resolvedAliasPath = requireCurrentSessionAliasPath(aliasPath);
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = toText(sessionId);
   const aliasStat = await lstatIfExists(resolvedAliasPath);
   if (aliasStat && !aliasStat.isSymbolicLink()) {
     throw vibe64Error(
@@ -101,7 +98,7 @@ async function clearVibe64CurrentSessionAliasIfMatches({
   if (!aliasStat?.isSymbolicLink()) {
     return;
   }
-  const expectedTarget = currentSessionAliasTarget(normalizeText(sessionId));
+  const expectedTarget = currentSessionAliasTarget(toText(sessionId));
   if (await readlink(resolvedAliasPath) !== expectedTarget) {
     return;
   }
@@ -129,7 +126,7 @@ async function readVibe64CurrentSessionAlias({
   if (
     path.isAbsolute(target) ||
     path.dirname(normalizedTarget) !== "active" ||
-    path.basename(normalizedTarget) !== normalizeText(path.basename(normalizedTarget))
+    path.basename(normalizedTarget) !== toText(path.basename(normalizedTarget))
   ) {
     throw vibe64Error(
       `Cannot read invalid current Vibe64 session alias target: ${target || "(empty)"}.`,

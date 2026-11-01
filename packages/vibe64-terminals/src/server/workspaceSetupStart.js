@@ -1,5 +1,4 @@
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { GENESIS_STACK_SECTION_AMBIGUOUS } from "@local/vibe64-genesis/server";
 import { workspaceSetupState } from "@local/vibe64-runtime/server/workspaceSetupState";
@@ -20,6 +19,7 @@ import {
   stepStatus,
   workspaceSetupRunKey
 } from "./workspaceSetupRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
@@ -51,7 +51,7 @@ function createWorkspaceSetupStart({
    * runs a failed recipe again instead of reporting the stored failure.
    */
   async function start({ renewal = false, rerunFailed = false, retry = false, runtime, session } = {}) {
-    const sessionId = normalizeText(session?.sessionId);
+    const sessionId = toText(session?.sessionId);
     if (!sessionId || !runtime?.store) {
       throw new TypeError("Workspace preparation requires a stored Vibe64 session.");
     }
@@ -84,7 +84,7 @@ function createWorkspaceSetupStart({
         projectRoot: sourcePath
       });
     } catch (error) {
-      if (normalizeText(error?.code) === "STACK_REQUIRED") {
+      if (toText(error?.code) === "STACK_REQUIRED") {
         const state = await persistInspectedState(runtime, sessionId, previous, {
           currentLabel: "",
           diagnostic: "",
@@ -108,18 +108,18 @@ function createWorkspaceSetupStart({
       }
       if (
         retry !== true ||
-        normalizeText(projectFormat?.action) !== "migrate" ||
-        !["outdated", "unversioned"].includes(normalizeText(projectFormat?.status))
+        toText(projectFormat?.action) !== "migrate" ||
+        !["outdated", "unversioned"].includes(toText(projectFormat?.status))
       ) {
         const state = await persistInspectedState(runtime, sessionId, previous, {
           currentLabel: "",
-          diagnostic: normalizeText(error?.message) || "Vibe64 could not inspect workspace preparation.",
+          diagnostic: toText(error?.message) || "Vibe64 could not inspect workspace preparation.",
           finishedAt: new Date().toISOString(),
           recipeHash: "",
           startedAt: "",
           // Genesis now rejects reads until the project authors one competing
           // section; keep the same "needs a choice" state its diagnostic used.
-          status: normalizeText(error?.code) === GENESIS_STACK_SECTION_AMBIGUOUS ? "ambiguous" : "failed"
+          status: toText(error?.code) === GENESIS_STACK_SECTION_AMBIGUOUS ? "ambiguous" : "failed"
         }, renewal);
         return { completion: null, state };
       }
@@ -211,14 +211,14 @@ function createWorkspaceSetupStart({
       } catch (error) {
         const state = await failed(runtime, sessionId, {
           currentLabel: "Prepare connected sources",
-          diagnostic: normalizeText(error?.message),
+          diagnostic: toText(error?.message),
           renewal
         });
         return { completion: null, state };
       }
     }
 
-    if (normalizeText(setup?.status) === "unconfigured") {
+    if (toText(setup?.status) === "unconfigured") {
       const state = await persistInspectedState(runtime, sessionId, stateBase, {
         currentLabel: "",
         diagnostic: "",
@@ -229,7 +229,7 @@ function createWorkspaceSetupStart({
       }, renewal);
       return { completion: null, state };
     }
-    if (normalizeText(setup?.status) !== "ready") {
+    if (toText(setup?.status) !== "ready") {
       const ambiguous = diagnosticsInclude(
         setup?.diagnostics,
         GENESIS_STACK_SECTION_AMBIGUOUS
@@ -251,7 +251,7 @@ function createWorkspaceSetupStart({
     } catch (error) {
       const state = await persistInspectedState(runtime, sessionId, stateBase, {
         currentLabel: "",
-        diagnostic: normalizeText(error?.message),
+        diagnostic: toText(error?.message),
         finishedAt: new Date().toISOString(),
         recipeHash: "",
         startedAt: "",
@@ -307,7 +307,7 @@ function createWorkspaceSetupStart({
             completion: null,
             state: await failed(runtime, sessionId, {
               currentLabel: "Prepare project environment",
-              diagnostic: normalizeText(error?.message),
+              diagnostic: toText(error?.message),
               recipeHash: recipe.recipeHash,
               renewal,
               transcript: stateBase.transcript,

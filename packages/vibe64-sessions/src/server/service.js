@@ -15,7 +15,7 @@ import { createSessionWork } from "./sessionWork.js";
 import { createSessionWorkOperations } from "./sessionWorkOperations.js";
 import { createSessionWorkRecovery } from "./sessionWorkRecovery.js";
 import { createSessionWorkspaceSetup } from "./sessionWorkspaceSetup.js";
-import { text } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionPresenceService} SessionPresenceService */
 /** @typedef {import("@local/vibe64-project/server/types").PublishProjectChanged} PublishProjectChanged */
@@ -223,10 +223,10 @@ function createService({
     // Connected Save needs the person's authenticated request to each project.
     if (sessionConnectedSources(session).length) return skipped("this session has connected repositories. Choose Save yourself.");
     const inspection = await service.inspectSessionWork(sessionId, {}, { includeConnected: false });
-    if (inspection?.ok === false) return skipped(text(inspection.error) || "this session's work could not be inspected.");
+    if (inspection?.ok === false) return skipped(normalizeText(inspection.error) || "this session's work could not be inspected.");
     if (!inspection.unsaved) return "Automatic save: nothing new to save.";
     const saved = await service.saveSessionWork(sessionId, { destinationReview: inspection.destination, vibe64User: submittedBy });
-    return saved?.ok === false ? skipped(text(saved.error) || "Save was refused.") : "Saved automatically after completing the plan.";
+    return saved?.ok === false ? skipped(normalizeText(saved.error) || "Save was refused.") : "Saved automatically after completing the plan.";
   });
   /**
    * @param {object} preparation

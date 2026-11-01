@@ -2,18 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import {
-  vibe64Error,
-  isPlainObject,
-  isMissingPathError,
-  normalizeText
-} from "@local/vibe64-core/server/core";
+import { vibe64Error, isPlainObject, isMissingPathError } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   processStartIdentityPlatform,
   readProcessStart
 } from "@local/vibe64-execution/server";
 import { writeJsonFile } from "./sessionFiles.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
@@ -85,7 +81,7 @@ function currentSessionLockProcessIdentity(processPlatform = process.platform) {
 
 async function observeSessionLockOwner(pid, identity = {}) {
   const reusable = processStartIdentityPlatform() === "darwin-ps";
-  const key = `${pid}:${normalizeText(identity.startTimeTicks)}`;
+  const key = `${pid}:${toText(identity.startTimeTicks)}`;
   const recent = reusable ? recentLiveSessionLockOwners.get(key) : null;
   if (recent && Date.now() - recent.atMs < SESSION_LOCK_OWNER_PROBE_REUSE_MS) {
     return recent.observed;
@@ -118,20 +114,20 @@ async function sessionLockOwnerProcessStatus(owner = {}) {
   }
   if (
     Number(owner.schemaVersion) !== SESSION_LOCK_OWNER_SCHEMA_VERSION ||
-    normalizeText(identity.platform) !== processStartIdentityPlatform() ||
-    !/^\d+$/u.test(normalizeText(identity.startTimeTicks)) ||
+    toText(identity.platform) !== processStartIdentityPlatform() ||
+    !/^\d+$/u.test(toText(identity.startTimeTicks)) ||
     observed.status !== "exact" ||
     !LOCK_OWNER_STATE_PATTERN.test(observed.state)
   ) {
     return processIsAlive(pid) ? "ambiguous" : "absent";
   }
-  return observed.startTimeTicks === normalizeText(identity.startTimeTicks)
+  return observed.startTimeTicks === toText(identity.startTimeTicks)
     ? "exact"
     : "reused";
 }
 
 function sessionLockPath(sessionPaths, lockName = "") {
-  const normalizedLockName = normalizeText(lockName);
+  const normalizedLockName = toText(lockName);
   if (!SESSION_LOCK_NAME_PATTERN.test(normalizedLockName)) {
     throw vibe64Error(`Invalid vibe64 session lock name: ${normalizedLockName || "(empty)"}`, "vibe64_session_lock_name_invalid");
   }
@@ -271,7 +267,7 @@ async function acquireSessionLock(sessionPaths, lockName, {
           logLockEvent("acquired", { waitedMs: Date.now() - startedAtMs });
           return async () => {
             const owner = await readSessionLockOwner(lockPath);
-            if (normalizeText(owner?.token) !== token) {
+            if (toText(owner?.token) !== token) {
               return;
             }
             const releasedPath = `${lockPath}.released.${process.pid}.${token}`;
@@ -300,14 +296,14 @@ async function acquireSessionLock(sessionPaths, lockName, {
       if (rejected || (operation && !contentionLogged)) {
         const owner = await readSessionLockOwner(lockPath);
         if (rejected) {
-          onRejected?.(normalizeText(owner?.operation));
+          onRejected?.(toText(owner?.operation));
         }
         const acquiredAtMs = Date.parse(owner?.createdAt);
         logLockEvent(rejected ? "rejected" : "contended", {
           waitedMs,
           owner: owner ? {
-            operation: normalizeText(owner.operation) || "unknown",
-            attemptId: normalizeText(owner.attemptId),
+            operation: toText(owner.operation) || "unknown",
+            attemptId: toText(owner.attemptId),
             pid: owner.pid,
             createdAt: owner.createdAt,
             heldMs: Number.isFinite(acquiredAtMs) ? Math.max(0, Date.now() - acquiredAtMs) : null,

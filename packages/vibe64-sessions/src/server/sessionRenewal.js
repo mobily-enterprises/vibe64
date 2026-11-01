@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { runVibe64AgentWriteExclusive, runVibe64RenewalAgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import {
@@ -33,6 +32,7 @@ import { createRenewalRestoration } from "./sessionRenewalRestoration.js";
 import { SESSION_RENEWAL_WORKFLOW_LOCK_RETRY_MS, createRenewalScheduler } from "./sessionRenewalScheduler.js";
 import { createRenewalSuccessorSession } from "./sessionRenewalSuccessor.js";
 import { createRenewalWorkflow } from "./sessionRenewalWorkflow.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 /** @typedef {import("./types.js").SessionArchive} SessionArchive */
@@ -245,7 +245,7 @@ function createSessionRenewalController({
           return confirmed;
         } catch (error) {
           if (!durablyQuiesced) {
-            const sourceStatus = normalizeText(
+            const sourceStatus = toText(
               await runtime.store.readStatusForRenewal(sessionId)
             );
             if (sourceStatus === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
@@ -317,8 +317,8 @@ function createSessionRenewalController({
           });
           if (
             source?.archived === true ||
-            normalizeText(source?.sessionId) !== normalizeText(sessionId) ||
-            normalizeText(source?.status) !== VIBE64_SESSION_STATUS.ACTIVE
+            toText(source?.sessionId) !== toText(sessionId) ||
+            toText(source?.status) !== VIBE64_SESSION_STATUS.ACTIVE
           ) {
             throw renewalError(
               "Only an active session can be renewed.",
@@ -482,7 +482,7 @@ function createSessionRenewalController({
           return current;
         } catch (error) {
           if (!durablyQuiesced) {
-            const sourceStatus = normalizeText(
+            const sourceStatus = toText(
               await runtime.store.readStatusForRenewal(sessionId)
             );
             if (sourceStatus === VIBE64_SESSION_STATUS.ACTIVE) {
@@ -494,8 +494,8 @@ function createSessionRenewalController({
       }, { operation: "retry-session-renewal" });
       if (!exclusive.acquired) {
         throw renewalError(
-          normalizeText(exclusive.value?.error) || "Another assistant operation is starting. Try again in a moment.",
-          normalizeText(exclusive.value?.code) || "vibe64_session_renewal_agent_busy",
+          toText(exclusive.value?.error) || "Another assistant operation is starting. Try again in a moment.",
+          toText(exclusive.value?.code) || "vibe64_session_renewal_agent_busy",
           { retryable: true }
         );
       }

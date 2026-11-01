@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SAVE_TIMEOUT_MS = 120_000;
 const SESSION_WORK_COMMAND_SCOPE = Symbol("vibe64-session-work-command-scope");
@@ -20,7 +20,7 @@ function saveError(message, code = "vibe64_session_save_failed", details = {}) {
 
 function commandProject(context = {}, project = {}) {
   return {
-    ownerUserKey: trimmedText(project.ownerUserKey || project.githubRepository?.owner),
+    ownerUserKey: normalizeText(project.ownerUserKey || project.githubRepository?.owner),
     projectRoot: context.worktreePath,
     repositoryMode: context.mode,
     sessionId: context.sessionId
@@ -35,7 +35,7 @@ function scopedSessionWorkCommand(runCommand, context = {}, project = {}, option
   if (runCommand?.[SESSION_WORK_COMMAND_SCOPE]) {
     return runCommand;
   }
-  const projectSlug = trimmedText(project.slug || project.projectSlug);
+  const projectSlug = normalizeText(project.slug || project.projectSlug);
   let commandTail = Promise.resolve();
   const scoped = (request = {}) => {
     const command = commandTail.then(() => runCommand({
@@ -45,7 +45,7 @@ function scopedSessionWorkCommand(runCommand, context = {}, project = {}, option
         kind: "job",
         label,
         lifecycle: "finite",
-        operationId: trimmedText(operationId),
+        operationId: normalizeText(operationId),
         ownerId: context.sessionId,
         projectSlug,
         sessionId: context.sessionId
@@ -83,7 +83,7 @@ async function saveCommand(runCommand, context, command, args, options = {}) {
       : []),
     ...(path.isAbsolute(context.remoteUrl) ? [context.remoteUrl, path.dirname(context.remoteUrl)] : []),
     ...additionalAllowedRoots.flatMap((root) => {
-      const normalized = trimmedText(root);
+      const normalized = normalizeText(root);
       return normalized ? [normalized, path.dirname(normalized)] : [];
     })
   ];
@@ -113,8 +113,8 @@ async function git(runCommand, context, args, {
   const result = await saveCommand(runCommand, context, "git", args, options);
   if (required && result?.ok !== true) {
     throw saveError(
-      trimmedText(result?.stderr || result?.stdout || result?.output || result?.error) || "Git Save command failed.",
-      trimmedText(result?.code) || "vibe64_session_save_git_failed",
+      normalizeText(result?.stderr || result?.stdout || result?.output || result?.error) || "Git Save command failed.",
+      normalizeText(result?.code) || "vibe64_session_save_git_failed",
       { gitArgs: args }
     );
   }
@@ -122,7 +122,7 @@ async function git(runCommand, context, args, {
 }
 
 function output(result = {}) {
-  return trimmedText(result.stdout || result.output);
+  return normalizeText(result.stdout || result.output);
 }
 
 async function gitOutput(runCommand, context, args, options = {}) {

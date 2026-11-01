@@ -1,5 +1,5 @@
 import { inspectVibe64ArchitectureLayout } from "@local/vibe64-genesis/server";
-import { normalizeText, pathExists } from "@local/vibe64-core/server/core";
+import { pathExists } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
 
@@ -21,6 +21,7 @@ import {
   requireEntry,
   usageError
 } from "./usageWeb.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
@@ -61,7 +62,7 @@ function createUsageService({
   const snapshotIndexes = new WeakMap();
 
   async function sessionSource(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     if (!normalizedSessionId) throw usageError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     const runtime = await projectService.createRuntime({ sessionId: normalizedSessionId });
     const session = await runtime.getSession(normalizedSessionId);
@@ -113,7 +114,7 @@ function createUsageService({
     readUsageEntries: query((index, input) => readEntries(index, input)),
     readUsageWeb: query(async (index, input, calls) => {
       const entry = requireEntry(index, input.entryId);
-      const mode = normalizeText(input.mode) || "imports";
+      const mode = toText(input.mode) || "imports";
       if (mode === "imports") return readImportsWeb(index, entry, input);
       if (mode === "calls") return readCallsWeb(index, await calls(), entry, input);
       throw usageError("Mode must be imports or calls.", "vibe64_invalid_usage_mode");

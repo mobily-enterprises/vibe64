@@ -37,12 +37,12 @@ import {
   sessionWorkComparison,
   treeWithDerivedArtifactsFromCommit
 } from "./sessionWorkGit.js";
-import { trimmedText } from "./trimmedText.js";
 import {
   readAuthorityBranchHeads,
   readCanonical
 } from "./sessionWorkAuthority.js";
 import { inspectSessionUpdateFailure, recoverSessionWorkUpdate } from "./sessionWorkUpdateRecovery.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const INCOMING_VERSION_LIMIT = 5;
 
@@ -77,14 +77,14 @@ function normalizedConflictRecovery(value = {}) {
       .sort((left, right) => left.localeCompare(right))
     : [];
   const recovery = {
-    baseCommit: trimmedText(value.baseCommit),
-    canonicalCommit: trimmedText(value.canonicalCommit),
-    checkpointTree: trimmedText(value.checkpointTree),
+    baseCommit: normalizeText(value.baseCommit),
+    canonicalCommit: normalizeText(value.canonicalCommit),
+    checkpointTree: normalizeText(value.checkpointTree),
     conflictPaths,
-    conflictTree: trimmedText(value.conflictTree),
-    reviewId: trimmedText(value.reviewId),
-    oldHead: trimmedText(value.oldHead),
-    oldIndexTree: trimmedText(value.oldIndexTree)
+    conflictTree: normalizeText(value.conflictTree),
+    reviewId: normalizeText(value.reviewId),
+    oldHead: normalizeText(value.oldHead),
+    oldIndexTree: normalizeText(value.oldIndexTree)
   };
   return Object.values(recovery).some((entry) => Array.isArray(entry) ? entry.length === 0 : !entry)
     ? null
@@ -287,7 +287,7 @@ async function readSessionAuthorityHeads({
     try {
       context = repositoryContext(session, project);
     } catch (error) {
-      results.set(trimmedText(session.sessionId), { code: trimmedText(error?.code), error: trimmedText(error?.message) });
+      results.set(normalizeText(session.sessionId), { code: normalizeText(error?.code), error: normalizeText(error?.message) });
       continue;
     }
     const members = authorities.get(context.remoteUrl) || [];
@@ -307,7 +307,7 @@ async function readSessionAuthorityHeads({
       }
       if (candidate.code !== "vibe64_session_git_command_actor_missing") refusal ||= candidate;
     }
-    let failure = refusal && { code: trimmedText(refusal.code), error: trimmedText(refusal.error) };
+    let failure = refusal && { code: normalizeText(refusal.code), error: normalizeText(refusal.error) };
     if (execution) {
       try {
         const heads = await readAuthorityBranchHeads(
@@ -336,8 +336,8 @@ async function readSessionAuthorityHeads({
         continue;
       } catch (error) {
         failure = {
-          code: trimmedText(error?.code) || "vibe64_session_update_check_failed",
-          error: trimmedText(error?.message) || "The project's repository could not be checked for updates."
+          code: normalizeText(error?.code) || "vibe64_session_update_check_failed",
+          error: normalizeText(error?.message) || "The project's repository could not be checked for updates."
         };
       }
     }
@@ -733,7 +733,7 @@ async function inspectSessionUpdateFailureDirect({
     ], options),
     gitOutput(runCommand, context, ["ls-files", "--unmerged", "-z"], options)
   ]);
-  const target = trimmedText(targetCommit);
+  const target = normalizeText(targetCommit);
   const [canonicalInSession, historyRewritten, targetInHead] = await Promise.all([
     commitIsAncestor(runCommand, context, canonicalCommit, sessionHead, options),
     savedHistoryRewritten(runCommand, context, canonicalCommit, sessionHead, options),

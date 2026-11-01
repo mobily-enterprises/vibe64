@@ -1,10 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "./atomicFile.js";
-import {
-  isPlainObject,
-  normalizeText
-} from "./core.js";
+import { isPlainObject } from "./core.js";
 import {
   PROJECT_CANONICAL_REPOSITORY_DIR,
   PROJECT_GITHUB_MIRROR_DIR,
@@ -12,6 +9,7 @@ import {
   resolveProjectGithubMirrorPath
 } from "./projectState.js";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { toText } from "../shared/toText.js";
 
 const PROJECT_REPOSITORY_MODE_GITHUB = "github";
 const PROJECT_REPOSITORY_MODE_MANAGED_GIT = "managed_git";
@@ -48,7 +46,7 @@ async function saveProjectRepositoryWorkflow(projectRuntimeRoot, requirePullRequ
 }
 
 function normalizeRepositoryMode(value = "") {
-  const mode = normalizeText(value).toLowerCase().replace(/[-\s]+/gu, "_");
+  const mode = toText(value).toLowerCase().replace(/[-\s]+/gu, "_");
   if (
     mode === PROJECT_REPOSITORY_MODE_GITHUB ||
     mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT ||
@@ -107,23 +105,23 @@ function projectRequiresGithubConnection(project = {}) {
 
 function normalizeProjectGithubRepository(value = {}) {
   const input = isPlainObject(value) ? value : {};
-  const fullName = normalizeText(input.fullName);
-  const owner = normalizeText(input.owner);
-  const name = normalizeText(input.name);
+  const fullName = toText(input.fullName);
+  const owner = toText(input.owner);
+  const name = toText(input.name);
   if (!fullName && (!owner || !name)) {
     return null;
   }
   const normalizedFullName = fullName || `${owner}/${name}`;
   return {
     canPush: input.canPush === true,
-    cloneUrl: normalizeText(input.cloneUrl),
+    cloneUrl: toText(input.cloneUrl),
     fullName: normalizedFullName,
     isPrivate: input.isPrivate === true,
     name: name || normalizedFullName.split("/").pop() || "",
     owner: owner || normalizedFullName.split("/")[0] || "",
-    url: normalizeText(input.url),
-    viewerPermission: normalizeText(input.viewerPermission).toUpperCase(),
-    visibility: normalizeText(input.visibility).toLowerCase()
+    url: toText(input.url),
+    viewerPermission: toText(input.viewerPermission).toUpperCase(),
+    visibility: toText(input.visibility).toLowerCase()
   };
 }
 
@@ -141,7 +139,7 @@ function normalizeProjectRepository(value = {}, options = {}) {
     return null;
   }
 
-  const defaultBranch = normalizeText(
+  const defaultBranch = toText(
     input.defaultBranch ||
     fallbackDefaultBranch ||
     (mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE ? PROJECT_REPOSITORY_LOCAL_SOURCE_BRANCH : "")
@@ -315,7 +313,7 @@ function sessionRepositoryProject(project, session, options = {}) {
   const { sourcePreparation = false } = options;
   const contribution = sessionConnectedContribution(session);
   if (contribution) {
-    const repository = normalizeText(project.githubRepository?.fullName || project.repository?.github?.fullName).toLowerCase();
+    const repository = toText(project.githubRepository?.fullName || project.repository?.github?.fullName).toLowerCase();
     if (session.metadata.github_pull_request || session.metadata.repository_branch ||
         normalizeRepositoryMode(project.repositoryMode || project.repository?.mode) !== PROJECT_REPOSITORY_MODE_GITHUB ||
         repository !== contribution.repository || project.repository?.defaultBranch !== contribution.integrationBranch) {
@@ -352,7 +350,7 @@ function sessionRepositoryProject(project, session, options = {}) {
   } catch {
     // Invalid authority must never fall back to the project branch.
   }
-  const fullName = normalizeText(project.githubRepository?.fullName || project.repository?.github?.fullName);
+  const fullName = toText(project.githubRepository?.fullName || project.repository?.github?.fullName);
   if (
     !source || source.baseRepository !== fullName ||
     !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(source.headRepository || "") ||
@@ -395,10 +393,10 @@ function sessionRepositoryDestination(project = {}, session = {}) {
     branch = session.metadata?.local_source_branch || branch;
   }
   return {
-    sessionId: normalizeText(session.sessionId),
+    sessionId: toText(session.sessionId),
     mode,
-    repository: normalizeText(repository),
-    branch: normalizeText(branch)
+    repository: toText(repository),
+    branch: toText(branch)
   };
 }
 

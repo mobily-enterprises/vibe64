@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import {
@@ -17,6 +16,7 @@ import {
   operationRedactionSecrets,
   stepStatus
 } from "./workspaceSetupRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
@@ -114,7 +114,7 @@ function createWorkspaceSetupMigration({
     } catch (migrationError) {
       const state = await failed(runtime, sessionId, {
         currentLabel,
-        diagnostic: normalizeText(migrationError?.message) || "Genesis project migration failed.",
+        diagnostic: toText(migrationError?.message) || "Genesis project migration failed.",
         redactionSecrets,
         renewal,
         startedAt: migrationStartedAt,
@@ -134,7 +134,7 @@ function createWorkspaceSetupMigration({
       const state = await persist(runtime, sessionId, {
         currentLabel: "",
         diagnostic: sanitizeOperationText(
-          normalizeText(inspectionError?.message) || "Vibe64 could not inspect the migrated workspace preparation.",
+          toText(inspectionError?.message) || "Vibe64 could not inspect the migrated workspace preparation.",
           redactionSecrets
         ),
         finishedAt: new Date().toISOString(),

@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises";
 import path from "node:path";
 
-import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
+import { isMissingPathError } from "@local/vibe64-core/server/core";
 
 import { cleanupAssistantHelper } from "./assistantHelperTurn.js";
 import {
@@ -12,6 +12,7 @@ import {
   promptHintFailure,
   sessionStateForHints
 } from "./promptHintRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -48,7 +49,7 @@ function createPromptHintContext({
   async function readContext(sessionId = "") {
     const runtime = await projectService.createRuntime({ inspectSource: false });
     const session = await runtime.getSession(sessionId, { inspectSource: false });
-    const sourceRoot = normalizeText(sessionSourcePath(session));
+    const sourceRoot = toText(sessionSourcePath(session));
     const [promptHintsResult, conversation, repositoryTasks, blueprint, subsystems] = await Promise.all([
       projectService.readPromptHints(),
       runtime.readConversationLogPage(sessionId, {
@@ -64,7 +65,7 @@ function createPromptHintContext({
       throw new Error(promptHintsResult.error || "Project prompt-hint settings could not be read.");
     }
     const repositoryOperationActive = repositoryTasks.some((task) => (
-      ["queued", "running", "starting"].includes(normalizeText(task?.status))
+      ["queued", "running", "starting"].includes(toText(task?.status))
     ));
     const sessionState = sessionStateForHints(session, {
       repositoryOperationActive,

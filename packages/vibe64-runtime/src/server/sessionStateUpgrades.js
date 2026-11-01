@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { lstat, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isMissingPathError, isPlainObject, normalizeText } from "@local/vibe64-core/server/core";
+import { isMissingPathError, isPlainObject } from "@local/vibe64-core/server/core";
 import { explicitPathIsManagedSessionSource } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   assertValidVibe64SessionId,
@@ -27,6 +27,7 @@ import {
   runCommand,
   sortedDirectoryNames
 } from "./sessionStoreLayout.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -471,7 +472,7 @@ function createSessionStateUpgrades({
     if (preparedReplacements.length) {
       if (!found || replacements.size !== files.length) throw new Error(`Practice session ${id} has an incomplete frozen replacement set.`);
       if (!currentArchive) {
-        learningSessionBinding({ learning_session: normalizeText(await readFrozen(replacements.get(files[0].filePath))) }, scope, id);
+        learningSessionBinding({ learning_session: toText(await readFrozen(replacements.get(files[0].filePath))) }, scope, id);
       } else {
         const archivePath = replacements.get(currentArchive.archivePath);
         const metadataPath = replacements.get(currentArchive.metadataPath);

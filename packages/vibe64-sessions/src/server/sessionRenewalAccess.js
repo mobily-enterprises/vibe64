@@ -1,4 +1,4 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -38,7 +38,7 @@ function createRenewalSessionAccess({
       const runtime = await runtimeForRenewal();
       await publishSessionChanged(sessionId, {
         operation: "updated",
-        originId: normalizeText(originId),
+        originId: toText(originId),
         reason,
         session: await readInternalSession(runtime, sessionId)
       });

@@ -12,9 +12,9 @@ import {
   saveError,
   scopedSessionWorkCommand
 } from "./sessionWorkGit.js";
-import { trimmedText } from "./trimmedText.js";
 import { readCanonical } from "./sessionWorkAuthority.js";
 import { reconcileSession, refreshVerifiedGithubMirror } from "./sessionWorkPublication.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 async function recoverSessionWorkSave({
   commandOptions = {},
@@ -25,7 +25,7 @@ async function recoverSessionWorkSave({
   session = {}
 } = {}) {
   const context = repositoryContext(session, project);
-  const operationId = trimmedText(recovery.operationId);
+  const operationId = normalizeText(recovery.operationId);
   runCommand = scopedSessionWorkCommand(runCommand, context, project, {
     label: "Recovering session save",
     operationId: operationId || crypto.randomUUID()
@@ -37,18 +37,18 @@ async function recoverSessionWorkSave({
         project
       })
     : "";
-  const proposedCommit = trimmedText(recovery.proposedCommit) || recordedProposedCommit;
+  const proposedCommit = normalizeText(recovery.proposedCommit) || recordedProposedCommit;
   if (
-    trimmedText(recovery.proposedCommit) &&
+    normalizeText(recovery.proposedCommit) &&
     recordedProposedCommit &&
-    trimmedText(recovery.proposedCommit) !== recordedProposedCommit
+    normalizeText(recovery.proposedCommit) !== recordedProposedCommit
   ) {
     throw saveError(
       "The interrupted Save has inconsistent prepared-commit evidence.",
       "vibe64_session_save_recovery_evidence_invalid"
     );
   }
-  const expectedCanonicalCommit = trimmedText(recovery.expectedCanonicalCommit) || (
+  const expectedCanonicalCommit = normalizeText(recovery.expectedCanonicalCommit) || (
     proposedCommit
       ? await optionalGitOutput(runCommand, context, ["rev-parse", "--verify", `${proposedCommit}^`], {
           commandOptions,
@@ -63,8 +63,8 @@ async function recoverSessionWorkSave({
         `${saveCheckpointRef(context, operationId)}^{commit}`
       ], { commandOptions, project })
     : "";
-  const checkpointCommit = trimmedText(recovery.checkpointCommit) || recordedCheckpointCommit;
-  const checkpointTree = trimmedText(recovery.checkpointTree) || (
+  const checkpointCommit = normalizeText(recovery.checkpointCommit) || recordedCheckpointCommit;
+  const checkpointTree = normalizeText(recovery.checkpointTree) || (
     checkpointCommit
       ? await optionalGitOutput(runCommand, context, ["rev-parse", "--verify", `${checkpointCommit}^{tree}`], {
           commandOptions,
@@ -92,7 +92,7 @@ async function recoverSessionWorkSave({
     } catch (error) {
       if (context.mode !== PROJECT_REPOSITORY_MODE_GITHUB) throw error;
       throw saveError(
-        `Save publication is still unknown. Restore repository access and inspect work again. ${trimmedText(error.message)}`,
+        `Save publication is still unknown. Restore repository access and inspect work again. ${normalizeText(error.message)}`,
         "vibe64_session_save_publication_unknown"
       );
     }
@@ -124,7 +124,7 @@ async function recoverSessionWorkSave({
       commandOptions,
       project,
       saveCommit: proposedCommit,
-      sessionHead: trimmedText(recovery.sessionHead)
+      sessionHead: normalizeText(recovery.sessionHead)
     });
     return {
       ...recovery,

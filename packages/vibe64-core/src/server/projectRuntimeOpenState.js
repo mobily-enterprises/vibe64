@@ -1,17 +1,14 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  isMissingPathError,
-  isPlainObject,
-  normalizeText
-} from "./core.js";
+import { isMissingPathError, isPlainObject } from "./core.js";
+import { toText } from "../shared/toText.js";
 
 const PROJECT_RUNTIME_STATE_DIR = "runtime";
 const PROJECT_RUNTIME_OPEN_STATE_FILE = "open.json";
 
 function projectRuntimeOpenStatePath(projectRuntimeRoot = "") {
-  const root = normalizeText(projectRuntimeRoot);
+  const root = toText(projectRuntimeRoot);
   return root ? path.join(path.resolve(root), PROJECT_RUNTIME_STATE_DIR, PROJECT_RUNTIME_OPEN_STATE_FILE) : "";
 }
 
@@ -53,8 +50,8 @@ async function writeProjectRuntimeOpenState({
   const state = {
     open: true,
     openedAt: now,
-    projectSlug: normalizeText(projectSlug),
-    reason: normalizeText(reason) || "project-open",
+    projectSlug: toText(projectSlug),
+    reason: toText(reason) || "project-open",
     updatedAt: now
   };
   await mkdir(path.dirname(filePath), {
@@ -83,10 +80,10 @@ function publicProjectRuntimeOpenState(state) {
   const open = state?.open === true;
   return {
     open,
-    ...(open && normalizeText(state.openedAt) ? { openedAt: normalizeText(state.openedAt) } : {}),
-    ...(open && normalizeText(state.projectSlug) ? { projectSlug: normalizeText(state.projectSlug) } : {}),
-    ...(open && normalizeText(state.reason) ? { reason: normalizeText(state.reason) } : {}),
-    ...(open && normalizeText(state.updatedAt) ? { updatedAt: normalizeText(state.updatedAt) } : {})
+    ...(open && toText(state.openedAt) ? { openedAt: toText(state.openedAt) } : {}),
+    ...(open && toText(state.projectSlug) ? { projectSlug: toText(state.projectSlug) } : {}),
+    ...(open && toText(state.reason) ? { reason: toText(state.reason) } : {}),
+    ...(open && toText(state.updatedAt) ? { updatedAt: toText(state.updatedAt) } : {})
   };
 }
 

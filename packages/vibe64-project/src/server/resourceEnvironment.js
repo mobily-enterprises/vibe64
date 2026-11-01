@@ -6,6 +6,7 @@ import {
 import {
   rejectCallerEnvPolicy
 } from "@local/vibe64-execution/server";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 
@@ -81,12 +82,8 @@ function objectRecord(value) {
     : null;
 }
 
-function text(value = "") {
-  return String(value ?? "").trim();
-}
-
 function declarationIdentity(component = "", resource = {}) {
-  return `${text(component)}\u0000${text(resource.id)}\u0000${text(resource.kind)}`;
+  return `${toText(component)}\u0000${toText(resource.id)}\u0000${toText(resource.kind)}`;
 }
 
 function normalizedSemanticValues(value = {}) {
@@ -95,7 +92,7 @@ function normalizedSemanticValues(value = {}) {
     throw resourceEnvironmentError("A resource provider returned invalid semantic values.");
   }
   return Object.fromEntries(Object.entries(record).map(([semantic, entry]) => {
-    const name = text(semantic);
+    const name = toText(semantic);
     if (!/^[a-z][A-Za-z0-9]*$/u.test(name) || !["number", "string"].includes(typeof entry)) {
       throw resourceEnvironmentError("A resource provider returned an invalid semantic value.");
     }
@@ -113,7 +110,7 @@ function declaredSemantics(resource = {}) {
 }
 
 function assertSafeResourceEnvironmentName(name = "") {
-  const key = text(name);
+  const key = toText(name);
   rejectCallerEnvPolicy({ [key]: "value" });
   if (runtimeConfigKeyIsVibe64Reserved(key) || FORBIDDEN_RESOURCE_ENVIRONMENT_NAMES.has(key)) {
     throw resourceEnvironmentError(
@@ -153,7 +150,7 @@ function preferredAlternative(resource = {}) {
   const preferred = alternatives.filter((alternative) => alternative?.preferred === true);
   if (preferred.length !== 1 || !objectRecord(preferred[0].bindings)) {
     throw resourceEnvironmentError(
-      `Genesis resource ${text(resource.id) || "(unknown)"} has no unambiguous preferred semantic binding.`,
+      `Genesis resource ${toText(resource.id) || "(unknown)"} has no unambiguous preferred semantic binding.`,
       "vibe64_resource_bindings_required"
     );
   }
@@ -230,7 +227,7 @@ function normalizedConnectionEndpoint(value = {}, kind = "") {
     throw resourceEnvironmentError("Database tool connection endpoint is invalid.");
   }
   if (kind === "sqlite") {
-    const database = text(endpoint.database);
+    const database = toText(endpoint.database);
     if (!database || !path.isAbsolute(database) || database.includes("\0") ||
         typeof endpoint.readOnly !== "boolean" ||
         Object.keys(endpoint).some((name) => !["database", "readOnly"].includes(name))) {
@@ -238,7 +235,7 @@ function normalizedConnectionEndpoint(value = {}, kind = "") {
     }
     return { database: path.normalize(database), readOnly: endpoint.readOnly };
   }
-  const url = text(endpoint.url);
+  const url = toText(endpoint.url);
   if (url) {
     if (Object.keys(endpoint).some((name) => name !== "url")) {
       throw resourceEnvironmentError("Database tool URL connections cannot mix structured fields.");
@@ -247,11 +244,11 @@ function normalizedConnectionEndpoint(value = {}, kind = "") {
   }
   const port = Number(endpoint.port);
   const normalized = {
-    database: text(endpoint.database),
-    host: text(endpoint.host),
+    database: toText(endpoint.database),
+    host: toText(endpoint.host),
     password: String(endpoint.password ?? ""),
     port,
-    username: text(endpoint.username)
+    username: toText(endpoint.username)
   };
   if (
     !normalized.database ||
@@ -275,7 +272,7 @@ function normalizeDatabaseToolEnvironment(value = {}, options = {}) {
     requireDistinctReader = false
   } = options;
   const environment = objectRecord(value);
-  const kind = text(environment?.kind);
+  const kind = toText(environment?.kind);
   if (
     environment?.contract !== DATABASE_TOOL_ENVIRONMENT_CONTRACT ||
     !DATABASE_RESOURCE_KINDS.has(kind) ||
@@ -523,21 +520,21 @@ function localDatabaseServerDeclarations(resources = [], options = {}) {
       const values = satisfied
         ? Object.fromEntries(Object.entries(satisfied.bindings).map(([semantic, name]) => [semantic, String(environment[name] ?? "")]))
         : null;
-      const testName = text(objectRecord(resource.optionalBindings)?.testDatabase);
+      const testName = toText(objectRecord(resource.optionalBindings)?.testDatabase);
       return {
-        component: text(component),
+        component: toText(component),
         connectsWith: !values ? "" : values.url ? "url" : "fields",
         endpoint: !values ? null
           : values.url ? { url: values.url.trim() }
           : {
-              database: text(values.database),
-              host: text(values.host),
+              database: toText(values.database),
+              host: toText(values.host),
               password: values.password ?? "",
               port: Number(values.port),
-              username: text(values.username)
+              username: toText(values.username)
             },
         fields,
-        id: text(resource.id),
+        id: toText(resource.id),
         kind: resource.kind,
         missing,
         ...(testName ? { testDatabase: { name: testName, value: trimmedValue(environment, testName) } } : {})
@@ -581,7 +578,7 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
     );
   }
   if (resource.kind === "sqlite") {
-    const database = text(values.database);
+    const database = toText(values.database);
     if (!database || database === ":memory:" || Object.keys(values).some((key) => key !== "database") ||
         (!path.isAbsolute(database) && !path.isAbsolute(sourceRoot))) {
       throw resourceEnvironmentError("SQLite database browsing requires a declared persistent database file.");

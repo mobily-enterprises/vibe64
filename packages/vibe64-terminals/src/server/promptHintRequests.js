@@ -1,7 +1,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 
-import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
+import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { normalizedPromptHintDraft, normalizedPromptHintSuggestions } from "@local/vibe64-runtime/shared";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
@@ -22,6 +22,7 @@ import {
   promptHintSubscriberKey,
   samePromptHintBasis
 } from "./promptHintRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").PromptHintState} PromptHintState */
@@ -168,7 +169,7 @@ function createPromptHintRequests({
   }
 
   async function generateSessionPromptHints(sessionId = "", input = {}) {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     const operationId = definePromptHintOperationId(input.operationId);
     const originId = definePromptHintOriginId(input.originId);
     const projectScope = currentProjectScopeKey();
@@ -218,7 +219,7 @@ function createPromptHintRequests({
   }
 
   async function cancelSessionPromptHints(sessionId = "", input = {}) {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     const operationId = definePromptHintOperationId(input.operationId);
     const originId = definePromptHintOriginId(input.originId);
     const projectScope = currentProjectScopeKey();
@@ -241,7 +242,7 @@ function createPromptHintRequests({
   }
 
   async function cancelSessionPromptHintsForSession(sessionId = "", options = {}) {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     const projectScope = currentProjectScopeKey();
     const sessionKey = promptHintSessionKey({
       projectScope,

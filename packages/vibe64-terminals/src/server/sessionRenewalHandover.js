@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const SESSION_RENEWAL_HANDOVER_SCHEMA_VERSION =
   "vibe64.session-renewal-handover.v1";
@@ -70,7 +70,7 @@ function assertBoundedPlainText(value = "", options = {}) {
     maxCharacters,
     required = true
   } = options;
-  const text = normalizeText(value);
+  const text = toText(value);
   const characterCount = Array.from(text).length;
   if ((required && !text) || characterCount > maxCharacters || textHasDisallowedControlCharacter(text)) {
     throw sessionRenewalProtocolError(
@@ -491,7 +491,7 @@ function parseSessionRenewalAcknowledgement(rawOutput = "", options = {}) {
   const valid = parsed.schemaVersion === SESSION_RENEWAL_ACKNOWLEDGEMENT_SCHEMA_VERSION &&
     parsed.status === "ready" &&
     parsed.handoverHash === expectedHash &&
-    normalizeText(parsed.sourceCommit).toLowerCase() === canonical.commit &&
+    toText(parsed.sourceCommit).toLowerCase() === canonical.commit &&
     Object.keys(parsed).every((key) => allowedKeys.has(key));
   if (!valid) {
     throw sessionRenewalProtocolError(
@@ -562,21 +562,21 @@ function renewalCleanupContext(sessionId = "", options = {}) {
   if (!renewalCleanup) {
     return null;
   }
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = toText(sessionId);
   const runtime = options.runtime;
   const session = options.session;
   const metadata = session?.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
-  const cleanupKind = normalizeText(renewalCleanup.kind);
-  const renewalId = normalizeText(renewalCleanup.renewalId);
-  const sourceSessionId = normalizeText(renewalCleanup.sourceSessionId);
-  const status = normalizeText(session?.status);
+  const cleanupKind = toText(renewalCleanup.kind);
+  const renewalId = toText(renewalCleanup.renewalId);
+  const sourceSessionId = toText(renewalCleanup.sourceSessionId);
+  const status = toText(session?.status);
   const successorIsExact = cleanupKind === "successor" &&
     status === VIBE64_SESSION_STATUS.RENEWAL_PENDING &&
-    normalizeText(metadata.renewal_id) === renewalId &&
-    normalizeText(metadata.renewed_from) === sourceSessionId &&
-    Boolean(normalizeText(metadata.renewed_from));
+    toText(metadata.renewal_id) === renewalId &&
+    toText(metadata.renewed_from) === sourceSessionId &&
+    Boolean(toText(metadata.renewed_from));
   // renewal_restored_id belongs to a completed rollback, not the next
   // transition. Current quiescence or renewed_to still owns the predecessor.
   const predecessorIsExact = cleanupKind === "predecessor" &&
@@ -584,17 +584,17 @@ function renewalCleanupContext(sessionId = "", options = {}) {
     (
       (
         status === VIBE64_SESSION_STATUS.ACTIVE &&
-        !normalizeText(metadata.renewal_quiesced_id) &&
-        !normalizeText(metadata.renewed_to)
+        !toText(metadata.renewal_quiesced_id) &&
+        !toText(metadata.renewed_to)
       ) ||
       (
         status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED &&
-        normalizeText(metadata.renewal_quiesced_id) === renewalId
+        toText(metadata.renewal_quiesced_id) === renewalId
       )
     );
   if (
     !runtime ||
-    normalizeText(session?.sessionId) !== normalizedSessionId ||
+    toText(session?.sessionId) !== normalizedSessionId ||
     !renewalId ||
     (!successorIsExact && !predecessorIsExact)
   ) {
@@ -608,21 +608,21 @@ function renewalCleanupContext(sessionId = "", options = {}) {
 }
 
 function renewalArchivedPredecessorContext(sessionId = "", options = {}) {
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = toText(sessionId);
   const runtime = options.runtime;
   const session = options.session;
   const metadata = session?.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
-  const renewalId = normalizeText(options.renewalId);
+  const renewalId = toText(options.renewalId);
   if (
     !runtime ||
     !renewalId ||
-    normalizeText(session?.sessionId) !== normalizedSessionId ||
+    toText(session?.sessionId) !== normalizedSessionId ||
     session?.archived !== true ||
-    normalizeText(session?.status) !== VIBE64_SESSION_STATUS.ARCHIVED ||
-    normalizeText(metadata.renewal_id) !== renewalId ||
-    !normalizeText(metadata.renewed_to)
+    toText(session?.status) !== VIBE64_SESSION_STATUS.ARCHIVED ||
+    toText(metadata.renewal_id) !== renewalId ||
+    !toText(metadata.renewed_to)
   ) {
     throw new TypeError("Renewal maintenance requires its exact archived predecessor and runtime.");
   }
@@ -634,31 +634,31 @@ function renewalArchivedPredecessorContext(sessionId = "", options = {}) {
 }
 
 function renewalSuccessorProcessExitProofReleaseContext(sessionId = "", options = {}) {
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = toText(sessionId);
   const runtime = options.runtime;
   const session = options.session;
   const metadata = session?.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
-  const renewalId = normalizeText(options.renewalId);
+  const renewalId = toText(options.renewalId);
   const authorization = options.authorization && typeof options.authorization === "object"
     ? options.authorization
     : {};
-  const authorizedAt = normalizeText(authorization.authorizedAt);
+  const authorizedAt = toText(authorization.authorizedAt);
   const authorizedAtMs = Date.parse(authorizedAt);
   if (
     !runtime ||
     !renewalId ||
-    normalizeText(session?.sessionId) !== normalizedSessionId ||
-    normalizeText(session?.status) !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
-    normalizeText(metadata.renewal_id) !== renewalId ||
-    !normalizeText(metadata.renewed_from) ||
-    normalizeText(authorization.kind) !== RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND ||
+    toText(session?.sessionId) !== normalizedSessionId ||
+    toText(session?.status) !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
+    toText(metadata.renewal_id) !== renewalId ||
+    !toText(metadata.renewed_from) ||
+    toText(authorization.kind) !== RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND ||
     Number(authorization.schemaVersion) !== 1 ||
-    normalizeText(authorization.renewalId) !== renewalId ||
-    normalizeText(authorization.sourceSessionId) !== normalizeText(metadata.renewed_from) ||
-    normalizeText(authorization.successorSessionId) !== normalizedSessionId ||
-    normalizeText(authorization.runtimeDir) !== normalizeText(metadata.agent_transport_runtime_dir) ||
+    toText(authorization.renewalId) !== renewalId ||
+    toText(authorization.sourceSessionId) !== toText(metadata.renewed_from) ||
+    toText(authorization.successorSessionId) !== normalizedSessionId ||
+    toText(authorization.runtimeDir) !== toText(metadata.agent_transport_runtime_dir) ||
     !Number.isFinite(authorizedAtMs) ||
     new Date(authorizedAtMs).toISOString() !== authorizedAt
   ) {

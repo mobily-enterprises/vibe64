@@ -1,9 +1,7 @@
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 
 import { requireGenesisCity } from "./genesisCities.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // Usage queries start from one Genesis entry point and return only what it
 // reaches: files through Imports, functions through Calls. Every response is
@@ -340,12 +338,12 @@ function clampInteger(value, fallback, maximum) {
 }
 
 function readEntries(index, input = {}) {
-  const kind = normalizeText(input.kind);
+  const kind = toText(input.kind);
   if (kind && !USAGE_ENTRY_KINDS.includes(kind)) throw usageError(`Unknown entry kind: ${kind}.`, "vibe64_invalid_usage_entry_kind");
-  const search = normalizeText(input.q).toLowerCase();
+  const search = toText(input.q).toLowerCase();
   if (search.length > USAGE_QUERY_LIMITS.searchLength) throw usageError("Search at most 80 characters.", "vibe64_invalid_usage_search");
   const limit = clampInteger(input.limit, USAGE_QUERY_LIMITS.entries, USAGE_QUERY_LIMITS.entriesMax);
-  const cursor = normalizeText(input.cursor);
+  const cursor = toText(input.cursor);
   if (cursor && !/^[0-9]{1,9}$/u.test(cursor)) throw usageError("The entry cursor is invalid.", "vibe64_invalid_usage_cursor");
   const offset = cursor ? Number(cursor) : 0;
   const matching = search ? index.entries.filter((entry) => entry.search.includes(search)) : index.entries;
@@ -377,9 +375,9 @@ function readEntries(index, input = {}) {
 }
 
 function requireEntry(index, entryId) {
-  const entry = index.entryById.get(normalizeText(entryId));
+  const entry = index.entryById.get(toText(entryId));
   if (!entry) {
-    throw usageError("This entry point is not in the current scan.", "vibe64_usage_entry_not_found", { entryId: normalizeText(entryId) });
+    throw usageError("This entry point is not in the current scan.", "vibe64_usage_entry_not_found", { entryId: toText(entryId) });
   }
   return entry;
 }
@@ -393,7 +391,7 @@ function webLimits(input) {
 }
 
 function zoomSubsystem(index, input) {
-  const subsystemId = normalizeText(input.subsystemId);
+  const subsystemId = toText(input.subsystemId);
   if (subsystemId && !index.subsystemById.has(subsystemId)) {
     throw usageError("This subsystem is not in the current scan.", "vibe64_usage_subsystem_not_found");
   }
@@ -487,7 +485,7 @@ function entryStarts(callIndex, entry) {
 function readCallsWeb(index, callIndex, entry, input) {
   const limits = webLimits(input);
   const subsystemId = zoomSubsystem(index, input);
-  const certainty = normalizeText(input.certainty) || "all";
+  const certainty = toText(input.certainty) || "all";
   if (!["all", "exact"].includes(certainty)) throw usageError("Certainty must be all or exact.", "vibe64_invalid_usage_certainty");
   const response = {
     entry: entryView(entry),
@@ -616,7 +614,7 @@ function readCallsWeb(index, callIndex, entry, input) {
 }
 
 function readFunction(index, callIndex, input) {
-  const functionId = normalizeText(input.functionId);
+  const functionId = toText(input.functionId);
   const position = callIndex?.ids.get(functionId);
   if (position === undefined) {
     throw usageError("This function is not in the current call web.", "vibe64_usage_function_not_found", { functionId });

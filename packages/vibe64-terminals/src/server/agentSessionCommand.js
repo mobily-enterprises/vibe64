@@ -17,7 +17,7 @@ import {
   workspaceSetupStateFromMetadata
 } from "@local/vibe64-runtime/server/workspaceSetupState";
 
-import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
@@ -72,6 +72,7 @@ import {
   VIBE64_WRAPPER_ENV,
   waitForCommandResult
 } from "./agentSessionCommandRun.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -202,8 +203,8 @@ function createAgentSessionCommandService({
 
   async function bindSession(sessionId = "", options = {}) {
     const { wrapperHostDir = "" } = options;
-    const normalizedSessionId = normalizeText(sessionId);
-    const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
+    const normalizedSessionId = toText(sessionId);
+    const normalizedWrapperHostDir = toText(wrapperHostDir);
     if (!normalizedSessionId || !normalizedWrapperHostDir) {
       throw vibe64Error(
         "Vibe64 session command binding is incomplete.",
@@ -233,7 +234,7 @@ function createAgentSessionCommandService({
   }
 
   async function runInSessionProject(sessionId, operation) {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     const runBound = () => projectBinding.run(normalizedSessionId, async (binding, project) => {
       const store = await projectService.createSessionStore({
         sessionId: normalizedSessionId
@@ -275,10 +276,10 @@ function createAgentSessionCommandService({
   async function messageProject(sessionId, input) {
     return runInSessionProject(sessionId, async ({ binding, store }) => {
       return sendProjectMessage({
-        projectSlug: normalizeText(input.projectSlug),
-        message: normalizeText(input.message),
-        ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
-        messageId: normalizeText(input.messageId) || randomUUID(),
+        projectSlug: toText(input.projectSlug),
+        message: toText(input.message),
+        ...(input.destinationSessionId !== undefined ? { destinationSessionId: toText(input.destinationSessionId) } : {}),
+        messageId: toText(input.messageId) || randomUUID(),
         sourceProject: binding.projectSlug,
         sourceSession: sessionId,
         actor: await requestActor(store, sessionId, binding)
@@ -289,8 +290,8 @@ function createAgentSessionCommandService({
   async function projectPreview(sessionId, input) {
     return runInSessionProject(sessionId, async ({ binding, store }) => {
       return readProjectPreview({
-        projectSlug: normalizeText(input.projectSlug),
-        ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
+        projectSlug: toText(input.projectSlug),
+        ...(input.destinationSessionId !== undefined ? { destinationSessionId: toText(input.destinationSessionId) } : {}),
         sourceProject: binding.projectSlug,
         sourceSession: sessionId,
         actor: await requestActor(store, sessionId, binding)
@@ -322,7 +323,7 @@ function createAgentSessionCommandService({
         // The agent repairing or deciding a project contract still needs status;
         // report Genesis's actionable message instead of failing the command.
         if (!genesisProjectContractNeedsAttention(error)) throw error;
-        setup = { status: "blocked", steps: [], diagnostics: [{ code: error.code, message: normalizeText(error.message) }] };
+        setup = { status: "blocked", steps: [], diagnostics: [{ code: error.code, message: toText(error.message) }] };
       }
       const state = workspaceSetupStateFromMetadata({
         [WORKSPACE_SETUP_METADATA_NAME]: await store.readMetadataValue(sessionId, WORKSPACE_SETUP_METADATA_NAME)
@@ -335,7 +336,7 @@ function createAgentSessionCommandService({
       return {
         ok: true,
         sessionId,
-        project: normalizeText(project.slug || project.name),
+        project: toText(project.slug || project.name),
         environment,
         repository: repositoryProblem
           ? { needsHelp: true, ...repositoryProblem }
@@ -439,7 +440,7 @@ function createAgentSessionCommandService({
     }
     const runtimeConfigEnv = await loadProjectExecutionEnv({
       projectService,
-      session: { ...context.descriptor, sessionId: normalizeText(input.sessionId) }
+      session: { ...context.descriptor, sessionId: toText(input.sessionId) }
     });
     const commandId = randomUUID();
     const runRoot = path.join(
@@ -474,9 +475,9 @@ function createAgentSessionCommandService({
         label: "Agent command",
         lifecycle: "service",
         operationId: `agent-command-${shortCommandHash(commandId)}`,
-        ownerId: normalizeText(input.sessionId),
+        ownerId: toText(input.sessionId),
         projectSlug,
-        sessionId: normalizeText(input.sessionId)
+        sessionId: toText(input.sessionId)
       },
       inheritProcessEnv: false,
       mode: "detached",
@@ -489,23 +490,23 @@ function createAgentSessionCommandService({
       runtimes: VIBE64_INTERACTIVE_RUNTIME_PACKS,
       session: {
         ...context.descriptor,
-        sessionId: normalizeText(input.sessionId),
+        sessionId: toText(input.sessionId),
         sourcePath: context.sourceRoot
       },
       shimDirs: withGenesisCommandShim([context.binding.wrapperHostDir]),
       timeout: AGENT_SESSION_COMMAND_TIMEOUT_MS
     });
-    const executionId = normalizeText(started?.execution?.id);
+    const executionId = toText(started?.execution?.id);
     if (started?.ok !== true || !executionId) {
       await rm(runRoot, { force: true, recursive: true }).catch(() => null);
       return responseError(
-        normalizeText(started?.error || started?.stderr || started?.output) || "Vibe64 could not start this session command.",
-        normalizeText(started?.code) || "vibe64_agent_session_command_start_failed"
+        toText(started?.error || started?.stderr || started?.output) || "Vibe64 could not start this session command.",
+        toText(started?.code) || "vibe64_agent_session_command_start_failed"
       );
     }
-    const executions = sessionExecutions.get(normalizeText(input.sessionId)) || new Set();
+    const executions = sessionExecutions.get(toText(input.sessionId)) || new Set();
     executions.add(executionId);
-    sessionExecutions.set(normalizeText(input.sessionId), executions);
+    sessionExecutions.set(toText(input.sessionId), executions);
     try {
       const exitCodeText = await waitForCommandResult(resultPath, {
         signal: input.signal,
@@ -534,7 +535,7 @@ function createAgentSessionCommandService({
 
   async function run(input = {}) {
     const startedAtMs = Date.now();
-    const sessionId = normalizeText(input.sessionId);
+    const sessionId = toText(input.sessionId);
     const abortController = new AbortController();
     const runs = sessionRuns.get(sessionId) || new Set();
     runs.add(abortController);
@@ -568,11 +569,11 @@ function createAgentSessionCommandService({
       }
     }
     logOperationalEvent(logger, result?.ok === false ? "warn" : "info", {
-      code: normalizeText(result?.code),
+      code: toText(result?.code),
       component: "vibe64.agent_session_command",
       durationMs: Date.now() - startedAtMs,
       event: "vibe64.agent_session_command.finished",
-      executionId: normalizeText(result?.execution?.id),
+      executionId: toText(result?.execution?.id),
       exitCode: Number(result?.exitCode ?? (result?.ok === false ? 1 : 0)),
       ok: result?.ok !== false,
       sessionId
@@ -581,7 +582,7 @@ function createAgentSessionCommandService({
   }
 
   async function closeAllForSession(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     const binding = projectBinding.forget(normalizedSessionId);
     for (const abortController of sessionRuns.get(normalizedSessionId) || []) {
       abortController.abort();
@@ -648,8 +649,8 @@ async function prepareAgentSessionCommand({
   sessionId = "",
   wrapperHostDir = ""
 }) {
-  const normalizedSessionId = normalizeText(sessionId);
-  const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
+  const normalizedSessionId = toText(sessionId);
+  const normalizedWrapperHostDir = toText(wrapperHostDir);
   if (!normalizedSessionId || !normalizedWrapperHostDir) {
     return {
       env: {},

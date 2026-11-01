@@ -3,7 +3,6 @@ import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequest
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { GENESIS_MACHINE_CITY_PATH, validateArchitectureFacts } from "@local/vibe64-genesis/server";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   downloadSessionFile,
@@ -69,6 +68,7 @@ import {
   deleteSourceEditorExplanation,
   stopSourceEditorExplanation
 } from "./explanationCleanup.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -103,7 +103,7 @@ function createExplanationOperations({
   });
 
   async function runSourceEditorAgentOperation(input, operation) {
-    const sessionId = normalizeText(input.sessionId);
+    const sessionId = toText(input.sessionId);
     if (!sessionId) {
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
@@ -198,7 +198,7 @@ function createExplanationOperations({
       // Only turns in the same explanation share mutable conversation state.
       // The session store still checks renewal admission before starting work.
       const conversationKey = crypto.createHash("sha256")
-        .update(normalizeText(input.explanationId) || crypto.randomUUID())
+        .update(toText(input.explanationId) || crypto.randomUUID())
         .digest("hex");
       const exclusive = await runtime.store.runSessionExclusive(
         sessionId,
@@ -466,7 +466,7 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
     }
     selection = { startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column };
   }
-  const scope = symbolId !== undefined ? "selection" : normalizeText(input.scope) === "file" ? "file" : "selection";
+  const scope = symbolId !== undefined ? "selection" : toText(input.scope) === "file" ? "file" : "selection";
   if (scope === "file" && presentation === "description") {
     selection = { startLine: 1, startColumn: 1, endLine: lines.length, endColumn: lines.at(-1).length + 1 };
   }
@@ -581,7 +581,7 @@ async function createCachedSourceEditorExplanation(
       sourceRange: explanationInput.range,
       status: "ready",
       summary: String(template.summary || sourceEditorExplanationSummary(template.body)),
-      title: normalizeText(template.title) || sourceEditorExplanationTitle(explanationInput)
+      title: toText(template.title) || sourceEditorExplanationTitle(explanationInput)
     }, {
       explanationChats
     })

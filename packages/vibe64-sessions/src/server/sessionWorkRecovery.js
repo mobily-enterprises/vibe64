@@ -1,6 +1,6 @@
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
-import { text } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
@@ -26,7 +26,7 @@ function createSessionWorkRecovery({
    * evidence. Retiring is best effort: a later recovery still reads the record.
    */
   async function retireRecordedSave(sessionId, operationId, context) {
-    if (!text(operationId)) return;
+    if (!normalizeText(operationId)) return;
     try {
       await terminals.retireSessionWorkSave(sessionId, { ...context, operationId });
     } catch (error) {
@@ -50,7 +50,7 @@ function createSessionWorkRecovery({
     if ((task?.status !== "running" && !failedPublication) || typeof terminals.recoverSessionWorkSave !== "function") {
       return task;
     }
-    if (workOperations.operationId("save", session.sessionId) === text(task.operationId)) {
+    if (workOperations.operationId("save", session.sessionId) === normalizeText(task.operationId)) {
       return task;
     }
     try {
@@ -91,12 +91,12 @@ function createSessionWorkRecovery({
       return runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_SAVE_TASK_ID, {
         event: {
           kind: "save-recovery-failed",
-          message: text(error?.message) || "Interrupted Save needs attention.",
+          message: normalizeText(error?.message) || "Interrupted Save needs attention.",
           status: "failed"
         },
         patch: {
-          code: text(error?.code),
-          error: text(error?.message) || "Interrupted Save needs attention.",
+          code: normalizeText(error?.code),
+          error: normalizeText(error?.message) || "Interrupted Save needs attention.",
           retryable: error?.retryable === true,
           status: "failed"
         }
@@ -113,7 +113,7 @@ function createSessionWorkRecovery({
     if (task?.status !== "running") {
       return task;
     }
-    if (workOperations.operationId("update", session.sessionId) === text(task.operationId)) {
+    if (workOperations.operationId("update", session.sessionId) === normalizeText(task.operationId)) {
       return task;
     }
     try {
@@ -140,12 +140,12 @@ function createSessionWorkRecovery({
       return runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_UPDATE_TASK_ID, {
         event: {
           kind: "update-recovery-failed",
-          message: text(error?.message) || "Interrupted session update needs attention.",
+          message: normalizeText(error?.message) || "Interrupted session update needs attention.",
           status: "failed"
         },
         patch: {
-          code: text(error?.code),
-          error: text(error?.message) || "Interrupted session update needs attention.",
+          code: normalizeText(error?.code),
+          error: normalizeText(error?.message) || "Interrupted session update needs attention.",
           retryable: error?.retryable === true,
           status: "failed"
         }
@@ -168,8 +168,8 @@ function createSessionWorkRecovery({
       return task || null;
     }
     if (options.knownNewer !== true) {
-      const saveUpdatedAt = Date.parse(text(saveResult.updatedAt));
-      const updateUpdatedAt = Date.parse(text(task.updatedAt));
+      const saveUpdatedAt = Date.parse(normalizeText(saveResult.updatedAt));
+      const updateUpdatedAt = Date.parse(normalizeText(task.updatedAt));
       if (
         !Number.isFinite(saveUpdatedAt) ||
         !Number.isFinite(updateUpdatedAt) ||
@@ -187,7 +187,7 @@ function createSessionWorkRecovery({
       patch: {
         code: "",
         error: "",
-        resolvedBySaveCommit: text(saveResult.saveCommit),
+        resolvedBySaveCommit: normalizeText(saveResult.saveCommit),
         retryable: false,
         status: "ready"
       }
@@ -216,7 +216,7 @@ function createSessionWorkRecovery({
       evidence = await terminals.inspectSessionUpdateFailure(session.sessionId, {
         runtime,
         session,
-        targetCommit: text(task.conflictRecovery?.canonicalCommit)
+        targetCommit: normalizeText(task.conflictRecovery?.canonicalCommit)
       });
     } catch (error) {
       // Unreadable evidence proves nothing; the failure stays.
@@ -228,7 +228,7 @@ function createSessionWorkRecovery({
     }
     const reached = evidence?.targetInHead === true;
     if (
-      text(evidence?.gitOperation) ||
+      normalizeText(evidence?.gitOperation) ||
       !Array.isArray(evidence?.unmergedPaths) || evidence.unmergedPaths.length > 0 ||
       (!reached && evidence?.updateNeeded !== false)
     ) {
@@ -245,7 +245,7 @@ function createSessionWorkRecovery({
       patch: {
         code: "",
         error: "",
-        resolvedAtCommit: text(evidence.sessionHead),
+        resolvedAtCommit: normalizeText(evidence.sessionHead),
         retryable: false,
         status: "ready"
       },
@@ -253,7 +253,7 @@ function createSessionWorkRecovery({
        * Only the failure that was inspected; a newer Update keeps its own record.
        */
       shouldWrite: ({ previous }) => previous.status === "failed" &&
-        text(previous.operationId) === text(task.operationId)
+        normalizeText(previous.operationId) === normalizeText(task.operationId)
     });
   }
 

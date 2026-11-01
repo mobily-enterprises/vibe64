@@ -3,11 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
 
-import {
-  normalizeText,
-  pathExists,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import {
   managedSessionSourcePath,
   sessionHasSource,
@@ -47,6 +43,7 @@ import {
   sessionAvailabilityIssue, sessionHasRenewalHandover, sessionIsSupported, sessionSourceCreationFailed,
   sessionSourceRecoveryWasSaved
 } from "./sessionRuntimeChecks.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -92,7 +89,7 @@ class Vibe64SessionRuntime {
     this.createSessionSource = typeof createSessionSource === "function"
       ? createSessionSource
       : null;
-    this.projectSessionSourceRoot = normalizeText(projectSessionSourceRoot);
+    this.projectSessionSourceRoot = toText(projectSessionSourceRoot);
     this.promptEnvironment = promptEnvironment && ["object", "function"].includes(typeof promptEnvironment)
       ? promptEnvironment
       : process.env;
@@ -102,7 +99,7 @@ class Vibe64SessionRuntime {
     this.sourceInspectionAvailable = sourceInspectionAvailable !== false;
     this.sourceInspectionError = sourceInspectionError || null;
     this.projectContextRoot = projectContextRoot;
-    this.stateRoot = normalizeText(projectRuntimeRoot);
+    this.stateRoot = toText(projectRuntimeRoot);
     if (!this.stateRoot && !store) {
       throw vibe64Error(
         "Vibe64 session runtime requires projectRuntimeRoot.",
@@ -166,7 +163,7 @@ class Vibe64SessionRuntime {
       } catch (error) {
         await this.store.mutateSession(created.sessionId, async () => {
           await Promise.all([
-            this.store.writeMetadataValue(created.sessionId, "source_creation_error", normalizeText(error?.message)),
+            this.store.writeMetadataValue(created.sessionId, "source_creation_error", toText(error?.message)),
             this.store.writeMetadataValue(created.sessionId, "source_creation_failed", "yes"),
             this.store.writeStatus(created.sessionId, VIBE64_SESSION_STATUS.BLOCKED)
           ]);
@@ -235,7 +232,7 @@ class Vibe64SessionRuntime {
       this.projectSessionSourceRoot,
       session.sessionId
     );
-    const recordedSourcePath = normalizeText(session.metadata?.source_path);
+    const recordedSourcePath = toText(session.metadata?.source_path);
     if (recordedSourcePath && path.resolve(recordedSourcePath) !== expectedSourcePath) {
       throw vibe64Error(
         "Renewal session source does not match its managed source path.",
@@ -307,10 +304,10 @@ class Vibe64SessionRuntime {
     const session = await this.store.readSessionForRenewal(sessionId);
     if (
       session.status !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
-      normalizeText(session.metadata?.renewal_id) !== normalizeText(renewalId)
+      toText(session.metadata?.renewal_id) !== toText(renewalId)
     ) {
       throw vibe64Error(
-        `Session is not the pending successor for renewal ${normalizeText(renewalId) || "(empty)"}: ${normalizeText(sessionId)}`,
+        `Session is not the pending successor for renewal ${toText(renewalId) || "(empty)"}: ${toText(sessionId)}`,
         "vibe64_session_renewal_transition_invalid"
       );
     }
@@ -377,10 +374,10 @@ class Vibe64SessionRuntime {
       const unavailable = issues[index];
       if (unavailable) {
         return includeUnavailable ? [{
-          sessionId: normalizeText(session.sessionId),
-          sessionName: normalizeText(session.sessionName),
-          sessionRoot: normalizeText(session.sessionRoot),
-          archivePath: normalizeText(session.archivePath),
+          sessionId: toText(session.sessionId),
+          sessionName: toText(session.sessionName),
+          sessionRoot: toText(session.sessionRoot),
+          archivePath: toText(session.archivePath),
           sourcePath: sessionSourcePath(session),
           unavailable
         }] : [];
@@ -477,7 +474,7 @@ class Vibe64SessionRuntime {
       if (session.archived || sessionIsClosing(session) || session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
         throw vibe64Error("Historical or inactive learning sessions cannot admit work.", "vibe64_learning_session_inactive");
       }
-      if (learning.noExercise) return { prompt: normalizeText(request) };
+      if (learning.noExercise) return { prompt: toText(request) };
     }
     const sourceRoot = requireSessionSourceRoot(session);
     let genesisTask = assertGenesisPromptTask(task, {
@@ -494,12 +491,12 @@ class Vibe64SessionRuntime {
       action: {
         genesisTask,
         id: genesisTask,
-        label: normalizeText(request) || genesisTask
+        label: toText(request) || genesisTask
       },
       environment: await this.resolvePromptEnvironment(),
       input: {
         ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
-        ...(normalizeText(request) ? { request: normalizeText(request) } : {})
+        ...(toText(request) ? { request: toText(request) } : {})
       },
       projectRoot: sourceRoot
     });
@@ -516,7 +513,7 @@ class Vibe64SessionRuntime {
     const {
       reason = "archive"
     } = options;
-    const sessionId = normalizeText(typeof sessionOrId === "string"
+    const sessionId = toText(typeof sessionOrId === "string"
       ? sessionOrId
       : sessionOrId.sessionId);
     return this.store.mutateSession(sessionId, async () => {
@@ -542,10 +539,10 @@ class Vibe64SessionRuntime {
       );
       if (
         session.status !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
-        normalizeText(session.metadata?.renewal_quiesced_id) !== normalizeText(renewalId)
+        toText(session.metadata?.renewal_quiesced_id) !== toText(renewalId)
       ) {
         throw vibe64Error(
-          `Only the exact quiesced session source can be prepared for renewal: ${normalizeText(sessionId)}`,
+          `Only the exact quiesced session source can be prepared for renewal: ${toText(sessionId)}`,
           "vibe64_session_renewal_source_not_quiesced"
         );
       }
@@ -567,10 +564,10 @@ class Vibe64SessionRuntime {
       );
       if (
         session.status !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
-        normalizeText(session.metadata?.renewal_quiesced_id) !== normalizeText(renewalId)
+        toText(session.metadata?.renewal_quiesced_id) !== toText(renewalId)
       ) {
         throw vibe64Error(
-          `Only the exact quiesced session source can enter its committed renewal stage: ${normalizeText(sessionId)}`,
+          `Only the exact quiesced session source can enter its committed renewal stage: ${toText(sessionId)}`,
           "vibe64_session_renewal_source_not_quiesced"
         );
       }
@@ -591,10 +588,10 @@ class Vibe64SessionRuntime {
       );
       if (
         session.status !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
-        normalizeText(session.metadata?.renewal_quiesced_id) !== normalizeText(renewalId)
+        toText(session.metadata?.renewal_quiesced_id) !== toText(renewalId)
       ) {
         throw vibe64Error(
-          `Renewal source restoration requires the exact quiesced predecessor: ${normalizeText(sessionId)}`,
+          `Renewal source restoration requires the exact quiesced predecessor: ${toText(sessionId)}`,
           "vibe64_session_renewal_source_restore_status_invalid"
         );
       }
@@ -613,16 +610,16 @@ class Vibe64SessionRuntime {
       const session = assertSupportedSession(publishedSession);
       if (session.status !== VIBE64_SESSION_STATUS.ARCHIVED) {
         throw vibe64Error(
-          `Renewal source removal requires an archived predecessor: ${normalizeText(sessionId)}`,
+          `Renewal source removal requires an archived predecessor: ${toText(sessionId)}`,
           "vibe64_session_renewal_source_commit_status_invalid"
         );
       }
       if (
-        normalizeText(session.metadata?.renewal_id) !== normalizeText(renewalId) ||
-        !normalizeText(session.metadata?.renewed_to)
+        toText(session.metadata?.renewal_id) !== toText(renewalId) ||
+        !toText(session.metadata?.renewed_to)
       ) {
         throw vibe64Error(
-          `Archived predecessor does not belong to renewal ${normalizeText(renewalId) || "(empty)"}: ${normalizeText(sessionId)}`,
+          `Archived predecessor does not belong to renewal ${toText(renewalId) || "(empty)"}: ${toText(sessionId)}`,
           "vibe64_session_renewal_link_mismatch"
         );
       }

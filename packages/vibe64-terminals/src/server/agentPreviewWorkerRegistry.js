@@ -1,9 +1,9 @@
-import { trimmedText } from "./trimmedText.js";
 import {
   startRegisteredBrowserWorker,
   stopRegisteredBrowserWorker,
   stopRegisteredBrowserWorkerForInput
 } from "./agentPreviewBrowserWorker.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").AgentPreviewCommandState} AgentPreviewCommandState */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -40,7 +40,7 @@ function createAgentPreviewWorkerRegistry({
    */
   function sessionProjectSlug(sessionId) {
     const project = [...(state.browserWorkers.get(sessionId)?.values() || [])][0]?.project;
-    return trimmedText(project?.slug || project?.name);
+    return normalizeText(project?.slug || project?.name);
   }
 
   async function runBrowserCommand(request) {
@@ -57,18 +57,18 @@ function createAgentPreviewWorkerRegistry({
   }
 
   function registerBrowserWorker(sessionId = "", descriptor = {}) {
-    const normalizedSessionId = trimmedText(sessionId);
-    const socketPath = trimmedText(descriptor.socketPath);
+    const normalizedSessionId = normalizeText(sessionId);
+    const socketPath = normalizeText(descriptor.socketPath);
     if (!normalizedSessionId || !socketPath) {
       return false;
     }
     const sessionWorkers = state.browserWorkers.get(normalizedSessionId) || new Map();
     const existing = sessionWorkers.get(socketPath);
-    const sameGeneration = trimmedText(existing?.token) === trimmedText(descriptor.token);
+    const sameGeneration = normalizeText(existing?.token) === normalizeText(descriptor.token);
     if (existing && !sameGeneration) state.browserTestRuns.get(normalizedSessionId)?.interrupt();
     sessionWorkers.set(socketPath, {
       ...descriptor,
-      executionId: sameGeneration ? trimmedText(existing?.executionId) : "",
+      executionId: sameGeneration ? normalizeText(existing?.executionId) : "",
       retiredDescriptors: sameGeneration
         ? (existing?.retiredDescriptors || [])
         : [
@@ -88,7 +88,7 @@ function createAgentPreviewWorkerRegistry({
    */
   async function teardownSession(sessionId = "", options = {}) {
     const { forget = false, reason = "" } = options;
-    const normalizedSessionId = trimmedText(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
     const pending = state.browserTestRuns.get(normalizedSessionId);
     pending?.interrupt();
     await pending?.completion;
@@ -118,7 +118,7 @@ function createAgentPreviewWorkerRegistry({
   }
 
   async function stopBrowsersForSession(sessionId = "") {
-    const sessionWorkers = state.browserWorkers.get(trimmedText(sessionId));
+    const sessionWorkers = state.browserWorkers.get(normalizeText(sessionId));
     if (!sessionWorkers) return { ok: true, closed: 0 };
     let closed = 0;
     for (const descriptor of sessionWorkers.values()) {

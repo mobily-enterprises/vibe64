@@ -9,7 +9,7 @@ import {
   stat
 } from "node:fs/promises";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
-import { text } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const DEFAULT_LOCK_TIMEOUT_MS = 30_000;
 const SESSION_POLICY_LOCK_TIMEOUT_MS = 300_000;
@@ -73,7 +73,7 @@ async function acquireProjectOperationLock(projectRuntimeRoot, lockName, options
     timeoutErrorMessage = "Another project source operation is still running.",
     timeoutMs = DEFAULT_LOCK_TIMEOUT_MS
   } = options;
-  const root = text(projectRuntimeRoot);
+  const root = normalizeText(projectRuntimeRoot);
   if (!path.isAbsolute(root)) {
     throw lockError(
       `${rootErrorLabel} requires an absolute project runtime root.`,
@@ -90,7 +90,7 @@ async function acquireProjectOperationLock(projectRuntimeRoot, lockName, options
     try {
       handle = await open(lockPath, "wx", vibe64SharedModes().file);
       await handle.writeFile(`${JSON.stringify({
-        operation: text(operation),
+        operation: normalizeText(operation),
         pid: process.pid,
         token
       })}\n`, "utf8");

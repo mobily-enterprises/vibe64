@@ -1,7 +1,7 @@
 import { lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 
-import { normalizeText, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionHasSource, sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 
@@ -9,6 +9,7 @@ import { inspectSessionSourceMergeState } from "./sessionSourceGit.js";
 import { sourceInspectionFailure } from "./sessionSourceInspection.js";
 import { VIBE64_SESSION_STATUS, learningSessionBinding, vibe64SessionStatusIsHidden } from "./sessionStore.js";
 import { publicSessionMetadata, workspaceSetupStateFromMetadata } from "./workspaceSetupState.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./runtime.js").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
@@ -19,7 +20,7 @@ const GENESIS_SESSION_KIND = "genesis";
 const SESSION_RENEWAL_HANDOVER_HASH_PATTERN = /^[a-f0-9]{64}$/u;
 
 function unsupportedSessionError(session = {}) {
-  const sessionId = normalizeText(session.sessionId) || "(unknown)";
+  const sessionId = toText(session.sessionId) || "(unknown)";
   return vibe64Error(
     `Session ${sessionId} uses an unsupported runtime format and cannot be opened.`,
     "vibe64_session_runtime_unsupported"
@@ -27,7 +28,7 @@ function unsupportedSessionError(session = {}) {
 }
 
 function sessionIsSupported(session = {}) {
-  return normalizeText(session.manifest?.runtimeKind) === GENESIS_SESSION_KIND;
+  return toText(session.manifest?.runtimeKind) === GENESIS_SESSION_KIND;
 }
 
 function assertSupportedSession(session = {}) {
@@ -40,7 +41,7 @@ function assertSupportedSession(session = {}) {
 function assertUsableSession(session = {}) {
   if (vibe64SessionStatusIsHidden(session.status)) {
     throw vibe64Error(
-      `Vibe64 session is reserved for an in-progress renewal: ${normalizeText(session.sessionId) || "(unknown)"}`,
+      `Vibe64 session is reserved for an in-progress renewal: ${toText(session.sessionId) || "(unknown)"}`,
       "vibe64_session_renewal_private"
     );
   }
@@ -50,7 +51,7 @@ function assertUsableSession(session = {}) {
 function requireSessionSourceRoot(session = {}) {
   const sourceRoot = sessionSourcePath(session);
   if (!sourceRoot) {
-    const sessionId = normalizeText(session.sessionId) || "(unknown)";
+    const sessionId = toText(session.sessionId) || "(unknown)";
     throw vibe64Error(
       `Session ${sessionId} has no usable source checkout. Create or select a session with source before using this operation.`,
       "vibe64_session_source_required"
@@ -61,12 +62,12 @@ function requireSessionSourceRoot(session = {}) {
 
 function plainManifest(manifest = {}) {
   return {
-    createdAt: normalizeText(manifest.createdAt),
-    product: normalizeText(manifest.product) || "vibe64",
+    createdAt: toText(manifest.createdAt),
+    product: toText(manifest.product) || "vibe64",
     revision: Number(manifest.revision) || 1,
     schemaVersion: Number(manifest.schemaVersion) || 1,
-    sessionId: normalizeText(manifest.sessionId),
-    updatedAt: normalizeText(manifest.updatedAt || manifest.createdAt)
+    sessionId: toText(manifest.sessionId),
+    updatedAt: toText(manifest.updatedAt || manifest.createdAt)
   };
 }
 
@@ -81,10 +82,10 @@ function plainSessionView(session = {}, options = {}) {
   return {
     ...(session.archived === true
       ? {
-          archiveMetadataPath: normalizeText(session.archiveMetadataPath),
-          archivePath: normalizeText(session.archivePath),
+          archiveMetadataPath: toText(session.archiveMetadataPath),
+          archivePath: toText(session.archivePath),
           archived: true,
-          archivedAt: normalizeText(session.archivedAt)
+          archivedAt: toText(session.archivedAt)
         }
       : {}),
     agentRuns: Array.isArray(session.agentRuns) ? session.agentRuns : [],
@@ -102,53 +103,53 @@ function plainSessionView(session = {}, options = {}) {
       nativeExecutionRoot: session.archived || archivedSessionStatus(session.status) ? ""
         : learning.noExercise ? learningNativeExecutionRoot(session) : sourcePath
     } : {}),
-    conversationLogRoot: normalizeText(session.conversationLogRoot),
+    conversationLogRoot: toText(session.conversationLogRoot),
     manifest: plainManifest(session.manifest),
     metadata: publicSessionMetadata(session.metadata),
     revision: Number(session.revision) || 1,
-    sessionId: normalizeText(session.sessionId),
-    sessionName: normalizeText(session.sessionName),
-    pinnedSessionId: normalizeText(session.pinnedSessionId),
-    sessionRoot: normalizeText(session.sessionRoot),
+    sessionId: toText(session.sessionId),
+    sessionName: toText(session.sessionName),
+    pinnedSessionId: toText(session.pinnedSessionId),
+    sessionRoot: toText(session.sessionRoot),
     sourceInspection,
     sourcePath,
     sourceReady: Boolean(sourcePath),
-    stateRoot: normalizeText(session.stateRoot),
-    status: normalizeText(session.status) || VIBE64_SESSION_STATUS.ACTIVE,
-    updatedAt: normalizeText(session.updatedAt),
+    stateRoot: toText(session.stateRoot),
+    status: toText(session.status) || VIBE64_SESSION_STATUS.ACTIVE,
+    updatedAt: toText(session.updatedAt),
     workspaceSetup
   };
 }
 
 function archivedSessionStatus(status = "") {
-  return normalizeText(status) === VIBE64_SESSION_STATUS.ARCHIVED;
+  return toText(status) === VIBE64_SESSION_STATUS.ARCHIVED;
 }
 
 function sessionSourceCreationFailed(session) {
-  return normalizeText(session?.metadata?.source_creation_failed).toLowerCase() === "yes";
+  return toText(session?.metadata?.source_creation_failed).toLowerCase() === "yes";
 }
 
 function sessionSourceRecoveryWasSaved(session) {
-  return normalizeText(session?.metadata?.source_recovery_saved).toLowerCase() === "yes";
+  return toText(session?.metadata?.source_recovery_saved).toLowerCase() === "yes";
 }
 
 function sessionHasRenewalHandover(session = {}) {
   const metadata = session.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
-  const acknowledged = normalizeText(metadata.agent_briefing_delivered).toLowerCase() === "yes" &&
-    Boolean(normalizeText(metadata.agent_renewal_seed_acknowledged_at)) &&
+  const acknowledged = toText(metadata.agent_briefing_delivered).toLowerCase() === "yes" &&
+    Boolean(toText(metadata.agent_renewal_seed_acknowledged_at)) &&
     SESSION_RENEWAL_HANDOVER_HASH_PATTERN.test(
-      normalizeText(metadata.agent_renewal_seed_handover_hash)
+      toText(metadata.agent_renewal_seed_handover_hash)
     ) &&
-    Boolean(normalizeText(metadata.agent_renewal_seed_operation_id)) &&
-    Boolean(normalizeText(metadata.agent_renewal_seed_thread_id)) &&
-    Boolean(normalizeText(metadata.agent_renewal_seed_turn_id)) &&
-    Boolean(normalizeText(metadata.renewal_id)) &&
-    Boolean(normalizeText(metadata.renewed_from));
-  const delivered = Boolean(normalizeText(metadata.renewal_handover_delivered_at)) &&
-    Boolean(normalizeText(metadata.renewal_id)) &&
-    Boolean(normalizeText(metadata.renewed_from));
+    Boolean(toText(metadata.agent_renewal_seed_operation_id)) &&
+    Boolean(toText(metadata.agent_renewal_seed_thread_id)) &&
+    Boolean(toText(metadata.agent_renewal_seed_turn_id)) &&
+    Boolean(toText(metadata.renewal_id)) &&
+    Boolean(toText(metadata.renewed_from));
+  const delivered = Boolean(toText(metadata.renewal_handover_delivered_at)) &&
+    Boolean(toText(metadata.renewal_id)) &&
+    Boolean(toText(metadata.renewed_from));
   return acknowledged || delivered;
 }
 
@@ -179,7 +180,7 @@ async function sessionAvailabilityIssue(session = {}, learningScope = null) {
   }
   if (
     session.archived === true || archivedSessionStatus(session.status) ||
-    sessionSourceCreationFailed(session) || normalizeText(session.metadata?.session_archive_operation)
+    sessionSourceCreationFailed(session) || toText(session.metadata?.session_archive_operation)
   ) {
     return null;
   }

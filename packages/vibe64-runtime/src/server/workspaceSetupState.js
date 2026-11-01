@@ -1,7 +1,5 @@
-import {
-  normalizeText
-} from "@local/vibe64-core/server/core";
 import stripAnsi from "strip-ansi";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -19,7 +17,7 @@ const WORKSPACE_SETUP_STATUSES = new Set([
 ]);
 
 function boundedText(value = "", maxLength = undefined) {
-  const normalized = normalizeText(value);
+  const normalized = toText(value);
   return Number.isSafeInteger(maxLength)
     ? normalized.slice(0, maxLength)
     : normalized;
@@ -45,12 +43,12 @@ function workspaceSetupState(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
-  const status = normalizeText(source.status);
-  const resourceAdmissionId = normalizeText(source.resourceAdmissionId);
+  const status = toText(source.status);
+  const resourceAdmissionId = toText(source.resourceAdmissionId);
   return {
     currentLabel: boundedText(source.currentLabel, 160),
     diagnostic: boundedText(source.diagnostic, WORKSPACE_SETUP_DIAGNOSTIC_MAX_LENGTH),
-    finishedAt: normalizeText(source.finishedAt),
+    finishedAt: toText(source.finishedAt),
     recipeHash: boundedText(source.recipeHash, 128),
     ...(status === "succeeded" && typeof source.resourceIdentity === "string" && /^[a-f0-9]{64}$/u.test(source.resourceIdentity)
       ? { resourceIdentity: source.resourceIdentity } : {}),
@@ -59,18 +57,18 @@ function workspaceSetupState(value = {}) {
     // The Stack runtimes the failed preparation used, so its panel can show them.
     ...(status === "failed" && Array.isArray(source.runtimes) && source.runtimes.length
       ? {
-        runtimes: [...new Set(source.runtimes.map((runtime) => normalizeText(runtime))
+        runtimes: [...new Set(source.runtimes.map((runtime) => toText(runtime))
             .filter((runtime) => /^[a-z0-9-]{1,40}$/u.test(runtime)))].slice(0, 16)
       } : {}),
-    startedAt: normalizeText(source.startedAt),
+    startedAt: toText(source.startedAt),
     status: WORKSPACE_SETUP_STATUSES.has(status) ? status : "unconfigured",
     transcript: workspaceSetupTranscript(source.transcript),
-    updatedAt: normalizeText(source.updatedAt)
+    updatedAt: toText(source.updatedAt)
   };
 }
 
 function workspaceSetupStateFromMetadata(metadata) {
-  const serialized = normalizeText(metadata?.[WORKSPACE_SETUP_METADATA_NAME]);
+  const serialized = toText(metadata?.[WORKSPACE_SETUP_METADATA_NAME]);
   if (!serialized) {
     return workspaceSetupState();
   }

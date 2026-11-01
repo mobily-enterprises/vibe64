@@ -1,34 +1,32 @@
 import path from "node:path";
 
-import {
-  normalizeText,
-  pathInsideOrEqual
-} from "./core.js";
+import { pathInsideOrEqual } from "./core.js";
+import { toText } from "../shared/toText.js";
 
 const SESSION_SOURCE_PATH_AUTHORITY_MANAGED = "managed_session_source";
 
 function normalizedSessionPath(value = "") {
-  const normalizedValue = normalizeText(value);
+  const normalizedValue = toText(value);
   return normalizedValue ? path.resolve(normalizedValue) : "";
 }
 
 function managedSessionSourcePath(managedSessionSourceRoot = "", sessionId = "") {
   const normalizedManagedSessionSourceRoot = normalizedSessionPath(managedSessionSourceRoot);
-  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedSessionId = toText(sessionId);
   return normalizedManagedSessionSourceRoot && normalizedSessionId
     ? path.join(normalizedManagedSessionSourceRoot, "sessions", "active", normalizedSessionId, "source")
     : "";
 }
 
 function explicitPathIsManagedSessionSource(session = {}, explicitPath = "") {
-  if (normalizeText(session.metadata?.source_path_authority) !== SESSION_SOURCE_PATH_AUTHORITY_MANAGED) {
+  if (toText(session.metadata?.source_path_authority) !== SESSION_SOURCE_PATH_AUTHORITY_MANAGED) {
     return false;
   }
-  if (normalizeText(session.metadata?.source_kind) !== "session_clone") {
+  if (toText(session.metadata?.source_kind) !== "session_clone") {
     return false;
   }
   const normalizedPath = normalizedSessionPath(explicitPath);
-  const sessionId = normalizeText(session.sessionId);
+  const sessionId = toText(session.sessionId);
   if (!normalizedPath || !sessionId) {
     return false;
   }
@@ -43,7 +41,7 @@ function explicitPathIsManagedSessionSource(session = {}, explicitPath = "") {
 }
 
 function explicitSessionSourcePath(session = {}) {
-  if (normalizeText(session.metadata?.source_removed).toLowerCase() === "yes") {
+  if (toText(session.metadata?.source_removed).toLowerCase() === "yes") {
     return "";
   }
   const explicitPath = normalizedSessionPath(

@@ -1,5 +1,5 @@
 import { isPlainObject } from "./core.js";
-import { trimmedText } from "../shared/trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const sessionUiSyncStates = new Map();
 
@@ -10,18 +10,18 @@ function cloneSessionUiSyncRecord(record = null) {
 }
 
 function sessionUiSyncStateKey(input) {
-  const projectSlug = trimmedText(input?.projectSlug);
-  const sessionId = trimmedText(input?.sessionId);
+  const projectSlug = normalizeText(input?.projectSlug);
+  const sessionId = normalizeText(input?.sessionId);
   return projectSlug && sessionId ? `${projectSlug}\u0000${sessionId}` : "";
 }
 
 function readSessionUiSyncStateForSession(sessionId = "") {
-  const normalizedSessionId = trimmedText(sessionId);
+  const normalizedSessionId = normalizeText(sessionId);
   if (!normalizedSessionId) {
     return null;
   }
   const state = [...sessionUiSyncStates.values()].find(
-    (record) => trimmedText(record?.sessionId) === normalizedSessionId
+    (record) => normalizeText(record?.sessionId) === normalizedSessionId
   );
   return cloneSessionUiSyncRecord(state);
 }
@@ -32,14 +32,14 @@ function writeSessionUiSyncPatch(input = {}, patch = {}) {
     return null;
   }
   const base = sessionUiSyncStates.get(key) || {
-    projectSlug: trimmedText(input.projectSlug),
-    sessionId: trimmedText(input.sessionId)
+    projectSlug: normalizeText(input.projectSlug),
+    sessionId: normalizeText(input.sessionId)
   };
   const next = {
     ...base,
     ...patch,
-    projectSlug: trimmedText(input.projectSlug),
-    sessionId: trimmedText(input.sessionId)
+    projectSlug: normalizeText(input.projectSlug),
+    sessionId: normalizeText(input.sessionId)
   };
   sessionUiSyncStates.set(key, next);
   return cloneSessionUiSyncRecord(next);
@@ -47,12 +47,12 @@ function writeSessionUiSyncPatch(input = {}, patch = {}) {
 
 function writeSessionUiSyncPreviewState(previewState) {
   const state = {
-    originId: trimmedText(previewState?.originId),
-    projectSlug: trimmedText(previewState?.projectSlug),
-    route: trimmedText(previewState?.route),
-    sessionId: trimmedText(previewState?.sessionId),
-    title: trimmedText(previewState?.title),
-    updatedAt: trimmedText(previewState?.updatedAt) || new Date().toISOString()
+    originId: normalizeText(previewState?.originId),
+    projectSlug: normalizeText(previewState?.projectSlug),
+    route: normalizeText(previewState?.route),
+    sessionId: normalizeText(previewState?.sessionId),
+    title: normalizeText(previewState?.title),
+    updatedAt: normalizeText(previewState?.updatedAt) || new Date().toISOString()
   };
   if (!state.originId || !state.projectSlug || !state.route || !state.sessionId) {
     return null;

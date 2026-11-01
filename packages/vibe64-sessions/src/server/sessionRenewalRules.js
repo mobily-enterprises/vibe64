@@ -1,11 +1,12 @@
 import crypto from "node:crypto";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
-import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { VIBE64_SESSION_STATUS, vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import {
   SESSION_RENEWAL_STAGE,
   publicSessionRenewalState
 } from "./sessionRenewalState.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -65,15 +66,15 @@ function actorFromUser(user = null) {
   const source = user && typeof user === "object" && !Array.isArray(user)
     ? user
     : {};
-  const name = normalizeText(source.displayName || source.name || source.username) ||
+  const name = toText(source.displayName || source.name || source.username) ||
     "Local user";
-  const id = normalizeText(source.id || source.userId || source.username) || "local-user";
+  const id = toText(source.id || source.userId || source.username) || "local-user";
   return { id, name };
 }
 
 function operationId(renewalId = "", kind = "operation") {
   const digest = crypto.createHash("sha256")
-    .update(`${normalizeText(renewalId)}\0${normalizeText(kind)}`, "utf8")
+    .update(`${toText(renewalId)}\0${toText(kind)}`, "utf8")
     .digest("hex")
     .slice(0, 32);
   return `renewal:${kind}:${digest}`;
@@ -84,7 +85,7 @@ function conversationFingerprint(page = {}) {
     ? page.pagination
     : {};
   return {
-    newestTurnId: normalizeText(pagination.newestTurnId),
+    newestTurnId: toText(pagination.newestTurnId),
     totalTurnCount: Number.isSafeInteger(Number(pagination.totalTurnCount))
       ? Number(pagination.totalTurnCount)
       : 0
@@ -92,13 +93,13 @@ function conversationFingerprint(page = {}) {
 }
 
 function fingerprintsMatch(left = {}, right = {}) {
-  return normalizeText(left.newestTurnId) === normalizeText(right.newestTurnId) &&
+  return toText(left.newestTurnId) === toText(right.newestTurnId) &&
     Number(left.totalTurnCount || 0) === Number(right.totalTurnCount || 0);
 }
 
 function sourceEnvelopesMatch(left, right) {
   return ["authority", "commit", "ref", "repository"]
-    .every((name) => normalizeText(left?.[name]) === normalizeText(right?.[name]));
+    .every((name) => toText(left?.[name]) === toText(right?.[name]));
 }
 
 /**
@@ -134,7 +135,7 @@ function assertWorkspaceIdle(session, setupRunner) {
       { retryable: true }
     );
   }
-  if (normalizeText(session.workspaceSetup?.status) === "running") {
+  if (toText(session.workspaceSetup?.status) === "running") {
     throw renewalError(
       "Wait for workspace preparation to finish before renewing this session.",
       "vibe64_session_renewal_setup_running",
@@ -169,17 +170,17 @@ async function assertNoRepositoryOperation(runtime, sessionId = "") {
 }
 
 function assertCanonicalClean(check = {}, work = {}) {
-  const canonicalCommit = normalizeText(check.canonicalCommit || work.canonicalCommit).toLowerCase();
-  const sessionHead = normalizeText(work.sessionHead).toLowerCase();
+  const canonicalCommit = toText(check.canonicalCommit || work.canonicalCommit).toLowerCase();
+  const sessionHead = toText(work.sessionHead).toLowerCase();
   const changedPaths = Array.isArray(work.changedPaths) ? work.changedPaths : [];
   const current = check.sessionCurrent === true || (
-    normalizeText(check.relationship) === "current" && check.updateAvailable !== true
+    toText(check.relationship) === "current" && check.updateAvailable !== true
   );
   if (
     !canonicalCommit ||
     !sessionHead ||
     canonicalCommit !== sessionHead ||
-    normalizeText(work.canonicalCommit).toLowerCase() !== canonicalCommit ||
+    toText(work.canonicalCommit).toLowerCase() !== canonicalCommit ||
     work.dirty === true ||
     work.unsaved === true ||
     work.sessionMatchesCanonical !== true ||
@@ -194,7 +195,7 @@ function assertCanonicalClean(check = {}, work = {}) {
         details: {
           canonicalCommit,
           changedPaths,
-          relationship: normalizeText(check.relationship || work.relationship),
+          relationship: toText(check.relationship || work.relationship),
           sessionHead
         }
       }
@@ -211,7 +212,7 @@ async function inspectSessionRenewalEligibility({
   terminals,
   vibe64User = null
 } = {}) {
-  if (!session || normalizeText(session.status) !== VIBE64_SESSION_STATUS.ACTIVE) {
+  if (!session || toText(session.status) !== VIBE64_SESSION_STATUS.ACTIVE) {
     throw renewalError(
       "Only an active session can be renewed.",
       "vibe64_session_renewal_source_not_active"
@@ -256,7 +257,7 @@ async function inspectSessionRenewalEligibility({
     canonicalCommit,
     conversation,
     provider: {
-      threadId: normalizeText(refreshedSession.metadata?.agent_identity_conversation_id)
+      threadId: toText(refreshedSession.metadata?.agent_identity_conversation_id)
     },
     source,
     verifiedAt: timestamp()
@@ -272,8 +273,8 @@ function statePatch(state = {}, patch = {}) {
 }
 
 function renewalBasisMatches(left = {}, right = {}) {
-  return normalizeText(left.canonicalCommit).toLowerCase() ===
-      normalizeText(right.canonicalCommit).toLowerCase() &&
+  return toText(left.canonicalCommit).toLowerCase() ===
+      toText(right.canonicalCommit).toLowerCase() &&
     sourceEnvelopesMatch(left.source, right.source) &&
     fingerprintsMatch(left.conversation, right.conversation);
 }
@@ -312,24 +313,24 @@ function assertRenewalAgentWriteAcquired(exclusive = {}) {
     return exclusive.value;
   }
   throw renewalError(
-    normalizeText(exclusive.value?.error) ||
+    toText(exclusive.value?.error) ||
       "Another assistant operation is starting. Try again in a moment.",
-    normalizeText(exclusive.value?.code) || "vibe64_session_renewal_agent_busy",
+    toText(exclusive.value?.code) || "vibe64_session_renewal_agent_busy",
     { retryable: true }
   );
 }
 
 function renewalFailure(error) {
   const failure = {
-    code: normalizeText(error?.code) || "vibe64_session_renewal_failed",
-    message: normalizeText(error?.message) || "Session renewal needs attention.",
+    code: toText(error?.code) || "vibe64_session_renewal_failed",
+    message: toText(error?.message) || "Session renewal needs attention.",
     retryable: error?.retryable !== false
   };
   const diagnostic = error?.renewalDiagnostic;
-  const phase = normalizeText(diagnostic?.phase);
+  const phase = toText(diagnostic?.phase);
   if (SESSION_RENEWAL_SUCCESSOR_DISCARD_PHASES.has(phase)) {
     failure.details = {
-      causeCode: normalizeText(diagnostic?.causeCode) || "vibe64_session_renewal_unknown_failure",
+      causeCode: toText(diagnostic?.causeCode) || "vibe64_session_renewal_unknown_failure",
       phase
     };
   }

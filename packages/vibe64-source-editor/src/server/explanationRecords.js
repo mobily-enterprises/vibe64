@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
+import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
 import {
@@ -12,6 +12,7 @@ import {
 } from "./explanationProfile.js";
 import { positiveInteger, SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION, sourceEditorExplanationMessageId } from "./explanationText.js";
 import { isPlainObject, normalizeSourceEditorRelativePath, sourceEditorError, sourceEditorLanguageForPath } from "./sourceFiles.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {Map<string, object>} SourceEditorExplanationChats - each explanation in memory, by project, session and explanation id */
@@ -25,7 +26,7 @@ const SOURCE_EDITOR_EXPLANATION_CLEANUP_MAX_AGE_MS = 30 * 60 * 1000;
 const sourceEditorExplanationCleanupQueues = new Map();
 
 function normalizeSourceEditorExplanationId(value = "") {
-  const id = normalizeText(value);
+  const id = toText(value);
   if (!/^[a-z0-9_-]+$/u.test(id)) {
     throw sourceEditorError("Invalid source explanation id.", "vibe64_source_explanation_id_invalid");
   }
@@ -33,7 +34,7 @@ function normalizeSourceEditorExplanationId(value = "") {
 }
 
 function sourceEditorExplanationMemoryKey(context = {}, explanationId = "") {
-  return `${currentProjectScopeKey()}\0${normalizeText(context.sessionId)}:${normalizeSourceEditorExplanationId(explanationId)}`;
+  return `${currentProjectScopeKey()}\0${toText(context.sessionId)}:${normalizeSourceEditorExplanationId(explanationId)}`;
 }
 
 function sourceEditorExplanationCleanupPath(context = {}) {
@@ -48,21 +49,21 @@ function normalizeSourceEditorCleanupRecord(value = {}) {
   } catch {
     return null;
   }
-  const agentThreadId = normalizeText(source.agentThreadId);
+  const agentThreadId = toText(source.agentThreadId);
   if (!agentThreadId && !source.helper) {
     return null;
   }
   return {
     ...(source.helper ? { helper: structuredClone(source.helper) } : {}),
     agentThreadId,
-    agentTurnId: normalizeText(source.agentTurnId),
-    createdAt: normalizeText(source.createdAt),
+    agentTurnId: toText(source.agentTurnId),
+    createdAt: toText(source.createdAt),
     id,
-    originId: normalizeText(source.originId),
-    sessionId: normalizeText(source.sessionId),
-    sourcePath: normalizeText(source.sourcePath),
-    status: normalizeText(source.status || "ready"),
-    updatedAt: normalizeText(source.updatedAt)
+    originId: toText(source.originId),
+    sessionId: toText(source.sessionId),
+    sourcePath: toText(source.sourcePath),
+    status: toText(source.status || "ready"),
+    updatedAt: toText(source.updatedAt)
   };
 }
 
@@ -232,7 +233,7 @@ async function deleteSourceEditorExplanationAgentThread(context = {}, record = {
     }
     return deleted;
   }
-  const threadId = normalizeText(record.agentThreadId);
+  const threadId = toText(record.agentThreadId);
   if (!threadId) {
     return {
       ok: true,
@@ -326,53 +327,53 @@ function normalizeSourceEditorExplanation(value = {}) {
     ? source.sourceRange
     : {};
   return {
-    agentThreadId: normalizeText(source.agentThreadId),
+    agentThreadId: toText(source.agentThreadId),
     agentSettings: null,
-    agentTurnId: normalizeText(source.agentTurnId),
+    agentTurnId: toText(source.agentTurnId),
     body: String(source.body || ""),
-    createdAt: normalizeText(source.createdAt),
-    engine: normalizeText(source.engine || (source.agentThreadId ? "agent-chat" : "")),
+    createdAt: toText(source.createdAt),
+    engine: toText(source.engine || (source.agentThreadId ? "agent-chat" : "")),
     error: String(source.error || ""),
     executionProfile: sourceEditorExecutionProfileSnapshot(source.executionProfile),
     followups: normalizeSourceEditorFollowups(source.followups),
     id: normalizeSourceEditorExplanationId(source.id),
     messages: normalizeSourceEditorMessages(source.messages),
-    model: normalizeText(source.model || "agent-chat"),
-    ownerOriginId: normalizeText(source.ownerOriginId || source.originId),
-    promptVersion: normalizeText(source.promptVersion || SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION),
+    model: toText(source.model || "agent-chat"),
+    ownerOriginId: toText(source.ownerOriginId || source.originId),
+    promptVersion: toText(source.promptVersion || SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION),
     sourceRange: {
       endColumn: positiveInteger(sourceRange.endColumn, 1),
       endLine: positiveInteger(sourceRange.endLine, 1),
-      fileHash: normalizeText(sourceRange.fileHash),
-      language: normalizeText(sourceRange.language || sourceEditorLanguageForPath(sourceRange.path)),
+      fileHash: toText(sourceRange.fileHash),
+      language: toText(sourceRange.language || sourceEditorLanguageForPath(sourceRange.path)),
       path: normalizeSourceEditorRelativePath(sourceRange.path),
-      scope: normalizeText(sourceRange.scope || "selection"),
+      scope: toText(sourceRange.scope || "selection"),
       ...(["description", "steps"].includes(sourceRange.presentation) ? { presentation: sourceRange.presentation } : {}),
-      ...(sourceRange.symbolId ? { symbolId: normalizeText(sourceRange.symbolId) } : {}),
-      selectedTextHash: normalizeText(sourceRange.selectedTextHash),
+      ...(sourceRange.symbolId ? { symbolId: toText(sourceRange.symbolId) } : {}),
+      selectedTextHash: toText(sourceRange.selectedTextHash),
       startColumn: positiveInteger(sourceRange.startColumn, 1),
       startLine: positiveInteger(sourceRange.startLine, 1)
     },
     stale: source.stale === true,
-    staleReason: normalizeText(source.staleReason),
-    status: normalizeText(source.status || "ready"),
+    staleReason: toText(source.staleReason),
+    status: toText(source.status || "ready"),
     summary: String(source.summary || ""),
-    title: normalizeText(source.title || "Code explanation"),
-    updatedAt: normalizeText(source.updatedAt)
+    title: toText(source.title || "Code explanation"),
+    updatedAt: toText(source.updatedAt)
   };
 }
 
 function normalizeSourceEditorFollowups(value = []) {
   return (Array.isArray(value) ? value : [])
     .map((entry) => {
-      const role = normalizeText(entry?.role);
+      const role = toText(entry?.role);
       const text = String(entry?.text || "");
       if (!["assistant", "user"].includes(role) || !text.trim()) {
         return null;
       }
       return {
-        createdAt: normalizeText(entry.createdAt),
-        id: normalizeText(entry.id) || sourceEditorExplanationMessageId(),
+        createdAt: toText(entry.createdAt),
+        id: toText(entry.id) || sourceEditorExplanationMessageId(),
         role,
         text
       };
@@ -383,15 +384,15 @@ function normalizeSourceEditorFollowups(value = []) {
 function normalizeSourceEditorMessages(value = []) {
   return (Array.isArray(value) ? value : [])
     .map((entry) => {
-      const role = normalizeText(entry?.role);
+      const role = toText(entry?.role);
       const text = String(entry?.text || "");
-      const status = normalizeText(entry.status || "complete");
+      const status = toText(entry.status || "complete");
       if (!["assistant", "user"].includes(role) || (!text.trim() && status === "complete")) {
         return null;
       }
       return {
-        createdAt: normalizeText(entry.createdAt),
-        id: normalizeText(entry.id) || sourceEditorExplanationMessageId(),
+        createdAt: toText(entry.createdAt),
+        id: toText(entry.id) || sourceEditorExplanationMessageId(),
         role,
         status,
         text
@@ -426,8 +427,8 @@ function shouldCleanupSourceEditorExplanationRecord(record = {}, options = {}) {
   if (activeIds.has(record.id)) {
     return false;
   }
-  const recordOriginId = normalizeText(record.originId);
-  const requestedOriginId = normalizeText(originId);
+  const recordOriginId = toText(record.originId);
+  const requestedOriginId = toText(originId);
   if (requestedOriginId && recordOriginId && requestedOriginId === recordOriginId) {
     return true;
   }

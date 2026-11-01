@@ -11,8 +11,8 @@ import {
 import { CLAUDE_CODE_VERSION } from "./claudeCodeProcess.js";
 import { claudeConversationError as error } from "./terminalShared.js";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
-import { normalizeText } from "@local/vibe64-core/server/core";
-import { sha256Hex } from "./sha256Hex.js";
+import { toText } from "@local/vibe64-core/shared/toText";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 /** @typedef {import("./types.js").ClaudeConversationOwner} ClaudeConversationOwner */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
@@ -123,7 +123,7 @@ function createClaudeConversationAccounts({
       throw error(`Claude Code account status could not be checked: ${sanitizeOperationText(account.error).slice(0, 1000)}`,
         "vibe64_claude_account_status_failed");
     }
-    const email = normalizeText(account.email).toLowerCase();
+    const email = toText(account.email).toLowerCase();
     if (!account.loggedIn || !email) {
       throw error("Sign in to Claude Code with your Claude account before continuing.", "vibe64_claude_account_required");
     }

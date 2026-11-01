@@ -1,6 +1,6 @@
 import { CODEX_APP_SERVER_PROVIDER_ID } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { codexTerminalNamespace } from "./terminalShared.js";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS = 180_000;
 const CODEX_APP_SERVER_MODEL_CATALOG_CACHE_MS = 30_000;
@@ -98,7 +98,7 @@ function createCodexAssistantCatalog({
       ? await codexAppServerRunOwner.readExecutionProfileModelCatalog(sessionId, { assistantScope, agentSettings, signal })
       : await codexConversationPreparation.context(sessionId, { runtime: resolvedRuntime, session: resolvedSession });
     if (context.ok === false) {
-      const error = new Error(trimmedText(context.error) || "Codex session is unavailable.");
+      const error = new Error(normalizeText(context.error) || "Codex session is unavailable.");
       Object.assign(error, context);
       throw error;
     }
@@ -138,7 +138,7 @@ function createCodexAssistantCatalog({
       session: resolvedSession
     });
     if (context.ok === false) {
-      const error = new Error(trimmedText(context.error) || "Codex session is unavailable.");
+      const error = new Error(normalizeText(context.error) || "Codex session is unavailable.");
       Object.assign(error, context);
       throw error;
     }

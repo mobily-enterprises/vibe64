@@ -3,15 +3,13 @@ import path from "node:path";
 
 import { serializeByKey, writeJsonFileAtomic } from "./atomicFile.js";
 
-import {
-  isPlainObject,
-  normalizeText
-} from "./core.js";
+import { isPlainObject } from "./core.js";
+import { toText } from "../shared/toText.js";
 
 const projectRecordMetadataUpdates = new Map();
 
 async function readProjectRecordMetadata(projectRecordPath = "") {
-  const filePath = normalizeText(projectRecordPath);
+  const filePath = toText(projectRecordPath);
   if (!filePath) {
     return {};
   }
@@ -26,7 +24,7 @@ async function readProjectRecordMetadata(projectRecordPath = "") {
 }
 
 async function updateProjectRecordMetadata(projectRecordPath = "", update = {}) {
-  const filePath = normalizeText(projectRecordPath);
+  const filePath = toText(projectRecordPath);
   if (!filePath) {
     throw new Error("Updating project metadata requires a project record path.");
   }

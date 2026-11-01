@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 
-/** A value's SHA-256 digest as lowercase hex. */
+/**
+ * The SHA-256 digest of a string or buffer, as lowercase hex.
+ * @param {string | Buffer} value
+ */
 function sha256Hex(value) {
   return createHash("sha256").update(value).digest("hex");
 }

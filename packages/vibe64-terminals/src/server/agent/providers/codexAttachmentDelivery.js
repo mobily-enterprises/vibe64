@@ -1,7 +1,7 @@
 // Checks a Codex message's attachments before delivery and renews accepted ones, retrying a busy renewal.
 
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const CODEX_ATTACHMENT_MAX_ITEMS = 10;
 const CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000, 5_000]);
@@ -10,7 +10,7 @@ const acceptedAttachmentRenewalTimers = new WeakMap();
 
 function codexAttachmentIds(input = {}) {
   return Array.isArray(input.attachmentIds)
-    ? input.attachmentIds.map(normalizeText).filter(Boolean)
+    ? input.attachmentIds.map(toText).filter(Boolean)
     : [];
 }
 
@@ -45,21 +45,21 @@ async function validateCodexAttachmentsBeforeDelivery(attachments, sessionId = "
   }
   if (renewal?.ok === false) {
     return codexAttachmentDeliveryFailure(
-      normalizeText(renewal?.code) || "vibe64_agent_attachment_unavailable",
-      normalizeText(renewal?.error) || "Attachments are temporarily unavailable. Try sending again.",
+      toText(renewal?.code) || "vibe64_agent_attachment_unavailable",
+      toText(renewal?.error) || "Attachments are temporarily unavailable. Try sending again.",
       renewal?.retryable !== false
     );
   }
 
   const expectedIds = new Set(attachmentIds);
   const busyIds = new Set((Array.isArray(renewal?.busy) ? renewal.busy : [])
-    .map(normalizeText)
+    .map(toText)
     .filter((attachmentId) => expectedIds.has(attachmentId)));
   const missingIds = new Set((Array.isArray(renewal?.missing) ? renewal.missing : [])
-    .map(normalizeText)
+    .map(toText)
     .filter((attachmentId) => expectedIds.has(attachmentId)));
   const retainedIds = new Set((Array.isArray(renewal?.retained) ? renewal.retained : [])
-    .map(normalizeText)
+    .map(toText)
     .filter((attachmentId) => expectedIds.has(attachmentId)));
   if (missingIds.size > 0) {
     return codexAttachmentDeliveryFailure(
@@ -116,7 +116,7 @@ async function renewAcceptedCodexAttachments(attachments, sessionId = "", input 
       return renewal;
     }
     const busy = Array.isArray(renewal?.busy)
-      ? renewal.busy.map(normalizeText).filter(Boolean)
+      ? renewal.busy.map(toText).filter(Boolean)
       : [];
     if (busy.length < 1) {
       return renewal;
@@ -143,7 +143,7 @@ function scheduleAcceptedCodexAttachmentRenewal(
   attempt = 0
 ) {
   const pendingIds = [...new Set((Array.isArray(attachmentIds) ? attachmentIds : [])
-    .map(normalizeText)
+    .map(toText)
     .filter(Boolean))];
   if (pendingIds.length < 1) {
     return;
@@ -155,7 +155,7 @@ function scheduleAcceptedCodexAttachmentRenewal(
     });
     return;
   }
-  const timerKey = `${normalizeText(sessionId)}:${[...pendingIds].sort().join(",")}`;
+  const timerKey = `${toText(sessionId)}:${[...pendingIds].sort().join(",")}`;
   const timers = acceptedCodexAttachmentRenewalTimerMap(attachments);
   const existingTimer = timers.get(timerKey);
   if (existingTimer) {
@@ -170,7 +170,7 @@ function scheduleAcceptedCodexAttachmentRenewal(
       attachments.renewAttachments(sessionId, pendingIds)
     )).then((renewal) => {
       const busy = Array.isArray(renewal?.busy)
-        ? renewal.busy.map(normalizeText).filter(Boolean)
+        ? renewal.busy.map(toText).filter(Boolean)
         : [];
       if (renewal?.ok === false) {
         scheduleAcceptedCodexAttachmentRenewal(attachments, sessionId, pendingIds, attempt + 1);
@@ -181,7 +181,7 @@ function scheduleAcceptedCodexAttachmentRenewal(
         return;
       }
       const missing = Array.isArray(renewal?.missing)
-        ? renewal.missing.map(normalizeText).filter(Boolean)
+        ? renewal.missing.map(toText).filter(Boolean)
         : [];
       if (missing.length > 0) {
         vibe64SessionDebugLog("server.codexAttachments.acceptedRenewal.missing", {

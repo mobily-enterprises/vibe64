@@ -6,7 +6,7 @@ import {
   normalizeOsUsername,
   resolveOsUser
 } from "./osUserIdentity.js";
-import { trimmedText as normalizeText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 

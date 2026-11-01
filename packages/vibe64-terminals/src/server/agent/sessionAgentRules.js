@@ -6,9 +6,9 @@ import {
   vibe64AssistantSelectionFromMetadata,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { currentProjectVibe64User } from "@local/vibe64-core/server/projectRequestContext";
 import { hasOwn } from "../hasOwn.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE = "vibe64_agent_provider_binding_conflict";
 
@@ -27,7 +27,7 @@ function sessionAgentProviderId(options = {}, fallbackProviderId = "") {
     options.session?.metadata,
     { required: false }
   );
-  return normalizeText(
+  return toText(
     durableSelection?.engineId ||
     options.assistantSelection?.engineId ||
     options.engineId ||
@@ -50,12 +50,12 @@ function sessionAssistantSelection(options = {}) {
 
 function providerBindingConflictError(sessionId = "", currentProviderId = "", requestedProviderId = "") {
   const error = new Error(
-    `Assistant session ${normalizeText(sessionId)} is bound to ${normalizeText(currentProviderId)}, not ${normalizeText(requestedProviderId)}.`
+    `Assistant session ${toText(sessionId)} is bound to ${toText(currentProviderId)}, not ${toText(requestedProviderId)}.`
   );
   error.code = SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE;
-  error.currentProviderId = normalizeText(currentProviderId);
-  error.requestedProviderId = normalizeText(requestedProviderId);
-  error.sessionId = normalizeText(sessionId);
+  error.currentProviderId = toText(currentProviderId);
+  error.requestedProviderId = toText(requestedProviderId);
+  error.sessionId = toText(sessionId);
   return error;
 }
 
@@ -73,9 +73,9 @@ function defineEphemeralAssistantScope(value = {}) {
   if (missing.length > 0) {
     throw new TypeError(`Ephemeral assistant scope is missing required fields: ${missing.join(", ")}.`);
   }
-  const id = normalizeText(value.id);
-  const workdir = normalizeText(value.workdir);
-  const runtimeRoot = normalizeText(value.runtimeRoot);
+  const id = toText(value.id);
+  const workdir = toText(value.workdir);
+  const runtimeRoot = toText(value.runtimeRoot);
   if (typeof value.stableContext !== "string") {
     throw new TypeError("Ephemeral assistant scope stable context must be a string.");
   }
@@ -116,7 +116,7 @@ function agentOperationResult(provider = {}, sessionId = "", result = {}) {
     ...source,
     engineId: provider.id,
     providerId: provider.id,
-    sessionId: normalizeText(sessionId),
+    sessionId: toText(sessionId),
     transportId: provider.transportId
   };
 }
@@ -150,8 +150,8 @@ function untrustedExecutionProfileResolutionError(provider = {}, sessionId = "",
     "The pre-resolved assistant execution profile was not issued for this provider session.",
     {
       field: "executionProfile",
-      providerId: normalizeText(provider.id),
-      sessionId: normalizeText(sessionId),
+      providerId: toText(provider.id),
+      sessionId: toText(sessionId),
       ...details
     }
   );
@@ -171,7 +171,7 @@ function connectionChangeBusy(engineId = "opencode", sessionIds = []) {
 }
 
 function bindingKey(sessionId, options = {}) {
-  const id = normalizeText(sessionId);
+  const id = toText(sessionId);
   return options.routingConversationId ? `${id}\0conversation\0${options.routingConversationId}` : id;
 }
 

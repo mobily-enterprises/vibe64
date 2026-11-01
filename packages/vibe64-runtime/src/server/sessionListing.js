@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { sessionLockIsAbandoned, sessionLockPath } from "./sessionLocks.js";
 import {
   genuineLearningBinding,
@@ -12,6 +11,7 @@ import {
   VIBE64_SESSION_STATUS
 } from "./sessionRecordRules.js";
 import { readDirectoryEntries, sortedDirectoryNames } from "./sessionStoreLayout.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -70,8 +70,8 @@ function createSessionListing({
       try {
         const session = await sessionRecords.readSessionForRenewal(record.sessionId);
         if (
-          normalizeText(session.metadata.renewal_id) &&
-          normalizeText(session.metadata.renewed_to)
+          toText(session.metadata.renewal_id) &&
+          toText(session.metadata.renewed_to)
         ) {
           // Renewal owns a reversible close transaction. Ordinary history
           // reads must neither publish it nor interfere with its rollback.
@@ -81,8 +81,8 @@ function createSessionListing({
         recovered.push(record.sessionId);
       } catch (error) {
         failures.push({
-          code: normalizeText(error?.code) || "vibe64_session_archive_recovery_failed",
-          error: normalizeText(error?.message) || `Archived session ${record.sessionId} could not be published.`,
+          code: toText(error?.code) || "vibe64_session_archive_recovery_failed",
+          error: toText(error?.message) || `Archived session ${record.sessionId} could not be published.`,
           ok: false,
           ...(error?.retryable === true ? { retryable: true } : {}),
           sessionId: record.sessionId
@@ -150,7 +150,7 @@ function createSessionListing({
         learningSessionBinding(summary.metadata, state.admittedLearningScope, summary.sessionId);
         return summary;
       })
-    ].sort((left, right) => normalizeText(left.sessionId).localeCompare(normalizeText(right.sessionId)));
+    ].sort((left, right) => toText(left.sessionId).localeCompare(toText(right.sessionId)));
   }
 
   async function listSessionsForRenewal() {

@@ -8,8 +8,8 @@ import {
   codexAppServerThreadSettings as nativeCodexAppServerThreadSettings,
   codexAppServerTurnSettings as nativeCodexAppServerTurnSettings
 } from "@jskit-ai/assistant-core/server/codex-configuration";
-import { normalizeAgentText } from "./agentProviders.js";
 import { isPlainRecord } from "../shared/isPlainRecord.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // Codex session defaults and the thread and turn settings session threads and
 // helper threads share.
@@ -22,7 +22,7 @@ const CODEX_SESSION_SANDBOX = "danger-full-access";
 const CODEX_SESSION_READ_ONLY_SANDBOX = "read-only";
 
 function normalizeWorkdir(value = "") {
-  return normalizeAgentText(value);
+  return toText(value);
 }
 
 function codexEffectiveAgentExecutionSettings(agentSettings = {}) {

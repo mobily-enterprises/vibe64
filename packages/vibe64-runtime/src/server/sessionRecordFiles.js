@@ -1,12 +1,6 @@
 import path from "node:path";
 import { conversationAgentRunRecord } from "@jskit-ai/assistant-core/server/conversation";
-import {
-  isMissingPathError,
-  isPlainObject,
-  normalizeText,
-  pathExists,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { isMissingPathError, isPlainObject, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { readVibe64CurrentSessionAlias } from "./currentSessionAlias.js";
 import {
   assertSafeAgentRunId,
@@ -35,6 +29,7 @@ import {
   revisionNumber,
   sortedFileNames
 } from "./sessionStoreLayout.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -57,7 +52,7 @@ function createSessionRecordFiles({ state, storePaths }) {
   }
 
   async function readStatusFromPaths(sessionPaths) {
-    return normalizeText(await readTextIfExists(sessionPaths.statusPath)) || VIBE64_SESSION_STATUS.ACTIVE;
+    return toText(await readTextIfExists(sessionPaths.statusPath)) || VIBE64_SESSION_STATUS.ACTIVE;
   }
 
   async function readMetadataFromPaths(sessionPaths) {
@@ -79,7 +74,7 @@ function createSessionRecordFiles({ state, storePaths }) {
       names.map(async (name) => {
         return [
           name,
-          normalizeText(await readTextIfExists(metadataFilePath(sessionPaths, name)))
+          toText(await readTextIfExists(metadataFilePath(sessionPaths, name)))
         ];
       })
     );
@@ -91,7 +86,7 @@ function createSessionRecordFiles({ state, storePaths }) {
     const metadataEntries = await Promise.all(
       SESSION_SOURCE_DESCRIPTOR_METADATA_NAMES.map(async (name) => [
         name,
-        normalizeText(await readTextIfExists(metadataFilePath(sessionPaths, name)))
+        toText(await readTextIfExists(metadataFilePath(sessionPaths, name)))
       ])
     );
     return {
@@ -144,8 +139,8 @@ function createSessionRecordFiles({ state, storePaths }) {
     return runs
       .filter(Boolean)
       .sort((left, right) => {
-        const timeComparison = normalizeText(left.updatedAt).localeCompare(normalizeText(right.updatedAt));
-        return timeComparison || normalizeText(left.id).localeCompare(normalizeText(right.id));
+        const timeComparison = toText(left.updatedAt).localeCompare(toText(right.updatedAt));
+        return timeComparison || toText(left.id).localeCompare(toText(right.id));
       });
   }
 
@@ -184,8 +179,8 @@ function createSessionRecordFiles({ state, storePaths }) {
     return tasks
       .filter(Boolean)
       .sort((left, right) => {
-        const timeComparison = normalizeText(left.updatedAt).localeCompare(normalizeText(right.updatedAt));
-        return timeComparison || normalizeText(left.id).localeCompare(normalizeText(right.id));
+        const timeComparison = toText(left.updatedAt).localeCompare(toText(right.updatedAt));
+        return timeComparison || toText(left.id).localeCompare(toText(right.id));
       });
   }
 
@@ -240,13 +235,13 @@ function createSessionRecordFiles({ state, storePaths }) {
       sessionRoot: archived ? "" : sessionPaths.sessionRoot,
       stateRoot: sessionPaths.stateRoot,
       status,
-      updatedAt: normalizeText(manifest.updatedAt || manifest.createdAt),
+      updatedAt: toText(manifest.updatedAt || manifest.createdAt),
       ...(archived
         ? {
             archivePath: archiveRecord.archivePath,
             archiveStatus: archiveRecord.status,
             archived: true,
-            archivedAt: normalizeText(archiveRecord.archivedAt),
+            archivedAt: toText(archiveRecord.archivedAt),
             archiveMetadataPath: archiveRecord.metadataPath
           }
         : {})
@@ -265,12 +260,12 @@ function createSessionRecordFiles({ state, storePaths }) {
     ]);
     const sessionName = await sessionNameForSession(sessionPaths, metadata);
     return {
-      createdAt: normalizeText(manifest.createdAt),
+      createdAt: toText(manifest.createdAt),
       manifest: {
-        createdAt: normalizeText(manifest.createdAt),
+        createdAt: toText(manifest.createdAt),
         revision: revisionNumber(manifest.revision),
-        runtimeKind: normalizeText(manifest.runtimeKind),
-        updatedAt: normalizeText(manifest.updatedAt || manifest.createdAt)
+        runtimeKind: toText(manifest.runtimeKind),
+        updatedAt: toText(manifest.updatedAt || manifest.createdAt)
       },
       metadata,
       projectContextRoot: sessionPaths.projectContextRoot,
@@ -281,7 +276,7 @@ function createSessionRecordFiles({ state, storePaths }) {
       sessionRoot: sessionPaths.sessionRoot,
       stateRoot: sessionPaths.stateRoot,
       status,
-      updatedAt: normalizeText(manifest.updatedAt || manifest.createdAt)
+      updatedAt: toText(manifest.updatedAt || manifest.createdAt)
     };
   }
 

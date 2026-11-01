@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { thisComputerToolFamily } from "@local/vibe64-execution/server";
 import { DATABASE_TOOL_ENVIRONMENT_CONTRACT } from "@local/vibe64-project/server/resourceEnvironment";
@@ -8,6 +7,7 @@ import { databaseError } from "./databaseError.js";
 import { inspectDatabaseSchema } from "./databaseDialect.js";
 import { checkDatabaseServer } from "./serverCheck.js";
 import { actorIdentity, readSchemaSnapshot, writeSchemaSnapshot } from "./sessionState.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -26,7 +26,7 @@ function createSessionDatabase({
   withKnex
 }) {
   async function sessionContext(input) {
-    const sessionId = normalizeText(input.sessionId);
+    const sessionId = toText(input.sessionId);
     if (!sessionId) {
       throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
@@ -128,7 +128,7 @@ function createSessionDatabase({
         "vibe64_database_write_confirmation_required"
       );
     }
-    if (normalizeText(input.confirmationDatabase) !== context.writeConnection.database) {
+    if (toText(input.confirmationDatabase) !== context.writeConnection.database) {
       throw databaseError(
         "The write confirmation does not match the selected session database.",
         "vibe64_database_write_target_mismatch",
@@ -173,7 +173,7 @@ function createSessionDatabase({
    * this computer. Nothing when the Stack declares none or the host supplies it.
    */
   async function checkServer(input) {
-    const sessionId = normalizeText(input.sessionId);
+    const sessionId = toText(input.sessionId);
     if (!sessionId) {
       throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }

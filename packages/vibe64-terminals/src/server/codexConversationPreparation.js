@@ -15,7 +15,7 @@ import {
   codexAppServerTurnState, codexConversationIdForWorkdir, codexThreadIdForWorkdir, withCodexState
 } from "./codexConversationStorage.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").CodexRuntimeHost} CodexRuntimeHost */
@@ -85,7 +85,7 @@ function createCodexConversationPreparation({
       provider: context.provider,
       threadId: codexAppServerTurnState(context.session).threadId ||
         codexThreadIdForWorkdir(context.session, context.workdir),
-      get providerKey() { return codexAppServerProviderKey(trimmedText(sessionId), context.providerOptions); },
+      get providerKey() { return codexAppServerProviderKey(normalizeText(sessionId), context.providerOptions); },
       get resumeOptions() {
         return codexAppServerThreadSettings({
           agentSettings: codexAgentSettingsFromSession(context.session),
@@ -432,7 +432,7 @@ function createCodexConversationPreparation({
     const { session: _openingSession, ...currentOptions } = options || {};
     const current = await codexAppServerSessionContext(sessionId, currentOptions);
     if (current.ok === false) return current;
-    const threadId = trimmedText(codexAppServerTurnState(current.session).threadId) ||
+    const threadId = normalizeText(codexAppServerTurnState(current.session).threadId) ||
       codexThreadIdForWorkdir(current.session, current.workdir);
     if (!input.messageId || !input.threadId || input.threadId !== threadId) {
       return { ok: false, code: "vibe64_codex_thread_mismatch", error: "Admission inspection requires the original assistant thread." };

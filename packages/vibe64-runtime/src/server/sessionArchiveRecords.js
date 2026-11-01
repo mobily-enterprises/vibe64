@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { isPlainObject, normalizeText, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { isPlainObject, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import {
   assertValidVibe64SessionId,
   assertVibe64SessionStatus,
@@ -23,6 +23,7 @@ import {
   sessionArchivePath,
   sortedFileNames
 } from "./sessionStoreLayout.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -65,7 +66,7 @@ function createSessionArchiveRecords({ state, storePaths }) {
       value.schemaVersion !== VIBE64_SESSION_ARCHIVE_SCHEMA_VERSION ||
       !isValidVibe64SessionId(value.sessionId) ||
       !isPlainObject(value.index) ||
-      normalizeText(value.index.sessionId) !== normalizeText(value.sessionId)
+      toText(value.index.sessionId) !== toText(value.sessionId)
     ) {
       throw vibe64Error(
         `Invalid Vibe64 session archive metadata: ${metadataPath}`,
@@ -75,7 +76,7 @@ function createSessionArchiveRecords({ state, storePaths }) {
     const normalizedStatus = assertVibe64SessionStatus(value.status);
     if (
       normalizedStatus !== VIBE64_SESSION_STATUS.ARCHIVED ||
-      normalizeText(value.index.status) !== VIBE64_SESSION_STATUS.ARCHIVED
+      toText(value.index.status) !== VIBE64_SESSION_STATUS.ARCHIVED
     ) {
       throw vibe64Error(
         `Invalid Vibe64 session archive status: ${normalizedStatus}`,
@@ -174,7 +175,7 @@ function createSessionArchiveRecords({ state, storePaths }) {
     const entries = SESSION_ARCHIVE_INDEX_METADATA_NAMES
       .map((name) => [
         name,
-        normalizeText(metadata[name])
+        toText(metadata[name])
       ])
       .filter(([, value]) => value);
     return Object.fromEntries(entries);
@@ -185,20 +186,20 @@ function createSessionArchiveRecords({ state, storePaths }) {
       sessionId = ""
     } = options;
     const manifest = isPlainObject(summary.manifest) ? summary.manifest : {};
-    const createdAt = normalizeText(summary.createdAt || manifest.createdAt);
-    const updatedAt = normalizeText(summary.updatedAt || manifest.updatedAt || createdAt);
+    const createdAt = toText(summary.createdAt || manifest.createdAt);
+    const updatedAt = toText(summary.updatedAt || manifest.updatedAt || createdAt);
     return {
       createdAt,
       manifest: {
         createdAt,
         revision: revisionNumber(summary.revision ?? manifest.revision),
-        runtimeKind: normalizeText(manifest.runtimeKind),
+        runtimeKind: toText(manifest.runtimeKind),
         updatedAt
       },
       metadata: sessionArchiveIndexMetadata(summary.metadata),
       revision: revisionNumber(summary.revision ?? manifest.revision),
       sessionId: assertValidVibe64SessionId(sessionId || summary.sessionId),
-      sessionName: normalizeText(summary.sessionName),
+      sessionName: toText(summary.sessionName),
       sessionRoot: "",
       status: VIBE64_SESSION_STATUS.ARCHIVED,
       updatedAt
@@ -208,20 +209,20 @@ function createSessionArchiveRecords({ state, storePaths }) {
   function sessionArchiveSummary(record = {}) {
     const index = isPlainObject(record.index) ? record.index : {};
     return {
-      createdAt: normalizeText(index.createdAt),
+      createdAt: toText(index.createdAt),
       manifest: isPlainObject(index.manifest) ? index.manifest : {},
       metadata: isPlainObject(index.metadata) ? index.metadata : {},
       revision: revisionNumber(index.revision),
-      sessionName: normalizeText(index.sessionName),
-      updatedAt: normalizeText(index.updatedAt),
+      sessionName: toText(index.sessionName),
+      updatedAt: toText(index.updatedAt),
       archiveMetadataPath: record.metadataPath,
       archivePath: record.archivePath,
       archiveStatus: record.status,
       archived: true,
-      archivedAt: normalizeText(record.archivedAt),
-      sessionId: normalizeText(index.sessionId) || normalizeText(record.sessionId),
+      archivedAt: toText(record.archivedAt),
+      sessionId: toText(index.sessionId) || toText(record.sessionId),
       sessionRoot: "",
-      status: normalizeText(index.status) || normalizeText(record.status)
+      status: toText(index.status) || toText(record.status)
     };
   }
 
@@ -240,7 +241,7 @@ function createSessionArchiveRecords({ state, storePaths }) {
         fileName: archiveFileName,
         relativePath: `archived/${archiveFileName}`
       },
-      archivedAt: normalizeText(archivedAt),
+      archivedAt: toText(archivedAt),
       index: sessionArchiveIndexFromSummary(summary, {
         sessionId: normalizedSessionId
       }),

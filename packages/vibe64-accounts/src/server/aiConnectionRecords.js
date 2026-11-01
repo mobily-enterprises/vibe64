@@ -6,7 +6,7 @@ import {
 } from "../shared/aiConnectionIdentity.js";
 import { aiConnectionError } from "./aiConnectionError.js";
 import { OPENCODE_NATIVE_ENDPOINT_CODE, assistantProviderPolicy } from "./assistantProviderPolicy.js";
-import { trimmedText } from "./trimmedText.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // What a saved AI connection is: its provider, key, label and model access,
 // the saved state's normal form and the view of a connection the person sees.
@@ -38,7 +38,7 @@ function containsControlCharacter(value = "") {
 }
 
 function providerId(value = "") {
-  const id = trimmedText(value);
+  const id = toText(value);
   if (!AI_CONNECTION_PROVIDER_PATTERN.test(id)) {
     throw aiConnectionError("vibe64_ai_provider_invalid", "AI provider id is invalid.", 400);
   }
@@ -46,7 +46,7 @@ function providerId(value = "") {
 }
 
 function providerRevision(value = "") {
-  const revision = trimmedText(value);
+  const revision = toText(value);
   if (!AI_CONNECTION_REVISION_PATTERN.test(revision)) {
     throw aiConnectionError("vibe64_ai_provider_revision_invalid", "Refresh the provider catalog before saving this API key.", 409);
   }
@@ -67,7 +67,7 @@ function apiKey(value = "") {
 
 function connectionLabel(value = "", fallback = "") {
   if (value === undefined || value === null || value === "") {
-    return trimmedText(fallback);
+    return toText(fallback);
   }
   const label = typeof value === "string" ? value.trim() : "";
   if (
@@ -86,7 +86,7 @@ function connectionFingerprint(id = "", key = "") {
 
 function modelIds(value = null) {
   return [...new Set((Array.isArray(value) ? value : [])
-    .map(trimmedText)
+    .map(toText)
     .filter((id) => id && id.length <= 256 && !containsControlCharacter(id)))];
 }
 
@@ -99,23 +99,23 @@ function normalizedZenModelCheck(value = null) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
-  const status = trimmedText(value.status);
+  const status = toText(value.status);
   if (!ZEN_MODEL_CHECK_STATUSES.has(status)) {
     return null;
   }
   return {
     checked: count(value.checked),
-    currentModelId: trimmedText(value.currentModelId).slice(0, 256),
+    currentModelId: toText(value.currentModelId).slice(0, 256),
     enabled: count(value.enabled),
-    finishedAt: trimmedText(value.finishedAt),
-    id: trimmedText(value.id),
-    message: trimmedText(value.message).slice(0, 320),
+    finishedAt: toText(value.finishedAt),
+    id: toText(value.id),
+    message: toText(value.message).slice(0, 320),
     rejected: count(value.rejected),
     retryable: count(value.retryable),
-    startedAt: trimmedText(value.startedAt),
+    startedAt: toText(value.startedAt),
     status,
     total: count(value.total),
-    updatedAt: trimmedText(value.updatedAt)
+    updatedAt: toText(value.updatedAt)
   };
 }
 
@@ -132,9 +132,9 @@ function connectionPolicy(connection = {}, id = "") {
     return {
       ...policy,
       accessLabel: ownerOnly ? "Personal use" : "Workspace use",
-      billingLabel: trimmedText(connection.billingLabel) || policy.billingLabel,
-      defaultModelId: trimmedText(connection.defaultModelId) || policy.defaultModelId,
-      managementUrl: trimmedText(connection.managementUrl) || policy.managementUrl,
+      billingLabel: toText(connection.billingLabel) || policy.billingLabel,
+      defaultModelId: toText(connection.defaultModelId) || policy.defaultModelId,
+      managementUrl: toText(connection.managementUrl) || policy.managementUrl,
       modelAccess: policy.modelAccess
         ? {
             ...policy.modelAccess,
@@ -166,31 +166,31 @@ function normalizedState(value = null) {
     const policy = connectionPolicy(candidate, id);
     connections[id] = {
       apiKey: key,
-      billingLabel: trimmedText(candidate.billingLabel) || policy?.billingLabel || "",
-      createdAt: trimmedText(candidate.createdAt),
+      billingLabel: toText(candidate.billingLabel) || policy?.billingLabel || "",
+      createdAt: toText(candidate.createdAt),
       ...(Object.hasOwn(candidate, "helperModelId") ? { helperModelId: candidate.helperModelId } : {}),
-      defaultModelId: trimmedText(candidate.defaultModelId) || policy?.defaultModelId || "",
+      defaultModelId: toText(candidate.defaultModelId) || policy?.defaultModelId || "",
       endpointCode: OPENCODE_NATIVE_ENDPOINT_CODE,
       fingerprint: connectionFingerprint(id, key),
-      label: trimmedText(candidate.label) || id,
-      managementUrl: trimmedText(candidate.managementUrl) || policy?.managementUrl || "",
+      label: toText(candidate.label) || id,
+      managementUrl: toText(candidate.managementUrl) || policy?.managementUrl || "",
       modelAccessUnlocked: candidate.modelAccessUnlocked === true,
       ownerOnly: candidate.ownerOnly === false ? false : policy?.ownerOnly !== false,
-      productLabel: trimmedText(candidate.productLabel) || policy?.productLabel || trimmedText(candidate.label) || id,
-      providerRevision: trimmedText(candidate.providerRevision),
-      updatedAt: trimmedText(candidate.updatedAt),
+      productLabel: toText(candidate.productLabel) || policy?.productLabel || toText(candidate.label) || id,
+      providerRevision: toText(candidate.providerRevision),
+      updatedAt: toText(candidate.updatedAt),
       ...(id === OPENCODE_ZEN_PROVIDER_ID
         ? {
             zenEnabledModelIds: modelIds(candidate.zenEnabledModelIds),
-            zenModelAccessMode: ZEN_MODEL_ACCESS_MODES.has(trimmedText(candidate.zenModelAccessMode))
-              ? trimmedText(candidate.zenModelAccessMode)
+            zenModelAccessMode: ZEN_MODEL_ACCESS_MODES.has(toText(candidate.zenModelAccessMode))
+              ? toText(candidate.zenModelAccessMode)
               : "recommended",
             zenModelCheck: normalizedZenModelCheck(candidate.zenModelCheck)
           }
         : {})
     };
   }
-  const requestedPreferredProviderId = trimmedText(source.preferredProviderId);
+  const requestedPreferredProviderId = toText(source.preferredProviderId);
   const preferredProviderId = AI_CONNECTION_PROVIDER_PATTERN.test(requestedPreferredProviderId)
     ? requestedPreferredProviderId
     : Object.hasOwn(connections, ZAI_PROVIDER_ID)
@@ -199,7 +199,7 @@ function normalizedState(value = null) {
   return {
     connections,
     preferredProviderId,
-    updatedAt: trimmedText(source.updatedAt),
+    updatedAt: toText(source.updatedAt),
     version: AI_CONNECTION_STORE_VERSION
   };
 }
@@ -209,8 +209,8 @@ function connectionModelAccess(connection = {}, id = "", options = {}) {
     activeZenCheck = false
   } = options;
   if (id === OPENCODE_ZEN_PROVIDER_ID) {
-    const mode = ZEN_MODEL_ACCESS_MODES.has(trimmedText(connection.zenModelAccessMode))
-      ? trimmedText(connection.zenModelAccessMode)
+    const mode = ZEN_MODEL_ACCESS_MODES.has(toText(connection.zenModelAccessMode))
+      ? toText(connection.zenModelAccessMode)
       : "recommended";
     const modelCheck = normalizedZenModelCheck(connection.zenModelCheck);
     const interrupted = modelCheck &&
@@ -250,20 +250,20 @@ function publicConnection(connection = {}, id = "", options = {}) {
     canonicalUrl: "",
     connected: Boolean(route),
     defaultModelId: route?.defaultModelId || "",
-    endpointCode: trimmedText(connection.endpointCode),
-    fingerprint: trimmedText(connection.fingerprint),
+    endpointCode: toText(connection.endpointCode),
+    fingerprint: toText(connection.fingerprint),
     id,
     keyHint: key.length > 4 ? `••••${key.slice(-4)}` : "••••",
-    label: trimmedText(connection.label) || id,
+    label: toText(connection.label) || id,
     managementUrl: route?.managementUrl || "",
     modelProviderId: id,
     modelAccess: modelAccess || null,
     ownerOnly: route?.ownerOnly !== false,
     preferred: connection.preferred === true,
     productLabel: route?.productLabel || "Unconfirmed provider route",
-    providerRevision: trimmedText(connection.providerRevision),
+    providerRevision: toText(connection.providerRevision),
     removable: true,
-    updatedAt: trimmedText(connection.updatedAt)
+    updatedAt: toText(connection.updatedAt)
   };
 }
 

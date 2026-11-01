@@ -5,10 +5,10 @@ import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState"
 import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { claudeConfigRoot } from "./claudeCodeProcess.js";
-import { isRecord } from "./isRecord.js";
 import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
 import { relativePathInside } from "@local/vibe64-core/server/core";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 const rejectedBeforeWrite = "Claude has no active turn for this message.";
 

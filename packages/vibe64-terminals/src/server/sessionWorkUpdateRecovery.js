@@ -12,7 +12,7 @@ import {
   saveError,
   scopedSessionWorkCommand
 } from "./sessionWorkGit.js";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 async function inspectSessionUpdateFailure({
   commandOptions = {},
@@ -44,7 +44,7 @@ async function recoverSessionWorkUpdate({
   const context = repositoryContext(session, project);
   runCommand = scopedSessionWorkCommand(runCommand, context, project, {
     label: "Recovering session update",
-    operationId: trimmedText(recovery.operationId) || crypto.randomUUID()
+    operationId: normalizeText(recovery.operationId) || crypto.randomUUID()
   });
   const required = [
     "canonicalCommit",
@@ -55,7 +55,7 @@ async function recoverSessionWorkUpdate({
     "oldHead",
     "oldIndexTree"
   ];
-  if (required.some((key) => !trimmedText(recovery[key]))) {
+  if (required.some((key) => !normalizeText(recovery[key]))) {
     throw saveError(
       "The interrupted session update stopped before mutation and can be retried.",
       "vibe64_session_update_interrupted_retryable",

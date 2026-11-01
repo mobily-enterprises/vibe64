@@ -8,10 +8,10 @@ import {
   defineVibe64AssistantCapabilities,
   resolveVibe64AssistantSelection
 } from "@local/vibe64-runtime/shared";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
 import { isPracticeProjectRuntime } from "../practiceAgentGuidance.js";
 import { assistantUser } from "./sessionAgentRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
@@ -72,7 +72,7 @@ function createSessionAgentRouting({
       engineId: provider.id,
       modelProviderId: assistantSelection.modelProviderId,
       session: options.session || null,
-      sessionId: normalizeText(options.session?.sessionId),
+      sessionId: toText(options.session?.sessionId),
       vibe64User: assistantUser(options)
     })).catch(() => ({ available: false, ownerOnly: true, connectionIdentity: "" })));
     return {
@@ -335,7 +335,7 @@ function createSessionAgentRouting({
   }
 
   async function listCapabilities(input = {}, options = {}) {
-    const requestedEngineId = normalizeText(input.engineId);
+    const requestedEngineId = toText(input.engineId);
     const providersToInspect = requestedEngineId
       ? [sessionBindings.providerFor({ engineId: requestedEngineId })]
       : [...state.providerById.values()];

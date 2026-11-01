@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import { normalizeText, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { writeJsonFile } from "./sessionFiles.js";
 import { clearVibe64CurrentSessionAliasIfMatches } from "./currentSessionAlias.js";
 import {
@@ -19,6 +19,7 @@ import {
   sessionArchiveStagingRoot
 } from "./sessionStoreLayout.js";
 import { enqueueSessionMutation } from "./sessionStoreLocks.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -113,8 +114,8 @@ function createSessionArchivePublishing({
           status: closingStatus
         });
         if (
-          normalizeText(closingMetadata.renewal_id) &&
-          normalizeText(closingMetadata.renewed_to)
+          toText(closingMetadata.renewal_id) &&
+          toText(closingMetadata.renewed_to)
         ) {
           throw vibe64Error(
             `Renewal predecessor must use the renewal archive transaction: ${activePaths.sessionId}`,
@@ -145,8 +146,8 @@ function createSessionArchivePublishing({
         );
       }
       if (
-        normalizeText(metadata.renewal_id) &&
-        normalizeText(metadata.renewed_to)
+        toText(metadata.renewal_id) &&
+        toText(metadata.renewed_to)
       ) {
         throw vibe64Error(
           `Renewal predecessor must use the renewal archive transaction: ${activePaths.sessionId}`,

@@ -4,7 +4,7 @@ import {
 } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { publicSession, sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -70,7 +70,7 @@ function createSessionWorkspaceSetup({
       });
       await publishSessionChanged(sessionId, {
         operation: "updated",
-        originId: text(originId),
+        originId: normalizeText(originId),
         reason: "workspace-setup-completed",
         session: await runtime.getSession(sessionId, {
           inspectSource: false
@@ -122,7 +122,7 @@ function createSessionWorkspaceSetup({
       const session = await runtime.getSession(sessionId, {
         inspectSource: false
       });
-      const status = text(session.workspaceSetup?.status);
+      const status = normalizeText(session.workspaceSetup?.status);
       if (!["ambiguous", "failed", "required", "unconfigured", "succeeded"].includes(status)) {
         const error = new Error(
           "Workspace preparation can only be started when it is required, newly configured, finished, or needs a recipe choice."
@@ -143,7 +143,7 @@ function createSessionWorkspaceSetup({
       });
       await publishSessionChanged(sessionId, {
         operation: "updated",
-        originId: text(input.originId),
+        originId: normalizeText(input.originId),
         reason: "workspace-setup-retried",
         session: currentSession
       });

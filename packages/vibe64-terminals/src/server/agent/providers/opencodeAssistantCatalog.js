@@ -5,8 +5,8 @@ import {
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_TRANSPORT_IDS
 } from "@local/vibe64-runtime/shared";
-import { normalizeText } from "@local/vibe64-core/server/core";
-import { record } from "../../record.js";
+import { toText } from "@local/vibe64-core/shared/toText";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 
 const OPENCODE_CAPABILITY_PAGE_LIMIT = 25;
 const OPENCODE_CAPABILITY_PAGE_LIMIT_MAXIMUM = 100;
@@ -27,7 +27,7 @@ function pageLimit(value) {
 }
 
 function decodedCursor(value = "", kind = "providers", modelProviderId = "") {
-  const cursor = normalizeText(value);
+  const cursor = toText(value);
   if (!cursor) {
     return 0;
   }
@@ -35,7 +35,7 @@ function decodedCursor(value = "", kind = "providers", modelProviderId = "") {
     const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
     if (
       decoded?.kind !== kind ||
-      normalizeText(decoded?.modelProviderId) !== normalizeText(modelProviderId) ||
+      toText(decoded?.modelProviderId) !== toText(modelProviderId) ||
       !Number.isSafeInteger(decoded?.offset) ||
       decoded.offset < 0
     ) {
@@ -53,7 +53,7 @@ function decodedCursor(value = "", kind = "providers", modelProviderId = "") {
 function encodedCursor(offset = 0, kind = "providers", modelProviderId = "") {
   return Buffer.from(JSON.stringify({
     kind,
-    modelProviderId: normalizeText(modelProviderId),
+    modelProviderId: toText(modelProviderId),
     offset
   })).toString("base64url");
 }
@@ -68,23 +68,23 @@ function normalizedConnections(value = null) {
           connected: true,
           defaultModelId: "",
           fingerprint: "",
-          id: normalizeText(connection),
-          label: normalizeText(connection),
+          id: toText(connection),
+          label: toText(connection),
           modelAccess: null,
           preferred: false,
           providerRevision: ""
         }
       : {
-          accessLabel: normalizeText(connection?.accessLabel),
-          billingLabel: normalizeText(connection?.billingLabel),
+          accessLabel: toText(connection?.accessLabel),
+          billingLabel: toText(connection?.billingLabel),
           connected: connection?.connected !== false,
-          defaultModelId: normalizeText(connection?.defaultModelId),
-          fingerprint: normalizeText(connection?.fingerprint),
-          id: normalizeText(connection?.modelProviderId || connection?.providerId || connection?.id),
-          label: normalizeText(connection?.productLabel || connection?.label),
-          modelAccess: record(connection?.modelAccess),
+          defaultModelId: toText(connection?.defaultModelId),
+          fingerprint: toText(connection?.fingerprint),
+          id: toText(connection?.modelProviderId || connection?.providerId || connection?.id),
+          label: toText(connection?.productLabel || connection?.label),
+          modelAccess: normalizeObject(connection?.modelAccess),
           preferred: connection?.preferred === true,
-          providerRevision: normalizeText(connection?.providerRevision)
+          providerRevision: toText(connection?.providerRevision)
         })
     .filter((connection) => connection.id);
 }
@@ -169,7 +169,7 @@ function openCodeConfiguredAssistantCapabilities({ connections = [] } = {}) {
 }
 
 function modelVariants(model = {}) {
-  return Object.keys(record(model.variants))
+  return Object.keys(normalizeObject(model.variants))
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right))
     .map((id) => ({
@@ -179,21 +179,21 @@ function modelVariants(model = {}) {
 }
 
 function normalizedModel(model = {}) {
-  const id = normalizeText(model.id);
-  const status = normalizeText(model.status);
+  const id = toText(model.id);
+  const status = toText(model.status);
   return {
     capabilities: {
       attachment: model.capabilities?.attachment === true,
       contextWindow: modelTokenLimit(model.limit?.context),
-      input: { ...record(model.capabilities?.input) },
+      input: { ...normalizeObject(model.capabilities?.input) },
       maxOutputTokens: modelTokenLimit(model.limit?.output),
-      output: { ...record(model.capabilities?.output) },
+      output: { ...normalizeObject(model.capabilities?.output) },
       reasoning: model.capabilities?.reasoning === true,
       toolcall: model.capabilities?.toolcall === true
     },
-    description: [normalizeText(model.family), normalizeText(model.release_date)].filter(Boolean).join(" · "),
+    description: [toText(model.family), toText(model.release_date)].filter(Boolean).join(" · "),
     id,
-    label: normalizeText(model.name) || id,
+    label: toText(model.name) || id,
     status: status === "deprecated" ? "unavailable" : "available",
     variants: modelVariants(model)
   };
@@ -205,18 +205,18 @@ function normalizedProvider(
   defaultModelId = "",
   currentModelIds = null
 ) {
-  const id = normalizeText(provider.id);
+  const id = toText(provider.id);
   const connection = connectionById.get(id);
-  const modelAccess = record(connection?.modelAccess);
-  const recommendedModelId = normalizeText(modelAccess.recommendedModelId);
-  const accessRestricted = ["recommended", "verified"].includes(normalizeText(modelAccess.mode));
+  const modelAccess = normalizeObject(connection?.modelAccess);
+  const recommendedModelId = toText(modelAccess.recommendedModelId);
+  const accessRestricted = ["recommended", "verified"].includes(toText(modelAccess.mode));
   const enabledModelIds = new Set((Array.isArray(modelAccess.enabledModelIds)
     ? modelAccess.enabledModelIds
-    : []).map(normalizeText).filter(Boolean));
+    : []).map(toText).filter(Boolean));
   if (recommendedModelId) {
     enabledModelIds.add(recommendedModelId);
   }
-  const upstreamModels = Object.values(record(provider.models))
+  const upstreamModels = Object.values(normalizeObject(provider.models))
     .map(normalizedModel)
     .filter((model) => model.id && !(id === OPENCODE_ZEN_PROVIDER_ID && model.id === RETIRED_ZEN_MODEL_ID))
     .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
@@ -234,13 +234,13 @@ function normalizedProvider(
     accessRestricted && !enabledModelIds.has(model.id) && model.status === "available"
       ? {
         ...model,
-        lockMessage: normalizeText(modelAccess.warning) || "This model needs additional provider access.",
+        lockMessage: toText(modelAccess.warning) || "This model needs additional provider access.",
         status: "locked"
       }
       : model
   ));
-  const upstreamDefaultModelId = normalizeText(defaultModelId);
-  const configuredDefaultModelId = normalizeText(connection?.defaultModelId);
+  const upstreamDefaultModelId = toText(defaultModelId);
+  const configuredDefaultModelId = toText(connection?.defaultModelId);
   const requestedDefaultModelId = accessRestricted
     ? recommendedModelId
     : configuredDefaultModelId || upstreamDefaultModelId;
@@ -277,7 +277,7 @@ function normalizedProvider(
     definitionRevision,
     description: "OpenCode provider",
     id,
-    label: normalizeText(provider.name) || id,
+    label: toText(provider.name) || id,
     modelAccess,
     models,
     preferred: connection?.preferred === true
@@ -285,18 +285,18 @@ function normalizedProvider(
 }
 
 function normalizedAgent(agent = {}) {
-  const mode = normalizeText(agent.mode);
+  const mode = toText(agent.mode);
   if (agent.hidden === true || !["all", "primary"].includes(mode)) {
     return null;
   }
   return {
-    description: normalizeText(agent.description),
-    id: normalizeText(agent.name),
-    label: normalizeText(agent.name).replaceAll("-", " ").replace(/^./u, (character) => character.toUpperCase()),
+    description: toText(agent.description),
+    id: toText(agent.name),
+    label: toText(agent.name).replaceAll("-", " ").replace(/^./u, (character) => character.toUpperCase()),
     mode,
-    modelId: normalizeText(agent.model?.modelID),
-    modelProviderId: normalizeText(agent.model?.providerID),
-    variantId: normalizeText(agent.variant)
+    modelId: toText(agent.model?.modelID),
+    modelProviderId: toText(agent.model?.providerID),
+    variantId: toText(agent.variant)
   };
 }
 
@@ -314,14 +314,14 @@ function openCodeAssistantCapabilities({
   const normalizedConnectionRows = normalizedConnections(connections);
   const connectionById = new Map(normalizedConnectionRows.map((connection) => [connection.id, connection]));
   const currentZenModelIds = Array.isArray(zenModelIds)
-    ? new Set(zenModelIds.map(normalizeText).filter(Boolean))
+    ? new Set(zenModelIds.map(toText).filter(Boolean))
     : null;
   const providers = (Array.isArray(providerResult?.all) ? providerResult.all : [])
     .map((provider) => normalizedProvider(
       provider,
       connectionById,
-      providerResult?.default?.[normalizeText(provider?.id)],
-      normalizeText(provider?.id) === "opencode" ? currentZenModelIds : null
+      providerResult?.default?.[toText(provider?.id)],
+      toText(provider?.id) === "opencode" ? currentZenModelIds : null
     ))
     .filter((provider) => provider.id)
     .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
@@ -329,15 +329,15 @@ function openCodeAssistantCapabilities({
     .map(normalizedAgent)
     .filter(Boolean)
     .sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
-  const requestedProviderId = normalizeText(input.modelProviderId);
-  const connectedOnly = normalizeText(input.connectedOnly).toLowerCase() === "true";
-  const search = normalizeText(input.search).toLocaleLowerCase();
+  const requestedProviderId = toText(input.modelProviderId);
+  const connectedOnly = toText(input.connectedOnly).toLowerCase() === "true";
+  const search = toText(input.search).toLocaleLowerCase();
   const kind = requestedProviderId ? "models" : "providers";
   const limit = pageLimit(input.limit);
   const offset = decodedCursor(input.cursor, kind, requestedProviderId);
   const defaultProvider = providers.find((provider) => provider.connected && provider.preferred) ||
     providers.find((provider) => provider.connected) || null;
-  const upstreamDefaultModelId = normalizeText(defaultProvider?.defaultModelId);
+  const upstreamDefaultModelId = toText(defaultProvider?.defaultModelId);
   const defaultModel = defaultProvider?.models.find((model) => (
     model.id === upstreamDefaultModelId && model.status === "available"
   )) || defaultProvider?.models.find((model) => model.status === "available") || null;
@@ -354,7 +354,7 @@ function openCodeAssistantCapabilities({
   let total;
   if (requestedProviderId) {
     const provider = selectableProviders.find((candidate) => candidate.id === requestedProviderId);
-    const requestedModelId = normalizeText(input.modelId);
+    const requestedModelId = toText(input.modelId);
     const filteredModels = (provider?.models || []).filter((model) => (
       (!requestedModelId || model.id === requestedModelId) &&
       searchable(`${model.label}\n${model.id}\n${model.description}`, search)
@@ -426,12 +426,12 @@ function openCodeAssistantCapabilities({
     label: "OpenCode",
     modelProviders: pageProviders,
     page: {
-      cursor: normalizeText(input.cursor),
+      cursor: toText(input.cursor),
       hasMore,
       kind,
       limit,
       nextCursor: hasMore ? encodedCursor(nextOffset, kind, requestedProviderId) : "",
-      search: normalizeText(input.search),
+      search: toText(input.search),
       total
     },
     revision,

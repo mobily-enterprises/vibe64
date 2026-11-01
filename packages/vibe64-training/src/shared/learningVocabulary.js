@@ -1,3 +1,5 @@
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+
 // The learning vocabulary: the real Vibe64 places a lesson or its teacher can
 // point at or open, the activities a lesson `do` beat can wait for, and the
 // names of the facts a `fact` check can read. Public Training owns its
@@ -141,11 +143,10 @@ function vocabularyFailure(message) {
   return Object.assign(new Error(message), { code: "VIBE64_TRAINING_VOCABULARY_INVALID" });
 }
 
-const plainObject = value => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const label = value => typeof value === "string" && value.trim().length > 0 && value.length <= 64;
 
 function definePlace(value) {
-  if (!plainObject(value) || !ID.test(value.id || "")) throw vocabularyFailure("A place needs a lowercase id.");
+  if (!isRecord(value) || !ID.test(value.id || "")) throw vocabularyFailure("A place needs a lowercase id.");
   const name = `Place ${value.id}`;
   if (!label(value.label)) throw vocabularyFailure(`${name} needs a label.`);
   if (!SCOPES.has(value.scope)) throw vocabularyFailure(`${name} scope is studio or project.`);
@@ -165,7 +166,7 @@ function definePlace(value) {
   }
   const shown = value.shown ?? (open?.pane ? [{ pane: open.pane, ...(open.databaseView ? { databaseView: open.databaseView } : {}) }]
     : open?.route ? [{ route: open.route }] : []);
-  if (!Array.isArray(shown) || shown.some(item => !plainObject(item) || !Object.keys(item).length)) {
+  if (!Array.isArray(shown) || shown.some(item => !isRecord(item) || !Object.keys(item).length)) {
     throw vocabularyFailure(`${name} shown is a list of page focus matchers.`);
   }
   if (value.event !== undefined && !ID.test(value.event)) throw vocabularyFailure(`${name} event is a lowercase activity name.`);
@@ -182,7 +183,7 @@ function definePlace(value) {
 }
 
 function defineActivity(value) {
-  if (!plainObject(value) || !ID.test(value.id || "")) throw vocabularyFailure("An activity needs a lowercase id.");
+  if (!isRecord(value) || !ID.test(value.id || "")) throw vocabularyFailure("An activity needs a lowercase id.");
   if (!ID.test(value.event || "")) throw vocabularyFailure(`Activity ${value.id} needs its page activity event.`);
   if (value.place !== undefined && !ID.test(value.place)) throw vocabularyFailure(`Activity ${value.id} place is a place id.`);
   return Object.freeze({

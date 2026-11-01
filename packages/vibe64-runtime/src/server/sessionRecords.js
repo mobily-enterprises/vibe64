@@ -5,7 +5,7 @@ import {
   finishConversationOperation as finishSessionOperation,
   conversationAgentRunEvent
 } from "@jskit-ai/assistant-core/server/conversation";
-import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { writeJsonFile, writeTextFile } from "./sessionFiles.js";
 import { sessionLockPath } from "./sessionLocks.js";
@@ -40,6 +40,7 @@ import {
   revisionNumber,
   withRevisionMarker
 } from "./sessionStoreLayout.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -247,14 +248,14 @@ function createSessionRecords({
   async function writeMetadataValue(sessionId, name, value) {
     assertMutableMetadataName(name);
     return mutateSession(sessionId, async (sessionPaths) => {
-      await writeTextFile(metadataFilePath(sessionPaths, name), `${normalizeText(value)}\n`);
+      await writeTextFile(metadataFilePath(sessionPaths, name), `${toText(value)}\n`);
     });
   }
 
   async function writeMetadataValueForRenewal(sessionId, name, value) {
     assertMutableMetadataName(name);
     return mutateSessionForRenewal(sessionId, async (sessionPaths) => {
-      await writeTextFile(metadataFilePath(sessionPaths, name), `${normalizeText(value)}\n`);
+      await writeTextFile(metadataFilePath(sessionPaths, name), `${toText(value)}\n`);
     });
   }
 
@@ -267,7 +268,7 @@ function createSessionRecords({
       }
       const labelPath = metadataFilePath(sessionPaths, SESSION_LABEL_METADATA);
       if (onlyIfUnnamed) {
-        const current = normalizeText(await readTextIfExists(labelPath));
+        const current = toText(await readTextIfExists(labelPath));
         if (current) return current;
       }
       await writeTextFile(labelPath, `${sessionName}\n`);
@@ -277,7 +278,7 @@ function createSessionRecords({
 
   async function readMetadataValue(sessionId, name) {
     return archiveAccess.withReadableSessionPaths(sessionId, async (sessionPaths) => {
-      return normalizeText(await readTextIfExists(metadataFilePath(sessionPaths, name)));
+      return toText(await readTextIfExists(metadataFilePath(sessionPaths, name)));
     });
   }
 
@@ -412,14 +413,14 @@ function createSessionRecords({
             events: [],
             id: normalizedTaskId
           };
-      const eventAt = normalizeText(event.at || patch.updatedAt) || state.now().toISOString();
+      const eventAt = toText(event.at || patch.updatedAt) || state.now().toISOString();
       const status = normalizeBackgroundTaskStatus(patch.status || event.status || previous.status);
-      const previousStatus = normalizeText(previous.status);
+      const previousStatus = toText(previous.status);
       const eventRecord = {
         ...event,
         at: eventAt,
-        kind: normalizeText(event.kind || status || "updated"),
-        message: normalizeText(event.message || patch.message),
+        kind: toText(event.kind || status || "updated"),
+        message: toText(event.message || patch.message),
         status
       };
       if (typeof shouldWrite === "function" && !shouldWrite({
@@ -439,19 +440,19 @@ function createSessionRecords({
         ].slice(-BACKGROUND_TASK_EVENT_LIMIT),
         finishedAt: status === BACKGROUND_TASK_STATUS.RUNNING
           ? ""
-          : normalizeText(patch.finishedAt || previous.finishedAt) || eventAt,
+          : toText(patch.finishedAt || previous.finishedAt) || eventAt,
         id: normalizedTaskId,
         kind: Object.hasOwn(patch, "kind")
-          ? normalizeText(patch.kind)
-          : normalizeText(eventRecord.kind || previous.kind),
+          ? toText(patch.kind)
+          : toText(eventRecord.kind || previous.kind),
         message: Object.hasOwn(patch, "message")
-          ? normalizeText(patch.message)
+          ? toText(patch.message)
           : Object.hasOwn(event, "message")
-            ? normalizeText(event.message)
-            : normalizeText(previous.message),
+            ? toText(event.message)
+            : toText(previous.message),
         startedAt: status === BACKGROUND_TASK_STATUS.RUNNING && previousStatus !== BACKGROUND_TASK_STATUS.RUNNING
           ? eventAt
-          : normalizeText(patch.startedAt || previous.startedAt) || eventAt,
+          : toText(patch.startedAt || previous.startedAt) || eventAt,
         status,
         updatedAt: eventAt
       };

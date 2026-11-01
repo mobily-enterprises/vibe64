@@ -34,6 +34,7 @@ import {
   previewApplicationIdentitiesReadInputValidator
 } from "./inputSchemas.js";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
+import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("./types.js").ProjectService} ProjectService */
@@ -76,12 +77,8 @@ function projectChangedEvent({ operation = "updated" } = {}) {
   });
 }
 
-function record(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
 function projectRecord(value = {}) {
-  const result = record(value);
+  const result = normalizeObject(value);
   if (result.currentProject && typeof result.currentProject === "object" && !Array.isArray(result.currentProject)) {
     return result.currentProject;
   }
@@ -92,7 +89,7 @@ function projectRecord(value = {}) {
 }
 
 function projectSlug(value = {}) {
-  const source = record(value);
+  const source = normalizeObject(value);
   const project = projectRecord(source);
   return String(
     source.projectSlug || source.slug || source.name || project.slug || project.name || currentProjectRequestContext()?.slug || ""
@@ -100,7 +97,7 @@ function projectSlug(value = {}) {
 }
 
 function projectRealtimePayload(value = {}) {
-  const source = record(value);
+  const source = normalizeObject(value);
   const slug = projectSlug(source);
   return {
     ...(slug ? { projectSlug: slug } : {}),

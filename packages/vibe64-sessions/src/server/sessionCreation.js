@@ -12,8 +12,8 @@ import { serializeVibe64AssistantSelection, VIBE64_ASSISTANT_SELECTION_METADATA 
 import { ASSISTANT_ROUTING_METADATA } from "@local/vibe64-runtime/shared/assistantRouting";
 import { sessionsOccupyingPolicySlots } from "./sessionPolicySlots.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -29,7 +29,7 @@ function sessionRuntimeOptions(terminals) {
 
 function sessionCreationLimitError(policy) {
   const error = new Error(
-    text(policy?.creation?.disabledReason) || "No more sessions can be created for this project."
+    normalizeText(policy?.creation?.disabledReason) || "No more sessions can be created for this project."
   );
   error.code = "vibe64_session_creation_limit";
   error.details = {
@@ -133,7 +133,7 @@ function createSessionCreation({
           [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(
             assistantSelection
           ),
-          created_by: text(vibe64User?.username || vibe64User?.name)
+          created_by: normalizeText(vibe64User?.username || vibe64User?.name)
         },
         ...(!runtime.learningScope?.noExercise ? {
           sourceContext: {
@@ -211,7 +211,7 @@ function createSessionCreation({
       try {
         await publishSessionChanged(created.session.sessionId, {
           operation: "created",
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: "session-created",
           session: currentSession
         });

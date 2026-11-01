@@ -3,9 +3,9 @@ import http from "node:http";
 import { mkdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64ErrorResponse, vibe64StatusCode } from "@local/vibe64-core/server/serverResponses";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
@@ -270,10 +270,10 @@ function createSessionCommandServers({
         return;
       }
       const input = await readJsonCommandRequest(request, { invalidJsonError, maxBytes, tooLargeError });
-      const tokenMatches = normalizeText(input.token) === entry[route.token || "token"];
-      const sessionMatches = normalizeText(input.sessionId) === entry.sessionId;
-      if (!tokenMatches || !sessionMatches || normalizeText(input.generationId) !== entry.generationId) {
-        if (tokenMatches && sessionMatches) reportUnixCommandControlChange(entry, "rejected", normalizeText(input.generationId));
+      const tokenMatches = toText(input.token) === entry[route.token || "token"];
+      const sessionMatches = toText(input.sessionId) === entry.sessionId;
+      if (!tokenMatches || !sessionMatches || toText(input.generationId) !== entry.generationId) {
+        if (tokenMatches && sessionMatches) reportUnixCommandControlChange(entry, "rejected", toText(input.generationId));
         sendJsonCommandResponse(response, rejection.statusCode, rejection.payload);
         return;
       }
@@ -345,7 +345,7 @@ function createSessionCommandServers({
    * @param {string} [request.socketPath]
    */
   async function ensure({ commandService, sessionId = "", socketPath = "" }) {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     for (let pending = preparations.get(socketPath); pending; pending = preparations.get(socketPath)) {
       await pending.catch(() => null);
     }
@@ -368,7 +368,7 @@ function createSessionCommandServers({
 
   async function closeForSession(sessionId = "") {
     await Promise.all([...preparations.values()].map((preparation) => preparation.catch(() => null)));
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     let closed = 0;
     for (const [socketPath, entry] of [...servers.entries()]) {
       if (entry.sessionId === normalizedSessionId) closed += await close(socketPath);

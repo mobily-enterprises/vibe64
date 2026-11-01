@@ -4,8 +4,8 @@ import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile
 import os from "node:os";
 import path from "node:path";
 import { isPlainObject } from "./isPlainObject.js";
+import { sha256Hex } from "./sha256Hex.js";
 
-const digest = (value) => createHash("sha256").update(value).digest("hex");
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
 export async function readUpgradeFile(filePath) {
@@ -86,7 +86,7 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
         update.relative = relativeFile(update.filePath);
         await verifyUpgradeParents(systemRoot, update.filePath);
         update.before = await fileDigest(update.filePath);
-        if (Object.hasOwn(update, "original") && update.before !== (update.original === null ? null : digest(update.original))) {
+        if (Object.hasOwn(update, "original") && update.before !== (update.original === null ? null : sha256Hex(update.original))) {
           throw new Error(`Application state changed during preparation: ${update.relative}. Stop all writers before retrying.`);
         }
         const beforePath = path.join(backupRoot, "before", update.relative);

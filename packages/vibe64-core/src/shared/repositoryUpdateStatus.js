@@ -1,4 +1,4 @@
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const REPOSITORY_UPDATE_RELATIONSHIPS = new Set([
   "ahead",
@@ -13,11 +13,11 @@ function nonnegativeInteger(value) {
 }
 
 function boundedText(value, maximum) {
-  return trimmedText(value).slice(0, maximum);
+  return normalizeText(value).slice(0, maximum);
 }
 
 function normalizeIncomingVersion(value = {}) {
-  const commit = trimmedText(value.commit);
+  const commit = normalizeText(value.commit);
   if (!/^[a-f0-9]{40,64}$/u.test(commit)) {
     return null;
   }
@@ -62,13 +62,13 @@ function normalizeRepositoryUpdateCheck(value = {}, checkedAt = new Date().toISO
   return {
     ahead,
     behind,
-    canonicalCommit: trimmedText(value.canonicalCommit),
-    checkedAt: trimmedText(checkedAt),
+    canonicalCommit: normalizeText(value.canonicalCommit),
+    checkedAt: normalizeText(checkedAt),
     incomingVersions,
     incomingVersionsTruncated:
       value.incomingVersionsTruncated === true || behind > incomingVersions.length,
     relationship,
-    sessionHead: trimmedText(value.sessionHead),
+    sessionHead: normalizeText(value.sessionHead),
     ...(value.historyReview ? { historyReview: value.historyReview } : {}),
     updateAvailable: Boolean(value.historyReview) || behind > 0,
     updateStrategy: repositoryUpdateStrategy(relationship)

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // One lifecycle for short tool-less assistant helpers (session naming, Save
 // commit subjects, prompt hints). Each feature supplies only its prompt and the
@@ -41,7 +41,7 @@ async function cleanupAssistantHelper(options = {}) {
 async function closeAssistantHelper({ agent, fail, prefix, record, stateRoot, vibe64User = null } = {}) {
   const helper = await record.read();
   if (!helper) return;
-  const id = trimmedText(helper.scope?.id);
+  const id = normalizeText(helper.scope?.id);
   const root = helperRoot(stateRoot, id);
   if (
     !new RegExp(`^${prefix}_[a-f0-9-]+$`, "u").test(id) ||
@@ -116,10 +116,10 @@ async function runAssistantHelperTurn({
     ...(signal ? { signal } : {}),
     async onEvent(event = {}) {
       if (event.type === "thread" || event.type === "turn") {
-        if (trimmedText(event.threadId)) helper.conversationId = trimmedText(event.threadId);
-        if (event.type === "turn") helper.runId = trimmedText(event.turnId);
+        if (normalizeText(event.threadId)) helper.conversationId = normalizeText(event.threadId);
+        if (event.type === "turn") helper.runId = normalizeText(event.turnId);
       } else if (event.type === "helper-execution") {
-        helper.executionId = trimmedText(event.executionId);
+        helper.executionId = normalizeText(event.executionId);
       } else {
         return;
       }

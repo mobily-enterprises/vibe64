@@ -1,6 +1,6 @@
 import { copyFile, cp, mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import { normalizeText, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { assertRenewalId } from "./sessionRenewalIds.js";
 import { writeJsonFile, writeTextFile } from "./sessionFiles.js";
 import { readVibe64CurrentSessionAlias } from "./currentSessionAlias.js";
@@ -25,6 +25,7 @@ import {
   sessionArchivePath,
   sessionArchiveRecordExists
 } from "./sessionStoreLayout.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -66,15 +67,15 @@ function createSessionRenewalArchives({
     const normalizedSessionId = assertValidVibe64SessionId(sessionId);
     const normalizedSuccessorSessionId = assertValidVibe64SessionId(successorSessionId);
     if (
-      normalizeText(metadata.renewal_id) !== normalizedRenewalId ||
-      normalizeText(metadata.renewed_to) !== normalizedSuccessorSessionId
+      toText(metadata.renewal_id) !== normalizedRenewalId ||
+      toText(metadata.renewed_to) !== normalizedSuccessorSessionId
     ) {
       throw vibe64Error(
         `Renewal predecessor does not belong to renewal ${normalizedRenewalId}: ${normalizedSessionId}`,
         "vibe64_session_renewal_link_mismatch"
       );
     }
-    const selectedBeforeArchive = normalizeText(metadata[RENEWAL_ARCHIVE_SELECTION_METADATA]);
+    const selectedBeforeArchive = toText(metadata[RENEWAL_ARCHIVE_SELECTION_METADATA]);
     if (
       (selectionMarkerRequired || selectedBeforeArchive) &&
       ![normalizedSessionId, RENEWAL_ARCHIVE_SELECTION_NONE].includes(selectedBeforeArchive)
@@ -109,8 +110,8 @@ function createSessionRenewalArchives({
       );
     }
     if (
-      normalizeText(archiveRecord.index?.metadata?.renewal_id) !== assertRenewalId(renewalId) ||
-      normalizeText(archiveRecord.index?.metadata?.renewed_to) !== assertValidVibe64SessionId(successorSessionId)
+      toText(archiveRecord.index?.metadata?.renewal_id) !== assertRenewalId(renewalId) ||
+      toText(archiveRecord.index?.metadata?.renewed_to) !== assertValidVibe64SessionId(successorSessionId)
     ) {
       throw vibe64Error(
         `Published predecessor archive belongs to another renewal: ${normalizedSessionId}`,
@@ -137,8 +138,8 @@ function createSessionRenewalArchives({
     }
     await archiveRecords.validateSessionArchive(archiveRecord.archivePath);
     if (
-      normalizeText(archiveRecord.index?.metadata?.renewal_id) !== normalizedRenewalId ||
-      normalizeText(archiveRecord.index?.metadata?.renewed_to) !== normalizedSuccessorSessionId
+      toText(archiveRecord.index?.metadata?.renewal_id) !== normalizedRenewalId ||
+      toText(archiveRecord.index?.metadata?.renewed_to) !== normalizedSuccessorSessionId
     ) {
       throw vibe64Error(
         `Prepared predecessor archive belongs to another renewal: ${normalizedSourceSessionId}`,
@@ -185,10 +186,10 @@ function createSessionRenewalArchives({
     ]);
     if (
       sourceStatus !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
-      normalizeText(sourceMetadata.renewal_quiesced_id) !== normalizedRenewalId ||
+      toText(sourceMetadata.renewal_quiesced_id) !== normalizedRenewalId ||
       successorStatus !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
-      normalizeText(successorMetadata.renewal_id) !== normalizedRenewalId ||
-      normalizeText(successorMetadata.renewed_from) !== normalizedSourceSessionId
+      toText(successorMetadata.renewal_id) !== normalizedRenewalId ||
+      toText(successorMetadata.renewed_from) !== normalizedSourceSessionId
     ) {
       throw vibe64Error(
         `Renewal archive cannot be prepared from ${sourceStatus} -> ${successorStatus}.`,
@@ -356,7 +357,7 @@ function createSessionRenewalArchives({
         ]);
         if (
           status !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
-          normalizeText(metadata.renewal_quiesced_id) !== normalizedRenewalId
+          toText(metadata.renewal_quiesced_id) !== normalizedRenewalId
         ) {
           throw vibe64Error(
             `Renewal predecessor cannot be restored from status ${status}: ${normalizedSourceSessionId}`,
@@ -451,7 +452,7 @@ function createSessionRenewalArchives({
           ]);
           if (
             status !== VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
-            normalizeText(metadata.renewal_quiesced_id) !== normalizedRenewalId
+            toText(metadata.renewal_quiesced_id) !== normalizedRenewalId
           ) {
             throw vibe64Error(
               `Renewal predecessor cannot be committed from status ${status}: ${normalizedSourceSessionId}`,
@@ -474,7 +475,7 @@ function createSessionRenewalArchives({
         ]);
         if (closingStatus === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) {
           if (
-            normalizeText(closingMetadata.renewal_quiesced_id) !==
+            toText(closingMetadata.renewal_quiesced_id) !==
               normalizedRenewalId
           ) {
             throw vibe64Error(
@@ -486,7 +487,7 @@ function createSessionRenewalArchives({
             await rm(metadataFilePath(closingPaths, name), { force: true });
           }
           for (const [name, value] of Object.entries(renewalArchiveMetadata(preparedSession.metadata, {
-            archivedAt: normalizeText(preparedSession.metadata.renewal_archived_at),
+            archivedAt: toText(preparedSession.metadata.renewal_archived_at),
             renewalId: normalizedRenewalId,
             selectedBeforeArchive: ownership.selectedBeforeArchive,
             successorSessionId: normalizedSuccessorSessionId

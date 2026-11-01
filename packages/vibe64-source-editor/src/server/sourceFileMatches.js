@@ -1,8 +1,8 @@
 import path from "node:path";
 
-import { normalizeText } from "@local/vibe64-core/server/core";
 
 import { sourceEditorLanguageForPath } from "./sourceEditorLanguage.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // How a session's file names match a query: tokens, fuzzy scores, ordering
 // and the ranked page of matches.
@@ -11,7 +11,7 @@ const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
 const SOURCE_EDITOR_QUERY_MAX_LENGTH = 240;
 
 function normalizeSourceEditorQuery(value = "") {
-  return normalizeText(value).slice(0, SOURCE_EDITOR_QUERY_MAX_LENGTH);
+  return toText(value).slice(0, SOURCE_EDITOR_QUERY_MAX_LENGTH);
 }
 
 function sourceEditorFileQueryTokens(value = "") {

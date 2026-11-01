@@ -1,4 +1,4 @@
-import { normalizeAgentText } from "./normalizeAgentText.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const VIBE64_ASSISTANT_ACCESS_ERROR_CODES = Object.freeze({
   RESTRICTED: "vibe64_assistant_owner_required",
@@ -11,13 +11,13 @@ function defineVibe64AssistantAccess(value = {}) {
     : {};
   const ownerOnly = source.ownerOnly === true;
   return Object.freeze({
-    accessLabel: normalizeAgentText(source.accessLabel) || (ownerOnly ? "Personal use" : "Workspace use"),
+    accessLabel: toText(source.accessLabel) || (ownerOnly ? "Personal use" : "Workspace use"),
     available: source.available !== false,
-    connectionIdentity: normalizeAgentText(source.connectionIdentity),
-    endpointCode: normalizeAgentText(source.endpointCode),
+    connectionIdentity: toText(source.connectionIdentity),
+    endpointCode: toText(source.endpointCode),
     // The account the selection needs, named as AI Accounts names it, when the
     // reader knows that this account is what is not connected.
-    missingAccountLabel: normalizeAgentText(source.missingAccountLabel),
+    missingAccountLabel: toText(source.missingAccountLabel),
     ownerOnly
   });
 }

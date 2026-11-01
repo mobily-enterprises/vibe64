@@ -3,19 +3,19 @@
 // controls that lead out of it. The editor, the session's assistant and
 // Colleague read it here, so each explains the same reason.
 
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SAVE_UPDATE_REQUIRED_CODE = "vibe64_session_save_update_required";
 const SESSION_WORK_PROBLEM_LABEL = "Repository needs help";
 
 function failed(record) {
-  return Boolean(record && typeof record === "object" && trimmedText(record.status).toLowerCase() === "failed");
+  return Boolean(record && typeof record === "object" && normalizeText(record.status).toLowerCase() === "failed");
 }
 
 function nextStep(operation, record) {
   const notice = operation === "update" ? "Update notice" : "Save notice";
-  const code = trimmedText(record.code);
-  if (code === "vibe64_session_update_conflict" && trimmedText(record.conflictRecovery?.reviewId)) {
+  const code = normalizeText(record.code);
+  if (code === "vibe64_session_update_conflict" && normalizeText(record.conflictRecovery?.reviewId)) {
     return `Resolve the listed files yourself, in Main chat or with Fix it with AI, then choose Review resolved conflicts on the ${notice}.`;
   }
   if (code === "vibe64_session_save_history_diverged" || code === "vibe64_session_update_history_diverged") {
@@ -33,20 +33,20 @@ function nextStep(operation, record) {
  * later failure is the one shown.
  */
 function sessionWorkProblem({ operation = null, updateOperation = null } = {}) {
-  const save = failed(operation) && trimmedText(operation.code) !== SAVE_UPDATE_REQUIRED_CODE ? operation : null;
+  const save = failed(operation) && normalizeText(operation.code) !== SAVE_UPDATE_REQUIRED_CODE ? operation : null;
   const update = failed(updateOperation) ? updateOperation : null;
   const record = save && update
-    ? (trimmedText(update.updatedAt) > trimmedText(save.updatedAt) ? update : save)
+    ? (normalizeText(update.updatedAt) > normalizeText(save.updatedAt) ? update : save)
     : save || update;
   if (!record) {
     return null;
   }
   const kind = record === update ? "update" : "save";
   return {
-    code: trimmedText(record.code),
-    failedAt: trimmedText(record.finishedAt || record.updatedAt),
+    code: normalizeText(record.code),
+    failedAt: normalizeText(record.finishedAt || record.updatedAt),
     label: SESSION_WORK_PROBLEM_LABEL,
-    message: trimmedText(record.error || record.message) ||
+    message: normalizeText(record.error || record.message) ||
       `${kind === "update" ? "Update" : "Save"} failed without a recorded reason.`,
     nextStep: nextStep(kind, record),
     operation: kind,

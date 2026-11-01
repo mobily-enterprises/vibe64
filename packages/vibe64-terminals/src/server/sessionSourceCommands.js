@@ -1,6 +1,6 @@
 // Runs the Git and GitHub commands that create a session's source, with the project's GitHub credentials.
 
-import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   gitFailureError,
@@ -9,6 +9,7 @@ import {
   normalizeGithubAccountMode,
   runVibe64Command
 } from "@local/vibe64-execution/server";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 function sourceError(message = "", code = "vibe64_session_source_failed") {
   return vibe64Error(message || "Vibe64 could not create the session source.", code);
@@ -47,11 +48,11 @@ async function runSourceCommand(command = "", args = [], options = {}) {
     const gitFailure = command === "git" ? gitFailureError(result) : null;
     if (gitFailure) throw gitFailure;
     throw sourceError(
-      normalizeText(result?.stderr || result?.output || result?.error) || "A source command failed while creating the session source.",
-      normalizeText(result?.code) || "vibe64_session_source_git_failed"
+      toText(result?.stderr || result?.output || result?.error) || "A source command failed while creating the session source.",
+      toText(result?.code) || "vibe64_session_source_git_failed"
     );
   }
-  return normalizeText(result.stdout || result.output);
+  return toText(result.stdout || result.output);
 }
 
 function runGit(cwd = "", args = [], allowedRoots = [], options = {}) {
@@ -111,10 +112,10 @@ async function githubSourceCommandOptions(vibe64User = null, env = process.env, 
     timeout: 60_000,
     userKey: context.username
   });
-  const token = tokenResult?.ok === true ? normalizeText(tokenResult.stdout) : "";
+  const token = tokenResult?.ok === true ? toText(tokenResult.stdout) : "";
   if (!token) {
     throw sourceError(
-      normalizeText(tokenResult?.stderr || tokenResult?.error) ||
+      toText(tokenResult?.stderr || tokenResult?.error) ||
         "GitHub authentication is not ready for this Vibe64 account.",
       "vibe64_session_source_github_credentials_required"
     );

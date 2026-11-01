@@ -1,6 +1,5 @@
 import path from "node:path";
 
-import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   ENV_USER_VALUE_SOURCE
 } from "@local/vibe64-core/server/envUserValues";
@@ -45,6 +44,7 @@ import {
   unavailableProductionStatus,
   validateParsedCommand
 } from "./agentEnvCommandText.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -119,7 +119,7 @@ function createAgentEnvCommandService({
       ok: true,
       projectContextRoot: binding.projectContextRoot,
       projectSlug: binding.projectSlug,
-      sessionId: normalizeText(sessionId)
+      sessionId: toText(sessionId)
     };
   }
 
@@ -127,7 +127,7 @@ function createAgentEnvCommandService({
   // delegates are the complete boundary to the services that own each scope.
   const developmentEnvironment = Object.freeze({
     isUserValueRecord(record = null) {
-      return normalizeText(record?.source) === ENV_USER_VALUE_SOURCE;
+      return toText(record?.source) === ENV_USER_VALUE_SOURCE;
     },
     async readRecords({ sessionId = "" } = {}) {
       const result = assertOperationResult(await projectService.readEnv({
@@ -308,7 +308,7 @@ function createAgentEnvCommandService({
   function savedValueRequest(binding = {}, sessionId = "") {
     return {
       actor: binding.actor || null,
-      projectSlug: normalizeText(binding.projectSlug),
+      projectSlug: toText(binding.projectSlug),
       sessionId
     };
   }
@@ -320,15 +320,15 @@ function createAgentEnvCommandService({
       "Saved values could not be read."
     ) : null;
     const entries = (Array.isArray(result?.entries) ? result.entries : []).map((entry) => ({
-      description: normalizeText(entry?.description),
-      environments: Array.isArray(entry?.environments) ? entry.environments.map(normalizeText).filter(Boolean) : [],
+      description: toText(entry?.description),
+      environments: Array.isArray(entry?.environments) ? entry.environments.map(toText).filter(Boolean) : [],
       fields: (Array.isArray(entry?.fields) ? entry.fields : []).map((field) => ({
-        id: normalizeText(field?.id),
-        label: normalizeText(field?.label),
+        id: toText(field?.id),
+        label: toText(field?.label),
         secret: field?.secret === true
       })).filter((field) => field.id),
-      id: normalizeText(entry?.id),
-      label: normalizeText(entry?.label)
+      id: toText(entry?.id),
+      label: toText(entry?.label)
     })).filter((entry) => entry.id);
     const payload = { entries, ok: true, ...(offered ? { provider: savedEnvValueLinks.label } : {}) };
     const lines = !offered
@@ -371,26 +371,26 @@ function createAgentEnvCommandService({
   }
 
   async function execute(parsed = {}, input = {}, binding = {}) {
-    const projectSlug = normalizeText(binding.projectSlug);
+    const projectSlug = toText(binding.projectSlug);
     if (parsed.command === "status") {
-      return statusResult(parsed, normalizeText(input.sessionId), projectSlug);
+      return statusResult(parsed, toText(input.sessionId), projectSlug);
     }
     if (parsed.command === "saved") {
-      return savedResult(parsed, normalizeText(input.sessionId), binding);
+      return savedResult(parsed, toText(input.sessionId), binding);
     }
     if (parsed.command === "link" || parsed.command === "unlink") {
-      return linkResult(parsed, normalizeText(input.sessionId), binding);
+      return linkResult(parsed, toText(input.sessionId), binding);
     }
     if (parsed.command === "set") {
-      return setResult(parsed, normalizeText(input.sessionId), String(input.stdin ?? ""), projectSlug);
+      return setResult(parsed, toText(input.sessionId), String(input.stdin ?? ""), projectSlug);
     }
-    return removeResult(parsed, normalizeText(input.sessionId), projectSlug);
+    return removeResult(parsed, toText(input.sessionId), projectSlug);
   }
 
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const parsed = parseCommandArgs(input.args);
-    const sessionId = normalizeText(input.sessionId);
+    const sessionId = toText(input.sessionId);
     let result;
     try {
       const validation = validateParsedCommand(parsed);
@@ -410,7 +410,7 @@ function createAgentEnvCommandService({
       };
     }
     logOperationalEvent(logger, result?.ok === false ? "warn" : "info", {
-      code: normalizeText(result?.code),
+      code: toText(result?.code),
       command: parsed.command,
       component: "vibe64.agent_env_command",
       durationMs: Date.now() - startedAtMs,
@@ -425,7 +425,7 @@ function createAgentEnvCommandService({
   }
 
   async function closeAllForSession(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     const bound = Boolean(projectBinding.forget(normalizedSessionId));
     const closed = await commandServers.closeForSession(normalizedSessionId);
     return {
@@ -453,8 +453,8 @@ async function prepareAgentEnvCommand({
   sessionId = "",
   wrapperHostDir = ""
 }) {
-  const normalizedSessionId = normalizeText(sessionId);
-  const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
+  const normalizedSessionId = toText(sessionId);
+  const normalizedWrapperHostDir = toText(wrapperHostDir);
   if (!normalizedSessionId || !normalizedWrapperHostDir) {
     return {
       env: {},

@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences } from "@local/vibe64-runtime/shared/assistantRouting";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
@@ -27,6 +26,7 @@ import {
   timestamp
 } from "./sessionRenewalRules.js";
 import { assertSuccessorSource, ensureSuccessorDiscarding } from "./sessionRenewalSuccessor.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").RenewalAdmission} RenewalAdmission */
 /** @typedef {ReturnType<typeof import("./sessionRenewalCompletion.js").createRenewalCompletion>} RenewalCompletion */
@@ -65,7 +65,7 @@ const SESSION_RENEWAL_SUCCESSOR_REPLACEMENT_LIMIT_CODE =
   "vibe64_session_renewal_successor_replacement_limit_reached";
 
 function successorSessionId(renewalId = "", attempt = 1) {
-  const suffix = normalizeText(renewalId)
+  const suffix = toText(renewalId)
     .replace(/[^A-Za-z0-9]/gu, "")
     .slice(0, 48);
   const normalizedAttempt = Math.max(1, Number(attempt) || 1);
@@ -79,8 +79,8 @@ function requireProviderSuccess(result = null, fallbackMessage = "The assistant 
     return result || {};
   }
   throw renewalError(
-    normalizeText(result.error) || fallbackMessage,
-    normalizeText(result.code) || "vibe64_session_renewal_provider_failed",
+    toText(result.error) || fallbackMessage,
+    toText(result.code) || "vibe64_session_renewal_provider_failed",
     {
       details: result.details || null,
       retryable: result.retryable !== false,
@@ -191,7 +191,7 @@ function createRenewalWorkflow({
         vibe64User: input.vibe64User
       }), "The old assistant could not prepare a session handover.");
       admission.assertWorkflowAdmissionOpen();
-      const handover = normalizeText(result?.handover || result?.output || result?.finalOutput);
+      const handover = toText(result?.handover || result?.output || result?.finalOutput);
       const reviewConversation = await captureReviewConversation(runtime, sessionId);
       admission.assertWorkflowAdmissionOpen();
       state = await mutateSessionRenewalState(runtime, sessionId, (current) => {
@@ -211,8 +211,8 @@ function createRenewalWorkflow({
           error: null,
           generation: {
             ...current.generation,
-            threadId: normalizeText(result?.threadId),
-            turnId: normalizeText(result?.turnId)
+            threadId: toText(result?.threadId),
+            turnId: toText(result?.turnId)
           },
           stage: SESSION_RENEWAL_STAGE.DRAFT_READY,
           status: SESSION_RENEWAL_STATUS.REVIEW
@@ -242,7 +242,7 @@ function createRenewalWorkflow({
             },
             draft: manualDraftRecord,
             error: {
-              code: normalizeText(error?.code) || SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
+              code: toText(error?.code) || SESSION_RENEWAL_THREAD_UNREADABLE_CODE,
               message: recoveredDraft
                 ? "The generated handover needs correction. Review and edit it before continuing."
                 : "The old assistant could not provide a usable handover. Complete the editable handover template, then review it before continuing.",
@@ -332,8 +332,8 @@ function createRenewalWorkflow({
                 ...latest.successor,
                 handoverDeliveredAt: timestamp(),
                 handoverError: renewalFailure(error),
-                threadId: normalizeText(error?.details?.threadId),
-                turnId: normalizeText(error?.details?.turnId)
+                threadId: toText(error?.details?.threadId),
+                turnId: toText(error?.details?.turnId)
               }
             })
           );
@@ -408,7 +408,7 @@ function createRenewalWorkflow({
       return advanceConfirmedRenewal(runtime, state, input);
     }
     if (state.stage === SESSION_RENEWAL_STAGE.OLD_QUIESCING) {
-      const sourceStatus = normalizeText(
+      const sourceStatus = toText(
         await runtime.store.readStatusForRenewal(sessionId)
       );
       if (sourceStatus === VIBE64_SESSION_STATUS.ACTIVE) {
@@ -471,7 +471,7 @@ function createRenewalWorkflow({
     }
     if (state.stage === SESSION_RENEWAL_STAGE.SUCCESSOR_CREATING) {
       const attempt = Math.max(1, Number(state.successor?.attempt) || 1);
-      const nextSessionId = normalizeText(state.successor?.sessionId) ||
+      const nextSessionId = toText(state.successor?.sessionId) ||
         successorSessionId(state.renewalId, attempt);
       if (!state.successor?.sessionId) {
         state = await mutateSessionRenewalState(runtime, sessionId, (current) => statePatch(current, {
@@ -518,7 +518,7 @@ function createRenewalWorkflow({
           let currentSetup = successor.workspaceSetup || null;
           if (setupRunner.isRunning(successor.sessionId)) {
             currentSetup = await setupRunner.wait(successor.sessionId);
-          } else if (!["succeeded", "unconfigured"].includes(normalizeText(currentSetup?.status))) {
+          } else if (!["succeeded", "unconfigured"].includes(toText(currentSetup?.status))) {
             admission.assertWorkflowAdmissionOpen();
             const started = await setupRunner.startRenewal({
               retry: true,
@@ -533,9 +533,9 @@ function createRenewalWorkflow({
         }
       );
       admission.assertWorkflowAdmissionOpen();
-      if (!["succeeded", "unconfigured"].includes(normalizeText(setup?.status))) {
+      if (!["succeeded", "unconfigured"].includes(toText(setup?.status))) {
         throw renewalError(
-          normalizeText(setup?.error) || "The renewed session workspace is not ready.",
+          toText(setup?.error) || "The renewed session workspace is not ready.",
           "vibe64_session_renewal_successor_setup_failed",
           { retryable: true }
         );
@@ -568,8 +568,8 @@ function createRenewalWorkflow({
         }));
       }
       const seeded = requireProviderSuccess(await terminals.seedSessionRenewalHandover(successor.sessionId, {
-        expectedThreadId: normalizeText(state.successor.threadId),
-        forbiddenThreadId: normalizeText(state.basis?.provider?.threadId),
+        expectedThreadId: toText(state.successor.threadId),
+        forbiddenThreadId: toText(state.basis?.provider?.threadId),
         handover: state.approved.text,
         handoverHash: state.approved.hash,
         operationId: seedOperationId,
@@ -589,14 +589,14 @@ function createRenewalWorkflow({
         stage: SESSION_RENEWAL_STAGE.SUCCESSOR_ACKNOWLEDGED,
         successor: {
           ...current.successor,
-          acknowledgedAt: normalizeText(seeded.acknowledgedAt) || timestamp(),
+          acknowledgedAt: toText(seeded.acknowledgedAt) || timestamp(),
           acknowledgement: {
-            handoverHash: normalizeText(acknowledgement.handoverHash),
-            message: normalizeText(acknowledgement.message),
-            sourceCommit: normalizeText(acknowledgement.sourceCommit)
+            handoverHash: toText(acknowledgement.handoverHash),
+            message: toText(acknowledgement.message),
+            sourceCommit: toText(acknowledgement.sourceCommit)
           },
-          threadId: normalizeText(seeded.threadId),
-          turnId: normalizeText(seeded.turnId)
+          threadId: toText(seeded.threadId),
+          turnId: toText(seeded.turnId)
         }
       }));
     }

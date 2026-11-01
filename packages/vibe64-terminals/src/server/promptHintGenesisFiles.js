@@ -2,7 +2,7 @@ import { constants as fsConstants } from "node:fs";
 import { open, realpath } from "node:fs/promises";
 import path from "node:path";
 
-import { isMissingPathError, normalizeText, pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { isMissingPathError, pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { GENESIS_BLUEPRINT_PATH, GENESIS_SUBSYSTEMS_PATH } from "@local/vibe64-genesis/server";
 
 import { openedFileWithin } from "./openedFileWithin.js";
@@ -11,6 +11,7 @@ import {
   PROMPT_HINT_SUBSYSTEMS_MAX_CHARACTERS,
   boundedText
 } from "./promptHintRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 function promptHintBlueprintError(message) {
   const error = new Error(message);
@@ -31,7 +32,7 @@ async function readPromptHintSubsystems(sourceRoot = "") {
  * links out of it. Blueprint safety errors also cover the subsystems map.
  */
 async function readPromptHintGenesisFile(sourceRoot = "", relativePath = "", maxCharacters = 0) {
-  const normalizedSourceRoot = normalizeText(sourceRoot);
+  const normalizedSourceRoot = toText(sourceRoot);
   if (!normalizedSourceRoot) {
     return "";
   }

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { constants } from "node:fs";
 import { copyFile, lstat, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
+import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { normalizePolicyPath, sourceEditorPathExcluded } from "./filePolicy.js";
@@ -29,6 +29,7 @@ import {
   sourceEditorDirectoryPage,
   sourceEditorFileRevealTree
 } from "./sourceFileTree.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 // Session source files: path policy, tree, file matching, search, resolution
 // and read/create/save. The Files areas and integrations reuse these helpers.
 const SOURCE_EDITOR_CONFLICT_CODE = "vibe64_source_editor_conflict";
@@ -106,14 +107,14 @@ function streamSourceEditorFileChanges(context, file, stream, fileObserver) {
           emit(VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT, {
             ...payload,
             originId: "filesystem",
-            updatedAt: normalizeText(event.updatedAt) || new Date().toISOString()
+            updatedAt: toText(event.updatedAt) || new Date().toISOString()
           });
           break;
         case "error":
           try {
             emit(VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT, {
               ...payload,
-              error: normalizeText(event.error) || "Source file observation failed.",
+              error: toText(event.error) || "Source file observation failed.",
               fatal: false
             });
           } finally {
@@ -255,7 +256,7 @@ async function sourceEditorFilePaths(context = {}) {
 }
 
 function normalizeSourceEditorImportTarget(value = "") {
-  const target = normalizeText(value)
+  const target = toText(value)
     .replaceAll("\\", "/")
     .split(/[?#]/u)[0]
     .trim();
@@ -325,13 +326,13 @@ async function resolveSourceEditorPath(context = {}, input = {}) {
   } catch {
     return {
       resolved: false,
-      target: normalizeText(input.target)
+      target: toText(input.target)
     };
   }
   if (!basePath) {
     return {
       resolved: false,
-      target: normalizeText(input.target)
+      target: toText(input.target)
     };
   }
   for (const candidatePath of sourceEditorResolveCandidates(basePath)) {
@@ -341,13 +342,13 @@ async function resolveSourceEditorPath(context = {}, input = {}) {
         file,
         path: file.path,
         resolved: true,
-        target: normalizeText(input.target)
+        target: toText(input.target)
       };
     }
   }
   return {
     resolved: false,
-    target: normalizeText(input.target)
+    target: toText(input.target)
   };
 }
 
@@ -406,7 +407,7 @@ async function runRipgrepLines(args = [], options = {}) {
 }
 
 function normalizeNewSourceEditorFilePath(value = "") {
-  const raw = normalizeText(value).replaceAll("\\", "/");
+  const raw = toText(value).replaceAll("\\", "/");
   if (/\/$/u.test(raw)) {
     throw sourceEditorError("Choose a file path, not a directory path.", "vibe64_invalid_source_editor_path");
   }
@@ -554,7 +555,7 @@ async function saveSourceEditorFile(context = {}, input = {}) {
   const currentBuffer = await readFile(file.absolutePath);
   assertTextBuffer(currentBuffer, file.relativePath);
   const currentHash = sourceEditorHash(currentBuffer);
-  const baseHash = normalizeText(input.baseHash);
+  const baseHash = toText(input.baseHash);
   if (baseHash && baseHash !== currentHash) {
     throw sourceEditorError("This file changed on disk. Reload it before saving.", SOURCE_EDITOR_CONFLICT_CODE, {
       currentHash,
@@ -582,12 +583,12 @@ async function saveSourceEditorFile(context = {}, input = {}) {
 
 function sourceEditorFileChange(context = {}, input = {}, file = {}) {
   return {
-    hash: normalizeText(file.hash),
+    hash: toText(file.hash),
     mtimeMs: file.mtimeMs,
-    originId: normalizeText(input.originId),
+    originId: toText(input.originId),
     path: normalizeSourceEditorRelativePath(file.path || input.path),
-    projectSlug: normalizeText(input.projectSlug),
-    sessionId: normalizeText(context.sessionId || input.sessionId),
+    projectSlug: toText(input.projectSlug),
+    sessionId: toText(context.sessionId || input.sessionId),
     size: file.size,
     updatedAt: new Date().toISOString()
   };
@@ -602,19 +603,19 @@ function assertTextBuffer(buffer, relativePath = "") {
 }
 
 function sourceEditorTempRoot(temporaryRoot = "", sessionId = "") {
-  const root = normalizeText(temporaryRoot);
+  const root = toText(temporaryRoot);
   if (!path.isAbsolute(root)) {
     throw sourceEditorError("Source editor requires an absolute runtime temp root.", "vibe64_source_editor_temp_root_missing", {}, 500);
   }
   const sessionKey = crypto.createHash("sha256")
-    .update(normalizeText(sessionId))
+    .update(toText(sessionId))
     .digest("hex")
     .slice(0, 24);
   return path.join(root, "vibe64-source-editor", sessionKey);
 }
 
 async function writeSourceEditorTextFile(context = {}, absolutePath = "", text = "") {
-  const tempRoot = normalizeText(context.sourceEditorTempRoot);
+  const tempRoot = toText(context.sourceEditorTempRoot);
   if (!tempRoot) {
     throw sourceEditorError("Source editor save requires runtime temp storage.", "vibe64_source_editor_temp_root_missing", {}, 500);
   }

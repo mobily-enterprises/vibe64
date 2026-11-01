@@ -1,13 +1,9 @@
 import { readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  normalizeText,
-  pathExists,
-  pathInsideOrEqual,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { pathExists, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 import { runSourceCommand } from "./sourceCommand.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_REPACK_TIMEOUT_MS = 60_000;
@@ -28,7 +24,7 @@ async function runGit(sourceRoot = "", args = [], options = {}) {
 }
 
 function resolveGitPath(sourceRoot = "", gitPath = "") {
-  const normalizedGitPath = normalizeText(gitPath);
+  const normalizedGitPath = toText(gitPath);
   if (!normalizedGitPath) {
     return "";
   }
@@ -41,11 +37,11 @@ async function fileHasContent(filePath = "") {
   if (!filePath || !await pathExists(filePath)) {
     return false;
   }
-  return normalizeText(await readFile(filePath, "utf8")) !== "";
+  return toText(await readFile(filePath, "utf8")) !== "";
 }
 
 async function sessionSourceGitAlternatesPath(sourceRoot = "") {
-  const normalizedSourceRoot = normalizeText(sourceRoot) ? path.resolve(sourceRoot) : "";
+  const normalizedSourceRoot = toText(sourceRoot) ? path.resolve(sourceRoot) : "";
   if (!normalizedSourceRoot) {
     throw vibe64Error(
       "Cannot inspect session source Git alternates without a source root.",
@@ -56,7 +52,7 @@ async function sessionSourceGitAlternatesPath(sourceRoot = "") {
     "rev-parse",
     "--is-inside-work-tree"
   ]);
-  if (!worktreeResult.ok || normalizeText(worktreeResult.stdout || worktreeResult.output) !== "true") {
+  if (!worktreeResult.ok || toText(worktreeResult.stdout || worktreeResult.output) !== "true") {
     return "";
   }
   const gitPathResult = await runGit(normalizedSourceRoot, [
@@ -91,7 +87,7 @@ function rememberMergeState(sourceRoot, revision, merge) {
 }
 
 async function inspectSessionSourceMergeState(sourceRoot = "") {
-  const normalizedSourceRoot = normalizeText(sourceRoot) ? path.resolve(sourceRoot) : "";
+  const normalizedSourceRoot = toText(sourceRoot) ? path.resolve(sourceRoot) : "";
   if (!normalizedSourceRoot) {
     return {
       conflictedFiles: [],
@@ -138,7 +134,7 @@ async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", opti
   const {
     runExclusive = null
   } = options;
-  const normalizedSourceRoot = normalizeText(sourceRoot) ? path.resolve(sourceRoot) : "";
+  const normalizedSourceRoot = toText(sourceRoot) ? path.resolve(sourceRoot) : "";
   if (!normalizedSourceRoot) {
     throw vibe64Error(
       "Cannot dissociate session source Git alternates without a source root.",

@@ -11,8 +11,9 @@ import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import { claudeConversationError, openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./terminalShared.js";
 import { codexAppServerTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText } from "./trimmedText.js";
 import { learningSessionExecutionRoot, readSessionConversationContext } from "./mainConversationContext.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -39,8 +40,8 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
       const { session: currentSession, threadId, turnId } = selected;
       const ownershipMatchesTurn = Boolean(
         turnOwnership &&
-        trimmedText(turnOwnership.threadId) === threadId &&
-        trimmedText(turnOwnership.turnId) === turnId
+        normalizeText(turnOwnership.threadId) === threadId &&
+        normalizeText(turnOwnership.turnId) === turnId
       );
       if (ownershipMatchesTurn && turnOwnership.reusable !== true) {
         return {
@@ -121,7 +122,7 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
     const refreshMetadata = preparedSession.metadata || {};
     const providerContextRefreshPending = codexContextRefreshPending(preparedSession);
     stageStartedAt = Date.now();
-    const genesisTask = trimmedText(input.genesisTask);
+    const genesisTask = normalizeText(input.genesisTask);
     const needsOpeningPrompt = sessionNeedsOpeningPrompt(preparedSession);
     const rendered = genesisTask || needsOpeningPrompt
       ? await runtime.renderPrompt(sessionId, {
@@ -136,7 +137,7 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
       sessionId,
       stage: "prompt-render"
     });
-    const renderedPrompt = trimmedText(rendered?.prompt);
+    const renderedPrompt = normalizeText(rendered?.prompt);
     if (!renderedPrompt) {
       throw new Error("The assistant prompt is empty.");
     }
@@ -197,7 +198,7 @@ async function recordCodexMainMessageDelivery(sessionId, prepared) {
 }
 
 function sessionBriefingIsDelivered(session = {}) {
-  return trimmedText(session.metadata?.agent_briefing_delivered) === "yes";
+  return normalizeText(session.metadata?.agent_briefing_delivered) === "yes";
 }
 
 /**
@@ -206,11 +207,11 @@ function sessionBriefingIsDelivered(session = {}) {
  */
 function sessionNeedsOpeningPrompt(session = {}) {
   return !sessionBriefingIsDelivered(session) &&
-    !trimmedText(session.metadata?.renewal_handover_delivered_at);
+    !normalizeText(session.metadata?.renewal_handover_delivered_at);
 }
 
 function codexContextRefreshPending(session = {}) {
-  return trimmedText(session.metadata?.codex_context_refresh_pending) === "yes";
+  return normalizeText(session.metadata?.codex_context_refresh_pending) === "yes";
 }
 
 /**
@@ -230,7 +231,6 @@ function createClaudeConversationMessagePolicy({
 }) {
   const error = claudeConversationError;
   const ENGINE = "claude";
-  const text = value => String(value ?? "").trim();
   async function prepareMessage(entry, input, { context: ctx, message, steering, renewal, deliveryTiming }) {
     if (entry.profile && message.length > entry.profile.limits.maxInputCharacters) throw error("Claude helper input exceeded its limit.");
     // JSKIT's delivery observer records these declared marks when it supplies one.
@@ -303,7 +303,7 @@ function createClaudeConversationMessagePolicy({
     const { input, context: ctx, message, messageId, uuid, actorMetadata } = event;
     const conversationTurn = await ctx.runtime.store.writeConversationUserMessage(ctx.sessionId, {
       messageId,
-      text: text(input.displayMessage) || message,
+      text: toText(input.displayMessage) || message,
       attachments: input.displayAttachments,
       turnMetadata: { ...actorMetadata, assistantSelection: ctx.selection, engineId: ENGINE, upstreamMessageId: uuid }
     });
@@ -342,7 +342,6 @@ function createOpenCodeMainMessagePreparation({
   events,
   presentation
 }) {
-  const text = (value = "") => String(value ?? "").trim();
   const { prepareProcess, storedUpstreamSessionId, upstreamSessionOptions } = hostPreparation;
   const { writeRun, messageMonitorProjection } = events;
   const { publishConversationTurn } = presentation;
@@ -352,7 +351,7 @@ function createOpenCodeMainMessagePreparation({
   }
 
   async function prepareMessageInput(sessionId = "", input = {}, options = {}) {
-    const message = text(input.message);
+    const message = toText(input.message);
     if (!message) {
       return {
         value: {
@@ -364,7 +363,7 @@ function createOpenCodeMainMessagePreparation({
       };
     }
     const context = await contextFor(sessionId, options);
-    const messageId = text(input.messageId) || randomUUID();
+    const messageId = toText(input.messageId) || randomUUID();
     return { context, message, messageId };
   }
 
@@ -408,12 +407,12 @@ function createOpenCodeMainMessagePreparation({
         if (actorFailure) {
           return actorFailure;
         }
-        const failureCode = text(error?.code).replace(/^assistant_opencode_/u, "vibe64_opencode_");
+        const failureCode = toText(error?.code).replace(/^assistant_opencode_/u, "vibe64_opencode_");
         if (failureCode.startsWith("vibe64_opencode_")) {
           return {
             code: failureCode,
             delivered: false,
-            error: text(error?.message) || "OpenCode prompt delivery failed.",
+            error: toText(error?.message) || "OpenCode prompt delivery failed.",
             ok: false,
             refreshRecommended: true,
             retryable: error?.retryable === true ||
@@ -429,13 +428,13 @@ function createOpenCodeMainMessagePreparation({
   }
 
   async function prepareMessageInspection(sessionId = "", input = {}, options = {}) {
-    const messageId = text(input.messageId);
+    const messageId = toText(input.messageId);
     if (!messageId) {
       throw openCodeError("vibe64_opencode_message_id_required", "Admission inspection requires a message ID.");
     }
     const context = await contextFor(sessionId, options);
     const threadId = storedUpstreamSessionId(context);
-    if (text(input.threadId) !== threadId) {
+    if (toText(input.threadId) !== threadId) {
       throw openCodeError("vibe64_opencode_thread_mismatch", "Admission inspection requires the original assistant thread.");
     }
     return {
@@ -501,7 +500,7 @@ function createOpenCodeMainMessagePreparation({
           }),
           ...conversationReviewActorMetadata(input.turnMetadata)
         };
-        const genesisTask = text(input.genesisTask);
+        const genesisTask = toText(input.genesisTask);
         const conversation = genesisTask
           ? null
           : await context.runtime.store.readConversationLogPage(context.sessionId, { limit: 1 });
@@ -518,7 +517,7 @@ function createOpenCodeMainMessagePreparation({
               task: genesisTask || "start"
             })
           : { prompt: message };
-        const renderedPrompt = text(rendered?.prompt) || message;
+        const renderedPrompt = toText(rendered?.prompt) || message;
         return {
           get agent() { return context.selection.agentId; },
           get model() { return openCodeModel(context.selection); },
@@ -536,13 +535,13 @@ function createOpenCodeMainMessagePreparation({
           {
             attachments: input.displayAttachments,
             messageId,
-            text: text(input.displayMessage) || message,
+            text: toText(input.displayMessage) || message,
             turnMetadata: {
               ...input.turnMetadata,
               assistantSelection: context.selection,
               ...actorMetadata,
               engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-              upstreamMessageId: text(admitted?.id)
+              upstreamMessageId: toText(admitted?.id)
             }
           }
         );

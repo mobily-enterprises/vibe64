@@ -1,5 +1,4 @@
 import path from "node:path";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   SESSION_RENEWAL_STAGE,
   SESSION_RENEWAL_STATUS,
@@ -14,6 +13,7 @@ import {
   statePatch,
   timestamp
 } from "./sessionRenewalRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */
@@ -30,11 +30,11 @@ function successorProcessExitProofReleaseAuthorization(state = {}, successor = {
   return {
     authorizedAt: timestamp(),
     kind: SESSION_RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND,
-    renewalId: normalizeText(state.renewalId),
-    runtimeDir: normalizeText(successor.metadata?.agent_transport_runtime_dir),
+    renewalId: toText(state.renewalId),
+    runtimeDir: toText(successor.metadata?.agent_transport_runtime_dir),
     schemaVersion: 1,
-    sourceSessionId: normalizeText(state.sessionId),
-    successorSessionId: normalizeText(successor.sessionId)
+    sourceSessionId: toText(state.sessionId),
+    successorSessionId: toText(successor.sessionId)
   };
 }
 
@@ -46,17 +46,17 @@ function assertSuccessorProcessExitProofReleaseAuthorization(
   const authorization = value && typeof value === "object" && !Array.isArray(value)
     ? value
     : {};
-  const authorizedAt = normalizeText(authorization.authorizedAt);
+  const authorizedAt = toText(authorization.authorizedAt);
   const authorizedAtMs = Date.parse(authorizedAt);
   if (
-    normalizeText(authorization.kind) !==
+    toText(authorization.kind) !==
       SESSION_RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND ||
     Number(authorization.schemaVersion) !== 1 ||
-    normalizeText(authorization.renewalId) !== normalizeText(state.renewalId) ||
-    normalizeText(authorization.sourceSessionId) !== normalizeText(state.sessionId) ||
-    normalizeText(authorization.successorSessionId) !== normalizeText(successor.sessionId) ||
-    normalizeText(authorization.runtimeDir) !==
-      normalizeText(successor.metadata?.agent_transport_runtime_dir) ||
+    toText(authorization.renewalId) !== toText(state.renewalId) ||
+    toText(authorization.sourceSessionId) !== toText(state.sessionId) ||
+    toText(authorization.successorSessionId) !== toText(successor.sessionId) ||
+    toText(authorization.runtimeDir) !==
+      toText(successor.metadata?.agent_transport_runtime_dir) ||
     !Number.isFinite(authorizedAtMs) ||
     new Date(authorizedAtMs).toISOString() !== authorizedAt
   ) {
@@ -79,7 +79,7 @@ async function readSuccessorProcessExitProofReleaseAuthorization(runtime, state,
     successor.sessionId,
     SESSION_RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_ARTIFACT
   );
-  if (!normalizeText(text)) {
+  if (!toText(text)) {
     return null;
   }
   let value = null;
@@ -112,7 +112,7 @@ function successorDiscardError(message, code, cause, phase) {
     statusCode: 500
   });
   error.renewalDiagnostic = {
-    causeCode: normalizeText(cause?.code) || "vibe64_session_renewal_unknown_failure",
+    causeCode: toText(cause?.code) || "vibe64_session_renewal_unknown_failure",
     phase
   };
   return error;
@@ -132,11 +132,11 @@ async function runSuccessorDiscardPhase(phase, operation) {
 }
 
 async function ensureSuccessorDiscarding(runtime, state, seedError) {
-  const expectedRenewalId = normalizeText(state.renewalId);
-  const expectedSuccessorId = normalizeText(state.successor?.sessionId);
+  const expectedRenewalId = toText(state.renewalId);
+  const expectedSuccessorId = toText(state.successor?.sessionId);
   const ownsExpectedSuccessor = (current) => (
-    normalizeText(current?.renewalId) === expectedRenewalId &&
-    normalizeText(current?.successor?.sessionId) === expectedSuccessorId
+    toText(current?.renewalId) === expectedRenewalId &&
+    toText(current?.successor?.sessionId) === expectedSuccessorId
   );
   try {
     return await mutateSessionRenewalState(runtime, state.sessionId, (current) => {
@@ -165,8 +165,8 @@ async function ensureSuccessorDiscarding(runtime, state, seedError) {
       }
       return statePatch(current, {
         error: {
-          code: normalizeText(seedError?.code) || "vibe64_session_renewal_acknowledgement_invalid",
-          message: normalizeText(seedError?.message) || "The fresh assistant did not accept the handover.",
+          code: toText(seedError?.code) || "vibe64_session_renewal_acknowledgement_invalid",
+          message: toText(seedError?.message) || "The fresh assistant did not accept the handover.",
           retryable: true
         },
         stage: SESSION_RENEWAL_STAGE.SUCCESSOR_DISCARDING,
@@ -193,14 +193,14 @@ async function ensureSuccessorDiscarding(runtime, state, seedError) {
 
 function assertSuccessorSource(state, successor = {}) {
   const metadata = successor.metadata || {};
-  const expectedCommit = normalizeText(state.basis?.source?.commit).toLowerCase();
-  const actualBaseCommit = normalizeText(metadata.base_commit).toLowerCase();
-  const actualCanonicalCommit = normalizeText(metadata.canonical_commit).toLowerCase();
-  const repository = normalizeText(metadata.source_remote_url);
+  const expectedCommit = toText(state.basis?.source?.commit).toLowerCase();
+  const actualBaseCommit = toText(metadata.base_commit).toLowerCase();
+  const actualCanonicalCommit = toText(metadata.canonical_commit).toLowerCase();
+  const repository = toText(metadata.source_remote_url);
   const actualSource = {
-    authority: normalizeText(metadata.repository_mode),
+    authority: toText(metadata.repository_mode),
     commit: actualBaseCommit,
-    ref: `refs/heads/${normalizeText(metadata.source_default_branch)}`,
+    ref: `refs/heads/${toText(metadata.source_default_branch)}`,
     ...(metadata.repository_mode !== "local_source" && repository ? { repository } : {})
   };
   const commitMismatch = actualBaseCommit !== expectedCommit || actualCanonicalCommit !== expectedCommit;
@@ -254,7 +254,7 @@ function createRenewalSuccessorSession({
    * @param {object} state
    */
   async function cleanupRenewalSuccessor(runtime, state) {
-    const nextSessionId = normalizeText(state.successor?.sessionId);
+    const nextSessionId = toText(state.successor?.sessionId);
     if (!nextSessionId) {
       return false;
     }
@@ -330,7 +330,7 @@ function createRenewalSuccessorSession({
     const {
       phase = "verification"
     } = options;
-    const successorSessionId = normalizeText(state.successor?.sessionId);
+    const successorSessionId = toText(state.successor?.sessionId);
     if (!successorSessionId) {
       throw renewalError(
         "The renewed session has no exact private successor.",
@@ -342,7 +342,7 @@ function createRenewalSuccessorSession({
       state,
       await renewalAccess.readInternalSession(runtime, successorSessionId)
     );
-    const expectedCommit = normalizeText(state.basis?.source?.commit).toLowerCase();
+    const expectedCommit = toText(state.basis?.source?.commit).toLowerCase();
     const work = await terminals.inspectSessionWork(successorSessionId, {
       runtime,
       session: successor
@@ -350,13 +350,13 @@ function createRenewalSuccessorSession({
     const changedPaths = Array.isArray(work?.changedPaths)
       ? work.changedPaths
       : [];
-    const actualBaseCommit = normalizeText(work?.baseCommit).toLowerCase();
-    const actualCanonicalCommit = normalizeText(work?.canonicalCommit).toLowerCase();
-    const actualHead = normalizeText(work?.sessionHead).toLowerCase();
-    const expectedWorktreePath = normalizeText(
+    const actualBaseCommit = toText(work?.baseCommit).toLowerCase();
+    const actualCanonicalCommit = toText(work?.canonicalCommit).toLowerCase();
+    const actualHead = toText(work?.sessionHead).toLowerCase();
+    const expectedWorktreePath = toText(
       successor?.sourcePath || successor?.metadata?.source_path
     );
-    const actualWorktreeTopLevel = normalizeText(work?.worktreeTopLevel);
+    const actualWorktreeTopLevel = toText(work?.worktreeTopLevel);
     if (
       !expectedCommit ||
       actualBaseCommit !== expectedCommit ||
@@ -367,7 +367,7 @@ function createRenewalSuccessorSession({
       work?.worktreeClean !== true ||
       work?.sessionMatchesCanonical !== true ||
       changedPaths.length > 0 ||
-      normalizeText(work?.relationship) !== "current" ||
+      toText(work?.relationship) !== "current" ||
       !expectedWorktreePath ||
       !actualWorktreeTopLevel ||
       path.resolve(actualWorktreeTopLevel) !== path.resolve(expectedWorktreePath)

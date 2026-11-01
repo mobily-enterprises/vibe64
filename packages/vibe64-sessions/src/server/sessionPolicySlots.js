@@ -1,4 +1,4 @@
-import { text } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 
@@ -12,21 +12,21 @@ async function sessionsOccupyingPolicySlots(runtime, openSessions = null) {
   const visible = Array.isArray(openSessions)
     ? openSessions
     : await runtime.listSessionSummaries({ statusGroup: "open" });
-  const visibleIds = new Set(visible.map((session) => text(session?.sessionId)).filter(Boolean));
+  const visibleIds = new Set(visible.map((session) => normalizeText(session?.sessionId)).filter(Boolean));
   const reservations = [];
   const reservedRenewalIds = new Set();
   for (const session of await runtime.store.listSessionsForRenewal()) {
-    const status = text(session?.status);
+    const status = normalizeText(session?.status);
     if (!["renewal_pending", "renewal_quiesced"].includes(status)) {
       continue;
     }
-    const renewalId = text(
+    const renewalId = normalizeText(
       session.metadata?.renewal_id || session.metadata?.renewal_quiesced_id
     );
     const linkedSessionIds = [
-      text(session.sessionId),
-      text(session.metadata?.renewed_from),
-      text(session.metadata?.renewed_to)
+      normalizeText(session.sessionId),
+      normalizeText(session.metadata?.renewed_from),
+      normalizeText(session.metadata?.renewed_to)
     ].filter(Boolean);
     if (
       !renewalId ||

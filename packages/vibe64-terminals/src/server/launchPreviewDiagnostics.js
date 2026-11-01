@@ -3,7 +3,7 @@ import stripAnsi from "strip-ansi";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { previewDiagnosticsSessionRoot, previewLastPath, previewLogPath } from "./previewDiagnosticFiles.js";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // The diagnostic record of each Preview launch step, written to the session's
 // latest-launch file and appended to its launch log, and the latest record
@@ -51,7 +51,7 @@ async function writePreviewDiagnostic(session = {}, record = {}, options = {}) {
     status: String(record.status || "failed").trim() || "failed",
     sessionSourceRoot: String(record.sessionSourceRoot || sessionSourcePath(session) || "").trim(),
     ...(record.reason ? { reason: String(record.reason) } : {}),
-    ...(record.outputTargetId ? { outputTargetId: trimmedText(record.outputTargetId) } : {}),
+    ...(record.outputTargetId ? { outputTargetId: normalizeText(record.outputTargetId) } : {}),
     ...(record.cwd ? { cwd: String(record.cwd) } : {}),
     ...(record.commandPreview ? { commandPreview: String(record.commandPreview) } : {}),
     ...(record.terminalSessionId ? { terminalSessionId: String(record.terminalSessionId) } : {}),

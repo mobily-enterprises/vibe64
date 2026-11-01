@@ -25,7 +25,7 @@ import {
   stateConnection
 } from "./aiConnectionRecords.js";
 import { assistantProviderPolicy, assistantProviderProductLabel } from "./assistantProviderPolicy.js";
-import { trimmedText } from "./trimmedText.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 async function verifyOpenCodeConnection({
   apiKey: key,
@@ -103,7 +103,7 @@ function createAiConnectionStore({
   verifyConnection,
   zenModelCheckDelayMs = ZEN_MODEL_CHECK_DELAY_MS
 }) {
-  if (!trimmedText(filePath)) {
+  if (!toText(filePath)) {
     throw new TypeError("AI connections require a private store path.");
   }
   const targetPath = path.resolve(filePath);
@@ -195,7 +195,7 @@ function createAiConnectionStore({
     await mutateZenModelCheck(job, (connection) => {
       connection.zenModelCheck.currentModelId = "";
       connection.zenModelCheck.finishedAt = new Date().toISOString();
-      connection.zenModelCheck.message = trimmedText(message).slice(0, 320);
+      connection.zenModelCheck.message = toText(message).slice(0, 320);
       connection.zenModelCheck.status = status;
     });
     if (zenModelChecks.get(OPENCODE_ZEN_PROVIDER_ID) === job) {
@@ -293,7 +293,7 @@ function createAiConnectionStore({
     const access = connection ? connectionModelAccess(connection, id, {
       activeZenCheck: zenModelChecks.has(id)
     }) : null;
-    const requestedModelId = trimmedText(modelId);
+    const requestedModelId = toText(modelId);
     const enabledModelIds = new Set(modelIds([
       access?.recommendedModelId,
       ...modelIds(access?.enabledModelIds)
@@ -378,8 +378,8 @@ function createAiConnectionStore({
       );
     }
     if (
-      trimmedText(provider?.id) !== id ||
-      trimmedText(provider?.definitionRevision) !== revision
+      toText(provider?.id) !== id ||
+      toText(provider?.definitionRevision) !== revision
     ) {
       throw aiConnectionError("vibe64_ai_provider_revision_changed", "Refresh the provider catalogue before saving this API key.", 409);
     }
@@ -403,11 +403,11 @@ function createAiConnectionStore({
       const connection = {
         apiKey: key,
         billingLabel: route.billingLabel,
-        createdAt: trimmedText(previous?.createdAt) || now,
+        createdAt: toText(previous?.createdAt) || now,
         defaultModelId: route.defaultModelId,
         endpointCode: route.endpointCode,
         fingerprint,
-        label: connectionLabel(input.label, trimmedText(previous?.label) || route.productLabel || id),
+        label: connectionLabel(input.label, toText(previous?.label) || route.productLabel || id),
         managementUrl: route.managementUrl,
         modelAccessUnlocked: previous?.modelAccessUnlocked === true,
         ownerOnly: route.ownerOnly,
@@ -442,7 +442,7 @@ function createAiConnectionStore({
 
   async function updateModelAccess(value = "", options = {}) {
     const id = providerId(value);
-    const requestedOperation = trimmedText(options.operation) || (
+    const requestedOperation = toText(options.operation) || (
       typeof options.unlocked === "boolean"
         ? options.unlocked ? "enable-all" : "disable-additional"
         : ""

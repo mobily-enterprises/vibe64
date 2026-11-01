@@ -1,6 +1,6 @@
 import { lstat, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
-import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { managedSessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { assertValidVibe64SessionId } from "./sessionRecordRules.js";
@@ -17,6 +17,7 @@ import {
   sessionCreationStagingRoot,
   sessionPathsFromRoot
 } from "./sessionStoreLayout.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 
@@ -91,7 +92,7 @@ function createSessionStorePaths({ state }) {
       path.dirname(publishingRenewalArchiveRoot(rootPaths, normalizedSessionId)),
       renewalStateRoot(),
       ...(sourcePath ? [
-        path.resolve(normalizeText(state.projectSessionSourceRoot)),
+        path.resolve(toText(state.projectSessionSourceRoot)),
         path.dirname(path.dirname(path.dirname(sourcePath))),
         path.dirname(path.dirname(sourcePath))
       ] : [])

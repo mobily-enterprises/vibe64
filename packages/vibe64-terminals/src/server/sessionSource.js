@@ -7,7 +7,7 @@ import {
   rm
 } from "node:fs/promises";
 
-import { normalizeText, pathExists } from "@local/vibe64-core/server/core";
+import { pathExists } from "@local/vibe64-core/server/core";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -29,6 +29,7 @@ import {
   runSourceCommand,
   sourceError
 } from "./sessionSourceCommands.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
@@ -69,10 +70,10 @@ function canonicalProjectSource(project = {}, standaloneSourceRoot = "") {
     ? project.repository
     : {};
   const mode = normalizeRepositoryMode(project.repositoryMode || repository.mode);
-  const branch = normalizeText(repository.defaultBranch);
+  const branch = toText(repository.defaultBranch);
   if (mode === PROJECT_REPOSITORY_MODE_GITHUB) {
     const github = project.githubRepository || repository.github || {};
-    const remoteUrl = normalizeText(github.cloneUrl);
+    const remoteUrl = toText(github.cloneUrl);
     if (!remoteUrl || !branch) {
       throw sourceError(
         "The GitHub project does not declare a complete canonical repository and default branch.",
@@ -81,14 +82,14 @@ function canonicalProjectSource(project = {}, standaloneSourceRoot = "") {
     }
     return {
       branch,
-      mirrorPath: normalizeText(project.githubMirrorPath),
+      mirrorPath: toText(project.githubMirrorPath),
       mode,
       remoteUrl,
       source: remoteUrl
     };
   }
   if (mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
-    const repositoryPath = normalizeText(project.canonicalRepositoryPath);
+    const repositoryPath = toText(project.canonicalRepositoryPath);
     if (!repositoryPath || !branch) {
       throw sourceError(
         "The Vibe64 Git project does not declare a complete canonical repository and default branch.",
@@ -125,7 +126,7 @@ async function prepareGithubMirrorReference({
   mirrorPath = "",
   remoteUrl = ""
 } = {}) {
-  const resolvedMirrorPath = normalizeText(mirrorPath);
+  const resolvedMirrorPath = toText(mirrorPath);
   const outcome = {
     attempted: Boolean(resolvedMirrorPath),
     referenceRoot: "",
@@ -214,7 +215,7 @@ async function cloneCanonicalSource({
   const preparationRoot = await mkdtemp(path.join(sourceParent, ".vibe64-source-preparing-"));
   const preparedSourcePath = path.join(preparationRoot, "source");
   const roots = [referenceRoot, source, sourceParent, sourcePath, preparationRoot, preparedSourcePath]
-    .map(normalizeText)
+    .map(toText)
     .filter((value) => path.isAbsolute(value));
   const localCommandOptions = {
     runCommand: commandOptions.runCommand
@@ -301,7 +302,7 @@ async function resolveExpectedSourceCommit({
   expectedCommit = "",
   sourcePath = ""
 } = {}) {
-  const expected = normalizeText(expectedCommit).toLowerCase();
+  const expected = toText(expectedCommit).toLowerCase();
   if (!expected) {
     return baselineCommit;
   }
@@ -452,7 +453,7 @@ async function createSessionSource({
 }) {
   const contribution = sessionConnectedContribution(session);
   if (contribution && !session.metadata?.renewed_from) {
-    if (expectedCommit && normalizeText(expectedCommit).toLowerCase() !== contribution.baseCommit) {
+    if (expectedCommit && toText(expectedCommit).toLowerCase() !== contribution.baseCommit) {
       throw sourceError("Contribution source must start at its reserved base commit.", "vibe64_contribution_base_changed");
     }
     expectedCommit = contribution.baseCommit;
@@ -479,9 +480,9 @@ async function createSessionSource({
     throw sourceError("Only a confirmed renewal can select a contribution source ref.",
       "vibe64_contribution_renewal_source_invalid");
   }
-  const sessionId = normalizeText(session.sessionId);
-  const projectContextRoot = normalizeText(runtime?.projectContextRoot);
-  const managedSessionSourceRoot = normalizeText(runtime?.projectSessionSourceRoot);
+  const sessionId = toText(session.sessionId);
+  const projectContextRoot = toText(runtime?.projectContextRoot);
+  const managedSessionSourceRoot = toText(runtime?.projectSessionSourceRoot);
   if (!sessionId || !projectContextRoot || !managedSessionSourceRoot || !store) {
     throw sourceError(
       "Session source creation requires a session id, project context root, managed source root, and session store.",
@@ -503,7 +504,7 @@ async function createSessionSource({
 
   const repositoryMode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
   const standaloneSourceRoot = repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
-    ? normalizeText(project.sourceRoot)
+    ? toText(project.sourceRoot)
     : "";
   if (repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE && !standaloneSourceRoot) {
     throw sourceError(
@@ -558,7 +559,7 @@ async function createSessionSource({
   });
 
   const sourceRoots = [standaloneSourceRoot, canonical.source, sourceParent, sourcePath]
-    .map(normalizeText)
+    .map(toText)
     .filter((value) => path.isAbsolute(value));
   const existingTopLevel = await optionalGitOutput(sourcePath, ["rev-parse", "--show-toplevel"], sourceRoots, {
     runCommand
@@ -610,7 +611,7 @@ async function createSessionSource({
   await runGit(sourcePath, ["checkout", "-B", branch, resolvedBaseline.commit], sourceRoots, {
     runCommand
   });
-  if (normalizeText(expectedCommit)) {
+  if (toText(expectedCommit)) {
     const checkedOutCommit = await runGit(
       sourcePath,
       ["rev-parse", "--verify", "HEAD^{commit}"],

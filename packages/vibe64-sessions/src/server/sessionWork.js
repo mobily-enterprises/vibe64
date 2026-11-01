@@ -3,8 +3,8 @@ import { sessionConnectedSubmissions } from "@local/vibe64-core/server/projectRe
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 import { persistRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
 import { sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -56,7 +56,7 @@ function createSessionWork({
       });
       const existingTask = await runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID);
       const operation = await recovery.recoverInterruptedSave(runtime, session, existingTask);
-      const confirmedContributionCommit = text(operation?.verifiedCommit) || knownSubmittedCommit;
+      const confirmedContributionCommit = normalizeText(operation?.verifiedCommit) || knownSubmittedCommit;
       const updateTask = await runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID);
       const recoveredUpdateOperation = await recovery.recoverInterruptedUpdate(runtime, session, updateTask);
       const updateOperation = recoveredUpdateOperation?.status === "failed"
@@ -98,8 +98,8 @@ function createSessionWork({
         runtime.store.readBackgroundTask(sessionId, SESSION_SAVE_TASK_ID),
         runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID)
       ]);
-      const activeSaveOperationId = text(workOperations.operationId("save", sessionId));
-      const activeUpdateOperationId = text(workOperations.operationId("update", sessionId));
+      const activeSaveOperationId = normalizeText(workOperations.operationId("save", sessionId));
+      const activeUpdateOperationId = normalizeText(workOperations.operationId("update", sessionId));
       let connected = [];
       let connectedInspectionError = "";
       if (includeConnected) {
@@ -108,7 +108,7 @@ function createSessionWork({
         } catch (error) {
           // Receiving status must not hide Main Save. Its separate publication
           // preflight repeats the authorized inspection and refuses unknowns.
-          connectedInspectionError = text(error?.message) || "Connected repository status is unavailable. Retry Save to check it again.";
+          connectedInspectionError = normalizeText(error?.message) || "Connected repository status is unavailable. Retry Save to check it again.";
         }
       }
       return {
@@ -182,7 +182,7 @@ function createSessionWork({
       } finally {
         await publishSessionChanged(sessionId, {
           operation: "updated",
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: "session-pull-request",
           session: await runtime.getSession(sessionId, { inspectSource: false })
         });
@@ -237,7 +237,7 @@ function createSessionWork({
             });
             await publishSessionChanged(sessionId, {
               operation: "updated",
-              originId: text(input.originId),
+              originId: normalizeText(input.originId),
               reason: "session-save-started",
               session: await runtime.getSession(sessionId, { inspectSource: false })
             });
@@ -246,8 +246,8 @@ function createSessionWork({
           onProgress: async (progress = {}) => {
             await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
               event: {
-                kind: text(progress.kind) || "save-progress",
-                message: text(progress.message),
+                kind: normalizeText(progress.kind) || "save-progress",
+                message: normalizeText(progress.message),
                 status: "running"
               },
               patch: {
@@ -258,7 +258,7 @@ function createSessionWork({
             });
             await publishSessionChanged(sessionId, {
               operation: "updated",
-              originId: text(input.originId),
+              originId: normalizeText(input.originId),
               reason: "session-save-progress",
               session: await runtime.getSession(sessionId, { inspectSource: false })
             });
@@ -291,7 +291,7 @@ function createSessionWork({
         await recovery.resolveSupersededUpdateFailure(runtime, sessionId, result, { knownNewer: true });
         await publishSessionChanged(sessionId, {
           operation: "updated",
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: "session-save-completed",
           session: await runtime.getSession(sessionId, { inspectSource: false })
         });
@@ -311,21 +311,21 @@ function createSessionWork({
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_SAVE_TASK_ID, {
           event: {
             kind: updateRequired ? "save-update-required" : "save-failed",
-            message: text(error?.message) || "Session Save failed.",
+            message: normalizeText(error?.message) || "Session Save failed.",
             status: updateRequired ? "ready" : "failed"
           },
           patch: {
-            code: text(error?.code),
+            code: normalizeText(error?.code),
             ...(updateRequired
               ? { updateRequired: true }
-              : { error: text(error?.message) || "Session Save failed." }),
+              : { error: normalizeText(error?.message) || "Session Save failed." }),
             operationId,
             status: updateRequired ? "ready" : "failed"
           }
         });
         await publishSessionChanged(sessionId, {
           operation: "updated",
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: updateRequired ? "session-save-update-required" : "session-save-failed",
           session: await runtime.getSession(sessionId, { inspectSource: false }),
           task
@@ -341,7 +341,7 @@ function createSessionWork({
     return sessionResult(async () => {
       const runtime = await project.createRuntime({ inspectSource: false });
       const session = await runtime.getSession(sessionId, { inspectSource: false });
-      const reviewedConflictId = text(input.reviewedConflictId);
+      const reviewedConflictId = normalizeText(input.reviewedConflictId);
       // Ordinary Rebase starts over; only an explicit repair check resumes a conflict.
       const previousTask = reviewedConflictId
         ? await runtime.store.readBackgroundTask(sessionId, SESSION_UPDATE_TASK_ID)
@@ -366,12 +366,12 @@ function createSessionWork({
                 message: "Updating this session (rebase).",
                 status: "running"
               },
-              patch: { operationId, requestId: text(input.requestId), status: "running" },
+              patch: { operationId, requestId: normalizeText(input.requestId), status: "running" },
               reset: true
             });
             await publishSessionChanged(sessionId, {
               operation: "updated",
-              originId: text(input.originId),
+              originId: normalizeText(input.originId),
               reason: "session-update-started",
               session: await runtime.getSession(sessionId, { inspectSource: false })
             });
@@ -380,8 +380,8 @@ function createSessionWork({
           onProgress: async (progress = {}) => {
             await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
               event: {
-                kind: text(progress.kind) || "update-progress",
-                message: text(progress.message),
+                kind: normalizeText(progress.kind) || "update-progress",
+                message: normalizeText(progress.message),
                 status: "running"
               },
               patch: { ...progress, operationId, status: "running" }
@@ -427,7 +427,7 @@ function createSessionWork({
         });
         await publishSessionChanged(sessionId, {
           operation: "updated",
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: "session-update-completed",
           session: await runtime.getSession(sessionId, { inspectSource: false })
         });
@@ -444,23 +444,23 @@ function createSessionWork({
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
           event: {
             kind: "update-failed",
-            message: text(error?.message) || "Session update failed.",
+            message: normalizeText(error?.message) || "Session update failed.",
             status: "failed"
           },
           patch: {
-            code: text(error?.code),
+            code: normalizeText(error?.code),
             conflictPaths: Array.isArray(error?.details?.conflictPaths)
               ? error.details.conflictPaths
               : [],
             conflictRecovery: error?.details?.conflictRecovery || null,
-            error: text(error?.message) || "Session update failed.",
+            error: normalizeText(error?.message) || "Session update failed.",
             operationId,
             status: "failed"
           }
         });
         await publishSessionChanged(sessionId, {
           operation: "updated",
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: "session-update-failed",
           session: await runtime.getSession(sessionId, { inspectSource: false }),
           task

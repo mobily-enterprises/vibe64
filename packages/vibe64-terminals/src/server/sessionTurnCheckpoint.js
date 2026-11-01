@@ -4,7 +4,7 @@ import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessi
 import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -85,7 +85,7 @@ async function checkpointSessionTurn({
  */
 function createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged }) {
   function checkpointOutcomeForCodexTurn(status = "", turnOutcome = "") {
-    const normalizedTurnOutcome = trimmedText(turnOutcome);
+    const normalizedTurnOutcome = normalizeText(turnOutcome);
     if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.USER_CANCELLED) {
       return "cancelled";
     }
@@ -95,7 +95,7 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
     if (normalizedTurnOutcome === CODEX_TURN_OUTCOME.RESPONSE_DELIVERY_FAILURE) {
       return "failed";
     }
-    const normalizedStatus = trimmedText(status);
+    const normalizedStatus = normalizeText(status);
     if (normalizedStatus === "interrupted") {
       return "interrupted";
     }
@@ -129,11 +129,11 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
         }
       });
     }
-    const normalizedSessionId = trimmedText(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
     const runtime = await projectService.createRuntime({ inspectSource: false });
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session, normalizeVibe64AgentRunState);
-    const outerTurnId = trimmedText(turn.outerTurnId);
+    const outerTurnId = normalizeText(turn.outerTurnId);
     return checkpointSessionTurn({
       projectService,
       runtime,
@@ -141,7 +141,7 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
       sessionId: normalizedSessionId,
       outerTurnId,
       outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
-      timestamp: trimmedText(turn.completedAt || turn.updatedAt),
+      timestamp: normalizeText(turn.completedAt || turn.updatedAt),
       publishSessionChanged
     });
   }

@@ -5,7 +5,7 @@ import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { lessonHasSteps, validateContent, validateLesson } from "./contentSchemas.js";
 import { splitStepBeats } from "../shared/beats.js";
 import { declaredLearningVocabulary } from "../shared/learningVocabulary.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;

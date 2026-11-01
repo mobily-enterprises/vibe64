@@ -3,7 +3,8 @@
 
 import { open, readFile } from "node:fs/promises";
 import path from "node:path";
-import { normalizeText, pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const AGENT_SESSION_COMMAND_NAME = "vibe64-session-command";
 
@@ -235,7 +236,7 @@ function sanitizedCommandEnvironment(value = {}) {
 }
 
 function decodedCommand(value = "") {
-  const normalized = normalizeText(value);
+  const normalized = toText(value);
   if (!normalized || !/^[A-Za-z0-9_-]+$/u.test(normalized)) {
     return "";
   }
@@ -247,7 +248,7 @@ function decodedCommand(value = "") {
 }
 
 function validateCommandCwd(cwd = "", sourceRoot = "") {
-  const resolvedCwd = path.resolve(normalizeText(cwd) || sourceRoot);
+  const resolvedCwd = path.resolve(toText(cwd) || sourceRoot);
   if (!sourceRoot || !pathInsideOrEqual(sourceRoot, resolvedCwd)) {
     return responseError(
       "Agent commands must run inside the active session source.",
@@ -293,7 +294,7 @@ async function waitForCommandResult(resultPath = "", options = {}) {
       throw error;
     }
     try {
-      return normalizeText(await readFile(resultPath, "utf8"));
+      return toText(await readFile(resultPath, "utf8"));
     } catch (error) {
       if (error?.code !== "ENOENT") {
         throw error;

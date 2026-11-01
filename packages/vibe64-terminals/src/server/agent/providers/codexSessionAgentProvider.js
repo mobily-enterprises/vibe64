@@ -15,9 +15,6 @@ import { CURATED_CODEX_PROVIDERS, curatedCodexModel } from "@local/vibe64-core/s
 import { createHash } from "node:crypto";
 
 import {
-  normalizeText
-} from "@local/vibe64-core/server/core";
-import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_ASSISTANT_ENGINE_IDS,
@@ -35,6 +32,7 @@ import {
   renewAcceptedCodexAttachments,
   validateCodexAttachmentsBeforeDelivery
 } from "./codexAttachmentDelivery.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../../types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-provider").createCodexAppServerProviderOwner>} CodexAppServerProviderOwner */
@@ -77,7 +75,7 @@ function codexAssistantCapabilities(connected = true, catalog = codexConfiguredM
     rows.find((model) => model.isDefault === true) || rows[0];
   const defaultThinking = codexCatalogReasoningEfforts(defaultModel).has(VIBE64_CODEX_DEFAULT_THINKING)
     ? VIBE64_CODEX_DEFAULT_THINKING
-    : normalizeText(defaultModel?.defaultReasoningEffort);
+    : toText(defaultModel?.defaultReasoningEffort);
   const curated = CURATED_CODEX_PROVIDERS.map((provider) => {
     const connection = connections.find(({ id }) => id === provider.id);
     return {
@@ -116,7 +114,7 @@ function codexAssistantCapabilities(connected = true, catalog = codexConfiguredM
     },
     defaults: {
       agentId: "codex",
-      modelId: connected ? normalizeText(defaultModel?.model) : defaultCuratedProvider?.defaultModelId || "",
+      modelId: connected ? toText(defaultModel?.model) : defaultCuratedProvider?.defaultModelId || "",
       modelProviderId: connected ? "openai" : defaultCuratedProvider?.id || "openai",
       variantId: connected ? defaultThinking : ""
     },
@@ -152,7 +150,7 @@ function codexCatalogRows(value = null) {
 
 function resolveCodexHelperExecutionProfile(request = {}, catalog = null, modelId = "", thinking = "") {
   const { executionProfile, limits } = vibe64HelperExecutionProfileRequest(request, "Codex");
-  const model = codexCatalogRows(catalog).find((row) => row?.hidden !== true && normalizeText(row?.model) === modelId);
+  const model = codexCatalogRows(catalog).find((row) => row?.hidden !== true && toText(row?.model) === modelId);
   if (!model) {
     throw codexExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
@@ -179,22 +177,22 @@ function resolveCodexHelperExecutionProfile(request = {}, catalog = null, modelI
 
 function normalizeCodexTurn(result) {
   const turn = result?.codexAgentTurn || {};
-  const id = normalizeText(turn?.turnId || result?.turnId);
+  const id = toText(turn?.turnId || result?.turnId);
   const active = Boolean(id) && (turn?.active === true || result?.active === true);
   if (!id && !active) {
     return null;
   }
   return {
     active,
-    error: normalizeText(turn?.error),
+    error: toText(turn?.error),
     id,
-    phase: active ? normalizeText(turn?.phase) : "",
-    runState: normalizeText(turn?.runState),
-    startedAt: normalizeText(turn?.startedAt),
-    state: normalizeText(turn?.state),
-    status: normalizeText(turn?.status || turn?.state),
-    threadId: normalizeText(turn?.threadId || result?.codexThreadId || result?.threadId),
-    updatedAt: normalizeText(turn?.updatedAt)
+    phase: active ? toText(turn?.phase) : "",
+    runState: toText(turn?.runState),
+    startedAt: toText(turn?.startedAt),
+    state: toText(turn?.state),
+    status: toText(turn?.status || turn?.state),
+    threadId: toText(turn?.threadId || result?.codexThreadId || result?.threadId),
+    updatedAt: toText(turn?.updatedAt)
   };
 }
 
@@ -202,12 +200,12 @@ function normalizeCodexSessionResult(result = {}) {
   const source = result && typeof result === "object" && !Array.isArray(result) ? result : {};
   const turn = normalizeCodexTurn(source);
   return {
-    ...(normalizeText(source.code) ? { code: normalizeText(source.code) } : {}),
-    ...(normalizeText(source.error) ? { error: normalizeText(source.error) } : {}),
-    ...(normalizeText(source.deliveryMode) ? { deliveryMode: normalizeText(source.deliveryMode) } : {}),
+    ...(toText(source.code) ? { code: toText(source.code) } : {}),
+    ...(toText(source.error) ? { error: toText(source.error) } : {}),
+    ...(toText(source.deliveryMode) ? { deliveryMode: toText(source.deliveryMode) } : {}),
     delivered: source.delivered === true,
-    ...(normalizeText(source.operationOutcome) ? { operationOutcome: normalizeText(source.operationOutcome) } : {}),
-    ...(normalizeText(source.reason) ? { reason: normalizeText(source.reason) } : {}),
+    ...(toText(source.operationOutcome) ? { operationOutcome: toText(source.operationOutcome) } : {}),
+    ...(toText(source.reason) ? { reason: toText(source.reason) } : {}),
     connectionReused: typeof source.connectionReused === "boolean" ? source.connectionReused : null,
     identity: source.agentIdentity || null,
     ...(typeof source.interrupted === "boolean" ? { interrupted: source.interrupted } : {}),
@@ -218,10 +216,10 @@ function normalizeCodexSessionResult(result = {}) {
     sessionUpdated: source.sessionUpdated === true,
     terminal: source.codexTerminal || null,
     thread: {
-      id: normalizeText(source.codexThreadId || source.threadId || turn?.threadId)
+      id: toText(source.codexThreadId || source.threadId || turn?.threadId)
     },
     turn,
-    workdir: normalizeText(source.codexWorkdir)
+    workdir: toText(source.codexWorkdir)
   };
 }
 
@@ -472,7 +470,7 @@ function createCodexSessionAgentProvider({
         vibe64User: input.vibe64User || context.vibe64User || null
       } : null;
       return {
-        scopedConversationId: normalizeText(input.conversationId) ? input.conversationId : undefined,
+        scopedConversationId: toText(input.conversationId) ? input.conversationId : undefined,
         get input() { return message || { ...input, agentSettings: codexAssistantSettings(context, input) }; }
       };
     }
@@ -524,7 +522,7 @@ function createCodexSessionAgentProvider({
 
   async function capabilities(context = {}, input = {}) {
     const connected = (await connectionStatus(context)) !== false;
-    const configuredOnly = normalizeText(input.configuredOnly).toLowerCase() === "true";
+    const configuredOnly = toText(input.configuredOnly).toLowerCase() === "true";
     // A provider filter must not change the catalogue revision used by Apply.
     const catalog = connected && !configuredOnly
       ? await codexAssistantCatalog.modelCatalog({ signal: context.signal })

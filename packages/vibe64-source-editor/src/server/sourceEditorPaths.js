@@ -1,7 +1,8 @@
 import { lstat } from "node:fs/promises";
 import path from "node:path";
 
-import { normalizeText, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
+import { pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /**
  * A session source path the editor may use: relative, inside the source and
@@ -15,7 +16,7 @@ function sourceEditorError(message, code, details = {}, statusCode = 400) {
 }
 
 function normalizeSourceEditorRelativePath(value = "") {
-  const raw = normalizeText(value).replaceAll("\\", "/");
+  const raw = toText(value).replaceAll("\\", "/");
   if (!raw || raw === "." || raw === "/") {
     return "";
   }

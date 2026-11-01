@@ -1,5 +1,4 @@
 import { createAssistantRoutingState } from "./assistantRoutingState.js";
-import { doNothing } from "./doNothing.js";
 import { createAssistantRoutingRecords } from "./assistantRoutingRecords.js";
 import { createAssistantRoutingDecisions } from "./assistantRoutingDecisions.js";
 import { createAssistantRoutingDelivery } from "./assistantRoutingDelivery.js";
@@ -7,6 +6,7 @@ import { createAssistantRoutingCancellation } from "./assistantRoutingCancellati
 import { createAssistantRoutingAdmission } from "./assistantRoutingAdmission.js";
 import { createAssistantRoutingOutcomes } from "./assistantRoutingOutcomes.js";
 import { createAssistantRoutingGoals } from "./assistantRoutingGoals.js";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */

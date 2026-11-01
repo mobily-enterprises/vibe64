@@ -22,9 +22,8 @@ import {
   codexAppServerFrozenThreadDeleteResponse,
   codexAppServerFrozenTurnInterruptResponse
 } from "./codexSessionProviderHost.js";
-import { trimmedText } from "./trimmedText.js";
-import { isRecord } from "./isRecord.js";
 import { hasOwn } from "./hasOwn.js";
+import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").CodexConversationPreparation} CodexConversationPreparation */
 /** @typedef {import("./types.js").CodexHelperPreparation} CodexHelperPreparation */
@@ -48,13 +47,13 @@ function codexAppServerConversationResponse(text = "") {
 function codexAppServerExpiredEphemeralConversation(conversationId = "", input = {}) {
   return {
     conversationExpired: true,
-    conversationId: trimmedText(conversationId),
+    conversationId: normalizeText(conversationId),
     error: "This Temporary AI task ended when Vibe64 restarted. Send the message again to start a new task.",
     message: "",
     ok: true,
     progressUpdates: [],
     rawText: "",
-    runId: trimmedText(input.runId),
+    runId: normalizeText(input.runId),
     status: "failed"
   };
 }
@@ -67,8 +66,8 @@ function codexDetachedChatTurnError(error, options = {}) {
   } = options;
   const profile = isRecord(executionProfile) ? executionProfile : null;
   const settings = profile || effectiveVibe64AgentExecutionSettings(agentSettings);
-  const terminalStatus = ["failed", "interrupted"].includes(trimmedText(status))
-    ? trimmedText(status)
+  const terminalStatus = ["failed", "interrupted"].includes(normalizeText(status))
+    ? normalizeText(status)
     : "";
   const requestDetails = [
     settings.model ? `model ${settings.model}` : "",
@@ -77,7 +76,7 @@ function codexDetachedChatTurnError(error, options = {}) {
       : "",
     terminalStatus ? `turn status ${terminalStatus}` : ""
   ].filter(Boolean);
-  const message = trimmedText(error?.error || error?.message || error) || "Codex app-server turn failed.";
+  const message = normalizeText(error?.error || error?.message || error) || "Codex app-server turn failed.";
   const contextualMessage = requestDetails.length && !message.includes("Request details:")
     ? `${message}\n\nRequest details: ${requestDetails.join("; ")}.`
     : message;
@@ -121,11 +120,11 @@ function createCodexScopedConversationPreparation({
   } = helperPreparation;
 
   async function codexAppServerEphemeralScopePreparation(sessionId = "", input = {}, scope = {}) {
-    const normalizedSessionId = trimmedText(sessionId);
-    if (trimmedText(scope.id) !== normalizedSessionId) {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (normalizeText(scope.id) !== normalizedSessionId) {
       throw new TypeError("Codex ephemeral conversation scope does not match its provider binding.");
     }
-    const requestedWorkdir = trimmedText(scope.workdir);
+    const requestedWorkdir = normalizeText(scope.workdir);
     if (!path.isAbsolute(requestedWorkdir)) {
       throw new TypeError("Codex ephemeral conversation workdir must be absolute.");
     }
@@ -263,7 +262,7 @@ function createCodexScopedConversationPreparation({
   }
 
   function appendCodexAppServerEphemeralProgress(state = {}, classification = {}) {
-    const rawText = trimmedText(classification.text);
+    const rawText = normalizeText(classification.text);
     const taskResult = normalizeVibe64AgentTaskResult(rawText);
     const text = taskResult?.kind === "continue" ? taskResult.message : rawText;
     if (!text) {
@@ -353,7 +352,7 @@ function createCodexScopedConversationPreparation({
     return {
       admission,
       get result() {
-        prompt = trimmedText(input.prompt || input.message);
+        prompt = normalizeText(input.prompt || input.message);
         if (!prompt) {
           return { code: "vibe64_codex_detached_prompt_empty", error: "Codex prompt is empty.", ok: false };
         }
@@ -393,8 +392,8 @@ function createCodexScopedConversationPreparation({
   }
 
   function codexAppServerConversationControl(sessionId, input, operation) {
-    const threadId = trimmedText(input.threadId || input.codexSessionId);
-    const turnId = operation === "interrupt" ? trimmedText(input.turnId || input.codexTurnId) : "";
+    const threadId = normalizeText(input.threadId || input.codexSessionId);
+    const turnId = operation === "interrupt" ? normalizeText(input.turnId || input.codexTurnId) : "";
     const frozen = () => operation === "delete"
       ? codexAppServerFrozenThreadDeleteResponse(threadId)
       : codexAppServerFrozenTurnInterruptResponse({ threadId, turnId });

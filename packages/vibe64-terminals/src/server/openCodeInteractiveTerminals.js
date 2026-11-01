@@ -3,8 +3,8 @@ import {
   subscribeTerminalSession, terminalNamespaceAdmissionFailure, writeTerminalSessionText
 } from "@local/vibe64-execution/server/terminalSessions";
 import { opencodeTerminalNamespace, vibe64Result } from "./terminalShared.js";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
@@ -34,7 +34,7 @@ export function createOpenCodeInteractiveTerminals({
   const { prepareProcess, upstreamSessionOptions, storedUpstreamSessionId } = hostPreparation;
 
   function terminalSnapshot(sessionId = "", terminalSessionId = "") {
-    const id = normalizeText(terminalSessionId);
+    const id = toText(terminalSessionId);
     return id
       ? readTerminalSession(id, {
           namespace: opencodeTerminalNamespace(sessionId),

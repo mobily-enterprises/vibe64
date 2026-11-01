@@ -3,12 +3,9 @@ import {
   randomUUID
 } from "node:crypto";
 
-import {
-  isPlainObject,
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {ReturnType<typeof import("@local/vibe64-runtime/server/sessionStore").createVibe64SessionStore>} Vibe64SessionStore */
 
@@ -20,7 +17,7 @@ const LAYOUT_NODE_LIMIT = 2_000;
 const writes = new Map();
 
 function actorIdentity(vibe64User = null) {
-  return normalizeText(
+  return toText(
     vibe64User?.username ||
     vibe64User?.id ||
     vibe64User?.email ||
@@ -140,10 +137,10 @@ async function recordQueryHistory(store, sessionId = "", vibe64User = null, entr
     ...workspace,
     history: [{
       affectedRows: Number(entry.affectedRows || 0),
-      at: normalizeText(entry.at) || new Date().toISOString(),
+      at: toText(entry.at) || new Date().toISOString(),
       durationMs: Number(entry.durationMs || 0),
       id: randomUUID(),
-      kind: normalizeText(entry.kind),
+      kind: toText(entry.kind),
       ok: entry.ok !== false,
       readOnly: entry.readOnly !== false,
       sql: String(entry.sql || "")
@@ -156,8 +153,8 @@ async function saveSnippet(store, sessionId = "", vibe64User = null, input = {})
   if (!sql) {
     throw vibe64Error("Snippet SQL is required.", "vibe64_database_snippet_sql_required");
   }
-  const id = normalizeText(input.id) || randomUUID();
-  const name = normalizeText(input.name) || "Untitled query";
+  const id = toText(input.id) || randomUUID();
+  const name = toText(input.name) || "Untitled query";
   return mutateWorkspace(store, sessionId, vibe64User, (workspace) => ({
     ...workspace,
     snippets: [{
@@ -170,7 +167,7 @@ async function saveSnippet(store, sessionId = "", vibe64User = null, input = {})
 }
 
 async function deleteSnippet(store, sessionId = "", vibe64User = null, snippetId = "") {
-  const id = normalizeText(snippetId);
+  const id = toText(snippetId);
   return mutateWorkspace(store, sessionId, vibe64User, (workspace) => ({
     ...workspace,
     snippets: workspace.snippets.filter((snippet) => snippet.id !== id)
@@ -196,17 +193,17 @@ function normalizedDiagram(value = null) {
       collapsed: node?.collapsed === true,
       expanded: node?.expanded === true,
       pinned: node?.pinned === true,
-      group: normalizeText(node?.group).slice(0, 80),
+      group: toText(node?.group).slice(0, 80),
       hidden: node?.hidden === true,
-      table: normalizeText(node?.table).slice(0, 512),
+      table: toText(node?.table).slice(0, 512),
       x: finiteCoordinate(node?.x),
       y: finiteCoordinate(node?.y)
     })).filter((node) => node.table),
     columnMode: record.columnMode === "all" ? "all" : "keys",
-    focusTable: normalizeText(record.focusTable).slice(0, 512),
-    activeGroup: normalizeText(record.activeGroup).slice(0, 524),
+    focusTable: toText(record.focusTable).slice(0, 512),
+    activeGroup: toText(record.activeGroup).slice(0, 524),
     groups: (Array.isArray(record.groups) ? record.groups : []).slice(0, 50)
-      .map((group) => ({ id: normalizeText(group?.id).slice(0, 80), name: normalizeText(group?.name).slice(0, 80) }))
+      .map((group) => ({ id: toText(group?.id).slice(0, 80), name: toText(group?.name).slice(0, 80) }))
       .filter((group) => group.id && group.name),
     viewport: {
       x: finiteCoordinate(record.viewport?.x),
@@ -221,7 +218,7 @@ function normalizedRoutes(value = []) {
     throw vibe64Error("The ERD connection paths are too large.", "vibe64_database_erd_layout_too_large");
   }
   return value.map((route) => {
-    if (!normalizeText(route?.id) ||
+    if (!toText(route?.id) ||
         !["left", "right"].includes(route.sourcePosition) ||
         !["left", "right"].includes(route.targetPosition) ||
       !Array.isArray(route.points) || route.points.length < 2 || route.points.length > 512 ||
@@ -229,7 +226,7 @@ function normalizedRoutes(value = []) {
       throw vibe64Error("The ERD connection path is invalid.", "vibe64_database_erd_route_invalid");
     }
     return {
-      id: normalizeText(route.id).slice(0, 1024),
+      id: toText(route.id).slice(0, 1024),
       sourcePosition: route.sourcePosition,
       targetPosition: route.targetPosition,
       points: route.points.map(({ x, y }) => ({ x: finiteCoordinate(x), y: finiteCoordinate(y) })),
@@ -243,10 +240,10 @@ function normalizedLayout(value = null) {
     ...normalizedDiagram(value),
     views: (Array.isArray(value?.views) ? value.views : []).slice(0, 20).map((view) => ({
       ...normalizedDiagram(view),
-      id: normalizeText(view?.id).slice(0, 80),
-      name: normalizeText(view?.name).slice(0, 80)
+      id: toText(view?.id).slice(0, 80),
+      name: toText(view?.name).slice(0, 80)
     })).filter((view) => view.id && view.name),
-    updatedAt: normalizeText(value?.updatedAt),
+    updatedAt: toText(value?.updatedAt),
     revision: Number.isSafeInteger(value?.revision) ? value.revision : 0,
     version: 1
   };

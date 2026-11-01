@@ -3,7 +3,6 @@ import {
   defineVibe64AgentExecutionProfileRequest,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { hasOwn } from "../hasOwn.js";
 import { createSharedOperations } from "../keyedOperations.js";
 import {
@@ -17,6 +16,7 @@ import {
   untrustedExecutionProfileResolutionError,
   verifiedExecutionProfileResolution
 } from "./sessionAgentRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
@@ -58,7 +58,7 @@ function looksLikeExecutionProfileResolution(value = null) {
 }
 
 function operationKey(sessionId = "", providerId = "", operation = "", identity = "") {
-  return [sessionId, providerId, operation, identity].map(normalizeText).join(":");
+  return [sessionId, providerId, operation, identity].map(toText).join(":");
 }
 
 /**
@@ -94,7 +94,7 @@ function createSessionAgentProviderCalls({
     verifiedExecutionProfiles.set(attributed, Object.freeze({
       providerId: provider.id,
       sessionBinding: state.bindingTokens.get(bindingKey(sessionId, context)),
-      sessionId: normalizeText(sessionId),
+      sessionId: toText(sessionId),
       snapshot,
       scope: context.assistantScope ? JSON.stringify(context.assistantScope) : "",
       selection: context.assistantScope ? JSON.stringify(context.assistantSelection) : "",
@@ -108,7 +108,7 @@ function createSessionAgentProviderCalls({
   function trustedExecutionProfile(provider = {}, sessionId = "", value = null, context = {}) {
     const snapshot = vibe64AgentExecutionProfileAuditSnapshot(value);
     const provenance = verifiedExecutionProfiles.get(value);
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     if (
       !provenance ||
       provenance.providerId !== provider.id ||
@@ -162,16 +162,16 @@ function createSessionAgentProviderCalls({
     if (["sendMessage", "startTerminal", "generateSessionRenewalHandover"].includes(method)) {
       requireCompletedConversationRewind(options.session);
     }
-    const terminalId = normalizeText(input.terminalSessionId);
+    const terminalId = toText(input.terminalSessionId);
     const terminalBinding = terminalId ? state.terminalBindings.get(terminalId) : null;
     if (method === "writeTerminal" && (!terminalBinding || terminalBinding.invalidated ||
-        terminalBinding.sessionId !== normalizeText(sessionId))) {
+        terminalBinding.sessionId !== toText(sessionId))) {
       throw Object.assign(new Error("Reopen the AI terminal before sending input. Its connection is no longer bound to this session."), {
         code: "vibe64_assistant_terminal_reopen_required",
         statusCode: 409
       });
     }
-    const boundTerminal = terminalBinding?.sessionId === normalizeText(sessionId) && method.endsWith("Terminal");
+    const boundTerminal = terminalBinding?.sessionId === toText(sessionId) && method.endsWith("Terminal");
     if (boundTerminal) {
       operationOptions = {
         ...operationOptions,
@@ -206,7 +206,7 @@ function createSessionAgentProviderCalls({
         ? { browserAuthority: operationOptions.browserAuthority } : {}),
       routingConversationId: operationOptions.routingConversationId || "",
       session: operationOptions.session || null,
-      sessionId: normalizeText(sessionId),
+      sessionId: toText(sessionId),
       signal: operationOptions.signal || null,
       transportId: provider.transportId,
       turnOwnership: operationOptions.turnOwnership || null,
@@ -294,7 +294,7 @@ function createSessionAgentProviderCalls({
         }
       }
       const result = await operation(context, providerInput);
-      if (method === "startTerminal" && result?.ok !== false && normalizeText(result?.id)) {
+      if (method === "startTerminal" && result?.ok !== false && toText(result?.id)) {
         // A reused PTY keeps its original connection until explicitly closed.
         if (!state.terminalBindings.has(result.id)) {
           state.terminalBindings.set(result.id, {
@@ -315,7 +315,7 @@ function createSessionAgentProviderCalls({
           )
         : agentOperationResult(provider, sessionId, result);
     };
-    const identity = normalizeText(coalesceIdentity);
+    const identity = toText(coalesceIdentity);
     return identity
       ? operations.run(operationKey(sessionId, provider.id, method, identity), run)
       : run();
@@ -350,8 +350,8 @@ function createSessionAgentProviderCalls({
     const results = settled.map((outcome, index) => outcome.status === "fulfilled"
       ? outcome.value
       : agentOperationResult(targets[index], "", {
-          code: normalizeText(outcome.reason?.code),
-          error: normalizeText(outcome.reason?.message || outcome.reason) || `Assistant provider ${targets[index].id} failed.`,
+          code: toText(outcome.reason?.code),
+          error: toText(outcome.reason?.message || outcome.reason) || `Assistant provider ${targets[index].id} failed.`,
           ok: false
         }));
     const failed = results.filter((result) => result.ok === false);

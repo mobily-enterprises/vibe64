@@ -2,12 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeJsonFileAtomic } from "./atomicFile.js";
 
-import {
-  isMissingPathError,
-  isPlainObject,
-  normalizeText,
-  vibe64Error
-} from "./core.js";
+import { isMissingPathError, isPlainObject, vibe64Error } from "./core.js";
+import { toText } from "../shared/toText.js";
 
 const PERSONAL_AI_PROFILE_DIRECTORY = "profile";
 const PERSONAL_AI_PROFILE_FILE = "personal.json";
@@ -33,7 +29,7 @@ function normalizePreferredName(value = "") {
 }
 
 function personalAiProfilePath(systemRoot = "") {
-  const root = normalizeText(systemRoot);
+  const root = toText(systemRoot);
   if (!root) {
     throw vibe64Error(
       "Personal AI profile requires the Vibe64 system root.",

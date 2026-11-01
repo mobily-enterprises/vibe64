@@ -18,8 +18,7 @@ import {
   stopVibe64OwnedExecutions
 } from "@local/vibe64-execution/server";
 import { removeDeadUnixJsonCommandSocket, requestUnixJsonCommand, unixCommandSocketIsPresent } from "./unixJsonCommand.js";
-import { trimmedText } from "./trimmedText.js";
-import { isRecord } from "./isRecord.js";
+import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
   "Browser checks need Playwright, and neither this project nor this computer has it. Report this and ask the person " +
@@ -41,7 +40,7 @@ function normalizedBrowserProcessGroups(value = []) {
   const groups = new Map();
   for (const entry of Array.isArray(value) ? value : []) {
     const groupId = Number(entry?.groupId);
-    const startTimeTicks = trimmedText(entry?.startTimeTicks);
+    const startTimeTicks = normalizeText(entry?.startTimeTicks);
     if (Number.isSafeInteger(groupId) && groupId > 1 && startTimeTicks) {
       groups.set(groupId, {
         groupId,
@@ -56,14 +55,14 @@ function browserWorkerMetadataSignature(metadata = {}, token = "") {
   return crypto
     .createHash("sha256")
     .update([
-      trimmedText(token),
-      trimmedText(metadata.contractVersion),
-      trimmedText(metadata.executionId),
+      normalizeText(token),
+      normalizeText(metadata.contractVersion),
+      normalizeText(metadata.executionId),
       String(metadata.pid || ""),
-      trimmedText(metadata.socketPath),
-      trimmedText(metadata.startTimeTicks),
-      trimmedText(metadata.startedAt),
-      trimmedText(metadata.workerScriptPath),
+      normalizeText(metadata.socketPath),
+      normalizeText(metadata.startTimeTicks),
+      normalizeText(metadata.startedAt),
+      normalizeText(metadata.workerScriptPath),
       JSON.stringify(normalizedBrowserProcessGroups(metadata.browserProcessGroups))
     ].join("\n"))
     .digest("hex");
@@ -96,7 +95,7 @@ async function registeredProcessGroupIsAlive(entry) {
   if (
     leader.status !== "exact" ||
     leader.groupId !== groupId ||
-    leader.startTimeTicks !== trimmedText(entry?.startTimeTicks)
+    leader.startTimeTicks !== normalizeText(entry?.startTimeTicks)
   ) {
     return false;
   }
@@ -138,10 +137,10 @@ async function drainRegisteredProcessGroup(entry = {}) {
 async function registeredWorkerMetadata(descriptor = {}) {
   try {
     const metadata = JSON.parse(await readFile(descriptor.metadataPath, "utf8"));
-    const executionId = trimmedText(metadata?.executionId);
+    const executionId = normalizeText(metadata?.executionId);
     if (
       !/^[A-Za-z0-9](?:[A-Za-z0-9._:-]{0,254}[A-Za-z0-9])?$/u.test(executionId) ||
-      (trimmedText(descriptor.executionId) && executionId !== trimmedText(descriptor.executionId)) ||
+      (normalizeText(descriptor.executionId) && executionId !== normalizeText(descriptor.executionId)) ||
       metadata?.socketPath !== descriptor.socketPath ||
       metadata?.workerScriptPath !== descriptor.workerScriptPath ||
       metadata?.contractVersion !== descriptor.contractVersion ||
@@ -218,8 +217,8 @@ async function stopRegisteredBrowserWorker(descriptor = {}, options = {}) {
     token: descriptor.token
   }).catch(() => null);
   const executionIds = [...new Set([
-    trimmedText(descriptor.executionId),
-    trimmedText(metadata?.executionId)
+    normalizeText(descriptor.executionId),
+    normalizeText(metadata?.executionId)
   ].filter(Boolean))];
   if (executionIds.length === 0 && (
     await unixCommandSocketIsPresent(descriptor.socketPath) ||
@@ -228,7 +227,7 @@ async function stopRegisteredBrowserWorker(descriptor = {}, options = {}) {
     const cleanup = await stopOwnedExecutions({
       kind: "browser",
       ownerId: descriptor.sessionId,
-      projectSlug: trimmedText(descriptor.project?.slug),
+      projectSlug: normalizeText(descriptor.project?.slug),
       sessionId: descriptor.sessionId
     }, { reason });
     if (cleanup?.supported !== true || cleanup?.scopeEmpty !== true) {
@@ -274,8 +273,8 @@ async function stopRegisteredBrowserWorker(descriptor = {}, options = {}) {
 }
 
 function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWorkers = new Map()) {
-  const normalizedSessionId = trimmedText(sessionId);
-  const socketPath = trimmedText(input.browserSocketPath);
+  const normalizedSessionId = normalizeText(sessionId);
+  const socketPath = normalizeText(input.browserSocketPath);
   const descriptor = browserWorkers.get(normalizedSessionId)?.get(socketPath);
   if (!descriptor) {
     return {
@@ -286,8 +285,8 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
     };
   }
   if (
-    trimmedText(input.managedNodePath) !== descriptor.managedNodePath ||
-    trimmedText(input.workerScriptPath) !== descriptor.workerScriptPath
+    normalizeText(input.managedNodePath) !== descriptor.managedNodePath ||
+    normalizeText(input.workerScriptPath) !== descriptor.workerScriptPath
   ) {
     return {
       error: responseError(
@@ -297,7 +296,7 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
     };
   }
   const worktreePath = path.resolve(descriptor.worktreePath);
-  const cwd = path.resolve(trimmedText(input.cwd) || worktreePath);
+  const cwd = path.resolve(normalizeText(input.cwd) || worktreePath);
   if (!pathInsideOrEqual(worktreePath, cwd)) {
     return {
       error: responseError(
@@ -335,24 +334,24 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
   if (!descriptor.runtimeRoot) {
     return responseError(LOCAL_PLAYWRIGHT_MESSAGE, "vibe64_preview_playwright_local");
   }
-  const parentExecutionId = trimmedText(input.parentExecutionId);
+  const parentExecutionId = normalizeText(input.parentExecutionId);
   if (!parentExecutionId) {
     return responseError(
       "Browser testing requires a live assistant execution owner.",
       "vibe64_managed_browser_parent_required"
     );
   }
-  const runner = trimmedText(input.runner);
+  const runner = normalizeText(input.runner);
   const args = Array.isArray(input.args)
     ? input.args.map((value) => String(value ?? ""))
     : [];
   let command = "";
   let scriptText = "";
   if (runner === "node") {
-    const cliPath = path.resolve(trimmedText(args[0]));
+    const cliPath = path.resolve(normalizeText(args[0]));
     const relativeCliPath = path.relative(path.resolve(descriptor.worktreePath), cliPath);
     if (
-      !trimmedText(args[0]) ||
+      !normalizeText(args[0]) ||
       !pathInsideOrEqual(descriptor.worktreePath, cliPath) ||
       !/node_modules\/(?:@playwright\/test|playwright)\/cli\.js$/u.test(relativeCliPath.split(path.sep).join("/"))
     ) {
@@ -363,14 +362,14 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
     }
     command = descriptor.managedNodePath;
   } else if (runner === "npm") {
-    const scriptName = trimmedText(args[1]);
+    const scriptName = normalizeText(args[1]);
     let packageRecord = null;
     try {
       packageRecord = JSON.parse(await readFile(path.join(cwd, "package.json"), "utf8"));
     } catch {
       packageRecord = null;
     }
-    const declaredScript = trimmedText(packageRecord?.scripts?.[scriptName]);
+    const declaredScript = normalizeText(packageRecord?.scripts?.[scriptName]);
     if (
       args[0] !== "run" ||
       !scriptName ||
@@ -393,7 +392,7 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
   }
 
   const requestedEnv = isRecord(input.playwrightEnv) ? input.playwrightEnv : {};
-  const targetId = trimmedText(input.targetId);
+  const targetId = normalizeText(input.targetId);
   const scopedPreview = Boolean(targetId || input.restorePreview === true);
   if (targetId && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(targetId)) {
     return responseError("Choose an exact declared Preview target id.", "vibe64_preview_target_invalid");
@@ -401,11 +400,11 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
   let baseUrl = "";
   try {
     if (!scopedPreview) {
-      const parsed = new URL(trimmedText(requestedEnv.PLAYWRIGHT_BASE_URL));
+      const parsed = new URL(normalizeText(requestedEnv.PLAYWRIGHT_BASE_URL));
       if (!["http:", "https:"].includes(parsed.protocol)) {
         throw new Error("Unsupported preview protocol.");
       }
-      baseUrl = trimmedText(requestedEnv.PLAYWRIGHT_BASE_URL);
+      baseUrl = normalizeText(requestedEnv.PLAYWRIGHT_BASE_URL);
     }
   } catch {
     return responseError(
@@ -413,10 +412,10 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       "vibe64_managed_playwright_base_url_invalid"
     );
   }
-  const browsersPath = path.resolve(trimmedText(requestedEnv.PLAYWRIGHT_BROWSERS_PATH));
+  const browsersPath = path.resolve(normalizeText(requestedEnv.PLAYWRIGHT_BROWSERS_PATH));
   const runtimeRoot = path.resolve(descriptor.runtimeRoot);
   if (
-    !trimmedText(requestedEnv.PLAYWRIGHT_BROWSERS_PATH) ||
+    !normalizeText(requestedEnv.PLAYWRIGHT_BROWSERS_PATH) ||
     !pathInsideOrEqual(runtimeRoot, browsersPath) ||
     path.basename(browsersPath) !== "browsers"
   ) {
@@ -425,7 +424,7 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       "vibe64_managed_playwright_runtime_invalid"
     );
   }
-  const storageStatePath = trimmedText(requestedEnv.PLAYWRIGHT_STORAGE_STATE);
+  const storageStatePath = normalizeText(requestedEnv.PLAYWRIGHT_STORAGE_STATE);
   if (storageStatePath && !path.isAbsolute(storageStatePath)) {
     return responseError(
       "The managed Playwright storage-state path must be absolute.",
@@ -564,7 +563,7 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, options 
       };
     }
     if (
-      existingMetadata || trimmedText(descriptor.executionId) ||
+      existingMetadata || normalizeText(descriptor.executionId) ||
       await unixCommandSocketIsPresent(descriptor.socketPath) ||
       await fileExists(descriptor.metadataPath)
     ) {
@@ -613,7 +612,7 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, options 
     if (result?.ok !== true) {
       return result;
     }
-    descriptor.executionId = trimmedText(result.execution?.id);
+    descriptor.executionId = normalizeText(result.execution?.id);
     if (!descriptor.executionId) {
       return browserCleanupFault(
         "The managed browser started without an execution ownership record."
@@ -663,10 +662,10 @@ async function stopRegisteredBrowserWorkerForInput(sessionId = "", input = {}, o
     stopExecution = stopVibe64Execution,
     stopOwnedExecutions = stopVibe64OwnedExecutions
   } = options;
-  const normalizedSessionId = trimmedText(sessionId);
+  const normalizedSessionId = normalizeText(sessionId);
   const descriptor = browserWorkers
     .get(normalizedSessionId)
-    ?.get(trimmedText(input.browserSocketPath));
+    ?.get(normalizeText(input.browserSocketPath));
   if (!descriptor) {
     return responseError(
       "The managed browser is not registered for this assistant session.",
@@ -712,8 +711,8 @@ async function streamPlaywrightRun({ commandService, input, response, sessionId 
     });
   }
   writeFrame({
-    code: trimmedText(payload?.code),
-    error: trimmedText(payload?.error || payload?.stderr),
+    code: normalizeText(payload?.code),
+    error: normalizeText(payload?.error || payload?.stderr),
     ...(isRecord(payload?.details?.admission) ? { details: { admission: payload.details.admission } } : {}),
     exitCode: Number.isInteger(payload?.exitCode) ? payload.exitCode : (payload?.ok === false ? 1 : 0),
     ok: payload?.ok !== false,

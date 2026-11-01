@@ -1,13 +1,13 @@
 import { cachedRepositoryUpdateCheck } from "./sessionRepositoryUpdates.js";
 import { sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
 function requiredIncomingSessionId(value = "") {
-  const sessionId = text(value);
+  const sessionId = normalizeText(value);
   if (!sessionId) {
     const error = new Error("Select a session before reviewing incoming changes.");
     error.code = "vibe64_incoming_changes_session_required";
@@ -22,7 +22,7 @@ function requiredIncomingSessionId(value = "") {
  * @param {string} [value]
  */
 async function optionalRepositorySession(project, value = "") {
-  const sessionId = text(value);
+  const sessionId = normalizeText(value);
   if (!sessionId) {
     return null;
   }

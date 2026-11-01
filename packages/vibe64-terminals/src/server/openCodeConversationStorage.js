@@ -1,6 +1,6 @@
 import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@local/vibe64-runtime/shared";
 import { createHash, randomUUID } from "node:crypto";
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 function openCodeFingerprint(...values) {
   return createHash("sha256").update(values.map((value) => String(value ?? "")).join("\0")).digest("hex");
@@ -17,13 +17,13 @@ function conversationMessageId(...values) {
 }
 
 function renewalSession(context = {}) {
-  return Boolean(normalizeText(context.session?.metadata?.renewed_from));
+  return Boolean(toText(context.session?.metadata?.renewed_from));
 }
 
 async function writeOpenCodeSessionMetadata(context = {}, values = {}) {
   const store = context.runtime?.store;
   const entries = Object.entries(values)
-    .filter(([name, value]) => normalizeText(name) && value !== undefined && value !== null);
+    .filter(([name, value]) => toText(name) && value !== undefined && value !== null);
   if (!entries.length) {
     return;
   }
@@ -44,10 +44,10 @@ async function writeOpenCodeSessionMetadata(context = {}, values = {}) {
 
 async function recordOpenCodeSessionIdentity(context, nativeId) {
   if (
-    normalizeText(context.session?.metadata?.opencode_conversation_id) !== nativeId ||
-    normalizeText(context.session?.metadata?.agent_identity_conversation_id) !== nativeId ||
-    normalizeText(context.session?.metadata?.agent_identity_provider) !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE ||
-    normalizeText(context.session?.metadata?.agent_transport_id) !== VIBE64_ASSISTANT_TRANSPORT_IDS.OPENCODE_SERVER
+    toText(context.session?.metadata?.opencode_conversation_id) !== nativeId ||
+    toText(context.session?.metadata?.agent_identity_conversation_id) !== nativeId ||
+    toText(context.session?.metadata?.agent_identity_provider) !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE ||
+    toText(context.session?.metadata?.agent_transport_id) !== VIBE64_ASSISTANT_TRANSPORT_IDS.OPENCODE_SERVER
   ) {
     const capturedAt = new Date().toISOString();
     await writeOpenCodeSessionMetadata(context, {

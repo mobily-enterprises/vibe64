@@ -3,13 +3,13 @@ import {
   browserTestNeedsCleanup,
   drainBrowserTestExecutions
 } from "./browserTestCleanup.js";
-import { trimmedText } from "./trimmedText.js";
 import {
   responseError,
   runRegisteredPlaywrightCommand
 } from "./agentPreviewBrowserWorker.js";
 import { waitForPreviewReady } from "./agentPreviewStatusText.js";
-import { doNothing } from "./doNothing.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("./types.js").AgentPreviewCommandState} AgentPreviewCommandState */
 /** @typedef {import("./types.js").AgentPreviewWorkerRegistry} AgentPreviewWorkerRegistry */
@@ -216,7 +216,7 @@ function createAgentPreviewBrowserTests({
       "A browser test still owns this session. Use vibe64-helper playwright status, then cancel its run ID or wait for completion.",
       "vibe64_test_approval_busy"
     );
-    const admission = launchTarget.previewTestRunAdmission(sessionId, trimmedText(input.testRunToken));
+    const admission = launchTarget.previewTestRunAdmission(sessionId, normalizeText(input.testRunToken));
     if (admission) return admission;
     const parent = input.testRunToken ? state.browserTestRuns.get(sessionId) : null;
     const cancellation = new AbortController();

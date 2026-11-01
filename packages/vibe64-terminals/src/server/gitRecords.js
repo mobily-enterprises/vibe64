@@ -1,5 +1,5 @@
 import path from "node:path";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const GIT_HISTORY_RECORD_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%s";
 const DEFAULT_CHANGE_FILE_LIMIT = 200;
@@ -11,18 +11,18 @@ function parseGitHistoryRecords(value = "") {
   const fields = String(value || "").split("\0");
   const versions = [];
   for (let index = 0; index + 5 < fields.length; index += 6) {
-    const commit = trimmedText(fields[index]);
+    const commit = normalizeText(fields[index]);
     if (!commit) {
       continue;
     }
-    const parents = trimmedText(fields[index + 1]).split(/\s+/u).filter(Boolean);
+    const parents = normalizeText(fields[index + 1]).split(/\s+/u).filter(Boolean);
     versions.push({
-      author: trimmedText(fields[index + 2]),
-      authorEmail: trimmedText(fields[index + 3]),
-      committedAt: trimmedText(fields[index + 4]),
+      author: normalizeText(fields[index + 2]),
+      authorEmail: normalizeText(fields[index + 3]),
+      committedAt: normalizeText(fields[index + 4]),
       commit,
       isMerge: parents.length > 1,
-      message: trimmedText(fields[index + 5]),
+      message: normalizeText(fields[index + 5]),
       parents,
       shortCommit: commit.slice(0, 8)
     });
@@ -41,7 +41,7 @@ function parseGitNameStatusZ(value = "") {
   const fields = String(value || "").split("\0");
   const files = new Map();
   for (let index = 0; index < fields.length;) {
-    const status = trimmedText(fields[index++]);
+    const status = normalizeText(fields[index++]);
     if (!status) {
       continue;
     }
@@ -60,7 +60,7 @@ function parseGitNameStatusZ(value = "") {
 }
 
 function numericStat(value = "") {
-  const normalized = trimmedText(value);
+  const normalized = normalizeText(value);
   if (normalized === "-") {
     return null;
   }

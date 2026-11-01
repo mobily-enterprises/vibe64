@@ -1,24 +1,20 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  isMissingPathError,
-  isPlainObject,
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { isMissingPathError, isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import {
   normalizePreviewApplicationIdentities
 } from "@local/vibe64-core/server/previewAuth";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const PREVIEW_APPLICATION_IDENTITIES_DIR = ".vibe64";
 const PREVIEW_APPLICATION_IDENTITIES_FILE = "preview-identities.json";
 const PREVIEW_APPLICATION_IDENTITIES_VERSION = 1;
 
 function resolvePreviewIdentitySourceRoot(sourceRoot = "") {
-  const root = normalizeText(sourceRoot);
+  const root = toText(sourceRoot);
   if (!root) {
     throw vibe64Error(
       "Managed app identities require an available project source.",

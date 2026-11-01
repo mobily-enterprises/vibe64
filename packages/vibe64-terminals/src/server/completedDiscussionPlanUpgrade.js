@@ -3,7 +3,7 @@ import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProjectContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 // This exact incident was verified against native history and confirmed by the
 // owner. Other drafts must never be declared complete from prose or a model guess.

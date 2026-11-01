@@ -1,5 +1,5 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { renewalError } from "./sessionRenewalRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /**
  * The renewal work this process admits: one run per renewal and per
@@ -19,7 +19,7 @@ function createRenewalAdmission() {
   }
 
   function runOnce(state, operation) {
-    const key = normalizeText(state.renewalId);
+    const key = toText(state.renewalId);
     if (!key) {
       throw new TypeError("Session renewal workflow scheduling requires a renewal id.");
     }
@@ -44,9 +44,9 @@ function createRenewalAdmission() {
   async function runConfirmationOnce(renewalId, input, operation) {
     assertWorkflowAdmissionOpen();
     const key = [
-      normalizeText(renewalId),
-      normalizeText(input.operationKey),
-      normalizeText(input.expectedHash),
+      toText(renewalId),
+      toText(input.operationKey),
+      toText(input.expectedHash),
       Number(input.expectedRevision)
     ].join(":");
     const current = confirmationOperations.get(key);

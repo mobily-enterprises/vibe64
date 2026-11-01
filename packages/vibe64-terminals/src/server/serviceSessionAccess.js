@@ -7,7 +7,7 @@ import {
   runVibe64AgentWriteExclusive,
   runVibe64RenewalAgentWriteExclusive
 } from "@local/vibe64-runtime/server/agentWriteLock";
-import { isRecord } from "./isRecord.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

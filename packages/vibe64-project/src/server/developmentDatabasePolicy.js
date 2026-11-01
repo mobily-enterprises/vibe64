@@ -1,14 +1,14 @@
 import {
   normalizeDevelopmentDatabaseScope
 } from "@local/vibe64-core/server/studioProjectContext";
-import { text } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const DEFAULT_MAX_OPEN_SESSIONS = 3;
 
 function normalizedOpenSessions(value = []) {
   return (Array.isArray(value) ? value : []).map((session = {}) => ({
-    label: text(session.sessionName || session.metadata?.label || session.sessionId),
-    sessionId: text(session.sessionId)
+    label: normalizeText(session.sessionName || session.metadata?.label || session.sessionId),
+    sessionId: normalizeText(session.sessionId)
   }));
 }
 

@@ -8,7 +8,7 @@ import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { readLearningFact } from "./learningFacts.js";
 import { availableStepIds } from "./lessonAvailability.js";
 import { trainingFailure } from "./errors.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 /** @typedef {import("./types.js").TrainingLearnerState} TrainingLearnerState */
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */

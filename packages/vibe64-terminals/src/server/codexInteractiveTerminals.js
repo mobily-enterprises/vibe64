@@ -25,7 +25,7 @@ import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecu
 import { recordSessionGitCommandActor } from "./sessionGitCommandActor.js";
 import { errorMessage } from "./codexStartupHealth.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -48,11 +48,11 @@ const CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 4 * 1024 * 1024;
  * @param {Vibe64SessionRuntime} [runtime]
  */
 async function globalCodexRuntimeRoot(projectService, runtime = null) {
-  const serviceRoot = trimmedText(projectService.currentProjectRuntimeRoot());
+  const serviceRoot = normalizeText(projectService.currentProjectRuntimeRoot());
   if (serviceRoot) {
     return serviceRoot;
   }
-  return trimmedText(runtime?.stateRoot);
+  return normalizeText(runtime?.stateRoot);
 }
 
 function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
@@ -60,7 +60,7 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
     return "";
   }
   const metadata = session.metadata || {};
-  const endpoint = trimmedText(metadata.agent_transport_endpoint);
+  const endpoint = normalizeText(metadata.agent_transport_endpoint);
   return endpoint ? codexAppServerEndpointForTarget(endpoint) : "";
 }
 
@@ -109,7 +109,7 @@ function createCodexInteractiveTerminals({
   const startCodexGatewayTerminal = createCodexGatewayTerminal(runCommand);
 
   async function codexAppServerRuntimeForVisibleTerminal(sessionId = "", threadId = "", options = {}) {
-    if (!trimmedText(threadId)) {
+    if (!normalizeText(threadId)) {
       return null;
     }
     const runtime = options.runtime || await createRuntimeForSession();
@@ -386,7 +386,7 @@ function createCodexInteractiveTerminals({
   }
 
   async function recordCodexTerminalInputGitActor(sessionId, data, input) {
-    const normalizedSessionId = trimmedText(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
     if (!input?.trackGitActor || !normalizedSessionId || String(data ?? "").length === 0) {
       return {
         ok: true

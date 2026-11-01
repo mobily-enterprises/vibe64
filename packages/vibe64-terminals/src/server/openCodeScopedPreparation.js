@@ -10,7 +10,7 @@ import { conversationMessageId, upstreamMessageId } from "./openCodeConversation
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
 import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencodeServerProcess.js";
 import { openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./terminalShared.js";
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
@@ -35,7 +35,7 @@ function openCodeExecutionProfile(input = {}) {
 
 function openCodeAgent(selection = {}, executionProfile = null, assistantScope = null) {
   if (executionProfile) return OPENCODE_HELPER_AGENT_ID;
-  return assistantScope ? OPENCODE_EPHEMERAL_AGENT_ID : normalizeText(selection.agentId);
+  return assistantScope ? OPENCODE_EPHEMERAL_AGENT_ID : toText(selection.agentId);
 }
 
 function boundedOpenCodeExecutionInput(prompt = "", executionProfile = null) {
@@ -131,7 +131,7 @@ export function createOpenCodeScopedPreparation({
         context.selection = options.assistantSelection || context.selection;
         const agent = openCodeAgent(context.selection, executionProfile, context.assistantScope);
         return {
-          conversationId: normalizeText(input.conversationId || input.threadId),
+          conversationId: toText(input.conversationId || input.threadId),
           scoped: Boolean(context.assistantScope),
           createIfMissing,
           profileChanged: () =>
@@ -151,7 +151,7 @@ export function createOpenCodeScopedPreparation({
 
   async function prepareExistingDetachedTarget(sessionId = "", input = {}, options = {}) {
     const context = await contextFor(sessionId, options);
-    const conversationId = normalizeText(input.conversationId || input.threadId);
+    const conversationId = toText(input.conversationId || input.threadId);
     if (!conversationId) {
       throw openCodeError(
         "vibe64_opencode_conversation_id_required",

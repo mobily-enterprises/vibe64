@@ -9,10 +9,7 @@ import {
 import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
-import {
-  normalizeText,
-  pathInsideOrEqual
-} from "@local/vibe64-core/server/core";
+import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
@@ -34,6 +31,7 @@ import {
   USAGE_RECORDING_REQUEST_HEADER
 } from "@local/vibe64-usage-recording/shared/contract";
 import { executionEnvRecord } from "./executionEnvRecord.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 const WEB_LAUNCH_READINESS_TIMEOUT_SECONDS = 300;
@@ -88,14 +86,14 @@ async function reserveAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_L
 }
 
 function normalizeUrlPath(value = "/") {
-  const normalized = normalizeText(value) || "/";
+  const normalized = toText(value) || "/";
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 }
 
 function normalizeLaunchRuntimes(values = []) {
   const normalized = [];
   for (const value of Array.isArray(values) ? values : []) {
-    const runtime = normalizeText(value);
+    const runtime = toText(value);
     if (runtime && !normalized.includes(runtime)) {
       normalized.push(runtime);
     }
@@ -118,14 +116,14 @@ function normalizeLaunchCommands({
 
   return entries
     .map((entry) => {
-      const normalizedCommand = normalizeText(typeof entry === "string" ? entry : entry?.command);
+      const normalizedCommand = toText(typeof entry === "string" ? entry : entry?.command);
       if (!normalizedCommand) {
         return null;
       }
       return {
         command: normalizedCommand,
-        commandPreview: normalizeText(entry?.commandPreview || normalizedCommand),
-        label: normalizeText(entry?.label),
+        commandPreview: toText(entry?.commandPreview || normalizedCommand),
+        label: toText(entry?.label),
         networkEnv: entry?.networkEnv !== false
       };
     })
@@ -321,9 +319,9 @@ function normalizeHttpLaunchReadiness(readiness = null) {
   if (!readiness || typeof readiness !== "object" || Array.isArray(readiness)) {
     return null;
   }
-  const kind = normalizeText(readiness.kind);
-  const method = normalizeText(readiness.method).toUpperCase();
-  const readinessPath = normalizeText(readiness.path);
+  const kind = toText(readiness.kind);
+  const method = toText(readiness.method).toUpperCase();
+  const readinessPath = toText(readiness.path);
   const status = Number(readiness.status);
   if (
     kind !== "http" ||
@@ -357,7 +355,7 @@ function launchCommandLines(commands = []) {
 
 function launchActionLines(actions = []) {
   return actions.map((action) => {
-    if (action?.kind !== "url" || !normalizeText(action.href)) {
+    if (action?.kind !== "url" || !toText(action.href)) {
       return "";
     }
     return `printf '\\n[studio] action:%s\\n' ${shellQuote(action.href)}`;
@@ -381,7 +379,7 @@ function webLaunchTargetStartupScript({
 }
 
 function ensurePreviewAuthRuntimeFilePath(filePath = "") {
-  const normalizedPath = normalizeText(filePath);
+  const normalizedPath = toText(filePath);
   if (!normalizedPath) {
     return "";
   }
@@ -427,9 +425,9 @@ function normalizeOpenTarget({
   label = "Open browser"
 } = {}) {
   return {
-    href: normalizeText(href),
-    kind: normalizeText(kind || "url"),
-    label: normalizeText(label || "Open")
+    href: toText(href),
+    kind: toText(kind || "url"),
+    label: toText(label || "Open")
   };
 }
 
@@ -506,7 +504,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       };
     }
 
-    const workdir = path.resolve(normalizeText(launch.workdir) || resolvedWorktreeRoot);
+    const workdir = path.resolve(toText(launch.workdir) || resolvedWorktreeRoot);
     if (!pathInsideOrEqual(resolvedWorktreeRoot, workdir)) {
       releasePortReservation();
       return {
@@ -535,16 +533,16 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     }
     const previewAuthKind = previewIdentity ? APPLICATION_COMMAND_PREVIEW_AUTH_KIND : "";
     const previewAuthSecretValue = previewIdentity ? createPreviewAuthSecret() : "";
-    const projectScope = normalizeText(launch.projectScope) || currentProjectScopeKey();
+    const projectScope = toText(launch.projectScope) || currentProjectScopeKey();
     const agentTargetHref = targetUrl;
     const launchAgentEnv = {
       VIBE64_LAUNCH_AGENT_HOST: "127.0.0.1"
     };
     const metadata = {
       ...(launch.metadata || {}),
-      defaultDisplay: normalizeText(launch.defaultDisplay || launchTarget.defaultDisplay),
-      launchTargetId: normalizeText(launchTarget.id),
-      launchTargetLabel: normalizeText(launchTarget.label),
+      defaultDisplay: toText(launch.defaultDisplay || launchTarget.defaultDisplay),
+      launchTargetId: toText(launchTarget.id),
+      launchTargetLabel: toText(launchTarget.label),
       agentTargetHref,
       openTarget,
       port,
@@ -629,7 +627,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       metadata,
       ok: true,
       allowedRoots: Array.isArray(launch.allowedRoots)
-        ? launch.allowedRoots.map((root) => normalizeText(root)).filter(Boolean)
+        ? launch.allowedRoots.map((root) => toText(root)).filter(Boolean)
         : [],
       onClose,
       onStop,

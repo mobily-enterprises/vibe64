@@ -4,7 +4,7 @@ import { lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/prom
 import path from "node:path";
 import { parseWorkPlanLines, workPlanScope } from "../shared/assistantWorkPlan.js";
 import { createKeyedQueue } from "./keyedOperations.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 const PLAN_LIMIT = 256 * 1024;
 // Process-wide: whole pair reads and publication/cleanup of a plan file run

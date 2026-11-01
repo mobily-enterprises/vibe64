@@ -1,5 +1,5 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /**
  * One daemon-side capture of a session source command (git, tar), reporting
@@ -36,10 +36,10 @@ async function runSourceCommand(command, args = [], options = {}) {
     timeout
   });
   return {
-    code: normalizeText(result.code),
+    code: toText(result.code),
     ok: result.ok === true,
-    output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
-      normalizeText(result.output || result.error),
+    output: toText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
+      toText(result.output || result.error),
     retryable: result.retryable === true,
     stdout: String(result.stdout || ""),
     stderr: String(result.stderr || "")

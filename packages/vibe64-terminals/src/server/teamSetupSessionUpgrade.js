@@ -3,7 +3,7 @@ import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState"
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { v4OwnerSetup } from "@local/vibe64-core/server/stateUpgrades/routingV4Format";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { isRecord } from "./isRecord.js";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 function parsed(raw, label) {
   let value;

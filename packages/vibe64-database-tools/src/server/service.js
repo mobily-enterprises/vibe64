@@ -6,7 +6,6 @@ import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
@@ -47,6 +46,7 @@ import {
   dataOverviewCoverage,
   validateDataOverview
 } from "../shared/dataOverview.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -70,7 +70,7 @@ function safeConnectionDescriptor(connection = {}, context = {}) {
     developmentDatabaseScope: context.developmentDatabaseScope || "",
     engine: connection.engine,
     label: connection.label,
-    sourceLabel: normalizeText(context.source?.label)
+    sourceLabel: toText(context.source?.label)
   };
 }
 
@@ -115,7 +115,7 @@ function createService({
   const activeAssistants = new Set();
 
   function sessionQueryKey(sessionId = "") {
-    return `${currentProjectScopeKey()}\0${normalizeText(sessionId)}`;
+    return `${currentProjectScopeKey()}\0${toText(sessionId)}`;
   }
 
   async function assistantDecision(context) {
@@ -335,7 +335,7 @@ function createService({
   async function refreshSchema(input) {
     return databaseResult(async () => {
       const context = await sessionDatabase.sessionContext(input);
-      const schema = await sessionDatabase.refreshSchema(context, normalizeText(input.source) || "user");
+      const schema = await sessionDatabase.refreshSchema(context, toText(input.source) || "user");
       await publishLayoutChanged(context.sessionId, context.session);
       return {
         ok: true,
@@ -433,7 +433,7 @@ function createService({
           code: error?.code,
           durationMs: Date.now() - startedAt,
           operation: "query.run",
-          queryId: normalizeText(input.queryId),
+          queryId: toText(input.queryId),
           readOnly,
           sql: auditSql(input.sql),
           status: "failed"
@@ -581,7 +581,7 @@ function createService({
 
   function askAssistant(input) {
     const task = {
-      sessionId: normalizeText(input.sessionId),
+      sessionId: toText(input.sessionId),
       projectScope: currentProjectScopeKey(),
       actor: actorKey(input.vibe64User),
       controller: new AbortController()

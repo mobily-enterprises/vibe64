@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import {
   SESSION_RENEWAL_STAGE,
@@ -13,6 +12,7 @@ import {
   statePatch,
   timestamp
 } from "./sessionRenewalRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").RenewalPredecessorSession} RenewalPredecessorSession */
 /** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */
@@ -53,7 +53,7 @@ function createRenewalRestoration({
         { retryable: false, statusCode: 500 }
       );
     }
-    let sourceStatus = normalizeText(
+    let sourceStatus = toText(
       await runtime.store.readStatusForRenewal(state.sessionId)
     );
     if (sourceStatus === VIBE64_SESSION_STATUS.ACTIVE) {
@@ -66,7 +66,7 @@ function createRenewalRestoration({
       SESSION_RENEWAL_STAGE.OLD_ARCHIVING,
       SESSION_RENEWAL_STAGE.SUCCESSOR_ACTIVATING
     ].includes(state.stage)) {
-      const successorSessionId = normalizeText(state.successor?.sessionId);
+      const successorSessionId = toText(state.successor?.sessionId);
       if (!successorSessionId) {
         throw renewalError(
           "The predecessor archive transition has no exact successor.",
@@ -90,12 +90,12 @@ function createRenewalRestoration({
         await runtime.store.rollbackRenewalSuccessorActivation(transition);
       }
       await runtime.store.restoreRenewalClosingSession(transition);
-      sourceStatus = normalizeText(
+      sourceStatus = toText(
         await runtime.store.readStatusForRenewal(state.sessionId)
       );
       if (
         sourceStatus === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED &&
-        normalizeText(published?.metadata?.source_recovery_saved) === "yes"
+        toText(published?.metadata?.source_recovery_saved) === "yes"
       ) {
         await runtime.restoreSessionSourceAfterRenewalFailure(state.sessionId, {
           renewalId: state.renewalId
@@ -131,7 +131,7 @@ function createRenewalRestoration({
     if (state?.stage !== SESSION_RENEWAL_STAGE.FAILURE_RESTORING) {
       return state;
     }
-    const failedStage = normalizeText(state.failure?.stage);
+    const failedStage = toText(state.failure?.stage);
     const failedError = state.failure?.error;
     if (
       !SESSION_RENEWAL_PRE_ACKNOWLEDGEMENT_STAGES.has(failedStage) ||
@@ -147,7 +147,7 @@ function createRenewalRestoration({
       ...state,
       stage: failedStage
     };
-    const successorSourceInvalid = normalizeText(failedError.code) ===
+    const successorSourceInvalid = toText(failedError.code) ===
       SESSION_RENEWAL_SUCCESSOR_SOURCE_INVALID_CODE;
     let cleanupError = null;
     if (successorSourceInvalid) {
@@ -174,9 +174,9 @@ function createRenewalRestoration({
             : "The predecessor is writable again, but the invalid renewed session still needs exact cleanup.",
           retryable: true,
           details: {
-            cleanupError: normalizeText(cleanupError?.message),
-            renewalError: normalizeText(failedError?.message),
-            restoreError: normalizeText(restoreError?.message)
+            cleanupError: toText(cleanupError?.message),
+            renewalError: toText(failedError?.message),
+            restoreError: toText(restoreError?.message)
           }
         },
         status: SESSION_RENEWAL_STATUS.FAILED

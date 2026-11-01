@@ -8,10 +8,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   resolveProjectCanonicalRepositoryPath
 } from "@local/vibe64-core/server/projectState";
@@ -24,11 +21,12 @@ import {
 import {
   initializeGenesisProject
 } from "@local/vibe64-genesis/server";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 function initialProjectError(result = {}, fallback = "Initial project materialization failed.") {
   return vibe64Error(
-    normalizeText(result.stderr || result.output || result.error) || fallback,
-    normalizeText(result.code) || "vibe64_initial_project_materialization_failed"
+    toText(result.stderr || result.output || result.error) || fallback,
+    toText(result.code) || "vibe64_initial_project_materialization_failed"
   );
 }
 
@@ -62,7 +60,7 @@ async function runGit(args = [], options = {}) {
     if (gitFailure) throw gitFailure;
     throw initialProjectError(result, "Git failed while materializing the initial project.");
   }
-  return normalizeText(result.stdout || result.output);
+  return toText(result.stdout || result.output);
 }
 
 async function initializeCanonicalRepository(repositoryPath, branch, options = {}) {
@@ -122,7 +120,7 @@ async function installCanonicalCommit(repositoryPath, sourceRoot, branch, option
 }
 
 function absoluteRuntimeRoot(projectRuntimeRoot = "") {
-  const input = normalizeText(projectRuntimeRoot);
+  const input = toText(projectRuntimeRoot);
   if (!input || !path.isAbsolute(input)) {
     throw vibe64Error(
       "Initial project materialization requires an absolute runtime root.",
@@ -148,7 +146,7 @@ async function createEmptyCanonicalRepository({
   await mkdir(repositoryRoot, {
     recursive: true
   });
-  await initializeCanonicalRepository(repositoryPath, normalizeText(defaultBranch) || "main", {
+  await initializeCanonicalRepository(repositoryPath, toText(defaultBranch) || "main", {
     allowedRoots: [repositoryRoot],
     repositoryRoot,
     runCommand
@@ -170,7 +168,7 @@ async function materializeInitialProject({
     throw new TypeError("materializeInitialProject requires publish.");
   }
   const runtimeRoot = absoluteRuntimeRoot(projectRuntimeRoot);
-  const branch = normalizeText(defaultBranch) || "main";
+  const branch = toText(defaultBranch) || "main";
   const temporaryRoot = path.join(runtimeRoot, "tmp");
   await mkdir(temporaryRoot, {
     recursive: true
@@ -264,8 +262,8 @@ async function initializeManagedProject({
   projectRuntimeRoot = "",
   runCommand = runVibe64Command
 } = {}) {
-  const namespaceInput = normalizeText(projectContextRoot);
-  const runtimeInput = normalizeText(projectRuntimeRoot);
+  const namespaceInput = toText(projectContextRoot);
+  const runtimeInput = toText(projectRuntimeRoot);
   if (
     !namespaceInput ||
     !runtimeInput ||

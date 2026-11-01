@@ -1,5 +1,4 @@
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { workspaceSetupState } from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import { persist } from "./workspaceSetupRecords.js";
@@ -8,6 +7,7 @@ import {
   resourceIdentityMatches,
   workspaceSetupRunKey
 } from "./workspaceSetupRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
@@ -82,11 +82,11 @@ function createWorkspaceSetupStatus({
   }
 
   function isRunning(sessionId = "") {
-    return runnerState.activeRuns.has(workspaceSetupRunKey(normalizeText(sessionId)));
+    return runnerState.activeRuns.has(workspaceSetupRunKey(toText(sessionId)));
   }
 
   function wait(sessionId = "") {
-    return runnerState.activeRuns.get(workspaceSetupRunKey(normalizeText(sessionId))) || null;
+    return runnerState.activeRuns.get(workspaceSetupRunKey(toText(sessionId))) || null;
   }
 
   return Object.freeze({

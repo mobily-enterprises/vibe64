@@ -1,11 +1,12 @@
 import path from "node:path";
 
-import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 function projectContextRoot(project) {
-  const root = normalizeText(project?.projectRoot || project?.path);
+  const root = toText(project?.projectRoot || project?.path);
   return root ? path.resolve(root) : "";
 }
 
@@ -25,10 +26,10 @@ function createAgentCommandProjectBinding(projectService, errors, options = {}) 
   const fail = ([message, code]) => vibe64Error(message, code);
 
   async function bind(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     if (!normalizedSessionId) throw fail(errors.sessionRequired);
     const project = await projectService.readCurrentProject();
-    const projectSlug = normalizeText(project?.slug || project?.name);
+    const projectSlug = toText(project?.slug || project?.name);
     if (!projectSlug) throw fail(errors.projectRequired);
     const binding = { ...capture(), projectContextRoot: projectContextRoot(project), projectSlug };
     bindings.set(normalizedSessionId, binding);
@@ -40,12 +41,12 @@ function createAgentCommandProjectBinding(projectService, errors, options = {}) 
    * project at that slug is no longer the one that was bound.
    */
   async function run(sessionId = "", operation) {
-    const binding = bindings.get(normalizeText(sessionId));
+    const binding = bindings.get(toText(sessionId));
     if (!binding?.projectSlug) throw fail(errors.unbound);
     return projectService.runInProjectContext(binding.projectSlug, async () => {
       const project = await projectService.readCurrentProject();
       if (
-        normalizeText(project?.slug || project?.name) !== binding.projectSlug ||
+        toText(project?.slug || project?.name) !== binding.projectSlug ||
         binding.projectContextRoot && projectContextRoot(project) !== binding.projectContextRoot
       ) {
         throw fail(errors.changed);
@@ -58,13 +59,13 @@ function createAgentCommandProjectBinding(projectService, errors, options = {}) 
    * Removes the session's binding and returns it, or null when none existed.
    */
   function forget(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedSessionId = toText(sessionId);
     const binding = bindings.get(normalizedSessionId) || null;
     bindings.delete(normalizedSessionId);
     return binding;
   }
 
-  const get = (sessionId = "") => bindings.get(normalizeText(sessionId)) || null;
+  const get = (sessionId = "") => bindings.get(toText(sessionId)) || null;
 
   return Object.freeze({
     bind,

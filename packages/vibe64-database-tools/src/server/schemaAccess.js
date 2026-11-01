@@ -1,7 +1,5 @@
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 const MAX_DATABASE_SCHEMA_CATALOG_ENTRIES = 100;
 const MAX_DATABASE_SCHEMA_MATCHES = 8;
@@ -12,19 +10,19 @@ function databaseSchemaSummary(schema = {}) {
   const tables = Array.isArray(schema.tables) ? schema.tables : [];
   const objectKinds = {};
   for (const table of tables) {
-    const kind = normalizeText(table.kind) || "table";
+    const kind = toText(table.kind) || "table";
     objectKinds[kind] = Number(objectKinds[kind] || 0) + 1;
   }
   return {
-    database: normalizeText(schema.database),
-    engine: normalizeText(schema.engine),
-    engineLabel: normalizeText(schema.engineLabel),
+    database: toText(schema.database),
+    engine: toText(schema.engine),
+    engineLabel: toText(schema.engineLabel),
     objectCount: tables.length,
     objectKinds,
-    refreshedAt: normalizeText(schema.refreshedAt),
-    schemaCount: new Set(tables.map((table) => normalizeText(table.schema))).size,
+    refreshedAt: toText(schema.refreshedAt),
+    schemaCount: new Set(tables.map((table) => toText(table.schema))).size,
     schemaVersion: Number(schema.schemaVersion || 0),
-    version: normalizeText(schema.version)
+    version: toText(schema.version)
   };
 }
 
@@ -51,15 +49,15 @@ function incomingRelationships(schema = {}, qualifiedName = "") {
     (Array.isArray(sourceTable.constraints) ? sourceTable.constraints : [])
       .filter((constraint) => (
         constraint.type === "foreign-key" &&
-        normalizeText(constraint.referencedTable) === qualifiedName
+        toText(constraint.referencedTable) === qualifiedName
       ))
       .map((constraint) => ({
         columns: Array.isArray(constraint.columns) ? constraint.columns : [],
-        constraintName: normalizeText(constraint.name),
+        constraintName: toText(constraint.name),
         referencedColumns: Array.isArray(constraint.referencedColumns)
           ? constraint.referencedColumns
           : [],
-        sourceTable: normalizeText(sourceTable.qualifiedName)
+        sourceTable: toText(sourceTable.qualifiedName)
       }))
   ));
 }
@@ -73,7 +71,7 @@ function assistantTableView(schema = {}, sourceTable = {}) {
     ...table,
     columns: (Array.isArray(sourceTable.columns) ? sourceTable.columns : [])
       .map(assistantColumnView),
-    incomingRelationships: incomingRelationships(schema, normalizeText(sourceTable.qualifiedName)),
+    incomingRelationships: incomingRelationships(schema, toText(sourceTable.qualifiedName)),
     indexes: (Array.isArray(sourceTable.indexes) ? sourceTable.indexes : [])
       .map(assistantIndexView)
   };
@@ -99,21 +97,21 @@ function searchableTableText(table = {}) {
       ...(Array.isArray(constraint.columns) ? constraint.columns : []),
       ...(Array.isArray(constraint.referencedColumns) ? constraint.referencedColumns : [])
     ]) : [])
-  ].map(normalizeText).filter(Boolean).join("\n").toLocaleLowerCase();
+  ].map(toText).filter(Boolean).join("\n").toLocaleLowerCase();
 }
 
 function searchTerms(value = "") {
   return [...new Set(String(value || "")
     .toLocaleLowerCase()
     .split(/[^\p{L}\p{N}_]+/u)
-    .map(normalizeText)
+    .map(toText)
     .filter((term) => term.length > 1))];
 }
 
 function tableSearchScore(table = {}, search = "") {
-  const query = normalizeText(search).toLocaleLowerCase();
-  const qualifiedName = normalizeText(table.qualifiedName).toLocaleLowerCase();
-  const name = normalizeText(table.name).toLocaleLowerCase();
+  const query = toText(search).toLocaleLowerCase();
+  const qualifiedName = toText(table.qualifiedName).toLocaleLowerCase();
+  const name = toText(table.name).toLocaleLowerCase();
   const haystack = searchableTableText(table);
   let score = 0;
   if (query === qualifiedName) score += 2_000;
@@ -160,7 +158,7 @@ function boundedSchemaResult(result = {}) {
 }
 
 function searchDatabaseSchema(schema = {}, value = "") {
-  const search = normalizeText(value);
+  const search = toText(value);
   if (!search) {
     throw vibe64Error(
       "The database assistant must name or search for a schema object.",
@@ -178,11 +176,11 @@ function searchDatabaseSchema(schema = {}, value = "") {
     .includes(search.toLocaleLowerCase());
   const normalizedSearch = search.toLocaleLowerCase();
   const exactQualifiedMatches = tables.filter((table) => (
-    normalizeText(table.qualifiedName).toLocaleLowerCase() === normalizedSearch
+    toText(table.qualifiedName).toLocaleLowerCase() === normalizedSearch
   ));
   const exactNameMatches = exactQualifiedMatches.length > 0
     ? []
-    : tables.filter((table) => normalizeText(table.name).toLocaleLowerCase() === normalizedSearch);
+    : tables.filter((table) => toText(table.name).toLocaleLowerCase() === normalizedSearch);
   const candidates = exactQualifiedMatches.length > 0
     ? exactQualifiedMatches
     : exactNameMatches.length > 0
@@ -195,7 +193,7 @@ function searchDatabaseSchema(schema = {}, value = "") {
         .filter((entry) => entry.score > 0)
         .sort((left, right) => (
           right.score - left.score ||
-          normalizeText(left.table.qualifiedName).localeCompare(normalizeText(right.table.qualifiedName))
+          toText(left.table.qualifiedName).localeCompare(toText(right.table.qualifiedName))
         ));
   const selected = ranked.slice(0, MAX_DATABASE_SCHEMA_MATCHES);
   const showCatalog = catalogueRequested || ranked.length === 0;
@@ -203,8 +201,8 @@ function searchDatabaseSchema(schema = {}, value = "") {
     catalog: showCatalog
       ? tables
           .map((table) => ({
-            kind: normalizeText(table.kind),
-            qualifiedName: normalizeText(table.qualifiedName)
+            kind: toText(table.kind),
+            qualifiedName: toText(table.qualifiedName)
           }))
           .sort((left, right) => left.qualifiedName.localeCompare(right.qualifiedName))
           .slice(0, MAX_DATABASE_SCHEMA_CATALOG_ENTRIES)

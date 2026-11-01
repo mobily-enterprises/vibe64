@@ -11,7 +11,7 @@ import {
   codexSessionWorktreeWasRemoved
 } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -23,8 +23,8 @@ import { trimmedText } from "./trimmedText.js";
 /** @typedef {typeof import("@local/vibe64-execution/server").runVibe64Command} RunVibe64Command */
 
 function codexAttachmentEnvForController(env = process.env) {
-  const explicitRoot = trimmedText(env?.[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]) ||
-    trimmedText(process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]);
+  const explicitRoot = normalizeText(env?.[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]) ||
+    normalizeText(process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]);
   return explicitRoot
     ? {
         [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: explicitRoot
@@ -86,7 +86,7 @@ function createCodexSessionEnvironment({
     sessionId = ""
   } = {}) {
     if (await learningSessionExecutionRoot(runtime, sessionId)) return {};
-    if (!codexGitCommand || !trimmedText(sessionId)) {
+    if (!codexGitCommand || !normalizeText(sessionId)) {
       return {};
     }
     const project = await projectService.readCurrentProject();
@@ -112,7 +112,7 @@ function createCodexSessionEnvironment({
     session = {},
     sessionId = ""
   } = {}) {
-    const normalizedSessionId = trimmedText(sessionId);
+    const normalizedSessionId = normalizeText(sessionId);
     const runOperation = async (currentSession = session) => {
       await learningSessionExecutionRoot(runtime, normalizedSessionId);
       if (codexSessionWorktreeIsUnavailable(currentSession)) {
@@ -200,13 +200,13 @@ function createCodexSessionEnvironment({
       runtime,
       sessionId = ""
     } = options;
-    if (trimmedText(error?.code) !== CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE) {
+    if (normalizeText(error?.code) !== CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE) {
       return null;
     }
     const session = await runtime.getSession(sessionId).catch(() => null);
     const failure = codexSessionWorktreeUnavailableFailure({
       session: session || {},
-      workdir: trimmedText(error?.workdir)
+      workdir: normalizeText(error?.workdir)
     });
     return {
       ...failure,

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { readProjectRuntimeOpenState } from "@local/vibe64-core/server/projectRuntimeOpenState";
 import { assertRenewalId } from "./sessionRenewalIds.js";
 import { readVibe64CurrentSessionAlias, updateVibe64CurrentSessionAlias } from "./currentSessionAlias.js";
@@ -13,6 +13,7 @@ import {
 } from "./sessionRecordRules.js";
 import { metadataFilePath, readTextIfExists } from "./sessionStoreLayout.js";
 import { enqueueSessionMutation } from "./sessionStoreLocks.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
@@ -76,7 +77,7 @@ function createCurrentSessionRecords({
   }
 
   async function updateCurrentSession(sessionId = "") {
-    const requestedSessionId = normalizeText(sessionId);
+    const requestedSessionId = toText(sessionId);
     const rootPaths = storePaths.paths();
     if (!rootPaths.currentSessionAliasPath) {
       throw vibe64Error(
@@ -136,8 +137,8 @@ function createCurrentSessionRecords({
       const successor = await sessionRecords.readSessionForRenewal(normalizedSuccessorSessionId);
       if (
         successor.status !== VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING ||
-        normalizeText(successor.metadata.renewal_id) !== normalizedRenewalId ||
-        normalizeText(successor.metadata.renewed_from) !== normalizedSourceSessionId
+        toText(successor.metadata.renewal_id) !== normalizedRenewalId ||
+        toText(successor.metadata.renewed_from) !== normalizedSourceSessionId
       ) {
         throw vibe64Error(
           `Renewal successor is not prepared for renewal ${normalizedRenewalId}: ${normalizedSuccessorSessionId}`,
@@ -187,9 +188,9 @@ function createCurrentSessionRecords({
       const successor = await sessionRecords.readSessionForRenewal(normalizedSuccessorSessionId);
       if (
         successor.status !== VIBE64_SESSION_STATUS.ACTIVE ||
-        normalizeText(successor.metadata.renewal_id) !== normalizedRenewalId ||
-        normalizeText(successor.metadata.renewed_from) !== normalizedSourceSessionId ||
-        !normalizeText(successor.metadata.renewal_activated_at)
+        toText(successor.metadata.renewal_id) !== normalizedRenewalId ||
+        toText(successor.metadata.renewed_from) !== normalizedSourceSessionId ||
+        !toText(successor.metadata.renewal_activated_at)
       ) {
         throw vibe64Error(
           `Renewal successor is not committed for renewal ${normalizedRenewalId}: ${normalizedSuccessorSessionId}`,
@@ -233,7 +234,7 @@ function createCurrentSessionRecords({
   }
 
   async function hasGenuineLearningBinding(sessionId) {
-    const raw = normalizeText(await readTextIfExists(metadataFilePath(storePaths.paths(sessionId), LEARNING_SESSION_METADATA)));
+    const raw = toText(await readTextIfExists(metadataFilePath(storePaths.paths(sessionId), LEARNING_SESSION_METADATA)));
     return genuineLearningBinding(raw, sessionId);
   }
 

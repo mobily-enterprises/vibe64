@@ -1,4 +1,3 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
 
 import {
   describeSourceEditorAgentProvider,
@@ -12,6 +11,7 @@ import { normalizeSourceEditorExplanation } from "./explanationRecords.js";
 import { positiveInteger, sourceEditorExplanationSummary } from "./explanationText.js";
 import { readSourceEditorFile, sourceEditorError } from "./sourceFiles.js";
 import { readSourceInterpretation, writeSourceInterpretation } from "./sourceInterpretations.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -32,8 +32,8 @@ async function sourceEditorCompletedCacheIdentityUnchanged(
   context = {},
   template = null
 ) {
-  const expectedProviderId = normalizeText(context.agentProviderId);
-  const expectedAccountIdentitySignature = normalizeText(context.agentAccountIdentitySignature);
+  const expectedProviderId = toText(context.agentProviderId);
+  const expectedAccountIdentitySignature = toText(context.agentAccountIdentitySignature);
   const expectedExecutionProfileIdentity = sourceEditorExecutionProfileIdentity(
     context.agentExecutionProfile
   );
@@ -48,8 +48,8 @@ async function sourceEditorCompletedCacheIdentityUnchanged(
   try {
     const current = await describeSourceEditorAgentProvider(terminalService, context);
     return JSON.stringify(current?.decision.effectiveSelection) === JSON.stringify(context.assistantHelper.selection) &&
-      normalizeText(current?.providerId) === expectedProviderId &&
-      normalizeText(current?.accountIdentitySignature) === expectedAccountIdentitySignature &&
+      toText(current?.providerId) === expectedProviderId &&
+      toText(current?.accountIdentitySignature) === expectedAccountIdentitySignature &&
       sourceEditorExecutionProfileIdentity(
         await resolveSourceEditorAgentExecutionProfile(terminalService, context)
       ) === expectedExecutionProfileIdentity;
@@ -89,21 +89,21 @@ function sourceEditorExplanationCacheKey(context = {}, explanationInput = {}) {
   const range = explanationInput.range || {};
   const executionProfile = requiredSourceEditorExecutionProfile(context.agentExecutionProfile);
   return JSON.stringify([
-    normalizeText(context.sessionId),
-    normalizeText(context.agentProviderId),
-    normalizeText(context.agentAccountIdentitySignature),
-    normalizeText(context.agentAccountIdentity),
+    toText(context.sessionId),
+    toText(context.agentProviderId),
+    toText(context.agentAccountIdentitySignature),
+    toText(context.agentAccountIdentity),
     sourceEditorExecutionProfileIdentity(executionProfile),
-    normalizeText(range.path),
-    normalizeText(range.scope),
+    toText(range.path),
+    toText(range.scope),
     positiveInteger(range.startLine, 1),
     positiveInteger(range.startColumn, 1),
     positiveInteger(range.endLine, 1),
     positiveInteger(range.endColumn, 1),
-    normalizeText(range.fileHash),
-    normalizeText(range.selectedTextHash),
-    normalizeText(range.symbolId),
-    normalizeText(explanationInput.promptVersion)
+    toText(range.fileHash),
+    toText(range.selectedTextHash),
+    toText(range.symbolId),
+    toText(explanationInput.promptVersion)
   ]);
 }
 

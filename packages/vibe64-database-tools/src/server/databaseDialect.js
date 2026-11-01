@@ -1,13 +1,11 @@
-import {
-  normalizeText,
-  vibe64Error
-} from "@local/vibe64-core/server/core";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 
 import {
   inspectMysqlSchema,
   inspectPostgresSchema,
   inspectSqliteSchema
 } from "./schemaInspector.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /**
  * Text from a driver value: binary values (mysql2 Buffers, worker-transferred
@@ -65,10 +63,10 @@ const DATABASE_DIALECT_FUNCTIONS = Object.freeze([
 
 function defineDatabaseDialect(definition = {}) {
   if (
-    !normalizeText(definition.client) ||
-    !normalizeText(definition.engine) ||
-    !normalizeText(definition.label) ||
-    !normalizeText(definition.readOnlyBeginSql) ||
+    !toText(definition.client) ||
+    !toText(definition.engine) ||
+    !toText(definition.label) ||
+    !toText(definition.readOnlyBeginSql) ||
     !Array.isArray(definition.urlProtocols) ||
     definition.urlProtocols.length < 1 ||
     !definition.queryOptions ||
@@ -210,7 +208,7 @@ const DATABASE_DIALECTS = Object.freeze({
 });
 
 function databaseDialect(kind = "") {
-  const candidate = normalizeText(kind).toLowerCase();
+  const candidate = toText(kind).toLowerCase();
   const dialect = DATABASE_DIALECTS[candidate];
   if (dialect) {
     return dialect;

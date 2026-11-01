@@ -8,9 +8,9 @@ import {
 } from "../shared/agentExecutionProfiles.js";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "../shared/assistantSelection.js";
 import { createCodexAppServerIsolation } from "@jskit-ai/assistant-core/server/codex-configuration";
-import { normalizeAgentText } from "./agentProviders.js";
 import { sendPreparedCodexAppServerHelperTurn } from "@jskit-ai/assistant-core/server/codex-turn";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 // Codex helper threads: read-only threads a Vibe64 helper starts, resumes and
 // sends one bounded turn to, with their isolation, settings and output limits.
@@ -92,7 +92,7 @@ const assertCodexAppServerHelperCompatibility = codexAppServerHelperIsolation.as
 function codexAppServerHelperPolicyError(message = "", details = {}) {
   return new Vibe64AgentExecutionProfileError(
     VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.POLICY_UNENFORCEABLE,
-    normalizeAgentText(message) || "Codex cannot prove the helper execution policy.",
+    toText(message) || "Codex cannot prove the helper execution policy.",
     details
   );
 }
@@ -162,7 +162,7 @@ function codexAppServerHelperThreadSettings({
     );
   }
   const profile = codexAppServerHelperProfile(executionProfile);
-  const normalizedSystemPrompt = normalizeAgentText(systemPrompt);
+  const normalizedSystemPrompt = toText(systemPrompt);
   if (normalizedSystemPrompt.length > CODEX_APP_SERVER_HELPER_DEVELOPER_INSTRUCTIONS_MAX_LENGTH) {
     throw new Vibe64AgentExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED,
@@ -348,7 +348,7 @@ function prepareCodexAppServerHelperTurn({
       }
     );
   }
-  const normalizedThreadId = normalizeAgentText(threadId);
+  const normalizedThreadId = toText(threadId);
   if (!normalizedThreadId) {
     throw codexAppServerHelperPolicyError(
       "Codex helper turn requires an app-server thread id."

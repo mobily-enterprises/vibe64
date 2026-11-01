@@ -24,8 +24,6 @@ import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 import { createSessionCommandServers, unixCommandSocketPath } from "./unixJsonCommand.js";
-import { trimmedText } from "./trimmedText.js";
-import { isRecord } from "./isRecord.js";
 import { createAgentPreviewCommandState } from "./agentPreviewCommandState.js";
 import { createAgentPreviewWorkerRegistry } from "./agentPreviewWorkerRegistry.js";
 import { createAgentPreviewBrowserTests } from "./agentPreviewBrowserTests.js";
@@ -34,6 +32,7 @@ import {
   responseError,
   streamPlaywrightRun
 } from "./agentPreviewBrowserWorker.js";
+import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -69,7 +68,7 @@ const commandServers = createSessionCommandServers({
       handle: ({ commandService, sessionId }) => commandService.playwrightStatus(sessionId)
     },
     "/agent-preview-command/playwright-cancel": {
-      handle: ({ commandService, input, sessionId }) => commandService.cancelPlaywrightRun(sessionId, trimmedText(input.runId)),
+      handle: ({ commandService, input, sessionId }) => commandService.cancelPlaywrightRun(sessionId, normalizeText(input.runId)),
       status: vibe64StatusCode
     },
     "/agent-preview-command/browser-start": {
@@ -123,7 +122,7 @@ async function writeWrapper({
   previewWrapperSource = "",
   wrapperHostDir = ""
 } = {}) {
-  const normalizedWrapperHostDir = trimmedText(wrapperHostDir);
+  const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
   if (!normalizedWrapperHostDir) {
     return false;
   }
@@ -226,9 +225,9 @@ function browserWorkerToken({
     .createHash("sha256")
     .update([
       "vibe64-preview-browser",
-      trimmedText(sessionId),
-      trimmedText(generationId),
-      trimmedText(commandToken)
+      normalizeText(sessionId),
+      normalizeText(generationId),
+      normalizeText(commandToken)
     ].join("\n"))
     .digest("hex");
 }
@@ -258,8 +257,8 @@ async function prepareAgentPreviewCommand({
   worktreePath = "",
   wrapperHostDir = ""
 }) {
-  const normalizedSessionId = trimmedText(sessionId);
-  const normalizedWrapperHostDir = trimmedText(wrapperHostDir);
+  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
   if (!normalizedSessionId || !normalizedWrapperHostDir) {
     return {
       env: {},
@@ -274,7 +273,7 @@ async function prepareAgentPreviewCommand({
     : [path.dirname(process.execPath)];
   const managedNodePath = packRoot ? path.join(nodeBinDir, "node") : process.execPath;
   const managedNpmPath = path.join(nodeBinDir, "npm");
-  const normalizedWorktreePath = path.resolve(trimmedText(worktreePath) || process.cwd());
+  const normalizedWorktreePath = path.resolve(normalizeText(worktreePath) || process.cwd());
   const workerScriptPath = browserWorkerHostPath(normalizedWrapperHostDir);
   const playwrightModulePath = packRoot
     ? path.join(packRoot, "playwright", "runtime", "lib", "node_modules", "playwright")

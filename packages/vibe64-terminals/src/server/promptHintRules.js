@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 
-import { normalizeText } from "@local/vibe64-core/server/core";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
@@ -13,7 +12,8 @@ import {
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
-import { isRecord } from "./isRecord.js";
+import { toText } from "@local/vibe64-core/shared/toText";
+import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v3";
 const PROMPT_HINT_TASK_DIRECTORY = "assistant/prompt-hint-tasks";
@@ -62,7 +62,7 @@ function promptHintRequestError(message, code) {
 }
 
 function definePromptHintOperationId(value = "") {
-  const operationId = normalizeText(value);
+  const operationId = toText(value);
   if (!PROMPT_HINT_OPERATION_ID_PATTERN.test(operationId)) {
     throw promptHintRequestError("Prompt hint operation id is invalid.", "vibe64_prompt_hint_operation_id_invalid");
   }
@@ -70,7 +70,7 @@ function definePromptHintOperationId(value = "") {
 }
 
 function definePromptHintOriginId(value = "") {
-  const originId = normalizeText(value);
+  const originId = toText(value);
   if (Array.from(originId).length > PROMPT_HINT_ORIGIN_ID_MAX_CHARACTERS) {
     throw promptHintRequestError("Prompt hint origin id is invalid.", "vibe64_prompt_hint_origin_id_invalid");
   }
@@ -137,12 +137,12 @@ function sessionStateForHints(session = {}, options = {}) {
     repositoryOperationActive = false,
     sourceAvailable = false
   } = options;
-  const workspaceSetupStatus = normalizeText(session.workspaceSetup?.status) || "unconfigured";
+  const workspaceSetupStatus = toText(session.workspaceSetup?.status) || "unconfigured";
   return {
     agentActive: sessionAgentActive(session),
     repositoryOperationActive,
     sourceAvailable,
-    status: normalizeText(session.status),
+    status: toText(session.status),
     workspaceSetupStatus
   };
 }
@@ -161,7 +161,7 @@ function promptHintBasis(context = {}, draft = "") {
       blueprintRevision: canonicalHash(blueprint),
       draftRevision: canonicalHash(currentDraft),
       conversationRevision: canonicalHash({
-        newestTurnId: normalizeText(pagination.newestTurnId),
+        newestTurnId: toText(pagination.newestTurnId),
         totalTurnCount: Number.isSafeInteger(pagination.totalTurnCount)
           ? pagination.totalTurnCount
           : 0,
@@ -198,7 +198,7 @@ function promptHintResponse(status = "unavailable", options = {}) {
 }
 
 function promptHintStaticSuggestions(context = {}) {
-  const existingProject = normalizeText(context.sessionState?.workspaceSetupStatus) !== "unconfigured";
+  const existingProject = toText(context.sessionState?.workspaceSetupStatus) !== "unconfigured";
   return existingProject
     ? VIBE64_PROMPT_HINT_STATIC_STARTERS.existingProject
     : VIBE64_PROMPT_HINT_STATIC_STARTERS.greenfield;
@@ -274,7 +274,7 @@ function parsePromptHintSuggestions(value = "") {
 }
 
 function promptHintActorId(vibe64User = null) {
-  return normalizeText(
+  return toText(
     vibe64User?.id ||
     vibe64User?.username ||
     vibe64User?.email
@@ -290,7 +290,7 @@ function promptHintSubscriberKey({
   vibe64User = null
 } = {}) {
   return canonicalHash({
-    actorId: normalizeText(actorId) || promptHintActorId(vibe64User),
+    actorId: toText(actorId) || promptHintActorId(vibe64User),
     operationId,
     originId,
     projectScope,

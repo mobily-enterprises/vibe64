@@ -1,6 +1,5 @@
 import path from "node:path";
 
-import { normalizeText } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import {
@@ -20,6 +19,7 @@ import {
   safeSetupLabel,
   stepStatus
 } from "./workspaceSetupRules.js";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */
@@ -195,7 +195,7 @@ function createWorkspaceSetupExecution({
     const completion = operation
       .catch((error) => inProjectContext(context.projectContext, async () => failed(context.runtime, sessionId, {
         currentLabel: context.currentLabel,
-        diagnostic: normalizeText(error?.message) || "Workspace preparation failed.",
+        diagnostic: toText(error?.message) || "Workspace preparation failed.",
         recipeHash: context.recipeHash,
         redactionSecrets: context.redactionSecrets,
         resourceAdmissionId: error?.details?.admission?.id,
@@ -205,7 +205,7 @@ function createWorkspaceSetupExecution({
       }).catch(() => workspaceSetupState({
         currentLabel: safeSetupLabel(context.currentLabel, context.redactionSecrets),
         diagnostic: sanitizeOperationText(
-          normalizeText(error?.message) || "Workspace preparation failed.",
+          toText(error?.message) || "Workspace preparation failed.",
           context.redactionSecrets
         ),
         finishedAt: new Date().toISOString(),

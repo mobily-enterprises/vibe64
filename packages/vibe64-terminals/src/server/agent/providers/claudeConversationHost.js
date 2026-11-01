@@ -34,7 +34,7 @@ import {
 } from "../../sessionRenewalReceipts.js";
 import { claudeConversationError as error, claudeTerminalNamespace } from "../../terminalShared.js";
 import { isoNow } from "../../isoNow.js";
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -377,12 +377,12 @@ function createClaudeConversationHost({
         method
       )) {
         if (input === undefined && !["stopConversation", "deleteConversation"].includes(method)) input = {};
-        const conversationId = normalizeText(input.conversationId || input.threadId);
+        const conversationId = toText(input.conversationId || input.threadId);
         return { scopedConversationId: conversationId || undefined, input };
       }
       if (method === "sessionState" || method === "readGoal" || method === "interruptTurn") return {};
       if (method !== "sendMessage") return { input: method === "updateGoal" && input === undefined ? {} : input };
-      const message = { ...input, message: input.message || input.prompt, messageId: normalizeText(input.messageId) || randomUUID() };
+      const message = { ...input, message: input.message || input.prompt, messageId: toText(input.messageId) || randomUUID() };
       return {
         input: message,
         async prepareInput(prepared) {
@@ -490,7 +490,7 @@ function createClaudeConversationHost({
               if (representation === "native") return { nativeResult: await sessionState(current, nativeState) };
               const nativeResult = current ? await sessionState(current, nativeState) : null;
               const session = await runtime.getSession(sessionId, { inspectSource: false });
-              const id = nativeResult?.thread.id || normalizeText(session.metadata.claude_conversation_id);
+              const id = nativeResult?.thread.id || toText(session.metadata.claude_conversation_id);
               const turn = conversations.readRetainedTurn(context.key, id, {
                 nativeResult,
                 get saved() { return JSON.parse(session.metadata[`claude_conversation_${id}`] || "null"); }

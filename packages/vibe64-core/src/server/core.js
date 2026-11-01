@@ -2,17 +2,14 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { isPlainObject } from "./isPlainObject.js";
-
-function normalizeText(value) {
-  return String(value ?? "").trim();
-}
+import { toText } from "../shared/toText.js";
 
 function plainClone(value) {
   return JSON.parse(JSON.stringify(value ?? null));
 }
 
 function normalizeTargetRoot(targetRoot = process.cwd()) {
-  return path.resolve(normalizeText(targetRoot) || process.cwd());
+  return path.resolve(toText(targetRoot) || process.cwd());
 }
 
 function vibe64Error(message, code) {
@@ -31,8 +28,8 @@ function isMissingPathError(error) {
  * is inside; `..`, `../x` and another drive are not.
  */
 function relativePathInside(rootPath = "", candidatePath = "") {
-  const root = normalizeText(rootPath);
-  const candidate = normalizeText(candidatePath);
+  const root = toText(rootPath);
+  const candidate = toText(candidatePath);
   if (!root || !candidate) return null;
   const relative = path.relative(path.resolve(root), path.resolve(candidate));
   return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) ? null : relative;
@@ -65,7 +62,6 @@ export {
   vibe64Error,
   isPlainObject,
   isMissingPathError,
-  normalizeText,
   normalizeTargetRoot,
   plainClone,
   pathExists,

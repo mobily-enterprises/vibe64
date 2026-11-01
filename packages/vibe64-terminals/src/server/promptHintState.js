@@ -1,4 +1,4 @@
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /**
  * What the prompt hint parts share: the diagnostic report that never makes a
@@ -15,7 +15,7 @@ function createPromptHintState({ diagnostic }) {
       diagnostic({
         code,
         details,
-        error: normalizeText(error?.message || error),
+        error: toText(error?.message || error),
         event: "vibe64.prompt_hints.failed"
       });
     } catch {

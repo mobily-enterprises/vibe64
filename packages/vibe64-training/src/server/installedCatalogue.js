@@ -8,7 +8,7 @@ import { canonicalJson } from "./content.js";
 import { courseSchema, list, validateContent } from "./contentSchemas.js";
 import { createInstalledTrainingContent, validateInstalledTopicPin } from "./installedContent.js";
 import { causedFailure } from "./errors.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 const MAX_COURSES = 16;
 const MAX_BYTES = 1024 * 1024;

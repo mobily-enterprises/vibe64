@@ -2,7 +2,7 @@ import { realpath } from "node:fs/promises";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { courseSchema, topicSchema, validateContent } from "./contentSchemas.js";
-import { sha256Hex } from "./sha256Hex.js";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 async function readPinnedTopic(directory) {
   const root = await realpath(directory);

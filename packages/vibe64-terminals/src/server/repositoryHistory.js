@@ -24,7 +24,7 @@ import {
   parseGitHistoryRecords,
   safeChangePath
 } from "./gitRecords.js";
-import { trimmedText } from "./trimmedText.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const DEFAULT_HISTORY_LIMIT = 30;
 const MAX_HISTORY_LIMIT = 50;
@@ -37,7 +37,7 @@ function repositoryError(message, code = "vibe64_repository_history_failed") {
 }
 
 function commitObjectId(value = "", errorCode = "vibe64_repository_history_commit_invalid") {
-  const commit = trimmedText(value);
+  const commit = normalizeText(value);
   if (!/^[a-f0-9]{40,64}$/u.test(commit)) {
     throw repositoryError("Choose a version from this project history.", errorCode);
   }
@@ -47,7 +47,7 @@ function commitObjectId(value = "", errorCode = "vibe64_repository_history_commi
 function repositoryReadContext(project = {}, session = null) {
   project = sessionRepositoryProject(project, session);
   const mode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
-  const branch = trimmedText(
+  const branch = normalizeText(
     project.repository?.defaultBranch ||
     session?.metadata?.source_default_branch ||
     session?.metadata?.base_branch
@@ -68,7 +68,7 @@ function repositoryReadContext(project = {}, session = null) {
   if (sessionSourceRoot) {
     // A session clone keeps no local copy of the branch it cloned; its history
     // is pinned to the commit the session recorded.
-    const snapshotRef = trimmedText(session?.metadata?.canonical_commit) || trimmedText(session?.metadata?.base_commit);
+    const snapshotRef = normalizeText(session?.metadata?.canonical_commit) || normalizeText(session?.metadata?.base_commit);
     if (!snapshotRef) {
       throw repositoryError(
         "This session has no recorded source version to read its history from.",
@@ -81,14 +81,14 @@ function repositoryReadContext(project = {}, session = null) {
       cwd: sessionSourceRoot,
       executionRoot: sessionSourceRoot,
       mode,
-      sessionId: trimmedText(session.sessionId),
+      sessionId: normalizeText(session.sessionId),
       snapshotRef
     };
   }
   if (mode === PROJECT_REPOSITORY_MODE_GITHUB || mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
     const repositoryPath = mode === PROJECT_REPOSITORY_MODE_GITHUB
-      ? trimmedText(project.githubMirrorPath)
-      : trimmedText(project.canonicalRepositoryPath);
+      ? normalizeText(project.githubMirrorPath)
+      : normalizeText(project.canonicalRepositoryPath);
     if (!repositoryPath) {
       throw repositoryError(
         "The project repository cache is not available yet.",
@@ -108,7 +108,7 @@ function repositoryReadContext(project = {}, session = null) {
     };
   }
   if (mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
-    const standaloneSourceRoot = trimmedText(project.sourceRoot);
+    const standaloneSourceRoot = normalizeText(project.sourceRoot);
     if (!standaloneSourceRoot) {
       throw repositoryError(
         "Standalone version history requires the explicitly selected local source folder.",
@@ -159,7 +159,7 @@ async function git(context, args, options = {}) {
   });
   if (required && result?.ok !== true) {
     throw repositoryError(
-      trimmedText(result?.stderr || result?.stdout || result?.output || result?.error) || "Version history Git command failed."
+      normalizeText(result?.stderr || result?.stdout || result?.output || result?.error) || "Version history Git command failed."
     );
   }
   return result;
@@ -170,7 +170,7 @@ function output(result = {}) {
 }
 
 async function gitText(context, args, options = {}) {
-  return trimmedText(output(await git(context, args, options)));
+  return normalizeText(output(await git(context, args, options)));
 }
 
 function encodeCursor(value = {}) {
@@ -183,14 +183,14 @@ function decodeCursor(value = "") {
   }
   try {
     const parsed = JSON.parse(Buffer.from(String(value), "base64url").toString("utf8"));
-    if (!parsed || typeof parsed !== "object" || !/^[a-f0-9]{40,64}$/u.test(trimmedText(parsed.snapshot))) {
+    if (!parsed || typeof parsed !== "object" || !/^[a-f0-9]{40,64}$/u.test(normalizeText(parsed.snapshot))) {
       throw new Error("invalid cursor");
     }
     const offset = Number(parsed.offset);
     if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000) {
       throw new Error("invalid cursor offset");
     }
-    return { offset, snapshot: trimmedText(parsed.snapshot) };
+    return { offset, snapshot: normalizeText(parsed.snapshot) };
   } catch {
     throw repositoryError("Version history has an invalid page cursor.", "vibe64_repository_history_cursor_invalid");
   }

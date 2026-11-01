@@ -9,7 +9,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { openCodeError } from "./terminalShared.js";
 import { openCodeFingerprint as fingerprint } from "./opencodeServerProcess.js";
 import { conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
-import { normalizeText } from "@local/vibe64-core/server/core";
+import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
@@ -33,7 +33,7 @@ function openCodeMessageError(message = {}) {
       ].filter(Boolean).join(", ");
       return [
         `Project guidance could not load: the Genesis ${scope} hook ${reason} after ${seconds}s${detail ? ` (${detail})` : ""}.`,
-        normalizeText(diagnostic.stderr).slice(0, 1500) || "The command returned no diagnostic output.",
+        toText(diagnostic.stderr).slice(0, 1500) || "The command returned no diagnostic output.",
         "The assistant stopped before it could continue. Check the project's Genesis hook and installed runtime, then send your message again."
       ].join("\n\n");
     } catch {
@@ -51,18 +51,18 @@ function openCodeCredentialFailureNoticeMessage() {
 }
 
 function openCodeProviderApiFailureNoticeMessage(failure = "") {
-  return `OpenCode could not finish: ${normalizeText(failure)} Saved project changes remain. [Go to AI Accounts](/app/manage/accounts)`;
+  return `OpenCode could not finish: ${toText(failure)} Saved project changes remain. [Go to AI Accounts](/app/manage/accounts)`;
 }
 
 function openCodeFailureNoticeMessage(failure = "") {
-  const detail = normalizeText(failure);
+  const detail = toText(failure);
   return detail
     ? `OpenCode could not finish.\n\n${detail}\n\nSaved project changes remain.`
     : "OpenCode could not finish. Saved project changes remain.";
 }
 
 function openCodeRunRealtimePayload(run = {}) {
-  const state = normalizeText(run.state);
+  const state = toText(run.state);
   const active = run.active === true || vibe64AgentRunStateIsActive(state);
   const turnState = state === VIBE64_AGENT_RUN_STATE.STARTING
     ? "starting"
@@ -71,9 +71,9 @@ function openCodeRunRealtimePayload(run = {}) {
       : active
         ? "active"
         : "idle";
-  const threadId = normalizeText(run.threadId);
-  const turnId = normalizeText(run.turnId);
-  const updatedAt = normalizeText(run.updatedAt);
+  const threadId = toText(run.threadId);
+  const turnId = toText(run.turnId);
+  const updatedAt = toText(run.updatedAt);
   return {
     agentRun: {
       active,
@@ -94,12 +94,12 @@ function openCodeRunRealtimePayload(run = {}) {
       transportId: OPENCODE_AGENT_RUN_ID,
       turn: {
         active,
-        completedAt: normalizeText(run.finishedAt),
-        error: normalizeText(run.error),
+        completedAt: toText(run.finishedAt),
+        error: toText(run.error),
         id: turnId,
-        phase: active && !run.observationError ? normalizeText(run.phase) : "",
+        phase: active && !run.observationError ? toText(run.phase) : "",
         runState: state,
-        startedAt: normalizeText(run.startedAt),
+        startedAt: toText(run.startedAt),
         state: turnState,
         status: run.observationError ? "observation_lost" : state,
         updatedAt
@@ -189,17 +189,17 @@ function createOpenCodeConversationEvents({
           engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
           ...(Object.hasOwn(turn, "submittedBy") ? { submittedBy: turn.submittedBy } : {}),
           error,
-          observationError: normalizeText(turn.observationError),
-          phase: vibe64AgentRunStateIsActive(state) && !turn.observationError ? normalizeText(turn.phase) : "",
+          observationError: toText(turn.observationError),
+          phase: vibe64AgentRunStateIsActive(state) && !turn.observationError ? toText(turn.phase) : "",
           model: context.selection.modelId,
           modelProviderId: context.selection.modelProviderId,
           ...(vibe64AgentRunStateIsActive(state)
-            ? { finishedAt: "", startedAt: normalizeText(turn.startedAt) }
-            : { finishedAt: normalizeText(turn.updatedAt) }),
+            ? { finishedAt: "", startedAt: toText(turn.startedAt) }
+            : { finishedAt: toText(turn.updatedAt) }),
           state,
-          threadId: normalizeText(turn.threadId),
-          turnId: normalizeText(turn.id),
-          updatedAt: normalizeText(turn.updatedAt)
+          threadId: toText(turn.threadId),
+          turnId: toText(turn.id),
+          updatedAt: toText(turn.updatedAt)
         }
       }
     ).then((run) => {
@@ -220,8 +220,8 @@ function createOpenCodeConversationEvents({
           error,
           id: OPENCODE_AGENT_RUN_ID,
           state,
-          threadId: normalizeText(turn.threadId),
-          turnId: normalizeText(turn.id),
+          threadId: toText(turn.threadId),
+          turnId: toText(turn.id),
           updatedAt: new Date().toISOString()
         })
       },

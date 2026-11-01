@@ -5,8 +5,8 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { currentProjectSlug } from "./terminalShared.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { inspectVibe64WorkspaceSetupForContext, listVibe64OutputTargets } from "./vibe64OutputTargets.js";
-import { trimmedText } from "./trimmedText.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // What a launch reads before it starts: the session's launch context, its
 // output targets with the workspace-setup gate, and the managed Preview plan.
@@ -166,7 +166,7 @@ function workspaceSetupLaunchDisabledReason(session = {}, inspection = null) {
 }
 
 function findOutputTarget(targets = [], outputTargetId = "") {
-  const normalizedOutputTargetId = trimmedText(outputTargetId);
+  const normalizedOutputTargetId = normalizeText(outputTargetId);
   return targets.find((target) => target.id === normalizedOutputTargetId) || null;
 }
 
@@ -229,7 +229,7 @@ function managedPreviewLaunchPlan({
 
   const activeMetadata = activeTerminal?.metadata || {};
   const lastOutputTarget = previewStatus.lastOutputTarget || savedOutputTarget || {};
-  const previousTargetId = trimmedText(
+  const previousTargetId = normalizeText(
     lastOutputTarget.id || activeMetadata.outputTargetId
   );
   if (restart && !previousTargetId) {

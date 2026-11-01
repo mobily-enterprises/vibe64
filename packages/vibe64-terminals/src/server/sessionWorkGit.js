@@ -15,7 +15,6 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { checkpointRefs, vibe64Host, writeGitWorktreeTree } from "@local/vibe64-execution/server";
 import { parseGitNameStatusZ } from "./gitRecords.js";
-import { trimmedText } from "./trimmedText.js";
 import {
   commandProject,
   git,
@@ -27,6 +26,7 @@ import {
   saveError,
   scopedSessionWorkCommand
 } from "./sessionWorkCommands.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SESSION_WORK_OPERATION_COMMAND_PATH = fileURLToPath(new URL(
   "./sessionWorkOperationCommand.js",
@@ -48,7 +48,7 @@ function boundedReviewDiff(content = "") {
 
 function normalizedDerivedArtifactPaths(paths = []) {
   return [...new Set((Array.isArray(paths) ? paths : [])
-    .map(trimmedText)
+    .map(normalizeText)
     .filter(Boolean))]
     .sort((left, right) => left.localeCompare(right));
 }
@@ -63,20 +63,20 @@ function repositoryContext(session = {}, project = {}) {
   project = sessionRepositoryProject(project, session);
   const sessionMetadata = metadata(session);
   const mode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
-  const branch = trimmedText(project.repository?.defaultBranch);
+  const branch = normalizeText(project.repository?.defaultBranch);
   if (mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE && sessionMetadata.local_source_branch &&
-      trimmedText(sessionMetadata.local_source_branch) !== branch) {
+      normalizeText(sessionMetadata.local_source_branch) !== branch) {
     throw saveError(
-      `This session belongs to ${trimmedText(sessionMetadata.local_source_branch)}. Switch the project folder back to that branch before saving or updating it.`,
+      `This session belongs to ${normalizeText(sessionMetadata.local_source_branch)}. Switch the project folder back to that branch before saving or updating it.`,
       "vibe64_session_local_branch_changed"
     );
   }
-  const worktreePath = trimmedText(session.sourcePath || sessionMetadata.source_path);
-  const sessionId = trimmedText(session.sessionId);
-  const baseCommit = trimmedText(sessionMetadata.base_commit);
-  const lastCanonicalCommit = trimmedText(sessionMetadata.canonical_commit) || baseCommit;
+  const worktreePath = normalizeText(session.sourcePath || sessionMetadata.source_path);
+  const sessionId = normalizeText(session.sessionId);
+  const baseCommit = normalizeText(sessionMetadata.base_commit);
+  const lastCanonicalCommit = normalizeText(sessionMetadata.canonical_commit) || baseCommit;
   const standaloneSourceRoot = mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
-    ? trimmedText(project.sourceRoot)
+    ? normalizeText(project.sourceRoot)
     : "";
   if (
     !mode ||
@@ -92,9 +92,9 @@ function repositoryContext(session = {}, project = {}) {
     );
   }
   const remoteUrl = mode === PROJECT_REPOSITORY_MODE_GITHUB
-    ? trimmedText(project.githubRepository?.cloneUrl || project.repository?.github?.cloneUrl)
+    ? normalizeText(project.githubRepository?.cloneUrl || project.repository?.github?.cloneUrl)
     : mode === PROJECT_REPOSITORY_MODE_MANAGED_GIT
-      ? trimmedText(project.canonicalRepositoryPath)
+      ? normalizeText(project.canonicalRepositoryPath)
       : standaloneSourceRoot;
   if (!remoteUrl) {
     throw saveError(
@@ -109,8 +109,8 @@ function repositoryContext(session = {}, project = {}) {
     connectedSubmissions: sessionConnectedSubmissions(session),
     lastCanonicalCommit,
     mode,
-    githubMirrorPath: trimmedText(project.githubMirrorPath),
-    repositoryFullName: trimmedText(project.githubRepository?.fullName || project.repository?.github?.fullName),
+    githubMirrorPath: normalizeText(project.githubMirrorPath),
+    repositoryFullName: normalizeText(project.githubRepository?.fullName || project.repository?.github?.fullName),
     githubMirrorOptional: Boolean(sessionMetadata.github_pull_request) || project.githubMirrorOptional === true,
     remoteUrl,
     sessionId,
@@ -120,7 +120,7 @@ function repositoryContext(session = {}, project = {}) {
 }
 
 function sessionWorkOperationProject(context, project = {}) {
-  const projectSlug = trimmedText(project.slug || project.projectSlug);
+  const projectSlug = normalizeText(project.slug || project.projectSlug);
   return {
     ...(context.mode === PROJECT_REPOSITORY_MODE_GITHUB
       ? {
@@ -135,7 +135,7 @@ function sessionWorkOperationProject(context, project = {}) {
     ...(context.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
       ? { sourceRoot: context.standaloneSourceRoot }
       : {}),
-    ownerUserKey: trimmedText(project.ownerUserKey || project.githubRepository?.owner),
+    ownerUserKey: normalizeText(project.ownerUserKey || project.githubRepository?.owner),
     projectSlug,
     repository: {
       defaultBranch: context.contribution?.integrationBranch || context.branch,
@@ -234,8 +234,8 @@ async function runSessionWorkOperation({
     );
   }
   throw saveError(
-    trimmedText(result?.stderr || result?.error || result?.output) || "Session repository inspection failed.",
-    trimmedText(result?.code) || "vibe64_session_work_operation_failed"
+    normalizeText(result?.stderr || result?.error || result?.output) || "Session repository inspection failed.",
+    normalizeText(result?.code) || "vibe64_session_work_operation_failed"
   );
 }
 
@@ -413,7 +413,7 @@ function canonicalRef(context) {
 }
 
 async function deleteOperationRef(runCommand, context, ref, options = {}) {
-  if (!trimmedText(ref)) {
+  if (!normalizeText(ref)) {
     return;
   }
   await git(runCommand, context, ["update-ref", "-d", ref], {
@@ -467,7 +467,7 @@ async function mergeTrees(runCommand, context, {
     required: false
   });
   const tokens = String(merged?.stdout || merged?.output || "").split("\0");
-  const mergedTree = trimmedText(tokens.shift());
+  const mergedTree = normalizeText(tokens.shift());
   if (!isGitObjectId(mergedTree)) {
     throw saveError(
       merged?.ok === true
@@ -530,7 +530,7 @@ async function createVirtualCommit(runCommand, context, {
     baseCommit
   ], {
     commandOptions,
-    input: `${trimmedText(message) || "Vibe64 virtual commit"}\n`,
+    input: `${normalizeText(message) || "Vibe64 virtual commit"}\n`,
     project
   });
 }

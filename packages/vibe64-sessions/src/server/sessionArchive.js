@@ -1,8 +1,8 @@
 import { assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { publicSession, sessionResult } from "./sessionResults.js";
-import { text } from "./trimmedText.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -31,7 +31,7 @@ function assertArchivePreparation(prepare) {
 const SESSION_ARCHIVE_STATUSES = new Set(["running", "failed"]);
 const SESSION_ARCHIVE_PHASES = new Set(["stopping", "resources", "source"]);
 function readSessionArchiveOperation(metadata) {
-  const stored = text(metadata?.session_archive_operation);
+  const stored = normalizeText(metadata?.session_archive_operation);
   if (!stored) return null;
   let operation = null;
   try { operation = JSON.parse(stored); } catch { /* Refused below. */ }
@@ -137,8 +137,8 @@ function createSessionArchive({
           }));
           const renewalSessions = await runtime.store.listSessionsForRenewal();
           const reservedSuccessor = renewalSessions.find((session) => (
-            ["renewal_pending", "renewal_activating"].includes(text(session.status)) &&
-            text(session.metadata?.renewed_from) === sessionId
+            ["renewal_pending", "renewal_activating"].includes(normalizeText(session.status)) &&
+            normalizeText(session.metadata?.renewed_from) === sessionId
           ));
           if (reservedSuccessor) {
             const error = new Error("Finish the session renewal using Retry before archiving its original session.");
@@ -156,7 +156,7 @@ function createSessionArchive({
             });
           }
           const sourceCreationFailed = currentSession.sourceReady !== true &&
-            text(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
+            normalizeText(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
           const previous = readSessionArchiveOperation(currentSession.metadata) || {};
           const operation = {
             phase: previous.status === "failed" && !currentSession.metadata?.session_closing_reason
@@ -173,7 +173,7 @@ function createSessionArchive({
             await persist();
             await publishSessionChanged(sessionId, {
               operation: "updated",
-              originId: text(input.originId),
+              originId: normalizeText(input.originId),
               reason: "session-archive-progress",
               payload: { clientRefresh: { includeList: true } }
             });
@@ -185,7 +185,7 @@ function createSessionArchive({
             });
             await publishSessionChanged(sessionId, {
               operation: "updated",
-              originId: text(input.originId),
+              originId: normalizeText(input.originId),
               reason: "session-archiving",
               payload: { clientRefresh: { includeList: true } },
               session: closingSession
@@ -202,12 +202,12 @@ function createSessionArchive({
             return await runtime.archiveSession(sessionId);
           } catch (error) {
             operation.status = "failed";
-            operation.error = text(error?.message) || "Session archive failed. Retry archiving this session.";
+            operation.error = normalizeText(error?.message) || "Session archive failed. Retry archiving this session.";
             await persist().catch(() => null);
             const restoredSession = await runtime.clearSessionClosing(sessionId).catch(() => null);
             await publishSessionChanged(sessionId, {
               operation: "updated",
-              originId: text(input.originId),
+              originId: normalizeText(input.originId),
               reason: "session-archive-failed",
               payload: { archiveError: operation.error, clientRefresh: { includeList: true } },
               session: restoredSession
@@ -240,7 +240,7 @@ function createSessionArchive({
         const session = exclusive.value;
         await publishSessionChanged(sessionId, {
           operation: "updated",
-          originId: text(input.originId),
+          originId: normalizeText(input.originId),
           reason: "session-archived",
           payload: { clientRefresh: { includeList: true } },
           session
