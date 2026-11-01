@@ -48,6 +48,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/server/colleagueActions.js`
 - Main: `packages/vibe64-colleague/src/server/service.js`
 - `packages/vibe64-colleague/src/server/colleagueServiceState.js`
+- `packages/vibe64-colleague/src/server/colleagueName.js`
 - `packages/vibe64-colleague/src/server/colleagueRecords.js`
 - `packages/vibe64-colleague/src/server/colleagueThreads.js`
 - `packages/vibe64-colleague/src/server/colleagueConversations.js`
@@ -634,8 +635,9 @@ merely opening a different project does not change an earlier request's target.
 The host can mount the reusable text drawer outside routed project content.
 Its shared chat element accepts messages and steering while a turn is active.
 The host supplies the existing avatar, application voice configuration and
-display name (default Colleague). The service accepts a host-owned name resolver
-and includes its current value as data in each model turn. Changing the name
+display name (default Colleague). A host provides its name resolver as the
+optional `vibe64.colleague.name-resolver` capability, and the service includes
+its current value as data in each model turn. Changing the name
 updates labels and future replies without replacing native history or typed drafts.
 Colleague owns a mounted 380-pixel right-hand desktop navigation drawer. Its
 Vuetify layout registration reserves space beside the existing workspace and

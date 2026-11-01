@@ -8,6 +8,7 @@ import Fastify from "fastify";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
+import { nameColleague } from "../../packages/vibe64-colleague/src/server/colleagueName.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
 import { io } from "socket.io-client";
 import { createServer } from "../../server.js";
@@ -193,7 +194,7 @@ test("Colleague browser facade retains Fastify cookie headers and revalidates lo
     resolveUser: async ({ request }) => signedIn && request?.headers?.cookie === cookie ? user : null,
     authorizeProject() { assert.fail("Colleague reading must not authorize a project."); }
   });
-  const service = createColleagueService({ actions, accounts: { async initializeModelRouting() {} }, terminals: {}, systemRoot: root });
+  const service = createColleagueService({ actions, accounts: { async initializeModelRouting() {} }, terminals: {}, resolveName: nameColleague, systemRoot: root });
   t.after(async () => {
     try { await app.close(); }
     finally { try { await service.close(); } finally { await rm(root, { recursive: true, force: true }); } }

@@ -15,6 +15,7 @@ import { WATCH_UPDATE_NOTICE, trimIncompleteSurrogate } from "./colleaguePresent
 /** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
 /** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
 /** @typedef {import("./types.js").ColleagueConversations} ColleagueConversations */
+/** @typedef {import("./types.js").ColleagueNameResolver} ColleagueNameResolver */
 
 // A completed reply delivered these observations: drop them and settle the
 // watches that were waiting on them.
@@ -40,8 +41,10 @@ function markObservationsDelivered(record, observations) {
  * @param {ColleagueRecords} dependencies.records
  * @param {ColleagueThreads} dependencies.threads
  * @param {ColleagueConversations} dependencies.conversations
+ * @param {ColleagueNameResolver} dependencies.resolveName
  */
-function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, watchDebounceMs, serviceState, records, threads, conversations }) {
+function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, watchDebounceMs, serviceState, records, threads, conversations,
+  resolveName }) {
   async function workerContext(state, connection, generation, autonomous, userMessageIds, isCurrent) {
     let context = threads.actionContext(state, connection);
     const observations = [];
@@ -80,7 +83,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
   }
 
   async function workerData(state, connection, currentContext, autonomous) {
-    return { assistantName: await serviceState.slots.resolveName(), focus: connection.focus,
+    return { assistantName: await resolveName(), focus: connection.focus,
       userMessageIds: currentContext.context.colleague.userMessageIds, observations: currentContext.observations, readOnly: currentContext.readOnly, autonomous,
       assignments: (state.record.assignments || []).filter(item => ["active", "waiting", "needs-user"].includes(item.status) || currentContext.observedAssignmentIds.includes(item.assignmentId))
         .map(item => {

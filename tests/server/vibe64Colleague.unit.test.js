@@ -14,6 +14,7 @@ import { PROJECT_OPERATION, registerVibe64ActionContext, vibe64ActionPolicy, WOR
 import { LEARNING_MODE_PROJECT_CODE, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, assertLearningModeAllowsProject, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 import { releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
+import { nameColleague } from "../../packages/vibe64-colleague/src/server/colleagueName.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/colleagueActions.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
 import { createWatchSources, stateWatchUpdate } from "../../packages/vibe64-colleague/src/server/watchSources.js";
@@ -59,7 +60,7 @@ function modelStream() {
   };
 }
 
-async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000, native = false, extraActions = [] } = {}) {
+async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000, native = false, extraActions = [], resolveName = nameColleague } = {}) {
   watching ||= assigning;
   const root = systemRoot || await mkdtemp(path.join(os.tmpdir(), "colleague-test-"));
   let resources = fixtureResources.get(t);
@@ -239,7 +240,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   const accounts = {
     async initializeModelRouting(input) { observations.routingInitialized.push(input.vibe64User.username); return { ok: true, initialized: [] }; }
   };
-  const service = createColleagueService({ actions, terminals, events, watchPollMs, watchDebounceMs: 1, systemRoot: root, accounts });
+  const service = createColleagueService({ actions, terminals, events, resolveName, watchPollMs, watchDebounceMs: 1, systemRoot: root, accounts });
   const operation = Object.freeze({
     extensions: { vibe64: WORKSPACE_OPERATION },
     id: "vibe64.test.operate", kind: "command", idempotency: "none",
@@ -1087,12 +1088,13 @@ test("new user cancellation supersedes a pending assignment follow-up and stop s
 });
 
 test("the current display name reaches every turn without replacing the conversation", async (t) => {
-  const f = await fixture(t, [reply("Hello."), reply("I'm Ada."), reply("Now I'm Grace.")]);
+  let resolveName = nameColleague;
+  const f = await fixture(t, [reply("Hello."), reply("I'm Ada."), reply("Now I'm Grace.")], { resolveName: () => resolveName() });
   await f.send("Hello.");
   await f.service.wait(f.context);
   assert.equal(f.observations.starts[0].data.assistantName, "Colleague");
   let name = "Ada";
-  f.service.setNameResolver(async () => name);
+  resolveName = async () => name;
   await f.send("What is your name?", "user-2");
   await f.service.wait(f.context);
   name = "Grace";

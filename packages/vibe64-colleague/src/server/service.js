@@ -15,6 +15,7 @@ import { createColleagueTurns } from "./colleagueTurns.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").ColleagueNameResolver} ColleagueNameResolver */
 
 /**
  * One Colleague service: its concerns share one service state and are built
@@ -25,10 +26,11 @@ import { createColleagueTurns } from "./colleagueTurns.js";
  * @param {TerminalsService} dependencies.terminals
  * @param {string} dependencies.systemRoot
  * @param {RuntimeEvents} dependencies.events
+ * @param {ColleagueNameResolver} dependencies.resolveName
  * @param {number} [dependencies.watchPollMs]
  * @param {number} [dependencies.watchDebounceMs]
  */
-function createColleagueService({ actions, accounts, terminals, systemRoot, events, watchPollMs = 30000, watchDebounceMs = 250 }) {
+function createColleagueService({ actions, accounts, terminals, systemRoot, events, resolveName, watchPollMs = 30000, watchDebounceMs = 250 }) {
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("Colleague needs the private application system root.");
   const serviceState = createColleagueServiceState();
   const records = createColleagueRecords({ actions, terminals, events, serviceState });
@@ -36,7 +38,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const conversations = createColleagueConversations({ actions, accounts, terminals, serviceState, records, threads });
   const watchSources = createWatchSources();
   const worker = createColleagueWorker({
-    actions, terminals, watchSources, watchPollMs, watchDebounceMs, serviceState, records, threads, conversations
+    actions, terminals, watchSources, watchPollMs, watchDebounceMs, serviceState, records, threads, conversations, resolveName
   });
   const watches = createColleagueWatches({ events, watchSources, watchDebounceMs, serviceState, records, threads, worker });
   const history = createColleagueHistory({ serviceState, records, threads, worker, watches });
@@ -44,19 +46,12 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const browserConversations = createColleagueBrowserConversations({ actions, serviceState, records, threads, conversations });
   const turns = createColleagueTurns({ terminals, serviceState, records, threads, conversations, worker });
 
-  function setNameResolver(resolver) {
-    if (typeof resolver !== "function") throw new TypeError("Colleague name resolver must be a function.");
-    serviceState.slots.resolveName = resolver;
-  }
-
   return Object.freeze({
     browserConversations,
     registerConversationSource: watches.registerConversationSource,
     registerWatchSource: watches.registerWatchSource,
     listWatchSources: watches.listWatchSources,
     watchState: watches.watchState,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setNameResolver,
     read: turns.read,
     startFresh: history.startFresh,
     readHistory: history.readHistory,

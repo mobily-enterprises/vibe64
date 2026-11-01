@@ -10,5 +10,6 @@
 /** @typedef {ReturnType<typeof import("./colleagueConversations.js").createColleagueConversations>} ColleagueConversations */
 /** @typedef {ReturnType<typeof import("./colleagueWorker.js").createColleagueWorker>} ColleagueWorker */
 /** @typedef {ReturnType<typeof import("./watchSources.js").createWatchSources>} WatchSources */
+/** @typedef {() => Promise<string>} ColleagueNameResolver The name Colleague gives the model on each turn. */
 
 export {};

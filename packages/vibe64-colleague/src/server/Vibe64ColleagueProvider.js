@@ -4,6 +4,7 @@ import { requestBody, requestQuery, vibe64RouteHandler, vibe64RouteHttp } from "
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "./colleagueActions.js";
 import { createColleagueService } from "./service.js";
+import { COLLEAGUE_NAME_RESOLVER_TOKEN, nameColleague } from "./colleagueName.js";
 import { registerColleagueFocus } from "./registerColleagueFocus.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -14,6 +15,7 @@ import { registerColleagueFocus } from "./registerColleagueFocus.js";
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").ColleagueService} ColleagueService */
 /** @typedef {import("./types.js").ColleagueBrowserFocus} ColleagueBrowserFocus */
+/** @typedef {import("./types.js").ColleagueNameResolver} ColleagueNameResolver */
 
 /** @param {RuntimeHttp} http */
 function registerColleagueRoutes(http) {
@@ -44,10 +46,11 @@ function registerColleagueRoutes(http) {
  * @param {AccountsService} dependencies.accounts
  * @param {TerminalsService} dependencies.terminals
  * @param {RuntimeEvents} dependencies.events
+ * @param {ColleagueNameResolver} dependencies.resolveName
  * @param {string} dependencies.systemRoot
  */
-function createColleague({ actions, accounts, terminals, events, systemRoot }) {
-  const colleague = createColleagueService({ actions, accounts, terminals, events, systemRoot });
+function createColleague({ actions, accounts, terminals, events, resolveName, systemRoot }) {
+  const colleague = createColleagueService({ actions, accounts, terminals, events, resolveName, systemRoot });
   return { ...colleague,
     browserConversations: { ...colleague.browserConversations,
       conversationDataSchema: colleagueConversationDataSchema,
@@ -68,8 +71,9 @@ function createColleagueBrowserFocus({ realtime, actions }) {
 const Vibe64ColleagueProvider = defineFeature({
   id: "vibe64.colleague", domain: "vibe64-colleague",
   requires: { accounts: "vibe64.accounts", http: "runtime.http", terminals: "vibe64.terminals", events: "runtime.events" },
-  // A composed host's own project views for navigation.open: [{ pane, meaning }].
-  optional: { navigationPanes: "vibe64.colleague.navigation-panes" },
+  // A composed host's own project views for navigation.open: [{ pane, meaning }],
+  // and the name it gives Colleague.
+  optional: { navigationPanes: "vibe64.colleague.navigation-panes", resolveName: COLLEAGUE_NAME_RESOLVER_TOKEN },
   provides: { colleague: "vibe64.colleague" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   /**
@@ -78,10 +82,13 @@ const Vibe64ColleagueProvider = defineFeature({
    * @param {RuntimeHttp} capabilities.http
    * @param {TerminalsService} capabilities.terminals
    * @param {RuntimeEvents} capabilities.events
+   * @param {ColleagueNameResolver | null} capabilities.resolveName
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
-  setup({ accounts, http, terminals, events }, { actionCatalogue }) {
-    const colleague = createColleague({ actions: actionCatalogue, accounts, terminals, events, systemRoot: getStudioProjectContext().systemRoot });
+  setup({ accounts, http, terminals, events, resolveName }, { actionCatalogue }) {
+    if (resolveName && typeof resolveName !== "function") throw new TypeError("Colleague name resolver must be a function.");
+    const colleague = createColleague({ actions: actionCatalogue, accounts, terminals, events, resolveName: resolveName ?? nameColleague,
+      systemRoot: getStudioProjectContext().systemRoot });
     registerColleagueRoutes(http);
     return { colleague };
   },

@@ -8,6 +8,7 @@
     "./client": "./src/client/index.js",
     "./server": "./src/server/Vibe64ColleagueProvider.js",
     "./server/service": "./src/server/service.js",
+    "./server/colleagueName": "./src/server/colleagueName.js",
     "./server/conversationUpgrade": "./src/server/conversationUpgrade.js",
     "./server/types": "./src/server/types.js",
     "./shared/learning-focus": "./src/shared/learningFocus.js",
