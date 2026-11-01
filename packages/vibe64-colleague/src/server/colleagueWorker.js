@@ -2,21 +2,20 @@ import { randomUUID } from "node:crypto";
 import { runBoundedAssistantToolLoop, readAssistantResponseEnvelope, readPartialAssistantReply } from "@jskit-ai/assistant-core/server";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { nativeInstructions, nativeLearnInstructions } from "./protocol.js";
-import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
-import { stateObservation, stateWatchUpdate } from "./watchSources.js";
-import { assignmentSummary, suspendAssignment } from "./assignments.js";
-import { failure, requireResult } from "./colleagueFailure.js";
+import { watchUpdate } from "./attention.js";
+import { stateWatchUpdate } from "./watchSources.js";
+import { suspendAssignment } from "./assignments.js";
+import { failure } from "./colleagueFailure.js";
 import { WATCH_UPDATE_NOTICE, trimIncompleteSurrogate } from "./colleaguePresentation.js";
 import { ACTION_COLLEAGUE_CONTEXT_READ } from "./colleagueActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
-/** @typedef {import("./types.js").WatchSources} WatchSources */
 /** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
 /** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
 /** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
 /** @typedef {import("./types.js").ColleagueConversations} ColleagueConversations */
-/** @typedef {import("./types.js").ColleagueNameResolver} ColleagueNameResolver */
+/** @typedef {import("./types.js").ColleagueTurnInputs} ColleagueTurnInputs */
 
 /**
  * A completed reply delivered these observations: drop them and settle the
@@ -39,134 +38,31 @@ function markObservationsDelivered(record, observations) {
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
  * @param {TerminalsService} dependencies.terminals
- * @param {WatchSources} dependencies.watchSources
  * @param {number} dependencies.watchPollMs
  * @param {number} dependencies.watchDebounceMs
  * @param {ColleagueServiceState} dependencies.serviceState
  * @param {ColleagueRecords} dependencies.records
  * @param {ColleagueThreads} dependencies.threads
  * @param {ColleagueConversations} dependencies.conversations
- * @param {ColleagueNameResolver} dependencies.resolveName
+ * @param {ColleagueTurnInputs} dependencies.turnInputs
  */
 function createColleagueWorker({
   actions,
   terminals,
-  watchSources,
   watchPollMs,
   watchDebounceMs,
   serviceState,
   records,
   threads,
   conversations,
-  resolveName
+  turnInputs
 }) {
-  async function workerContext(state, connection, generation, autonomous, userMessageIds, isCurrent) {
-    let context = threads.actionContext(state, connection);
-    const observations = [];
-    for (const observation of state.record.observations.slice()) {
-      // Persisted notifications may outlive their original project access.
-      try {
-        const watch = state.record.watches.find(item => item.watchId === observation.watchId);
-        if (watch?.source) await readWatch(watch, context);
-        else requireResult(await actions.execute({
-          actionId: "vibe64.sessions.inspect",
-          input: { sessionId: observation.focus.sessionId },
-          context: { ...context, projectSlug: observation.focus.projectSlug }
-        }));
-        observations.push(observation);
-      } catch (error) {
-        const watch = state.record.watches.find(item => item.watchId === observation.watchId);
-        if (watch?.status === "pending") {
-          watch.status = "paused";
-          watch.error = `Watching paused: ${error.message}`.slice(0, 512);
-        }
-        suspendAssignment(
-          state.record,
-          observation.assignmentId,
-          "Assignment access could not be verified. Resolve access before resuming."
-        );
-        state.record.observations = state.record.observations.filter(item => item.id !== observation.id);
-        await records.persist(state);
-      }
-    }
-    if (!isCurrent()) return null;
-    if (autonomous && !observations.length) {
-      state.record.status = "ready";
-      await records.persist(state);
-      return null;
-    }
-    const assignmentIds = observations.filter(observation => state.record.assignments?.some(assignment =>
-      assignment.assignmentId === observation.assignmentId &&
-        ["active", "waiting"].includes(assignment.status))).map(observation => observation.assignmentId);
-    const observedAssignmentIds = observations.flatMap(observation => observation.assignmentId ? [observation.assignmentId] : []);
-    const canRelay = (state.record.assignments || []).some(assignment => observedAssignmentIds.includes(assignment.assignmentId) &&
-      assignment.status !== "cancelled" && assignment.links?.some(link => state.record.assignments.some(target =>
-        target.assignmentId === link.assignmentId && ["active", "waiting"].includes(target.status))));
-    const readOnly = autonomous && !assignmentIds.length && !canRelay;
-    context = {
-      ...context,
-      colleague: {
-        ...context.colleague,
-        generation,
-        autonomous,
-        readOnly,
-        userMessageIds,
-        assignmentIds,
-        observedAssignmentIds,
-        observationIds: observations.map(observation => observation.id)
-      }
-    };
-    state.operationRunId = randomUUID();
-    state.operationContext = context;
-    state.observationIds = autonomous ? context.colleague.observationIds : [];
-    return { context, observations, readOnly, observedAssignmentIds };
-  }
-
-  async function workerData(state, connection, currentContext, autonomous) {
-    return {
-      assistantName: await resolveName(),
-      focus: connection.focus,
-      userMessageIds: currentContext.context.colleague.userMessageIds,
-      observations: currentContext.observations,
-      readOnly: currentContext.readOnly,
-      autonomous,
-      assignments: (state.record.assignments || []).filter(item =>
-        ["active", "waiting", "needs-user"].includes(item.status) || currentContext.observedAssignmentIds.includes(item.assignmentId))
-        .map(item => {
-          const {
-            assignmentId,
-            projectSlug,
-            sessionId,
-            conversationId,
-            status,
-            summary,
-            turnLimit,
-            turnsUsed,
-            waitingForAssignmentId,
-            links
-          } = assignmentSummary(item);
-          return {
-            assignmentId,
-            projectSlug,
-            sessionId,
-            conversationId,
-            status,
-            summary,
-            turnLimit,
-            turnsUsed,
-            waitingForAssignmentId,
-            links
-          };
-        }),
-      ...(state.record.retiredConversation?.operation ? { previousOperation: state.record.retiredConversation.operation } : {})
-    };
-  }
-
   async function runApi(state, connection, generation, message, admission, controller) {
     const isCurrent = () =>
       !serviceState.lifecycle.closed && !state.stopping && !controller.signal.aborted && generation === state.generation;
     const autonomous = !message;
-    const currentContext = await workerContext(state, connection, generation, autonomous, message ? [message.messageId] : [], isCurrent);
+    const userMessageIds = message ? [message.messageId] : [];
+    const currentContext = await turnInputs.workerContext(state, connection, generation, autonomous, userMessageIds, isCurrent);
     if (!currentContext) return;
     const { context, observations } = currentContext;
     const hadRuntime = Boolean(state.record.conversationMetadata?.runtime);
@@ -194,7 +90,7 @@ function createColleagueWorker({
       }
       return runNative(state, connection, generation, controller);
     }
-    const data = await workerData(state, connection, currentContext, autonomous);
+    const data = await turnInputs.workerData(state, connection, currentContext, autonomous);
     const streamId = randomUUID();
     const messageId = message?.messageId || `observation-${randomUUID()}`;
     let replyTurnId = "";
@@ -402,7 +298,7 @@ function createColleagueWorker({
           const messages = state.pendingMessages.splice(0);
           userMessageIds.push(...messages.map(message => message.messageId));
           if (messages.length) replyTurnId = messages.at(-1).turnId;
-          currentContext = await workerContext(state, connection, generation, autonomous, [...userMessageIds], isCurrent);
+          currentContext = await turnInputs.workerContext(state, connection, generation, autonomous, [...userMessageIds], isCurrent);
           if (!currentContext) return {};
           if (!feedback && previousResponse?.kind === "invalid") {
             state.streamingReply = progress;
@@ -426,7 +322,7 @@ function createColleagueWorker({
           const conversation = await conversations.prepare(state, currentContext.context, connection.assistantSelection, systemPrompt);
           await conversation.configure({ outputSchema });
           controller.signal.throwIfAborted();
-          const data = await workerData(state, connection, currentContext, autonomous);
+          const data = await turnInputs.workerData(state, connection, currentContext, autonomous);
           const operation = state.record.conversationLog.findLast(turn =>
             turn.metadata?.applicationTools?.length)?.metadata.applicationTools.at(
             -1
@@ -621,28 +517,8 @@ function createColleagueWorker({
     state.watchTimer.unref();
   }
 
-  /**
-   * A watch without a source is a project's own coding conversation.
-   */
-  function watchSource(watch) {
-    if (!watch.source) return null;
-    const source = watchSources.get(watch.source);
-    if (!source) throw failure("This watch's source is unavailable in this runtime.");
-    return source;
-  }
-
-  async function readWatch(watch, context) {
-    const source = watchSource(watch);
-    if (!source) return readWatchedConversation(actions, watch, context);
-    if (source.kind === "state") return stateObservation(source, await source.read({ ...watch.input }, context));
-    return conversationObservation({
-      ...requireResult(await source.read(watch, context)),
-      replyDuringWork: watch.condition === "reply" && !watch.assignmentId
-    });
-  }
-
   async function observeWatch(state, watch) {
-    const observation = await readWatch(watch, threads.actionContext(state, { clientId: "", focus: watch }));
+    const observation = await turnInputs.readWatch(watch, threads.actionContext(state, { clientId: "", focus: watch }));
     if (serviceState.lifecycle.closed || state.released || watch.status !== "active") return;
     if (watch.assignmentId &&
         !watch.expectedRunId &&
@@ -650,7 +526,7 @@ function createColleagueWorker({
         observation.runId !== watch.cursor?.runId) {
       watch.expectedRunId = observation.runId;
     }
-    const { cursor, reason } = (watchSource(watch)?.kind === "state" ? stateWatchUpdate : watchUpdate)(watch, observation);
+    const { cursor, reason } = (turnInputs.watchSource(watch)?.kind === "state" ? stateWatchUpdate : watchUpdate)(watch, observation);
     watch.cursor = cursor;
     watch.error = "";
     if (reason) {

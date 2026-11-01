@@ -42,11 +42,13 @@ registers current focus only, without replaying stale focus or resuming watches.
 ## Sources
 
 - `packages/vibe64-colleague/src/server/Vibe64ColleagueFeature.js`
+- `packages/vibe64-colleague/src/server/registerRoutes.js`
 - `packages/vibe64-colleague/src/server/registerColleagueFocus.js`
 - `packages/vibe64-colleague/src/client/colleagueFocusBinding.js`
 - `packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js`
 - `packages/vibe64-sessions/src/server/conversationHost.js`
 - `packages/vibe64-colleague/src/server/colleagueActions.js`
+- `packages/vibe64-colleague/src/server/colleagueSchemas.js`
 - Main: `packages/vibe64-colleague/src/server/service.js`
 - `packages/vibe64-colleague/src/server/colleagueServiceState.js`
 - `packages/vibe64-colleague/src/server/colleagueName.js`
@@ -94,6 +96,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/server/conversationUpgrade.js`
 - `packages/vibe64-colleague/src/server/learningWatchUpgrade.js`
 - `packages/vibe64-colleague/src/server/nativeConversationUpgrade.js`
+- `packages/vibe64-colleague/src/server/nativeContinuityRepairs.js`
 - `packages/vibe64-colleague/src/server/retiredOperationUpgrade.js`
 - `packages/vibe64-publishing/src/server/publicationWatch.js`
 

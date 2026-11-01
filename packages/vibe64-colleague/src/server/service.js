@@ -4,6 +4,7 @@ import { createColleagueServiceState } from "./colleagueServiceState.js";
 import { createColleagueRecords } from "./colleagueRecords.js";
 import { createColleagueThreads } from "./colleagueThreads.js";
 import { createColleagueConversations } from "./colleagueConversations.js";
+import { createColleagueTurnInputs } from "./colleagueTurnInputs.js";
 import { createColleagueWorker } from "./colleagueWorker.js";
 import { createColleagueWatches } from "./colleagueWatches.js";
 import { createColleagueHistory } from "./colleagueHistory.js";
@@ -62,17 +63,23 @@ function createColleagueService({
     threads
   });
   const watchSources = createWatchSources();
+  const turnInputs = createColleagueTurnInputs({
+    actions,
+    watchSources,
+    records,
+    threads,
+    resolveName
+  });
   const worker = createColleagueWorker({
     actions,
     terminals,
-    watchSources,
     watchPollMs,
     watchDebounceMs,
     serviceState,
     records,
     threads,
     conversations,
-    resolveName
+    turnInputs
   });
   const watches = createColleagueWatches({
     events,
