@@ -87,8 +87,9 @@ async function inventory(directory) {
     for (const entry of await readdir(current, { withFileTypes: true })) {
       if (++entries > 65536) throw new Error("Installed snapshot exceeds 65536 directory entries.");
       const filename = path.join(current, entry.name);
-      if (entry.isDirectory()) await visit(filename);
-      else {
+      if (entry.isDirectory()) {
+        await visit(filename);
+      } else {
         await requirePath(filename, false);
         files.push(path.relative(directory, filename).split(path.sep).join("/"));
       }
@@ -452,9 +453,11 @@ function installedTrainingContent(systemRoot, lessonTeachable) {
     const reader = admissionOnly === true ? readAdmissionIdentity : metadataOnly === true ? readLessonIdentity : readLesson;
     const lesson = await reader({ topicId, commit, topicHash, lessonCode, lessonHash });
     const exercise = lesson.lesson.exercise;
-    if (!exercise) throw Object.assign(new Error(`Lesson ${lessonCode} has no declared bundled exercise.`), {
-      code: "VIBE64_TRAINING_EXERCISE_MISSING"
-    });
+    if (!exercise) {
+      throw Object.assign(new Error(`Lesson ${lessonCode} has no declared bundled exercise.`), {
+        code: "VIBE64_TRAINING_EXERCISE_MISSING"
+      });
+    }
     const sourcePath = path.posix.join(path.posix.dirname(lesson.descriptorPath), exercise.source);
     const identity = {
       pin: lesson.pin,

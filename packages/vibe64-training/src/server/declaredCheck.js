@@ -195,11 +195,13 @@ function createTrainingDeclaredCheckOwner({
         cleanupSafe = Boolean(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(result?.execution?.id || "") &&
           ["finished", "rejected"].includes(result.execution.state) &&
           !["vibe64_execution_drain_failed", "vibe64_execution_cleanup_required"].includes(result.code));
-        if (!cleanupSafe) throw failure(
-          "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
-          "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
-          { execution: result?.execution, scratch }
-        );
+        if (!cleanupSafe) {
+          throw failure(
+            "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+            "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
+            { execution: result?.execution, scratch }
+          );
+        }
         signal?.throwIfAborted();
         const current = await readAttempt(actor, input);
         const freshSession = await runtime.getSessionWithoutSource(input.sessionId);
@@ -388,11 +390,13 @@ function createTrainingDeclaredCheckOwner({
         cleanupSafe = Boolean(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(run?.execution?.id || "") &&
           ["finished", "rejected"].includes(run.execution.state) &&
           !["vibe64_execution_drain_failed", "vibe64_execution_cleanup_required"].includes(run.code));
-        if (!cleanupSafe) throw failure(
-          "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
-          "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
-          { execution: run?.execution, scratch }
-        );
+        if (!cleanupSafe) {
+          throw failure(
+            "The check execution scope could not be proven empty. Its private files are retained for the original execution cleanup owner.",
+            "VIBE64_TRAINING_CHECK_CLEANUP_REQUIRED",
+            { execution: run?.execution, scratch }
+          );
+        }
         signal?.throwIfAborted();
         if (!sameAttempt(await readAttempt(actor, input))) {
           throw failure("The lesson changed while its code check was running. Check your code again.", "VIBE64_TRAINING_CHECK_RUN_STALE");

@@ -23,10 +23,12 @@ function createTrainingLessonVisuals({ learners, content }) {
    */
   async function readLessonVisual({ attemptId, visualId }, context) {
     const actor = authenticatedVibe64User(context);
-    if (!actor) throw Object.assign(new Error("Log in to Vibe64 before reading your lesson diagram."), {
-      code: "vibe64_auth_required",
-      statusCode: 401
-    });
+    if (!actor) {
+      throw Object.assign(new Error("Log in to Vibe64 before reading your lesson diagram."), {
+        code: "vibe64_auth_required",
+        statusCode: 401
+      });
+    }
     const state = await learners.readState({ actor, attemptId, includeCompletion: true });
     // The reader shows ended lessons too, so any of this learner's retained
     // attempts may read its pinned diagram.

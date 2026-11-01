@@ -97,8 +97,9 @@ function createTrainingContentInstaller({ systemRoot }) {
     }
     await inspectPath(lockPath, false);
     const existing = await inspectPath(snapshotRoot, true);
-    if (existing) requireMatchingPin((await reader.readTopic(pin)).pin, pin);
-    else {
+    if (existing) {
+      requireMatchingPin((await reader.readTopic(pin)).pin, pin);
+    } else {
       if (!source) throw new Error("Trusted topic source is missing. Prepare the approved local repository before installing its pin.");
       await verifySourcePin(sourceRoot, pin);
     }

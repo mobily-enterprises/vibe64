@@ -148,15 +148,20 @@ function createTrainingStepEvidence({
     const chunks = [];
     for (const file of files) {
       let section = "";
-      if (file.binary) file.omitted = "binary";
-      else if (file.status === "new") {
+      if (file.binary) {
+        file.omitted = "binary";
+      } else if (file.status === "new") {
         const added = await untrackedSection(source, file.path);
-        if (added.omitted) file.omitted = added.omitted; else {
+        if (added.omitted) {
+          file.omitted = added.omitted;
+        } else {
           file.added = added.added;
           file.removed = 0;
           section = added.section;
         }
-      } else section = sections.get(file.path) || "";
+      } else {
+        section = sections.get(file.path) || "";
+      }
       if (!section) continue;
       if (section.length > EVIDENCE_LIMITS.fileDiffCharacters) {
         file.omitted = "large";

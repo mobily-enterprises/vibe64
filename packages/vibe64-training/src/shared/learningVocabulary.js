@@ -284,8 +284,10 @@ const registerLearningVocabulary = value => learningVocabulary.register(value);
 function declaredLearningVocabulary({ places = [], activities = [], facts = [] } = {}) {
   const vocabulary = createLearningVocabulary();
   const known = new Set(vocabulary.places().map(value => value.id));
-  for (const id of [...places, ...activities, ...facts]) if (!ID.test(id || "")) {
-    throw vocabularyFailure(`Declared name ${id} is not a lowercase id.`);
+  for (const id of [...places, ...activities, ...facts]) {
+    if (!ID.test(id || "")) {
+      throw vocabularyFailure(`Declared name ${id} is not a lowercase id.`);
+    }
   }
   const declaredPlaces = new Set(places.filter(id => !known.has(id)));
   const declaredActivities = new Set(activities.filter(id => !vocabulary.activity(id)));
@@ -435,7 +437,9 @@ function lessonStepNeeds(step, vocabulary = learningVocabulary) {
     if (activity || vocabulary.declaredActivity(beat.target)) {
       activities.add(beat.target);
       if (activity?.place) places.add(activity.place);
-    } else places.add(beat.target);
+    } else {
+      places.add(beat.target);
+    }
   }
   if (step?.guide?.target) places.add(step.guide.target);
   if (step?.check?.kind === "fact") facts.add(step.check.fact);

@@ -389,17 +389,19 @@ function createTrainingService({
         // fails. Retrying reads the same saved identities before any effect.
         try {
           const current = await learners.resumeAttempt({ actor, attemptId });
-          if (attempt.preparation.phase !== "ready") await learners.recordPreparationFailure({
-            actor,
-            attemptId,
-            expectedRevision: current.revision,
-            initialSessionId,
-            stage,
-            code: String(error.code || "VIBE64_TRAINING_PREPARATION_FAILED").slice(0, 64),
-            message: error === cause
-              ? "Exercise preparation could not finish. Resume the same lesson; if it still fails, ask the owner to inspect the project, session and setup diagnostics."
-              : error.message
-          });
+          if (attempt.preparation.phase !== "ready") {
+            await learners.recordPreparationFailure({
+              actor,
+              attemptId,
+              expectedRevision: current.revision,
+              initialSessionId,
+              stage,
+              code: String(error.code || "VIBE64_TRAINING_PREPARATION_FAILED").slice(0, 64),
+              message: error === cause
+                ? "Exercise preparation could not finish. Resume the same lesson; if it still fails, ask the owner to inspect the project, session and setup diagnostics."
+                : error.message
+            });
+          }
         } catch { /* Original failure remains authoritative. */ }
         setupRun = null;
         throw error;

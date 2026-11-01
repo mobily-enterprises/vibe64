@@ -200,16 +200,18 @@ function createTrainingStepChecks({
       const existing = entry.results.find(saved => saved.requestId === requestId);
       if (existing) return { value: replayed(existing, result.stepId, same) };
       const passedIds = new Set(entry.results.filter(saved => saved.outcome === "passed").map(saved => saved.stepId));
-      if (passedIds.has(result.stepId)) return {
-        value: {
-          ok: true,
-          stepId: result.stepId,
-          outcome: "passed",
-          recorded: false,
-          replayed: false,
-          alreadyPassed: true
-        }
-      };
+      if (passedIds.has(result.stepId)) {
+        return {
+          value: {
+            ok: true,
+            stepId: result.stepId,
+            outcome: "passed",
+            recorded: false,
+            replayed: false,
+            alreadyPassed: true
+          }
+        };
+      }
       const outstanding = checkable.filter(id => !passedIds.has(id)).length;
       if (result.outcome !== "passed" && entry.results.length + outstanding >= MAX_STEP_RESULTS) {
         return {

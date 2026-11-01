@@ -349,8 +349,9 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
         if (excludedExerciseEntries.has(item.name)) continue;
         const relative = path.relative(reader.root, path.join(directory, item.name));
         const file = await reader.resolve(relative);
-        if (item.isDirectory()) await includeDirectory(file.filename);
-        else {
+        if (item.isDirectory()) {
+          await includeDirectory(file.filename);
+        } else {
           const read = await reader.read(relative);
           include(read);
           served.add(read.relative);

@@ -79,12 +79,16 @@ async function treeDigest(root) {
   const entries = [];
   async function walk(target, relative) {
     const info = await lstat(target);
-    if (info.isSymbolicLink()) entries.push([relative, "link", await readlink(target)]);
-    else if (info.isFile()) entries.push([relative, "file", info.size, await fileDigest(target)]);
-    else if (info.isDirectory()) {
+    if (info.isSymbolicLink()) {
+      entries.push([relative, "link", await readlink(target)]);
+    } else if (info.isFile()) {
+      entries.push([relative, "file", info.size, await fileDigest(target)]);
+    } else if (info.isDirectory()) {
       entries.push([relative, "directory"]);
       for (const name of (await readdir(target)).sort()) await walk(path.join(target, name), `${relative}/${name}`);
-    } else throw new Error(`Learning reset cannot copy a special file: ${target}. Inspect it before upgrading.`);
+    } else {
+      throw new Error(`Learning reset cannot copy a special file: ${target}. Inspect it before upgrading.`);
+    }
   }
   await walk(root, ".");
   return JSON.stringify(entries);
@@ -285,11 +289,15 @@ export async function resetLearningForLearningSpace({
   for (const move of moves) {
     const [source, destination] = await Promise.all([kind(move.source), kind(move.destination)]);
     if (source === "missing" && destination !== "missing") continue;
-    if (source === "missing") errors.push(`Neither ${move.source} nor its retired copy exists.`);
-    else if (destination !== "missing" && !planned.has(move.source)) {
+    if (source === "missing") {
+      errors.push(`Neither ${move.source} nor its retired copy exists.`);
+    } else if (destination !== "missing" && !planned.has(move.source)) {
       errors.push(`Unexpected destination ${move.destination} already exists.`);
-    } else if (destination !== "missing") copied.push(move);
-    else pending.push(move);
+    } else if (destination !== "missing") {
+      copied.push(move);
+    } else {
+      pending.push(move);
+    }
   }
   if (errors.length) throw new Error(`${errors.join(" ")} Inspect before upgrading.`);
   report(

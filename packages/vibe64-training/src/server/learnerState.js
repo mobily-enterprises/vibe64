@@ -137,14 +137,16 @@ function createTrainingLearnerState({
 
   async function readProgress(paths) {
     const value = await readRecord(paths.progress);
-    if (!value) return {
-      schemaVersion: 2,
-      learnerId: paths.learner.id,
-      revision: 0,
-      activeAttemptId: null,
-      completedLessons: [],
-      attempts: []
-    };
+    if (!value) {
+      return {
+        schemaVersion: 2,
+        learnerId: paths.learner.id,
+        revision: 0,
+        activeAttemptId: null,
+        completedLessons: [],
+        attempts: []
+      };
+    }
     return validateProgress(value, paths.learner.id);
   }
 
