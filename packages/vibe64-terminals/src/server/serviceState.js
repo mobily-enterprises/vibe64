@@ -1,6 +1,7 @@
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 
 /** @typedef {import("./types.js").ReadClaudeAccountStatus} ReadClaudeAccountStatus */
+/** @typedef {import("./types.js").AssistantRuntime} AssistantRuntime */
 
 /**
  * What the service's parts share: the turn completions in flight, the shutdown signal, and the assistant
@@ -14,6 +15,7 @@ function createServiceState({ readClaudeAccountStatus }) {
   // Server shutdown happens once. Its signal stops discarded background AI
   // work (session naming).
   const shutdownSignal = new AbortController();
+  /** @type {AssistantRuntime} */
   const assistantRuntime = {
     claudeConnectionStatus: async () => (await readClaudeAccountStatus()).loggedIn === true,
     codexConnectionStatus: async () => true,

@@ -46,6 +46,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("../../types.js").CodexSessionTurnCheckpoint} CodexSessionTurnCheckpoint */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
+/** @typedef {import("../../types.js").ListAssistantConnections} ListAssistantConnections */
 
 const CODEX_HELPER_PROFILE_REVISION = "codex-helper-selected-v4";
 function codexAssistantSettings(context = {}, input = {}) {
@@ -227,7 +228,7 @@ function normalizeCodexSessionResult(result = {}) {
  * @param {object} dependencies
  * @param {(context: object) => Promise<boolean>} [dependencies.connectionStatus]
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation
- * @param {(request: object) => Promise<object[]>} dependencies.listConnections
+ * @param {ListAssistantConnections} dependencies.listConnections
  * @param {CodexAppServerRunOwner} dependencies.runOwner
  * @param {CodexAppServerProviderOwner} dependencies.providerOwner
  * @param {CodexConversationPreparation} dependencies.conversationPreparation

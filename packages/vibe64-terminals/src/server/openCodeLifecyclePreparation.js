@@ -20,6 +20,7 @@ import { openCodeError, throwVibe64OpenCodeError,
 /** @typedef {import("./types.js").OpenCodeConversationEvents} OpenCodeConversationEvents */
 /** @typedef {import("./types.js").OpenCodeConversationPresentation} OpenCodeConversationPresentation */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").ResolveAssistantConnection} ResolveAssistantConnection */
 
 /**
  * Authorized application facts and awaited product cleanup. The supplied native
@@ -32,7 +33,7 @@ import { openCodeError, throwVibe64OpenCodeError,
  * @param {OpenCodeMainMessagePreparation} dependencies.mainMessagePreparation
  * @param {OpenCodeConversationEvents} dependencies.events
  * @param {OpenCodeConversationPresentation} dependencies.presentation
- * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
+ * @param {ResolveAssistantConnection} dependencies.resolveConnection
  */
 function createOpenCodeLifecyclePreparation({
   project,

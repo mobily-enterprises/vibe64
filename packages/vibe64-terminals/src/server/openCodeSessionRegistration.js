@@ -62,6 +62,8 @@ import {
 /** @typedef {import("./types.js").AgentPreviewCommandService} AgentPreviewCommandService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").ListAssistantConnections} ListAssistantConnections */
+/** @typedef {import("./types.js").ResolveAssistantConnection} ResolveAssistantConnection */
 
 /**
  * @param {object} dependencies
@@ -74,7 +76,7 @@ import {
  * @param {typeof createOpenCodeServerProcess} [dependencies.createServerProcess]
  * @param {RuntimeEnv} [dependencies.env]
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
- * @param {(request: object) => Promise<object[]>} dependencies.listConnections
+ * @param {ListAssistantConnections} dependencies.listConnections
  * @param {RuntimeLogger} dependencies.logger
  * @param {typeof prepareAgentSessionCommandEnvironment} [dependencies.prepareCommandEnvironment]
  * @param {ProjectService} dependencies.project
@@ -84,7 +86,7 @@ import {
  * @param {typeof readOpenCodeCatalog} [dependencies.readCatalogCommand]
  * @param {typeof readOpenCodeZenModelIds} [dependencies.readZenModelsCommand]
  * @param {typeof writeSessionGitCommandActor} [dependencies.recordGitActor]
- * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
+ * @param {ResolveAssistantConnection} dependencies.resolveConnection
  * @param {typeof verifyOpenCodeApiKey} [dependencies.verifyConnectionCommand]
  */
 function createOpenCodeSessionRegistration({

@@ -70,6 +70,23 @@
 /** @typedef {ReturnType<typeof import("./serviceAssistantContext.js").createServiceAssistantContext>} ServiceAssistantContext */
 /** @typedef {ReturnType<typeof import("./workspaceSetup.js").createWorkspaceSetupRunner>} WorkspaceSetupRunner */
 /** @typedef {ReturnType<typeof import("./sessionConversations.js").createSessionConversations>} SessionConversations */
+/**
+ * The assistant runtime a composing host configures (configureAssistantRuntime); serviceState holds its defaults.
+ * @typedef {object} AssistantRuntime
+ * @property {(context?: object) => Promise<boolean>} claudeConnectionStatus
+ * @property {(context?: object) => Promise<boolean>} codexConnectionStatus
+ * @property {(request?: object) => Promise<object[]>} listConnections
+ * @property {(context?: object) => Promise<{ ownerOnly: boolean }>} readAssistantAccess
+ * @property {(user?: object | null) => Promise<object | null>} resolveAssistantUser
+ * @property {(actor: object) => object} createActionContext
+ * @property {(actor: object, projectSlug?: string) => Promise<object>} authorizeProjectMessage
+ * @property {(selection?: object) => Promise<object | null>} resolveConnection
+ * @property {((request: object) => Promise<object>) | null} updateModelAccess
+ */
+/** @typedef {AssistantRuntime["listConnections"]} ListAssistantConnections */
+/** @typedef {AssistantRuntime["resolveConnection"]} ResolveAssistantConnection */
+/** @typedef {AssistantRuntime["readAssistantAccess"]} ReadAssistantAccess */
+/** @typedef {AssistantRuntime["resolveAssistantUser"]} ResolveAssistantUser */
 /** @typedef {ReturnType<typeof import("./serviceState.js").createServiceState>} ServiceState */
 /** @typedef {ReturnType<typeof import("./sessionNaming.js").createSessionNaming>} SessionNaming */
 /** @typedef {ReturnType<typeof import("./sessionPromptHints.js").createSessionPromptHintsService>} SessionPromptHintsService */

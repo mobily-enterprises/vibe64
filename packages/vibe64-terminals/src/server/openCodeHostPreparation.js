@@ -25,6 +25,8 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("./types.js").CreateOpenCodeServerProcess} CreateOpenCodeServerProcess */
 /** @typedef {typeof import("./agentCommandEnvironment.js").prepareAgentSessionCommandEnvironment} PrepareAgentSessionCommandEnvironment */
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
+/** @typedef {import("./types.js").ListAssistantConnections} ListAssistantConnections */
+/** @typedef {import("./types.js").ResolveAssistantConnection} ResolveAssistantConnection */
 
 function connectionIdentity(connection = {}, apiKey = "") {
   const value = toText(connection.fingerprint);
@@ -79,10 +81,10 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
  * @param {CreateOpenCodeServerProcess} dependencies.createServerProcess
  * @param {RuntimeEnv} dependencies.env
  * @param {() => SessionAgentManager} dependencies.getAssistantManager
- * @param {(request: object) => Promise<object[]>} dependencies.listConnections
+ * @param {ListAssistantConnections} dependencies.listConnections
  * @param {PrepareAgentSessionCommandEnvironment} dependencies.prepareCommandEnvironment
  * @param {ProjectService} dependencies.project
- * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
+ * @param {ResolveAssistantConnection} dependencies.resolveConnection
  * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
  */
 function createOpenCodeHostPreparation({

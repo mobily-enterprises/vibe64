@@ -15,6 +15,8 @@ import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */
 /** @typedef {import("./types.js").CreateOpenCodeServerProcess} CreateOpenCodeServerProcess */
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */
+/** @typedef {import("./types.js").ListAssistantConnections} ListAssistantConnections */
+/** @typedef {import("./types.js").ResolveAssistantConnection} ResolveAssistantConnection */
 
 const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;
 
@@ -24,13 +26,13 @@ const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;
  * @param {string} dependencies.command
  * @param {CreateOpenCodeServerProcess} dependencies.createServerProcess
  * @param {RuntimeEnv} dependencies.env
- * @param {(request: object) => Promise<object[]>} dependencies.listConnections
+ * @param {ListAssistantConnections} dependencies.listConnections
  * @param {typeof import("./opencodeServerProcess.js").readOpenCodeCatalog} dependencies.readCatalogCommand
  * @param {typeof import("./opencodeServerProcess.js").readOpenCodeZenModelIds} dependencies.readZenModelsCommand
  * @param {OpenCodeHostPreparation["sharedRoots"]} dependencies.sharedRoots
  * @param {typeof import("./opencodeServerProcess.js").verifyOpenCodeApiKey} dependencies.verifyConnectionCommand
  * @param {OpenCodeMainMessagePreparation} dependencies.mainMessagePreparation
- * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
+ * @param {ResolveAssistantConnection} dependencies.resolveConnection
  */
 function createOpenCodeConversationAccounts({
   command,

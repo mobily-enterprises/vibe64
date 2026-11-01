@@ -14,6 +14,8 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("../types.js").ConversationRuntime} ConversationRuntime */
 /** @typedef {import("../types.js").SessionAgentProvider} SessionAgentProvider */
+/** @typedef {import("../types.js").ReadAssistantAccess} ReadAssistantAccess */
+/** @typedef {import("../types.js").ResolveAssistantUser} ResolveAssistantUser */
 
 /**
  * A provider with its product and transport ids trimmed; one without both is refused.
@@ -39,9 +41,9 @@ function normalizeProvider(provider) {
  * @param {SessionAttachments} dependencies.attachments
  * @param {ConversationRuntime} dependencies.conversationRuntime
  * @param {string} [dependencies.defaultProviderId]
- * @param {(context: object) => Promise<object>} dependencies.readAssistantAccess
+ * @param {ReadAssistantAccess} dependencies.readAssistantAccess
  * @param {(selection: object) => Promise<object | null>} dependencies.readProviderUsage
- * @param {(user: object | null) => Promise<object | null>} dependencies.resolveAssistantUser
+ * @param {ResolveAssistantUser} dependencies.resolveAssistantUser
  * @param {() => Promise<object>} dependencies.readRoutingConfiguration
  * @param {SessionAgentProvider[]} dependencies.providers the session agent providers, one per engine
  */

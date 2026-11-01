@@ -29,6 +29,8 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
 /** @typedef {import("../types.js").SessionAgentProvider} SessionAgentProvider */
+/** @typedef {import("../types.js").ReadAssistantAccess} ReadAssistantAccess */
+/** @typedef {import("../types.js").ResolveAssistantUser} ResolveAssistantUser */
 
 function mergeRoutingCatalogPage(catalog, page, revisionError) {
   catalog ||= { ...page, modelProviders: [] };
@@ -49,9 +51,9 @@ function mergeRoutingCatalogPage(catalog, page, revisionError) {
  * @param {object} dependencies
  * @param {SessionAgentManagerState} dependencies.state
  * @param {SessionAgentBindings} dependencies.sessionBindings
- * @param {(context: object) => Promise<object>} dependencies.readAssistantAccess
+ * @param {ReadAssistantAccess} dependencies.readAssistantAccess
  * @param {() => Promise<object>} dependencies.readRoutingConfiguration
- * @param {(user: object | null) => Promise<object | null>} dependencies.resolveAssistantUser
+ * @param {ResolveAssistantUser} dependencies.resolveAssistantUser
  */
 function createSessionAgentRouting({
   state,

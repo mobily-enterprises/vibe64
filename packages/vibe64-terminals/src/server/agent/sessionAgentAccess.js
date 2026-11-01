@@ -9,6 +9,8 @@ import { assistantUser, providerBindingConflictError, sessionAssistantSelection 
 import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
+/** @typedef {import("../types.js").ReadAssistantAccess} ReadAssistantAccess */
+/** @typedef {import("../types.js").ResolveAssistantUser} ResolveAssistantUser */
 
 /** The plan usage of an assistant that reports none, as a fresh value per read. */
 function unsupportedPlanUsage() {
@@ -20,9 +22,9 @@ function unsupportedPlanUsage() {
  * requirements, plan usage, and the provider's account description.
  * @param {object} dependencies
  * @param {SessionAgentBindings} dependencies.sessionBindings
- * @param {(context: object) => Promise<object>} dependencies.readAssistantAccess
+ * @param {ReadAssistantAccess} dependencies.readAssistantAccess
  * @param {(selection: object) => Promise<object | null>} dependencies.readProviderUsage
- * @param {(user: object | null) => Promise<object | null>} dependencies.resolveAssistantUser
+ * @param {ResolveAssistantUser} dependencies.resolveAssistantUser
  */
 function createSessionAgentAccess({
   sessionBindings,

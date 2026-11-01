@@ -1,6 +1,8 @@
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 
+/** @typedef {import("./types.js").ResolveAssistantConnection} ResolveAssistantConnection */
+
 const PROVIDERS = {
   deepseek: {
     url: "https://api.deepseek.com/user/balance",
@@ -56,7 +58,7 @@ function normalizeUsage(providerId, value) {
  * Account snapshots are optional and memory-only. Turn execution never awaits a
  * balance request, and the HTTP read never makes an upstream request of its own.
  * @param {object} dependencies
- * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
+ * @param {ResolveAssistantConnection} dependencies.resolveConnection
  * @param {typeof fetch} [dependencies.fetchImpl]
  */
 function createProviderUsage({ resolveConnection, fetchImpl = fetch }) {
