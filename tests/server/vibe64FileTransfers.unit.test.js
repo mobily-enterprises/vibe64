@@ -19,6 +19,22 @@ import { registerRoutes } from "../../packages/vibe64-source-editor/src/server/r
 import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
 import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
+const AREA_METHODS = Object.freeze({
+  areas: "readFileAreas",
+  tree: "readAreaTree",
+  file: "readAreaFile",
+  download: "downloadAreaFile",
+  archive: "downloadAreaArchive",
+  conflicts: "findAreaConflicts",
+  upload: "uploadAreaFile",
+  create: "createAreaFile",
+  save: "saveAreaFile",
+  rename: "renameAreaItem",
+  mkdir: "createAreaFolder",
+  delete: "deleteAreaItem",
+  transfer: "transferAreaItem"
+});
+
 // Each project has one live session with a managed source checkout (Repo, a
 // clean Git checkout), its Session Dropzone and Session tree, plus the
 // project's Dropzone and Backups. `sourcesBase` puts the checkouts elsewhere,
@@ -60,7 +76,7 @@ async function fixture(t, { sourcesBase } = {}) {
   // Session-scoped calls carry the route's session; project-scoped calls have none.
   const call = (operation, input = {}, { role = "member", slug = "one", options } = {}) => runWithProjectRequestContext({
     slug, targetRoot: path.join(root, slug), vibe64User: { username: role, role }
-  }, () => service.fileArea({ sessionId: "session-1", area: "drop-zone", ...input }, operation, options));
+  }, () => service[AREA_METHODS[operation]]({ sessionId: "session-1", area: "drop-zone", ...input }, options));
   const project = (operation, input = {}, options = {}) => call(operation, { sessionId: undefined, ...input }, options);
   const paths = (slug = "one") => ({
     ...stores.get(slug).paths("session-1"), repo: sources.get(slug), repoStaging: path.join(sources.get(slug), ".git", "vibe64-file-staging")
@@ -441,6 +457,7 @@ test("HTTP project routes, transfers and inline image previews keep trusted iden
 const SWAP_FOLDER_FOR_LINK = `
 import { renameSync, symlinkSync, unlinkSync } from "node:fs";
 import path from "node:path";
+
 const [dir, target] = process.argv.slice(1);
 const sub = path.join(dir, "sub");
 const real = path.join(dir, "sub.real");

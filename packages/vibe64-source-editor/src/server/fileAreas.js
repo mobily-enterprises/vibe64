@@ -59,7 +59,6 @@ const FILE_AREAS = Object.freeze({
   "project-drop-zone": { scope: "project" },
   backups: { scope: "project" }
 });
-const READS = ["tree", "file", "download", "archive", "conflicts"];
 const WRITES = ["upload", "create", "save", "rename", "delete", "mkdir", "transfer"];
 // A finished Repo upload waits this long for Save, Update or another source
 // change to let go of the exclusive write before it reports busy.
@@ -209,11 +208,10 @@ function createFileArea(project, { repoChanged }) {
   }
 
   /**
-   * Every Files request enters here inside the trusted project request context.
+   * Every Files operation enters here inside the trusted project request context.
    * Operations receive resolved roots; neither HTTP bodies nor callers select them.
    */
-  async function fileArea(input, operation, options = {}) {
-    const { readUpload = null } = options;
+  async function runFileArea(input, operation, readUpload) {
     return runSourceEditorOperation(async () => {
       const requestContext = currentProjectRequestContext();
       if (!requestContext) {
@@ -227,9 +225,6 @@ function createFileArea(project, { repoChanged }) {
         return { ok: true, areas: ["repo", "drop-zone", ...(owner ? ["session"] : [])] };
       }
       const area = String(input.area || "");
-      if (!READS.includes(operation) && !WRITES.includes(operation)) {
-        throw sourceEditorError("Unknown file area or operation.", "vibe64_files_invalid_area", {}, 404);
-      }
       if (operation === "transfer") {
         const mode = input.mode === "move" ? "move" : "copy";
         const targetSessionId = toText(input.targetSessionId) || sessionId;
@@ -273,7 +268,128 @@ function createFileArea(project, { repoChanged }) {
     });
   }
 
-  return fileArea;
+  /**
+   * The file areas this caller may open in the session.
+   * @param {object} input
+   */
+  function readFileAreas(input) {
+    return runFileArea(input, "areas");
+  }
+
+  /**
+   * One page of a folder in an area.
+   * @param {object} input
+   */
+  function readAreaTree(input) {
+    return runFileArea(input, "tree");
+  }
+
+  /**
+   * A text file in an area.
+   * @param {object} input
+   */
+  function readAreaFile(input) {
+    return runFileArea(input, "file");
+  }
+
+  /**
+   * An area file's original bytes, as an open handle for the download transport.
+   * @param {object} input
+   */
+  function downloadAreaFile(input) {
+    return runFileArea(input, "download");
+  }
+
+  /**
+   * The session's archive, from the Session area, as an open handle for the download transport.
+   * @param {object} input
+   */
+  function downloadAreaArchive(input) {
+    return runFileArea(input, "archive");
+  }
+
+  /**
+   * The names among input.names that already exist in a folder of an area.
+   * @param {object} input
+   */
+  function findAreaConflicts(input) {
+    return runFileArea(input, "conflicts");
+  }
+
+  /**
+   * Receives one uploaded file into an area.
+   * @param {object} input
+   * @param {object} [options]
+   * @param {() => AsyncIterable<object>} [options.readUpload] The transport's multipart reader.
+   */
+  function uploadAreaFile(input, options = {}) {
+    const { readUpload } = options;
+    return runFileArea(input, "upload", readUpload);
+  }
+
+  /**
+   * Creates a text file in an area.
+   * @param {object} input
+   */
+  function createAreaFile(input) {
+    return runFileArea(input, "create");
+  }
+
+  /**
+   * Saves a text file in an area against its base hash.
+   * @param {object} input
+   */
+  function saveAreaFile(input) {
+    return runFileArea(input, "save");
+  }
+
+  /**
+   * Renames an item within an area.
+   * @param {object} input
+   */
+  function renameAreaItem(input) {
+    return runFileArea(input, "rename");
+  }
+
+  /**
+   * Creates a folder in an area.
+   * @param {object} input
+   */
+  function createAreaFolder(input) {
+    return runFileArea(input, "mkdir");
+  }
+
+  /**
+   * Deletes an item from an area.
+   * @param {object} input
+   */
+  function deleteAreaItem(input) {
+    return runFileArea(input, "delete");
+  }
+
+  /**
+   * Moves or copies an item between areas without downloading it.
+   * @param {object} input
+   */
+  function transferAreaItem(input) {
+    return runFileArea(input, "transfer");
+  }
+
+  return Object.freeze({
+    readFileAreas,
+    readAreaTree,
+    readAreaFile,
+    downloadAreaFile,
+    downloadAreaArchive,
+    findAreaConflicts,
+    uploadAreaFile,
+    createAreaFile,
+    saveAreaFile,
+    renameAreaItem,
+    createAreaFolder,
+    deleteAreaItem,
+    transferAreaItem
+  });
 }
 
 async function areaOperation(operation, context, input, readUpload) {
@@ -319,7 +435,7 @@ async function areaOperation(operation, context, input, readUpload) {
     case "create":
       return createAreaTextFile(context, input);
     case "upload":
-      return uploadAreaFile(context, input, readUpload);
+      return uploadIntoArea(context, input, readUpload);
     case "conflicts":
       return { ok: true, existing: await existingNames(context, relativePath, input.names) };
     case "mkdir":
@@ -383,7 +499,7 @@ async function createAreaTextFile(context, input) {
   return { ok: true, file: await readSourceEditorFile(context, relativePath) };
 }
 
-async function uploadAreaFile(context, input, readUpload) {
+async function uploadIntoArea(context, input, readUpload) {
   if (typeof readUpload !== "function") throw sourceEditorError("Choose a file to upload.", "vibe64_files_upload_required");
   const requested = normalizeNewSourceEditorFilePath(input.path);
   if (sourceEditorPathExcluded(context.policy, requested)) throw protectedError(requested);

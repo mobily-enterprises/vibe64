@@ -76,7 +76,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
       id: "vibe64.source-editor.file-areas.read",
       input: { schema: createSchema({ sessionId: identity }), mode: "create" },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "areas")
+      execute: (input) => sourceEditor.readFileAreas(input)
     }),
     // Project areas need no session; the service requires one for session areas.
     Object.freeze({
@@ -92,7 +92,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "tree", {})
+      execute: (input) => sourceEditor.readAreaTree(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
@@ -106,7 +106,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "file", {})
+      execute: (input) => sourceEditor.readAreaFile(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
@@ -120,7 +120,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "download", {})
+      execute: (input) => sourceEditor.downloadAreaFile(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
@@ -134,7 +134,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "archive", {})
+      execute: (input) => sourceEditor.downloadAreaArchive(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,
@@ -149,7 +149,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "conflicts", {})
+      execute: (input) => sourceEditor.findAreaConflicts(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -164,7 +164,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input, context) => sourceEditor.fileArea(input, "upload", { readUpload: context.sourceEditorUpload?.readUpload })
+      execute: (input, context) => sourceEditor.uploadAreaFile(input, { readUpload: context.sourceEditorUpload?.readUpload })
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -179,7 +179,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "create", {})
+      execute: (input) => sourceEditor.createAreaFile(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -195,7 +195,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "save", {})
+      execute: (input) => sourceEditor.saveAreaFile(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -210,7 +210,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "rename", {})
+      execute: (input) => sourceEditor.renameAreaItem(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -224,7 +224,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "mkdir", {})
+      execute: (input) => sourceEditor.createAreaFolder(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -238,7 +238,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "delete", {})
+      execute: (input) => sourceEditor.deleteAreaItem(input)
     }),
     Object.freeze({
       ...VIBE64_COMMAND,
@@ -257,7 +257,7 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged }) {
         mode: "create"
       },
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },
-      execute: (input) => sourceEditor.fileArea(input, "transfer", {})
+      execute: (input) => sourceEditor.transferAreaItem(input)
     }),
     Object.freeze({
       ...VIBE64_QUERY,

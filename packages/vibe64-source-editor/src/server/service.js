@@ -223,7 +223,21 @@ function createService({
     searchIndex.invalidate(sourceRoot);
   }
 
-  const fileArea = createFileArea(project, { repoChanged: invalidateRepoIndexes });
+  const {
+    readFileAreas,
+    readAreaTree,
+    readAreaFile,
+    downloadAreaFile,
+    downloadAreaArchive,
+    findAreaConflicts,
+    uploadAreaFile,
+    createAreaFile,
+    saveAreaFile,
+    renameAreaItem,
+    createAreaFolder,
+    deleteAreaItem,
+    transferAreaItem
+  } = createFileArea(project, { repoChanged: invalidateRepoIndexes });
   const {
     runIntegrationSetup,
     registerOAuthIntegration,
@@ -412,7 +426,19 @@ function createService({
   }
 
   return Object.freeze({
-    fileArea,
+    readFileAreas,
+    readAreaTree,
+    readAreaFile,
+    downloadAreaFile,
+    downloadAreaArchive,
+    findAreaConflicts,
+    uploadAreaFile,
+    createAreaFile,
+    saveAreaFile,
+    renameAreaItem,
+    createAreaFolder,
+    deleteAreaItem,
+    transferAreaItem,
     runIntegrationSetup,
     registerOAuthIntegration,
     discoverN8nIntegration,

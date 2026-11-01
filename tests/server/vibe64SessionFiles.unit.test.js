@@ -19,6 +19,22 @@ import { registerRoutes } from "../../packages/vibe64-source-editor/src/server/r
 import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/sourceEditorActions.js";
 import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
+const AREA_METHODS = Object.freeze({
+  areas: "readFileAreas",
+  tree: "readAreaTree",
+  file: "readAreaFile",
+  download: "downloadAreaFile",
+  archive: "downloadAreaArchive",
+  conflicts: "findAreaConflicts",
+  upload: "uploadAreaFile",
+  create: "createAreaFile",
+  save: "saveAreaFile",
+  rename: "renameAreaItem",
+  mkdir: "createAreaFolder",
+  delete: "deleteAreaItem",
+  transfer: "transferAreaItem"
+});
+
 const exec = promisify(execFile);
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-file-areas-"));
@@ -40,13 +56,13 @@ async function fixture(t) {
   t.after(async () => { service.close(); await rm(root, { recursive: true, force: true }); });
   const call = (operation, input = {}, role = "owner", slug = "one", options) => runWithProjectRequestContext({
     slug, targetRoot: path.join(root, slug), vibe64User: { username: role, role }
-  }, () => service.fileArea({ sessionId: "shared-id", area: "drop-zone", ...input }, operation, options));
+  }, () => service[AREA_METHODS[operation]]({ sessionId: "shared-id", area: "drop-zone", ...input }, options));
   return { root, stores, service, call };
 }
 
 test("one Files boundary enforces project/session/area access for every operation", async (t) => {
   const { call, service } = await fixture(t);
-  assert.equal((await service.fileArea({ sessionId: "shared-id" }, "areas")).statusCode, 403);
+  assert.equal((await service.readFileAreas({ sessionId: "shared-id" })).statusCode, 403);
   assert.deepEqual((await call("areas", {}, "member")).areas, ["repo", "drop-zone"]);
   assert.deepEqual((await call("areas")).areas, ["repo", "drop-zone", "session"]);
   for (const operation of ["tree", "file", "download", "archive", "save", "upload", "rename", "delete", "mkdir"]) {

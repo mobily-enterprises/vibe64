@@ -90,8 +90,7 @@ test("source downloads deliver original file bytes over a real HTTP connection",
         projectContext, routeRelativePath: "vibe64", routeSurface: "app",
         sourceEditor: {
           async readTree() { return { ok: true }; },
-          async fileArea(input, operation) {
-            assert.equal(operation, "download");
+          async downloadAreaFile(input) {
             assert.equal(Object.hasOwn(input, "offset"), false);
             return this.downloadFile(input);
           },
@@ -279,13 +278,13 @@ test("source operations share validated inputs and fresh project authority acros
     const changes = [];
     let allowed = true;
     const cases = [
-      ["GET", "/files", "file-areas.read", "fileArea", {}],
-      ["GET", "/files/:area/tree", "file-area.tree", "fileArea", { offset: "next" }],
-      ["GET", "/files/:area/file", "file-area.file", "fileArea", { path: "readme.txt", offset: "0" }],
-      ["PUT", "/files/:area/file", "file-area.save", "fileArea", { path: "readme.txt", baseHash: "hash", text: "  keep whitespace\n" }],
-      ["POST", "/files/:area/rename", "file-area.rename", "fileArea", { path: "old.txt", destination: "new.txt" }],
-      ["POST", "/files/:area/directory", "file-area.mkdir", "fileArea", { path: "new" }],
-      ["DELETE", "/files/:area/file", "file-area.delete", "fileArea", { path: "old.txt" }],
+      ["GET", "/files", "file-areas.read", "readFileAreas", {}],
+      ["GET", "/files/:area/tree", "file-area.tree", "readAreaTree", { offset: "next" }],
+      ["GET", "/files/:area/file", "file-area.file", "readAreaFile", { path: "readme.txt", offset: "0" }],
+      ["PUT", "/files/:area/file", "file-area.save", "saveAreaFile", { path: "readme.txt", baseHash: "hash", text: "  keep whitespace\n" }],
+      ["POST", "/files/:area/rename", "file-area.rename", "renameAreaItem", { path: "old.txt", destination: "new.txt" }],
+      ["POST", "/files/:area/directory", "file-area.mkdir", "createAreaFolder", { path: "new" }],
+      ["DELETE", "/files/:area/file", "file-area.delete", "deleteAreaItem", { path: "old.txt" }],
       ["GET", "/integrations", "integrations.read", "readIntegrations", {}],
       ["GET", "/integrations/providers", "integrations.providers.read", "readIntegrationProviders", { search: "email", offset: 20 }],
       ["POST", "/integrations/n8n/discovery", "integrations.n8n.discover", "discoverN8nIntegration", { serverUrl: "https://example.com" }],
@@ -361,7 +360,7 @@ test("multipart upload passes its bounded transport reader through the authorize
     const app = testRouteApp();
     const actions = registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
       readTree() {},
-      async fileArea(input, operation, { readUpload }) { calls.push({ input, operation, parts: await readUpload() }); return { ok: true }; }
+      async uploadAreaFile(input, { readUpload }) { calls.push({ input, parts: await readUpload() }); return { ok: true }; }
     } }, async () => { if (!allowed) throw Object.assign(new Error("Revoked"), { statusCode: 403 }); });
     const route = findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId/files/:area/upload` });
     let readCount = 0;
