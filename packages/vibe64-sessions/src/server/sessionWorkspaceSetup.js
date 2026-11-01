@@ -10,16 +10,17 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
-/** @typedef {ReturnType<typeof createTerminalsSetupRunner>} WorkspaceSetupRunner */
+/** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 
 // A starter's workspace preparation waits this long for a busy session.
 const STARTER_PREPARATION_WAIT_MS = 60_000;
 
 /**
  * Session workspace setup through the terminals' own setup.
- * @param {TerminalsService} terminals
+ * @param {object} dependencies
+ * @param {TerminalsService} dependencies.terminals
  */
-function createTerminalsSetupRunner(terminals) {
+function createTerminalsSetupRunner({ terminals }) {
   const isRunning = (sessionId) => terminals.workspaceSetupIsRunning(sessionId);
 
   const start = ({ retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(

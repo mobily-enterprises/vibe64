@@ -8,6 +8,7 @@ import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-c
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { createSessionStartupRecovery } from "../../packages/vibe64-sessions/src/server/sessionStartupRecovery.js";
 
 import {
   Vibe64ProjectFeature
@@ -296,7 +297,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   const recovery = new Promise((resolve) => {
     finishRecovery = resolve;
   });
-  const sessions = {
+  const sessions = withStartupRecovery({
     async closeSessionRenewalWork() {
       renewalWorkClosed = true;
       shutdownEvents.push("close-renewal-admission");
@@ -307,9 +308,8 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
       resumeCalls += 1;
       return recovery;
     }
-  };
+  });
   const bootResult = Vibe64SessionsFeature.boot({
-    logger: silentLogger,
     project: selectedProject
   }, {
     outputs: { sessions }
@@ -343,7 +343,6 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   assert.equal(shutdownSettled, true);
 
   Vibe64SessionsFeature.boot({
-    logger: silentLogger,
     project: selectedProject
   }, {
     outputs: { sessions }
@@ -351,16 +350,15 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   assert.equal(resumeCalls, 1, "Feature shutdown permanently closes its recovery task");
 
   Vibe64SessionsFeature.boot({
-    logger: silentLogger,
     project: { targetRoot: "" }
   }, {
     outputs: {
-      sessions: {
+      sessions: withStartupRecovery({
         async resumeSessionArchives() { return { failures: [] }; },
-    async resumeSessionRenewals() {
+        async resumeSessionRenewals() {
           resumeCalls += 1;
         }
-      }
+      })
     }
   });
   assert.equal(
@@ -370,16 +368,15 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   );
 
   Vibe64SessionsFeature.boot({
-    logger: silentLogger,
     project: selectedProject
   }, {
     outputs: {
-      sessions: {
+      sessions: withStartupRecovery({
         async resumeSessionArchives() { return { failures: [] }; },
-    async resumeSessionRenewals() {
+        async resumeSessionRenewals() {
           throw new Error("Expected detached recovery failure");
         }
-      }
+      })
     }
   });
   await new Promise((resolve) => setImmediate(resolve));
@@ -402,12 +399,30 @@ const selectedProject = {
   runInProjectContext: (slug, operation) => runWithProjectRequestContext({ slug }, operation)
 };
 
+/**
+ * A sessions double whose startup recovery is the service's own, over the
+ * double's archive and renewal resumption, in the selected project.
+ */
+function withStartupRecovery(sessions, logger = silentLogger) {
+  const recovery = createSessionStartupRecovery({
+    logger,
+    project: selectedProject,
+    resumeSessionArchives: (options) => sessions.resumeSessionArchives(options),
+    resumeSessionRenewals: () => sessions.resumeSessionRenewals()
+  });
+  return {
+    ...sessions,
+    resumeInterruptedWork: recovery.start,
+    stopResumingInterruptedWork: recovery.stop
+  };
+}
+
 // Startup recovery runs outside any request. An archive or renewal it finishes
 // still reaches the pages that show its session.
 test("startup recovery's session changes reach the recovered project's pages", async () => {
   const published = [];
   const publish = createSessionChangedPublisher({ async publish(event) { published.push(event); } });
-  const sessions = {
+  const sessions = withStartupRecovery({
     async closeSessionRenewalWork() {},
     closeSessionPresence() {},
     async resumeSessionArchives() {
@@ -418,8 +433,8 @@ test("startup recovery's session changes reach the recovered project's pages", a
       await publish("renewing-b", { reason: "session-renewal-completed" });
       return { failures: [] };
     }
-  };
-  Vibe64SessionsFeature.boot({ logger: silentLogger, project: selectedProject }, { outputs: { sessions } });
+  });
+  Vibe64SessionsFeature.boot({ project: selectedProject }, { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   await recoveryShutdown(sessions);
   assert.deepEqual(published.filter(({ type }) => type === "entity.changed").map(({ realtime }) => realtime.audience), [
@@ -437,7 +452,7 @@ function recoveryShutdown(sessions) {
 test("startup recovery resumes renewals after archive recovery fails and logs each failure with its session", async () => {
   const warnings = [];
   let renewalsResumed = 0;
-  const sessions = {
+  const sessions = withStartupRecovery({
     async closeSessionRenewalWork() {},
     closeSessionPresence() {},
     async resumeSessionArchives() {
@@ -450,11 +465,8 @@ test("startup recovery resumes renewals after archive recovery fails and logs ea
       return { failures: [{ code: "vibe64_session_renewal_state_unreadable", error: "Session renewal state is unreadable.",
         sessionId: "renewing-b" }] };
     }
-  };
-  Vibe64SessionsFeature.boot({
-    logger: { ...silentLogger, warn(fields, message) { warnings.push({ fields, message }); } },
-    project: selectedProject
-  }, { outputs: { sessions } });
+  }, { ...silentLogger, warn(fields, message) { warnings.push({ fields, message }); } });
+  Vibe64SessionsFeature.boot({ project: selectedProject }, { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   await recoveryShutdown(sessions);
   assert.equal(renewalsResumed, 1, "an archive recovery failure must not skip renewal recovery");
@@ -468,7 +480,7 @@ test("startup recovery resumes renewals after archive recovery fails and logs ea
 test("shutdown stops the startup archive loop instead of waiting for every pending archive", async () => {
   let archiveSignal;
   let renewalsResumed = 0;
-  const sessions = {
+  const sessions = withStartupRecovery({
     async closeSessionRenewalWork() {},
     closeSessionPresence() {},
     async resumeSessionArchives({ signal } = {}) {
@@ -480,9 +492,8 @@ test("shutdown stops the startup archive loop instead of waiting for every pendi
       return { failures: [] };
     },
     async resumeSessionRenewals() { renewalsResumed += 1; return { failures: [] }; }
-  };
-  Vibe64SessionsFeature.boot({ logger: silentLogger, project: selectedProject },
-    { outputs: { sessions } });
+  });
+  Vibe64SessionsFeature.boot({ project: selectedProject }, { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   const started = Date.now();
   await recoveryShutdown(sessions);
@@ -506,10 +517,10 @@ test("sessions reject a fulfilled but unsuccessful agent-runtime shutdown", asyn
       }
     }, {
       outputs: {
-        sessions: {
+        sessions: withStartupRecovery({
           async closeSessionRenewalWork() {},
           closeSessionPresence() {}
-        }
+        })
       }
     }),
     (error) => (

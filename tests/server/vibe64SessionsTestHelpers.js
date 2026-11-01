@@ -43,7 +43,7 @@ function createSessionsService(dependencies) {
     restoreRenewalActor: restoreStandaloneRenewalActor,
     publishSessionChanged: async () => null,
     sessionPresence: { close() {}, update: async () => ({ ok: true, status: "unavailable" }) },
-    workspaceSetupRunner: createTerminalsSetupRunner(terminals),
+    setupRunner: createTerminalsSetupRunner({ terminals }),
     ...dependencies,
     project: withOperations(dependencies.project, NEUTRAL_PROJECT_OPERATIONS),
     terminals

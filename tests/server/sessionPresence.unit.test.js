@@ -103,9 +103,11 @@ test("session presence validates origin and monotonic sequence", () => {
 test("session presence uses the authenticated-user audience without draft content", async () => {
   const events = [];
   const publish = createSessionPresencePublisher({
-    async publish(event) {
-      events.push(event);
-      return event;
+    events: {
+      async publish(event) {
+        events.push(event);
+        return event;
+      }
     }
   });
   await publish({

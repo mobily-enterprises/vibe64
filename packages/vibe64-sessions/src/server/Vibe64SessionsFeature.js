@@ -8,12 +8,12 @@ import {
 import { createProjectWatchActions, createSessionActions } from "./sessionActions.js";
 import { registerProjectWatch } from "./projectWatch.js";
 import { createRepositoryUpdateProbe } from "./repositoryUpdateProbe.js";
-import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { registerApprovalCountReader } from "@local/vibe64-core/server/studioProjectContext";
 import { createVibe64ProjectChangedPublisher } from "@local/vibe64-project/server/actions";
 import { countWaitingMainChatApprovals } from "./mainChatApprovals.js";
 import { registerRoutes } from "./registerRoutes.js";
+import { createRepositoryUpdates } from "./repositoryUpdates.js";
 import { createService } from "./service.js";
 import { SESSION_ARCHIVE_PREPARATION_TOKEN, assertArchivePreparation, prepareNothingForArchive } from "./sessionArchive.js";
 import {
@@ -30,7 +30,6 @@ import {
 
 /** @typedef {import("./types.js").SessionsService} SessionsService */
 /** @typedef {import("./types.js").SessionRepositoryUpdates} SessionRepositoryUpdates */
-/** @typedef {import("./types.js").RepositoryUpdateProbe} RepositoryUpdateProbe */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -43,256 +42,132 @@ import {
 /** @typedef {import("./types.js").SessionArchivePreparation} SessionArchivePreparation */
 /** @typedef {import("./types.js").RenewalActorResolver} RenewalActorResolver */
 
-/**
- * Startup resumes interrupted archives, then interrupted renewals. Each step
- * runs even when the other fails, and every failure is logged with its
- * session. Shutdown stops the archive loop between sessions.
- * @param {object} dependencies
- * @param {(options: { signal: AbortSignal }) => Promise<object>} dependencies.recover
- * @param {RuntimeLogger} dependencies.logger
- */
-function createSessionRenewalRecoveryTask({ recover, logger }) {
-  let activeRecovery = null;
-  let started = false;
-  let stopped = false;
-  const stopping = new AbortController();
-
-  function reportFailure(failure = {}) {
-    logOperationalEvent(logger, "warn", {
-      code: String(failure.code || "vibe64_session_recovery_failed"),
-      component: "vibe64.sessions",
-      error: String(failure.error || "Session recovery failed."),
-      event: "vibe64.sessions.recovery.session_failed",
-      ...(failure.sessionId ? { sessionId: String(failure.sessionId) } : {})
-    }, "An interrupted session archive or renewal could not resume.");
-  }
-
-  function start() {
-    if (stopped || started) {
-      return activeRecovery;
-    }
-    started = true;
-    let result;
-    try {
-      result = recover({ signal: stopping.signal });
-    } catch (error) {
-      result = Promise.reject(error);
-    }
-    const recovery = Promise.resolve(result)
-      .then((report) => {
-        for (const failure of Array.isArray(report?.failures) ? report.failures : []) reportFailure(failure);
-      })
-      .catch((error) => {
-        reportFailure({ code: error?.code, error: error?.message });
-        vibe64SessionDebugLog("server.sessions.renewal.resume.error", {
+const Vibe64SessionsFeature = defineFeature({
+  id: "vibe64.sessions",
+  domain: "vibe64-sessions",
+  requires: {
+    accounts: "vibe64.accounts",
+    events: "runtime.events",
+    http: "runtime.http",
+    logger: "runtime.logger",
+    project: "vibe64.project",
+    sourceEditor: "vibe64.source-editor",
+    terminals: "vibe64.terminals"
+  },
+  // A composed host's preparation of each archive, and its people's resolver
+  // for renewals that continue without them.
+  optional: {
+    archivePreparation: SESSION_ARCHIVE_PREPARATION_TOKEN,
+    renewalActorResolver: SESSION_RENEWAL_ACTOR_RESOLVER_TOKEN
+  },
+  provides: {
+    sessions: "vibe64.sessions"
+  },
+  /**
+   * @param {object} capabilities
+   * @param {AccountsService} capabilities.accounts
+   * @param {SessionArchivePreparation | null} capabilities.archivePreparation
+   * @param {RuntimeEvents} capabilities.events
+   * @param {RuntimeHttp} capabilities.http
+   * @param {RuntimeLogger} capabilities.logger
+   * @param {ProjectService} capabilities.project
+   * @param {RenewalActorResolver | null} capabilities.renewalActorResolver
+   * @param {SourceEditorService} capabilities.sourceEditor
+   * @param {TerminalsService} capabilities.terminals
+   * @param {FeatureSetupContext} context
+   */
+  setup({
+    accounts,
+    archivePreparation,
+    events,
+    http,
+    logger,
+    project,
+    renewalActorResolver,
+    sourceEditor,
+    terminals
+  }, { actionCatalogue }) {
+    assertArchivePreparation(archivePreparation);
+    assertRenewalActorResolver(renewalActorResolver);
+    const sessionPresence = createSessionPresenceService({
+      onPublishError: (error) => {
+        vibe64SessionDebugLog("server.sessions.presence.publish.error", {
           error: vibe64SessionDebugError(error)
         });
-      })
-      .finally(() => {
-        if (activeRecovery === recovery) {
-          activeRecovery = null;
-        }
-      });
-    activeRecovery = recovery;
-    return recovery;
-  }
-
-  async function stop() {
-    stopped = true;
-    stopping.abort();
-    await activeRecovery;
-  }
-
-  return Object.freeze({ start, stop });
-}
-
-/**
- * @param {SessionsService} sessions
- * @param {object} [options]
- * @param {AbortSignal} options.signal
- */
-async function resumeInterruptedSessionWork(sessions, options = {}) {
-  const { signal } = options;
-  const failures = [];
-  for (const [step, resume] of [
-    ["archive", () => sessions.resumeSessionArchives({ signal })],
-    ["renewal", () => sessions.resumeSessionRenewals()]
-  ]) {
-    if (signal?.aborted) break;
-    try {
-      failures.push(...((await resume())?.failures || []));
-    } catch (error) {
-      failures.push({
-        code: String(error?.code || `vibe64_session_${step}_recovery_failed`),
-        error: String(error?.message || `Session ${step} recovery failed.`)
-      });
-    }
-  }
-  return { failures };
-}
-
-function createVibe64SessionsFeature() {
-  const recoveryTasks = new WeakMap();
-  const stoppedServices = new WeakSet();
-
-  /**
-   * @param {SessionsService} sessions
-   * @param {RuntimeLogger} logger
-   * @param {ProjectService} project
-   */
-  function recoveryTaskFor(sessions, logger, project) {
-    if (stoppedServices.has(sessions)) {
-      return null;
-    }
-    let task = recoveryTasks.get(sessions);
-    if (!task) {
-      task = createSessionRenewalRecoveryTask({
-        logger,
-        /**
-         * Startup has no request: recovery runs in the project this server
-         * holds, so its reads and session changes belong to that project.
-         */
-        recover: (options) => project.runInProjectContext(project.currentProjectSlug(),
-          () => resumeInterruptedSessionWork(sessions, options))
-      });
-      recoveryTasks.set(sessions, task);
-    }
-    return task;
-  }
-
-  return defineFeature({
-    id: "vibe64.sessions",
-    domain: "vibe64-sessions",
-    requires: {
-      accounts: "vibe64.accounts",
-      events: "runtime.events",
-      http: "runtime.http",
-      logger: "runtime.logger",
-      project: "vibe64.project",
-      sourceEditor: "vibe64.source-editor",
-      terminals: "vibe64.terminals"
-    },
-    // A composed host's preparation of each archive, and its people's resolver
-    // for renewals that continue without them.
-    optional: {
-      archivePreparation: SESSION_ARCHIVE_PREPARATION_TOKEN,
-      renewalActorResolver: SESSION_RENEWAL_ACTOR_RESOLVER_TOKEN
-    },
-    provides: {
-      sessions: "vibe64.sessions"
-    },
-    actionDefaults: {
-      channels: ["api", "automation", "internal"],
-      surfaces: ["app"]
-    },
-    /**
-     * @param {object} capabilities
-     * @param {AccountsService} capabilities.accounts
-     * @param {SessionArchivePreparation | null} capabilities.archivePreparation
-     * @param {RuntimeEvents} capabilities.events
-     * @param {RuntimeHttp} capabilities.http
-     * @param {ProjectService} capabilities.project
-     * @param {RenewalActorResolver | null} capabilities.renewalActorResolver
-     * @param {SourceEditorService} capabilities.sourceEditor
-     * @param {TerminalsService} capabilities.terminals
-     * @param {FeatureSetupContext} context
-     */
-    setup({
-      accounts,
-      archivePreparation,
-      events,
-      http,
+      },
+      publishPresence: createSessionPresencePublisher({ events })
+    });
+    const sessions = createService({
+      actions: actionCatalogue,
+      archivePreparation: archivePreparation ?? prepareNothingForArchive,
+      initializeModelRouting: (input) => accounts.initializeModelRouting(input),
+      logger,
       project,
-      renewalActorResolver,
+      publishProjectChanged: createVibe64ProjectChangedPublisher({ events }),
+      publishSessionChanged: createSessionChangedPublisher(events),
+      restoreRenewalActor: renewalActorResolver ? restoreRenewalActorWith(renewalActorResolver) : restoreStandaloneRenewalActor,
+      sessionPresence,
+      setupRunner: createTerminalsSetupRunner({ terminals }),
       sourceEditor,
       terminals
-    }, { actionCatalogue }) {
-      assertArchivePreparation(archivePreparation);
-      assertRenewalActorResolver(renewalActorResolver);
-      const sessionPresence = createSessionPresenceService({
-        onPublishError: (error) => {
-          vibe64SessionDebugLog("server.sessions.presence.publish.error", {
-            error: vibe64SessionDebugError(error)
-          });
-        },
-        publishPresence: createSessionPresencePublisher(events)
-      });
-      const sessions = createService({
-        actions: actionCatalogue,
-        archivePreparation: archivePreparation ?? prepareNothingForArchive,
-        initializeModelRouting: (input) => accounts.initializeModelRouting(input),
-        project,
-        publishProjectChanged: createVibe64ProjectChangedPublisher({ events }),
-        publishSessionChanged: createSessionChangedPublisher(events),
-        restoreRenewalActor: renewalActorResolver ? restoreRenewalActorWith(renewalActorResolver) : restoreStandaloneRenewalActor,
-        sessionPresence,
-        sourceEditor,
-        terminals,
-        workspaceSetupRunner: createTerminalsSetupRunner(terminals)
-      });
-      registerApprovalCountReader(countWaitingMainChatApprovals);
-      // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
-      project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
-      registerRoutes(http);
-      return { sessions };
-    },
-    actions({ sessions }) {
-      return createSessionActions({ sessions });
-    },
-    /**
-     * @param {object} capabilities
-     * @param {RuntimeLogger} capabilities.logger
-     * @param {ProjectService} capabilities.project
-     * @param {{ outputs: { sessions: SessionsService } }} context
-     */
-    boot({ logger, project }, { outputs }) {
-      if (!String(project?.targetRoot || "").trim()) {
-        return;
-      }
-      recoveryTaskFor(outputs.sessions, logger, project)?.start();
-    },
-    /**
-     * @param {{ terminals: TerminalsService }} capabilities
-     * @param {{ outputs: { sessions: SessionsService } }} context
-     */
-    async shutdown({ terminals }, { outputs }) {
-      const sessions = outputs.sessions;
-      stoppedServices.add(sessions);
-      const closing = sessions.closeSessionRenewalWork();
-      const task = recoveryTasks.get(sessions);
-      const operations = [
-        Promise.resolve(closing),
-        Promise.resolve(sessions.closeSessionPresence()),
-        ...(task ? [task.stop()] : []),
-        Promise.resolve().then(async () => {
-          const result = await terminals.invalidateAgentRuntimes({
-            reason: "server-shutdown"
-          });
-          if (result?.ok === false) {
-            const error = new Error("Assistant runtime shutdown did not complete successfully.");
-            error.code = "vibe64_agent_runtime_shutdown_failed";
-            error.details = result;
-            throw error;
-          }
-          return result;
-        })
-      ];
-      const results = await Promise.allSettled(operations);
-      recoveryTasks.delete(sessions);
-      const failures = results.flatMap((result) => (
-        result.status === "rejected" ? [result.reason] : []
-      ));
-      if (failures.length > 0) {
-        throw new AggregateError(
-          failures,
-          "Session renewal work did not stop cleanly."
-        );
-      }
+    });
+    registerApprovalCountReader(countWaitingMainChatApprovals);
+    // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
+    project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
+    registerRoutes(http);
+    return { sessions };
+  },
+  actions({ sessions }) {
+    return createSessionActions({ sessions });
+  },
+  /**
+   * A server that holds one project resumes that project's interrupted
+   * archives and renewals without waiting for them. A hosted server, which
+   * holds none, recovers each project at its own boundary.
+   * @param {object} capabilities
+   * @param {ProjectService} capabilities.project
+   * @param {{ outputs: { sessions: SessionsService } }} context
+   */
+  boot({ project }, { outputs }) {
+    if (project.targetRoot) {
+      outputs.sessions.resumeInterruptedWork();
     }
-  });
-}
-
-const Vibe64SessionsFeature = createVibe64SessionsFeature();
+  },
+  /**
+   * @param {{ terminals: TerminalsService }} capabilities
+   * @param {{ outputs: { sessions: SessionsService } }} context
+   */
+  async shutdown({ terminals }, { outputs }) {
+    const sessions = outputs.sessions;
+    const operations = [
+      Promise.resolve(sessions.closeSessionRenewalWork()),
+      Promise.resolve(sessions.closeSessionPresence()),
+      sessions.stopResumingInterruptedWork(),
+      Promise.resolve().then(async () => {
+        const result = await terminals.invalidateAgentRuntimes({
+          reason: "server-shutdown"
+        });
+        if (result?.ok === false) {
+          const error = new Error("Assistant runtime shutdown did not complete successfully.");
+          error.code = "vibe64_agent_runtime_shutdown_failed";
+          error.details = result;
+          throw error;
+        }
+        return result;
+      })
+    ];
+    const results = await Promise.allSettled(operations);
+    const failures = results.flatMap((result) => (
+      result.status === "rejected" ? [result.reason] : []
+    ));
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures,
+        "Session renewal work did not stop cleanly."
+      );
+    }
+  }
+});
 
 // The terminals publish these when an agent turn starts in a session.
 const TURN_ACTIVE_REASONS = new Set([
@@ -300,22 +175,6 @@ const TURN_ACTIVE_REASONS = new Set([
   "codex-app-server-turn-active",
   "opencode-server-turn-active"
 ]);
-
-/**
- * The repository updates capability: the update probe, and close(), which
- * stops the project watches and the probe.
- * @param {object} dependencies
- * @param {RepositoryUpdateProbe} dependencies.probe
- * @param {() => void} dependencies.closeWatches
- */
-function createRepositoryUpdates({ probe, closeWatches }) {
-  function close() {
-    closeWatches();
-    probe.close();
-  }
-
-  return Object.freeze({ probe, close });
-}
 
 // Browser pages watch the projects and sessions they show over realtime
 // (projectWatch.js); the project update probe runs while a page watches the
@@ -329,10 +188,8 @@ const Vibe64RepositoryUpdatesFeature = defineFeature({
     realtime: "runtime.realtime",
     sessions: "vibe64.sessions"
   },
-  provides: { repositoryUpdates: "vibe64.sessions.repository-updates" },
-  actionDefaults: {
-    channels: ["api"],
-    surfaces: ["app"]
+  provides: {
+    repositoryUpdates: "vibe64.sessions.repository-updates"
   },
   /**
    * @param {object} capabilities
@@ -376,4 +233,7 @@ const Vibe64RepositoryUpdatesFeature = defineFeature({
   }
 });
 
-export { Vibe64RepositoryUpdatesFeature, Vibe64SessionsFeature, createRepositoryUpdates };
+export {
+  Vibe64RepositoryUpdatesFeature,
+  Vibe64SessionsFeature
+};

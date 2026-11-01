@@ -670,7 +670,7 @@ test("scope saving and session creation share one project policy boundary", asyn
           return { ok: true };
         }
       },
-      workspaceSetupRunner: {
+      setupRunner: {
         isRunning: () => false,
         start: () => ({ completion: null }),
         wait: () => null

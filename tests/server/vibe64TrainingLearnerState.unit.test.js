@@ -1978,7 +1978,7 @@ test("a practice session is an ordinary local project session that stays the lea
           project: await project.readCurrentProject() }), { operation: "session-source-create" });
       }
     },
-    workspaceSetupRunner: { isRunning: () => false, wait: () => null,
+    setupRunner: { isRunning: () => false, wait: () => null,
       start({ runtime }) { setupRuntime = runtime; return { completion: null }; } },
     publishSessionChanged: async () => {}
   });

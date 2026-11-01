@@ -106,6 +106,7 @@ Git commands.
 - `packages/vibe64-sessions/src/server/sessionRepositoryUpdates.js`
 - `packages/vibe64-sessions/src/server/sessionWorkOperations.js`
 - `packages/vibe64-sessions/src/server/repositoryUpdateProbe.js`
+- `packages/vibe64-sessions/src/server/repositoryUpdates.js`
 - `packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
 - `packages/vibe64-sessions/src/server/sessionActions.js`

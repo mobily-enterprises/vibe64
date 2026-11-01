@@ -104,7 +104,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     };
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     const service = createService({ actions, project, initializeModelRouting: async () => ({ ok: true }),
-      workspaceSetupRunner: { start: async () => { setupStarts++; return { completion: null }; } },
+      setupRunner: { start: async () => { setupStarts++; return { completion: null }; } },
       terminals: {
         async inspectSessionWork(id, { session, inspectContributionPublication }) {
           calls.push(`inspect work:${id}`);

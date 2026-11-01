@@ -94,8 +94,11 @@ function presencePayload(input = {}, options = {}) {
   });
 }
 
-/** @param {RuntimeEvents} events */
-function createSessionPresencePublisher(events) {
+/**
+ * @param {object} dependencies
+ * @param {RuntimeEvents} dependencies.events
+ */
+function createSessionPresencePublisher({ events }) {
   return async function publishSessionPresence(payload = {}) {
     const presence = presencePayload(payload, {
       expiresAt: Date.parse(payload.expiresAt) || Date.now(),

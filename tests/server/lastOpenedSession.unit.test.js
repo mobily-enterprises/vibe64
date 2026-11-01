@@ -49,7 +49,7 @@ function project(stateRoot, { pinned = "", sessionIds = ["s1", "s2", "s3"] } = {
   const service = createService({
     project: projectRecord,
     terminals: {},
-    workspaceSetupRunner: { isRunning: () => false, wait: () => null }
+    setupRunner: { isRunning: () => false, wait: () => null }
   });
   return { project: projectRecord, service };
 }

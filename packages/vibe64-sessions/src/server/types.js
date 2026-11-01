@@ -3,7 +3,7 @@
 // package's files share.
 
 /** @typedef {ReturnType<typeof import("./service.js").createService>} SessionsService */
-/** @typedef {ReturnType<typeof import("./Vibe64SessionsFeature.js").createRepositoryUpdates>} SessionRepositoryUpdates */
+/** @typedef {ReturnType<typeof import("./repositoryUpdates.js").createRepositoryUpdates>} SessionRepositoryUpdates */
 /** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
 /** @typedef {ReturnType<typeof import("./sessionWorkOperations.js").createSessionWorkOperations>} SessionWorkOperations */
 /** @typedef {ReturnType<typeof import("./sessionPresence.js").createSessionPresenceService>} SessionPresenceService */
@@ -11,6 +11,7 @@
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService["initializeModelRouting"]} AccountsInitializeModelRouting */
 /** @typedef {ReturnType<typeof import("./sessionWorkspaceSetup.js").createSessionWorkspaceSetup>} SessionWorkspaceSetup */
 /** @typedef {ReturnType<typeof import("./sessionArchive.js").createSessionArchive>} SessionArchive */
+/** @typedef {ReturnType<typeof import("./sessionRenewal.js").createSessionRenewalController>} SessionRenewalController */
 /** @typedef {SessionArchive["prepareArchive"]} SessionArchivePrepareArchive */
 /**
  * A host's preparation of a session's archive, at each phase of every attempt;

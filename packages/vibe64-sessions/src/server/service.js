@@ -11,6 +11,7 @@ import { createSessionMessages } from "./sessionMessages.js";
 import { createSessionRenewalController } from "./sessionRenewal.js";
 import { createSessionRepositoryReads } from "./sessionRepositoryReads.js";
 import { createSessionRepositoryUpdates } from "./sessionRepositoryUpdates.js";
+import { createSessionStartupRecovery } from "./sessionStartupRecovery.js";
 import { createSessionWork } from "./sessionWork.js";
 import { createSessionWorkOperations } from "./sessionWorkOperations.js";
 import { createSessionWorkRecovery } from "./sessionWorkRecovery.js";
@@ -22,6 +23,7 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -38,27 +40,29 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
  * @param {ActionCatalogue} dependencies.actions
  * @param {SessionArchivePreparation} dependencies.archivePreparation
  * @param {AccountsInitializeModelRouting} dependencies.initializeModelRouting
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishProjectChanged} dependencies.publishProjectChanged
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {RenewalActorRestoration} dependencies.restoreRenewalActor
  * @param {SessionPresenceService} dependencies.sessionPresence
+ * @param {WorkspaceSetupRunner} dependencies.setupRunner
  * @param {SourceEditorService} dependencies.sourceEditor
  * @param {TerminalsService} dependencies.terminals
- * @param {WorkspaceSetupRunner} dependencies.workspaceSetupRunner
  */
 function createService({
   actions,
   archivePreparation,
   initializeModelRouting,
+  logger,
   project,
   publishProjectChanged,
   publishSessionChanged,
   restoreRenewalActor,
   sessionPresence,
+  setupRunner,
   sourceEditor,
-  terminals,
-  workspaceSetupRunner: setupRunner
+  terminals
 }) {
   const workOperations = createSessionWorkOperations();
   const workspaceSetup = createSessionWorkspaceSetup({
@@ -140,11 +144,20 @@ function createService({
     setupRunner,
     terminals
   });
+  const startupRecovery = createSessionStartupRecovery({
+    logger,
+    project,
+    resumeSessionArchives: archive.resumeSessionArchives,
+    resumeSessionRenewals: renewal.resumeSessionRenewals
+  });
 
   const service = Object.freeze({
     browserConversations: createMainBrowserConversations({ actions, terminals }),
     archiveSession: archive.archiveSession,
     resumeSessionArchives: archive.resumeSessionArchives,
+
+    resumeInterruptedWork: startupRecovery.start,
+    stopResumingInterruptedWork: startupRecovery.stop,
 
     cancelSessionRenewal: renewal.cancelSessionRenewal,
     closeSessionRenewalWork: renewal.closeSessionRenewalWork,

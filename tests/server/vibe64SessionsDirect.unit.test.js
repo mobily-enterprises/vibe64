@@ -225,7 +225,7 @@ function sessionCreationPolicyHarness({
         ? { resolveAssistantSelection }
         : {})
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       start: startWorkspaceSetup,
       wait: () => null
@@ -1218,7 +1218,7 @@ test("work inspection recovers an interrupted prepared Update and advances its b
         return runtime;
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       async start() {
         prepareCalls += 1;
         assert.equal(updateTask.status, "ready");
@@ -2041,7 +2041,7 @@ test("Update starts fresh and automatically prepares the updated workspace", asy
     async publishSessionChanged(_sessionId, event) {
       publications.push(event);
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       async start(input) {
         assert.equal(input.runtime, runtime);
         assert.equal(input.session.metadata.base_commit, "canonical");
@@ -2594,7 +2594,7 @@ test("an early assistant message waits for workspace preparation and is sent onc
         return { ok: true };
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => true,
       start: () => null,
       wait: () => setupFinished
@@ -2631,7 +2631,7 @@ test("live workspace preparation prevents retry and archive races", async () => 
         return { ok: true };
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => true,
       start() {
         const error = new Error("Workspace preparation is already running.");
@@ -2661,7 +2661,7 @@ test("archiving retains main and temporary routing cleanup records", async () =>
     const service = createService({ project: { createRuntime: async () => ({ store: lock.store,
       getSession: async () => session, markSessionClosing: async () => { closed = true; } }) },
       terminals: {},
-      workspaceSetupRunner: { isRunning: () => false, wait: () => null } });
+      setupRunner: { isRunning: () => false, wait: () => null } });
     const result = await service.archiveSession("session-1");
     assert.equal(result.ok, false);
     assert.equal(result.code, "vibe64_assistant_routing_pending");
@@ -2696,7 +2696,7 @@ test("archive cancels exact pending routing outside its lock and retains deliver
           assert.equal(options.forgetConversationBinding, true, "an archived session's conversations leave memory");
           calls.push("stop-native");
         } },
-      workspaceSetupRunner: { isRunning: () => false, wait: () => null } });
+      setupRunner: { isRunning: () => false, wait: () => null } });
     assert.equal((await service.archiveSession("session-1")).ok, true);
     assert.deepEqual(calls, ["cancel", "closing", "stop-native", "archive"]);
     assert.deepEqual(JSON.parse(metadata.assistant_routing_request), { ...route, stopped: true });
@@ -2719,7 +2719,7 @@ test("archive cancellation failures retain the session and a reload retries clea
       if (cleanupFailed) throw Object.assign(new Error("The routing helper could not be closed. Retry Close."), { code: "cleanup-failed" });
       session.metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true, helper: null });
     }, closeSessionTerminals: async () => {} },
-    workspaceSetupRunner: { isRunning: () => false, wait: () => null } };
+    setupRunner: { isRunning: () => false, wait: () => null } };
   const failed = await createService(options).archiveSession("session-1");
   assert.equal(failed.code, "cleanup-failed");
   assert.equal(archived, false);
@@ -2745,7 +2745,7 @@ test("archive preserves pin and renewal guards before cancelling routing and rej
         session.metadata.assistant_routing_request = JSON.stringify({ messageId: "replacement", delivery: "pending", status: "waiting",
           stopped: guard === "stopped-replacement" });
         preparing = guard === "preparation";
-      } }, workspaceSetupRunner: { isRunning: () => preparing, wait: () => null } });
+      } }, setupRunner: { isRunning: () => preparing, wait: () => null } });
     const result = await service.archiveSession("session-1");
     assert.equal(result.ok, false);
     assert.equal(cancelled, ["pinned", "renewal"].includes(guard) ? 0 : 1);
@@ -2798,7 +2798,7 @@ test("an active Save keeps archiving out of its agent-write window", async () =>
         calls.push("terminals");
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       wait: () => null
     }
@@ -2875,7 +2875,7 @@ test("active archiving keeps Save out of its agent-write window", async () => {
         calls.push("terminals-finished");
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       wait: () => null
     }
@@ -2940,7 +2940,7 @@ test("failed archiving cleanup releases the agent-write lock for retry", async (
         }
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       wait: () => null
     }
@@ -3000,7 +3000,7 @@ test("concurrent archiving has one cleanup owner", async () => {
         await cleanupFinishedPromise;
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       wait: () => null
     }
@@ -3057,7 +3057,7 @@ test("archiving a session releases its managed resources after terminals stop", 
         calls.push("terminals");
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       wait: () => null
     }
@@ -3107,7 +3107,7 @@ test("archiving a source-creation failure does not release resources that were n
         calls.push("terminals");
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       wait: () => null
     }
@@ -3456,7 +3456,7 @@ test("session listing reports unavailable sessions separately without changing c
       }
     },
     terminals: {},
-    workspaceSetupRunner: { isRunning: () => false, wait: () => null }
+    setupRunner: { isRunning: () => false, wait: () => null }
   });
   assert.deepEqual(await service.listSessions({}), {
     ok: true, sessions: [{ ...healthy, agentActivity: { active: false, revision: 7 } }],
@@ -3498,7 +3498,7 @@ test("session listing reads saved activity without opening chats and isolates un
         async developmentDatabasePolicy() { return { creation: {}, limits: {} }; }
       },
       terminals: {},
-      workspaceSetupRunner: { isRunning: () => false, wait: () => null }
+      setupRunner: { isRunning: () => false, wait: () => null }
     });
     const result = await service.listSessions({});
     assert.equal(result.ok, true);
@@ -3534,7 +3534,7 @@ test("archived session history is ordered by archive time with a stable session-
       }
     },
     terminals: {},
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       wait: () => null
     }
@@ -4023,7 +4023,7 @@ test("new sessions publish running workspace preparation and its eventual result
         return { ok: true };
       }
     },
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => true,
       start() {
         session.workspaceSetup = {
@@ -4076,7 +4076,7 @@ test("an applied starter prepares the session workspace once and publishes its p
     project: { async createRuntime() { return { async getSession() { return session(); } }; } },
     publishSessionChanged: async (...args) => { publications.push(args); },
     terminals: {},
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => running,
       async start(input) {
         starts.push(input.session.sessionId);
@@ -4118,7 +4118,7 @@ test("an applied starter announces new unsaved session work before and without p
     } },
     publishSessionChanged: async (...args) => { publications.push(args); },
     terminals: {},
-    workspaceSetupRunner: { isRunning: () => true, async start() { throw new Error("not started"); }, wait: () => null }
+    setupRunner: { isRunning: () => true, async start() { throw new Error("not started"); }, wait: () => null }
   });
 
   await service.prepareStarterWorkspace("session-1");
@@ -4149,7 +4149,7 @@ test("workspace preparation explicitly reruns succeeded recipes and retains retr
       }
     },
     terminals: {},
-    workspaceSetupRunner: {
+    setupRunner: {
       isRunning: () => false,
       async start(input) {
         startCount += 1;

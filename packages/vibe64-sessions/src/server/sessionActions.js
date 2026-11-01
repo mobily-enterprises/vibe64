@@ -111,20 +111,6 @@ const ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF = "vibe64.repository.history.d
 // Route adapters assemble body patches and path IDs before dispatch, so each
 // action's input is in create mode: an action invocation must supply the
 // complete required operation arguments.
-const SESSION_QUERY = Object.freeze({
-  version: 1,
-  kind: "query",
-  output: null,
-  idempotency: "none",
-  events: []
-});
-const SESSION_COMMAND = Object.freeze({
-  version: 1,
-  kind: "command",
-  output: null,
-  idempotency: "optional",
-  events: []
-});
 
 function conversationContextGrant(_input, context) {
   if (!context.vibe64Action) {
@@ -326,7 +312,7 @@ function createSessionActions({ sessions }) {
       execute: input => sessions.allocateConnectedSource(input)
     }),
     Object.freeze({
-      ...SESSION_QUERY,
+      ...VIBE64_QUERY,
       id: ACTION_READ_CONVERSATION_CONTEXT,
       input: { ...sessionIdInputValidator, mode: "create" },
       // This grant stays inside the application's conversation adapter. It has
@@ -802,7 +788,7 @@ function createSessionActions({ sessions }) {
  */
 function createProjectWatchActions({ probe }) {
   return Object.freeze([Object.freeze({
-    ...SESSION_COMMAND,
+    ...VIBE64_COMMAND,
     id: PROJECT_WATCH_ACTION,
     input: { ...projectWatchInputValidator, mode: "create" },
     // No HTTP route: a watch lives only as long as its connection.
