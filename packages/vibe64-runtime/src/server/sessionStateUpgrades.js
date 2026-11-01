@@ -76,8 +76,11 @@ function createSessionStateUpgrades({
         const original = await readRegularText(filePath);
         if (original) {
           let record;
-          try { record = JSON.parse(original); }
-          catch { throw new Error(`Invalid temporary conversation record: ${filePath}. Inspect it before upgrading routing.`); }
+          try {
+            record = JSON.parse(original);
+          } catch {
+            throw new Error(`Invalid temporary conversation record: ${filePath}. Inspect it before upgrading routing.`);
+          }
           if (!isPlainObject(record)) throw new Error(`Invalid temporary conversation record: ${filePath}.`);
           if (record.conversationId !== entry.name) throw new Error(`Temporary conversation identity does not match ${filePath}.`);
           conversations.push({ filePath, original, record });
@@ -159,8 +162,8 @@ function createSessionStateUpgrades({
           for (const patch of transformPlanProgress(files)) {
             if (!isPlainObject(patch) || !/^(current\.(md|json)|(archive|plan|progress)\/[a-f0-9]{64}\.(md|json))$/u.test(patch.name) ||
                 !(patch.text === null || typeof patch.text === "string")) throw new Error(
-                  "Plan-progress upgrade attempted an unrelated write."
-                );
+              "Plan-progress upgrade attempted an unrelated write."
+            );
             const original = files.find(file => file.name === patch.name)?.text ?? null;
             if (original !== patch.text) changes.push({ filePath: path.join(root, patch.name), original, contents: patch.text });
           }
@@ -192,8 +195,11 @@ function createSessionStateUpgrades({
             const original = await readRegularText(filePath);
             if (!original) continue;
             let record;
-            try { record = JSON.parse(original); }
-            catch { throw new Error(`Invalid conversation metadata: ${filePath}. Inspect it before upgrading routing.`); }
+            try {
+              record = JSON.parse(original);
+            } catch {
+              throw new Error(`Invalid conversation metadata: ${filePath}. Inspect it before upgrading routing.`);
+            }
             if (!isPlainObject(record)) throw new Error(`Invalid conversation metadata: ${filePath}.`);
             const updated = transformTurnMetadata(record);
             if (JSON.stringify(updated) !== JSON.stringify(record)) {
@@ -240,7 +246,9 @@ function createSessionStateUpgrades({
     }
     const checkedPath = async (filePath, directory = false) => {
       let info;
-      try { info = await lstat(filePath); } catch (error) {
+      try {
+        info = await lstat(filePath);
+      } catch (error) {
         if (isMissingPathError(error)) return false;
         throw error;
       }
@@ -287,8 +295,11 @@ function createSessionStateUpgrades({
         const rawRecord = await readRegularText(metadataPath);
         if (!rawRecord) throw new Error(`Session archive ${sessionId} is incomplete. Finish archive recovery before upgrading.`);
         let parsed;
-        try { parsed = JSON.parse(rawRecord); }
-        catch { throw new Error(`Invalid session archive record: ${metadataPath}. Inspect it before upgrading sessions.`); }
+        try {
+          parsed = JSON.parse(rawRecord);
+        } catch {
+          throw new Error(`Invalid session archive record: ${metadataPath}. Inspect it before upgrading sessions.`);
+        }
         const record = archiveRecords.sessionArchiveRecordFromJson(parsed, { archivePath: filePath, metadataPath });
         if (record.sessionId !== sessionId) throw new Error(`Session archive identity does not match ${filePath}.`);
         await archiveRecords.validateSessionArchive(filePath);
@@ -336,8 +347,11 @@ function createSessionStateUpgrades({
         const filePath = storePaths.renewalStatePath(sessionId);
         const original = await readRegularText(filePath);
         let renewal;
-        try { renewal = JSON.parse(original); }
-        catch { throw new Error(`Invalid session renewal record: ${filePath}. Inspect it before upgrading sessions.`); }
+        try {
+          renewal = JSON.parse(original);
+        } catch {
+          throw new Error(`Invalid session renewal record: ${filePath}. Inspect it before upgrading sessions.`);
+        }
         if (!isPlainObject(renewal) || renewal.sessionId !== sessionId) {
           throw new Error(`Session renewal identity does not match ${filePath}.`);
         }
@@ -397,7 +411,11 @@ function createSessionStateUpgrades({
     // is complete. Keep this bounded initial-session cut fail closed.
     const renewal = storePaths.renewalStatePath(id);
     let renewalInfo;
-    try { renewalInfo = await lstat(renewal); } catch (error) { if (!isMissingPathError(error)) throw error; }
+    try {
+      renewalInfo = await lstat(renewal);
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+    }
     if (renewalInfo) {
       throw new Error(`Practice session ${id} retains renewal state. Finish or inspect its original transaction before upgrading.`);
     }
@@ -477,8 +495,11 @@ function createSessionStateUpgrades({
         const archivePath = replacements.get(currentArchive.archivePath);
         const metadataPath = replacements.get(currentArchive.metadataPath);
         let value;
-        try { value = JSON.parse(await readFrozen(metadataPath)); }
-        catch (cause) { throw new Error(`Frozen practice archive ${id} has invalid metadata. Inspect its original backup.`, { cause }); }
+        try {
+          value = JSON.parse(await readFrozen(metadataPath));
+        } catch (cause) {
+          throw new Error(`Frozen practice archive ${id} has invalid metadata. Inspect its original backup.`, { cause });
+        }
         const record = archiveRecords.sessionArchiveRecordFromJson(value, { archivePath, metadataPath });
         if (record.sessionId !== id) throw new Error(`Frozen practice archive ${id} has a different session identity.`);
         learningSessionBinding({ learning_session: record.index.metadata?.[LEARNING_SESSION_METADATA] }, scope, id);
@@ -576,57 +597,60 @@ function createSessionStateUpgrades({
   }
 
   async function prepareConversationStorageUpgrade({ temporaryRoot }) {
-    return prepareSessionStateUpgrade({ temporaryRoot, async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {
-      await checkedPath(sessionPaths.sessionRoot, true);
-      await checkedPath(sessionPaths.manifestPath);
-      await recordFiles.readManifestFromPaths(sessionPaths);
-      const changes = [];
-      const scopes = [sessionPaths];
-      for (const entry of await inventory(sessionPaths.conversationsRoot)) {
-        if (!entry.isDirectory()) continue;
-        scopes.push(recordFiles.conversationPaths(sessionPaths, entry.name));
-      }
-      for (const scope of scopes) {
-        const entries = await inventory(scope.conversationLogRoot);
-        const filePath = path.join(scope.conversationLogRoot, "transcript.json");
-        const original = await checkedPath(filePath) ? await readRegularText(filePath) : null;
-        const legacy = [];
-        const turns = new Map();
-        for (const entry of entries) {
-          if (!entry.isDirectory() || !CONVERSATION_TURN_ID_PATTERN.test(entry.name)) continue;
-          const turnRoot = conversationTurnRoot(scope, entry.name);
-          for (const file of await inventory(turnRoot)) {
-            if (!CONVERSATION_MESSAGE_FILE_PATTERN.test(file.name) &&
+    return prepareSessionStateUpgrade({
+      temporaryRoot,
+      async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {
+        await checkedPath(sessionPaths.sessionRoot, true);
+        await checkedPath(sessionPaths.manifestPath);
+        await recordFiles.readManifestFromPaths(sessionPaths);
+        const changes = [];
+        const scopes = [sessionPaths];
+        for (const entry of await inventory(sessionPaths.conversationsRoot)) {
+          if (!entry.isDirectory()) continue;
+          scopes.push(recordFiles.conversationPaths(sessionPaths, entry.name));
+        }
+        for (const scope of scopes) {
+          const entries = await inventory(scope.conversationLogRoot);
+          const filePath = path.join(scope.conversationLogRoot, "transcript.json");
+          const original = await checkedPath(filePath) ? await readRegularText(filePath) : null;
+          const legacy = [];
+          const turns = new Map();
+          for (const entry of entries) {
+            if (!entry.isDirectory() || !CONVERSATION_TURN_ID_PATTERN.test(entry.name)) continue;
+            const turnRoot = conversationTurnRoot(scope, entry.name);
+            for (const file of await inventory(turnRoot)) {
+              if (!CONVERSATION_MESSAGE_FILE_PATTERN.test(file.name) &&
                 ![CONVERSATION_TURN_ATTACHMENTS_FILE, CONVERSATION_TURN_METADATA_FILE].includes(file.name)) continue;
-            const sourcePath = path.join(turnRoot, file.name);
+              const sourcePath = path.join(turnRoot, file.name);
+              const contents = await readRegularText(sourcePath);
+              legacy.push({ filePath: sourcePath, original: contents, contents: null });
+            }
+            turns.set(entry.name, await conversationStore.readConversationTurnDirectory(scope, entry.name));
+          }
+          let rewound = [];
+          for (const name of ["rewound.json", "message-ids.json"]) {
+            const sourcePath = path.join(scope.conversationLogRoot, name);
+            if (!await checkedPath(sourcePath)) continue;
             const contents = await readRegularText(sourcePath);
+            if (name === "rewound.json") rewound = JSON.parse(contents);
             legacy.push({ filePath: sourcePath, original: contents, contents: null });
           }
-          turns.set(entry.name, await conversationStore.readConversationTurnDirectory(scope, entry.name));
-        }
-        let rewound = [];
-        for (const name of ["rewound.json", "message-ids.json"]) {
-          const sourcePath = path.join(scope.conversationLogRoot, name);
-          if (!await checkedPath(sourcePath)) continue;
-          const contents = await readRegularText(sourcePath);
-          if (name === "rewound.json") rewound = JSON.parse(contents);
-          legacy.push({ filePath: sourcePath, original: contents, contents: null });
-        }
-        if (original !== null) {
-          conversationStore.parseConversationRecord(original);
-          if (legacy.length) {
-            throw new Error(`Conversation has both current and legacy records: ${filePath}. Inspect the upgrade backup before retrying.`);
+          if (original !== null) {
+            conversationStore.parseConversationRecord(original);
+            if (legacy.length) {
+              throw new Error(`Conversation has both current and legacy records: ${filePath}. Inspect the upgrade backup before retrying.`);
+            }
+          } else if (legacy.length || turns.size) {
+            const contents = `${JSON.stringify(conversationStore.conversationRecordJson({ turns, metadata: {}, rewound }), null, 2)}\n`;
+            conversationStore.parseConversationRecord(contents);
+            // Publish the complete record first. Retry follows the prepared manifest
+            // and retires old files only after all original bytes are backed up.
+            changes.push({ filePath, original: null, contents }, ...legacy);
           }
-        } else if (legacy.length || turns.size) {
-          const contents = `${JSON.stringify(conversationStore.conversationRecordJson({ turns, metadata: {}, rewound }), null, 2)}\n`;
-          conversationStore.parseConversationRecord(contents);
-          // Publish the complete record first. Retry follows the prepared manifest
-          // and retires old files only after all original bytes are backed up.
-          changes.push({ filePath, original: null, contents }, ...legacy);
         }
+        return changes;
       }
-      return changes;
-    } });
+    });
   }
 
   return Object.freeze({

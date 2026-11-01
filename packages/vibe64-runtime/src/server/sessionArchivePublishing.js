@@ -266,9 +266,11 @@ function createSessionArchivePublishing({
         execution: ARCHIVE_EXECUTIONS.write
       });
       if (!tarResult.ok) {
-        throw archiveCommandError(tarResult,
+        throw archiveCommandError(
+          tarResult,
           `Cannot archive Vibe64 session ${sessionPaths.sessionId}: ${tarResult.output}`,
-          "vibe64_session_archive_write_failed");
+          "vibe64_session_archive_write_failed"
+        );
       }
       await archiveRecords.validateSessionArchive(stagedArchivePath);
       await writeJsonFile(stagedMetadataPath, metadataRecord);

@@ -454,7 +454,8 @@ const VIBE64_ASSISTANT_SELECTION_IDENTITY_FIELDS = Object.freeze(["engineId", "m
  */
 function sameVibe64AssistantSelection(left, right) {
   return VIBE64_ASSISTANT_SELECTION_IDENTITY_FIELDS.every(
-    (key) => String(left?.[key] ?? "").trim() === String(right?.[key] ?? "").trim());
+    (key) => String(left?.[key] ?? "").trim() === String(right?.[key] ?? "").trim()
+  );
 }
 
 function vibe64AssistantConversationKey(selection = {}) {

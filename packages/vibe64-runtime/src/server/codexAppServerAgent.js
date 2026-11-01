@@ -370,7 +370,9 @@ function codexAppServerRuntimeHost(options = {}) {
     prepare: () => prepareCodexAttachmentRoot({ env: options.env }),
     stop: stopVibe64Execution,
     stopOwned: stopVibe64OwnedExecutions,
-    get authoritative() { return Boolean(vibe64ManagedExecutionProvider()); },
+    get authoritative() {
+      return Boolean(vibe64ManagedExecutionProvider());
+    },
     run({ processProfile, ...request }) {
       const { command, helper: profileHelper, executionMode, ...profile } = processProfile || {};
       const commandRunner = options.commandRunner === undefined ? defaultCommandRunner : options.commandRunner;
@@ -482,8 +484,10 @@ function codexAppServerRuntimeHost(options = {}) {
  * @param {RuntimeLogger} logger
  */
 function codexAppServerControlsLog(logger) {
-  return (event, fields, { threadId, environment = {}, connectionGeneration }) => logOperationalEvent(logger,
-    ["recovery_failed", "settings_failed"].includes(event) ? "warn" : "info", {
+  return (event, fields, { threadId, environment = {}, connectionGeneration }) => logOperationalEvent(
+    logger,
+    ["recovery_failed", "settings_failed"].includes(event) ? "warn" : "info",
+    {
       component: "vibe64.codex_controls",
       event: `vibe64.codex_controls.${event}`,
       threadId,
@@ -492,7 +496,9 @@ function codexAppServerControlsLog(logger) {
         key.endsWith("_COMMAND_GENERATION") && /^[0-9a-f-]{36}$/iu.test(value))),
       connectionGeneration,
       ...fields
-    }, "Codex managed controls changed.");
+    },
+    "Codex managed controls changed."
+  );
 }
 
 async function ensureCodexAppServerRuntime(options = {}) {

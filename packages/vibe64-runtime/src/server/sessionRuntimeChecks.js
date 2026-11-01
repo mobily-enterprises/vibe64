@@ -165,8 +165,10 @@ async function requireLearningNativeDirectory(session) {
       throw new Error("Not a private native directory.");
     }
   } catch {
-    throw vibe64Error("The learning execution directory is missing or aliased. Ask your administrator to restore the original session; reads do not recreate it.",
-      "vibe64_learning_native_directory_unavailable");
+    throw vibe64Error(
+      "The learning execution directory is missing or aliased. Ask your administrator to restore the original session; reads do not recreate it.",
+      "vibe64_learning_native_directory_unavailable"
+    );
   }
   return directory;
 }
@@ -188,8 +190,9 @@ async function sessionAvailabilityIssue(session = {}, learningScope = null) {
     try {
       await requireLearningNativeDirectory(session);
       return null;
+    } catch (error) {
+      return { code: error.code, message: error.message };
     }
-    catch (error) { return { code: error.code, message: error.message }; }
   }
   const sourcePath = sessionSourcePath(session);
   if (sourcePath && await pathExists(sourcePath)) {

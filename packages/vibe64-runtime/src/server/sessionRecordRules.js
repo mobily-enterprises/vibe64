@@ -421,8 +421,10 @@ function sessionListMayIncludeArchived({
  */
 function validateLearningSessionScope(value) {
   if (value === undefined || value === null) return null;
-  const invalid = () => vibe64Error("Learning sessions require an authorized learner, exact attempt/pin and exercise scope.",
-    "vibe64_learning_scope_invalid");
+  const invalid = () => vibe64Error(
+    "Learning sessions require an authorized learner, exact attempt/pin and exercise scope.",
+    "vibe64_learning_scope_invalid"
+  );
   if (!isPlainObject(value) || Object.keys(value).some(name => !["learnerId", "attemptId", "pin", "noExercise"].includes(name)) ||
       typeof value.learnerId !== "string" || !value.learnerId || value.learnerId.trim() !== value.learnerId ||
       // eslint-disable-next-line no-control-regex -- Match the existing authenticated learner identity contract.
@@ -434,7 +436,9 @@ function validateLearningSessionScope(value) {
   try {
     bytes = JSON.stringify(value.pin);
     pin = JSON.parse(bytes);
-  } catch { throw invalid(); }
+  } catch {
+    throw invalid();
+  }
   if (Buffer.byteLength(bytes) > 4096 || !isDeepStrictEqual(pin, value.pin)) throw invalid();
   return deepFreeze({ learnerId: value.learnerId, attemptId: value.attemptId, pin, noExercise: value.noExercise });
 }
@@ -444,10 +448,14 @@ function learningSessionBinding(metadata, learningScope, sessionId) {
   if (!learningScope && raw === undefined) return null;
   const expected = learningScope && { schemaVersion: 1, ...learningScope, conversationId: sessionId };
   let binding;
-  try { binding = JSON.parse(raw); } catch { /* Refuse missing or malformed claimed purpose. */ }
+  try {
+    binding = JSON.parse(raw);
+  } catch { /* Refuse missing or malformed claimed purpose. */ }
   if (!expected || !isDeepStrictEqual(binding, expected)) {
-    throw vibe64Error("This learning session does not match its admitted owner, attempt, pin or exercise purpose.",
-      "vibe64_learning_session_scope_mismatch");
+    throw vibe64Error(
+      "This learning session does not match its admitted owner, attempt, pin or exercise purpose.",
+      "vibe64_learning_session_scope_mismatch"
+    );
   }
   return binding;
 }
@@ -458,7 +466,11 @@ function learningSessionBinding(metadata, learningScope, sessionId) {
  */
 function genuineLearningBinding(raw, sessionId) {
   let binding;
-  try { binding = JSON.parse(raw); } catch { return false; }
+  try {
+    binding = JSON.parse(raw);
+  } catch {
+    return false;
+  }
   if (!isPlainObject(binding) || binding.schemaVersion !== 1 || binding.conversationId !== sessionId ||
       Object.keys(binding).length !== 6) return false;
   try {
@@ -469,7 +481,9 @@ function genuineLearningBinding(raw, sessionId) {
       noExercise: binding.noExercise
     });
     return true;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 export {

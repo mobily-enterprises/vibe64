@@ -112,13 +112,13 @@ function createSessionConversationStore({
     const request = parseIntegrationSetupRequest(assistant);
     if (!request) return null;
     const requestId = createHash("sha256").update(assistant.text).digest("hex");
-    const text = await readTextIfExists(path.join(
-      conversationTurnRoot(sessionPaths, turnId), "integration-setup.json"
-    ));
+    const text = await readTextIfExists(path.join(conversationTurnRoot(sessionPaths, turnId), "integration-setup.json"));
     let decision = { outcome: "pending" };
     if (text) {
       let saved;
-      try { saved = JSON.parse(text); } catch {
+      try {
+        saved = JSON.parse(text);
+      } catch {
         throw vibe64Error("Invalid integration setup decision.", "vibe64_invalid_integration_setup_decision");
       }
       const completed = saved?.outcome === "completed";
@@ -199,17 +199,23 @@ function createSessionConversationStore({
       const saved = (await readConversationTurn(sessionPaths, turnId)).integrationSetup;
       if (!saved || saved.outcome !== "completed" || saved.requestId !== requestId ||
           saved.continuationMessageId !== continuationMessageId) {
-        throw vibe64Error("This integration completion has changed or no longer exists.",
-          "vibe64_integration_setup_request_changed");
+        throw vibe64Error(
+          "This integration completion has changed or no longer exists.",
+          "vibe64_integration_setup_request_changed"
+        );
       }
       if (saved.continuation.status !== "pending" &&
           (saved.continuation.engineId !== engineId || saved.continuation.threadId !== threadId)) {
-        throw vibe64Error("This continuation belongs to a different assistant thread.",
-          "vibe64_integration_continuation_thread_changed");
+        throw vibe64Error(
+          "This continuation belongs to a different assistant thread.",
+          "vibe64_integration_continuation_thread_changed"
+        );
       }
       if (status === "accepted" && saved.continuation.status === "pending") {
-        throw vibe64Error("This integration continuation has not been claimed.",
-          "vibe64_integration_continuation_not_claimed");
+        throw vibe64Error(
+          "This integration continuation has not been claimed.",
+          "vibe64_integration_continuation_not_claimed"
+        );
       }
       if (saved.continuation.status === "accepted" ||
           (status === "sending" && saved.continuation.status === "sending")) {
@@ -230,13 +236,17 @@ function createSessionConversationStore({
     return sessionRecords.mutateSession(sessionId, async (sessionPaths) => {
       const turn = await readConversationTurn(sessionPaths, turnId);
       if (!turn.integrationSetup || turn.integrationSetup.requestId !== requestId) {
-        throw vibe64Error("This integration setup request has changed or no longer exists.",
-          "vibe64_integration_setup_request_changed");
+        throw vibe64Error(
+          "This integration setup request has changed or no longer exists.",
+          "vibe64_integration_setup_request_changed"
+        );
       }
       if (turn.integrationSetup.outcome === "completed" && decision.outcome === "completed" &&
           turn.integrationSetup.configurationHash !== decision.configurationHash) {
-        throw vibe64Error("This request was completed against a different integration configuration.",
-          "vibe64_integration_setup_configuration_changed");
+        throw vibe64Error(
+          "This request was completed against a different integration configuration.",
+          "vibe64_integration_setup_configuration_changed"
+        );
       }
       // The first saved decision wins, including across independent store instances.
       if (turn.integrationSetup.outcome !== "pending") return turn.integrationSetup;
@@ -316,9 +326,9 @@ function createSessionConversationStore({
       ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
       ...(isPlainObject(value.assistantRouting) &&
         ["senior", "junior", "fix", "helper", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
-        assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
-          .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
-      } : {}),
+            assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
+              .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
+          } : {}),
       ...(isPlainObject(value.nativeMessageVersions) ? {
         nativeMessageVersions: Object.fromEntries(Object.entries(value.nativeMessageVersions)
           .filter(([, version]) => typeof version === "string" && /^[a-f0-9]{64}$/u.test(version)))
@@ -332,7 +342,9 @@ function createSessionConversationStore({
 
   function parseConversationRecord(source) {
     let value;
-    try { value = JSON.parse(source); } catch {
+    try {
+      value = JSON.parse(source);
+    } catch {
       throw vibe64Error("Conversation storage is not valid JSON. Restore it before continuing.", "vibe64_invalid_conversation_storage");
     }
     return validateConversationDocument(value);
@@ -369,8 +381,10 @@ function createSessionConversationStore({
     const entries = await readDirectoryEntries(sessionPaths.conversationLogRoot);
     if (entries.some((entry) =>
       CONVERSATION_TURN_ID_PATTERN.test(entry.name) || ["rewound.json", "message-ids.json"].includes(entry.name))) {
-      throw vibe64Error("This conversation needs the offline state upgrade. Stop services and run the candidate upgrade-state command before opening it.",
-        "vibe64_conversation_upgrade_required");
+      throw vibe64Error(
+        "This conversation needs the offline state upgrade. Stop services and run the candidate upgrade-state command before opening it.",
+        "vibe64_conversation_upgrade_required"
+      );
     }
     return { turns: new Map(), metadata: {}, rewound: [] };
   }
@@ -404,16 +418,24 @@ function createSessionConversationStore({
       /**
        * A read sees the saved record unchanged, so its message index applies.
        */
-      ...(write ? {} : { async hasMessage(id) { return conversationRecordHasMessage(record, id); } }),
-      async listTurnIds() { return (await transaction.listTurnIds()).filter((id) => !record.rewound.includes(id)); },
+      ...(write ? {} : {
+        async hasMessage(id) {
+          return conversationRecordHasMessage(record, id);
+        }
+      }),
+      async listTurnIds() {
+        return (await transaction.listTurnIds()).filter((id) => !record.rewound.includes(id));
+      },
       /**
        * Identity lookups see the same turns as listTurnIds.
        */
       // readable-check: allow method-probe - optional operation: a transaction without message lookups offers none
-      ...(typeof transaction.findMessageTurnId === "function" ? { async findMessageTurnId(id) {
-        const turnId = await transaction.findMessageTurnId(id);
-        return turnId && !record.rewound.includes(turnId) ? turnId : "";
-      } } : {}),
+      ...(typeof transaction.findMessageTurnId === "function" ? {
+        async findMessageTurnId(id) {
+          const turnId = await transaction.findMessageTurnId(id);
+          return turnId && !record.rewound.includes(turnId) ? turnId : "";
+        }
+      } : {}),
       async readTurn(id) {
         const turn = await transaction.readTurn(id);
         if (!turn || record.rewound.includes(id)) return turn;

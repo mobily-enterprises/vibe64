@@ -175,7 +175,9 @@ function createSessionRecords({
       let blockingOperation = "";
       const release = await locks.acquireStoreSessionLock(sessionPaths, operationName, {
         expectedRefusal,
-        onRejected: (ownerOperation) => { blockingOperation = ownerOperation; },
+        onRejected: (ownerOperation) => {
+          blockingOperation = ownerOperation;
+        },
         operation: diagnosticOperation,
         waitMs
       });
@@ -243,8 +245,10 @@ function createSessionRecords({
 
   function assertMutableMetadataName(name) {
     if (name === LEARNING_SESSION_METADATA) {
-      throw vibe64Error("Learning purpose is immutable; start a separately admitted session.",
-        "vibe64_learning_session_binding_immutable");
+      throw vibe64Error(
+        "Learning purpose is immutable; start a separately admitted session.",
+        "vibe64_learning_session_binding_immutable"
+      );
     }
   }
 
@@ -413,9 +417,9 @@ function createSessionRecords({
       const previous = reset === true
         ? { events: [], id: normalizedTaskId }
         : await recordFiles.readBackgroundTaskFromPath(sessionPaths, normalizedTaskId) || {
-            events: [],
-            id: normalizedTaskId
-          };
+          events: [],
+          id: normalizedTaskId
+        };
       const eventAt = toText(event.at || patch.updatedAt) || state.now().toISOString();
       const status = normalizeBackgroundTaskStatus(patch.status || event.status || previous.status);
       const previousStatus = toText(previous.status);

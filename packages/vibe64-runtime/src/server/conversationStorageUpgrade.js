@@ -27,8 +27,11 @@ export async function inspectConversationUndoRetirement(context) {
       const inspectMetadata = (metadata, label) => {
         if (!metadata?.assistant_changeover) return;
         let state;
-        try { state = JSON.parse(metadata.assistant_changeover); }
-        catch { throw new Error(`${label} has invalid conversation changeover metadata. Inspect it before upgrading.`); }
+        try {
+          state = JSON.parse(metadata.assistant_changeover);
+        } catch {
+          throw new Error(`${label} has invalid conversation changeover metadata. Inspect it before upgrading.`);
+        }
         if (state !== null && (typeof state !== "object" || Array.isArray(state))) {
           throw new Error(`${label} has invalid conversation changeover metadata. Inspect it before upgrading.`);
         }

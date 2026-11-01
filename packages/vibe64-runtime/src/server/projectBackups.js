@@ -16,7 +16,11 @@ async function withProjectAreaLock(stateRoot, name, busy, operation) {
   if (await realpath(lockRoot) !== lockRoot) throw new Error("Project lock directory must not contain links.");
   const release = await tryAcquireExclusiveFileLock(path.join(lockRoot, `${name}.lock`));
   if (!release) throw Object.assign(new Error(busy.message), { code: busy.code, statusCode: 409 });
-  try { return await operation(); } finally { await release(); }
+  try {
+    return await operation();
+  } finally {
+    await release();
+  }
 }
 
 /**
@@ -44,7 +48,9 @@ async function maintainProjectBackups({ stateRoot, dryRun = false, now = Date.no
   const root = path.join(stateRoot, "backups");
   const result = { status: "success", reclaimedBytes: 0, eligibleBytes: 0, retainedBytes: 0, issues: [] };
   let rootInfo;
-  try { rootInfo = await lstat(root); } catch (error) {
+  try {
+    rootInfo = await lstat(root);
+  } catch (error) {
     if (error.code === "ENOENT") return result;
     throw error;
   }
@@ -63,7 +69,9 @@ async function maintainProjectBackups({ stateRoot, dryRun = false, now = Date.no
         if (++entries > 100_000) throw new Error("project_backups_scan_limit");
         const target = path.join(directory, entry.name);
         let info;
-        try { info = await lstat(target); } catch (error) {
+        try {
+          info = await lstat(target);
+        } catch (error) {
           if (error.code === "ENOENT") continue;
           throw error;
         }
@@ -88,8 +96,7 @@ async function maintainProjectBackups({ stateRoot, dryRun = false, now = Date.no
           if (!dryRun) {
             await unlink(target);
             result.reclaimedBytes += bytes;
-          }
-          else result.retainedBytes += bytes;
+          } else result.retainedBytes += bytes;
         } else {
           result.issues.push({ code: "project_backups_entry_unverified" });
         }

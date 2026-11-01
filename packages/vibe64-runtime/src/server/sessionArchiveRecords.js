@@ -266,10 +266,13 @@ function createSessionArchiveRecords({ state, storePaths }) {
       execution: ARCHIVE_EXECUTIONS.check
     });
     if (!result.ok) {
-      throw archiveCommandError(result, result.code
-        ? `Vibe64 could not check session archive ${archivePath}: ${result.output}`
-        : `Invalid Vibe64 session archive ${archivePath}: ${result.output}`,
-      "vibe64_session_archive_invalid");
+      throw archiveCommandError(
+        result,
+        result.code
+          ? `Vibe64 could not check session archive ${archivePath}: ${result.output}`
+          : `Invalid Vibe64 session archive ${archivePath}: ${result.output}`,
+        "vibe64_session_archive_invalid"
+      );
     }
   }
 

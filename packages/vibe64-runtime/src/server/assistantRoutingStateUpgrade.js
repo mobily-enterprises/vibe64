@@ -134,8 +134,11 @@ function readRecord(raw, label) {
 }
 
 function selection(value, label) {
-  try { return defineVibe64AssistantSelection(value); }
-  catch { throw new Error(`${label} has an invalid assistant selection. Inspect it before upgrading routing.`); }
+  try {
+    return defineVibe64AssistantSelection(value);
+  } catch {
+    throw new Error(`${label} has an invalid assistant selection. Inspect it before upgrading routing.`);
+  }
 }
 
 function workflow(value, label) {
@@ -172,7 +175,7 @@ function upgradeMetadata(metadata, currentSelection, label) {
   if (nativeGoal) {
     const schemaVersion = savedGoal.configuration?.schemaVersion ?? (savedGoal.mode === "intern" ||
       savedRequest?.schemaVersion === 3 || Object.values(savedGoal.configuration?.orchestrators || {})
-        .some(roles => Object.hasOwn(roles, "intern")) ? 3 : 4);
+      .some(roles => Object.hasOwn(roles, "intern")) ? 3 : 4);
     validateAssistantRoutingUpgradeRecord(savedGoal, { schemaVersion });
     if (!savedGoal.selection) throw new Error(`${label} has an invalid explicit goal selection.`);
   }

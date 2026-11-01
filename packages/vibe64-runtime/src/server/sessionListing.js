@@ -114,8 +114,7 @@ function createSessionListing({
       ? (await archiveRecords.readSessionArchiveRecords())
           .filter((record) => !unarchivedSessionIds.has(record.sessionId))
           .filter((record) => sessionStatusMatchesListOptions(record.status, listOptions))
-          .filter((record) => state.admittedLearningScope || !genuineLearningBinding(
-            archiveRecords.sessionArchiveSummary(record).metadata?.[LEARNING_SESSION_METADATA], record.sessionId))
+          .filter((record) => state.admittedLearningScope || !genuineLearningBinding(archiveRecords.sessionArchiveSummary(record).metadata?.[LEARNING_SESSION_METADATA], record.sessionId))
       : [];
     return {
       archivedRecords,

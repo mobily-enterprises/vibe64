@@ -16,7 +16,11 @@ export function parseIntegrationSetupRequest(message) {
         const payload = lines.slice(fence.start + 1, index).join("\n");
         if (payload.length > 1024) return null;
         let value;
-        try { value = JSON.parse(payload); } catch { return null; }
+        try {
+          value = JSON.parse(payload);
+        } catch {
+          return null;
+        }
         if (!value || Array.isArray(value) || typeof value !== "object" ||
             Object.keys(value).length !== 1 || typeof value.integrationId !== "string" ||
             !value.integrationId.trim() || value.integrationId.length > 200 ||

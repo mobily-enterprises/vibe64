@@ -62,8 +62,12 @@ async function runVibe64RenewalAgentWriteExclusive(runtime, sessionId, operation
  * HTTP callers show its message; without a status it would be a server error.
  */
 function agentWriteBusyError(result = VIBE64_AGENT_WRITE_BUSY_RESULT) {
-  return Object.assign(new Error(result.error || VIBE64_AGENT_WRITE_BUSY_RESULT.error),
-    VIBE64_AGENT_WRITE_BUSY_RESULT, result, { retryable: true, statusCode: 409 });
+  return Object.assign(
+    new Error(result.error || VIBE64_AGENT_WRITE_BUSY_RESULT.error),
+    VIBE64_AGENT_WRITE_BUSY_RESULT,
+    result,
+    { retryable: true, statusCode: 409 }
+  );
 }
 
 function throwIfAgentWriteBusy(result) {

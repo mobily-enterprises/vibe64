@@ -68,9 +68,11 @@ function createSessionArchiveAccess({
         execution: ARCHIVE_EXECUTIONS.read
       });
       if (!extractResult.ok) {
-        throw archiveCommandError(extractResult,
+        throw archiveCommandError(
+          extractResult,
           `Cannot read Vibe64 session archive ${record.archivePath}: ${extractResult.output}`,
-          "vibe64_session_archive_read_failed");
+          "vibe64_session_archive_read_failed"
+        );
       }
       const sessionPaths = storePaths.pathsForSessionRoot(record.sessionId, extractedSessionRoot);
       if (!await pathExists(sessionPaths.manifestPath)) {
@@ -208,12 +210,14 @@ function createSessionArchiveAccess({
         const change = async (work) => {
           requireExclusive();
           publishing = true;
-          try { return await work(); }
-          catch (error) {
+          try {
+            return await work();
+          } catch (error) {
             available = false;
             throw error;
+          } finally {
+            publishing = false;
           }
-          finally { publishing = false; }
         };
         const publishArtifacts = async (files) => {
           requireExclusive();
@@ -244,7 +248,9 @@ function createSessionArchiveAccess({
                 try {
                   if (before.size) await destination.writeFile(source.createReadStream({ autoClose: false, end: before.size - 1 }));
                   await destination.sync();
-                } finally { await destination.close(); }
+                } finally {
+                  await destination.close();
+                }
                 const after = await source.stat();
                 if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) {
                   throw new Error("Archived artifact source changed during publication.");
@@ -268,8 +274,11 @@ function createSessionArchiveAccess({
           if (typeof beforePrune !== "function") throw new TypeError("Attachment expiry requires a host callback.");
           return change(() => pruneExtractedAttachments(archived, { beforePrune, beforeWork }));
         };
-        try { return await operation(archived, { publishArtifacts, pruneArtifacts, pruneAttachments }); }
-        finally { available = false; }
+        try {
+          return await operation(archived, { publishArtifacts, pruneArtifacts, pruneAttachments });
+        } finally {
+          available = false;
+        }
       });
     });
   }
@@ -286,7 +295,9 @@ function createSessionArchiveAccess({
       current = path.join(current, parts[index]);
       const parent = index < parts.length - 1;
       if (parent && createParents) {
-        await mkdir(current, { recursive: false }).catch((error) => { if (error.code !== "EEXIST") throw error; });
+        await mkdir(current, { recursive: false }).catch((error) => {
+          if (error.code !== "EEXIST") throw error;
+        });
       }
       const info = await lstat(current).catch((error) => {
         if (isMissingPathError(error)) return null;
@@ -311,18 +322,31 @@ function createSessionArchiveAccess({
         execution: ARCHIVE_EXECUTIONS.write
       });
       if (!result.ok) {
-        throw archiveCommandError(result, `Cannot prepare updated session archive: ${result.output}`,
-          "vibe64_session_archive_write_failed");
+        throw archiveCommandError(
+          result,
+          `Cannot prepare updated session archive: ${result.output}`,
+          "vibe64_session_archive_write_failed"
+        );
       }
       await archiveRecords.validateSessionArchive(candidatePath);
       await beforePublish(candidatePath);
       const candidate = await open(candidatePath, "r");
-      try { await candidate.sync(); } finally { await candidate.close(); }
+      try {
+        await candidate.sync();
+      } finally {
+        await candidate.close();
+      }
       // Keep the archive index, metadata, messages and archival time unchanged.
       await rename(candidatePath, session.archivePath);
       const directory = await open(path.dirname(session.archivePath), "r");
-      try { await directory.sync(); } finally { await directory.close(); }
-    } finally { await rm(candidatePath, { force: true }); }
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
+    } finally {
+      await rm(candidatePath, { force: true });
+    }
   }
 
   function artifactExpiryRequest(relativePaths, beforePrune) {
@@ -340,8 +364,9 @@ function createSessionArchiveAccess({
       try {
         await rm(target);
         removed.push(relativePath);
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error;
       }
-      catch (error) { if (!isMissingPathError(error)) throw error; }
     }
     if (removed.length) {
       await publishExtractedSessionArchive(session, {
@@ -394,15 +419,21 @@ function createSessionArchiveAccess({
   async function pruneArchivedSessionArtifacts(sessionId, options = {}) {
     const { relativePaths, beforePrune, beforeWork } = options;
     artifactExpiryRequest(relativePaths, beforePrune);
-    return withArchivedSession(sessionId, (_session, { pruneArtifacts }) => pruneArtifacts(relativePaths, { beforePrune }),
-      { beforeWork });
+    return withArchivedSession(
+      sessionId,
+      (_session, { pruneArtifacts }) => pruneArtifacts(relativePaths, { beforePrune }),
+      { beforeWork }
+    );
   }
 
   async function pruneArchivedSessionAttachments(sessionId, options = {}) {
     const { beforePrune, beforeWork } = options;
     if (typeof beforePrune !== "function") throw new TypeError("Attachment expiry requires a host callback.");
-    return withArchivedSession(sessionId, (_session, { pruneAttachments }) => pruneAttachments({ beforePrune }),
-      { beforeWork });
+    return withArchivedSession(
+      sessionId,
+      (_session, { pruneAttachments }) => pruneAttachments({ beforePrune }),
+      { beforeWork }
+    );
   }
 
   async function withPreparedRenewalSession(sessionId, operation) {

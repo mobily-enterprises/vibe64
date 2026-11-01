@@ -92,9 +92,9 @@ function codexAppServerIdentityMetadata({
   const runtimeMetadata = codexAppServerRuntimeMetadata(appServerRuntime);
   const hostCli = runtimeMetadata.endpoint
     ? codexCliResumeCommand({
-        endpoint: runtimeMetadata.endpoint,
-        threadId: normalizedThreadId
-      }).command
+      endpoint: runtimeMetadata.endpoint,
+      threadId: normalizedThreadId
+    }).command
     : "";
   const prefix = modelProviderId === "openai" ? "codex" : `codex_${modelProviderId}`;
   return {
@@ -146,8 +146,8 @@ async function writeCodexAppServerIdentityMetadata({
     typeof additionalMetadata === "object" &&
     !Array.isArray(additionalMetadata)
     ? Object.fromEntries(Object.entries(additionalMetadata)
-        .filter(([name]) => toText(name).startsWith("agent_renewal_"))
-        .map(([name, value]) => [toText(name), toText(value)]))
+      .filter(([name]) => toText(name).startsWith("agent_renewal_"))
+      .map(([name, value]) => [toText(name), toText(value)]))
     : {};
   const metadata = {
     ...supplemental,
@@ -580,8 +580,12 @@ function codexAppServerThreadPreparationForSession({
         }
         return codexAppServerToolSchemaIdentityForSession(current, normalizedWorkdir);
       },
-      get pauseGoal() { return session.metadata?.codex_changeover_pause_goal === "yes"; },
-      clearPause() { return runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", ""); },
+      get pauseGoal() {
+        return session.metadata?.codex_changeover_pause_goal === "yes";
+      },
+      clearPause() {
+        return runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", "");
+      },
       write({ appServerRuntime, threadId, toolSchemaIdentity, workdir: threadWorkdir }) {
         return writeCodexAppServerIdentityMetadata({
           appServerRuntime,
@@ -627,7 +631,9 @@ async function sendCodexAppServerPromptForSession({
     threadId,
     readOnly
   }, {
-    get turnSettings() { return codexAppServerTurnSettings({ agentSettings, cwd: workdir }); }
+    get turnSettings() {
+      return codexAppServerTurnSettings({ agentSettings, cwd: workdir });
+    }
   });
 }
 

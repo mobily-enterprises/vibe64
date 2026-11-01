@@ -198,8 +198,8 @@ function createSessionRenewalArchives({
     }
     const selectedSessionId = rootPaths.currentSessionAliasPath
       ? await readVibe64CurrentSessionAlias({
-          aliasPath: rootPaths.currentSessionAliasPath
-        })
+        aliasPath: rootPaths.currentSessionAliasPath
+      })
       : "";
     const selectedBeforeArchive = selectedSessionId === normalizedSourceSessionId
       ? normalizedSourceSessionId
@@ -255,9 +255,11 @@ function createSessionRenewalArchives({
         execution: ARCHIVE_EXECUTIONS.write
       });
       if (!tarResult.ok) {
-        throw archiveCommandError(tarResult,
+        throw archiveCommandError(
+          tarResult,
           `Cannot prepare renewal archive ${normalizedSourceSessionId}: ${tarResult.output}`,
-          "vibe64_session_archive_write_failed");
+          "vibe64_session_archive_write_failed"
+        );
       }
       await archiveRecords.validateSessionArchive(stagedArchivePath);
       await writeJsonFile(stagedMetadataPath, metadataRecord);

@@ -97,8 +97,10 @@ function routingError(message, code = "vibe64_assistant_routing_invalid") {
   return Object.assign(new Error(message), { code, statusCode: 409 });
 }
 
-const upgradeRequired = () => routingError("This saved request predates the current AI setup. The administrator must run the state upgrade.",
-  "vibe64_assistant_routing_upgrade_required");
+const upgradeRequired = () => routingError(
+  "This saved request predates the current AI setup. The administrator must run the state upgrade.",
+  "vibe64_assistant_routing_upgrade_required"
+);
 
 /**
  * Only Senior, Junior and Auto chats carry Deslop and automatic save choices.
@@ -144,11 +146,15 @@ function assistantRoutingGoalFromMetadata(metadata) {
   const raw = metadata?.assistant_routing_goal;
   if (!raw) return null;
   let goal;
-  try { goal = JSON.parse(raw); } catch { /* Refused below. */ }
+  try {
+    goal = JSON.parse(raw);
+  } catch { /* Refused below. */ }
   if (goal === null) return null;
   if (!goal || typeof goal !== "object" || Array.isArray(goal)) {
-    throw Object.assign(new Error("Saved goal is unreadable. Inspect it before continuing."),
-      { code: "vibe64_assistant_goal_invalid", statusCode: 409 });
+    throw Object.assign(
+      new Error("Saved goal is unreadable. Inspect it before continuing."),
+      { code: "vibe64_assistant_goal_invalid", statusCode: 409 }
+    );
   }
   return goal;
 }
@@ -158,7 +164,11 @@ const assistantRoutingRequestFromMetadata = (metadata) => JSON.parse(metadata?.a
  * strict reader above and refuse to act on it.
  */
 function assistantRoutingRequestForDisplay(metadata = {}) {
-  try { return assistantRoutingRequestFromMetadata(metadata); } catch { return null; }
+  try {
+    return assistantRoutingRequestFromMetadata(metadata);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -259,9 +269,13 @@ function assistantRoutingRequestCanBeReplaced(request, selection) {
 
 function parseRoutingDecision(text) {
   let result;
-  try { result = JSON.parse(String(text).trim()); } catch { throw routingError(
-    "Routing returned an unreadable decision. Retry routing or choose Senior."
-  ); }
+  try {
+    result = JSON.parse(String(text).trim());
+  } catch {
+    throw routingError(
+      "Routing returned an unreadable decision. Retry routing or choose Senior."
+    );
+  }
   if (!result || !["senior", "junior"].includes(result.mode) || !ROUTING_REASONS.includes(result.reason) ||
       Object.keys(result).some((key) => !["mode", "reason"].includes(key))) {
     throw routingError("Routing returned an invalid decision. Retry routing or choose Senior.");
@@ -462,7 +476,11 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
   function convert(raw) {
     if (!raw) return raw;
     let previous;
-    try { previous = JSON.parse(raw); } catch { throw new Error("Saved routing request is unreadable. Inspect it before upgrading."); }
+    try {
+      previous = JSON.parse(raw);
+    } catch {
+      throw new Error("Saved routing request is unreadable. Inspect it before upgrading.");
+    }
     if (!previous || typeof previous !== "object" || Array.isArray(previous)) throw new Error("Saved routing request must be an object.");
     if (previous.schemaVersion === 5) {
       if (!assistantWorkflowStateIsSupported(previous)) throw new Error("Saved workflow has an unsupported state.");
@@ -490,8 +508,8 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
     ];
     if (![3, 4].includes(previous.schemaVersion) || !statuses.includes(previous.status) ||
         !previous.messageId || !previous.input || !previous.assignments) throw new Error(
-          "Saved routing request is unsupported. Finish earlier routing upgrades first."
-        );
+      "Saved routing request is unsupported. Finish earlier routing upgrades first."
+    );
     const { continuation, implementationMessage, reviewMessageId, autoExecution, reviewStatus, outcome, ...request } = previous;
     let stage = null;
     if (previous.status.startsWith("planning") || previous.reason === "planning" && !reviewMessageId) stage = "planning";
@@ -518,8 +536,8 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
       reason: previous.reason === "discussion"
         ? "conversation"
         : ["plan_implementation", "explicit_implementation"].includes(previous.reason)
-          ? "implementation"
-          : previous.reason === "deslop" ? "review" : previous.reason,
+            ? "implementation"
+            : previous.reason === "deslop" ? "review" : previous.reason,
       steps: autoExecution?.continuations || 0,
       stalledTurns: autoExecution?.stalledTurns || 0,
       steering: autoExecution?.steering || [],

@@ -354,11 +354,11 @@ async function saveSessionSourceRecovery({
       worktreePath
     })
     : {
-      dirty: false,
-      patchArtifact: metadataValue(session, "source_recovery_patch_artifact"),
-      untrackedArtifact: metadataValue(session, "source_recovery_untracked_artifact"),
-      untrackedCount: Number(metadataValue(session, "source_recovery_untracked_count") || 0)
-    };
+        dirty: false,
+        patchArtifact: metadataValue(session, "source_recovery_patch_artifact"),
+        untrackedArtifact: metadataValue(session, "source_recovery_untracked_artifact"),
+        untrackedCount: Number(metadataValue(session, "source_recovery_untracked_count") || 0)
+      };
   const branchBundleArtifact = worktreeIsGitWorktree
     ? await writeBranchRecoveryBundle({
       artifactsRoot: session.artifactsRoot,

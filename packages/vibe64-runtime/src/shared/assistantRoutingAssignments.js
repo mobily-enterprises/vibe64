@@ -153,11 +153,12 @@ function recommendedRoutingAssignments({ catalogs = [], setup = "owner", values 
     }
     const selectedEngine = catalogs.find((catalog) => catalog.engineId === choice.engineId);
     if (sameRoute(choice, values[role])) {
-      try { recommended[role] = {
-        ...routingAssignmentSelection(selectedEngine, values[role], { purpose }),
-        selectionSource: "recommended"
-      }; continue; }
-      catch { /* An obsolete variant must not prevent an otherwise eligible recommendation. */ }
+      try {
+        recommended[role] = {
+          ...routingAssignmentSelection(selectedEngine, values[role], { purpose }),
+          selectionSource: "recommended"
+        }; continue;
+      } catch { /* An obsolete variant must not prevent an otherwise eligible recommendation. */ }
     }
     const preferredEffort = routingRecommendedEffort(choice, scoreRole);
     const agent = selectedEngine.agents.find(({ id }) => id === choice.agentId);

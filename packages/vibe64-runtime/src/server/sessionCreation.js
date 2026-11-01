@@ -54,8 +54,10 @@ function createSessionCreation({
     status = VIBE64_SESSION_STATUS.ACTIVE
   } = {}, initialize = null) {
     if (Object.hasOwn(metadata, LEARNING_SESSION_METADATA)) {
-      throw vibe64Error("Learning purpose is supplied only by the authorized runtime constructor, not creation metadata.",
-        "vibe64_learning_scope_invalid");
+      throw vibe64Error(
+        "Learning purpose is supplied only by the authorized runtime constructor, not creation metadata.",
+        "vibe64_learning_scope_invalid"
+      );
     }
     const normalizedMetadata = Object.fromEntries(
       Object.entries(metadata).map(([name, value]) => [assertSafeMetadataName(name), toText(value)])
