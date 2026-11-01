@@ -63,8 +63,10 @@ function createAiConnectionRuntime({
    * The ids of OpenCode's own models that are not unavailable.
    */
   async function readModelIds() {
-    const { rows } = await readAllOpenCodeCapabilityRows((query) => terminals.listAssistantCapabilities(query),
-      { modelProviderId: "opencode" });
+    const { rows } = await readAllOpenCodeCapabilityRows(
+      (query) => terminals.listAssistantCapabilities(query),
+      { modelProviderId: "opencode" }
+    );
     return rows.filter((model) => model?.status !== "unavailable")
       .map((model) => String(model?.id || "").trim()).filter(Boolean);
   }

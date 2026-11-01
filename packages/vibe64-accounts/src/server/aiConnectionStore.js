@@ -148,8 +148,11 @@ function createAiConnectionStore({
     const pending = mutation.catch(() => null).then(async () => {
       const state = await readState();
       if (Object.values(state.connections).some((connection) => Object.hasOwn(connection, "helperModelId"))) {
-        throw aiConnectionError("vibe64_ai_routing_upgrade_required",
-          "Stop the services and run the application state upgrade before changing AI connections.", 409);
+        throw aiConnectionError(
+          "vibe64_ai_routing_upgrade_required",
+          "Stop the services and run the application state upgrade before changing AI connections.",
+          409
+        );
       }
       return operation();
     });

@@ -230,7 +230,9 @@ async function upgradeAssistantHelpers(context) {
         try {
           if (!(await lstat(oldRoot)).isDirectory()) throw new Error("Helper ownership must be a regular directory.");
           entries = await readdir(oldRoot, { withFileTypes: true });
-        } catch (error) { if (error.code !== "ENOENT") throw error; }
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+        }
         for (const entry of entries) {
           if (entry.isDirectory() && entry.name === ".locks") {
             if ((await readdir(path.join(oldRoot, entry.name))).length) {

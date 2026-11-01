@@ -132,13 +132,13 @@ async function readGithubStoredStatus({
     const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
     return previousGithubIdentity
       ? accountConnected({
-          id: "github",
-          label: "GitHub",
-          message: `GitHub is connected as @${previousGithubIdentity.login}.`,
-          observed: "Cached Vibe64 user identity.",
-          scope: USER_CREDENTIAL_SCOPE,
-          username: previousGithubIdentity.login
-        })
+        id: "github",
+        label: "GitHub",
+        message: `GitHub is connected as @${previousGithubIdentity.login}.`,
+        observed: "Cached Vibe64 user identity.",
+        scope: USER_CREDENTIAL_SCOPE,
+        username: previousGithubIdentity.login
+      })
       : null;
   }
 

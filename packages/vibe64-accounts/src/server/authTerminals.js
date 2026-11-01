@@ -98,10 +98,10 @@ function createAuthTerminals({
       const account = finalizedCodexAuthSession
         ? await statusReads.codexStatusWithNewMarker(reason || "terminal-close")
         : await statusReads.accountStatus(accountId, {
-            codexMarkerReason: "terminal-close-status",
-            githubContext,
-            previousGithub
-          });
+          codexMarkerReason: "terminal-close-status",
+          githubContext,
+          previousGithub
+        });
       if (["codex", "claude"].includes(accountId) && account?.connected === true && exitCode === 0) {
         account.routing = await modelRouting.initializeModelRouting({ vibe64User });
       }
@@ -145,10 +145,14 @@ function createAuthTerminals({
       });
       await authSessionViews.forgetFinishedAuthSessions(accountId, String(githubContext?.userKey || ""), { except: id });
       const startedAt = Date.parse(finishedMetadata?.startedAt || "");
-      logAccountChange(logger, "finish-sign-in", { accountId, authSessionId: id, exitCode },
+      logAccountChange(
+        logger,
+        "finish-sign-in",
+        { accountId, authSessionId: id, exitCode },
         exitCode === 0 && account?.connected === true ? { ok: true }
           : { ok: false, code: account?.code || "", error: account?.message || "The sign-in did not connect the account." },
-        Number.isFinite(startedAt) ? startedAt : Date.now());
+        Number.isFinite(startedAt) ? startedAt : Date.now()
+      );
       authDebug("server.auth.terminal.finalize.done", {
         accountId,
         connected: account?.connected === true,

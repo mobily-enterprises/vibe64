@@ -75,7 +75,11 @@ export async function upgradeIndependentProviderCredentials({
     "warning",
     `Managed native credential inventory includes external runtime locations: ${runtimeBases.join(", ")}. Stop every service and native terminal writing these paths before apply.`
   );
-  await publishStateUpgradeFiles({ systemRoot: publicationRoot, apply, backupRoot, report,
+  await publishStateUpgradeFiles({
+    systemRoot: publicationRoot,
+    apply,
+    backupRoot,
+    report,
     async prepareUpdates() {
       const updates = [];
       for (const filePath of exactPaths) {
@@ -105,8 +109,9 @@ export async function upgradeIndependentProviderCredentials({
       for (const root of runtimeRoots) {
         await verifyUpgradeParents(publicationRoot, path.join(root, ".inventory"));
         let entries;
-        try { entries = await readdir(root, { withFileTypes: true }); }
-        catch (error) {
+        try {
+          entries = await readdir(root, { withFileTypes: true });
+        } catch (error) {
           if (error.code === "ENOENT") continue;
           throw error;
         }
@@ -129,8 +134,9 @@ export async function upgradeIndependentProviderCredentials({
       for (const root of runtimeBases) {
         await verifyUpgradeParents(publicationRoot, path.join(root, ".inventory"));
         let entries;
-        try { entries = await readdir(root, { withFileTypes: true }); }
-        catch (error) {
+        try {
+          entries = await readdir(root, { withFileTypes: true });
+        } catch (error) {
           if (error.code === "ENOENT") continue;
           throw error;
         }

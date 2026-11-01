@@ -41,14 +41,21 @@ export async function upgradeTeamSetupRouting({ systemRoot, apply, backupRoot, r
       const original = await readUpgradeFile(filePath);
       if (original === null) return [];
       let saved;
-      try { saved = JSON.parse(original); } catch { throw new Error("Saved model routing is unreadable. Inspect it before upgrading."); }
+      try {
+        saved = JSON.parse(original);
+      } catch {
+        throw new Error("Saved model routing is unreadable. Inspect it before upgrading.");
+      }
       if (saved?.schemaVersion === 5) return [];
       if (!apply && saved?.schemaVersion !== 4) {
         report("info", "Earlier upgrades will prepare the saved model routing first; apply checks it again.");
         return [];
       }
-      try { validateV4(saved); }
-      catch { throw new Error("Saved model routing is not in the schema-4 format. Inspect it before upgrading."); }
+      try {
+        validateV4(saved);
+      } catch {
+        throw new Error("Saved model routing is not in the schema-4 format. Inspect it before upgrading.");
+      }
       const { orchestrators } = saved;
       const sourceEngineId = v4SourceEngineId(orchestrators);
       for (const engineId of V4_ENGINE_ORDER) {
@@ -67,7 +74,9 @@ export async function upgradeTeamSetupRouting({ systemRoot, apply, backupRoot, r
       const openCodeConnections = backup?.engineId === "opencode"
         ? await createAiConnectionStore({
           filePath: path.join(systemRoot, "ai-connections", "connections.json"),
-          verifyConnection: () => { throw new Error("Offline routing upgrade cannot call a provider."); }
+          verifyConnection: () => {
+            throw new Error("Offline routing upgrade cannot call a provider.");
+          }
         }).listConnections()
         : [];
       let nonOwner = {};

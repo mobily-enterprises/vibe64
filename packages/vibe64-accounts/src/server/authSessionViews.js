@@ -181,10 +181,10 @@ function createAuthSessionViews({
       ? metadata.account || await (finalizedCodexAuthSession
         ? statusReads.codexStatusWithNewMarker("auth-session-exited")
         : statusReads.accountStatus(metadata.accountId, {
-            codexMarkerReason: "auth-session-status",
-            githubContext: metadata.githubContext,
-            previousGithub: access.previousGithubForInput(input)
-          }))
+          codexMarkerReason: "auth-session-status",
+          githubContext: metadata.githubContext,
+          previousGithub: access.previousGithubForInput(input)
+        }))
       : authenticatingAccount(metadata.accountId);
     authDebug("server.auth.read.account_status", {
       account: accountDebugSummary(account),

@@ -94,10 +94,13 @@ function upgradeAssistantRoutingConfiguration({
     for (const modelId of modelIds) {
       if (!modelId || (connection.modelAccess && connection.modelAccess.mode !== "all" &&
           modelId !== connection.modelAccess.recommendedModelId && !(connection.modelAccess.enabledModelIds || []).includes(
-            modelId
-          ))) continue;
-      add(offlineSelection("opencode", connection.id, modelId), connection.ownerOnly === false,
-        connection.id === "opencode" && modelId === "big-pickle");
+        modelId
+      ))) continue;
+      add(
+        offlineSelection("opencode", connection.id, modelId),
+        connection.ownerOnly === false,
+        connection.id === "opencode" && modelId === "big-pickle"
+      );
     }
   }
   for (const profile of Object.values(orchestrators)) {
@@ -236,7 +239,9 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
   if (!existing) return [];
   const connections = await createAiConnectionStore({
     filePath: connectionsPath,
-    verifyConnection: () => { throw new Error("Offline routing upgrade cannot call a provider."); }
+    verifyConnection: () => {
+      throw new Error("Offline routing upgrade cannot call a provider.");
+    }
   }).listConnections()
     .then(historicalOpenCodeConnections)
     .then((rows) => rows.map((connection) => ({
@@ -301,45 +306,45 @@ async function upgradeAssistantRouting(context) {
   return publishStateUpgradeFiles({
     ...context,
     prepareUpdates: async (temporaryRoot) => {
-        const projects = await listProjectRuntimeRoots(systemRoot);
-        const sessionUpdates = [];
-        const historicalSelections = [];
-        for (const projectRuntimeRoot of projects) {
-          const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-          const staged = await store.prepareAssistantRoutingStateUpgrade({
-            temporaryRoot,
-            transform: (session) => {
-              const result = upgradeAssistantRoutingSession(session);
-              if (session.renewal?.successor?.assistantSelection) {
-                historicalSelections.push(defineVibe64AssistantSelection(session.renewal.successor.assistantSelection));
-              }
-              if (session.metadata.assistant_selection) {
-                historicalSelections.push(defineVibe64AssistantSelection(JSON.parse(session.metadata.assistant_selection)));
-              }
-              for (const conversation of session.conversations) if (conversation.assistantSelection) {
-                historicalSelections.push(defineVibe64AssistantSelection(conversation.assistantSelection));
-              }
-              return result;
+      const projects = await listProjectRuntimeRoots(systemRoot);
+      const sessionUpdates = [];
+      const historicalSelections = [];
+      for (const projectRuntimeRoot of projects) {
+        const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
+        const staged = await store.prepareAssistantRoutingStateUpgrade({
+          temporaryRoot,
+          transform: (session) => {
+            const result = upgradeAssistantRoutingSession(session);
+            if (session.renewal?.successor?.assistantSelection) {
+              historicalSelections.push(defineVibe64AssistantSelection(session.renewal.successor.assistantSelection));
             }
-          });
-          if (staged.length) report("info", `${path.basename(projectRuntimeRoot)}: ${staged.length} routing state file(s) to upgrade.`);
-          sessionUpdates.push(...staged);
-        }
-        const prepared = await prepareConfiguration(systemRoot, projects, historicalSelections);
-        const updates = [...prepared.updates || [], ...sessionUpdates, ...prepared.retired || []];
-        for (const [engineId, profile] of Object.entries(prepared.configuration?.orchestrators || {})) {
-          if (profile.helperRoutingReview) {
-            report(
-              "warning",
-              `${engineId}: old helpers differ from Economy. The owner must review helper routing before those helpers run.`
-            );
+            if (session.metadata.assistant_selection) {
+              historicalSelections.push(defineVibe64AssistantSelection(JSON.parse(session.metadata.assistant_selection)));
+            }
+            for (const conversation of session.conversations) if (conversation.assistantSelection) {
+              historicalSelections.push(defineVibe64AssistantSelection(conversation.assistantSelection));
+            }
+            return result;
           }
-          if (!profile.sharedBackup) {
-            report("warning", `${engineId}: choose a shared Backup in Model routing to enable personal-access substitution.`);
-          }
-        }
-        return updates;
+        });
+        if (staged.length) report("info", `${path.basename(projectRuntimeRoot)}: ${staged.length} routing state file(s) to upgrade.`);
+        sessionUpdates.push(...staged);
       }
+      const prepared = await prepareConfiguration(systemRoot, projects, historicalSelections);
+      const updates = [...prepared.updates || [], ...sessionUpdates, ...prepared.retired || []];
+      for (const [engineId, profile] of Object.entries(prepared.configuration?.orchestrators || {})) {
+        if (profile.helperRoutingReview) {
+          report(
+            "warning",
+            `${engineId}: old helpers differ from Economy. The owner must review helper routing before those helpers run.`
+          );
+        }
+        if (!profile.sharedBackup) {
+          report("warning", `${engineId}: choose a shared Backup in Model routing to enable personal-access substitution.`);
+        }
+      }
+      return updates;
+    }
   });
 }
 

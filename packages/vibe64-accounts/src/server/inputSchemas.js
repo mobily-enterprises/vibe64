@@ -116,7 +116,8 @@ const modelRoutingInputValidator = deepFreeze({
         engineId: { ...routingEngine, required: true }
       })
     }
-  }), mode: "create"
+  }),
+  mode: "create"
 });
 
 const accountIdInputValidator = deepFreeze({

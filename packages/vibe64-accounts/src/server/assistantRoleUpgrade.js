@@ -85,8 +85,11 @@ function metadata(value) {
   for (const field of ["assistant_routing", "assistant_routing_request", "assistant_routing_goal"]) {
     if (!value[field]) continue;
     let parsed;
-    try { parsed = JSON.parse(value[field]); }
-    catch { throw new Error(`Invalid ${field}. Inspect the saved routing before upgrading.`); }
+    try {
+      parsed = JSON.parse(value[field]);
+    } catch {
+      throw new Error(`Invalid ${field}. Inspect the saved routing before upgrading.`);
+    }
     if (parsed === null) continue;
     const next = field === "assistant_routing" && ["senior", "junior", "custom", "auto"].includes(parsed.mode)
       ? validateAssistantRoutingUpgradeRecord(parsed, { preferences: true }) : routingRecord(parsed);
@@ -142,12 +145,18 @@ async function upgradeAssistantRoles(context) {
           throw new Error("Model routing must be a regular file in a regular directory.");
         }
         original = await readFile(filePath, "utf8");
-      } catch (error) { if (error.code !== "ENOENT") throw error; }
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
       if (original !== undefined) {
         let parsed;
-        try { parsed = JSON.parse(original); } catch { throw new Error(
-          "Model routing is invalid JSON. Repair it before upgrading roles."
-        ); }
+        try {
+          parsed = JSON.parse(original);
+        } catch {
+          throw new Error(
+            "Model routing is invalid JSON. Repair it before upgrading roles."
+          );
+        }
         if (!isRecord(parsed)) throw new Error("Model routing must be an object. Repair it before upgrading roles.");
         if (parsed.schemaVersion === 4) validateV4(parsed);
         else if (parsed.schemaVersion === 3) validateAssistantRoutingConfiguration(parsed);

@@ -36,7 +36,9 @@ function createTeamAiReadiness({ routingStore, terminals }) {
     return memo.ready;
   }
 
-  function invalidate() { memo = null; }
+  function invalidate() {
+    memo = null;
+  }
 
   return Object.freeze({ ready, invalidate });
 }

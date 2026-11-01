@@ -29,16 +29,22 @@ async function readAllOpenCodeCapabilityRows(readCapabilities, options = {}) {
       ? engine.modelProviders.find((candidate) => candidate?.id === modelProviderId) || null
       : null;
     if (modelProviderId && !provider) {
-      throw aiConnectionError("vibe64_ai_provider_unavailable",
-        "The current OpenCode catalog did not return this provider.", 404);
+      throw aiConnectionError(
+        "vibe64_ai_provider_unavailable",
+        "The current OpenCode catalog did not return this provider.",
+        404
+      );
     }
     first ||= { result, engine, provider };
     const pageRows = modelProviderId ? provider.models : engine.modelProviders;
     rows.push(...(Array.isArray(pageRows) ? pageRows : []));
     cursor = engine.page?.hasMore === true ? String(engine.page.nextCursor || "").trim() : "";
     if (cursor && seenCursors.has(cursor)) {
-      throw aiConnectionError("vibe64_ai_catalog_cursor_stalled",
-        "OpenCode could not finish reading its provider catalog.", 502);
+      throw aiConnectionError(
+        "vibe64_ai_catalog_cursor_stalled",
+        "OpenCode could not finish reading its provider catalog.",
+        502
+      );
     }
     if (cursor) seenCursors.add(cursor);
   } while (cursor);

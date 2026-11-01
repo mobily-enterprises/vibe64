@@ -120,9 +120,9 @@ function createAccountsRuntime({
   const resolvedSystemRoot = requireExplicitRoots && !explicitSystemRoot
     ? ""
     : resolveVibe64SystemRoot({
-        env,
-        explicitRoot: systemRoot
-      });
+      env,
+      explicitRoot: systemRoot
+    });
   const codexAuthModes = normalizeCodexAuthModes(allowedCodexAuthModes);
   const readCodexRuntimeContext = requireExplicitRoots ? codexRuntimeContextRequiringSystemRoot : codexRuntimeContext;
 

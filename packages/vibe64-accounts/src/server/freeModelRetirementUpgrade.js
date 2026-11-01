@@ -24,13 +24,20 @@ export async function retireFreeModelRouting({ systemRoot, apply, backupRoot, re
       const original = await readUpgradeFile(filePath);
       if (original === null) return [];
       let saved;
-      try { saved = JSON.parse(original); } catch { throw new Error("Saved model routing is unreadable. Inspect it before upgrading."); }
+      try {
+        saved = JSON.parse(original);
+      } catch {
+        throw new Error("Saved model routing is unreadable. Inspect it before upgrading.");
+      }
       if (!apply && saved?.schemaVersion !== 4) {
         report("info", "Earlier upgrades will prepare the saved model routing first; apply checks it again.");
         return [];
       }
-      try { validateAssistantRoutingConfiguration(saved); }
-      catch { throw new Error("Saved model routing is not in the current format. Inspect it before upgrading."); }
+      try {
+        validateAssistantRoutingConfiguration(saved);
+      } catch {
+        throw new Error("Saved model routing is not in the current format. Inspect it before upgrading.");
+      }
       const orchestrators = structuredClone(saved.orchestrators);
       let retired = 0;
       for (const [engineId, roles] of Object.entries(orchestrators)) {

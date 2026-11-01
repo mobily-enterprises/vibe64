@@ -170,25 +170,25 @@ function createAccountStatusReads({
         });
         return refresh || localAccount?.status === "reconnecting"
           ? codexStatus.readLiveCodexStatus({
-              reason: refresh ? "accounts-status-refresh" : "accounts-status-recovery"
-            })
+            reason: refresh ? "accounts-status-refresh" : "accounts-status-recovery"
+          })
           : localAccount;
       }
       if (accountId === "github") {
         return refresh
           ? readGithubStatus({
-              githubContext,
-              previousGithub,
-              runHostToolCommand: access.accountRunHostCommand,
-              systemRoot: access.systemRoot
-            })
+            githubContext,
+            previousGithub,
+            runHostToolCommand: access.accountRunHostCommand,
+            systemRoot: access.systemRoot
+          })
           : readGithubAccountStatus({
-              githubContext,
-              previousGithub,
-              readGitIdentity: input.readGitIdentity !== false,
-              runHostToolCommand: access.accountRunHostCommand,
-              systemRoot: access.systemRoot
-            });
+            githubContext,
+            previousGithub,
+            readGitIdentity: input.readGitIdentity !== false,
+            runHostToolCommand: access.accountRunHostCommand,
+            systemRoot: access.systemRoot
+          });
       }
       throw new Error(`Unknown account: ${accountId}`);
     }
@@ -199,14 +199,18 @@ function createAccountStatusReads({
      * the reason it is still unfinished.
      */
     async function failedAccountRow(accountId, error) {
-      logOperationalEvent(logger, "warn", {
-        component: "vibe64-accounts",
-        event: "vibe64.accounts.status_failed",
-        accountId,
-        code: String(error?.code || ""),
-        error: String(error?.message || error || "")
-      },
-      "Vibe64 account status could not be read");
+      logOperationalEvent(
+        logger,
+        "warn",
+        {
+          component: "vibe64-accounts",
+          event: "vibe64.accounts.status_failed",
+          accountId,
+          code: String(error?.code || ""),
+          error: String(error?.message || error || "")
+        },
+        "Vibe64 account status could not be read"
+      );
       const local = accountId === "codex"
         ? await readCodexLocalStatus({ codexContext: access.codexContextForInput(), systemRoot: access.systemRoot }).catch(() => null)
         : null;
