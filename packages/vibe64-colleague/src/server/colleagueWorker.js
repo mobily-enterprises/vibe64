@@ -6,7 +6,7 @@ import { watchUpdate } from "./attention.js";
 import { stateWatchUpdate } from "./watchSources.js";
 import { suspendAssignment } from "./assignments.js";
 import { failure } from "./colleagueFailure.js";
-import { WATCH_UPDATE_NOTICE, trimIncompleteSurrogate } from "./colleaguePresentation.js";
+import { projectNoReply, trimIncompleteSurrogate, WATCH_UPDATE_NOTICE } from "./colleaguePresentation.js";
 import { ACTION_COLLEAGUE_CONTEXT_READ } from "./colleagueActions.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
@@ -198,7 +198,7 @@ function createColleagueWorker({
       });
       scheduleWatches(state);
     } finally {
-      if (state.projectReply === projectReply) state.projectReply = null;
+      if (state.projectReply === projectReply) state.projectReply = projectNoReply;
       unsubscribe();
     }
   }
@@ -433,7 +433,7 @@ function createColleagueWorker({
       });
     } finally {
       release?.();
-      if (state.projectReply === projectReply) state.projectReply = null;
+      if (state.projectReply === projectReply) state.projectReply = projectNoReply;
     }
   }
 

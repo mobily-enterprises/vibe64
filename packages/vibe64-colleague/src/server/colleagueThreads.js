@@ -7,7 +7,7 @@ import { learnThreadFile, learnThreadLearnerKey, registerLearnThreadReleaser } f
 import { createColleagueNavigationCoordination } from "./navigationCoordination.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { failure, requireResult } from "./colleagueFailure.js";
-import { releaseObserver } from "./colleaguePresentation.js";
+import { projectNoReply, releaseObserver } from "./colleaguePresentation.js";
 
 /** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
 /** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
@@ -197,7 +197,7 @@ function createColleagueThreads({
       operationContext: null,
       operationRunId: "",
       interimReply: null,
-      projectReply: null,
+      projectReply: projectNoReply,
       stopping: false,
       rotating: false,
       opening: 0,

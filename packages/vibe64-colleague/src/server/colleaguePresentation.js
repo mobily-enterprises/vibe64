@@ -69,6 +69,13 @@ function colleagueBrowserState(current) {
 /**
  * A streamed partial may end halfway through a surrogate pair.
  */
+/**
+ * A thread's reply projection while no worker runs: browser events carry no projected reply.
+ */
+function projectNoReply() {
+  return null;
+}
+
 const trimIncompleteSurrogate = text => text.replace(/[\uD800-\uDBFF]$/, "");
 function colleagueBrowserStream(streaming) {
   return streaming ? {
@@ -85,6 +92,7 @@ export {
   colleagueBrowserState,
   colleagueBrowserStream,
   colleagueHistoryMessages,
+  projectNoReply,
   publicWatch,
   releaseObserver,
   trimIncompleteSurrogate

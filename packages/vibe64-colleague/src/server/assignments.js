@@ -30,7 +30,10 @@ function suspendAssignment(record, assignmentId, summary, options = {}) {
   if (pauseWatches) for (const watch of record.watches) if (watch.assignmentId === assignmentId) watch.status = "paused";
 }
 
-function assignmentSummary(assignment, detail = false) {
+/**
+ * An assignment as Colleague reads it: the list form, or with its links' requests, its turns and its amendments.
+ */
+function describeAssignment(assignment, detail) {
   return {
     assignmentId: assignment.assignmentId,
     requestMessageId: assignment.requestMessageId,
@@ -50,6 +53,14 @@ function assignmentSummary(assignment, detail = false) {
     waitingForAssignmentId: assignment.waitingForAssignmentId || "",
     ...(detail ? { turns: assignment.turns.map(({ message, ...turn }) => turn), amendments: assignment.amendments } : {})
   };
+}
+
+function assignmentSummary(assignment) {
+  return describeAssignment(assignment, false);
+}
+
+function assignmentDetail(assignment) {
+  return describeAssignment(assignment, true);
 }
 
 /**
@@ -137,7 +148,7 @@ function createAssignmentOperations({
   }
 
   async function read(state, input) {
-    return input.assignmentId ? { ok: true, assignment: assignmentSummary(find(state, input.assignmentId), true) }
+    return input.assignmentId ? { ok: true, assignment: assignmentDetail(find(state, input.assignmentId)) }
       : { ok: true, assignments: (state.record.assignments || []).map((item) => assignmentSummary(item)) };
   }
 
@@ -151,7 +162,7 @@ function createAssignmentOperations({
           existing.sessionId !== input.sessionId || existing.conversationId !== (input.conversationId || "")) throw fail(
             "That assignment ID already belongs to another request or target."
           );
-      return { ok: true, assignment: assignmentSummary(existing, true) };
+      return { ok: true, assignment: assignmentDetail(existing) };
     }
     const retained = state.record.assignments || [];
     if (retained.filter((item) => openStatuses.has(item.status)).length >= 16) {
@@ -184,7 +195,7 @@ function createAssignmentOperations({
     state.record.assignments = retained.filter((item) => openStatuses.has(item.status) || linked.has(item.assignmentId) || keep.has(item))
       .concat(assignment);
     await persist(state);
-    return { ok: true, assignment: assignmentSummary(assignment, true) };
+    return { ok: true, assignment: assignmentDetail(assignment) };
   }
 
   async function linkAssignments(state, input, context) {
@@ -213,7 +224,7 @@ function createAssignmentOperations({
       else owner.links.push(link);
     }
     await persist(state);
-    return { ok: true, assignment: assignmentSummary(assignment, true) };
+    return { ok: true, assignment: assignmentDetail(assignment) };
   }
 
   async function relay(state, input, context) {
@@ -251,7 +262,7 @@ function createAssignmentOperations({
     }
     if (assignment.reviewerConversationId && assignment.reviewCreated) return {
       ok: true,
-      assignment: assignmentSummary(assignment, true)
+      assignment: assignmentDetail(assignment)
     };
     if (!assignment.turns.some((turn) => turn.recipient === "implementer" && turn.answerId)) {
       throw fail("Wait for the implementer's answer before starting review.");
@@ -273,7 +284,7 @@ function createAssignmentOperations({
       throw error;
     }
     await persist(state);
-    return { ok: true, assignment: assignmentSummary(assignment, true) };
+    return { ok: true, assignment: assignmentDetail(assignment) };
   }
 
   async function send(state, input, context) {
@@ -291,7 +302,7 @@ function createAssignmentOperations({
           "This send was not confirmed. Inspect its conversation before deciding what to do; it will not be repeated automatically."
         );
       }
-      return { ok: true, assignment: assignmentSummary(assignment, true) };
+      return { ok: true, assignment: assignmentDetail(assignment) };
     }
     if (assignment.status === "needs-user") throw fail("This assignment needs a user decision before continuing.");
     if (assignment.waitingForAssignmentId && assignment.waitingForAssignmentId !== input.sourceAssignmentId) {
@@ -375,7 +386,7 @@ function createAssignmentOperations({
       throw error;
     }
     await persist(state);
-    return { ok: true, assignment: assignmentSummary(assignment, true) };
+    return { ok: true, assignment: assignmentDetail(assignment) };
   }
 
   async function update(state, input, context) {
@@ -469,7 +480,7 @@ function createAssignmentOperations({
       state.record.observations = state.record.observations.filter((item) => item.assignmentId !== assignment.assignmentId);
     }
     await persist(state);
-    return { ok: true, assignment: assignmentSummary(assignment, true) };
+    return { ok: true, assignment: assignmentDetail(assignment) };
   }
 
   return Object.freeze({

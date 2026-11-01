@@ -77,7 +77,7 @@ function createColleagueConversations({
   };
   const runtime = createConversationRuntime(runtimeOptions);
   // The same backend/catalogue has two server-owned policies, but each product
-  // runtimeId owns only one live handle. Direct API keeps its original policy.
+  // runtimeId owns only one live handle. Direct API uses the runtime's default policy.
   const nativeRuntime = createConversationRuntime({ ...runtimeOptions, completedEnvelope: true,
     // Native wake admission measures the serialized frame in UTF-16 units:
     // existing L context/framing + 2L raw arguments + L result object + 2L
@@ -103,8 +103,7 @@ function createColleagueConversations({
         // subscriptions reauthorize independently, so their callback order is
         // deliberately not an application presentation guarantee.
         if (observer.context.colleague?.conversationId !== state.record.scopeId) return;
-        // readable-check: allow optional-call - optional operation: a reply projection exists only while a worker runs
-        const projected = state.projectReply?.(event);
+        const projected = state.projectReply(event);
         const interimReply = state.interimReply;
         if (event.completedEnvelope === true) {
           observer.listener(projected ? { ...projected, interimReply } : { type: "presentation", interimReply });
@@ -116,8 +115,8 @@ function createColleagueConversations({
           observer.listener({ type: "presentation", interimReply });
           return;
         }
-        // Keep the original autonomous-commentary policy. The shared binding
-        // owns streaming and transcript rendering.
+        // Autonomous commentary is presented here; the shared binding owns
+        // streaming and transcript rendering.
         if (event.origin === "application" && event.role === "commentary") {
           // API text can precede its tool classification. Retire that earlier
           // partial when the completed message is identified as commentary.

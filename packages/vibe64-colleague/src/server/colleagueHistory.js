@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { failure, requireResult } from "./colleagueFailure.js";
-import { answerPendingNavigation, colleagueBrowserState } from "./colleaguePresentation.js";
+import { answerPendingNavigation, colleagueBrowserState, projectNoReply } from "./colleaguePresentation.js";
 
 /** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
 /** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
@@ -113,7 +113,7 @@ function createColleagueHistory({
         await records.persist(state, patch, old.runtimeId);
         state.streamingReply = null;
         state.interimReply = null;
-        state.projectReply = null;
+        state.projectReply = projectNoReply;
         clearTimeout(state.replyTimer);
         state.replyTimer = null;
         state.streamEpoch = randomUUID();
