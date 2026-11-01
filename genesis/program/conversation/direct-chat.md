@@ -1243,6 +1243,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantPlanUpgrade.js`
 - `src/components/studio/vibe64-session/Vibe64WorkPlan.vue`
 - `packages/vibe64-terminals/src/server/terminalActions.js`
+- `packages/vibe64-terminals/src/server/mainGoalControl.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`
 - `tests/server/assistantPlanLifecycle.test.js`
 - `tests/client/vibe64WorkPlan.vitest.js`

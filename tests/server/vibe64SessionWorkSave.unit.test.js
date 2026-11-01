@@ -2706,7 +2706,8 @@ for (const mode of ["local_source", "managed_git"]) {
     const created = await createSessionSource({ project, runCommand: commandRunner,
       runtime: { projectContextRoot: root, projectSessionSourceRoot: path.join(root, "sessions") },
       session: { sessionId: "created" },
-      store: { async writeMetadataValue(_id, name, value) { metadata[name] = value; } } });
+      store: { async mutateSession(_id, write) { return write(); },
+        async writeMetadataValue(_id, name, value) { metadata[name] = value; } } });
     const session = { metadata, sessionId: "created", sourcePath: created.sourcePath };
     const branches = () => git(created.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/heads"]);
     assert.equal(metadata.source_default_branch_local, "removed");

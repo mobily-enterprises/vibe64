@@ -266,7 +266,8 @@ test("session history reads its recorded commit in a created session without a l
   const created = await createSessionSource({ project: localProject(root), runCommand: commandRunner,
     runtime: { projectContextRoot: root, projectSessionSourceRoot: sessionSourceRoot },
     session: { sessionId: "history" },
-    store: { async writeMetadataValue(_id, name, value) { metadata[name] = value; } } });
+    store: { async mutateSession(_id, write) { return write(); },
+      async writeMetadataValue(_id, name, value) { metadata[name] = value; } } });
   assert.equal(metadata.source_default_branch_local, "removed");
   assert.equal(await git(created.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/heads"]), "refs/heads/vibe64/history");
   // The project moves on; the session's history stays pinned to its recorded commit.

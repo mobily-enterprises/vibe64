@@ -97,17 +97,8 @@ test("prompt-hint actions delegate generation and cancellation to their exact se
   await actionById(actions, ACTION_CANCEL_SESSION_PROMPT_HINTS).execute(input, { requestMeta: { request: { vibe64User } } });
 
   assert.deepEqual(calls, [
-    ["generate", "session-1", {
-      draft: input.draft,
-      operationId: "hint:tab-1:1",
-      originId: "tab:1",
-      vibe64User
-    }],
-    ["cancel", "session-1", {
-      operationId: "hint:tab-1:1",
-      originId: "tab:1",
-      vibe64User
-    }]
+    ["generate", "session-1", input],
+    ["cancel", "session-1", input]
   ]);
 }));
 
@@ -284,7 +275,7 @@ test("prompt-hint cancellation without a draft passes route validation and reach
         assert.equal(reply.statusCode, 200);
         assert.equal(reply.payload.status, "cancelled");
         assert.deepEqual(calls.at(-1), ["session-1", {
-          operationId: body.operationId, originId: body.originId || "", vibe64User
+          operationId: body.operationId, originId: body.originId || "", sessionId: "session-1", vibe64User
         }]);
       }
       assert.equal(calls.length, 2);

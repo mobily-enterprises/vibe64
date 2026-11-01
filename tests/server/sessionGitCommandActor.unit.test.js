@@ -72,8 +72,8 @@ test("session Git actor changes only when a new turn explicitly replaces it", as
 
 test("new assistant turns explicitly replace the session Git actor", async () => {
   const [codexSource, openCodeSource] = await Promise.all([
-    readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationBinding.js"), "utf8"),
-    readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationBinding.js"), "utf8")
+    readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationMessages.js"), "utf8"),
+    readFile(path.resolve("packages/vibe64-terminals/src/server/mainConversationMessages.js"), "utf8")
   ]);
   assert.match(
     codexSource,

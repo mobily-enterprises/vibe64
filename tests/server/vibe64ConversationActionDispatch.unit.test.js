@@ -12,6 +12,7 @@ import { currentProjectRequestContext } from "@local/vibe64-core/server/projectR
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, ACTION_SEND_AGENT_MESSAGE, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { ACTION_READ_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
+import { requestMainGoalControl } from "../../packages/vibe64-terminals/src/server/mainGoalControl.js";
 import { registerRoutes as registerSessions } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { registerRoutes as registerTerminals } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
@@ -29,7 +30,7 @@ test("standalone Main and temporary conversations use the selected local project
     const actions = createActionCatalogue();
     const sends = [];
     actions.register({ contributorId: "local-goals", domain: "terminals", actions:
-      createTerminalActions({ terminals: {} }).filter(({ id }) => id === "vibe64.terminals.main-goal.pause")
+      createTerminalActions({ terminals: { requestMainGoalControl } }).filter(({ id }) => id === "vibe64.terminals.main-goal.pause")
         .map(definition => ({ surfaces: ["app"], ...definition })) });
     actions.register({ contributorId: "local-sessions", domain: "sessions", actions:
       createSessionActions({ sessions: {

@@ -11,6 +11,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL, createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
+import { createTerminalControls } from "../../packages/vibe64-terminals/src/server/terminalControls.js";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
@@ -74,6 +75,12 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       calls.push({ method, args, project: context.slug, actor: context.vibe64User });
       return { ok: true, id: "terminal-1", output: "ready", status: "running", lastOutputAt: new Date(0).toISOString() };
     }]));
+    Object.assign(terminals, createTerminalControls({
+      readAgentScreen: (...args) => terminals.readAgentTerminal(...args),
+      writeAgentInput: (...args) => terminals.writeAgentTerminal(...args),
+      readGlobalScreen: (...args) => terminals.readGlobalCodexTerminal(...args),
+      writeGlobalInput: (...args) => terminals.writeGlobalCodexTerminal(...args)
+    }));
     const actions = catalogue(terminals, projectContext, { resolveUser: async () => owner,
       async authorizeProject() { if (!allowed) throw Object.assign(new Error("Access revoked"), { statusCode: 403 }); }
     });
@@ -131,7 +138,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       }
       if (operation === "agent-terminal.start") {
         assert.deepEqual(fromHttp.args[1].size, { cols: 80, rows: 24 });
-        assert.equal(fromHttp.args[2].vibe64User, owner);
+        assert.equal(fromHttp.args[1].vibe64User, owner);
       }
       assert.equal(actions.getDefinition(actionId).input.mode, "create");
       assert.equal(actions.getDefinition(actionId).extensions.assistant.exclude === true,
@@ -280,7 +287,7 @@ test("canonical Main goals reuse internal terminal actions with fresh authority 
       id: mainConversationId({ projectSlug: slug, sessionId: "session-1" }), context: { channel: "internal", surface: "app" }
     });
     assert.deepEqual(await facade.readGoal(), goal);
-    assert.deepEqual(calls[0], { method: "read", args: ["session-1", { vibe64User: actor }, { canonical: true }], project: slug });
+    assert.deepEqual(calls[0], { method: "read", args: ["session-1", { sessionId: "session-1", vibe64User: actor }, { canonical: true }], project: slug });
     const input = { action: "set", expectedSegmentId: null, expectedGoalId: null,
       messageId: "goal-one", objective: "Finish the requested work", tokenBudget: 1000 };
     assert.deepEqual(await facade.updateGoal(input), rejected, "original pre-admission failures are returned without manufacturing a goal or receipt");

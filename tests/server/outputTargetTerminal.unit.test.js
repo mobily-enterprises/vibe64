@@ -105,7 +105,7 @@ test("explicit Preview Stop persists and refuses incidental startup before prepa
   };
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { prepared += 1; throw new Error("Stop must not prepare a workspace."); },
-    projectService: { async createRuntime() { return {
+    projectService: { currentProjectSlug: () => "", async createRuntime() { return {
       store,
       async getSession() { return { sessionId, metadata }; }
     }; } },
@@ -132,7 +132,7 @@ test("Preview Stop drains before queued recovery and isolates other session clea
   const cleaned = [];
   const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { assert.fail("Queued automatic recovery must not prepare after Stop."); },
-    projectService: { async createRuntime() { return {
+    projectService: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {
         async mutateSession(_id, operation) { return operation(); },
         async writeMetadataValue(id, key, value) { metadata.get(id)[key] = value; }
@@ -170,7 +170,7 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
     const metadata = { output_target_preview_stopped: value };
     const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
       ensureWorkspacePrepared() { prepared += 1; },
-      projectService: { async createRuntime() { return {
+      projectService: { currentProjectSlug: () => "", async createRuntime() { return {
         store: { async mutateSession() { writes += 1; } },
         async getSession() { return { metadata }; }
       }; } }
@@ -191,7 +191,7 @@ test("an explicit Preview start reruns a failed setup; an automatic one does not
       requests.push(context.rerunFailedSetup);
       return { ok: false, error: "Workspace preparation failed." };
     },
-    projectService: { async createRuntime() { return {
+    projectService: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {},
       async getSession(sessionId) { return { sessionId, metadata: {} }; }
     }; } }
@@ -213,7 +213,7 @@ test("failed Preview browser cleanup retains Stop across controllers and retries
   let attempts = 0;
   const options = { ensureProjectServices: async () => {}, publishSessionChanged: async () => null, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared() { assert.fail("Stopped Preview must not prepare a workspace."); },
-    projectService: { async createRuntime() { return {
+    projectService: { currentProjectSlug: () => "", async createRuntime() { return {
       store: {
         async mutateSession(_id, operation) { return operation(); },
         async writeMetadataValue(_id, key, value) { metadata[key] = value; }
@@ -530,6 +530,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       async createRuntime() {
         return runtime;
       },
+      currentProjectSlug: () => "",
       currentServiceDataRoot() {
         return path.join(root, "service");
       },

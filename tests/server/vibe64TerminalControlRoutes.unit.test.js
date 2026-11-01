@@ -17,6 +17,7 @@ import {
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
+import { createTerminalControls } from "../../packages/vibe64-terminals/src/server/terminalControls.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 
@@ -126,6 +127,10 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
           return this.readAgentTerminal(_sessionId, terminalSessionId);
         }
       };
+      Object.assign(service, createTerminalControls({
+        readAgentScreen: (...args) => service.readAgentTerminal(...args),
+        writeAgentInput: (...args) => service.writeAgentTerminal(...args)
+      }));
       const app = terminalControlRouteApp(service);
       registerRoutes(app.http, {
         fastify: app.fastify,

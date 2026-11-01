@@ -94,6 +94,7 @@ function sourceContext(root, sessionId = "session-1") {
       sessionId
     },
     store: {
+      async mutateSession(_id, write) { return write(); },
       async writeMetadataValue(id, name, value) {
         assert.equal(id, sessionId);
         metadata[name] = value;

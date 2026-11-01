@@ -245,7 +245,8 @@ const workPlanRestoreInputValidator = validator({
   archiveId: { ...requiredText, minLength: 64, maxLength: 64 }
 });
 const outputStatusInputValidator = validator({
-  sessionId: sessionIdField, editorOrigin: optionalText, publicHost: optionalText, publicProtocol: optionalText,
+  sessionId: sessionIdField, editorOrigin: optionalText,
+  publicHost: { ...optionalText, defaultTo: "" }, publicProtocol: { ...optionalText, defaultTo: "" },
   outputTargetId: { ...optionalText, minLength: 1 },
   targetOffset: { type: "integer", min: 0, required: false },
   runOffset: { type: "integer", min: 0, required: false }
