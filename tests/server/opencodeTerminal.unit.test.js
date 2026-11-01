@@ -2793,23 +2793,23 @@ async function boundMainOpenCodeFixture(t, options = {}) {
     }
   });
   const suppliedRuntime = options.runtimeFactory ? await options.runtimeFactory({ harness }) : null;
-  const store = suppliedRuntime ? suppliedRuntime.store : createVibe64SessionStore({ projectContextRoot: harness.root,
+  const appStore = suppliedRuntime ? suppliedRuntime.store : createVibe64SessionStore({ projectContextRoot: harness.root,
     projectRuntimeRoot: path.join(harness.root, "runtime") });
   if (suppliedRuntime) {
     harness.runtime = suppliedRuntime;
     harness.controllerOptions.projectService.createRuntime = async () => suppliedRuntime;
   } else {
-    await store.createSession({ sessionId: "session-1", runtimeKind: "genesis" });
-    for (const [key, value] of Object.entries(harness.session.metadata)) await store.writeMetadataValue("session-1", key, value);
+    await appStore.createSession({ sessionId: "session-1", runtimeKind: "genesis" });
+    for (const [key, value] of Object.entries(harness.session.metadata)) await appStore.writeMetadataValue("session-1", key, value);
   }
   // The existing fake native client selects its response by this saved identity.
   // Mirror fixture metadata only; every durable write uses the actual app store.
-  const writeMetadata = store.writeMetadataValue;
-  store.writeMetadataValue = async (id, key, value) => {
-    const result = await writeMetadata(id, key, value);
+  // This copy is the test's own, so a test may wrap its reads to observe them.
+  const store = { ...appStore, async writeMetadataValue(id, key, value) {
+    const result = await appStore.writeMetadataValue(id, key, value);
     harness.session.metadata[key] = value;
     return result;
-  };
+  } };
   harness.runtime.store = store;
   if (!suppliedRuntime) harness.runtime.getSession = id => store.readSession(id);
   const context = { runtime: harness.runtime, sessionId: suppliedRuntime ? harness.session.sessionId : "session-1", providerId: "opencode",

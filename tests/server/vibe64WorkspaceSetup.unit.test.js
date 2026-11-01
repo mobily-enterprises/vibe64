@@ -6,6 +6,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
+  createVibe64SessionStore,
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
 import {
@@ -35,17 +36,20 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-async function workspaceSession(targetRoot, sessionId = "workspace-session") {
+// storeDoubles(store) names the store operations a test replaces; the rest stay real.
+async function workspaceSession(targetRoot, sessionId = "workspace-session", { storeDoubles = () => ({}) } = {}) {
   const sourceRoot = sourcePath(targetRoot, sessionId);
   await mkdir(path.join(sourceRoot, "web"), {
     recursive: true
   });
+  const store = createVibe64SessionStore({ projectContextRoot: targetRoot, projectRuntimeRoot: projectRuntimeRoot(targetRoot) });
   const runtime = new Vibe64SessionRuntime({
     promptEnvironment: {
       SETUP_ENV_PROBE: "from-prompt-environment"
     },
     projectContextRoot: targetRoot,
-    projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+    projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+    store: Object.freeze({ ...store, ...storeDoubles(store) })
   });
   await runtime.store.createSession({
     metadata: sourceMetadata(targetRoot, sessionId),
@@ -190,19 +194,19 @@ test("workspace preparation executes declared argv in order through the managed 
 
 test("a requested connected preparation returns at once and records each progress step", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const { runtime, session } = await workspaceSession(targetRoot);
+    const labels = [];
+    const { runtime, session } = await workspaceSession(targetRoot, undefined, { storeDoubles: (store) => ({
+      async writeMetadataValue(id, name, value) {
+        if (name === "workspace_setup") labels.push(JSON.parse(value).currentLabel);
+        return store.writeMetadataValue(id, name, value);
+      }
+    }) });
     const stored = async () => workspaceSetupStateFromMetadata(
       (await runtime.store.readSession(session.sessionId)).metadata
     );
     let release;
     const gate = new Promise((resolve) => { release = resolve; });
     let preparations = 0;
-    const labels = [];
-    const write = runtime.store.writeMetadataValue.bind(runtime.store);
-    runtime.store.writeMetadataValue = async (id, name, value) => {
-      if (name === "workspace_setup") labels.push(JSON.parse(value).currentLabel);
-      return write(id, name, value);
-    };
     const runner = createWorkspaceSetupRunner({
       async startWorkflow() { return { ok: true, workflow: { id: "6f0a9a54-2a43-4d7b-9a3e-6c1b4c0b8f11" } }; },
       async finishWorkflow() {},

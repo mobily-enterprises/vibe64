@@ -31,6 +31,8 @@ async function harness(t) {
     get store() { return store; },
     calls, logs, receipts, failure: "", inspectUnknown: false, provisional: new Set(),
     nativeThread: "", closeFailure: false,
+    // Named store operations a test replaces; a restart starts with the real ones.
+    storeDoubles: {},
     async replace(input) { return replaceNativeConversation(sessionId, input, await api.context(), agent); },
     async bindNative() {
       for (const [name, value] of Object.entries({ codex_conversation_id: "codex-original-thread",
@@ -39,12 +41,12 @@ async function harness(t) {
         await store.writeMetadataValue(sessionId, name, value);
       }
     },
-    async context() { return { runtime: { store: api.provisional.size ? { ...store,
+    async context() { return { runtime: { store: { ...store, ...api.storeDoubles, ...(api.provisional.size ? {
       readConversationLog: async id => (await store.readConversationLog(id)).map(turn => !api.provisional.has(turn.user?.messageId) ? turn : {
         ...turn, user: { ...turn.user, receipt: false },
         messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message)
       })
-    } : store }, session: await store.readSession(sessionId) }; },
+    } : {}) } }, session: await store.readSession(sessionId) }; },
     async select(engineId, providerId) {
       const context = await api.context();
       const old = sessionConversationKey(context.session);
@@ -55,7 +57,7 @@ async function harness(t) {
     async send(message, messageId = `message-${++serial}`) {
       return sendWithAssistantChangeover(sessionId, { message, messageId }, await api.context(), agent, (entry) => logs.push(entry));
     },
-    async restart() { store = makeStore(); },
+    async restart() { store = makeStore(); api.storeDoubles = {}; },
     async history() { return store.readConversationLog(sessionId); },
     async editAnswer(turnId, text) { await store.upsertConversationAssistantMessage(sessionId, { turnId, text }); }
   };
@@ -424,10 +426,10 @@ test("partial binding writes resume without starting a successor or losing prede
   await h.bindNative();
   const remove = h.store.deleteMetadataValue;
   let writes = 0;
-  h.store.deleteMetadataValue = async (...args) => {
+  h.storeDoubles = { deleteMetadataValue: async (...args) => {
     if (++writes === 2) throw new Error("simulated process loss");
     return remove(...args);
-  };
+  } };
   await assert.rejects(h.replace(replacementRequest), /simulated process loss/u);
   await h.restart();
   await assert.rejects(h.send("Blocked"), { code: "vibe64_conversation_replacement_pending" });

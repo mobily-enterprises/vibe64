@@ -1952,11 +1952,12 @@ async function withAgentMessageController(operation, {
     projectRuntimeRoot,
     session
   } = await managedSessionFixture(temporaryRoot);
-  let store = createVibe64SessionStore({
+  // The harness's own copy of the frozen store: tests replace single operations on it.
+  let store = { ...createVibe64SessionStore({
     projectContextRoot,
     projectRuntimeRoot,
     projectSessionSourceRoot: path.join(temporaryRoot, "managed", "sessions")
-  });
+  }) };
   await store.createSession({
     metadata: session.metadata,
     runtimeKind: "genesis",
@@ -8266,17 +8267,12 @@ test("renewal cleanup cannot drain another project's notification queue", {
     assert.ok(subscribers.size > 0);
 
     const notificationHold = createDeterministicHold();
-    const betaNotificationStore = new Proxy(beta.store, {
-      get(target, property) {
-        if (property === "mutateSession") {
-          return async (...args) => {
-            notificationHold.enter();
-            await notificationHold.wait;
-            return target.mutateSession(...args);
-          };
-        }
-        const value = Reflect.get(target, property);
-        return typeof value === "function" ? value.bind(target) : value;
+    const betaNotificationStore = Object.freeze({
+      ...beta.store,
+      async mutateSession(...args) {
+        notificationHold.enter();
+        await notificationHold.wait;
+        return beta.store.mutateSession(...args);
       }
     });
     projectService.createSessionStore = () => {
@@ -8393,17 +8389,12 @@ test("renewal cleanup cannot cancel another project's finalizing recovery timer"
       assert.equal(finalizingRun?.state, VIBE64_AGENT_RUN_STATE.FINALIZING);
 
       const notificationHold = createDeterministicHold();
-      const betaNotificationStore = new Proxy(beta.store, {
-        get(target, property) {
-          if (property === "mutateSession") {
-            return async (...args) => {
-              notificationHold.enter();
-              await notificationHold.wait;
-              return target.mutateSession(...args);
-            };
-          }
-          const value = Reflect.get(target, property);
-          return typeof value === "function" ? value.bind(target) : value;
+      const betaNotificationStore = Object.freeze({
+        ...beta.store,
+        async mutateSession(...args) {
+          notificationHold.enter();
+          await notificationHold.wait;
+          return beta.store.mutateSession(...args);
         }
       });
       projectService.createSessionStore = () => {
@@ -12963,21 +12954,20 @@ test("Codex real provider cold resume composes retained Public hook preparation 
   await withConversationController(async ({ controller, projectService, projectContextRoot,
     projectRuntimeRoot, session, temporaryRoot, captures }) => {
     workdir = session.metadata.source_path;
-    const store = createVibe64SessionStore({
+    const appStore = createVibe64SessionStore({
       projectContextRoot,
       projectRuntimeRoot,
       projectSessionSourceRoot: path.join(temporaryRoot, "managed", "sessions")
     });
-    await store.createSession({
+    await appStore.createSession({
       metadata: session.metadata,
       runtimeKind: "genesis",
       sessionId: session.sessionId
     });
-    const readAgentRun = store.readAgentRun.bind(store);
-    store.readAgentRun = async (...args) => {
+    const store = Object.freeze({ ...appStore, async readAgentRun(...args) {
       protocol.push({ method: "before-resume", args });
-      return readAgentRun(...args);
-    };
+      return appStore.readAgentRun(...args);
+    } });
     projectService.createSessionStore = () => store;
 
     const { native } = await controller.prepareConversationHost("session-1", {}, "create");

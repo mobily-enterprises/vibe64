@@ -110,7 +110,7 @@ function createVibe64SessionStore(options = {}) {
     conversationStore
   });
 
-  return {
+  return Object.freeze({
     assertSessionCreationAbsent: storePaths.assertSessionCreationAbsent,
     createSession: creation.createSession,
     createRenewalPendingSession: creation.createRenewalPendingSession,
@@ -124,7 +124,7 @@ function createVibe64SessionStore(options = {}) {
     prepareConversationMessageDataUpgrade: upgrades.prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade: upgrades.prepareLearningSessionBindingUpgrade,
     conversationMessageIdExists: conversationStore.conversationMessageIdExists,
-    ...(conversationStore.findSubmittedConversationTurn ? { findSubmittedConversationTurn: conversationStore.findSubmittedConversationTurn } : {}),
+    findSubmittedConversationTurn: conversationStore.findSubmittedConversationTurn,
     readConversationLogTurn: conversationStore.readConversationLogTurn,
     conversationStorage: conversationStore.conversationStorage,
     deleteMetadataValue: sessionRecords.deleteMetadataValue,
@@ -215,7 +215,7 @@ function createVibe64SessionStore(options = {}) {
     pruneArchivedSessionArtifacts: archiveAccess.pruneArchivedSessionArtifacts,
     writeSessionLabel: sessionRecords.writeSessionLabel,
     writeStatus: sessionRecords.writeStatus
-  };
+  });
 }
 
 export {

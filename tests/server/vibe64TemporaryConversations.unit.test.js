@@ -149,7 +149,8 @@ async function conversationFixture(root, engineId = "codex") {
       { id: "disabled-model", status: "unavailable", variants: [] }
     ] }]
   };
-  const store = createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root) });
+  // The fixture's own copy of the frozen store: tests replace single operations on it.
+  const store = { ...createVibe64SessionStore({ projectContextRoot: root, projectRuntimeRoot: projectRuntimeRoot(root) }) };
   await store.createSession({ runtimeKind: "genesis", sessionId: "one", metadata: {
     ...sourceMetadata(root, "one"), assistant_selection: serializeVibe64AssistantSelection(selection)
   } });
