@@ -15,17 +15,16 @@ function sourceError(message = "", code = "vibe64_session_source_failed") {
   return vibe64Error(message || "Vibe64 could not create the session source.", code);
 }
 
-async function runSourceCommand(command = "", args = [], options = {}) {
-  const {
-    actor = "daemon",
-    allowedRoots = [],
-    credentialHome = null,
-    cwd = "",
-    gitAuthToken = "",
-    gitTransport = "none",
-    runCommand = runVibe64Command,
-    userKey = ""
-  } = options;
+async function runSourceCommand(command = "", args = [], {
+  actor = "daemon",
+  allowedRoots = [],
+  credentialHome = null,
+  cwd = "",
+  gitAuthToken = "",
+  gitTransport = "none",
+  runCommand = runVibe64Command,
+  userKey = ""
+} = {}) {
   const githubTransport = gitTransport === "github-https" || gitTransport === "github-token";
   const result = await runCommand({
     actor,
@@ -63,10 +62,9 @@ function runGit(cwd = "", args = [], allowedRoots = [], options = {}) {
   });
 }
 
-async function githubSourceCommandOptions(vibe64User = null, env = process.env, options = {}) {
-  const {
-    runCommand = runVibe64Command
-  } = options;
+async function githubSourceCommandOptions(vibe64User = null, env = process.env, {
+  runCommand = runVibe64Command
+} = {}) {
   const accountMode = normalizeGithubAccountMode(
     env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
     GITHUB_ACCOUNT_MODE_LOCAL

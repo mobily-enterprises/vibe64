@@ -157,10 +157,9 @@ async function runSourceEditorOperation(operation) {
   }
 }
 
-async function streamSourceEditorOperation(operation, options = {}) {
-  const {
-    emit = null
-  } = options;
+async function streamSourceEditorOperation(operation, {
+  emit = null
+} = {}) {
   try {
     await operation();
   } catch (error) {
@@ -352,12 +351,11 @@ async function resolveSourceEditorPath(context = {}, input = {}) {
   };
 }
 
-async function runRipgrepLines(args = [], options = {}) {
-  const {
-    cwd = "",
-    onLine = () => true,
-    timeoutMs = SOURCE_EDITOR_SEARCH_TIMEOUT_MS
-  } = options;
+async function runRipgrepLines(args = [], {
+  cwd = "",
+  onLine = () => true,
+  timeoutMs = SOURCE_EDITOR_SEARCH_TIMEOUT_MS
+} = {}) {
   const result = await runVibe64Command({
     actor: "app",
     allowedRoots: [

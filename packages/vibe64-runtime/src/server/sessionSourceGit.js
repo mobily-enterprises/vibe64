@@ -130,10 +130,9 @@ async function inspectSessionSourceMergeState(sourceRoot = "") {
   return merge;
 }
 
-async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", options = {}) {
-  const {
-    runExclusive = null
-  } = options;
+async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", {
+  runExclusive = null
+} = {}) {
   const normalizedSourceRoot = toText(sourceRoot) ? path.resolve(sourceRoot) : "";
   if (!normalizedSourceRoot) {
     throw vibe64Error(

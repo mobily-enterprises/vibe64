@@ -128,12 +128,11 @@ function repositoryReadContext(project = {}, session = null) {
   throw repositoryError("This repository mode has no history reader.", "vibe64_repository_history_mode_invalid");
 }
 
-async function git(context, args, options = {}) {
-  const {
-    input,
-    required = true,
-    runCommand = runVibe64Command
-  } = options;
+async function git(context, args, {
+  input,
+  required = true,
+  runCommand = runVibe64Command
+} = {}) {
   const roots = [
     context.cwd,
     ...(context.repositoryPath ? [context.repositoryPath, path.dirname(context.repositoryPath)] : [])

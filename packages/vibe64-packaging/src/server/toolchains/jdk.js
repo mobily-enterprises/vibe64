@@ -39,8 +39,7 @@ function hostPlatform(platform = process.platform, arch = process.arch) {
 /**
  * `java -version` of one Java home: { ok, javaHome, version, major, message }.
  */
-async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, options = {}) {
-  const { runCommand = spawnCommand } = options;
+async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, { runCommand = spawnCommand } = {}) {
   if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) return { ok: false, javaHome: null, message: "No Java home given." };
   const java = path.join(javaHome, "bin", "java");
   if (!await exists(java)) return { ok: false, javaHome, message: `${javaHome} has no bin/java.` };
@@ -64,8 +63,7 @@ async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, opt
 /**
  * The Java home of `java` on PATH, read from the JVM itself.
  */
-async function javaHomeOnPath({ baseEnvironment = process.env } = {}, options = {}) {
-  const { runCommand = spawnCommand } = options;
+async function javaHomeOnPath({ baseEnvironment = process.env } = {}, { runCommand = spawnCommand } = {}) {
   const result = await runCommand({
     command: "java",
     args: ["-XshowSettings:properties", "-version"],

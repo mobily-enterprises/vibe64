@@ -57,8 +57,7 @@ export async function replaceNativeConversation(sessionId, input, context, agent
   });
 }
 
-function changeoverFor(store, sessionId, options = {}) {
-  const { agent, context, log, maximumInitialMessages } = options;
+function changeoverFor(store, sessionId, { agent, context, log, maximumInitialMessages } = {}) {
   const binding = createMainConversationBinding(store, sessionId, context);
   return createConversationChangeover({
     state: binding.state,

@@ -11,14 +11,13 @@ export function erdRouteSnapshot(routes = []) {
   }));
 }
 
-export function createErdRelationshipRoutes(nodes = [], relationships = [], options = {}) {
-  const {
-    previousRoutes = [],
-    dragging = false,
-    fixedSides = false,
-    calculatePaths = true,
-    layoutPaths = new Map()
-  } = options;
+export function createErdRelationshipRoutes(nodes = [], relationships = [], {
+  previousRoutes = [],
+  dragging = false,
+  fixedSides = false,
+  calculatePaths = true,
+  layoutPaths = new Map()
+} = {}) {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const portsByNode = new Map(nodes.map((node) => [node.id, []]));
   const previous = new Map(previousRoutes.map((route) => [route.id, {

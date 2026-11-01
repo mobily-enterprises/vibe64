@@ -277,10 +277,9 @@ function createConnectedContributions({
     });
   }
 
-  async function prepareConnectedSourcesInsideAgentWrite({ runtime, session }, input = {}, requestContext = {}, options = {}) {
-    const {
-      onProgress = null
-    } = options;
+  async function prepareConnectedSourcesInsideAgentWrite({ runtime, session }, input = {}, requestContext = {}, {
+    onProgress = null
+  } = {}) {
     const sessionId = session.sessionId;
     const prepared = [];
     const resolvedSources = [];

@@ -8,13 +8,12 @@ function defaultEventStreamErrorPayload(error) {
   };
 }
 
-async function sendVibe64EventStream(reply, run, options = {}) {
-  const {
-    errorEvent = "",
-    errorPayload = defaultEventStreamErrorPayload,
-    heartbeatMs = 15000,
-    retryMs = 3000
-  } = options;
+async function sendVibe64EventStream(reply, run, {
+  errorEvent = "",
+  errorPayload = defaultEventStreamErrorPayload,
+  heartbeatMs = 15000,
+  retryMs = 3000
+} = {}) {
   if (!reply?.raw) {
     throw new Error("Vibe64 event streams require a Fastify reply with raw stream access.");
   }

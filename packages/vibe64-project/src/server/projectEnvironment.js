@@ -64,14 +64,13 @@ function environmentRecord(value = {}) {
     .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/u.test(key)));
 }
 
-function environmentRecords(environment = {}, options = {}) {
-  const {
-    editable = false,
-    owner = RUNTIME_CONFIG_OWNERS.SYSTEM,
-    secretKeys = new Set(),
-    source = "system",
-    sources = {}
-  } = options;
+function environmentRecords(environment = {}, {
+  editable = false,
+  owner = RUNTIME_CONFIG_OWNERS.SYSTEM,
+  secretKeys = new Set(),
+  source = "system",
+  sources = {}
+} = {}) {
   return Object.entries(environmentRecord(environment)).map(([key, value]) => ({
     editable,
     key,

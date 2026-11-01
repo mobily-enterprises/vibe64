@@ -18,16 +18,15 @@ function withoutCredentials(value = "") {
  * command that fails returns null; any other failure throws `code` with Git's
  * own message. `env` adds Git variables such as GIT_INDEX_FILE.
  */
-async function releaseGit(root, args, options = {}) {
-  const {
-    code = "VIBE64_PUBLISH_GIT_FAILED",
-    optional = false,
-    stdin,
-    env,
-    timeout = 60_000,
-    maxBuffer = 8 * 1024 * 1024,
-    runCommand = runVibe64Command
-  } = options;
+async function releaseGit(root, args, {
+  code = "VIBE64_PUBLISH_GIT_FAILED",
+  optional = false,
+  stdin,
+  env,
+  timeout = 60_000,
+  maxBuffer = 8 * 1024 * 1024,
+  runCommand = runVibe64Command
+} = {}) {
   const result = await runCommand({
     actor: "daemon",
     allowedRoots: [root],

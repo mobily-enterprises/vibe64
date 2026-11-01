@@ -52,8 +52,7 @@ function projectCommandRequest({ command, args = [], cwd, env = {}, signal = nul
 /**
  * Stage 1's runner: { command, args, cwd, env, signal } -> { ok, exitCode, stdout, stderr, error }.
  */
-async function runStageCommand({ command, args, cwd, env, signal, projectSlug } = {}, options = {}) {
-  const { runCommand = runVibe64Command } = options;
+async function runStageCommand({ command, args, cwd, env, signal, projectSlug } = {}, { runCommand = runVibe64Command } = {}) {
   const result = await runCommand(projectCommandRequest({ command, args, cwd, env, signal, projectSlug, operationId: "publish-build" }));
   return {
     ok: result?.ok === true,

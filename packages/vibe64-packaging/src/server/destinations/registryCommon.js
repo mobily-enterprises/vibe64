@@ -106,8 +106,7 @@ function redact(text, secrets = []) {
 /**
  * Runs one tool; failures carry its redacted output, never a credential.
  */
-async function runTool({ argv, cwd, env, stdin = null, secrets = [], failureCode, failureMessage }, options = {}) {
-  const { runCommand = spawnCommand } = options;
+async function runTool({ argv, cwd, env, stdin = null, secrets = [], failureCode, failureMessage }, { runCommand = spawnCommand } = {}) {
   const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env, stdin });
   const output = redact(`${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`, secrets).trim();
   if (result?.ok !== true) {

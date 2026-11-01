@@ -54,12 +54,11 @@ function psEnv() {
  * Reads a process's start identity: { status: "exact" | "absent" | "ambiguous",
  * groupId, state, startTimeTicks }. Linux reads /proc; macOS asks ps.
  */
-async function readProcessStart(pid, options = {}) {
-  const {
-    execFileFn = execFile,
-    platform = process.platform,
-    readFileFn = readFile
-  } = options;
+async function readProcessStart(pid, {
+  execFileFn = execFile,
+  platform = process.platform,
+  readFileFn = readFile
+} = {}) {
   const normalizedPid = Number(pid);
   const ambiguous = { status: "ambiguous", groupId: 0, state: "", startTimeTicks: "" };
   if (!Number.isSafeInteger(normalizedPid) || normalizedPid <= 0) {
@@ -94,13 +93,12 @@ async function readProcessStart(pid, options = {}) {
 /**
  * True when any non-zombie process still belongs to the process group.
  */
-async function processGroupHasLiveMember(groupId, options = {}) {
-  const {
-    execFileFn = execFile,
-    platform = process.platform,
-    readFileFn = readFile,
-    readdirFn = readdir
-  } = options;
+async function processGroupHasLiveMember(groupId, {
+  execFileFn = execFile,
+  platform = process.platform,
+  readFileFn = readFile,
+  readdirFn = readdir
+} = {}) {
   const normalizedGroupId = Number(groupId);
   if (!Number.isSafeInteger(normalizedGroupId) || normalizedGroupId <= 1) {
     return false;

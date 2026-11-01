@@ -206,8 +206,7 @@ function createSessionRepositoryUpdates({
      * last failure published. A project nobody watches and no agent turn uses
      * is not read at all.
      */
-    async probeRepositoryUpdates(slug, options = {}) {
-      const { memory = new Map(), watched = false } = options;
+    async probeRepositoryUpdates(slug, { memory = new Map(), watched = false } = {}) {
       return project.runInProjectContext(slug, async () => {
         const runtime = await project.createRuntime({ inspectSource: false });
         const open = await runtime.listSessions({ statusGroup: "open" });

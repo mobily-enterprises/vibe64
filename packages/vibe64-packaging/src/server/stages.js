@@ -176,10 +176,9 @@ async function runBuildStage({
   cacheDirectory = "",
   projectSlug = "",
   signal
-} = {}, options = {}) {
-  const {
-    runCommand = runStageCommand
-  } = options;
+} = {}, {
+  runCommand = runStageCommand
+} = {}) {
   // Resumable: a completed build for this plan and package is reused after verification.
   const stored = await storedArtifacts({ resultStore, planHash, packageId });
   if (stored) return stored;

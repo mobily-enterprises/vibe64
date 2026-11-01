@@ -8,8 +8,7 @@ import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
-async function runTrainingCli(args, options = {}) {
-  const { write = text => console.log(text) } = options;
+async function runTrainingCli(args, { write = text => console.log(text) } = {}) {
   if (args[0] === "install-topic") {
     const [, directory, systemRoot] = args;
     if (args.length !== 3 || !directory || !systemRoot) {

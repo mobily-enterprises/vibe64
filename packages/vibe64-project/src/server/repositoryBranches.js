@@ -4,12 +4,11 @@ import { validRepositoryBranch } from "@local/vibe64-core/server/projectReposito
 import { githubApi, requireGithubRepository } from "./githubApi.js";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
-async function repositoryBranches(project, input = {}, options = {}) {
-  const {
-    runCommand = runVibe64Command,
-    env = process.env,
-    runExclusive = runProjectSourceExclusive
-  } = options;
+async function repositoryBranches(project, input = {}, {
+  runCommand = runVibe64Command,
+  env = process.env,
+  runExclusive = runProjectSourceExclusive
+} = {}) {
   const mode = project.repositoryMode || project.repository?.mode;
   if (!["github", "managed_git"].includes(mode)) {
     throw new Error("Use the local Git controls to switch the opened folder before creating a session.");

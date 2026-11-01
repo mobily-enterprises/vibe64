@@ -96,13 +96,12 @@ function currentOsUser({
   };
 }
 
-async function resolveOsUser(username = "", options = {}) {
-  const {
-    execFileFn = execFile,
-    platform = process.platform,
-    readFileFn = readFile,
-    userInfo = os.userInfo
-  } = options;
+async function resolveOsUser(username = "", {
+  execFileFn = execFile,
+  platform = process.platform,
+  readFileFn = readFile,
+  userInfo = os.userInfo
+} = {}) {
   const safeUsername = assertSafeOsUsername(username);
   if (platform === "linux" && !/^\d+$/u.test(safeUsername)) {
     // A successful first-source files lookup is authoritative under NSS's
@@ -145,10 +144,9 @@ async function listOsUsers({
   return users.sort((left, right) => left.username.localeCompare(right.username));
 }
 
-function osUserEligibility(user = {}, options = {}) {
-  const {
-    extraServiceNames = []
-  } = options;
+function osUserEligibility(user = {}, {
+  extraServiceNames = []
+} = {}) {
   const reasons = [];
   const username = normalizeOsUsername(user.username);
   const shell = String(user.shell || "").trim();

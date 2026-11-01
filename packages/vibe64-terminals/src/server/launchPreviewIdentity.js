@@ -6,11 +6,10 @@ import { previewTokenCookie } from "./launchPreviewHeaders.js";
 const PREVIEW_IDENTITY_REQUEST_BODY_LIMIT_BYTES = 64 * 1024;
 const consumedPreviewIdentityGrantNonces = new Map();
 
-async function readStreamBuffer(stream, options = {}) {
-  const {
-    maxBytes = 0,
-    tooLargeError = () => new Error("Stream is too large.")
-  } = options;
+async function readStreamBuffer(stream, {
+  maxBytes = 0,
+  tooLargeError = () => new Error("Stream is too large.")
+} = {}) {
   const chunks = [];
   let totalBytes = 0;
   for await (const chunk of stream) {
@@ -151,14 +150,13 @@ function createPreviewIdentityGrantConsumer(previewAuth = {}) {
   };
 }
 
-async function proxyPreviewIdentityExchange(request, response, options = {}) {
-  const {
-    consumeIdentityGrant,
-    executePreviewIdentityCommand = null,
-    previewAuth = null,
-    proxyOrigin = "",
-    token = ""
-  } = options;
+async function proxyPreviewIdentityExchange(request, response, {
+  consumeIdentityGrant,
+  executePreviewIdentityCommand = null,
+  previewAuth = null,
+  proxyOrigin = "",
+  token = ""
+} = {}) {
   const setCookie = [];
   let signedOut = false;
   try {

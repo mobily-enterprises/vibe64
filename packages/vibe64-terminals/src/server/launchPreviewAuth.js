@@ -108,10 +108,9 @@ function previewIdentityCapability({
   };
 }
 
-function previewIdentitySelection(input = {}, options = {}) {
-  const {
-    identities = []
-  } = options;
+function previewIdentitySelection(input = {}, {
+  identities = []
+} = {}) {
   const mode = String(input.mode || "identity").trim();
   if (!["identity", "guest"].includes(mode)) {
     const error = new Error("Preview identity mode is invalid.");

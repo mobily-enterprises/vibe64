@@ -299,8 +299,7 @@ function createSessionArchiveAccess({
     return target;
   }
 
-  async function publishExtractedSessionArchive(session, options = {}) {
-    const { beforePublish, beforeWork } = options;
+  async function publishExtractedSessionArchive(session, { beforePublish, beforeWork } = {}) {
     await beforeWork?.({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
     const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
     try {

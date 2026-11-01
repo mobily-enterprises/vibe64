@@ -24,8 +24,7 @@ async function exists(file) {
 /**
  * archive: { url, file, size, sha256 | sha1 }. Returns the verified local path.
  */
-async function downloadVerified(archive, directory, options = {}) {
-  const { fetchImpl = fetch, signal } = options;
+async function downloadVerified(archive, directory, { fetchImpl = fetch, signal } = {}) {
   const algorithm = archive.sha256 ? "sha256" : "sha1";
   const expected = archive.sha256 || archive.sha1;
   if (!/^[0-9a-f]{40,64}$/u.test(expected || "") || !archive.file || !archive.url) {

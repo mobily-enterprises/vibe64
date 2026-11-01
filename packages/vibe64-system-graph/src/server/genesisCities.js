@@ -160,8 +160,7 @@ function validateGenesisCallWeb(document, files) {
   }
 }
 
-async function readGenesisCallWeb(projectRoot, architecture, options = {}) {
-  const { validate = validateGenesisCallWeb } = options;
+async function readGenesisCallWeb(projectRoot, architecture, { validate = validateGenesisCallWeb } = {}) {
   const summary = architecture?.callWeb;
   if (!summary) return null;
   if (summary.path !== CALL_WEB_PATH) throw callWebError(`must be ${CALL_WEB_PATH}.`);

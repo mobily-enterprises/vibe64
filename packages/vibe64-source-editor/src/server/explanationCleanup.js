@@ -37,12 +37,11 @@ import { toText } from "@local/vibe64-core/shared/toText";
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminals
  */
-async function stopSourceEditorExplanation(context = {}, explanationId = "", options = {}) {
-  const {
-    explanationChats,
-    explanationTurns,
-    terminals
-  } = options;
+async function stopSourceEditorExplanation(context = {}, explanationId = "", {
+  explanationChats,
+  explanationTurns,
+  terminals
+} = {}) {
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
   if (pendingTurn) {
@@ -124,13 +123,12 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", opt
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminals
  */
-async function cleanupSourceEditorExplanations(context = {}, input = {}, options = {}) {
-  const {
-    all = false,
-    explanationChats,
-    explanationTurns,
-    terminals
-  } = options;
+async function cleanupSourceEditorExplanations(context = {}, input = {}, {
+  all = false,
+  explanationChats,
+  explanationTurns,
+  terminals
+} = {}) {
   const activeIds = sourceEditorCleanupActiveIds(input.activeExplanationIds);
   const originId = toText(input.originId);
   const cleaned = [];
@@ -201,12 +199,11 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, options
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminals
  */
-async function deleteSourceEditorExplanation(context = {}, explanationId = "", options = {}) {
-  const {
-    explanationChats,
-    explanationTurns,
-    terminals
-  } = options;
+async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
+  explanationChats,
+  explanationTurns,
+  terminals
+} = {}) {
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
   const pendingTurn = explanationTurns.get(key);
   pendingTurn?.controller.abort();

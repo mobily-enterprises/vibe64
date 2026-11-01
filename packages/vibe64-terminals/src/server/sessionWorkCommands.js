@@ -66,15 +66,14 @@ function scopedSessionWorkCommand(runCommand, context = {}, project = {}, option
   return scoped;
 }
 
-async function saveCommand(runCommand, context, command, args, options = {}) {
-  const {
-    additionalAllowedRoots = [],
-    commandOptions = {},
-    cwd = context.worktreePath,
-    env = {},
-    input,
-    project = {}
-  } = options;
+async function saveCommand(runCommand, context, command, args, {
+  additionalAllowedRoots = [],
+  commandOptions = {},
+  cwd = context.worktreePath,
+  env = {},
+  input,
+  project = {}
+} = {}) {
   const allowedRoots = [
     context.worktreePath,
     path.dirname(context.worktreePath),

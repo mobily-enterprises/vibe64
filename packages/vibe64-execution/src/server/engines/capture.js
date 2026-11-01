@@ -28,18 +28,17 @@ async function stopCaptureExecution(executionId) {
   };
 }
 
-async function runCaptureCommand(command = "", args = [], options = {}) {
-  const {
-    cwd = "",
-    env = {},
-    execution = null,
-    input = undefined,
-    maxBuffer = undefined,
-    onOutput = null,
-    outputEncoding = "utf8",
-    signal = null,
-    timeout = 15_000
-  } = options;
+async function runCaptureCommand(command = "", args = [], {
+  cwd = "",
+  env = {},
+  execution = null,
+  input = undefined,
+  maxBuffer = undefined,
+  onOutput = null,
+  outputEncoding = "utf8",
+  signal = null,
+  timeout = 15_000
+} = {}) {
   let outcome;
   let stop;
   let cancellation;

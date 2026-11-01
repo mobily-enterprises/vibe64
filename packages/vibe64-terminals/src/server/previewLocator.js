@@ -41,11 +41,10 @@ function parsesAsScript(source) {
   return checkedSources.get(hash);
 }
 
-async function readPreviewLocatorSource(session, options = {}) {
-  const {
-    inspect = inspectVibe64ArchitectureInspection,
-    read = readArchitecturePreviewLocator
-  } = options;
+async function readPreviewLocatorSource(session, {
+  inspect = inspectVibe64ArchitectureInspection,
+  read = readArchitecturePreviewLocator
+} = {}) {
   const projectRoot = sessionSourcePath(session || {});
   if (!projectRoot) {
     return "";

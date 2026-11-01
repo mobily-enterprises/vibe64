@@ -271,19 +271,18 @@ function emitSourceEditorExplanationEvent(emit = null, isClosed = null, type = "
  * @param {object} [options]
  * @param {TerminalsService} options.terminals
  */
-async function streamSourceEditorAgentTurn(context = {}, options = {}) {
-  const {
-    onText = null,
-    onExecutionProfile = null,
-    onThread = null,
-    onTurn = null,
-    prompt = "",
-    promptLabel = "",
-    terminals,
-    threadId = "",
-    outputSchema = SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA,
-    answerMaxChars = SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS
-  } = options;
+async function streamSourceEditorAgentTurn(context = {}, {
+  onText = null,
+  onExecutionProfile = null,
+  onThread = null,
+  onTurn = null,
+  prompt = "",
+  promptLabel = "",
+  terminals,
+  threadId = "",
+  outputSchema = SOURCE_EDITOR_EXPLANATION_OUTPUT_SCHEMA,
+  answerMaxChars = SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS
+} = {}) {
   let latestText = "";
   let latestExecutionProfile = null;
   let latestThreadId = toText(threadId);
@@ -456,13 +455,12 @@ function sourceEditorAgentStreamHandlers({
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
  */
-function createSourceEditorExplanationStreamState(context = {}, initialExplanation = {}, options = {}) {
-  const {
-    assistantMessageId = "",
-    emit = null,
-    explanationChats,
-    isClosed = null
-  } = options;
+function createSourceEditorExplanationStreamState(context = {}, initialExplanation = {}, {
+  assistantMessageId = "",
+  emit = null,
+  explanationChats,
+  isClosed = null
+} = {}) {
   let explanation = initialExplanation;
   let writeQueue = Promise.resolve(explanation);
   const currentExplanation = () => explanation;
@@ -552,17 +550,16 @@ function createSourceEditorExplanationStreamState(context = {}, initialExplanati
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminals
  */
-async function runTrackedSourceEditorAgentTurn(context = {}, options = {}) {
-  const {
-    assistantMessageId = "",
-    currentExplanation = () => ({}),
-    emitEvent = () => {},
-    explanationChats,
-    fallbackError = "Source explanation failed.",
-    remember = async () => ({}),
-    run = async () => ({}),
-    terminals
-  } = options;
+async function runTrackedSourceEditorAgentTurn(context = {}, {
+  assistantMessageId = "",
+  currentExplanation = () => ({}),
+  emitEvent = () => {},
+  explanationChats,
+  fallbackError = "Source explanation failed.",
+  remember = async () => ({}),
+  run = async () => ({}),
+  terminals
+} = {}) {
   const finishStoppedExplanation = async (executionProfile = null) => {
     let stopped = await readStoppedSourceEditorExplanation(context, currentExplanation().id, {
       explanationChats

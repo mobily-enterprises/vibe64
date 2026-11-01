@@ -178,10 +178,9 @@ function createWorkspaceProjectRecords({
     });
   }
 
-  async function createWorkspaceProjectRecord(input = {}, options = {}) {
-    const {
-      prepare = null
-    } = options;
+  async function createWorkspaceProjectRecord(input = {}, {
+    prepare = null
+  } = {}) {
     const scope = catalogueOrPracticeScope();
 
     const slug = projectSlugFromInput(input);

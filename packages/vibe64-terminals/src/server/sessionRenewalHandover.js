@@ -63,13 +63,12 @@ function sessionRenewalProtocolError(code, message, details = {}, options = {}) 
   return error;
 }
 
-function assertBoundedPlainText(value = "", options = {}) {
-  const {
-    code,
-    label,
-    maxCharacters,
-    required = true
-  } = options;
+function assertBoundedPlainText(value = "", {
+  code,
+  label,
+  maxCharacters,
+  required = true
+} = {}) {
   const text = toText(value);
   const characterCount = Array.from(text).length;
   if ((required && !text) || characterCount > maxCharacters || textHasDisallowedControlCharacter(text)) {

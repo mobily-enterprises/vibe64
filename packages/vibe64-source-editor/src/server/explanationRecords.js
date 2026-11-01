@@ -214,10 +214,9 @@ async function readSourceEditorExplanationCleanupRecord(context = {}, explanatio
  * @param {object} [options]
  * @param {TerminalsService} options.terminals
  */
-async function deleteSourceEditorExplanationAgentThread(context = {}, record = {}, options = {}) {
-  const {
-    terminals
-  } = options;
+async function deleteSourceEditorExplanationAgentThread(context = {}, record = {}, {
+  terminals
+} = {}) {
   if (record.helper) {
     const helper = record.helper;
     sourceEditorHelperRoot(context, helper);
@@ -265,10 +264,9 @@ async function deleteSourceEditorExplanationAgentThread(context = {}, record = {
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
  */
-async function readSourceEditorExplanationRecord(context = {}, explanationId = "", options = {}) {
-  const {
-    explanationChats
-  } = options;
+async function readSourceEditorExplanationRecord(context = {}, explanationId = "", {
+  explanationChats
+} = {}) {
   const record = explanationChats.get(sourceEditorExplanationMemoryKey(context, explanationId));
   if (!record) {
     throw sourceEditorError("Source explanation was not found.", "vibe64_source_explanation_not_found", {
@@ -284,10 +282,9 @@ async function readSourceEditorExplanationRecord(context = {}, explanationId = "
  * @param {object} [options]
  * @param {SourceEditorExplanationChats} options.explanationChats
  */
-async function writeSourceEditorExplanation(context = {}, explanation = {}, options = {}) {
-  const {
-    explanationChats
-  } = options;
+async function writeSourceEditorExplanation(context = {}, explanation = {}, {
+  explanationChats
+} = {}) {
   const record = normalizeSourceEditorExplanation({
     ...explanation,
     updatedAt: new Date().toISOString()
@@ -418,12 +415,11 @@ function sourceEditorCleanupRecordAgeMs(record = {}, nowMs = Date.now()) {
   return Number.isFinite(timestampMs) ? Math.max(0, nowMs - timestampMs) : Number.POSITIVE_INFINITY;
 }
 
-function shouldCleanupSourceEditorExplanationRecord(record = {}, options = {}) {
-  const {
-    activeIds = new Set(),
-    nowMs = Date.now(),
-    originId = ""
-  } = options;
+function shouldCleanupSourceEditorExplanationRecord(record = {}, {
+  activeIds = new Set(),
+  nowMs = Date.now(),
+  originId = ""
+} = {}) {
   if (activeIds.has(record.id)) {
     return false;
   }

@@ -30,15 +30,14 @@ function initialProjectError(result = {}, fallback = "Initial project materializ
   );
 }
 
-async function runGit(args = [], options = {}) {
-  const {
-    allowedRoots = [],
-    cwd = "",
-    input,
-    maxBuffer,
-    outputEncoding,
-    runCommand = runVibe64Command
-  } = options;
+async function runGit(args = [], {
+  allowedRoots = [],
+  cwd = "",
+  input,
+  maxBuffer,
+  outputEncoding,
+  runCommand = runVibe64Command
+} = {}) {
   const result = await runCommand({
     actor: "daemon",
     allowedRoots,
@@ -63,12 +62,11 @@ async function runGit(args = [], options = {}) {
   return toText(result.stdout || result.output);
 }
 
-async function initializeCanonicalRepository(repositoryPath, branch, options = {}) {
-  const {
-    allowedRoots,
-    repositoryRoot,
-    runCommand
-  } = options;
+async function initializeCanonicalRepository(repositoryPath, branch, {
+  allowedRoots,
+  repositoryRoot,
+  runCommand
+} = {}) {
   const result = await runCommand({
     actor: "daemon",
     allowedRoots,
@@ -90,12 +88,11 @@ async function initializeCanonicalRepository(repositoryPath, branch, options = {
   }
 }
 
-async function installCanonicalCommit(repositoryPath, sourceRoot, branch, options = {}) {
-  const {
-    allowedRoots,
-    repositoryRoot,
-    runCommand
-  } = options;
+async function installCanonicalCommit(repositoryPath, sourceRoot, branch, {
+  allowedRoots,
+  repositoryRoot,
+  runCommand
+} = {}) {
   const result = await runCommand({
     actor: "daemon",
     allowedRoots,
