@@ -1,6 +1,7 @@
 import mysql from "mysql2/promise";
 import pg from "pg";
 
+import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { toText } from "@local/vibe64-core/shared/toText";
 
 // One real sign-in to the database server a project uses, with the values the
@@ -33,13 +34,13 @@ function nameIn(endpoint = {}, field = "") {
   }
 }
 
-function withTimeout(promise, ms, onTimeout) {
+function withTimeout(promise, ms, onTimeout = doNothing) {
   let timer;
   return Promise.race([
     promise,
     new Promise((_, reject) => {
       timer = setTimeout(() => {
-        onTimeout?.();
+        onTimeout();
         reject(Object.assign(new Error("timed out"), { code: "ETIMEDOUT" }));
       }, ms);
     })
