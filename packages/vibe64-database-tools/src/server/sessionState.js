@@ -16,7 +16,7 @@ const SNIPPET_LIMIT = 100;
 const LAYOUT_NODE_LIMIT = 2_000;
 const writes = new Map();
 
-function actorIdentity(vibe64User = null) {
+function actorIdentity(vibe64User) {
   return toText(
     vibe64User?.username ||
     vibe64User?.id ||
@@ -25,14 +25,14 @@ function actorIdentity(vibe64User = null) {
   );
 }
 
-function actorKey(vibe64User = null) {
+function actorKey(vibe64User) {
   return createHash("sha256")
     .update(`vibe64-database-user\u0000${actorIdentity(vibe64User)}`)
     .digest("hex")
     .slice(0, 20);
 }
 
-function workspaceArtifactPath(vibe64User = null) {
+function workspaceArtifactPath(vibe64User) {
   return `database/workspace-${actorKey(vibe64User)}.json`;
 }
 
@@ -53,9 +53,9 @@ function parseArtifact(value = "", label = "Database state") {
 
 /**
  * @param {Vibe64SessionStore} store
- * @param {string} [sessionId]
+ * @param {string} sessionId
  */
-async function readSchemaSnapshot(store, sessionId = "") {
+async function readSchemaSnapshot(store, sessionId) {
   return parseArtifact(
     await store.readArtifact(sessionId, SCHEMA_ARTIFACT_PATH),
     "The refreshed database schema"
@@ -64,10 +64,10 @@ async function readSchemaSnapshot(store, sessionId = "") {
 
 /**
  * @param {Vibe64SessionStore} store
- * @param {string} [sessionId]
- * @param {object} [schema]
+ * @param {string} sessionId
+ * @param {object} schema
  */
-async function writeSchemaSnapshot(store, sessionId = "", schema = {}) {
+async function writeSchemaSnapshot(store, sessionId, schema) {
   await store.writeJsonArtifact(sessionId, SCHEMA_ARTIFACT_PATH, schema);
   return schema;
 }
@@ -91,10 +91,10 @@ function normalizedWorkspace(value = null) {
 
 /**
  * @param {Vibe64SessionStore} store
- * @param {string} [sessionId]
- * @param {object | null} [vibe64User]
+ * @param {string} sessionId
+ * @param {object | null} vibe64User
  */
-async function readWorkspace(store, sessionId = "", vibe64User = null) {
+async function readWorkspace(store, sessionId, vibe64User) {
   const value = parseArtifact(
     await store.readArtifact(sessionId, workspaceArtifactPath(vibe64User)),
     "The database workspace"
@@ -115,8 +115,8 @@ function serializeWrite(key, operation) {
 
 /**
  * @param {Vibe64SessionStore} store
- * @param {string} [sessionId]
- * @param {object | null} [vibe64User]
+ * @param {string} sessionId
+ * @param {object | null} vibe64User
  * @param {(workspace: object) => object | Promise<object>} operation
  */
 async function mutateWorkspace(store, sessionId, vibe64User, operation) {
@@ -129,7 +129,7 @@ async function mutateWorkspace(store, sessionId, vibe64User, operation) {
   });
 }
 
-async function recordQueryHistory(store, sessionId = "", vibe64User = null, entry = {}) {
+async function recordQueryHistory(store, sessionId, vibe64User, entry) {
   return mutateWorkspace(store, sessionId, vibe64User, (workspace) => ({
     ...workspace,
     history: [{
@@ -145,7 +145,7 @@ async function recordQueryHistory(store, sessionId = "", vibe64User = null, entr
   }));
 }
 
-async function saveSnippet(store, sessionId = "", vibe64User = null, input = {}) {
+async function saveSnippet(store, sessionId, vibe64User, input) {
   const sql = String(input.sql || "").trim();
   if (!sql) {
     throw vibe64Error("Snippet SQL is required.", "vibe64_database_snippet_sql_required");
@@ -163,7 +163,7 @@ async function saveSnippet(store, sessionId = "", vibe64User = null, input = {})
   }));
 }
 
-async function deleteSnippet(store, sessionId = "", vibe64User = null, snippetId = "") {
+async function deleteSnippet(store, sessionId, vibe64User, snippetId) {
   const id = toText(snippetId);
   return mutateWorkspace(store, sessionId, vibe64User, (workspace) => ({
     ...workspace,
@@ -248,9 +248,9 @@ function normalizedLayout(value = null) {
 
 /**
  * @param {Vibe64SessionStore} store
- * @param {string} [sessionId]
+ * @param {string} sessionId
  */
-async function readErdLayout(store, sessionId = "") {
+async function readErdLayout(store, sessionId) {
   return normalizedLayout(parseArtifact(
     await store.readArtifact(sessionId, ERD_LAYOUT_ARTIFACT_PATH),
     "The database ERD layout"
@@ -259,12 +259,12 @@ async function readErdLayout(store, sessionId = "") {
 
 /**
  * @param {Vibe64SessionStore} store
- * @param {string} [sessionId]
- * @param {object} [layout]
+ * @param {string} sessionId
+ * @param {object} layout
  * @param {object} [options]
  * @param {number} [options.expectedRevision]
  */
-async function saveErdLayout(store, sessionId = "", layout = {}, options = {}) {
+async function saveErdLayout(store, sessionId, layout, options = {}) {
   const { expectedRevision } = options;
   const normalized = normalizedLayout(layout);
   if (Buffer.byteLength(JSON.stringify(normalized)) > ERD_LAYOUT_MAX_BYTES) {

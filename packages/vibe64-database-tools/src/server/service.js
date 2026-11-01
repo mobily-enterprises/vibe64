@@ -44,7 +44,7 @@ import { toText } from "@local/vibe64-core/shared/toText";
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {ReturnType<typeof import("./events.js").createDatabaseLayoutChangedPublisher>} PublishLayoutChanged */
 
-function safeConnectionDescriptor(connection = {}, context = {}) {
+function safeConnectionDescriptor(connection, context) {
   return {
     resourceId: (context.resources || []).find(({ resource }) => resource.kind === connection.engine)?.resource.id || "",
     client: connection.client,
@@ -56,7 +56,7 @@ function safeConnectionDescriptor(connection = {}, context = {}) {
   };
 }
 
-function historyEntry(sql = "", result = {}, readOnly = true) {
+function historyEntry(sql, result, readOnly) {
   return {
     affectedRows: Number(result.affectedRows || 0),
     durationMs: Number(result.durationMs || 0),
@@ -67,7 +67,7 @@ function historyEntry(sql = "", result = {}, readOnly = true) {
   };
 }
 
-function auditSql(sql = "") {
+function auditSql(sql) {
   return String(sql || "").slice(0, 32 * 1024);
 }
 

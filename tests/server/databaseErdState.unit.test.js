@@ -32,7 +32,7 @@ test("ERD positions, views, groups, pins and focus are shared across users, not 
 });
 test("ERD normalization bounds stored fields and uses keys mode for an empty workspace", async () => {
   const store = stateStore();
-  assert.equal((await readErdLayout(store)).columnMode, "keys");
+  assert.equal((await readErdLayout(store, "session")).columnMode, "keys");
   const saved = await saveErdLayout(store, "session", { nodes: [{ table: "t", x: Infinity, y: -Infinity }], views: [{ id: "a", name: "a", viewport: { zoom: 100 } }], columnMode: "invalid" });
   assert.equal(saved.nodes[0].x, 0);
   assert.equal(saved.nodes[0].y, 0);

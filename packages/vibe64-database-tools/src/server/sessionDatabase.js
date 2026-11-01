@@ -67,7 +67,7 @@ function createSessionDatabase({
     };
   }
 
-  function logOperation(context = {}, fields = {}, level = "info") {
+  function logOperation(context, fields, level = "info") {
     logOperationalEvent(logger, level, {
       actor: context.actor,
       component: "vibe64-database-tools",
@@ -79,7 +79,7 @@ function createSessionDatabase({
     }, "Vibe64 session database operation");
   }
 
-  async function refreshSchema(context, source = "user") {
+  async function refreshSchema(context, source) {
     const startedAt = Date.now();
     try {
       const schema = await withKnex(context.readEndpoint, ({ connection, knex }) => (
@@ -106,13 +106,12 @@ function createSessionDatabase({
     }
   }
 
-  async function currentSchema(context, options = {}) {
-    const { initialize = true } = options;
+  async function currentSchema(context) {
     const schema = await readSchemaSnapshot(context.store, context.sessionId);
     const matchesConnection = schema &&
       schema.engine === context.readConnection.engine &&
       schema.database === context.readConnection.database;
-    if (matchesConnection || !initialize) {
+    if (matchesConnection) {
       return schema;
     }
     return refreshSchema(
@@ -121,7 +120,7 @@ function createSessionDatabase({
     );
   }
 
-  function assertWriteQueryConfirmed(context, input = {}) {
+  function assertWriteQueryConfirmed(context, input) {
     if (input.writeUnlocked !== true || input.confirmed !== true) {
       throw databaseError(
         "Unlock writes and confirm this statement before running it.",
@@ -139,7 +138,7 @@ function createSessionDatabase({
     }
   }
 
-  async function runMutation(input, operation, audit = {}) {
+  async function runMutation(input, operation, audit) {
     const context = await sessionContext(input);
     const schema = await currentSchema(context);
     const startedAt = Date.now();
