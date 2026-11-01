@@ -35,11 +35,25 @@ function createLearnerPreparation({
   /**
    * The admitted server owner holds this across effects. Typed state writes
    * acquire only their short state.lock, so they remain usable inside it.
-   * Preparation verifies the teachable lesson first; a close (archive or
-   * delete) needs only its identity, so a lesson this Vibe64 can no longer
-   * teach can still be closed.
+   * Preparation verifies the teachable lesson first.
+   * @param {{ actor: object, attemptId: string }} attempt
+   * @param {() => Promise<unknown> | unknown} operation
    */
-  async function runPreparationExclusive({ actor, attemptId, closing = false }, operation) {
+  function runPreparationExclusive(attempt, operation) {
+    return runAttemptExclusive(attempt, operation, {});
+  }
+
+  /**
+   * The same exclusive hold for a close (archive or delete), which needs only the lesson's verified identity, so a
+   * lesson this Vibe64 can no longer teach can still be closed.
+   * @param {{ actor: object, attemptId: string }} attempt
+   * @param {() => Promise<unknown> | unknown} operation
+   */
+  function runClosingExclusive(attempt, operation) {
+    return runAttemptExclusive(attempt, operation, { admissionOnly: true });
+  }
+
+  async function runAttemptExclusive({ actor, attemptId }, operation, verification) {
     const paths = userPaths(actor);
     if (typeof attemptId !== "string" || !uuidPattern.test(attemptId) || typeof operation !== "function") {
       throw new Error("Run preparation for the saved attempt with an admitted server operation.");
@@ -52,7 +66,7 @@ function createLearnerPreparation({
         404
       );
     }
-    await verifyActiveLesson(before.progress, { admissionOnly: closing === true });
+    await verifyActiveLesson(before.progress, verification);
     let release = await tryAcquireExclusiveFileLock(paths.preparationLock);
     for (const deadline = Date.now() + PREPARATION_BUSY_WAIT_MS; !release && Date.now() < deadline;) {
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -74,7 +88,7 @@ function createLearnerPreparation({
           404
         );
       }
-      await verifyActiveLesson(state.progress, { admissionOnly: closing === true });
+      await verifyActiveLesson(state.progress, verification);
       return await operation();
     } finally {
       await release();
@@ -212,6 +226,7 @@ function createLearnerPreparation({
   }
 
   return Object.freeze({
+    runClosingExclusive,
     runPreparationExclusive,
     beginPreparation,
     recordPreparationReady,

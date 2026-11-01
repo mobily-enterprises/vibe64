@@ -476,7 +476,7 @@ function createTrainingLearnerState({
    * step passed and records the lesson content in completedLessons. Its step
    * results and code ledger then go: the archive bundle already copied what it
    * keeps (readAttemptRecord). The admitted host runs this inside
-   * runPreparationExclusive; no project or session effect happens here.
+   * runClosingExclusive; no project or session effect happens here.
    */
   async function endAttempt({ actor, attemptId, requestId, expectedRevision, reason } = {}) {
     const paths = userPaths(actor);
@@ -631,6 +631,7 @@ function createTrainingLearnerState({
     reserveAttempt,
     endAttempt,
     resumeAttempt,
+    runClosingExclusive: preparation.runClosingExclusive,
     runPreparationExclusive: preparation.runPreparationExclusive,
     beginPreparation: preparation.beginPreparation,
     recordPreparationReady: preparation.recordPreparationReady,

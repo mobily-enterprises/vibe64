@@ -24,6 +24,7 @@ import { createTrainingOperations } from "./trainingOperations.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
+/** @typedef {import("./types.js").LearningFacts} LearningFacts */
 
 /**
  * The training capability of this computer: its installed catalogue and content, the learners' state, exercise
@@ -37,6 +38,7 @@ import { createTrainingOperations } from "./trainingOperations.js";
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {SessionsService} dependencies.sessions
  * @param {TerminalsService} dependencies.terminals
+ * @param {LearningFacts} dependencies.facts
  */
 function createTraining({
   actionCatalogue,
@@ -45,7 +47,8 @@ function createTraining({
   project,
   projectContext,
   sessions,
-  terminals
+  terminals,
+  facts
 }) {
   const systemRoot = projectContext.systemRoot;
   const catalogue = createInstalledTrainingCatalogue({ systemRoot });
@@ -81,7 +84,8 @@ function createTraining({
     reviewer: createTrainingStepReviewer({
       learners,
       terminals
-    })
+    }),
+    facts
   });
   const projectArchive = createProjectArchiveService({
     projectContext,

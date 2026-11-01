@@ -2,42 +2,39 @@ import { learningVocabulary } from "../shared/learningVocabulary.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 
-// Fact readers: what a `fact` check asks. Each answers for one learner (and
-// the attempt's practice project slug, when it has one) with
-// { holds, reason? }; its owner decides how, reading through ordinary actions
-// with the check's own action `context` so the learner's access applies. Public Training registers its
-// built-in readers; a host registers its own (for example one
-// for its own state) by composition. Registering a reader also registers its name in
-// the learning vocabulary, which is what makes a step that checks it
-// available here.
-const readers = new Map();
+/** @typedef {import("./types.js").LearningFact} LearningFact */
 
 /**
- * @param {object} fact
- * @param {string} fact.id
- * @param {(request: { actor: object, projectSlug: string, context: object }) => Promise<{ holds: boolean, reason?: string }>} fact.read
+ * The fact readers a `fact` check asks. Each answers for one learner (and the attempt's practice project slug, when
+ * it has one) with { holds, reason? }; its owner decides how, reading through ordinary actions with the check's own
+ * action `context` so the learner's access applies. Training passes its built-in readers plus the ones a host provides
+ * (the optional vibe64.training.learning-facts token). Each reader's name also goes into the learning vocabulary,
+ * which is what makes a step that checks it available here; a later reader of the same name replaces an earlier one.
+ * @param {ReadonlyArray<LearningFact>} facts
  */
-// readable-check: allow module-registry - filled by this feature's setup and a composing host's; convert with its supplier
-function registerLearningFact({ id, read }) {
-  // A feature set up again replaces its reader.
-  learningVocabulary.register({ facts: [id] });
-  readers.set(id, read);
-}
+function createLearningFacts(facts) {
+  const readers = new Map(facts.map(({ id, read }) => [id, read]));
+  learningVocabulary.register({ facts: [...readers.keys()] });
 
-/**
- * One bounded answer; a reader that fails or is missing answers "not yet".
- */
-async function readLearningFact(id, options = {}) {
-  const { actor, projectSlug = "", context = {} } = options;
-  const read = readers.get(id);
-  if (!read) return { holds: false, reason: "This installation cannot check this yet." };
-  try {
-    const value = await read({ actor, projectSlug, context });
-    const reason = typeof value?.reason === "string" ? value.reason.trim().slice(0, 256) : "";
-    return { holds: value?.holds === true, ...(reason ? { reason } : {}) };
-  } catch (cause) {
-    return { holds: false, reason: String(cause?.message || "The check could not be read. Try again.").slice(0, 256) };
+  /**
+   * One bounded answer; a reader that fails or is missing answers "not yet".
+   * @param {string} id
+   * @param {{ actor: object, projectSlug?: string, context?: object }} options
+   */
+  async function read(id, options) {
+    const { actor, projectSlug = "", context = {} } = options;
+    const reader = readers.get(id);
+    if (!reader) return { holds: false, reason: "This installation cannot check this yet." };
+    try {
+      const value = await reader({ actor, projectSlug, context });
+      const reason = typeof value?.reason === "string" ? value.reason.trim().slice(0, 256) : "";
+      return { holds: value?.holds === true, ...(reason ? { reason } : {}) };
+    } catch (cause) {
+      return { holds: false, reason: String(cause?.message || "The check could not be read. Try again.").slice(0, 256) };
+    }
   }
+
+  return Object.freeze({ read });
 }
 
 /**
@@ -57,4 +54,4 @@ function aiReadyFact({ terminals }) {
   };
 }
 
-export { aiReadyFact, readLearningFact, registerLearningFact };
+export { aiReadyFact, createLearningFacts };

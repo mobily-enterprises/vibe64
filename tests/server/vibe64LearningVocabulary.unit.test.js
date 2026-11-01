@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { __testables, declaredLearningVocabulary, lessonAvailable, lessonStepAvailable, trainingGuideCommand, trainingGuideRequest, trainingPlaceShown } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 import { beatNeedsPracticeProject, splitStepBeats } from "../../packages/vibe64-training/src/shared/beats.js";
-import { readLearningFact, registerLearningFact } from "../../packages/vibe64-training/src/server/learningFacts.js";
+import { createLearningFacts } from "../../packages/vibe64-training/src/server/learningFacts.js";
 
 const { createLearningVocabulary, lessonStepNeeds } = __testables;
 
@@ -97,12 +97,12 @@ test("a step is available when every name it uses is registered here and open to
 });
 
 test("a fact reader answers for the learner; failures and missing readers answer not yet", async () => {
-  registerLearningFact({ id: "vocabulary-test-fact", read: async ({ actor, projectSlug }) => ({ holds: actor.username === "ada", reason: `slug ${projectSlug}` }) });
-  assert.deepEqual(await readLearningFact("vocabulary-test-fact", { actor: { username: "ada" }, projectSlug: "p" }), { holds: true, reason: "slug p" });
-  assert.equal((await readLearningFact("vocabulary-test-fact", { actor: { username: "bo" } })).holds, false);
-  registerLearningFact({ id: "vocabulary-test-fact", read: async () => { throw new Error("Deployment state is unavailable."); } });
-  assert.deepEqual(await readLearningFact("vocabulary-test-fact", { actor: {} }), { holds: false, reason: "Deployment state is unavailable." });
-  assert.equal((await readLearningFact("never-registered", { actor: {} })).holds, false);
+  const facts = createLearningFacts([{ id: "vocabulary-test-fact", read: async ({ actor, projectSlug }) => ({ holds: actor.username === "ada", reason: `slug ${projectSlug}` }) }]);
+  assert.deepEqual(await facts.read("vocabulary-test-fact", { actor: { username: "ada" }, projectSlug: "p" }), { holds: true, reason: "slug p" });
+  assert.equal((await facts.read("vocabulary-test-fact", { actor: { username: "bo" } })).holds, false);
+  const failing = createLearningFacts([{ id: "vocabulary-test-fact", read: async () => { throw new Error("Deployment state is unavailable."); } }]);
+  assert.deepEqual(await failing.read("vocabulary-test-fact", { actor: {} }), { holds: false, reason: "Deployment state is unavailable." });
+  assert.equal((await facts.read("never-registered", { actor: {} })).holds, false);
 });
 
 test("Publish is a built-in project place that opens its Dashboard section", () => {

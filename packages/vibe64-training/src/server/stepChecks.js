@@ -5,7 +5,6 @@ import { compareChoiceAnswer, pinnedLessonKey } from "./installedContent.js";
 import { declaredStepCheck, validateContent } from "./contentSchemas.js";
 import { lessonSteps, MAX_STEP_RESULTS } from "./learnerState.js";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
-import { readLearningFact } from "./learningFacts.js";
 import { availableStepIds } from "./lessonAvailability.js";
 import { trainingFailure } from "./errors.js";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
@@ -17,6 +16,7 @@ import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 /** @typedef {ReturnType<typeof import("./stepEvidence.js").createTrainingStepEvidence>} TrainingStepEvidence */
 /** @typedef {ReturnType<typeof import("./stepReview.js").createTrainingStepReviewer>} TrainingStepReviewer */
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("./types.js").LearningFacts} LearningFacts */
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -122,6 +122,7 @@ function requireLearnerChannel(context, what) {
  * @param {ActionCatalogue} dependencies.actions
  * @param {TrainingStepEvidence} dependencies.evidence
  * @param {TrainingStepReviewer} dependencies.reviewer
+ * @param {LearningFacts} dependencies.facts
  */
 function createTrainingStepChecks({
   learners,
@@ -130,7 +131,8 @@ function createTrainingStepChecks({
   authorship,
   actions,
   evidence,
-  reviewer
+  reviewer,
+  facts
 }) {
   async function openStep({ actor, attemptId, stepId, active = true }) {
     if (!uuidPattern.test(attemptId || "") || !idPattern.test(stepId || "")) {
@@ -321,7 +323,7 @@ function createTrainingStepChecks({
   async function runFactCheck({ actor, attempt, lesson, step, requestId, trigger, context }) {
     const previous = (await savedEntry(actor, attempt)).results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, step.id);
-    const fact = await readLearningFact(step.check.fact, { actor, projectSlug: attempt.projectSlug || "", context });
+    const fact = await facts.read(step.check.fact, { actor, projectSlug: attempt.projectSlug || "", context });
     const outcome = fact.holds ? "passed" : "not-yet-passed";
     const reason = boundedReason(fact.reason);
     if (trigger !== "learner") {

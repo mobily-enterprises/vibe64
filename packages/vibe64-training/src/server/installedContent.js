@@ -98,18 +98,37 @@ async function inventory(directory) {
   return files.sort();
 }
 
+const publishedLessonsOnly = status => status === "published";
+const publishedAndDraftLessons = () => true;
+
 /**
- * Only the composing server may admit drafts for an isolated author preview.
- * Read inputs cannot change this choice; ordinary learner readers refuse drafts.
+ * The installed teaching content of one system root. Ordinary learner readers teach only published lessons.
+ * @param {object} options
+ * @param {string} options.systemRoot
  */
-function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false }) {
+function createInstalledTrainingContent({ systemRoot }) {
+  return installedTrainingContent(systemRoot, publishedLessonsOnly);
+}
+
+/**
+ * The same reader, also admitting draft lessons: only the composing server builds it, for an isolated author preview.
+ * Read inputs cannot change this choice.
+ * @param {object} options
+ * @param {string} options.systemRoot
+ */
+function createInstalledTrainingContentWithDrafts({ systemRoot }) {
+  return installedTrainingContent(systemRoot, publishedAndDraftLessons);
+}
+
+/**
+ * @param {string} systemRoot
+ * @param {(status: string) => boolean} lessonTeachable which installed lesson statuses this reader teaches
+ */
+function installedTrainingContent(systemRoot, lessonTeachable) {
   if (typeof systemRoot !== "string" || !systemRoot || !path.isAbsolute(systemRoot)) {
     throw new Error("Installed teaching content needs an absolute server-owned system root.");
   }
   const root = path.resolve(systemRoot);
-  if (typeof allowDraftLessons !== "boolean") {
-    throw new TypeError("Draft lesson reads require a trusted server construction choice.");
-  }
   const pendingTopics = new Map();
 
   /**
@@ -258,7 +277,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
           sha256Hex(canonicalJson(selected.manifest)) !== lessonHash) {
         throw new Error("Installed lesson manifest differs from the trusted content hash.");
       }
-      if (entry.status !== "published" && !allowDraftLessons) {
+      if (!lessonTeachable(entry.status)) {
         throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
       }
       const identity = { pin, manifest: selected.manifest, hash: lessonHash, descriptorPath: descriptor.descriptor };
@@ -289,7 +308,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     const topic = await readVerifiedTopic({ topicId, commit, topicHash });
     const bundle = topic.bundles.find(item => item.lesson.code === lessonCode);
     if (!bundle) throw new Error(`Lesson ${lessonCode} is not declared in this pinned topic.`);
-    if (bundle.status !== "published" && !allowDraftLessons) {
+    if (!lessonTeachable(bundle.status)) {
       throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
     }
     if (bundle.hash !== lessonHash) {
@@ -466,4 +485,10 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
  */
 const pinnedLessonKey = pin => ({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
 
-export { compareChoiceAnswer, createInstalledTrainingContent, pinnedLessonKey, validateInstalledTopicPin };
+export {
+  compareChoiceAnswer,
+  createInstalledTrainingContent,
+  createInstalledTrainingContentWithDrafts,
+  pinnedLessonKey,
+  validateInstalledTopicPin
+};

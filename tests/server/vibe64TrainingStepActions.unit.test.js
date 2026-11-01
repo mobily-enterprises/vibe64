@@ -20,7 +20,7 @@ import { registerTrainingRoutes } from "../../packages/vibe64-training/src/serve
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { createTrainingOperations } from "../../packages/vibe64-training/src/server/trainingOperations.js";
 import { createTrainingService } from "../../packages/vibe64-training/src/server/preparation.js";
-import { registerLearningFact } from "../../packages/vibe64-training/src/server/learningFacts.js";
+import { createLearningFacts } from "../../packages/vibe64-training/src/server/learningFacts.js";
 import { registerLearningVocabulary } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 import { createTrainingLessonVisuals } from "../../packages/vibe64-training/src/server/lessonVisuals.js";
 import { NO_LEARNING_SPACE } from "../../packages/vibe64-training/src/server/learningSpace.js";
@@ -33,7 +33,7 @@ const fixtureTopic = new URL("../fixtures/training/steps-v3/", import.meta.url);
 const BROWSER_ONLY = ["step.observe", "step.answer", "step.done", "step.review.run", "reader.save"];
 const ASSISTANT = ["lesson.read", "step.check.run", "step.evidence.read", "practice.list", "lesson.delete", "practice.archived.delete"];
 
-async function fixture(t, { contentWrapper = value => value, practice = true, editTopic = null } = {}) {
+async function fixture(t, { contentWrapper = value => value, practice = true, editTopic = null, facts = createLearningFacts([]) } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-step-actions-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "topic");
@@ -74,7 +74,7 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
     return actionId === "vibe64.terminals.outputs.read" ? { ok: true, activeTerminal: { id: "terminal-1" } } : { ok: true };
   } };
   const authorship = createTrainingCodeAuthorship({ learners, content, project: { runInProjectContext() { throw new Error("no code step in these tests"); } } });
-  const steps = createTrainingStepChecks({ learners, content, checks, authorship, actions: inner });
+  const steps = createTrainingStepChecks({ learners, content, checks, authorship, actions: inner, facts });
   // Without a learning space, the exercise host cannot close the lesson.
   const exercises = practice ? { async deleteLesson(value) { removed.push(value); return { ok: true, attemptId: value.attemptId, closed: true }; },
     ...(typeof practice === "object" ? practice : {}) } : { deleteLesson: value => NO_LEARNING_SPACE.closeAttempt(value) };
@@ -527,11 +527,11 @@ test("a fact step passes by its reader; steps this learner cannot take here are 
   let live = false;
   const channels = [];
   // A reader reads through ordinary actions with the check's own context.
-  registerLearningFact({ id: "step-actions-live", read: async ({ actor, projectSlug, context }) => {
+  const facts = createLearningFacts([{ id: "step-actions-live", read: async ({ actor, projectSlug, context }) => {
     channels.push(context?.channel);
     return { holds: live && actor.username === "alice" && Boolean(projectSlug), ...(live ? {} : { reason: "Not live yet." }) };
-  } });
-  const f = await fixture(t, { editTopic: async source => {
+  } }]);
+  const f = await fixture(t, { facts, editTopic: async source => {
     const metadata = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
     metadata.vibe64Training.places = ["step-actions-owner-place", "step-actions-missing-place"];
     metadata.vibe64Training.facts = ["step-actions-live"];

@@ -249,7 +249,7 @@ function createTrainingLearningSpace({
         });
       }
       try {
-        await learners.runPreparationExclusive({ actor, attemptId, closing: true }, async () => {
+        await learners.runClosingExclusive({ actor, attemptId }, async () => {
           const record = attempt.projectSlug ? await findRecord(actor, attemptId) : null;
           if (record) {
             await projectContext.runWithPracticeProjectScope({ actor, training: record.training, access: "write", allowDeleting: true },

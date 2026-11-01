@@ -6,7 +6,7 @@ import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from 
 import { listProjectRuntimeRoots, resolveProjectRecordPath } from "@local/vibe64-core/server/projectState";
 import { readProjectRecordMetadata } from "@local/vibe64-core/server/projectRecordMetadata";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { createInstalledTrainingContent } from "./installedContent.js";
+import { createInstalledTrainingContent, createInstalledTrainingContentWithDrafts } from "./installedContent.js";
 import { createPracticeHistoryReader } from "./practiceHistoryReader.js";
 
 /**
@@ -52,7 +52,7 @@ export async function upgradeLearningPracticeHistory({ systemRoot, backupRoot, a
     {
       name: "author-preview",
       root: path.join(systemRoot, "author-preview"),
-      content: createInstalledTrainingContent({ systemRoot, allowDraftLessons: true })
+      content: createInstalledTrainingContentWithDrafts({ systemRoot })
     }
   ];
   for (const namespace of namespaces) {

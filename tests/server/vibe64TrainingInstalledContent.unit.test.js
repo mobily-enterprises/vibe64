@@ -9,7 +9,11 @@ import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
 import { readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
-import { compareChoiceAnswer, createInstalledTrainingContent } from "@local/vibe64-training/server/installed-content";
+import {
+  compareChoiceAnswer,
+  createInstalledTrainingContent,
+  createInstalledTrainingContentWithDrafts
+} from "@local/vibe64-training/server/installed-content";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-installed-training-"));
@@ -642,7 +646,7 @@ test("trusted author-preview construction reads a pinned draft through the origi
   await f.write("training/lessons/LESSON-02/lesson.md", f.teachingText);
   const { pin, bundle } = await f.install();
   const input = { ...pin, lessonCode: "LESSON-02", lessonHash: bundle.lessons[1].hash };
-  const author = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  const author = createInstalledTrainingContentWithDrafts({ systemRoot: f.systemRoot });
   const before = await treeState(f.systemRoot);
   const lesson = await author.readLesson(input);
   assert.equal(lesson.lesson.code, "LESSON-02");
@@ -668,13 +672,14 @@ test("trusted author-preview construction reads a pinned draft through the origi
   assert.deepEqual(await treeState(f.systemRoot), before);
 });
 
-test("author-preview readers retain original snapshot corruption refusal and require an explicit boolean construction", async t => {
+test("author-preview readers retain original snapshot corruption refusal, and only the drafts reader admits drafts", async t => {
   const f = await fixture(t);
-  for (const allowDraftLessons of ["true", 1, null]) {
-    assert.throws(() => createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons }), /trusted server construction/u);
-  }
   const input = { ...f.installed.pin, lessonCode: "LESSON-02", lessonHash: f.installed.bundle.lessons[1].hash };
-  const author = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  for (const allowDraftLessons of ["true", 1, null, true]) {
+    const reader = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons });
+    await assert.rejects(() => reader.readLesson(input), /draft and cannot be taught/u);
+  }
+  const author = createInstalledTrainingContentWithDrafts({ systemRoot: f.systemRoot });
   await f.write("files/training/lessons/LESSON-02/lesson.md", "Changed draft bytes.\n", f.installed.snapshotRoot);
   const before = await treeState(f.systemRoot);
   await assert.rejects(() => author.readLesson(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
@@ -703,7 +708,7 @@ test("conversation admission refuses changed pins, manifests, draft selection an
   }
   await assert.rejects(() => f.reader.readAdmissionIdentity({ ...input, lessonCode: "LESSON-02",
     lessonHash: f.installed.bundle.lessons[1].hash }), /draft/u);
-  const author = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  const author = createInstalledTrainingContentWithDrafts({ systemRoot: f.systemRoot });
   assert.equal((await author.readAdmissionIdentity({ ...input, lessonCode: "LESSON-02",
     lessonHash: f.installed.bundle.lessons[1].hash })).lesson.code, "LESSON-02");
   const changedTopic = structuredClone(f.installed.bundle);
@@ -996,7 +1001,7 @@ test("a v2 draft lesson is readable only through the trusted author-preview cons
   const f = await stepsFixture(t, { status: "draft" });
   await assert.rejects(() => f.reader.readLesson(f.input), /draft and cannot be taught/u);
   await assert.rejects(() => f.reader.readChoiceAnswer({ ...f.input, stepId: "which-side" }), /draft and cannot be taught/u);
-  const author = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  const author = createInstalledTrainingContentWithDrafts({ systemRoot: f.systemRoot });
   assert.equal((await author.readLesson(f.input)).steps.length, 5);
   assert.deepEqual((await author.readChoiceAnswer({ ...f.input, stepId: "which-side" })).answer, [1]);
 });

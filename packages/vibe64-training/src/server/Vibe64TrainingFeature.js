@@ -6,7 +6,7 @@ import { registerPracticeRequestActor } from "@local/vibe64-core/server/projectR
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { createTrainingCodeSaveOwner } from "./codeSaveOwner.js";
 import { createTrainingLearnerNotesActions } from "./learnerNotesActions.js";
-import { aiReadyFact, registerLearningFact } from "./learningFacts.js";
+import { aiReadyFact, createLearningFacts } from "./learningFacts.js";
 import { localLearnerActor } from "./localLearnerActor.js";
 import { registerTrainingRoutes } from "./registerRoutes.js";
 import { createTrainingStepActions } from "./stepActions.js";
@@ -25,6 +25,7 @@ import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js"
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").TrainingService} TrainingService */
+/** @typedef {import("./types.js").LearningFact} LearningFact */
 
 const Vibe64TrainingFeature = defineFeature({
   id: "vibe64.training",
@@ -39,6 +40,7 @@ const Vibe64TrainingFeature = defineFeature({
     terminals: "vibe64.terminals"
   },
   optional: {
+    learningFacts: "vibe64.training.learning-facts",
     trainingHost: "vibe64.training.host",
     sourceEditor: "vibe64.source-editor"
   },
@@ -54,6 +56,7 @@ const Vibe64TrainingFeature = defineFeature({
    * @param {ProjectService} capabilities.project
    * @param {SessionsService} capabilities.sessions
    * @param {TerminalsService} capabilities.terminals
+   * @param {ReadonlyArray<LearningFact> | null} capabilities.learningFacts a host's own fact readers
    * @param {TrainingService | null} capabilities.trainingHost
    * @param {SourceEditorService | null} capabilities.sourceEditor
    * @param {FeatureSetupContext} context
@@ -66,13 +69,13 @@ const Vibe64TrainingFeature = defineFeature({
     project,
     sessions,
     terminals,
+    learningFacts,
     trainingHost,
     sourceEditor
   }, { actionCatalogue }) {
     registerTrainingRoutes(http);
     registerTrainingVisualResourceRoutes(http);
-    // Built-in fact readers, for every host (a host adds its own by composition).
-    registerLearningFact(aiReadyFact({ terminals }));
+    // A host that composes its own training passes its fact readers to that composition.
     if (trainingHost) return { training: trainingHost };
 
     const projectContext = getStudioProjectContext();
@@ -83,7 +86,9 @@ const Vibe64TrainingFeature = defineFeature({
       project,
       projectContext,
       sessions,
-      terminals
+      terminals,
+      // The built-in fact readers, then any a host provides.
+      facts: createLearningFacts([aiReadyFact({ terminals }), ...(learningFacts ?? [])])
     });
     registerVibe64ActionContext(actionCatalogue, {
       env,

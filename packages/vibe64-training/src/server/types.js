@@ -18,5 +18,13 @@
 /** @typedef {ReturnType<typeof import("./learnerEvents.js").createTrainingLearnerChangedPublisher>} TrainingPublishLearnerChanged */
 /** @typedef {TrainingLearnerState} TrainingLearners */
 /** @typedef {InstalledTrainingContent} TrainingContent */
+/**
+ * A server fact reader a lesson's `fact` check asks, for example one a host answers from its own state.
+ * @typedef {{
+ *   id: string,
+ *   read: (request: { actor: object, projectSlug: string, context: object }) => Promise<{ holds: boolean, reason?: string }>
+ * }} LearningFact
+ */
+/** @typedef {ReturnType<typeof import("./learningFacts.js").createLearningFacts>} LearningFacts */
 
 export {};

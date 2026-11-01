@@ -13,7 +13,10 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { readProjectRecordMetadata, updateProjectRecordMetadata } from "@local/vibe64-core/server/projectRecordMetadata";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
 import { createTrainingContentInstaller } from "../../packages/vibe64-training/src/server/contentInstaller.js";
-import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
+import {
+  createInstalledTrainingContent,
+  createInstalledTrainingContentWithDrafts
+} from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 
@@ -1865,7 +1868,7 @@ test("an isolated original store admits drafts only through its configured autho
   const f = await fixture(t, { published: false });
   const previewRoot = path.join(f.root, "author-preview");
   await fs.mkdir(previewRoot, { mode: 0o700 });
-  const content = createInstalledTrainingContent({ systemRoot: f.systemRoot, allowDraftLessons: true });
+  const content = createInstalledTrainingContentWithDrafts({ systemRoot: f.systemRoot });
   const preview = createTrainingLearnerState({ systemRoot: previewRoot, contentSystemRoot: path.join(f.root, "missing-content"), content });
   const before = await treeState(f.systemRoot);
   await assert.rejects(() => f.reserve(), /draft and cannot be taught/u);
@@ -2112,7 +2115,7 @@ test("a lesson in progress that can no longer be taught can still be archived or
     // The close (Archive, Delete, start-with-archive) needs only the lesson's verified identity.
     await assert.rejects(() => state.runPreparationExclusive({ actor: f.actor, attemptId }, async () => {}),
       { code: "VIBE64_TRAINING_LESSON_UNUSABLE" }, "preparing still needs a teachable lesson");
-    const record = await state.runPreparationExclusive({ actor: f.actor, attemptId, closing: true },
+    const record = await state.runClosingExclusive({ actor: f.actor, attemptId },
       () => state.readAttemptRecord({ actor: f.actor, attemptId }));
     assert.equal(record.lessonTitle, "Try the practice app");
     const ended = await state.endAttempt({ actor: f.actor, attemptId, requestId: `close-${index}`, expectedRevision: reserved.revision, reason });
