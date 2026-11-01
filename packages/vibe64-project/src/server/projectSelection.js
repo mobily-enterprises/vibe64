@@ -175,7 +175,7 @@ function createProjectSelection({ logger, projectContext }) {
   // example, a renewal successor before it becomes visible). Reuse only an
   // exact-id record; ordinary callers still cross the public read boundary.
   async function sessionForInput(input = {}, sessionId = "") {
-    const providedSessionId = String(input.session?.sessionId || input.session?.id || "").trim();
+    const providedSessionId = String(input.session?.sessionId || "").trim();
     return providedSessionId === sessionId
       ? input.session
       : sessionStore().readSession(sessionId);

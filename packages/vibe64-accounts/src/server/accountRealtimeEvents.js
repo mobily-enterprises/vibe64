@@ -107,7 +107,7 @@ function vibe64ConnectionsRealtimePayload(execution = {}) {
 
 function vibe64AccountAuthSessionRealtimePayload(session = {}) {
   const source = plainObject(session) || {};
-  const accountId = normalizeAccountValue(source.account?.id || source.account || "");
+  const accountId = normalizeAccountValue(source.account?.id || "");
   const sessionId = normalizeAccountValue(source.id || source.sessionId || "");
   return {
     ...(accountId ? { accountId } : {}),

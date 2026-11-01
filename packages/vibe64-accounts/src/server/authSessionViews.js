@@ -118,8 +118,8 @@ function createAuthSessionViews({ access, notifications, state, statusReads }) {
     return true;
   }
 
-  async function readSessionWithAccount(input = {}) {
-    const sessionId = String(input?.sessionId || input || "");
+  async function readSessionWithAccount(input) {
+    const sessionId = String(input.sessionId || "");
     authDebug("server.auth.read.start", {
       sessionId
     });
@@ -260,8 +260,8 @@ function createAuthSessionViews({ access, notifications, state, statusReads }) {
     });
   }
 
-  function requireVisibleAuthTerminal(input = {}) {
-    const sessionId = String(input?.terminalSessionId || input?.sessionId || input || "");
+  function requireVisibleAuthTerminal(input) {
+    const sessionId = String(input.sessionId || "");
     const metadata = authMetadata(sessionId, input);
     if (!metadata || !sessionVisibleToInput(input, metadata)) {
       return authError("unknown_auth_session", "Account auth session not found.");
@@ -277,8 +277,8 @@ function createAuthSessionViews({ access, notifications, state, statusReads }) {
   }
 
   async function cancelAuthSession(input) {
-    return access.accountChange("cancel-sign-in", input, { authSessionId: String(input.sessionId || input || "") }, async () => {
-      const id = String(input.sessionId || input || "");
+    return access.accountChange("cancel-sign-in", input, { authSessionId: String(input.sessionId || "") }, async () => {
+      const id = String(input.sessionId || "");
       const metadata = authMetadata(id, input);
       if (!metadata || !sessionVisibleToInput(input, metadata)) {
         return authError("unknown_auth_session", "Account auth session not found.");
