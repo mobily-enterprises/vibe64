@@ -48,45 +48,68 @@ const pinSchema = createSchema({
   lesson: { type: "object", required: true, schema: lessonKeySchema }
 });
 const evidenceSchema = createSchema({
-  kind: { ...text, enum: ["answer", "observation"] }, learnerId: { ...text, maxLength: 128 },
-  attemptId: { ...text, maxLength: 36 }, text: { ...text, maxLength: 2048 },
-  messageId: { ...text, required: false, maxLength: 128 }, questionId: { ...text, required: false, maxLength: 64 },
-  observationId: { ...text, required: false, maxLength: 128 }, observedAt: { ...text, required: false, maxLength: 24 },
-  projectSlug: { ...text, required: false, maxLength: 48 }, sessionId: { ...text, required: false, maxLength: 128 },
+  kind: { ...text, enum: ["answer", "observation"] },
+  learnerId: { ...text, maxLength: 128 },
+  attemptId: { ...text, maxLength: 36 },
+  text: { ...text, maxLength: 2048 },
+  messageId: { ...text, required: false, maxLength: 128 },
+  questionId: { ...text, required: false, maxLength: 64 },
+  observationId: { ...text, required: false, maxLength: 128 },
+  observedAt: { ...text, required: false, maxLength: 24 },
+  projectSlug: { ...text, required: false, maxLength: 48 },
+  sessionId: { ...text, required: false, maxLength: 128 },
   producer: { ...text, required: false, enum: ["workspace", "colleague", "exercise", "code"] },
-  operation: { ...text, required: false, maxLength: 64 }, origin: { ...text, required: false, enum: ["learner", "demonstration"] },
+  operation: { ...text, required: false, maxLength: 64 },
+  origin: { ...text, required: false, enum: ["learner", "demonstration"] },
   check: { ...text, required: false, maxLength: 64 }
 });
 const resultSchema = createSchema({
-  submissionId: { ...text, maxLength: 64 }, assessmentId: { ...text, maxLength: 64 },
-  kind: { ...text, enum: ["answer", "practical"] }, outcome: { ...text, enum: ["passed", "not-yet-passed", "needs-review"] },
+  submissionId: { ...text, maxLength: 64 },
+  assessmentId: { ...text, maxLength: 64 },
+  kind: { ...text, enum: ["answer", "practical"] },
+  outcome: { ...text, enum: ["passed", "not-yet-passed", "needs-review"] },
   evidence: { type: "object", required: true, schema: evidenceSchema },
-  explanation: { ...text, maxLength: 1024 }, assistance: { ...text, enum: ["none", "hint", "demonstration", "substantial"] },
-  rubric: text, rubricRevision: { ...text, maxLength: 64 }, recordedAt: { ...text, maxLength: 24 }
+  explanation: { ...text, maxLength: 1024 },
+  assistance: { ...text, enum: ["none", "hint", "demonstration", "substantial"] },
+  rubric: text,
+  rubricRevision: { ...text, maxLength: 64 },
+  recordedAt: { ...text, maxLength: 24 }
 });
 const resumeSchema = createSchema({
-  requestId: { ...text, maxLength: 64 }, revision, stage: { ...text, maxLength: 64 },
-  pendingQuestion: { type: "object", required: true, nullable: true, schema: createSchema({
-    id: { ...text, maxLength: 64 }, assessmentId: { ...text, maxLength: 64 }, text: { ...text, maxLength: 2048 },
-    assistance: { ...text, required: false, enum: ["none", "hint", "demonstration", "substantial"] },
-    issuedRevision: { ...revision, required: false, min: 1 }
-  }) },
+  requestId: { ...text, maxLength: 64 },
+  revision,
+  stage: { ...text, maxLength: 64 },
+  pendingQuestion: {
+    type: "object",
+    required: true,
+    nullable: true,
+    schema: createSchema({
+      id: { ...text, maxLength: 64 },
+      assessmentId: { ...text, maxLength: 64 },
+      text: { ...text, maxLength: 2048 },
+      assistance: { ...text, required: false, enum: ["none", "hint", "demonstration", "substantial"] },
+      issuedRevision: { ...revision, required: false, min: 1 }
+    })
+  },
   visuals: list(createSchema({ visualId: { ...text, maxLength: 64 }, snapshot: { type: "object", required: true } }), 12),
   summary: { ...text, minLength: 0, maxLength: 2048 }
 });
 const learningSchema = createSchema({
-  submissions: list(resultSchema, 64), resume: { type: "object", required: false, schema: resumeSchema }
+  submissions: list(resultSchema, 64),
+  resume: { type: "object", required: false, schema: resumeSchema }
 });
 // vibe64 0.1.35 attempts ended with "restart".
 const endedSchema = createSchema({
-  requestId: { ...text, maxLength: 64 }, revision,
+  requestId: { ...text, maxLength: 64 },
+  revision,
   reason: { ...text, enum: ["left", "finished", "discard", "restart"] }
 });
 // practiceId names the practice project when the attempt continues one that an
 // earlier attempt created; it is stored only when it differs from attemptId.
 // projectSlug and preparation exist only for a lesson with an exercise.
 const attemptSchema = createSchema({
-  attemptId: { ...text, maxLength: 36 }, practiceId: { ...text, required: false, maxLength: 36 },
+  attemptId: { ...text, maxLength: 36 },
+  practiceId: { ...text, required: false, maxLength: 36 },
   requestIds: { ...list({ ...text, maxLength: 64 }, MAX_REQUEST_IDS), minLength: 1 },
   createdAt: { ...text, maxLength: 24 },
   pin: { type: "object", required: true, schema: pinSchema },
@@ -96,20 +119,40 @@ const attemptSchema = createSchema({
   ended: { type: "object", required: false, schema: endedSchema }
 });
 const progressSchema = createSchema({
-  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, revision,
+  schemaVersion: version,
+  learnerId: { ...text, maxLength: 128 },
+  revision,
   activeAttemptId: { ...text, maxLength: 36, nullable: true },
   // Retain ended attempts without replacing their evidence or identities.
   attempts: list(attemptSchema, MAX_ATTEMPTS)
 });
 const activeSchema = createSchema({
-  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, progressRevision: revision,
-  attemptId: { ...text, maxLength: 36 }, practiceId: { ...text, required: false, maxLength: 36 }, pin: { type: "object", required: true, schema: pinSchema },
-  projectSlug: { ...text, required: false, maxLength: 48 }, preparation: { type: "object", required: false, schema: preparationSchema },
+  schemaVersion: version,
+  learnerId: { ...text, maxLength: 128 },
+  progressRevision: revision,
+  attemptId: {
+    ...text,
+    maxLength: 36
+  },
+  practiceId: {
+    ...text,
+    required: false,
+    maxLength: 36
+  },
+  pin: {
+    type: "object",
+    required: true,
+    schema: pinSchema
+  },
+  projectSlug: { ...text, required: false, maxLength: 48 },
+  preparation: { type: "object", required: false, schema: preparationSchema },
   learning: { type: "object", required: false, schema: learningSchema }
 });
 
 const emptyActiveSchema = createSchema({
-  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, progressRevision: revision,
+  schemaVersion: version,
+  learnerId: { ...text, maxLength: 128 },
+  progressRevision: revision,
   attemptId: { ...text, nullable: true, maxLength: 36 }
 });
 // Version 2 step results: a separate append-only per-learner record with its
@@ -117,10 +160,14 @@ const emptyActiveSchema = createSchema({
 // are kept per lesson content (code and hash), so every attempt of the same
 // lesson content shares them and pruning an attempt never loses a pass.
 const stepProgressSchema = createSchema({
-  schemaVersion: { type: "integer", required: true, enum: [2] }, learnerId: { ...text, maxLength: 128 }, revision,
-  lessons: list(createSchema({ lesson: { type: "object", required: true, schema: lessonKeySchema },
+  schemaVersion: { type: "integer", required: true, enum: [2] },
+  learnerId: { ...text, maxLength: 128 },
+  revision,
+  lessons: list(createSchema({
+    lesson: { type: "object", required: true, schema: lessonKeySchema },
     results: list(stepResultSchema, MAX_STEP_RESULTS),
-    receipts: { ...list(stepReceiptSchema, MAX_STEP_RECEIPTS), required: false } }), MAX_STEP_LESSONS)
+    receipts: { ...list(stepReceiptSchema, MAX_STEP_RECEIPTS), required: false }
+  }), MAX_STEP_LESSONS)
 });
 
 function validateStepProgress(value, learnerId) {
@@ -213,7 +260,8 @@ function validateAttempt(attempt) {
   const projectSlug = attempt.preparation ? practiceSlugFor(attemptPracticeId(attempt)) : undefined;
   if (attempt.projectSlug !== projectSlug || !attempt.preparation && attempt.practiceId !== undefined ||
       !Number.isFinite(Date.parse(attempt.createdAt)) || new Date(attempt.createdAt).toISOString() !== attempt.createdAt ||
-      !attempt.requestIds.length || attempt.requestIds.some(id => !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
+      !attempt.requestIds.length || attempt.requestIds.some(id =>
+        !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
     throw new Error("Learning state has an invalid attempt identity, reservation time or retry inventory.");
   }
 }
@@ -340,7 +388,10 @@ function passedAssessmentIds(attempt, lesson, attempts = [attempt]) {
 }
 
 function createPracticeHistoryReader({ systemRoot, content } = {}) {
-  if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) !== systemRoot || systemRoot === path.parse(systemRoot).root) {
+  if (typeof systemRoot !== "string" ||
+      !path.isAbsolute(systemRoot) ||
+      path.resolve(systemRoot) !== systemRoot ||
+      systemRoot === path.parse(systemRoot).root) {
     throw new Error("Learning state needs a canonical absolute, non-root server-owned system root.");
   }
   const installed = content;
@@ -403,7 +454,9 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
           const previousEndRevision = progress.attempts[attemptIndex - 1]?.ended?.revision || 0;
           const expectedRevision = retained?.ended ? retained.ended.revision - 1 : progress.revision;
           const expected = retained && deriveActive({ ...progress, activeAttemptId: retained.attemptId, revision: expectedRevision });
-          if (previousEndRevision && active.progressRevision <= previousEndRevision) throw new Error("Active summary predates this attempt's reservation.");
+          if (previousEndRevision && active.progressRevision <= previousEndRevision) {
+            throw new Error("Active summary predates this attempt's reservation.");
+          }
           let preparation = active.preparation;
           if (preparation && expected?.preparation && active.progressRevision < expectedRevision) {
             const previous = active.preparation;
@@ -455,7 +508,10 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
         progress,
         active,
         activeSummaryCurrent: canonicalJson(savedActive) === canonicalJson(active || (progress.revision ? {
-          schemaVersion: 1, learnerId: progress.learnerId, progressRevision: progress.revision, attemptId: null
+          schemaVersion: 1,
+          learnerId: progress.learnerId,
+          progressRevision: progress.revision,
+          attemptId: null
         } : null))
       };
     } catch (cause) {
@@ -516,7 +572,11 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     const lessonCompletions = [...byLesson.values()];
     if (!state.active) return { ...state, completion: null, lessonCompletions };
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-    return { ...state, completion: lessonCompletion(attempt, lessons.get(attempt.attemptId), state.progress.attempts, stepLessons), lessonCompletions };
+    return {
+      ...state,
+      completion: lessonCompletion(attempt, lessons.get(attempt.attemptId), state.progress.attempts, stepLessons),
+      lessonCompletions
+    };
   }
 
   /**
@@ -532,22 +592,38 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     if (workInactive || typeof installed.readExercise !== "function") {
       const lesson = await verifyInstalled(attempt.pin);
       if (!lesson.lesson.exercise) {
-        throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This saved lesson has no practice project. Use its source-less learning conversation.", 409);
+        throw failure(
+          "VIBE64_TRAINING_EXERCISE_MISSING",
+          "This saved lesson has no practice project. Use its source-less learning conversation.",
+          409
+        );
       }
       if (workInactive) {
         throw failure("VIBE64_TRAINING_ATTEMPT_INACTIVE", "Resume this exact confirmed active lesson before admitting practice work.", 409);
       }
-      throw failure("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installed content reader cannot supply the lesson's exact bundled exercise.", 409);
+      throw failure(
+        "VIBE64_TRAINING_EXERCISE_UNAVAILABLE",
+        "This installed content reader cannot supply the lesson's exact bundled exercise.",
+        409
+      );
     }
     let exercise;
     try {
-      exercise = await installed.readExercise({ ...attempt.pin.topic,
-        lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash, metadataOnly: true,
-        admissionOnly: access === "observe" || access === "control" });
+      exercise = await installed.readExercise({
+        ...attempt.pin.topic,
+        lessonCode: attempt.pin.lesson.code,
+        lessonHash: attempt.pin.lesson.hash,
+        metadataOnly: true,
+        admissionOnly: access === "observe" || access === "control"
+      });
     } catch (error) {
       if (error?.code === "VIBE64_TRAINING_EXERCISE_MISSING") {
         await verifyInstalled(attempt.pin);
-        throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This saved lesson has no practice project. Use its source-less learning conversation.", 409);
+        throw failure(
+          "VIBE64_TRAINING_EXERCISE_MISSING",
+          "This saved lesson has no practice project. Use its source-less learning conversation.",
+          409
+        );
       }
       throw error;
     }
@@ -565,7 +641,8 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
       training,
       projectSlug: attempt.projectSlug,
       ...(attempt.preparation.initialSessionId ? { initialSessionId: attempt.preparation.initialSessionId } : {}),
-      active, activeSummaryCurrent: state.activeSummaryCurrent
+      active,
+      activeSummaryCurrent: state.activeSummaryCurrent
     };
   }
 
@@ -585,11 +662,23 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
     const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
     if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
     if (attempt.practiceId) {
-      throw failure("VIBE64_TRAINING_ATTEMPT_CONFLICT", "This attempt continues a learning-space practice project; read it by its practice project.", 409);
+      throw failure(
+        "VIBE64_TRAINING_ATTEMPT_CONFLICT",
+        "This attempt continues a learning-space practice project; read it by its practice project.",
+        409
+      );
     }
     const { active, sourcePath } = await readAttemptExercise(state, attempt, access);
-    return exerciseScope(paths, state, attempt, { active, training: { schemaVersion: 1, learnerKey: paths.learner.key,
-      attemptId, pin: structuredClone(attempt.pin), exercise: { kind: "bundled", sourcePath } } });
+    return exerciseScope(paths, state, attempt, {
+      active,
+      training: {
+        schemaVersion: 1,
+        learnerKey: paths.learner.key,
+        attemptId,
+        pin: structuredClone(attempt.pin),
+        exercise: { kind: "bundled", sourcePath }
+      }
+    });
   }
 
   /**
@@ -679,7 +768,9 @@ function createPracticeHistoryReader({ systemRoot, content } = {}) {
       return { revision: record?.revision || 0, lessons: record?.lessons || [] };
     } catch (cause) {
       throw failure("VIBE64_TRAINING_STATE_INVALID",
-        `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`, null, { cause });
+        `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
+        null,
+          { cause });
     }
   }
 

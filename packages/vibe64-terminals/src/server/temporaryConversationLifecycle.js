@@ -61,7 +61,9 @@ function createTemporaryConversationLifecycle({
         : { mode: "senior", override: parentSelection };
       const requestedPreferences = input.presentation?.recoveryOperation === "update" ? { mode: "fix" }
         : input.assistantRouting || inheritedPreferences;
-      if (requestedPreferences.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
+      if (requestedPreferences.mode === "auto") {
+        throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
+      }
       if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw teamTemporaryModesRefusal();
       const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false, autoSave: false });
       const initialPresentation = presentation(input.presentation);
@@ -72,12 +74,17 @@ function createTemporaryConversationLifecycle({
         ...initialPresentation,
         number: Math.max(0, ...numbers) + 1,
         ...(Object.hasOwn(initialPresentation, "draft") ? { draftRevision: randomUUID() } : {}),
-        ...(preferences ? { routingMetadata: { assistant_routing: JSON.stringify(preferences),
-          ...(recentContext ? { assistant_changeover: JSON.stringify({ lastEngine: "", engines: {} }) } : {}) } } : {}),
+        ...(preferences ? {
+          routingMetadata: {
+            assistant_routing: JSON.stringify(preferences),
+            ...(recentContext ? { assistant_changeover: JSON.stringify({ lastEngine: "", engines: {} }) } : {})
+          }
+        } : {}),
         ...(recentContext ? { recentChatContext: recentContext } : {}),
         agentSettings: input.agentSettings || {},
         assistantSelection: parentSelection,
-        providerConversationId: "", nativeBindings: {},
+        providerConversationId: "",
+        nativeBindings: {},
         state: "open",
         status: "ready",
         attachments: []
@@ -113,9 +120,13 @@ function createTemporaryConversationLifecycle({
     if (result.conversations.some(record => record.deferredReconciliation)) return result;
     // Provider availability is read-only and can be slow. Polling must not
     // hold the session write lock while looking up every chat's modes.
-    return { ...result, conversations: await Promise.all(result.conversations.map(async (record) => ({
-      ...record, purposes: await chatRecords.purposes(context, record)
-    }))) };
+    return {
+      ...result,
+      conversations: await Promise.all(result.conversations.map(async (record) => ({
+        ...record,
+        purposes: await chatRecords.purposes(context, record)
+      })))
+    };
   }
 
   async function readTemporaryConversation(sessionId, input = {}, options = {}, transcriptQuery) {
@@ -137,7 +148,8 @@ function createTemporaryConversationLifecycle({
     const messages = result.messages || [];
     const end = input.beforeMessageId ? messages.findIndex((message) => message.id === input.beforeMessageId) : messages.length;
     if (end < 0) throw Object.assign(new Error("This message cursor no longer exists. Read the latest messages again."), {
-      code: "vibe64_conversation_cursor_missing", statusCode: 409
+      code: "vibe64_conversation_cursor_missing",
+      statusCode: 409
     });
     const start = Math.max(0, end - (input.messageLimit || 12));
     return { ...result, messages: messages.slice(start, end), earlierMessages: start > 0 };
@@ -155,7 +167,8 @@ function createTemporaryConversationLifecycle({
   /** Removes a chat's open runtime entry, with its handles, from memory. */
   function retireOpenEntry(runtime, sessionId, conversationId) {
     return conversationRuntime.retireOpenConversation({
-      namespace: temporaryConversationNamespace(runtime, sessionId, conversationId), sessionId
+      namespace: temporaryConversationNamespace(runtime, sessionId, conversationId),
+      sessionId
     });
   }
 
@@ -173,9 +186,14 @@ function createTemporaryConversationLifecycle({
       return conversationRuntime.deletePersistentConversation(chatTurns.persistentConversationOptions(ctx, record));
     });
     if (result.ok) {
-      await chatRecords.publish(context, input.conversationId, { payload: { conversationStream: context.runtime.store.clearConversationStream({
-        sessionId, conversationId: input.conversationId
-      }) } });
+      await chatRecords.publish(context, input.conversationId, {
+        payload: {
+          conversationStream: context.runtime.store.clearConversationStream({
+            sessionId,
+            conversationId: input.conversationId
+          })
+        }
+      });
       // The closed chat's open runtime entry and its handles leave memory now.
       await retireOpenEntry(context.runtime, sessionId, input.conversationId);
       await publishSessionChanged(sessionId, {
@@ -205,7 +223,8 @@ function createTemporaryConversationLifecycle({
       try {
         const record = await chatTurns.write(sessionId, options, async (ctx) => {
           const conversations = await ctx.runtime.store.listSessionConversations(sessionId);
-          const completed = conversations.find((item) => item.providerConversationId === payload.conversationId && item.state !== "closing");
+          const completed = conversations.find((item) =>
+            item.providerConversationId === payload.conversationId && item.state !== "closing");
           if (!completed) return null;
           // Persist the completed reply before review checks for unanswered questions.
           const observed = await chatTurns.snapshot(ctx, completed);
@@ -213,7 +232,10 @@ function createTemporaryConversationLifecycle({
           return completed;
         });
         throwIfAgentWriteBusy(record);
-        if (record?.conversationId) await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, { ...options, conversationId: record.conversationId });
+        if (record?.conversationId) await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, {
+          ...options,
+          conversationId: record.conversationId
+        });
         return;
       } catch (error) {
         if (error?.code !== "vibe64_agent_write_mode_busy" || attempt >= temporaryCompletionAttempts) throw error;

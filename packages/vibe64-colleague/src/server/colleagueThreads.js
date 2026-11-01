@@ -21,7 +21,11 @@ import { releaseObserver } from "./colleaguePresentation.js";
  * @param {ColleagueServiceState} dependencies.serviceState
  * @param {ColleagueRecords} dependencies.records
  */
-function createColleagueThreads({ systemRoot, serviceState, records }) {
+function createColleagueThreads({
+  systemRoot,
+  serviceState,
+  records
+}) {
   function userKey(context) {
     const user = authenticatedVibe64User(context);
     return Buffer.from(String(user?.uid ?? user?.username ?? "local")).toString("base64url");
@@ -138,32 +142,78 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
     try { saved = JSON.parse(await readFile(file, "utf8")); }
     catch (error) {
       if (error.code === "ENOENT") saved = undefined;
-      else if (error instanceof SyntaxError) throw failure("Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.", "colleague_history_invalid", 503);
+      else if (error instanceof SyntaxError) throw failure(
+        "Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.",
+        "colleague_history_invalid",
+        503
+      );
       else throw error;
     }
-    if (saved && saved.schemaVersion !== 3) throw failure("Run the candidate Vibe64 state upgrade with services stopped before opening this Colleague history; no state was changed.");
+    if (saved && saved.schemaVersion !== 3) {
+      throw failure(
+        "Run the candidate Vibe64 state upgrade with services stopped before opening this Colleague history; no state was changed."
+      );
+    }
     const record = saved || {
-      schemaVersion: 3, runtimeId: key, previousConversations: [], scopeId: `colleague_${randomUUID().replaceAll("-", "")}`,
-      assistantSelection: null, status: "ready", error: "", conversationLog: []
+      schemaVersion: 3,
+      runtimeId: key,
+      previousConversations: [],
+      scopeId: `colleague_${randomUUID().replaceAll("-", "")}`,
+      assistantSelection: null,
+      status: "ready",
+      error: "",
+      conversationLog: []
     };
     try { validateColleagueConversationRecord(record, key); }
     catch {
-      throw failure("Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.", "colleague_history_invalid", 503);
+      throw failure(
+        "Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.",
+        "colleague_history_invalid",
+        503
+      );
     }
     record.watches ||= [];
     record.observations ||= [];
     if (!serviceState.browsers.has(owner)) serviceState.browsers.set(owner, new Map());
     const state = {
-      key, userKey: owner, thread: develop ? { kind: "develop" } : { kind: "learn", ...(thread.attemptId ? { attemptId: thread.attemptId } : {}) },
-      file, root, record, connections: serviceState.browsers.get(owner),
-      saving: Promise.resolve(), admission: Promise.resolve(), running: null,
-      streamEpoch: randomUUID(), streamRevision: 0,
-      generation: 0, requestContext: null, streamingReply: null,
-      operationContext: null, operationRunId: "",
-      interimReply: null, projectReply: null,
-      stopping: false, rotating: false, opening: 0, conversation: null, host: null, selecting: null, observationIds: [],
-      runtimeOwner: null, transfer: null, pendingMessages: [], nextConnection: null, workerAbort: null,
-      watchTimer: null, polling: null, watchDirty: false, watchAdmission: Promise.resolve(),
+      key,
+      userKey: owner,
+      thread: develop ? { kind: "develop" } : {
+        kind: "learn",
+        ...(thread.attemptId ? { attemptId: thread.attemptId } : {})
+      },
+      file,
+      root,
+      record,
+      connections: serviceState.browsers.get(owner),
+      saving: Promise.resolve(),
+      admission: Promise.resolve(),
+      running: null,
+      streamEpoch: randomUUID(),
+      streamRevision: 0,
+      generation: 0,
+      requestContext: null,
+      streamingReply: null,
+      operationContext: null,
+      operationRunId: "",
+      interimReply: null,
+      projectReply: null,
+      stopping: false,
+      rotating: false,
+      opening: 0,
+      conversation: null,
+      host: null,
+      selecting: null,
+      observationIds: [],
+      runtimeOwner: null,
+      transfer: null,
+      pendingMessages: [],
+      nextConnection: null,
+      workerAbort: null,
+      watchTimer: null,
+      polling: null,
+      watchDirty: false,
+      watchAdmission: Promise.resolve(),
       browserObservers: new Set()
     };
     state.navigation = createColleagueNavigationCoordination({ changed: () => records.publishBrowserChange(state) });
@@ -185,7 +235,11 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
 
   function assertCurrentConversation(state, conversationId) {
     if (conversationId && conversationId !== state.record.scopeId) {
-      throw failure("This Colleague conversation has been retained as read-only history. Open the current conversation before sending.", "ACTION_VALIDATION_FAILED", 400);
+      throw failure(
+        "This Colleague conversation has been retained as read-only history. Open the current conversation before sending.",
+        "ACTION_VALIDATION_FAILED",
+        400
+      );
     }
   }
 
@@ -193,14 +247,28 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
     // Do not copy the reserved authorization result from a previous action.
     // The host rechecks this real request for every tool and model exchange.
     return {
-      surface: "app", channel: "automation", requestMeta: state.requestContext.requestMeta,
+      surface: "app",
+      channel: "automation",
+      requestMeta: state.requestContext.requestMeta,
       projectSlug: connection.focus?.projectSlug || "",
-      colleague: { userKey: state.userKey, threadKey: state.key, thread: state.thread.kind,
-        conversationId: state.record.scopeId, clientId: connection.clientId, focus: connection.focus }
+      colleague: {
+        userKey: state.userKey,
+        threadKey: state.key,
+        thread: state.thread.kind,
+        conversationId: state.record.scopeId,
+        clientId: connection.clientId,
+        focus: connection.focus
+      }
     };
   }
 
-  return Object.freeze({ userKey, stateFor, assertCurrentConversation, actionContext, unregisterReleaser });
+  return Object.freeze({
+    userKey,
+    stateFor,
+    assertCurrentConversation,
+    actionContext,
+    unregisterReleaser
+  });
 }
 
 export { createColleagueThreads };

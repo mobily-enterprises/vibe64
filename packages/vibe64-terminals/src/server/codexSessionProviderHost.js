@@ -1,6 +1,6 @@
 import { codexAppServerAgentRun,
   codexAppServerInterruptUnavailableResponse as nativeCodexAppServerInterruptUnavailableResponse,
-  codexAppServerFrozenTurnInterruptResponse as nativeCodexAppServerFrozenTurnInterruptResponse,
+  codexAppServerFrozenTurnInterruptResponse as nativeCodexAppServerFrozenTurnInterruptResponse
 } from "@jskit-ai/assistant-core/server/codex-turn";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
@@ -119,7 +119,9 @@ function createCodexSessionProviderHost(host) {
     return {
       preserveProcessExitProof: options.executionMode !== CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
       owner: {
-        sessionKey: codexTerminalNamespace(sessionId), sessionId, projectContext,
+        sessionKey: codexTerminalNamespace(sessionId),
+        sessionId,
+        projectContext,
         workdir: identity.workdir
       },
       observation: codexAppServerObservation({ sessionId, providerKey, projectContext }),
@@ -185,7 +187,7 @@ function createCodexSessionProviderHost(host) {
               throw new Error("The assistant's current tool connections did not pass their health checks.");
             }
             return current;
-          }),
+          })
         };
       },
       async prepareResumeGuard() {
@@ -266,18 +268,27 @@ function createCodexSessionProviderHost(host) {
     const sessionId = owner.sessionId;
     if (event === "lost") {
       logOperationalEvent(logger, "warn", {
-        component: "vibe64.codex_observation", event: "vibe64.codex_observation.lost",
-        sessionId, code: error.code, error: error.message, cause: error.cause?.message || ""
+        component: "vibe64.codex_observation",
+        event: "vibe64.codex_observation.lost",
+        sessionId,
+        code: error.code,
+        error: error.message,
+        cause: error.cause?.message || ""
       }, "Codex observation was lost; verifying that work stops.");
     } else if (event === "stopFailed") {
       logOperationalEvent(logger, "warn", {
-        component: "vibe64.codex_observation", event: "vibe64.codex_observation.stop_failed",
-        sessionId, code: error.code, error: error.message, cause: error.cause?.message || ""
+        component: "vibe64.codex_observation",
+        event: "vibe64.codex_observation.stop_failed",
+        sessionId,
+        code: error.code,
+        error: error.message,
+        cause: error.cause?.message || ""
       }, "Codex stop remains unconfirmed; connection checks will retry.");
     }
     if (event !== "lost") {
       vibe64SessionDebugLog(`server.codexTerminal.observation.${event}`, {
-        sessionId, error: vibe64SessionDebugError(error)
+        sessionId,
+        error: vibe64SessionDebugError(error)
       });
     }
   }

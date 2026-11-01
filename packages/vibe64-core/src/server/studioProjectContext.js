@@ -93,11 +93,28 @@ function createStudioProjectContext({
   });
   let selectionSource = selectedTargetRoot ? "explicit" : "";
 
-  const learningProjects = createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed, practiceOwner, systemRoot });
+  const learningProjects = createLearningSpaceProjects({
+    learningSpaceRoot,
+    learningSpaceRootNamed,
+    practiceOwner,
+    systemRoot
+  });
 
-  const paths = createProjectPaths({ managedSourceRoot, practiceOwner, projectCatalogEnabled, projectsRoot, systemRoot });
+  const paths = createProjectPaths({
+    managedSourceRoot,
+    practiceOwner,
+    projectCatalogEnabled,
+    projectsRoot,
+    systemRoot
+  });
 
-  const workspaceRecords = createWorkspaceProjectRecords({ learningProjects, paths, projectCatalogEnabled, projectsRoot, systemRoot });
+  const workspaceRecords = createWorkspaceProjectRecords({
+    learningProjects,
+    paths,
+    projectCatalogEnabled,
+    projectsRoot,
+    systemRoot
+  });
 
   function selectedProject() {
     return selectedTargetRoot

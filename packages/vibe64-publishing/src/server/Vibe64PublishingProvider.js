@@ -39,7 +39,12 @@ const Vibe64PublishingProvider = defineFeature({
    * @param {SourceEditorService} capabilities.sourceEditor
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
-  setup({ colleague, http, project, sourceEditor }, { actionCatalogue }) {
+  setup({
+    colleague,
+    http,
+    project,
+    sourceEditor
+  }, { actionCatalogue }) {
     const publishing = createPublishingService({ project, sourceEditor });
     registerRoutes(http, { publishing });
     colleague.registerWatchSource(publicationWatchSource({ actions: actionCatalogue }));

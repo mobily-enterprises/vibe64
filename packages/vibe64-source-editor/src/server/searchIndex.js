@@ -116,7 +116,11 @@ function createSourceEditorSearchIndex() {
     return queue.finally(() => entries.clear());
   }
 
-  return Object.freeze({ search, invalidate, close });
+  return Object.freeze({
+    search,
+    invalidate,
+    close
+  });
 }
 
 export { createSourceEditorSearchIndex, sourceEditorIndexDirectory };

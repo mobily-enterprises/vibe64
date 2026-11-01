@@ -30,7 +30,11 @@ import {
   findVibe64AgentProvider,
   vibe64HelperExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
-import { codexAttachmentLimitResult, renewAcceptedCodexAttachments, validateCodexAttachmentsBeforeDelivery } from "./codexAttachmentDelivery.js";
+import {
+  codexAttachmentLimitResult,
+  renewAcceptedCodexAttachments,
+  validateCodexAttachmentsBeforeDelivery
+} from "./codexAttachmentDelivery.js";
 
 /** @typedef {import("../../types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-provider").createCodexAppServerProviderOwner>} CodexAppServerProviderOwner */
@@ -260,9 +264,13 @@ function createCodexSessionAgentProvider({
     throw new TypeError("Codex session agent provider requires its catalogue facility.");
   }
   const { prepareCodexRenewalHandover, prepareCodexRenewalSeed, prepareRenewalProcessExitProof } = renewalPreparation;
-  const { prepareNativeStorageProvider, prepareCodexAppServerThreadUnsubscription,
-    codexAppServerReconciliationPreparation, prepareCodexSessionCleanup,
-    prepareCodexProjectCleanup } = codexLifecyclePreparation;
+  const {
+    prepareNativeStorageProvider,
+    prepareCodexAppServerThreadUnsubscription,
+    codexAppServerReconciliationPreparation,
+    prepareCodexSessionCleanup,
+    prepareCodexProjectCleanup
+  } = codexLifecyclePreparation;
   const nativeSessionResult = result => Object.hasOwn(result, "session")
     ? withCodexState(result.value, result.session) : result.value;
 
@@ -283,20 +291,26 @@ function createCodexSessionAgentProvider({
   function prepareConversationHost(sessionId, context = {}, mode = "main") {
     if (mode === "activity" || mode === "settings") return { native: { runOwner: codexAppServerRunOwner } };
     if (mode === "renewalProof") return {
-      native: { providerOwner: codexAppServerProviderOwner, preparation: {
-        predecessor(options) {
-          return prepareRenewalProcessExitProof(renewalArchivedPredecessorContext(sessionId, options).session);
-        },
-        successor(options) {
-          return prepareRenewalProcessExitProof(renewalSuccessorProcessExitProofReleaseContext(sessionId, options).session);
+      native: {
+        providerOwner: codexAppServerProviderOwner,
+        preparation: {
+          predecessor(options) {
+            return prepareRenewalProcessExitProof(renewalArchivedPredecessorContext(sessionId, options).session);
+          },
+          successor(options) {
+            return prepareRenewalProcessExitProof(renewalSuccessorProcessExitProofReleaseContext(sessionId, options).session);
+          }
         }
-      } }
+      }
     };
     if (mode === "renewal") return {
-      native: { runOwner: codexAppServerRunOwner, preparation: {
-        handover: (input, current) => prepareCodexRenewalHandover(sessionId, input, current),
-        seed: (input, current) => prepareCodexRenewalSeed(sessionId, input, current)
-      } }
+      native: {
+        runOwner: codexAppServerRunOwner,
+        preparation: {
+          handover: (input, current) => prepareCodexRenewalHandover(sessionId, input, current),
+          seed: (input, current) => prepareCodexRenewalSeed(sessionId, input, current)
+        }
+      }
     };
     if (mode === "reconciliation") return {
       native: { runOwner: codexAppServerRunOwner, preparation: codexAppServerReconciliationPreparation() }
@@ -316,8 +330,11 @@ function createCodexSessionAgentProvider({
     };
     if (mode === "detached" || mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
     if (mode === "storage") return {
-      native: { providerOwner: codexAppServerProviderOwner, errorPrefix: "vibe64_",
-        preparation: { storage: prepareNativeStorageProvider } }
+      native: {
+        providerOwner: codexAppServerProviderOwner,
+        errorPrefix: "vibe64_",
+        preparation: { storage: prepareNativeStorageProvider }
+      }
     };
     if (mode === "projectCleanup") return {
       native: { runOwner: codexAppServerRunOwner, preparation: { projectCleanup: prepareCodexProjectCleanup } }
@@ -327,18 +344,23 @@ function createCodexSessionAgentProvider({
         native: { runOwner: codexAppServerRunOwner, preparation: { readiness: () => codexConversationPreparation.readiness(sessionId) } }
       };
       if (mode === "scoped" || mode === "create" || mode === "dispose") return {
-        ...(mode === "dispose" ? { cleanupOptions: {
-          ...(context.assistantScope ? { assistantScope: context.assistantScope } : {}),
-          changeover: context.changeover === true,
-          preserveProcessExitProof: context.preserveProcessExitProof === true,
-          renewalCleanup: context.renewalCleanup,
-          runtime: context.runtime,
-          session: context.session
-        } } : {}),
+        ...(mode === "dispose" ? {
+          cleanupOptions: {
+            ...(context.assistantScope ? { assistantScope: context.assistantScope } : {}),
+            changeover: context.changeover === true,
+            preserveProcessExitProof: context.preserveProcessExitProof === true,
+            renewalCleanup: context.renewalCleanup,
+            runtime: context.runtime,
+            session: context.session
+          }
+        } : {}),
         namespace: codexTerminalNamespace(sessionId),
-        native: { runOwner: codexAppServerRunOwner, providerOwner: codexAppServerProviderOwner,
+        native: {
+          runOwner: codexAppServerRunOwner,
+          providerOwner: codexAppServerProviderOwner,
           namespace: codexTerminalNamespace(sessionId),
-          preparation: { cleanup: options => prepareCodexSessionCleanup(sessionId, options) } }
+          preparation: { cleanup: options => prepareCodexSessionCleanup(sessionId, options) }
+        }
       };
       const { runtime } = context;
       const session = context.session || await codexConversationStorage.readSession(sessionId);
@@ -361,8 +383,11 @@ function createCodexSessionAgentProvider({
           const limit = await readCodexModelContextWindow({ runtimeDir: (await current.provider.currentRuntimeInfo()).runtimeDir, model });
           const usage = sessionContextUsageFromMetadata(current.session.metadata, { expectedThreadId: target.threadId });
           if (usage?.providerId === "codex") {
-            return { model, usedTokens: usage.usedTokens,
-              windowTokens: Math.min(limit.effectiveWindowTokens, usage.windowTokens) };
+            return {
+              model,
+              usedTokens: usage.usedTokens,
+              windowTokens: Math.min(limit.effectiveWindowTokens, usage.windowTokens)
+            };
           }
           // Missing usage is zero only for a natively verified empty thread.
           // An existing thread without its receipt must never get a full budget.
@@ -375,7 +400,8 @@ function createCodexSessionAgentProvider({
           return { model, usedTokens: 0, windowTokens: limit.effectiveWindowTokens };
         },
         native: {
-          runOwner: codexAppServerRunOwner, providerOwner: codexAppServerProviderOwner,
+          runOwner: codexAppServerRunOwner,
+          providerOwner: codexAppServerProviderOwner,
           admission: () => beginTerminalNamespaceOperation(codexTerminalNamespace(sessionId)),
           messagePreparation,
           controlPreparation: (options, input) => codexConversationPreparation.control(sessionId, options, input),
@@ -393,24 +419,32 @@ function createCodexSessionAgentProvider({
   }
 
   function prepareConversationRequest(method, context, input = {}) {
-    if (method === "releaseRenewalPredecessorProcessExitProof") return { context: {
-      renewalId: input.renewalId,
-      runtime: context.runtime,
-      session: context.session
-    } };
-    if (method === "releaseRenewalSuccessorProcessExitProof") return { context: {
-      authorization: input.authorization,
-      renewalId: input.renewalId,
-      runtime: context.runtime,
-      session: context.session
-    } };
+    if (method === "releaseRenewalPredecessorProcessExitProof") return {
+      context: {
+        renewalId: input.renewalId,
+        runtime: context.runtime,
+        session: context.session
+      }
+    };
+    if (method === "releaseRenewalSuccessorProcessExitProof") return {
+      context: {
+        authorization: input.authorization,
+        renewalId: input.renewalId,
+        runtime: context.runtime,
+        session: context.session
+      }
+    };
     if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
-      input: { ...input, agentSettings: codexAssistantSettings(context, input),
-        vibe64User: input.vibe64User || context.vibe64User || null },
+      input: {
+        ...input,
+        agentSettings: codexAssistantSettings(context, input),
+        vibe64User: input.vibe64User || context.vibe64User || null
+      },
       context: { runtime: context.runtime, session: context.session }
     };
     if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
-      input, context: { runtime: context.runtime, session: context.session }
+      input,
+      context: { runtime: context.runtime, session: context.session }
     };
     if (method === "ensureSession") return { context: {} };
     if (method === "createConversation") return {
@@ -418,7 +452,9 @@ function createCodexSessionAgentProvider({
       context: { assistantScope: context.assistantScope, runtime: context.runtime, session: context.session }
     };
     if (method === "closeSession") return {
-      namespace: codexTerminalNamespace(context.sessionId), sessionId: context.sessionId, context,
+      namespace: codexTerminalNamespace(context.sessionId),
+      sessionId: context.sessionId,
+      context,
       options: {
         changeover: context.changeover === true,
         forgetConversationBinding: context.forgetConversationBinding === true,
@@ -427,7 +463,9 @@ function createCodexSessionAgentProvider({
         session: context.session
       }
     };
-    if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(method)) {
+    if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(
+      method
+    )) {
       const message = method === "startConversationTurn" ? {
         ...input,
         agentSettings: codexAssistantSettings(context, input),
@@ -451,10 +489,13 @@ function createCodexSessionAgentProvider({
           message: input,
           vibe64User: context.vibe64User || null
         };
-    return { input: message, async prepareInput(changes) {
-      const prepared = { ...message, ...changes };
-      return context.prepareMessage ? context.prepareMessage(prepared) : prepared;
-    } };
+    return {
+      input: message,
+      async prepareInput(changes) {
+        const prepared = { ...message, ...changes };
+        return context.prepareMessage ? context.prepareMessage(prepared) : prepared;
+      }
+    };
   }
 
   async function projectConversationResult(method, perform) {
@@ -532,8 +573,10 @@ function createCodexSessionAgentProvider({
     return resolveCodexHelperExecutionProfile(
       executionProfile,
       await codexAssistantCatalog.executionProfileModelCatalog(context.sessionId, {
-        ...(context.assistantScope ? { assistantScope: context.assistantScope,
-          agentSettings: codexAssistantSettings(context) } : {}),
+        ...(context.assistantScope ? {
+          assistantScope: context.assistantScope,
+          agentSettings: codexAssistantSettings(context)
+        } : {}),
         runtime: context.runtime,
         session: context.session,
         signal: context.signal,
@@ -602,7 +645,36 @@ function createCodexSessionAgentProvider({
     transportId: VIBE64_ASSISTANT_TRANSPORT_IDS.CODEX_APP_SERVER,
     prepareSelection: prepareCodexModelRouting,
     prepareConversationHost,
-    conversationOperations: Object.freeze(["createConversation", "ensureSession", "updateSessionSettings", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readGoal", "updateGoal", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "unsubscribeSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation"]),
+    conversationOperations: Object.freeze([
+      "createConversation",
+      "ensureSession",
+      "updateSessionSettings",
+      "sendMessage",
+      "sessionState",
+      "inspectMessageAdmission",
+      "interruptTurn",
+      "readGoal",
+      "updateGoal",
+      "readConversation",
+      "startConversationTurn",
+      "waitForConversationTurn",
+      "stopConversation",
+      "deleteConversation",
+      "closeSession",
+      "closeProject",
+      "invalidateRuntimes",
+      "reconcileSessions",
+      "unsubscribeSessions",
+      "generateSessionRenewalHandover",
+      "seedSessionRenewalHandover",
+      "releaseRenewalPredecessorProcessExitProof",
+      "releaseRenewalSuccessorProcessExitProof",
+      "interruptDetachedChatTurn",
+      "deleteDetachedChatThread",
+      "listNativeConversationStorage",
+      "retireConversationHistory",
+      "hasActiveTemporaryConversation"
+    ]),
     prepareConversationRequest,
     projectConversationResult,
     runDetachedChatTurn,

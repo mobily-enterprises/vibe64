@@ -102,7 +102,8 @@ async function inspectVibe64Service(executionId) {
   const killed = ["2", "3", "killed", "dumped"].includes(reason);
   const signal = result.signal || (killed ? (status.startsWith("SIG") ? status
     : Object.entries(constants.signals).find(([, number]) => String(number) === status)?.[0]) : null);
-  return { ...result,
+  return {
+    ...result,
     running: exited || killed || result.scopeEmpty === true ? false : result.scopeEmpty === false ? true : null,
     exitCode: exited && /^\d+$/u.test(status) ? Number(status) : null,
     signal: signal || null

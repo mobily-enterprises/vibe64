@@ -122,7 +122,16 @@ function createRenewalAdmission() {
     return closePromise;
   }
 
-  return Object.freeze({ admitMutation, assertWorkflowAdmissionOpen, drain, isOpen, runConfirmationOnce, runOnce, stop, trackRecovery });
+  return Object.freeze({
+    admitMutation,
+    assertWorkflowAdmissionOpen,
+    drain,
+    isOpen,
+    runConfirmationOnce,
+    runOnce,
+    stop,
+    trackRecovery
+  });
 }
 
 export { createRenewalAdmission };

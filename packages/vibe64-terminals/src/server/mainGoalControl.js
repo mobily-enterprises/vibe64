@@ -12,7 +12,8 @@ function requestMainGoalControl(operation, input, context) {
   if (typeof context.mainGoalControl?.[operation] !== "function" ||
       (context.vibe64Action?.project || currentProjectRequestContext())?.slug !== context.projectSlug) {
     throw Object.assign(new Error("Only this goal's admitted Main conversation can request this goal control."), {
-      code: "vibe64_main_goal_control_required", statusCode: 403
+      code: "vibe64_main_goal_control_required",
+      statusCode: 403
     });
   }
   return context.mainGoalControl[operation](input);

@@ -108,7 +108,13 @@ function genesisEnvironmentIsUnconfigured(error) {
  * @param {ProjectResourceEnvironment} dependencies.resourceEnvironmentProvider
  * @param {SavedEnvValues} dependencies.savedEnvValues
  */
-function createProjectEnvironment({ env, inspectEnvironment, resourceEnvironmentProvider, savedEnvValues, selection }) {
+function createProjectEnvironment({
+  env,
+  inspectEnvironment,
+  resourceEnvironmentProvider,
+  savedEnvValues,
+  selection
+}) {
   async function userEnvRecords() {
     return (await readEnvUserValues({
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot()

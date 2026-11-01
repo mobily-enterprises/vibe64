@@ -40,7 +40,9 @@ function versionMap(values, label) {
  */
 function releaseTagName({ packageId, version, independent }) {
   if (!isSemver(version)) invalid(`Version ${version} is not a semantic version such as 1.5.0.`);
-  if (!isReleaseVersion(version)) invalid(`Version ${version} has build metadata (+…), which a release tag such as v1.5.0 cannot hold. Choose a version without it.`);
+  if (!isReleaseVersion(version)) {
+    invalid(`Version ${version} has build metadata (+…), which a release tag such as v1.5.0 cannot hold. Choose a version without it.`);
+  }
   return independent ? `${packageId}@${version}` : `v${version}`;
 }
 
@@ -66,7 +68,9 @@ function normalizeTargets(targets, packages) {
     if (!destination.packers.includes(entry.packer)) {
       invalid(`Target ${id}: ${destination.label} cannot publish a ${entry.packer} package.`);
     }
-    const channel = target.channel === undefined || target.channel === null || target.channel === "" ? null : oneLine(target.channel, `Target ${id} channel`);
+    const channel = target.channel === undefined || target.channel === null || target.channel === ""
+      ? null
+      : oneLine(target.channel, `Target ${id} channel`);
     if (channel && !destination.channels.some((known) => channel === known || channel.startsWith(`${known}:`))) {
       invalid(`Target ${id}: ${destination.label} has no channel ${channel}.`);
     }
@@ -88,7 +92,9 @@ function targetSettings(settings, id) {
   const plain = (value) => typeof value === "string" || typeof value === "boolean"
     || (Array.isArray(value) && value.every((item) => typeof item === "string"));
   for (const [name, value] of Object.entries(settings)) {
-    if (!/^[a-z][A-Za-z0-9]*$/u.test(name) || !plain(value)) invalid(`Target ${id} setting ${name} must be text, true/false or a list of text.`);
+    if (!/^[a-z][A-Za-z0-9]*$/u.test(name) || !plain(value)) {
+      invalid(`Target ${id} setting ${name} must be text, true/false or a list of text.`);
+    }
   }
   return Object.fromEntries(Object.entries(settings).sort(([left], [right]) => left.localeCompare(right)));
 }
@@ -146,7 +152,9 @@ function createPublishPlan({
     };
   });
   for (const id of Object.keys(buildNumbers)) {
-    if (!built.some((entry) => entry.id === id && entry.buildNumber)) invalid(`Build number given for ${id}, which this release does not build as an app.`);
+    if (!built.some((entry) => entry.id === id && entry.buildNumber)) {
+      invalid(`Build number given for ${id}, which this release does not build as an app.`);
+    }
   }
   for (const id of Object.keys(versions)) {
     if (!built.some((entry) => entry.id === id && entry.version)) invalid(`Version given for ${id}, which this release does not publish.`);

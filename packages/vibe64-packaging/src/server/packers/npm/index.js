@@ -50,7 +50,10 @@ async function buildRecipe({ sourceRoot, entry, version = null, commitTime = nul
   }
   const tarball = path.join(packageRoot, npmTarballName(manifest.name, manifest.version));
   if (await stat(tarball).catch(() => null)) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `${path.basename(tarball)} is committed in the source; remove it so the build makes it fresh.`);
+    throw publishError(
+      "VIBE64_PUBLISH_BUILD_INVALID",
+      `${path.basename(tarball)} is committed in the source; remove it so the build makes it fresh.`
+    );
   }
   return {
     packageName: manifest.name,

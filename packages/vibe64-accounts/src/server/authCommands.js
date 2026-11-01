@@ -170,7 +170,8 @@ function parseAuthOutput({
   if (mode === DEVICE_AUTH_MODE) {
     const userCode = deviceUserCode(output);
     return {
-      authUrl: firstMatchingUrl(output, (url) => url.includes("openai.com/") || url.includes("chatgpt.com/")) || (userCode ? CODEX_DEVICE_AUTH_URL : ""),
+      authUrl: firstMatchingUrl(output, (url) => url.includes("openai.com/") || url.includes("chatgpt.com/")) ||
+        (userCode ? CODEX_DEVICE_AUTH_URL : ""),
       userCode
     };
   }
@@ -192,7 +193,7 @@ function authTerminalMetadata(accountId, mode, githubContext = null, actorId = "
   const metadata = {
     accountId,
     credentialScope: ACCOUNT_DEFINITIONS[accountId]?.scope || "",
-    mode,
+    mode
   };
   if (actorId) {
     metadata.actorId = String(actorId);

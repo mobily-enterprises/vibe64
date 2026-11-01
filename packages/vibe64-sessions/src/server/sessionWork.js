@@ -29,11 +29,22 @@ import { trustedAssistantUser } from "./trustedAssistantUser.js";
  * @param {SessionWorkOperations} dependencies.workOperations
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
-function createSessionWork({ connectedContributions, project, publishSessionChanged, recovery, repositoryUpdates, terminals, workOperations, workspaceSetup }) {
+function createSessionWork({
+  connectedContributions,
+  project,
+  publishSessionChanged,
+  recovery,
+  repositoryUpdates,
+  terminals,
+  workOperations,
+  workspaceSetup
+}) {
   const activeWorkInspections = new Map();
 
   async function inspectSessionWork(sessionId, requestContext = {}, {
-    includeConnected = true, inspectContributionPublication = false, knownSubmittedCommit = ""
+    includeConnected = true,
+    inspectContributionPublication = false,
+    knownSubmittedCommit = ""
   } = {}) {
     return sessionResult(async () => {
       const runtime = await project.createRuntime({
@@ -62,8 +73,11 @@ function createSessionWork({ connectedContributions, project, publishSessionChan
       let inspection = activeWorkInspections.get(inspectionKey);
       if (!inspection) {
         inspection = Promise.resolve().then(() => terminals.inspectSessionWork(sessionId, {
-          runtime, session, ...(inspectContributionPublication ? {
-            inspectContributionPublication: true, knownSubmittedCommit: confirmedContributionCommit
+          runtime,
+          session,
+          ...(inspectContributionPublication ? {
+            inspectContributionPublication: true,
+            knownSubmittedCommit: confirmedContributionCommit
           } : {})
         }));
         activeWorkInspections.set(inspectionKey, inspection);
@@ -156,12 +170,19 @@ function createSessionWork({ connectedContributions, project, publishSessionChan
         return await terminals.createSessionPullRequest(sessionId, {
           assertConnectedWorkSaved: () => connectedContributions.assertConnectedWorkSaved(runtime, sessionId, requestContext),
           destinationReview: input.destinationReview,
-          title: input.title, body: input.body, draft: input.draft,
-          operationId: crypto.randomUUID(), runtime, session, vibe64User
+          title: input.title,
+          body: input.body,
+          draft: input.draft,
+          operationId: crypto.randomUUID(),
+          runtime,
+          session,
+          vibe64User
         });
       } finally {
         await publishSessionChanged(sessionId, {
-          operation: "updated", originId: text(input.originId), reason: "session-pull-request",
+          operation: "updated",
+          originId: text(input.originId),
+          reason: "session-pull-request",
           session: await runtime.getSession(sessionId, { inspectSource: false })
         });
       }
@@ -383,7 +404,10 @@ function createSessionWork({ connectedContributions, project, publishSessionChan
         // invalidation is presented as pending, not a manual setup failure.
         // A connected refresh that changed nothing leaves its setup alone.
         if (!(input.connectedRefresh === true && result.status === "already_current")) {
-          await workspaceSetup.prepareUpdatedWorkspace(runtime, sessionId, { originId: input.originId, wait: input.connectedRefresh === true });
+          await workspaceSetup.prepareUpdatedWorkspace(runtime, sessionId, {
+            originId: input.originId,
+            wait: input.connectedRefresh === true
+          });
         }
         const task = await runtime.store.writeBackgroundTaskEvent(sessionId, SESSION_UPDATE_TASK_ID, {
           event: {

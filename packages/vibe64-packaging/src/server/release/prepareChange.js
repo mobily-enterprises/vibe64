@@ -165,7 +165,10 @@ async function prepareReleaseChange({ projectRoot, entry, version, notes, date =
   if (!DATE.test(date)) throw prepareError("The release date must be YYYY-MM-DD.");
   const source = versionSource(entry);
   if (!source) {
-    throw publishError("VIBE64_PUBLISH_VERSION_EXTERNAL", `Package ${entry.id} takes its version from its own release tool; Vibe64 only reads it.`);
+    throw publishError(
+      "VIBE64_PUBLISH_VERSION_EXTERNAL",
+      `Package ${entry.id} takes its version from its own release tool; Vibe64 only reads it.`
+    );
   }
   const root = packageRoot(projectRoot, entry);
   const manifestPath = path.join(root, source.file);

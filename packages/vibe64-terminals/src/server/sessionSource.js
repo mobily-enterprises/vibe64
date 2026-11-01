@@ -467,8 +467,13 @@ async function createSessionSource({
       throw sourceError("Contribution renewal requires its exact confirmed source commit and owned ref.",
         "vibe64_contribution_renewal_source_invalid");
     }
-    project = { ...project, repository: { ...project.repository,
-      defaultBranch: expectedSourceRef.slice("refs/heads/".length) } };
+    project = {
+      ...project,
+      repository: {
+        ...project.repository,
+        defaultBranch: expectedSourceRef.slice("refs/heads/".length)
+      }
+    };
   } else if (contribution && expectedSourceRef) {
     throw sourceError("Only a confirmed renewal can select a contribution source ref.",
       "vibe64_contribution_renewal_source_invalid");

@@ -37,7 +37,12 @@ const pointBefore = (left, right) => left.line - right.line || left.column - rig
 // ---------------------------------------------------------------- snapshot
 
 function layoutGroups(layout) {
-  return (layout?.groups || []).map((group) => ({ id: group.id, title: group.title, kind: group.kind, roots: group.subsystems.map((member) => member.root) }));
+  return (layout?.groups || []).map((group) => ({
+    id: group.id,
+    title: group.title,
+    kind: group.kind,
+    roots: group.subsystems.map((member) => member.root)
+  }));
 }
 
 /**
@@ -46,7 +51,9 @@ function layoutGroups(layout) {
  * link's certainty: a tag resolved through its import is exact.
  */
 function renderLinks(ui) {
-  const fileOf = new Map([...(ui?.pages || []), ...(ui?.components || [])].filter((record) => record.file).map((record) => [record.id, record.file]));
+  const fileOf = new Map(
+    [...(ui?.pages || []), ...(ui?.components || [])].filter((record) => record.file).map((record) => [record.id, record.file])
+  );
   const uses = new Map((ui?.componentUses || []).map((use) => [use.id, use]));
   const links = new Map();
   for (const use of uses.values()) {
@@ -83,7 +90,10 @@ function buildSnapshotIndex(record, layout) {
   const groups = layoutGroups(layout);
   const groupByRoot = new Map(groups.flatMap((group) => group.roots.map((root) => [root, group.id])));
   const subsystems = (architecture.subsystems || []).map((owner) => ({
-    id: owner.id, title: owner.title || owner.root || owner.id, root: owner.root || "", group: groupByRoot.get(owner.root) ?? null
+    id: owner.id,
+    title: owner.title || owner.root || owner.id,
+    root: owner.root || "",
+    group: groupByRoot.get(owner.root) ?? null
   }));
   const subsystemById = new Map(subsystems.map((owner) => [owner.id, owner]));
   const files = new Map();
@@ -137,7 +147,9 @@ function buildSnapshotIndex(record, layout) {
       sourceIdentity: architecture.sourceHash || null,
       callWebIdentity: callWeb?.identity || null,
       // Why a scan has no calls, when Genesis said: Git does not ignore the call web.
-      callWebProblem: !callWeb && (architecture.diagnostics || []).some((item) => item.code === "CALL_WEB_NOT_IGNORED") ? "not-ignored" : null,
+      callWebProblem: !callWeb && (architecture.diagnostics || []).some((item) => item.code === "CALL_WEB_NOT_IGNORED")
+        ? "not-ignored"
+        : null,
       builtAt: record.builtAt || null,
       // The System Graph's own out-of-date signal: Genesis re-indexed source
       // without the inspectors, so observations and calls need a re-scan.
@@ -259,11 +271,17 @@ function followSteps(index, callIndex, allowed) {
 function breadthFirst(starts, follow) {
   const depth = new Map();
   const queue = [];
-  for (const start of starts) if (!depth.has(start)) { depth.set(start, 0); queue.push(start); }
+  for (const start of starts) if (!depth.has(start)) {
+    depth.set(start, 0);
+    queue.push(start);
+  }
   for (let head = 0; head < queue.length; head += 1) {
     const current = queue[head];
     follow(current, (next) => {
-      if (!depth.has(next)) { depth.set(next, depth.get(current) + 1); queue.push(next); }
+      if (!depth.has(next)) {
+        depth.set(next, depth.get(current) + 1);
+        queue.push(next);
+      }
     });
   }
   return depth;
@@ -337,7 +355,21 @@ function readEntries(index, input = {}) {
   const page = selected.slice(offset, offset + limit);
   return {
     kinds: USAGE_ENTRY_KINDS.filter((name) => counts.has(name)).map((name) => ({ kind: name, count: counts.get(name) })),
-    entries: page.map(({ id, kind: entryKind, title, file, subsystemId, hasCalls }) => ({ id, kind: entryKind, title, file, subsystemId, hasCalls })),
+    entries: page.map(({
+      id,
+      kind: entryKind,
+      title,
+      file,
+      subsystemId,
+      hasCalls
+    }) => ({
+      id,
+      kind: entryKind,
+      title,
+      file,
+      subsystemId,
+      hasCalls
+    })),
     nextCursor: offset + limit < selected.length ? String(offset + limit) : null,
     limits: { limit, maxLimit: USAGE_QUERY_LIMITS.entriesMax, searchLength: USAGE_QUERY_LIMITS.searchLength },
     truncated: false
@@ -346,23 +378,38 @@ function readEntries(index, input = {}) {
 
 function requireEntry(index, entryId) {
   const entry = index.entryById.get(normalizeText(entryId));
-  if (!entry) throw usageError("This entry point is not in the current scan.", "vibe64_usage_entry_not_found", { entryId: normalizeText(entryId) });
+  if (!entry) {
+    throw usageError("This entry point is not in the current scan.", "vibe64_usage_entry_not_found", { entryId: normalizeText(entryId) });
+  }
   return entry;
 }
 
 function webLimits(input) {
-  return { maxNodes: clampInteger(input.maxNodes, USAGE_QUERY_LIMITS.maxNodes, USAGE_QUERY_LIMITS.maxNodesMax), responseBytes: USAGE_QUERY_LIMITS.responseBytes, unresolved: USAGE_QUERY_LIMITS.unresolved };
+  return {
+    maxNodes: clampInteger(input.maxNodes, USAGE_QUERY_LIMITS.maxNodes, USAGE_QUERY_LIMITS.maxNodesMax),
+    responseBytes: USAGE_QUERY_LIMITS.responseBytes,
+    unresolved: USAGE_QUERY_LIMITS.unresolved
+  };
 }
 
 function zoomSubsystem(index, input) {
   const subsystemId = normalizeText(input.subsystemId);
-  if (subsystemId && !index.subsystemById.has(subsystemId)) throw usageError("This subsystem is not in the current scan.", "vibe64_usage_subsystem_not_found");
+  if (subsystemId && !index.subsystemById.has(subsystemId)) {
+    throw usageError("This subsystem is not in the current scan.", "vibe64_usage_subsystem_not_found");
+  }
   return subsystemId;
 }
 
 function crossingList(crossings, fields) {
-  return [...crossings.values()].sort((left, right) => byText(left.fromSubsystemId, right.fromSubsystemId) || byText(left.toSubsystemId, right.toSubsystemId))
-    .map((crossing) => ({ fromSubsystemId: crossing.fromSubsystemId, toSubsystemId: crossing.toSubsystemId, ...Object.fromEntries(fields.map((field) => [field, crossing[field]])) }));
+  return [...crossings.values()].sort((
+    left,
+    right
+  ) => byText(left.fromSubsystemId, right.fromSubsystemId) || byText(left.toSubsystemId, right.toSubsystemId))
+    .map((crossing) => ({
+      fromSubsystemId: crossing.fromSubsystemId,
+      toSubsystemId: crossing.toSubsystemId,
+      ...Object.fromEntries(fields.map((field) => [field, crossing[field]]))
+    }));
 }
 
 function readImportsWeb(index, entry, input) {
@@ -392,7 +439,13 @@ function readImportsWeb(index, entry, input) {
     entry: entryView(entry),
     mode: "imports",
     groups: index.groups,
-    subsystems: index.subsystems.map((item) => ({ id: item.id, title: item.title, group: item.group, fileCount: reachedBySubsystem.get(item.id) || 0, reached: reachedBySubsystem.has(item.id) })),
+    subsystems: index.subsystems.map((item) => ({
+      id: item.id,
+      title: item.title,
+      group: item.group,
+      fileCount: reachedBySubsystem.get(item.id) || 0,
+      reached: reachedBySubsystem.has(item.id)
+    })),
     crossings: crossingList(crossings, ["count"]),
     unresolvedImports,
     limits,
@@ -404,8 +457,18 @@ function readImportsWeb(index, entry, input) {
     const kept = scope.slice(0, limits.maxNodes);
     response.truncated = kept.length < scope.length;
     const keptSet = new Set(kept);
-    response.files = kept.map((fileId) => ({ id: fileId, path: index.files.get(fileId).path, subsystemId: owner(fileId), depth: depth.get(fileId) }));
-    response.edges = kept.flatMap((fileId) => [...new Set(index.imports.get(fileId) || [])].filter((target) => keptSet.has(target)).map((target) => ({ from: fileId, to: target })));
+    response.files = kept.map((fileId) => ({
+      id: fileId,
+      path: index.files.get(fileId).path,
+      subsystemId: owner(fileId),
+      depth: depth.get(fileId)
+    }));
+    response.edges = kept.flatMap((fileId) => [...new Set(
+      index.imports.get(fileId) || []
+    )].filter((target) => keptSet.has(target)).map((target) => ({
+      from: fileId,
+      to: target
+    })));
   }
   return fitResponse(response, "files", (edge) => [edge.from, edge.to]);
 }
@@ -439,7 +502,14 @@ function readCallsWeb(index, callIndex, entry, input) {
     truncated: false
   };
   if (!callIndex) {
-    response.subsystems = index.subsystems.map((item) => ({ id: item.id, title: item.title, group: item.group, functionCount: 0, exact: 0, probable: 0 }));
+    response.subsystems = index.subsystems.map((item) => ({
+      id: item.id,
+      title: item.title,
+      group: item.group,
+      functionCount: 0,
+      exact: 0,
+      probable: 0
+    }));
     return response;
   }
   const allowed = certainty === "exact" ? (value) => value === "exact" : (value) => value === "exact" || value === "probable";
@@ -480,7 +550,10 @@ function readCallsWeb(index, callIndex, entry, input) {
       } else {
         // An exact call replaces a probable one between the same functions.
         const crossing = crossings.get(`${fromOwner}\n${owner(to)}`);
-        if (crossing) { crossing.probable -= 1; crossing.exact += 1; }
+        if (crossing) {
+          crossing.probable -= 1;
+          crossing.exact += 1;
+        }
       }
       edges.set(key, { from, to, certainty: edgeCertainty, method });
     });
@@ -500,10 +573,20 @@ function readCallsWeb(index, callIndex, entry, input) {
   }
   response.subsystems = index.subsystems.map((item) => {
     const bucket = counts.get(item.id) || { functionCount: 0, exact: 0 };
-    return { id: item.id, title: item.title, group: item.group, functionCount: bucket.functionCount, exact: bucket.exact, probable: bucket.functionCount - bucket.exact };
+    return {
+      id: item.id,
+      title: item.title,
+      group: item.group,
+      functionCount: bucket.functionCount,
+      exact: bucket.exact,
+      probable: bucket.functionCount - bucket.exact
+    };
   });
   response.crossings = crossingList(crossings, ["exact", "probable", "renders"]);
-  unresolved.sort((left, right) => depth.get(left.from) - depth.get(right.from) || left.from - right.from || pointBefore(left.start, right.start));
+  unresolved.sort((
+    left,
+    right
+  ) => depth.get(left.from) - depth.get(right.from) || left.from - right.from || pointBefore(left.start, right.start));
   response.unresolvedTotal = unresolved.length;
   response.unresolved = unresolved.slice(0, USAGE_QUERY_LIMITS.unresolved)
     .map((item) => ({ fromFunctionId: callIndex.functions[item.from].id, callee: item.callee, start: item.start }));
@@ -522,7 +605,12 @@ function readCallsWeb(index, callIndex, entry, input) {
       calledByCount: inCount.get(position) || 0
     }));
     response.edges = [...edges.values()].filter((edge) => keptSet.has(edge.from) && keptSet.has(edge.to))
-      .map((edge) => ({ from: callIndex.functions[edge.from].id, to: callIndex.functions[edge.to].id, certainty: edge.certainty, method: edge.method }));
+      .map((edge) => ({
+        from: callIndex.functions[edge.from].id,
+        to: callIndex.functions[edge.to].id,
+        certainty: edge.certainty,
+        method: edge.method
+      }));
   }
   return fitResponse(response, "functions", (edge) => [edge.from, edge.to]);
 }
@@ -530,27 +618,53 @@ function readCallsWeb(index, callIndex, entry, input) {
 function readFunction(index, callIndex, input) {
   const functionId = normalizeText(input.functionId);
   const position = callIndex?.ids.get(functionId);
-  if (position === undefined) throw usageError("This function is not in the current call web.", "vibe64_usage_function_not_found", { functionId });
+  if (position === undefined) {
+    throw usageError("This function is not in the current call web.", "vibe64_usage_function_not_found", { functionId });
+  }
   const limit = USAGE_QUERY_LIMITS.functionList;
   const calls = [];
   const unresolved = [];
   for (const callPosition of callIndex.outCalls[position]) {
     const call = callIndex.calls[callPosition];
     if (call.certainty === "unresolved") unresolved.push({ callee: call.callee, start: call.site.start });
-    else for (const target of call.targets) calls.push({ target: functionView(callIndex, target), certainty: call.certainty, method: call.method, callee: call.callee, start: call.site.start });
+    else for (const target of call.targets) calls.push({
+      target: functionView(callIndex, target),
+      certainty: call.certainty,
+      method: call.method,
+      callee: call.callee,
+      start: call.site.start
+    });
   }
   for (const bridgePosition of callIndex.outBridges[position]) {
     const bridge = callIndex.bridges[bridgePosition];
-    calls.push({ target: functionView(callIndex, bridge.to), certainty: bridge.certainty, method: "operation", callee: bridgeCallee(bridge), start: null });
+    calls.push({
+      target: functionView(callIndex, bridge.to),
+      certainty: bridge.certainty,
+      method: "operation",
+      callee: bridgeCallee(bridge),
+      start: null
+    });
   }
   const calledBy = [];
   for (const callPosition of callIndex.inCalls[position]) {
     const call = callIndex.calls[callPosition];
-    calledBy.push({ source: functionView(callIndex, call.from), certainty: call.certainty, method: call.method, callee: call.callee, start: call.site.start });
+    calledBy.push({
+      source: functionView(callIndex, call.from),
+      certainty: call.certainty,
+      method: call.method,
+      callee: call.callee,
+      start: call.site.start
+    });
   }
   for (const bridgePosition of callIndex.inBridges[position]) {
     const bridge = callIndex.bridges[bridgePosition];
-    calledBy.push({ source: functionView(callIndex, bridge.from), certainty: bridge.certainty, method: "operation", callee: bridgeCallee(bridge), start: null });
+    calledBy.push({
+      source: functionView(callIndex, bridge.from),
+      certainty: bridge.certainty,
+      method: "operation",
+      callee: bridgeCallee(bridge),
+      start: null
+    });
   }
   // A file's anchor also lists the components it renders and the files that
   // render it; `start` is the tag in the rendering file.
@@ -567,7 +681,11 @@ function readFunction(index, callIndex, input) {
     }
   }
   const certaintyOrder = (row) => (row.certainty === "exact" ? 0 : 1);
-  const atSite = (left, right) => certaintyOrder(left) - certaintyOrder(right) || (left.start && right.start ? pointBefore(left.start, right.start) : left.start ? -1 : right.start ? 1 : 0);
+  const atSite = (
+    left,
+    right
+  ) => certaintyOrder(left) - certaintyOrder(right) ||
+    (left.start && right.start ? pointBefore(left.start, right.start) : left.start ? -1 : right.start ? 1 : 0);
   calls.sort(atSite);
   calledBy.sort(atSite);
   unresolved.sort((left, right) => pointBefore(left.start, right.start));
@@ -600,10 +718,22 @@ function joinFunctions(index, callIndex, input) {
       // Without a call web, the Machine City's hash still says whether the
       // recording ran the scanned version of the file.
       const changed = indexed && indexed.hash !== candidate.hash;
-      return { index: position, functionId: null, subsystemId: subsystemForPath(index, filePath), join: changed ? "stale" : "none", ...(!changed && noCalls ? { reason: noCalls } : {}) };
+      return {
+        index: position,
+        functionId: null,
+        subsystemId: subsystemForPath(index, filePath),
+        join: changed ? "stale" : "none",
+        ...(!changed && noCalls ? { reason: noCalls } : {})
+      };
     }
     if (file.hash !== candidate.hash) return { index: position, functionId: null, subsystemId: file.subsystemId ?? null, join: "stale" };
-    if (file.coverage === "none") return { index: position, functionId: null, subsystemId: file.subsystemId ?? null, join: "none", reason: "language" };
+    if (file.coverage === "none") return {
+      index: position,
+      functionId: null,
+      subsystemId: file.subsystemId ?? null,
+      join: "none",
+      reason: "language"
+    };
     const inFile = callIndex.byPath.get(filePath) || [];
     const start = candidate.start || {};
     const atStart = inFile.filter((fnPosition) => {
@@ -616,12 +746,24 @@ function joinFunctions(index, callIndex, input) {
       ? atStart.find((fnPosition) => callIndex.functions[fnPosition].name === (candidate.name || ""))
         ?? atStart.find((fnPosition) => callIndex.functions[fnPosition].kind === "module")
       : atStart[0];
-    if (exact !== undefined) return { index: position, functionId: callIndex.functions[exact].id, subsystemId: file.subsystemId ?? null, join: "exact", position: exact };
+    if (exact !== undefined) return {
+      index: position,
+      functionId: callIndex.functions[exact].id,
+      subsystemId: file.subsystemId ?? null,
+      join: "exact",
+      position: exact
+    };
     const near = candidate.name ? inFile.filter((fnPosition) => {
       const fn = callIndex.functions[fnPosition];
       return fn.name === candidate.name && Math.abs(fn.start.line - start.line) <= NEAR_LINES;
     }) : [];
-    if (near.length === 1) return { index: position, functionId: callIndex.functions[near[0]].id, subsystemId: file.subsystemId ?? null, join: "name-line", position: near[0] };
+    if (near.length === 1) return {
+      index: position,
+      functionId: callIndex.functions[near[0]].id,
+      subsystemId: file.subsystemId ?? null,
+      join: "name-line",
+      position: near[0]
+    };
     return { index: position, functionId: null, subsystemId: file.subsystemId ?? null, join: "none" };
   });
   const byFunction = new Map();
@@ -637,7 +779,19 @@ function joinFunctions(index, callIndex, input) {
   }
   const subsystemIds = [...new Set(joined.map((item) => item.subsystemId).filter(Boolean))].sort(byText);
   return {
-    joined: joined.map(({ index: position, functionId, subsystemId, join, reason }) => ({ index: position, functionId, subsystemId, join, ...(reason ? { reason } : {}) })),
+    joined: joined.map(({
+      index: position,
+      functionId,
+      subsystemId,
+      join,
+      reason
+    }) => ({
+      index: position,
+      functionId,
+      subsystemId,
+      join,
+      ...(reason ? { reason } : {})
+    })),
     edges: [...edges.values()].sort((left, right) => left.from - right.from || left.to - right.to),
     groups: index.groups,
     subsystems: subsystemIds.map((id) => {

@@ -15,11 +15,17 @@ const LABEL_CREATION_UNCONFIRMED = "Label creation could not be confirmed. Refre
 function issueCataloguePage(result, key, input) {
   if (input.search == null && input.offset == null && input.limit == null) return result;
   const search = String(input.search || "").trim().toLowerCase();
-  const entries = result[key].filter((entry) => [entry.name, entry.login].some((value) => String(value || "").toLowerCase().includes(search)));
+  const entries = result[key].filter((entry) =>
+    [entry.name, entry.login].some((value) => String(value || "").toLowerCase().includes(search)));
   const offset = input.offset ?? 0;
   const page = entries.slice(offset, offset + (input.limit ?? 20));
-  return { ...result, [key]: page, total: entries.length, offset,
-    nextOffset: offset + page.length < entries.length ? offset + page.length : null };
+  return {
+    ...result,
+    [key]: page,
+    total: entries.length,
+    offset,
+    nextOffset: offset + page.length < entries.length ? offset + page.length : null
+  };
 }
 
 async function issueMentionUsers(api, owner, name, number) {
@@ -59,8 +65,12 @@ async function issueMentionUsers(api, owner, name, number) {
     }
   }
   if (!loaded) throw unavailable[0].error;
-  return { ok: true, users: [...users.values()], warning: unavailable.length
-    ? `Some ${unavailable.map(({ source }) => source).join(" and ")} could not load. You can still type any @username.` : "" };
+  return {
+    ok: true,
+    users: [...users.values()],
+    warning: unavailable.length
+      ? `Some ${unavailable.map(({ source }) => source).join(" and ")} could not load. You can still type any @username.` : ""
+  };
 }
 
 async function repositoryLabels(api, owner, name) {
@@ -100,11 +110,14 @@ async function repositoryLabels(api, owner, name) {
 export async function githubIssues(project, input = {}, options = {}) {
   const fullName = requireGithubRepository(project, "Issues");
   const operation = input.operation || "list";
-  if (!["list", "read", "comment", "edit-comment", "edit", "state", "create", "labels", "create-label", "set-labels", "mentions"].includes(operation)) {
+  if (!["list", "read", "comment", "edit-comment", "edit", "state", "create", "labels", "create-label", "set-labels", "mentions"].includes(
+    operation
+  )) {
     throw vibe64Error("Unknown issue action.", "vibe64_issue_input_invalid");
   }
   const number = Number(input.number);
-  if ((["read", "comment", "edit-comment", "edit", "state", "set-labels"].includes(operation) || (operation === "mentions" && input.number != null)) &&
+  if ((["read", "comment", "edit-comment", "edit", "state", "set-labels"].includes(operation) ||
+      (operation === "mentions" && input.number != null)) &&
       (!Number.isSafeInteger(number) || number < 1)) {
     throw vibe64Error("Choose a valid issue number.", "vibe64_issue_input_invalid");
   }
@@ -119,7 +132,8 @@ export async function githubIssues(project, input = {}, options = {}) {
   if (!["open", "closed", "all"].includes(state) || search.length > 200 ||
       (cursor !== null && (typeof cursor !== "string" || cursor.length > 500)) ||
       (operation === "state" && !["open", "closed"].includes(input.state)) ||
-      (["comment", "edit-comment"].includes(operation) && (typeof input.body !== "string" || !input.body.trim() || input.body.length > 65536))) {
+      (["comment", "edit-comment"].includes(operation) &&
+        (typeof input.body !== "string" || !input.body.trim() || input.body.length > 65536))) {
     throw vibe64Error("Check the issue filters or comment and try again.", "vibe64_issue_input_invalid");
   }
   if (["create", "edit"].includes(operation) && (typeof input.title !== "string" || !input.title.trim() || input.title.length > 256 ||
@@ -172,7 +186,9 @@ export async function githubIssues(project, input = {}, options = {}) {
       : operation === "create-label" ? LABEL_CREATION_UNCONFIRMED : ""
   });
   const [owner, name] = fullName.split("/");
-  if (operation === "mentions") return issueCataloguePage(await issueMentionUsers(api, owner, name, input.number == null ? null : number), "users", input);
+  if (operation === "mentions") {
+    return issueCataloguePage(await issueMentionUsers(api, owner, name, input.number == null ? null : number), "users", input);
+  }
   let labelIds;
   if (["labels", "create-label", "set-labels"].includes(operation) || (operation === "create" && selectedLabels.length)) {
     const catalog = await repositoryLabels(api, owner, name);
@@ -203,10 +219,15 @@ export async function githubIssues(project, input = {}, options = {}) {
   }
   if (operation === "create") {
     const created = await api(`repos/${fullName}/issues`, {
-      title: input.title.trim(), body: input.body || "", labels: selectedLabels
+      title: input.title.trim(),
+      body: input.body || "",
+      labels: selectedLabels
     });
     if (!Number.isSafeInteger(created.number) || !created.html_url) {
-      throw vibe64Error("Issue creation could not be confirmed. Refresh the issue list before trying again.", "vibe64_github_issues_failed");
+      throw vibe64Error(
+        "Issue creation could not be confirmed. Refresh the issue list before trying again.",
+        "vibe64_github_issues_failed"
+      );
     }
     return { ok: true, issue: { number: created.number, url: created.html_url } };
   }
@@ -220,12 +241,23 @@ export async function githubIssues(project, input = {}, options = {}) {
       const matches = found && !found.pull_request && (state === "all" || found.state === state) &&
         selectedLabels.every((label) => found.labels.some((item) => item.name.toLowerCase() === label.toLowerCase()));
       const issues = matches ? [{
-        number: found.number, title: found.title, url: found.html_url, state: found.state.toUpperCase(),
-        updatedAt: found.updated_at, author: { login: found.user?.login || "" },
-        comments: { totalCount: found.comments }, labels: { totalCount: found.labels.length, nodes: found.labels }
+        number: found.number,
+        title: found.title,
+        url: found.html_url,
+        state: found.state.toUpperCase(),
+        updatedAt: found.updated_at,
+        author: { login: found.user?.login || "" },
+        comments: { totalCount: found.comments },
+        labels: { totalCount: found.labels.length, nodes: found.labels }
       }] : [];
-      return { ok: true, repository: fullName, issues, total: issues.length,
-        pageInfo: { hasNextPage: false, endCursor: null }, searchLimit: null };
+      return {
+        ok: true,
+        repository: fullName,
+        issues,
+        total: issues.length,
+        pageInfo: { hasNextPage: false, endCursor: null },
+        searchLimit: null
+      };
     }
     // Search text is a literal phrase, never a user-supplied repository qualifier.
     const phrase = search.replace(/["\\\r\n]/gu, " ").trim();
@@ -240,8 +272,14 @@ export async function githubIssues(project, input = {}, options = {}) {
               totalCount ${PAGE_INFO} nodes { ${ISSUE_LIST_FIELDS} }
             }
           }
-        }`, variables: { owner, name, cursor, states: state === "all" ? null : [state.toUpperCase()],
-          labels: selectedLabels.length ? selectedLabels : null }
+        }`,
+        variables: {
+          owner,
+          name,
+          cursor,
+          states: state === "all" ? null : [state.toUpperCase()],
+          labels: selectedLabels.length ? selectedLabels : null
+        }
       });
       list = result.data?.repository?.issues;
     } else {
@@ -257,20 +295,27 @@ export async function githubIssues(project, input = {}, options = {}) {
               ${ISSUE_LIST_FIELDS}
             } }
           }
-        }`, variables: { search: query, cursor }
+        }`,
+        variables: { search: query, cursor }
       });
       list = result.data?.search;
     }
     if (!Array.isArray(list?.nodes)) throw vibe64Error("GitHub returned an unreadable issue list.", "vibe64_github_issues_failed");
-    return { ok: true, repository: fullName, issues: list.nodes.filter((issue) => issue?.number),
+    return {
+      ok: true,
+      repository: fullName,
+      issues: list.nodes.filter((issue) => issue?.number),
       total: useSearch ? list.issueCount : list.totalCount,
-      pageInfo: list.pageInfo, searchLimit: useSearch ? 1000 : null };
+      pageInfo: list.pageInfo,
+      searchLimit: useSearch ? 1000 : null
+    };
   }
   if (operation === "edit-comment") {
     const result = await api("graphql", {
       query: `query($id:ID!) { node(id:$id) { ... on IssueComment {
         viewerCanUpdate issue { number repository { nameWithOwner } }
-      } } }`, variables: { id: input.commentId }
+      } } }`,
+      variables: { id: input.commentId }
     });
     const comment = result.data?.node;
     if (comment?.issue?.number !== number || comment.issue.repository?.nameWithOwner?.toLowerCase() !== fullName.toLowerCase()) {
@@ -282,7 +327,8 @@ export async function githubIssues(project, input = {}, options = {}) {
     const updated = await api("graphql", {
       query: `mutation($input:UpdateIssueCommentInput!) {
         updateIssueComment(input:$input) { issueComment { ${COMMENT_FIELDS} } }
-      }`, variables: { input: { id: input.commentId, body: input.body } }
+      }`,
+      variables: { input: { id: input.commentId, body: input.body } }
     });
     return { ok: true, comment: updated.data.updateIssueComment.issueComment };
   }
@@ -293,7 +339,8 @@ export async function githubIssues(project, input = {}, options = {}) {
           totalCount pageInfo { hasPreviousPage startCursor } nodes { ${COMMENT_FIELDS} }
         }
       } }
-    }`, variables: { owner, name, number, cursor }
+    }`,
+    variables: { owner, name, number, cursor }
   });
   const issue = result.data?.repository?.issue;
   if (!issue) throw vibe64Error("This issue is unavailable or you no longer have access.", "vibe64_issue_not_found");
@@ -325,11 +372,19 @@ export async function githubIssues(project, input = {}, options = {}) {
     const allowed = input.state === "closed" ? issue.viewerCanClose : issue.viewerCanReopen;
     if (!allowed) throw vibe64Error("Your GitHub account cannot change this issue's state.", "vibe64_issue_permission_denied");
     const updated = await api(`repos/${fullName}/issues/${number}`, {
-      state: input.state, state_reason: input.state === "closed" ? "completed" : "reopened"
+      state: input.state,
+      state_reason: input.state === "closed" ? "completed" : "reopened"
     }, "PATCH");
     return { ok: true, state: String(updated.state).toUpperCase(), stateReason: updated.state_reason };
   }
   const comment = await api(`repos/${fullName}/issues/${number}/comments`, { body: input.body });
-  return { ok: true, comment: { id: String(comment.node_id), body: comment.body,
-    createdAt: comment.created_at, author: { login: comment.user?.login || "" } } };
+  return {
+    ok: true,
+    comment: {
+      id: String(comment.node_id),
+      body: comment.body,
+      createdAt: comment.created_at,
+      author: { login: comment.user?.login || "" }
+    }
+  };
 }

@@ -95,9 +95,12 @@ function plainSessionView(session = {}, {
       id: GENESIS_SESSION_KIND,
       label: "Genesis"
     },
-    ...(learning ? { purpose: "learning", learning,
+    ...(learning ? {
+      purpose: "learning",
+      learning,
       nativeExecutionRoot: session.archived || archivedSessionStatus(session.status) ? ""
-        : learning.noExercise ? learningNativeExecutionRoot(session) : sourcePath } : {}),
+        : learning.noExercise ? learningNativeExecutionRoot(session) : sourcePath
+    } : {}),
     conversationLogRoot: normalizeText(session.conversationLogRoot),
     manifest: plainManifest(session.manifest),
     metadata: publicSessionMetadata(session.metadata),
@@ -156,7 +159,9 @@ async function requireLearningNativeDirectory(session) {
   const directory = learningNativeExecutionRoot(session);
   try {
     const info = await lstat(directory);
-    if (!info.isDirectory() || info.isSymbolicLink() || await realpath(directory) !== directory) throw new Error("Not a private native directory.");
+    if (!info.isDirectory() || info.isSymbolicLink() || await realpath(directory) !== directory) {
+      throw new Error("Not a private native directory.");
+    }
   } catch {
     throw vibe64Error("The learning execution directory is missing or aliased. Ask your administrator to restore the original session; reads do not recreate it.",
       "vibe64_learning_native_directory_unavailable");
@@ -178,7 +183,10 @@ async function sessionAvailabilityIssue(session = {}, learningScope = null) {
     return null;
   }
   if (learningSessionBinding(session.metadata, learningScope, session.sessionId)?.noExercise) {
-    try { await requireLearningNativeDirectory(session); return null; }
+    try {
+      await requireLearningNativeDirectory(session);
+      return null;
+    }
     catch (error) { return { code: error.code, message: error.message }; }
   }
   const sourcePath = sessionSourcePath(session);

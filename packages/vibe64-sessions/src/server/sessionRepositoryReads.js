@@ -68,7 +68,8 @@ function createSessionRepositoryReads({ project, terminals }) {
 
     async inspectIncomingContributions(sessionId, input = {}) {
       return sessionResult(() => terminals.inspectIncomingContributions(requiredIncomingSessionId(sessionId), {
-        ...input, vibe64User: trustedAssistantUser(input)
+        ...input,
+        vibe64User: trustedAssistantUser(input)
       }), "Incoming changes could not be read. Refresh before acting.");
     },
 
@@ -82,7 +83,8 @@ function createSessionRepositoryReads({ project, terminals }) {
     async changeIncomingContribution(sessionId, input) {
       return sessionResult(async () => {
         const result = await terminals.changeIncomingContribution(requiredIncomingSessionId(sessionId), {
-          ...input, vibe64User: trustedAssistantUser(input)
+          ...input,
+          vibe64User: trustedAssistantUser(input)
         });
         // The Git result is confirmed. A failed UI notification must not turn
         // that success into a retry of a remote write.

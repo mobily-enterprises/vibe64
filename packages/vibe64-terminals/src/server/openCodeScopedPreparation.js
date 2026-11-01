@@ -88,7 +88,12 @@ function openCodeExecutionTimeout(input = {}, executionProfile = null) {
  * @param {(sessionId: string, context: object) => Promise<unknown>} dependencies.prepareSessionCleanup
  */
 export function createOpenCodeScopedPreparation({
-  projectService, contextFor, hostPreparation, events, publishSessionChanged, prepareSessionCleanup
+  projectService,
+  contextFor,
+  hostPreparation,
+  events,
+  publishSessionChanged,
+  prepareSessionCleanup
 }) {
   const { prepareProcess, sharedRoots, promptContext, writeSessionEnvironmentRegistry } = hostPreparation;
   const { observationProjection } = events;
@@ -117,15 +122,22 @@ export function createOpenCodeScopedPreparation({
     const context = await contextFor(sessionId, options);
     const executionProfile = openCodeExecutionProfile(input);
     return {
-      context, key: context.key, executionProfile, process: await prepareProcess(context, options),
+      context,
+      key: context.key,
+      executionProfile,
+      process: await prepareProcess(context, options),
       get workdir() { return executionProfile ? sharedRoots().workdir : ""; },
       selection() {
         context.selection = options.assistantSelection || context.selection;
         const agent = openCodeAgent(context.selection, executionProfile, context.assistantScope);
         return {
-          conversationId: normalizeText(input.conversationId || input.threadId), scoped: Boolean(context.assistantScope), createIfMissing,
-          profileChanged: () => openCodeError("vibe64_opencode_execution_profile_changed", "The scoped helper profile changed. Start a new helper.", {}, 409),
-          identityRequired: () => openCodeError("vibe64_opencode_conversation_id_required", "OpenCode conversation id is required.", {}, 400),
+          conversationId: normalizeText(input.conversationId || input.threadId),
+          scoped: Boolean(context.assistantScope),
+          createIfMissing,
+          profileChanged: () =>
+            openCodeError("vibe64_opencode_execution_profile_changed", "The scoped helper profile changed. Start a new helper.", {}, 409),
+          identityRequired: () =>
+            openCodeError("vibe64_opencode_conversation_id_required", "OpenCode conversation id is required.", {}, 400),
           input: { agent, get model() { return openCodeModel(context.selection, executionProfile); } },
           registration: {
             executionProfile,
@@ -149,15 +161,20 @@ export function createOpenCodeScopedPreparation({
       );
     }
     return {
-      key: context.key, conversationId, persistent: input.persistent,
+      key: context.key,
+      conversationId,
+      persistent: input.persistent,
       process: () => prepareProcess(context, options),
       readUnavailable: openCodeReadUnavailable,
-      readError: openCodeMessageError, projectResult: boundedOpenCodeExecutionOutput,
+      readError: openCodeMessageError,
+      projectResult: boundedOpenCodeExecutionOutput,
       messages: {
-        readError: openCodeMessageError, messageId: conversationMessageId,
+        readError: openCodeMessageError,
+        messageId: conversationMessageId,
         get inputMessageId() { return input.messageId ? upstreamMessageId(input.messageId) : ""; }
       },
-      failure: runtimeFailure, onRemoved: writeSessionEnvironmentRegistry,
+      failure: runtimeFailure,
+      onRemoved: writeSessionEnvironmentRegistry,
       get scoped() { return context.assistantScope; },
       get cleanupAfterDelete() { return context.assistantScope ? prepareSessionCleanup(context.sessionId, context) : null; }
     };
@@ -199,9 +216,11 @@ export function createOpenCodeScopedPreparation({
           waitForCompletion,
           get signal() { return options.signal; },
           observation: () => observationProjection(context, options.onEvent, false),
-          get readiness() { return { timeoutError: openCodeError(
-            "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504
-          ) }; },
+          get readiness() { return {
+            timeoutError: openCodeError(
+              "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready.", {}, 504
+            )
+          }; },
           async beforeDispatch() {
             // readable-check: allow optional-call - input validation: a caller's optional event stream
             await options.onEvent?.({ threadId: conversationId, type: "thread" });
@@ -233,9 +252,13 @@ export function createOpenCodeScopedPreparation({
               async afterClose({ stopped, outcome }) {
                 if (stopped && !executionProfile && !context.assistantScope) {
                   await checkpointSessionTurn({
-                    projectService, runtime: context.runtime, session: context.session, sessionId,
+                    projectService,
+                    runtime: context.runtime,
+                    session: context.session,
+                    sessionId,
                     outerTurnId: `opencode:${conversationId}:${tracked.inputMessageId}`,
-                    outcome, publishSessionChanged
+                    outcome,
+                    publishSessionChanged
                   });
                 }
               }
@@ -244,11 +267,21 @@ export function createOpenCodeScopedPreparation({
           onCompletion(completion) {
             if (input.persistent) {
               void completion.then((result) => publishSessionChanged(sessionId, {
-                reason: "temporary-agent-turn-idle", payload: { conversationId,
-                  temporaryRun: { active: false, state: result.status || "completed", providerTurnId: tracked.inputMessageId } }
+                reason: "temporary-agent-turn-idle",
+                payload: {
+                  conversationId,
+                  temporaryRun: { active: false, state: result.status || "completed", providerTurnId: tracked.inputMessageId }
+                }
               }), () => publishSessionChanged(sessionId, {
-                reason: "temporary-agent-turn-idle", payload: { conversationId,
-                  temporaryRun: { active: false, state: tracked.interrupted ? "interrupted" : "failed", providerTurnId: tracked.inputMessageId } }
+                reason: "temporary-agent-turn-idle",
+                payload: {
+                  conversationId,
+                  temporaryRun: {
+                    active: false,
+                    state: tracked.interrupted ? "interrupted" : "failed",
+                    providerTurnId: tracked.inputMessageId
+                  }
+                }
               })).catch(() => {});
             }
           }
@@ -258,5 +291,9 @@ export function createOpenCodeScopedPreparation({
     return prepared;
   }
 
-  return Object.freeze({ prepareConversationCreation, prepareDetachedChatTurn, prepareExistingDetachedTarget });
+  return Object.freeze({
+    prepareConversationCreation,
+    prepareDetachedChatTurn,
+    prepareExistingDetachedTarget
+  });
 }

@@ -41,7 +41,12 @@ function createAuthSessionState() {
  * @param {AuthSessionState} dependencies.state
  * @param {AccountStatusReads} dependencies.statusReads
  */
-function createAuthSessionViews({ access, notifications, state, statusReads }) {
+function createAuthSessionViews({
+  access,
+  notifications,
+  state,
+  statusReads
+}) {
   function authMetadata(sessionId = "", input = {}) {
     const existing = state.authSessions.get(sessionId);
     if (existing) {

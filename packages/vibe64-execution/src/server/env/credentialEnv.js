@@ -34,7 +34,7 @@ function credentialEnv({ actor = {}, request = {} } = {}) {
     home,
     username
   }, {
-    VIBE64_CREDENTIAL_HOME: home,
+    VIBE64_CREDENTIAL_HOME: home
   });
   return {
     ...env,

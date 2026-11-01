@@ -36,14 +36,20 @@ function confirmingActor({ channel, assistant, user }) {
  * @param {() => number} [dependencies.now]
  * @param {number} [dependencies.ttlMs]
  */
-function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs }) {
+function createConfirmationService({
+  runtimeRoot,
+  now = () => Date.now(),
+  ttlMs
+}) {
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("Confirmations need the project's publishing folder.");
   const file = path.join(runtimeRoot, "confirmations.json");
   const exclusive = serialized();
 
   async function read() {
     const value = await readJsonFile(file, () => ({ contract: CONFIRMATIONS_CONTRACT, records: [], pendingRequest: null }));
-    if (value?.contract !== CONFIRMATIONS_CONTRACT) throw publishingError("Saved confirmations are not readable.", "vibe64_publishing_state_invalid");
+    if (value?.contract !== CONFIRMATIONS_CONTRACT) {
+      throw publishingError("Saved confirmations are not readable.", "vibe64_publishing_state_invalid");
+    }
     return value;
   }
 
@@ -61,7 +67,9 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
    */
   function request({ planHash, targetIds, requestedBy = "assistant" } = {}) {
     return exclusive(async () => {
-      if (!PLAN_HASH.test(planHash || "")) throw publishingError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
+      if (!PLAN_HASH.test(planHash || "")) {
+        throw publishingError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
+      }
       if (!Array.isArray(targetIds) || !targetIds.length || !targetIds.every((id) => typeof id === "string" && id)) {
         throw publishingError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_invalid");
       }
@@ -107,7 +115,10 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
   function redeem({ planHash, token, actor } = {}) {
     return exclusive(async () => {
       if (actor?.kind !== "person") {
-        throw publishingError("Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
+        throw publishingError(
+          "Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.",
+          "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON"
+        );
       }
       const value = await read();
       // The token names this person's record; redeeming it says what else is
@@ -122,7 +133,14 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
     });
   }
 
-  return Object.freeze({ file, pendingRequest, request, dismissRequest, open, redeem });
+  return Object.freeze({
+    file,
+    pendingRequest,
+    request,
+    dismissRequest,
+    open,
+    redeem
+  });
 }
 
 export { createConfirmationService, confirmingActor };

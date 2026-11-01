@@ -19,7 +19,9 @@ function createLearnerReviews({ createNamespace, userPaths }) {
   async function readReviewHelperRecord(paths) {
     const value = await readRecord(paths.reviewHelper, MAX_REVIEW_HELPER_BYTES);
     if (!value) return null;
-    if (value.schemaVersion !== 1 || value.learnerId !== paths.learner.id || Object.keys(value).sort().join() !== "helper,learnerId,schemaVersion" ||
+    if (value.schemaVersion !== 1 ||
+        value.learnerId !== paths.learner.id ||
+        Object.keys(value).sort().join() !== "helper,learnerId,schemaVersion" ||
         value.helper !== null && (typeof value.helper !== "object" || Array.isArray(value.helper))) {
       throw new Error("The review Helper receipt is invalid or belongs to another learner.");
     }
@@ -34,7 +36,11 @@ function createLearnerReviews({ createNamespace, userPaths }) {
     if (lock && lock.size !== 0) throw new Error("Learning state lock contains unexplained data; inspect it before retrying.");
     const release = await tryAcquireExclusiveFileLock(paths.reviewLock);
     if (!release) {
-      throw failure("VIBE64_TRAINING_REVIEW_BUSY", "A review of your work is already running. Wait for it to finish, then check again.", 409);
+      throw failure(
+        "VIBE64_TRAINING_REVIEW_BUSY",
+        "A review of your work is already running. Wait for it to finish, then check again.",
+        409
+      );
     }
     try {
       const receipt = {

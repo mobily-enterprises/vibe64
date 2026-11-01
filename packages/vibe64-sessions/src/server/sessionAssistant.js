@@ -61,7 +61,12 @@ function publicAssistantAccess(access = {}) {
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {TerminalsService} dependencies.terminals
  */
-function createSessionAssistant({ initializeModelRouting, project, publishSessionChanged, terminals }) {
+function createSessionAssistant({
+  initializeModelRouting,
+  project,
+  publishSessionChanged,
+  terminals
+}) {
   /**
    * @param {object} input
    * @param {object | null} vibe64User
@@ -79,7 +84,9 @@ function createSessionAssistant({ initializeModelRouting, project, publishSessio
     const direct = isAssistantRoutingOwner(vibe64User) || currentRequestIsPracticeProject();
     if (!direct && Object.keys(input.assistantSelection || {}).length) {
       throw Object.assign(new Error("Main chat runs on the workspace owner's AI. Team members can't choose its model."), {
-        code: "vibe64_main_chat_approval_required", statusCode: 403 });
+        code: "vibe64_main_chat_approval_required",
+        statusCode: 403
+      });
     }
     // A chosen model comes from Custom's live catalogue, so it is checked as
     // Custom checks it in an open chat.
@@ -93,17 +100,23 @@ function createSessionAssistant({ initializeModelRouting, project, publishSessio
     const preferences = assistantRoutingPreferences(explicitSelection ? { mode: "custom", override: explicitSelection }
       : { mode: startMode });
     const routingSetup = await initializeModelRouting({ vibe64User });
-    if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), { code: routingSetup.code, statusCode: routingSetup.statusCode });
+    if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), {
+      code: routingSetup.code,
+      statusCode: routingSetup.statusCode
+    });
     // Outside a lesson, a team member's session records main chat's starting
     // model only; their messages wait for the owner, so nothing runs as them here.
     const purpose = preferences.mode === "auto" ? "senior" : preferences.mode;
-    const decision = await terminals.resolveAssistantPurpose({ purpose,
-      ...(explicitSelection ? { override: { role: "custom", selection: explicitSelection } } : {}) },
+    const decision = await terminals.resolveAssistantPurpose({
+      purpose,
+      ...(explicitSelection ? { override: { role: "custom", selection: explicitSelection } } : {})
+    },
     { vibe64User: direct ? vibe64User : { role: "owner" } }, direct ? undefined : { validateModels: false });
     if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
     if (direct) {
       await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
-        vibe64User, expectedConnectionIdentity: decision.connectionIdentity
+        vibe64User,
+        expectedConnectionIdentity: decision.connectionIdentity
       });
     }
     return { assistantSelection: decision.effectiveSelection, assistantRouting: preferences };
@@ -145,7 +158,9 @@ function createSessionAssistant({ initializeModelRouting, project, publishSessio
       // Main chat's mode, review and model are the owner's, with or without a
       // goal, except in a team member's own lesson.
       if (!isAssistantRoutingOwner(vibe64User) && !currentRequestIsPracticeProject()) {
-        throw Object.assign(new Error("Main chat runs on the workspace owner's AI. Only the owner can change its chat mode, review or model."),
+        throw Object.assign(new Error(
+          "Main chat runs on the workspace owner's AI. Only the owner can change its chat mode, review or model."
+        ),
           { code: "vibe64_main_chat_approval_required", statusCode: 403 });
       }
       const runtime = await project.createRuntime({ inspectSource: false });
@@ -164,15 +179,19 @@ function createSessionAssistant({ initializeModelRouting, project, publishSessio
             if (nativeState) return nativeState;
             const agentSession = await terminals.agentSessionState(sessionId, { runtime, session });
             const observedGoal = await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User });
-            nativeState = { turnActive: agentSession?.turn?.active === true,
+            nativeState = {
+              turnActive: agentSession?.turn?.active === true,
               goalActive: assistantGoalIsActive(observedGoal?.status === "available" ? observedGoal.goal
-                : observedGoal?.goal || agentSession?.goal || assistantRoutingGoalFromMetadata(session.metadata)) };
+                : observedGoal?.goal || agentSession?.goal || assistantRoutingGoalFromMetadata(session.metadata))
+            };
             return nativeState;
           };
           if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
             // An omitted Deslop or automatic save choice keeps the chat's own.
             preferences = assistantRoutingPreferences({
-              ...assistantRoutingAutomation(assistantRoutingFromMetadata(session.metadata)), ...input.assistantRouting });
+              ...assistantRoutingAutomation(assistantRoutingFromMetadata(session.metadata)),
+              ...input.assistantRouting
+            });
             // Main chat's tool follows the owner's setup; a changed tool
             // catches up on the next message. Only an active goal rebinds now.
             if (!(await readNativeState()).goalActive) {
@@ -180,7 +199,8 @@ function createSessionAssistant({ initializeModelRouting, project, publishSessio
               return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
             }
             const decision = await terminals.resolveAssistantPurpose({
-              purpose: preferences.mode, reviewEnabled: preferences.review,
+              purpose: preferences.mode,
+              reviewEnabled: preferences.review,
               ...(preferences.override ? { override: { role: preferences.mode, selection: preferences.override } } : {})
             }, { vibe64User });
             if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
@@ -197,12 +217,15 @@ function createSessionAssistant({ initializeModelRouting, project, publishSessio
             }, vibe64User);
           }
           await terminals.requireAssistantSelectionAccess(resolved, {
-            vibe64User, ...(connectionIdentity ? { expectedConnectionIdentity: connectionIdentity } : {})
+            vibe64User,
+            ...(connectionIdentity ? { expectedConnectionIdentity: connectionIdentity } : {})
           });
           const { turnActive, goalActive } = await readNativeState();
           const next = resolved;
           const nextPreferences = preferences || {
-            mode: "custom", review: false, override: next
+            mode: "custom",
+            review: false,
+            override: next
           };
           if (deferred || turnActive || goalActive) {
             await terminals.applyGoalSelection(sessionId, next, nextPreferences, { runtime, session, vibe64User });

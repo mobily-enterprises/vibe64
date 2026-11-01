@@ -52,8 +52,10 @@ export async function prepareCopiedColleagueConversation(record, ownerKey, { at 
   if (copy.summaryHelper) copy.summaryHelper.executionId = "";
   for (const chat of [copy, ...copy.previousConversations]) {
     const storage = createConversationStorage({
-      readRecord: async () => ({ metadata: chat.conversationMetadata || {},
-        turns: new Map(chat.conversationLog.map(turn => [turn.turnId, turn])) }),
+      readRecord: async () => ({
+        metadata: chat.conversationMetadata || {},
+        turns: new Map(chat.conversationLog.map(turn => [turn.turnId, turn]))
+      }),
       async writeRecord(_key, { turns, metadata }, transaction) {
         chat.conversationMetadata = metadata;
         chat.conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));

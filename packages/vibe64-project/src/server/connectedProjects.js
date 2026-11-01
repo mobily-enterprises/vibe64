@@ -27,7 +27,8 @@ function normalizeConnectedProjects(value) {
   }
   const repositories = new Set();
   return { projects: value.projects.map((entry) => {
-    if (!isPlainObject(entry) || Object.keys(entry).some((key) => !["name", "repository", "relationship", "type", "script"].includes(key))) {
+    if (!isPlainObject(entry) ||
+        Object.keys(entry).some((key) => !["name", "repository", "relationship", "type", "script"].includes(key))) {
       invalid("Each project must contain name, repository and relationship, with optional type and script.");
     }
     // eslint-disable-next-line no-control-regex -- Display names must stay on one line without ASCII control characters.
@@ -58,9 +59,13 @@ function normalizeConnectedProjects(value) {
     if (entry.type !== undefined && !connectedPackageTypeUsesScript(entry.type) && entry.script !== undefined) {
       invalid(`The ${entry.type} connection cannot have a custom script; only custom connections select a script.`);
     }
-    return { name: entry.name.trim(), repository, relationship: entry.relationship,
+    return {
+      name: entry.name.trim(),
+      repository,
+      relationship: entry.relationship,
       ...(entry.type === undefined ? {} : { type: entry.type }),
-      ...(entry.script === undefined ? {} : { script: entry.script }) };
+      ...(entry.script === undefined ? {} : { script: entry.script })
+    };
   }) };
 }
 
@@ -105,7 +110,10 @@ async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   if (Buffer.byteLength(`${JSON.stringify(normalized, null, 2)}\n`, "utf8") > CONNECTED_PROJECTS_MAX_BYTES) {
     invalid("The connection list exceeds 64 KiB. Shorten its entries before saving.");
   }
-  await writeJsonFileAtomic(connectionsPath(sourceRoot), normalized, { directoryMode: vibe64SharedModes().inheritingDirectory, fileMode: vibe64SharedModes().file });
+  await writeJsonFileAtomic(connectionsPath(sourceRoot), normalized, {
+    directoryMode: vibe64SharedModes().inheritingDirectory,
+    fileMode: vibe64SharedModes().file
+  });
   return readConnectedProjects(sourceRoot);
 }
 

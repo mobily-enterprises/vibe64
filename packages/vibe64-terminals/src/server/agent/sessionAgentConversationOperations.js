@@ -18,16 +18,26 @@ const CONVERSATION_COMMANDS = Object.freeze({
 // Operations served directly by the shared conversation runtime: whether the
 // provider projects the result, and the runtime call.
 const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
-  closeProject: { project: true,
-    run: (runtime, context, input) => runtime.closeNativeProject({ context, input }) },
-  invalidateRuntimes: { project: true,
-    run: (runtime, context, input) => runtime.invalidateNativeRuntimes({ context, input }) },
-  reconcileSessions: { project: true,
-    run: (runtime, context, sessions, options) => runtime.reconcileNativeSessions({ context, sessions, options }) },
-  unsubscribeSessions: { project: true,
-    run: (runtime, context, sessions) => runtime.unsubscribeNativeSessions({ context, sessions }) },
-  hasActiveTemporaryConversation: { project: true,
-    run: (runtime, context) => runtime.inspectNativeTemporaryActivity({ id: context.sessionId, context }) },
+  closeProject: {
+    project: true,
+    run: (runtime, context, input) => runtime.closeNativeProject({ context, input })
+  },
+  invalidateRuntimes: {
+    project: true,
+    run: (runtime, context, input) => runtime.invalidateNativeRuntimes({ context, input })
+  },
+  reconcileSessions: {
+    project: true,
+    run: (runtime, context, sessions, options) => runtime.reconcileNativeSessions({ context, sessions, options })
+  },
+  unsubscribeSessions: {
+    project: true,
+    run: (runtime, context, sessions) => runtime.unsubscribeNativeSessions({ context, sessions })
+  },
+  hasActiveTemporaryConversation: {
+    project: true,
+    run: (runtime, context) => runtime.inspectNativeTemporaryActivity({ id: context.sessionId, context })
+  },
   interruptDetachedChatTurn: {
     run: (runtime, context, input) => runtime.interruptNativeDetachedConversation({ id: context.sessionId, context, input }) },
   deleteDetachedChatThread: {
@@ -36,19 +46,33 @@ const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
     run: (runtime, context, binding) => runtime.listNativeConversationStorage({ id: context.sessionId, context, binding }) },
   retireConversationHistory: {
     run: (runtime, context, binding) => runtime.retireNativeConversationHistory({ id: context.sessionId, context, binding }) },
-  updateSessionSettings: { project: true,
-    run: (runtime, context, input) => runtime.updateNativeConversationSettings({ id: context.sessionId, context, input }) },
-  ensureSession: { project: true,
-    run: (runtime, context) => runtime.ensureNativeConversation({ id: context.sessionId, context }) },
+  updateSessionSettings: {
+    project: true,
+    run: (runtime, context, input) => runtime.updateNativeConversationSettings({ id: context.sessionId, context, input })
+  },
+  ensureSession: {
+    project: true,
+    run: (runtime, context) => runtime.ensureNativeConversation({ id: context.sessionId, context })
+  },
   createConversation: {
-    run: (runtime, context, input) => runtime.createNativeConversation({ id: context.sessionId, context, input }) },
+    run: (runtime, context, input) => runtime.createNativeConversation({
+      id: context.sessionId,
+      context,
+      input
+    }) },
   releaseRenewalPredecessorProcessExitProof: {
     run: (runtime, context, input) => runtime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input }) },
   releaseRenewalSuccessorProcessExitProof: {
     run: (runtime, context, input) => runtime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input }) }
 });
 
-const SCOPED_CONVERSATION_METHODS = new Set(["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"]);
+const SCOPED_CONVERSATION_METHODS = new Set([
+  "readConversation",
+  "startConversationTurn",
+  "waitForConversationTurn",
+  "stopConversation",
+  "deleteConversation"
+]);
 
 /**
  * The operation a provider serves for a method: the shared conversation
@@ -76,7 +100,9 @@ function createSessionAgentConversationOperations({ conversationRuntime }) {
       // Preserve the provider's original input/options projection before its result boundary.
       const request = provider.prepareConversationRequest(method, context, input);
       const current = request.context === context ? context : {
-        ...request.context, sessionId: context.sessionId, providerId: context.providerId
+        ...request.context,
+        sessionId: context.sessionId,
+        providerId: context.providerId
       };
       return provider.projectConversationResult(method, () => method === "generateSessionRenewalHandover"
         ? conversationRuntime.generateNativeRenewalHandover({ id: context.sessionId, context: current, input: request.input })
@@ -103,7 +129,9 @@ function createSessionAgentConversationOperations({ conversationRuntime }) {
               request.scopedConversationId === undefined) {
             throw new TypeError("A retained conversation operation requires its original scope and native identity.");
           }
-          return conversationRuntime.open({ id: context.sessionId, representation: "native",
+          return conversationRuntime.open({
+            id: context.sessionId,
+            representation: "native",
             context: { ...context, scopedConversationId: request.scopedConversationId }
           }).then(conversation => command(conversation, request));
         }

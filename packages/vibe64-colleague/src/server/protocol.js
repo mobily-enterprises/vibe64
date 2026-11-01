@@ -2,7 +2,10 @@
 // and tool discovery nests arguments. Individual actions still bound each field.
 const COLLEAGUE_TOOL_PAYLOAD_LIMIT = 256 * 1024;
 // Every Colleague tool call's argument and result bound, in bytes.
-const COLLEAGUE_TOOL_LIMITS = Object.freeze({ maxToolArgumentBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT, maxToolResultBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT });
+const COLLEAGUE_TOOL_LIMITS = Object.freeze({
+  maxToolArgumentBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
+  maxToolResultBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT
+});
 
 const replyStyle = [
   "Keep replies short by default: usually one or two brief sentences. Give a detailed explanation only when the user asks for one; include essential outcomes, failures or a necessary clarification without padding.",
@@ -70,4 +73,11 @@ const nativeFor = base => [base, discoveryInstructions, progressInstructions,
 const nativeInstructions = nativeFor(instructions);
 const nativeLearnInstructions = nativeFor(learnInstructions);
 
-export { COLLEAGUE_TOOL_LIMITS, COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, learnInstructions, nativeInstructions, nativeLearnInstructions };
+export {
+  COLLEAGUE_TOOL_LIMITS,
+  COLLEAGUE_TOOL_PAYLOAD_LIMIT,
+  instructions,
+  learnInstructions,
+  nativeInstructions,
+  nativeLearnInstructions
+};

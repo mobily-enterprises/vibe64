@@ -50,7 +50,14 @@ const Vibe64ProjectProvider = defineFeature({
    * @param {ProjectResourceEnvironment | null} capabilities.resourceEnvironmentProvider
    * @param {SavedEnvValues | null} capabilities.savedEnvValues
    */
-  setup({ env, events, http, logger, resourceEnvironmentProvider, savedEnvValues }) {
+  setup({
+    env,
+    events,
+    http,
+    logger,
+    resourceEnvironmentProvider,
+    savedEnvValues
+  }) {
     assertResourceEnvironmentProvider(resourceEnvironmentProvider);
     assertSavedEnvValues(savedEnvValues);
     const project = createService({

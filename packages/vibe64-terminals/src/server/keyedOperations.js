@@ -84,7 +84,11 @@ function createSharedOperations() {
     return [...inFlight.values()];
   }
 
-  return Object.freeze({ has, pending, run });
+  return Object.freeze({
+    has,
+    pending,
+    run
+  });
 }
 
 export { createKeyedQueue, createSharedOperations };

@@ -16,8 +16,14 @@ function inspectionError(code, message) {
  * Caller holds the existing project source lock, so conversion cannot change
  * repository identity between source selection and inspection.
  */
-async function inspectCanonicalProjectStack({ project, temporaryRoot, vibe64User = null,
-  env = process.env, signal, runCommand = runVibe64Command } = {}) {
+async function inspectCanonicalProjectStack({
+  project,
+  temporaryRoot,
+  vibe64User = null,
+  env = process.env,
+  signal,
+  runCommand = runVibe64Command
+} = {}) {
   const source = canonicalProjectSource(project, project?.sourceRoot);
   if (![PROJECT_REPOSITORY_MODE_GITHUB, PROJECT_REPOSITORY_MODE_MANAGED_GIT].includes(source.mode)) {
     throw inspectionError("vibe64_stack_repository_mode", "Saved Stack inspection requires a managed project repository.");
@@ -31,13 +37,25 @@ async function inspectCanonicalProjectStack({ project, temporaryRoot, vibe64User
   async function git(args, { cwd = scratch, auth = {} } = {}) {
     signal?.throwIfAborted();
     const result = await runCommand({
-      actor: "daemon", ...auth, command: "git", args, cwd,
-      allowedRoots: roots, gitSafeDirectories: roots, mode: "capture", envPolicy: "project",
-      purpose: auth.gitTransport ? "github" : "source", runtimes: auth.gitTransport === "github-https" ? ["git", "gh"] : ["git"],
-      timeout: 30_000, maxBuffer: MAX_INPUT_BYTES + 4096, signal
+      actor: "daemon",
+      ...auth,
+      command: "git",
+      args,
+      cwd,
+      allowedRoots: roots,
+      gitSafeDirectories: roots,
+      mode: "capture",
+      envPolicy: "project",
+      purpose: auth.gitTransport ? "github" : "source",
+      runtimes: auth.gitTransport === "github-https" ? ["git", "gh"] : ["git"],
+      timeout: 30_000,
+      maxBuffer: MAX_INPUT_BYTES + 4096,
+      signal
     });
     signal?.throwIfAborted();
-    if (result?.ok !== true) throw inspectionError("vibe64_stack_repository_read_failed", "The saved project repository could not be verified or read.");
+    if (result?.ok !== true) {
+      throw inspectionError("vibe64_stack_repository_read_failed", "The saved project repository could not be verified or read.");
+    }
     return String(result.stdout ?? result.output ?? "");
   }
   try {
@@ -46,7 +64,9 @@ async function inspectCanonicalProjectStack({ project, temporaryRoot, vibe64User
     if (source.mode === PROJECT_REPOSITORY_MODE_GITHUB) {
       const auth = await githubSourceCommandOptions(vibe64User, env, { runCommand });
       const reference = await prepareGithubMirrorReference({
-        mirrorPath: source.mirrorPath, remoteUrl: source.remoteUrl, commandOptions: { ...auth, runCommand }
+        mirrorPath: source.mirrorPath,
+        remoteUrl: source.remoteUrl,
+        commandOptions: { ...auth, runCommand }
       });
       // Remote verification is mandatory even when every object is cached.
       const remote = await git(["ls-remote", "--exit-code", "--", source.remoteUrl, `refs/heads/${source.branch}`], { auth });
@@ -63,18 +83,46 @@ async function inspectCanonicalProjectStack({ project, temporaryRoot, vibe64User
       }
       // Fetch the exact verified object into the cache if refresh did not supply
       // it. A force push between verification and fetch fails without fallback.
-      const object = await runCommand({ actor: "daemon", command: "git",
-        args: ["--git-dir", repositoryPath, "cat-file", "-e", `${commit}^{commit}`], cwd: scratch,
-        allowedRoots: roots, gitSafeDirectories: roots, envPolicy: "project", purpose: "source",
-        runtimes: ["git"], mode: "capture", timeout: 30_000, signal });
-      if (object?.ok !== true) await git(["--git-dir", repositoryPath, "fetch", "--no-tags", "--depth=1", "--", source.remoteUrl, commit], { auth });
+      const object = await runCommand({
+        actor: "daemon",
+        command: "git",
+        args: ["--git-dir", repositoryPath, "cat-file", "-e", `${commit}^{commit}`],
+        cwd: scratch,
+        allowedRoots: roots,
+        gitSafeDirectories: roots,
+        envPolicy: "project",
+        purpose: "source",
+        runtimes: ["git"],
+        mode: "capture",
+        timeout: 30_000,
+        signal
+      });
+      if (object?.ok !== true) {
+        await git(["--git-dir", repositoryPath, "fetch", "--no-tags", "--depth=1", "--", source.remoteUrl, commit], { auth });
+      }
     } else {
       const info = await lstat(repositoryPath);
-      if (!info.isDirectory() || await realpath(repositoryPath) !== repositoryPath) throw new Error("Unsafe canonical repository directory.");
+      if (!info.isDirectory() || await realpath(repositoryPath) !== repositoryPath) {
+        throw new Error("Unsafe canonical repository directory.");
+      }
       commit = (await git(["--git-dir", repositoryPath, "rev-parse", "--verify", `refs/heads/${source.branch}^{commit}`])).trim();
     }
-    if (!/^[a-f0-9]{40,64}$/u.test(commit)) throw inspectionError("vibe64_stack_repository_authority_invalid", "Invalid repository commit.");
-    const listing = await git(["--git-dir", repositoryPath, "ls-tree", "-r", "-z", "--long", commit, "--", "genesis/version", "genesis/stack.md", "genesis/stack"]);
+    if (!/^[a-f0-9]{40,64}$/u.test(commit)) {
+      throw inspectionError("vibe64_stack_repository_authority_invalid", "Invalid repository commit.");
+    }
+    const listing = await git([
+      "--git-dir",
+      repositoryPath,
+      "ls-tree",
+      "-r",
+      "-z",
+      "--long",
+      commit,
+      "--",
+      "genesis/version",
+      "genesis/stack.md",
+      "genesis/stack"
+    ]);
     if (Buffer.byteLength(listing) > MAX_INPUT_BYTES) throw new Error("Stack input inventory is too large.");
     const files = listing.split("\0").filter(Boolean);
     if (files.length > MAX_INPUT_FILES) throw new Error("Stack has too many input files.");
@@ -95,8 +143,14 @@ async function inspectCanonicalProjectStack({ project, temporaryRoot, vibe64User
       await writeFile(file, contents, { mode: 0o600 });
     }
     const stack = await inspectGenesisStackComponents({ projectRoot });
-    return { ...stack, repositoryMode: source.mode, repository: source.remoteUrl,
-      branch: source.branch, commit, checkedAt: new Date().toISOString() };
+    return {
+      ...stack,
+      repositoryMode: source.mode,
+      repository: source.remoteUrl,
+      branch: source.branch,
+      commit,
+      checkedAt: new Date().toISOString()
+    };
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }

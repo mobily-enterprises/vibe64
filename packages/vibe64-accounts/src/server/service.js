@@ -88,21 +88,67 @@ function createService({
   runAuthTerminalCommand = runVibe64Command
 }) {
   /** @type {AccountNotifications} */
-  const notifications = Object.freeze({ invalidateAgentRuntimes, publishAccountChanged, publishAuthSessionChanged });
-  const access = createAccountAccess({ accountRuntime, logger, notifications, runHostToolCommand });
-  const codexStatus = createCodexAccountStatus({ access, env, notifications });
+  const notifications = Object.freeze({
+    invalidateAgentRuntimes,
+    publishAccountChanged,
+    publishAuthSessionChanged
+  });
+  const access = createAccountAccess({
+    accountRuntime,
+    logger,
+    notifications,
+    runHostToolCommand
+  });
+  const codexStatus = createCodexAccountStatus({
+    access,
+    env,
+    notifications
+  });
   const statusReads = createAccountStatusReads({
-    access, accountRuntime, codexStatus, env, logger, personalProfileStore, readClaudeAccountStatus
+    access,
+    accountRuntime,
+    codexStatus,
+    env,
+    logger,
+    personalProfileStore,
+    readClaudeAccountStatus
   });
-  const modelRouting = createModelRouting({ access, inspectRoutingConfiguration, notifications });
-  const providerKeys = createCodexProviderKeys({ access, modelRouting, notifications });
+  const modelRouting = createModelRouting({
+    access,
+    inspectRoutingConfiguration,
+    notifications
+  });
+  const providerKeys = createCodexProviderKeys({
+    access,
+    modelRouting,
+    notifications
+  });
   const authSessionState = createAuthSessionState();
-  const authSessionViews = createAuthSessionViews({ access, notifications, state: authSessionState, statusReads });
-  const authTerminals = createAuthTerminals({
-    access, accountRuntime, authSessionViews, env, logger, modelRouting, notifications, runAuthTerminalCommand,
-    state: authSessionState, statusReads
+  const authSessionViews = createAuthSessionViews({
+    access,
+    notifications,
+    state: authSessionState,
+    statusReads
   });
-  const credentials = createAccountCredentials({ access, authSessionViews, env, notifications, statusReads });
+  const authTerminals = createAuthTerminals({
+    access,
+    accountRuntime,
+    authSessionViews,
+    env,
+    logger,
+    modelRouting,
+    notifications,
+    runAuthTerminalCommand,
+    state: authSessionState,
+    statusReads
+  });
+  const credentials = createAccountCredentials({
+    access,
+    authSessionViews,
+    env,
+    notifications,
+    statusReads
+  });
 
   return Object.freeze({
     initializeModelRouting: modelRouting.initializeModelRouting,

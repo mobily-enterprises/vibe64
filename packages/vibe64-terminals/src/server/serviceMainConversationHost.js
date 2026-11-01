@@ -84,9 +84,14 @@ function createServiceMainConversationHost({
       // denied checks without adding a log write for every healthy token.
       if ((operation !== "subscribe" || !allowed || durationMs >= 100) &&
           realtimeDebugEnabled(env)) {
-        logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
-          sessionId: conversationId, phase: "authorization", operation, allowed,
-          durationMs }, "Browser conversation authorization timing.");
+        logOperationalEvent(logger, "warn", {
+          event: "vibe64.conversation.browser_timing",
+          sessionId: conversationId,
+          phase: "authorization",
+          operation,
+          allowed,
+          durationMs
+        }, "Browser conversation authorization timing.");
       }
     }
   }
@@ -141,13 +146,17 @@ function createServiceMainConversationHost({
           operation !== "generateRenewalHandover" && operation !== "seedRenewalHandover" && context.temporaryConversationId && !context.scopedConversationId && !context.assistantScope) {
         return sessionConversations.conversationBinding(id, context);
       }
-      const engine = context.providerId || context.assistantSelection?.engineId || vibe64AssistantSelectionFromMetadata(context.session?.metadata).engineId;
+      const engine = context.providerId ||
+        context.assistantSelection?.engineId ||
+        vibe64AssistantSelectionFromMetadata(context.session?.metadata).engineId;
       const provider = sessionAgent.conversationProvider(engine, "codex");
       if (operation === "generateRenewalHandover" || operation === "seedRenewalHandover") {
         return prepareSessionConversationRenewal(provider, id, context, input);
       }
       if (operation === "create") return prepareSessionConversationCreation(provider, id, context, input);
-      if (operation === "ensure") return prepareSessionConversationReadiness(provider, id, assistantContext.applicationToolManifest(context));
+      if (operation === "ensure") {
+        return prepareSessionConversationReadiness(provider, id, assistantContext.applicationToolManifest(context));
+      }
       if (operation === "updateSettings") return prepareSessionConversationSettings(provider, id, context);
       if (operation === "dispose") return prepareSessionConversationDisposal(provider, id, context, input);
       // Scoped work already has its own authorized host and native identity;
@@ -155,7 +164,8 @@ function createServiceMainConversationHost({
       if (context.assistantScope) return createSessionConversationBinding(provider, id, context);
       const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
       const binding = await createSessionConversationBinding(provider, id, {
-        ...context, runtime,
+        ...context,
+        runtime,
         prepareInput: (message, current) => current.prepareInput ? current.prepareInput(message) : message
       });
       if (engine === "claude" && !runtime.learningScope && !binding.native?.scoped && !context.temporaryConversationId && actions) {
@@ -166,11 +176,15 @@ function createServiceMainConversationHost({
             if (!authority || authority.sessionId !== id || admitted.conversationId !== id ||
                 admitted.origin !== "user" || !admitted.nativeThreadId || !admitted.nativeTurnId) {
               throw Object.assign(new Error("Goal control requires the current admitted Main request."), {
-                code: "vibe64_main_goal_control_required", statusCode: 403
+                code: "vibe64_main_goal_control_required",
+                statusCode: 403
               });
             }
-            const grant = await actions.execute({ actionId: "vibe64.sessions.conversation.context.read",
-              input: { projectSlug: authority.projectSlug, sessionId: id }, context: authority.requestContext });
+            const grant = await actions.execute({
+              actionId: "vibe64.sessions.conversation.context.read",
+              input: { projectSlug: authority.projectSlug, sessionId: id },
+              context: authority.requestContext
+            });
             if (grant.actor.id !== authority.actorId) throw new Error("The Main conversation's acting user changed.");
             await assistant.requireAssistantSelectionAccess(current.assistantSelection, { vibe64User: grant.user });
             admitted.assertCurrent();
@@ -181,15 +195,24 @@ function createServiceMainConversationHost({
                 throw new Error("This admitted Main turn no longer owns an active goal.");
               }
               admitted.assertCurrent();
-              const result = await goals.updateAgentGoal(id, { ...goalOptions, action, reason,
-                threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
+              const result = await goals.updateAgentGoal(id, {
+                ...goalOptions,
+                action,
+                reason,
+                threadId: observed.threadId,
+                createdAt: observed.goal.createdAt,
+                objective: observed.goal.objective
+              });
               const status = action === "block" ? "blocked" : "paused";
               if (result?.ok === false || result?.goal?.status !== status) {
                 throw new Error(result?.error || `The goal ${action} could not be verified.`);
               }
               return { status };
             }
-            return { ...authority.requestContext, runtime, assistantSelection: current.assistantSelection,
+            return {
+              ...authority.requestContext,
+              runtime,
+              assistantSelection: current.assistantSelection,
               projectSlug: authority.projectSlug,
               mainGoalControl: {
                 pause: () => retainGoal("pause"),

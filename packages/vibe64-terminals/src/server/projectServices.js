@@ -137,8 +137,11 @@ function createProjectServices({
           throw Object.assign(new Error(result.error || `Project service ${service.id} could not start.`), { code: result.code });
         }
         project.services.set(key, {
-          id: service.id, scope: scoped ? "session" : "project", sessionId: scoped ? sessionId : "",
-          identity, executionId: result.execution.id
+          id: service.id,
+          scope: scoped ? "session" : "project",
+          sessionId: scoped ? sessionId : "",
+          identity,
+          executionId: result.execution.id
         });
       }
     });
@@ -202,7 +205,15 @@ function createProjectServices({
       throw new Error("The destination project is closing or closed. Reopen it before sending.");
     }
   }
-  return Object.freeze({ ensure, beginClose, opened, close, closeSession, closeAll, assertOpen });
+  return Object.freeze({
+    ensure,
+    beginClose,
+    opened,
+    close,
+    closeSession,
+    closeAll,
+    assertOpen
+  });
 }
 
 export { createProjectServices };

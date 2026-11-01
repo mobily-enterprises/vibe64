@@ -22,10 +22,42 @@ const DIAGNOSTIC_REASONS = Object.freeze({
 const isoNow = (now) => new Date(now()).toISOString();
 
 function publicRecording(record) {
-  const { id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt, sourceIdentity, highestInteraction, requestLog } = record;
+  const {
+    id,
+    sessionId,
+    state,
+    target,
+    runtimes,
+    tracers,
+    startedAt,
+    stoppedAt,
+    stopReason,
+    counts,
+    truncated,
+    dismissedAt,
+    sourceIdentity,
+    highestInteraction,
+    requestLog
+  } = record;
   return structuredClone({
-    id, sessionId, state, target, runtimes, tracers, startedAt, stoppedAt, stopReason, counts, truncated, dismissedAt,
-    sourceIdentity: sourceIdentity ?? null, highestInteraction: highestInteraction ?? 0, requestLog: requestLog ?? { assets: 0, full: false }
+    id,
+    sessionId,
+    state,
+    target,
+    runtimes,
+    tracers,
+    startedAt,
+    stoppedAt,
+    stopReason,
+    counts,
+    truncated,
+    dismissedAt,
+    sourceIdentity: sourceIdentity ?? null,
+    highestInteraction: highestInteraction ?? 0,
+    requestLog: requestLog ?? {
+      assets: 0,
+      full: false
+    }
   });
 }
 
@@ -37,7 +69,11 @@ function publicRecording(record) {
  * @param {RuntimeLogger} dependencies.logger
  * @param {() => number} dependencies.now
  */
-function createRecordingRecords({ events, logger, now }) {
+function createRecordingRecords({
+  events,
+  logger,
+  now
+}) {
   async function publish(entry) {
     entry.lastEventAt = now();
     if (!entry.projectSlug) return;
@@ -124,7 +160,14 @@ function createRecordingRecords({ events, logger, now }) {
     }
   }
 
-  return Object.freeze({ changeState, publish, refreshFromReader, unreadyTracers, writeIndex, writeRecord });
+  return Object.freeze({
+    changeState,
+    publish,
+    refreshFromReader,
+    unreadyTracers,
+    writeIndex,
+    writeRecord
+  });
 }
 
 /** @typedef {ReturnType<typeof createRecordingRecords>} RecordingRecords */

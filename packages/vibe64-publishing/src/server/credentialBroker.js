@@ -52,7 +52,12 @@ function plainProof(proof) {
  * @param {() => string} [dependencies.now]
  * @param {string} [dependencies.ghCommand]
  */
-function createCredentialBroker({ keys, packaging, now = () => new Date().toISOString(), ghCommand = "gh" }) {
+function createCredentialBroker({
+  keys,
+  packaging,
+  now = () => new Date().toISOString(),
+  ghCommand = "gh"
+}) {
   async function accounts() {
     const status = await keys.status();
     return status.entries.filter((entry) => entry.kind === "account").map((entry) => ({
@@ -79,7 +84,11 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
       value,
       kind: "account",
       label: String(label || `${kind} account`).trim().slice(0, 80),
-      meta: { accountKind: kind, address: String(address || "").trim().slice(0, 300), source: source === "github-cli" ? "github-cli" : "token" }
+      meta: {
+        accountKind: kind,
+        address: String(address || "").trim().slice(0, 300),
+        source: source === "github-cli" ? "github-cli" : "token"
+      }
     });
     value = "";
     return { id, kind, label: entry.label, address: entry.address || "", source: entry.source, createdAt: entry.createdAt };
@@ -99,7 +108,10 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
       const { stdout } = await run(ghCommand, ["auth", "token"], { timeout: 15_000, env: { ...process.env, GH_PROMPT_DISABLED: "1" } });
       return stdout.trim();
     } catch {
-      throw brokerError("The GitHub CLI is not signed in on this computer. Run gh auth login, or paste a token.", "vibe64_publishing_github_cli_missing");
+      throw brokerError(
+        "The GitHub CLI is not signed in on this computer. Run gh auth login, or paste a token.",
+        "vibe64_publishing_github_cli_missing"
+      );
     }
   }
 
@@ -130,7 +142,10 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
 
   async function dryRun({ target, version, artifacts, toolchains = {} }) {
     const destination = packaging.vibe64Destination(target.destination);
-    return packaging.withStageCredentials({ credentials: packaging.credentialSpecs(destination, "credentials", target), obtainCredential: obtainFor(target) },
+    return packaging.withStageCredentials({
+      credentials: packaging.credentialSpecs(destination, "credentials", target),
+      obtainCredential: obtainFor(target)
+    },
       (credentials) => destination.dryRun({ target, version, artifacts, credentials, toolchains }));
   }
 
@@ -150,7 +165,11 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
   /**
    * Creates the app's install key straight into the person's keys.
    */
-  async function createSideloadKey({ target, appName, javaHome }) {
+  async function createSideloadKey({
+    target,
+    appName,
+    javaHome
+  }) {
     const entryId = sideloadKeyEntryId(target);
     if (keys.has(entryId)) throw brokerError(`${target.package} already has an install key.`, "vibe64_publishing_key_exists");
     return packaging.generateSideloadKey({
@@ -159,7 +178,12 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
       sink: async ({ keystore, password, certificateSha256 }) => {
         const value = Buffer.from(JSON.stringify({ keystore: keystore.toString("base64"), password: password.toString("utf8") }), "utf8");
         try {
-          await keys.put(entryId, { value, kind: "android-sideload-key", label: `Install key for ${appName || target.package}`, meta: { certificateSha256, package: target.package } });
+          await keys.put(entryId, {
+            value,
+            kind: "android-sideload-key",
+            label: `Install key for ${appName || target.package}`,
+            meta: { certificateSha256, package: target.package }
+          });
         } finally {
           value.fill(0);
         }
@@ -171,7 +195,22 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
    * What a dry run reports, without local paths or anything credential-like.
    */
   function safeReport(report) {
-    const keep = ["destination", "alreadyPublished", "previousVersion", "diff", "integrity", "repository", "tag", "tagPushed", "channel", "releaseExists", "project", "version", "index", "check"];
+    const keep = [
+      "destination",
+      "alreadyPublished",
+      "previousVersion",
+      "diff",
+      "integrity",
+      "repository",
+      "tag",
+      "tagPushed",
+      "channel",
+      "releaseExists",
+      "project",
+      "version",
+      "index",
+      "check"
+    ];
     const result = {};
     for (const field of keep) if (report?.[field] !== undefined) result[field] = JSON.parse(JSON.stringify(report[field]));
     if (Array.isArray(report?.files)) {
@@ -200,7 +239,18 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
     };
   }
 
-  return Object.freeze({ accounts, addAccount, createSideloadKey, dryRun, facts, obtainFor, publish, removeAccount, safeOutcome, safeReport });
+  return Object.freeze({
+    accounts,
+    addAccount,
+    createSideloadKey,
+    dryRun,
+    facts,
+    obtainFor,
+    publish,
+    removeAccount,
+    safeOutcome,
+    safeReport
+  });
 }
 
 export { accountEntryId, createCredentialBroker, sideloadKeyEntryId };

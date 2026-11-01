@@ -67,7 +67,13 @@ function conversationRecordHasMessage(record, messageId) {
  * @param {SessionArchiveAccess} dependencies.archiveAccess
  * @param {SessionRecords} dependencies.sessionRecords
  */
-function createSessionConversationStore({ state, storePaths, recordFiles, archiveAccess, sessionRecords }) {
+function createSessionConversationStore({
+  state,
+  storePaths,
+  recordFiles,
+  archiveAccess,
+  sessionRecords
+}) {
   async function readConversationMessage(sessionPaths, turnId, fileName) {
     const match = normalizeText(fileName).match(CONVERSATION_MESSAGE_FILE_PATTERN);
     if (!match) {
@@ -233,7 +239,8 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
       // The first saved decision wins, including across independent store instances.
       if (turn.integrationSetup.outcome !== "pending") return turn.integrationSetup;
       await writeJsonFile(path.join(conversationTurnRoot(sessionPaths, turnId), "integration-setup.json"), {
-        requestId, ...decision
+        requestId,
+        ...decision
       });
       return { ...turn.integrationSetup, ...decision };
     });
@@ -291,14 +298,22 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
       );
     }
     const other = { ...value };
-    for (const key of ["actorDisplayName", "actorId", "engineId", "assistantSelection", "assistantRouting", "nativeMessageVersions"]) delete other[key];
+    for (const key of [
+      "actorDisplayName",
+      "actorId",
+      "engineId",
+      "assistantSelection",
+      "assistantRouting",
+      "nativeMessageVersions"
+    ]) delete other[key];
     return {
       ...other,
       actorDisplayName: normalizeText(value.actorDisplayName),
       actorId: normalizeText(value.actorId),
       ...(VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) ? { engineId: value.engineId } : {}),
       ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
-      ...(isPlainObject(value.assistantRouting) && ["senior", "junior", "fix", "helper", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
+      ...(isPlainObject(value.assistantRouting) &&
+        ["senior", "junior", "fix", "helper", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
         assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]
           .filter((key) => value.assistantRouting[key] !== undefined).map((key) => [key, value.assistantRouting[key]]))
       } : {}),
@@ -324,7 +339,10 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
   function validateConversationDocument(value) {
     const turnIds = Array.isArray(value?.turns) ? new Set(value.turns.map((entry) => entry?.[0])) : new Set();
     if (value?.version !== 1 || !isPlainObject(value.metadata) || !Array.isArray(value.rewound) || !Array.isArray(value.turns) ||
-        value.turns.some((entry) => !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" || !CONVERSATION_TURN_ID_PATTERN.test(entry[0]) ||
+        value.turns.some((entry) => !Array.isArray(entry) ||
+          entry.length !== 2 ||
+          typeof entry[0] !== "string" ||
+          !CONVERSATION_TURN_ID_PATTERN.test(entry[0]) ||
           !isPlainObject(entry[1]) || !Array.isArray(entry[1].messages) ||
           (entry[1].metadata !== undefined && !isPlainObject(entry[1].metadata)) ||
           entry[1].messages.some((message) => !isPlainObject(message) || !CONVERSATION_MESSAGE_ROLES.includes(message.role) ||
@@ -332,7 +350,10 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
             (message.messageId !== undefined && typeof message.messageId !== "string"))) ||
         turnIds.size !== value.turns.length ||
         value.rewound.some((id) => !turnIds.has(id))) {
-      throw vibe64Error("Conversation storage has an unsupported or damaged format. Restore it before continuing.", "vibe64_invalid_conversation_storage");
+      throw vibe64Error(
+        "Conversation storage has an unsupported or damaged format. Restore it before continuing.",
+        "vibe64_invalid_conversation_storage"
+      );
     }
     return { metadata: value.metadata, rewound: value.rewound, turns: new Map(value.turns) };
   }
@@ -344,7 +365,8 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
       if (!isMissingPathError(error)) throw error;
     }
     const entries = await readDirectoryEntries(sessionPaths.conversationLogRoot);
-    if (entries.some((entry) => CONVERSATION_TURN_ID_PATTERN.test(entry.name) || ["rewound.json", "message-ids.json"].includes(entry.name))) {
+    if (entries.some((entry) =>
+      CONVERSATION_TURN_ID_PATTERN.test(entry.name) || ["rewound.json", "message-ids.json"].includes(entry.name))) {
       throw vibe64Error("This conversation needs the offline state upgrade. Stop services and run the candidate upgrade-state command before opening it.",
         "vibe64_conversation_upgrade_required");
     }
@@ -358,7 +380,10 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
   function conversationRecordTransaction(sessionPaths, callback, write = false, newTurnMetadata = null) {
     let record;
     const storage = createConversationStorage({
-      async readRecord() { record = await readConversationRecord(sessionPaths); return record; },
+      async readRecord() {
+        record = await readConversationRecord(sessionPaths);
+        return record;
+      },
       async writeRecord(_scope, next) {
         // Transactions cannot change rewind markers; keep the saved ones.
         next = { metadata: next.metadata, turns: next.turns, rewound: next.rewound ?? record.rewound };
@@ -395,17 +420,28 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
       },
       async appendMessage(id, message) {
         const saved = await transaction.readTurn(id);
-        let metadata = message.turnMetadata ? normalizeConversationTurnMetadata({ ...saved?.metadata, ...message.turnMetadata }) : saved?.metadata;
-        if (!saved && !metadata?.assistantSelection && newTurnMetadata) metadata = normalizeConversationTurnMetadata({ ...newTurnMetadata, ...metadata });
+        let metadata = message.turnMetadata ? normalizeConversationTurnMetadata({
+          ...saved?.metadata,
+          ...message.turnMetadata
+        }) : saved?.metadata;
+        if (!saved && !metadata?.assistantSelection && newTurnMetadata) metadata = normalizeConversationTurnMetadata({
+          ...newTurnMetadata,
+          ...metadata
+        });
         if (!saved && !metadata?.assistantSelection) {
-          const selection = vibe64AssistantSelectionFromMetadata(await recordFiles.readMetadataFromPaths(sessionPaths), { required: false });
+          const selection = vibe64AssistantSelectionFromMetadata(
+            await recordFiles.readMetadataFromPaths(sessionPaths),
+            { required: false }
+          );
           if (selection && (!metadata?.engineId || metadata.engineId === selection.engineId)) {
             metadata = normalizeConversationTurnMetadata({ ...metadata, engineId: selection.engineId, assistantSelection: selection });
           }
         }
         if (metadata?.engineId && message.role !== "thinking") {
-          metadata.nativeMessageVersions = { ...metadata.nativeMessageVersions,
-            [conversationMessageIdentity(id, message)]: conversationMessageVersion(message) };
+          metadata.nativeMessageVersions = {
+            ...metadata.nativeMessageVersions,
+            [conversationMessageIdentity(id, message)]: conversationMessageVersion(message)
+          };
         }
         await transaction.appendMessage(id, { ...message, ...(metadata ? { turnMetadata: metadata } : {}) });
       },
@@ -414,9 +450,12 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
         const metadata = previous?.metadata || {};
         const key = conversationMessageIdentity(id, { role: "assistant" });
         if (previous?.assistant && !metadata.nativeMessageVersions?.[key]) {
-          await transaction.updateTurnMetadata(id, { nativeMessageVersions: {
-            ...metadata.nativeMessageVersions, [key]: conversationMessageVersion(previous.assistant)
-          } });
+          await transaction.updateTurnMetadata(id, {
+            nativeMessageVersions: {
+              ...metadata.nativeMessageVersions,
+              [key]: conversationMessageVersion(previous.assistant)
+            }
+          });
         }
         await transaction.replaceAssistant(id, message);
       }
@@ -425,7 +464,12 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
 
   async function readConversationTurn(sessionPaths, turnId) {
     return conversationRecordTransaction(sessionPaths, async (transaction) => await transaction.readTurn(turnId) || {
-      turnId, user: null, assistant: null, thinking: [], commentary: [], messages: []
+      turnId,
+      user: null,
+      assistant: null,
+      thinking: [],
+      commentary: [],
+      messages: []
     });
   }
 
@@ -455,7 +499,9 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
 
   async function readSessionConversation(sessionId, conversationId) {
     return archiveAccess.withReadableSessionPaths(sessionId, async (paths) => {
-      const text = await readTextIfExists(path.join(recordFiles.conversationPaths(paths, conversationId).conversationRoot, "conversation.json"));
+      const text = await readTextIfExists(
+        path.join(recordFiles.conversationPaths(paths, conversationId).conversationRoot, "conversation.json")
+      );
       return text ? JSON.parse(text) : null;
     });
   }
@@ -464,7 +510,9 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
     return archiveAccess.withReadableSessionPaths(sessionId, async (paths) => {
       const entries = await readDirectoryEntries(paths.conversationsRoot);
       const records = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
-        const text = await readTextIfExists(path.join(recordFiles.conversationPaths(paths, entry.name).conversationRoot, "conversation.json"));
+        const text = await readTextIfExists(
+          path.join(recordFiles.conversationPaths(paths, entry.name).conversationRoot, "conversation.json")
+        );
         return text ? JSON.parse(text) : null;
       }));
       return records.filter(Boolean).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
@@ -476,8 +524,13 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
       const file = path.join(recordFiles.conversationPaths(paths, conversationId).conversationRoot, "conversation.json");
       const text = await readTextIfExists(file);
       const previous = text ? JSON.parse(text) : {};
-      const record = { ...previous, ...patch, conversationId,
-        createdAt: previous.createdAt || state.now().toISOString(), updatedAt: state.now().toISOString() };
+      const record = {
+        ...previous,
+        ...patch,
+        conversationId,
+        createdAt: previous.createdAt || state.now().toISOString(),
+        updatedAt: state.now().toISOString()
+      };
       await writeJsonFile(file, record);
       return record;
     });
@@ -485,7 +538,8 @@ function createSessionConversationStore({ state, storePaths, recordFiles, archiv
 
   async function deleteSessionConversation(sessionId, conversationId) {
     return sessionRecords.mutateSession(sessionId, (paths) => rm(recordFiles.conversationPaths(paths, conversationId).conversationRoot, {
-      recursive: true, force: true
+      recursive: true,
+      force: true
     }));
   }
 

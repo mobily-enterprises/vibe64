@@ -62,8 +62,20 @@ const ACTIONS = Object.freeze({
 const PERSON_ONLY = Object.freeze(["api"]);
 
 // Every publication operation runs in its project.
-const PUBLISHING_QUERY = Object.freeze({ version: 1, kind: "query", output: null, idempotency: "none", events: [] });
-const PUBLISHING_COMMAND = Object.freeze({ version: 1, kind: "command", output: null, idempotency: "optional", events: [] });
+const PUBLISHING_QUERY = Object.freeze({
+  version: 1,
+  kind: "query",
+  output: null,
+  idempotency: "none",
+  events: []
+});
+const PUBLISHING_COMMAND = Object.freeze({
+  version: 1,
+  kind: "command",
+  output: null,
+  idempotency: "optional",
+  events: []
+});
 
 /**
  * @param {object} dependencies

@@ -16,7 +16,11 @@ import { text } from "./trimmedText.js";
  * @param {SessionWorkOperations} dependencies.workOperations
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
-function createSessionWorkRecovery({ terminals, workOperations, workspaceSetup }) {
+function createSessionWorkRecovery({
+  terminals,
+  workOperations,
+  workspaceSetup
+}) {
   /**
    * Once a Save's outcome is recorded, its prepared ref is no longer recovery
    * evidence. Retiring is best effort: a later recovery still reads the record.

@@ -35,8 +35,13 @@ function snapshot(raw, label) {
   if (!raw) return raw;
   const value = parsed(raw, label);
   if (!isRecord(value.configuration?.orchestrators)) return raw;
-  const next = { ...value, configuration: { revision: value.configuration.revision,
-    owner: v4OwnerSetup(value.configuration.orchestrators[value.workflowEngineId] || {}) } };
+  const next = {
+    ...value,
+    configuration: {
+      revision: value.configuration.revision,
+      owner: v4OwnerSetup(value.configuration.orchestrators[value.workflowEngineId] || {})
+    }
+  };
   if (isRecord(value.assignments) && Object.hasOwn(value.assignments, "helper")) {
     const { helper, ...assignments } = value.assignments;
     next.assignments = { ...assignments, quickHelper: helper };
@@ -54,9 +59,17 @@ function changedValues(values = {}, repair = false) {
 }
 
 function teamSetupSessionChanges({ metadata = {}, conversations = [], renewal }) {
-  const result = { metadata: changedValues(metadata), conversations: conversations.map((record) => !record.routingMetadata ? record
-    : { ...record, routingMetadata: { ...record.routingMetadata,
-      ...changedValues(record.routingMetadata, record.recoveryOperation === "update") } }) };
+  const result = {
+    metadata: changedValues(metadata),
+    conversations: conversations.map((record) => !record.routingMetadata ? record
+      : {
+        ...record,
+        routingMetadata: {
+          ...record.routingMetadata,
+          ...changedValues(record.routingMetadata, record.recoveryOperation === "update")
+        }
+      })
+  };
   const successor = renewal?.successor?.assistantRouting;
   if (isRecord(successor) && Object.hasOwn(successor, "workflowEngineId")) {
     const { workflowEngineId: _workflowEngineId, ...assistantRouting } = successor;
@@ -70,16 +83,22 @@ function teamSetupSessionChanges({ metadata = {}, conversations = [], renewal })
  * setups. Retained requests keep their delivery; nothing is replayed.
  */
 async function upgradeTeamSetupSessions(context) {
-  return publishStateUpgradeFiles({ ...context, prepareUpdates: async (temporaryRoot) => {
-    const updates = [];
-    for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
-      const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-      const staged = await store.prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform: teamSetupSessionChanges });
-      context.report("info", `${path.basename(projectRuntimeRoot)}: ${staged.length} session file change(s) for the owner and team AI setups.`);
-      updates.push(...staged);
+  return publishStateUpgradeFiles({
+    ...context,
+    prepareUpdates: async (temporaryRoot) => {
+      const updates = [];
+      for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
+        const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
+        const staged = await store.prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform: teamSetupSessionChanges });
+        context.report(
+          "info",
+          `${path.basename(projectRuntimeRoot)}: ${staged.length} session file change(s) for the owner and team AI setups.`
+        );
+        updates.push(...staged);
+      }
+      return updates;
     }
-    return updates;
-  } });
+  });
 }
 
 export { teamSetupSessionChanges, upgradeTeamSetupSessions };

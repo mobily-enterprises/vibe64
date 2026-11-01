@@ -28,7 +28,9 @@ async function readDeclaredFiles(source, files) {
     const filename = path.join(source, ...file.split("/"));
     let stat;
     try { stat = await lstat(filename); } catch (error) {
-      if (error.code === "ENOENT") throw conflictFailure("VIBE64_TRAINING_CODE_FILE_MISSING", `The lesson file ${file} is missing from your practice project.`);
+      if (error.code === "ENOENT") {
+        throw conflictFailure("VIBE64_TRAINING_CODE_FILE_MISSING", `The lesson file ${file} is missing from your practice project.`);
+      }
       throw error;
     }
     if (!stat.isFile() || stat.isSymbolicLink() || await realpath(filename) !== filename || stat.size > MAX_FILE_BYTES) {
@@ -51,7 +53,8 @@ function verifyStepAuthorship(ledger, stepId, files) {
   const step = ledger?.steps?.find(value => value.stepId === stepId);
   const verified = verifyLedgerChain(step?.baseline, ledger?.entries.slice(step?.entryStart), files);
   if (!verified.intact) return verified;
-  const unchanged = files.filter(file => step.baseline.find(value => value.path === file.path).sha256 === file.sha256).map(file => file.path);
+  const unchanged = files.filter(file => step.baseline.find(value => value.path === file.path).sha256 === file.sha256)
+    .map(file => file.path);
   return unchanged.length ? { intact: false, files: unchanged, unchanged: true } : verified;
 }
 
@@ -103,7 +106,11 @@ function codeStepOf(lesson, stepId) {
  * @param {InstalledTrainingContent} dependencies.content
  * @param {ProjectService} dependencies.project
  */
-function createTrainingCodeAuthorship({ learners, content, project }) {
+function createTrainingCodeAuthorship({
+  learners,
+  content,
+  project
+}) {
   async function liveFiles(attempt, files) {
     return project.runInProjectContext(attempt.projectSlug, async () => {
       const runtime = await project.createRuntime({ inspectSource: false });
@@ -137,8 +144,17 @@ function createTrainingCodeAuthorship({ learners, content, project }) {
       if (current?.steps.some(step => step.stepId === stepId)) return null;
       const files = await liveFiles(open.attempt, open.files);
       const entries = current?.entries || [];
-      return { ledger: { steps: [...(current?.steps || []), { stepId, enteredRevision: revision, entryStart: entries.length,
-        baseline: files.map(file => ({ path: file.path, sha256: file.sha256 })) }], entries } };
+      return {
+        ledger: {
+          steps: [...(current?.steps || []), {
+            stepId,
+            enteredRevision: revision,
+            entryStart: entries.length,
+            baseline: files.map(file => ({ path: file.path, sha256: file.sha256 }))
+          }],
+          entries
+        }
+      };
     });
     const step = ledger.steps.find(value => value.stepId === stepId);
     return { recorded: true, step: { stepId, enteredRevision: step.enteredRevision }, baseline: structuredClone(step.baseline) };
@@ -155,20 +171,33 @@ function createTrainingCodeAuthorship({ learners, content, project }) {
     const result = await learners.updateCodeLedger({ actor, attemptId }, async (current, { learnerId, attempt }) => {
       const tracking = Boolean(current && await openCodeStep(attempt, current.steps[0].stepId));
       if (tracking && current.entries.length >= MAX_SEPARATE_ENTRIES) {
-        throw conflictFailure("VIBE64_TRAINING_CODE_LEDGER_FULL", "This code step recorded too many separate edits. Ask the lesson owner to review it.");
+        throw conflictFailure(
+          "VIBE64_TRAINING_CODE_LEDGER_FULL",
+          "This code step recorded too many separate edits. Ask the lesson owner to review it."
+        );
       }
       const saved = await save();
       const savedPath = saved?.file?.path;
       if (saved?.ok === false || !tracking || !trackedPaths(current).has(savedPath)) return { value: saved };
-      const entry = { path: savedPath, baseHash: String(input.baseHash || ""), savedHash: String(saved.file.hash || ""),
-        intendedHash: sha256Hex(Buffer.from(String(input.text ?? ""), "utf8")), actorId: learnerId,
-        at: new Date().toISOString(), saves: 1 };
+      const entry = {
+        path: savedPath,
+        baseHash: String(input.baseHash || ""),
+        savedHash: String(saved.file.hash || ""),
+        intendedHash: sha256Hex(Buffer.from(String(input.text ?? ""), "utf8")),
+        actorId: learnerId,
+        at: new Date().toISOString(),
+        saves: 1
+      };
       const entries = current.entries;
       const last = entries.at(-1);
       // Consecutive clean saves of one file collapse into one link of the
       // chain, never across a later step entry (which starts at the next save).
       const sealed = Math.max(0, ...current.steps.map(step => step.entryStart));
-      if (last && entries.length > sealed && last.path === entry.path && last.actorId === entry.actorId && last.savedHash === last.intendedHash &&
+      if (last &&
+          entries.length > sealed &&
+          last.path === entry.path &&
+          last.actorId === entry.actorId &&
+          last.savedHash === last.intendedHash &&
           entry.baseHash === last.savedHash && entry.savedHash === entry.intendedHash) {
         Object.assign(last, { savedHash: entry.savedHash, intendedHash: entry.intendedHash, at: entry.at, saves: last.saves + 1 });
       } else {

@@ -130,7 +130,10 @@ function normalizedConversation(messages = [], schema = {}) {
   }
   const selected = normalized.at(-1).table;
   if (selected && !schema.tables?.some((table) => table.qualifiedName === selected)) {
-    throw vibe64Error("The selected table is no longer in the refreshed schema. Select a current table and try again.", "vibe64_database_assistant_table_invalid");
+    throw vibe64Error(
+      "The selected table is no longer in the refreshed schema. Select a current table and try again.",
+      "vibe64_database_assistant_table_invalid"
+    );
   }
   return normalized;
 }
@@ -248,28 +251,70 @@ async function runDatabaseAssistant({
   // These two in-process actions close over the already admitted database.
   // They are not registered on HTTP, general automation or native Helper tools.
   const actions = createActionCatalogue();
-  actions.register({ contributorId: "database.copilot", domain: "database", actions: Object.freeze([
-    Object.freeze({
-      ...DATABASE_ASSISTANT_ACTION_FIELDS,
-      id: "vibe64.database.assistant.schema.search",
-      extensions: { assistant: { description: "Search the refreshed schema for complete SQL-relevant definitions. Use * to list object names and kinds; otherwise use business terms, column names or exact qualified object names. Results explicitly report truncation." } },
-      input: { schema: createSchema({ search: { type: "string", required: true, noTrim: true,
-        minLength: 1, maxLength: MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS } }), mode: "replace" },
-      output: { schema: createSchema({ search: { type: "string", required: true, noTrim: true },
-        result: { type: "object", required: true, additionalProperties: true } }), mode: "replace" },
-      execute: (input) => searchSchema(input)
-    }),
-    Object.freeze({
-      ...DATABASE_ASSISTANT_ACTION_FIELDS,
-      id: "vibe64.database.assistant.query.read",
-      extensions: { assistant: { description: "Execute one read-only SQL statement through the selected session's reader identity when real row data is necessary. Returned rows are bounded; writes and schema changes must instead be proposed for human review." } },
-      input: { schema: createSchema({ sql: { type: "string", required: true, noTrim: true,
-        minLength: 1, maxLength: DATABASE_ASSISTANT_SQL_MAX_CHARACTERS } }), mode: "replace" },
-      output: { schema: createSchema({ sql: { type: "string", required: true, noTrim: true },
-        result: { type: "object", required: true, additionalProperties: true } }), mode: "replace" },
-      execute: (input) => readQuery(input)
-    })
-  ]) });
+  actions.register({
+    contributorId: "database.copilot",
+    domain: "database",
+    actions: Object.freeze([
+      Object.freeze({
+        ...DATABASE_ASSISTANT_ACTION_FIELDS,
+        id: "vibe64.database.assistant.schema.search",
+        extensions: {
+          assistant: {
+            description: "Search the refreshed schema for complete SQL-relevant definitions. Use * to list object names and kinds; otherwise use business terms, column names or exact qualified object names. Results explicitly report truncation."
+          }
+        },
+        input: {
+          schema: createSchema({
+            search: {
+              type: "string",
+              required: true,
+              noTrim: true,
+              minLength: 1,
+              maxLength: MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS
+            }
+          }),
+          mode: "replace"
+        },
+        output: {
+          schema: createSchema({
+            search: { type: "string", required: true, noTrim: true },
+            result: { type: "object", required: true, additionalProperties: true }
+          }),
+          mode: "replace"
+        },
+        execute: (input) => searchSchema(input)
+      }),
+      Object.freeze({
+        ...DATABASE_ASSISTANT_ACTION_FIELDS,
+        id: "vibe64.database.assistant.query.read",
+        extensions: {
+          assistant: {
+            description: "Execute one read-only SQL statement through the selected session's reader identity when real row data is necessary. Returned rows are bounded; writes and schema changes must instead be proposed for human review."
+          }
+        },
+        input: {
+          schema: createSchema({
+            sql: {
+              type: "string",
+              required: true,
+              noTrim: true,
+              minLength: 1,
+              maxLength: DATABASE_ASSISTANT_SQL_MAX_CHARACTERS
+            }
+          }),
+          mode: "replace"
+        },
+        output: {
+          schema: createSchema({
+            sql: { type: "string", required: true, noTrim: true },
+            result: { type: "object", required: true, additionalProperties: true }
+          }),
+          mode: "replace"
+        },
+        execute: (input) => readQuery(input)
+      })
+    ])
+  });
   // Domain bounds apply before the shared tool-result transport and its next
   // response. Retain the original outer serialization allowance.
   const toolCatalog = createServiceToolCatalog(actions, {

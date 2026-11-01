@@ -28,8 +28,11 @@ function failure(message, code, statusCode) {
 function person(vibe64User = null) {
   const id = text(vibe64User?.username || vibe64User?.id);
   if (!id) return null;
-  return { id, username: text(vibe64User.username) || id,
-    displayName: text(vibe64User.preferredName) || text(vibe64User.displayName) || id };
+  return {
+    id,
+    username: text(vibe64User.username) || id,
+    displayName: text(vibe64User.preferredName) || text(vibe64User.displayName) || id
+  };
 }
 
 function parseApprovals(raw = "") {
@@ -128,16 +131,27 @@ function createMainChatApprovals({
 
   function decided(entry, vibe64User, status) {
     const now = new Date().toISOString();
-    Object.assign(entry, { status, updatedAt: now, decidedAt: now,
-      decidedBy: person(vibe64User) || { id: "owner", displayName: "Owner" } });
+    Object.assign(entry, {
+      status,
+      updatedAt: now,
+      decidedAt: now,
+      decidedBy: person(vibe64User) || { id: "owner", displayName: "Owner" }
+    });
   }
 
   async function read(sessionId, { vibe64User = null } = {}) {
     const runtime = await project.createRuntime({ inspectSource: false });
     const approvals = parseApprovals(await runtime.store.readMetadataValue(sessionId, MAIN_CHAT_APPROVALS_METADATA));
     const team = await readWorkspaceTeam();
-    return { ok: true, sessionId, owner: isAssistantRoutingOwner(vibe64User), practice: currentRequestIsPracticeProject(), viewer: person(vibe64User),
-      ownerName: team.ownerName, entries: approvals.entries };
+    return {
+      ok: true,
+      sessionId,
+      owner: isAssistantRoutingOwner(vibe64User),
+      practice: currentRequestIsPracticeProject(),
+      viewer: person(vibe64User),
+      ownerName: team.ownerName,
+      entries: approvals.entries
+    };
   }
 
   async function enqueue(sessionId, { message, messageId = "", attachmentIds = [] } = {}, { vibe64User }) {
@@ -162,8 +176,17 @@ function createMainChatApprovals({
           "vibe64_main_chat_approval_limit", 409);
       }
       const now = new Date().toISOString();
-      approvals.entries.push({ id, sender, text: message, steer, status: "waiting",
-        revision: 1, createdAt: now, updatedAt: now, error: "" });
+      approvals.entries.push({
+        id,
+        sender,
+        text: message,
+        steer,
+        status: "waiting",
+        revision: 1,
+        createdAt: now,
+        updatedAt: now,
+        error: ""
+      });
       return { ok: true, queued: true, approvalId: id, status: "waiting" };
     }, { approvalId: id, approvalSender: sender.displayName });
   }
@@ -229,9 +252,17 @@ function createMainChatApprovals({
     let result;
     try {
       result = await deliver(sessionId, {
-        message: entry.text, messageId: `approval_${entry.id}_${entry.revision}`, vibe64User,
-        turnMetadata: { sender: { id: entry.sender.id, displayName: entry.sender.displayName,
-          approvalId: entry.id, approvedBy: entry.decidedBy.displayName } }
+        message: entry.text,
+        messageId: `approval_${entry.id}_${entry.revision}`,
+        vibe64User,
+        turnMetadata: {
+          sender: {
+            id: entry.sender.id,
+            displayName: entry.sender.displayName,
+            approvalId: entry.id,
+            approvedBy: entry.decidedBy.displayName
+          }
+        }
       }, browserAuthority ? { browserAuthority } : {});
     } catch (error) {
       result = { ok: false, error: error.message, code: error.code };
@@ -239,14 +270,24 @@ function createMainChatApprovals({
     const sent = result?.ok !== false;
     await change(sessionId, sent ? "main-chat-approval-sent" : "main-chat-approval-updated", (approvals) => {
       const current = entryFor(approvals, approvalId);
-      Object.assign(current, { status: sent ? "sent" : "waiting", updatedAt: new Date().toISOString(),
-        error: sent ? "" : text(result?.error) || "The message could not be sent." });
+      Object.assign(current, {
+        status: sent ? "sent" : "waiting",
+        updatedAt: new Date().toISOString(),
+        error: sent ? "" : text(result?.error) || "The message could not be sent."
+      });
     });
     return sent ? { ...result, ok: true, approvalId, status: "sent" }
       : { ...result, ok: false, approvalId, status: "waiting" };
   }
 
-  return Object.freeze({ read, enqueue, edit, withdraw, decline, approve });
+  return Object.freeze({
+    read,
+    enqueue,
+    edit,
+    withdraw,
+    decline,
+    approve
+  });
 }
 
 export { MAIN_CHAT_APPROVALS_METADATA, countWaitingMainChatApprovals, createMainChatApprovals };

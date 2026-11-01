@@ -263,7 +263,7 @@ const sessionPullRequestInputValidator = actionInput({
   title: { type: "string", required: true, minLength: 1, maxLength: 256 },
   body: { type: "string", required: false, maxLength: 65536, noTrim: true },
   draft: { type: "boolean", required: false },
-  ...optionalOrigin,
+  ...optionalOrigin
 });
 
 const incomingReviewSchema = createSchema({
@@ -271,7 +271,9 @@ const incomingReviewSchema = createSchema({
   targetBranch: { type: "string", required: true, minLength: 1, maxLength: 255, noTrim: true },
   id: { type: "string", required: true, pattern: UUID_V4_PATTERN },
   ...Object.fromEntries(["targetHead", "activeHead", "discardedHead"].map(key => [key, {
-    type: "string", required: true, pattern: key === "targetHead" ? /^[a-f0-9]{40,64}$/u : /^(?:[a-f0-9]{40,64})?$/u
+    type: "string",
+    required: true,
+    pattern: key === "targetHead" ? /^[a-f0-9]{40,64}$/u : /^(?:[a-f0-9]{40,64})?$/u
   }]))
 });
 const incomingInspectionInputValidator = actionInput({
@@ -286,10 +288,16 @@ const incomingChangeInputValidator = actionInput({
   id: { type: "string", required: true, pattern: UUID_V4_PATTERN },
   action: { type: "string", required: true, enum: ["merge", "discard", "review-repair"] },
   review: { type: "object", required: true, schema: incomingReviewSchema },
-  repairReview: { type: "object", required: false, schema: createSchema(Object.fromEntries(
-    ["tree", "worktreeTree", "head", "indexTree"].map(key => [key, {
-      type: "string", required: true, pattern: /^[a-f0-9]{40,64}$/u
-    }])) ) }
+  repairReview: {
+    type: "object",
+    required: false,
+    schema: createSchema(Object.fromEntries(
+      ["tree", "worktreeTree", "head", "indexTree"].map(key => [key, {
+        type: "string",
+        required: true,
+        pattern: /^[a-f0-9]{40,64}$/u
+      }])) )
+  }
 });
 
 const connectedSourceAllocationInputValidator = actionInput({
@@ -314,18 +322,22 @@ const connectedWorkInputValidator = actionInput({
 });
 
 const sessionCreateInputValidator = actionInput({
-  repositoryBranch: { type: "object", required: false, schema: createSchema({
-    name: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: true },
-    fromBranch: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: false },
-    expectedCommit: { type: "string", pattern: /^[a-f0-9]{40,64}$/u, required: true }
-  }) },
+  repositoryBranch: {
+    type: "object",
+    required: false,
+    schema: createSchema({
+      name: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: true },
+      fromBranch: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: false },
+      expectedCommit: { type: "string", pattern: /^[a-f0-9]{40,64}$/u, required: true }
+    })
+  },
   pullRequestNumber: { type: "integer", min: 1, required: false },
   assistantSelection: {
     type: "object",
     additionalProperties: true,
     required: false
   },
-  ...optionalOrigin,
+  ...optionalOrigin
 });
 
 const assistantCapabilitiesInputValidator = actionInput({
@@ -388,17 +400,25 @@ const assistantModelAccessFields = {
 const assistantModelAccessUpdateInputValidator = patchSchema(assistantModelAccessFields);
 const assistantModelAccessUpdateActionInputValidator = actionInput(assistantModelAccessFields);
 
-const assistantSelectionField = { type: "object", required: false, schema: createSchema({
-  engineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
-  ...Object.fromEntries(["schema", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision"]
-    .map((key) => [key, { type: "string", required: false }]))
-}) };
-const assistantRoutingField = { type: "object", required: false, schema: createSchema({
-  mode: { type: "string", enum: ASSISTANT_MODES.map(({ id }) => id), required: true },
-  review: { type: "boolean", required: false },
-  autoSave: { type: "boolean", required: false },
-  override: assistantSelectionField
-}) };
+const assistantSelectionField = {
+  type: "object",
+  required: false,
+  schema: createSchema({
+    engineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
+    ...Object.fromEntries(["schema", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision"]
+      .map((key) => [key, { type: "string", required: false }]))
+  })
+};
+const assistantRoutingField = {
+  type: "object",
+  required: false,
+  schema: createSchema({
+    mode: { type: "string", enum: ASSISTANT_MODES.map(({ id }) => id), required: true },
+    review: { type: "boolean", required: false },
+    autoSave: { type: "boolean", required: false },
+    override: assistantSelectionField
+  })
+};
 
 const assistantSelectionUpdateInputValidator = patchSchema({
   assistantRouting: assistantRoutingField,

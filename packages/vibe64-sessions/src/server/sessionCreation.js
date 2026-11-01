@@ -51,11 +51,22 @@ function sessionCreationLimitError(policy) {
  * @param {TerminalsService} dependencies.terminals
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
-function createSessionCreation({ assistant, project, publishSessionChanged, setupRunner, terminals, workspaceSetup }) {
+function createSessionCreation({
+  assistant,
+  project,
+  publishSessionChanged,
+  setupRunner,
+  terminals,
+  workspaceSetup
+}) {
   /**
    * Only an internal caller may supply a server-reserved identity.
    */
-  async function createSession(input = {}, { sessionId, expectedCommit, connectedContribution } = {}) {
+  async function createSession(input = {}, {
+    sessionId,
+    expectedCommit,
+    connectedContribution
+  } = {}) {
     return sessionResult(async () => {
       assertProjectEffectAdmission();
       if (sessionId !== undefined) assertValidVibe64SessionId(sessionId);
@@ -99,11 +110,13 @@ function createSessionCreation({ assistant, project, publishSessionChanged, setu
         }
       }
       const pullRequest = input.pullRequestNumber == null ? null : await project.resolvePullRequestSource({
-        number: input.pullRequestNumber, vibe64User
+        number: input.pullRequestNumber,
+        vibe64User
       });
       if (pullRequest && input.repositoryBranch) throw new Error("Choose a branch or a pull request for this session.");
       const { assistantSelection, assistantRouting } = await assistant.resolveSessionStart(input, {
-        vibe64User, mode: learningRuntime ? "junior" : "senior"
+        vibe64User,
+        mode: learningRuntime ? "junior" : "senior"
       });
       const runtime = learningRuntime || await project.createRuntime(sessionRuntimeOptions(terminals));
       if (runtime.learningScope && !learningRuntime) {
@@ -121,12 +134,14 @@ function createSessionCreation({ assistant, project, publishSessionChanged, setu
           ),
           created_by: text(vibe64User?.username || vibe64User?.name)
         },
-        ...(!runtime.learningScope?.noExercise ? { sourceContext: {
-          ...(expectedCommit === undefined ? {} : { expectedCommit }),
-          ...(repositoryBranch ? { expectedCommit: repositoryBranch.commit } : {}),
-          ...(pullRequest ? { expectedCommit: pullRequest.headCommit } : {}),
-          vibe64User
-        } } : {})
+        ...(!runtime.learningScope?.noExercise ? {
+          sourceContext: {
+            ...(expectedCommit === undefined ? {} : { expectedCommit }),
+            ...(repositoryBranch ? { expectedCommit: repositoryBranch.commit } : {}),
+            ...(pullRequest ? { expectedCommit: pullRequest.headCommit } : {}),
+            vibe64User
+          }
+        } : {})
       });
       let created;
       if (runtime.learningScope?.noExercise) {
@@ -150,7 +165,8 @@ function createSessionCreation({ assistant, project, publishSessionChanged, setu
             await runtime.store.assertSessionCreationAbsent(sessionId);
           }
           const repositoryBranch = input.repositoryBranch ? await project.resolveSessionBranch({
-            selection: input.repositoryBranch, vibe64User
+            selection: input.repositoryBranch,
+            vibe64User
           }) : null;
           const session = await createAdmittedSession({ repositoryBranch });
           const updatedPolicy = await project.developmentDatabasePolicy({

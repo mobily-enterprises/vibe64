@@ -23,16 +23,25 @@ function major(version) {
  * developerVerification: "registered" | null }
  */
 async function gatherAndroidFacts({ sourceRoot, packaging, packageIds = null, toolchains = {}, developerVerification = null } = {}) {
-  const apps = (packaging?.packages || []).filter((entry) => entry.packer === "capacitor" && (!packageIds || packageIds.includes(entry.id)));
+  const apps = (packaging?.packages || []).filter((entry) =>
+    entry.packer === "capacitor" && (!packageIds || packageIds.includes(entry.id)));
   if (!apps.length) return null;
   const packages = [];
   for (const entry of apps) {
     const iconBytes = await readFile(path.join(sourceRoot, entry.application.icon)).catch(() => null);
     const content = packaging.packages.find((candidate) => candidate.id === entry.content);
-    const found = content ? nativePlugins(await readContentDependencies({ sourceRoot, content })) : { problems: [{ message: `Content ${entry.content} is missing.` }], core: null };
+    const found = content ? nativePlugins(await readContentDependencies({
+      sourceRoot,
+      content
+    })) : {
+      problems: [{ message: `Content ${entry.content} is missing.` }],
+      core: null
+    };
     const plugins = found.problems.map(({ message }) => message);
     if (found.core && major(found.core) !== major(CAPACITOR_SHELL_TEMPLATE.capacitor)) {
-      plugins.push(`The app uses @capacitor/core ${found.core}; Vibe64 builds with Capacitor ${CAPACITOR_SHELL_TEMPLATE.capacitor}. Move the app to Capacitor ${major(CAPACITOR_SHELL_TEMPLATE.capacitor)}.`);
+      plugins.push(
+        `The app uses @capacitor/core ${found.core}; Vibe64 builds with Capacitor ${CAPACITOR_SHELL_TEMPLATE.capacitor}. Move the app to Capacitor ${major(CAPACITOR_SHELL_TEMPLATE.capacitor)}.`
+      );
     }
     packages.push({
       id: entry.id,
@@ -49,7 +58,12 @@ async function gatherAndroidFacts({ sourceRoot, packaging, packageIds = null, to
   const androidSdk = await describeAndroidSdk({ androidHome: toolchains.androidHome });
   return {
     packages,
-    toolchain: { java: java.ok ? java.version : null, javaMessage: java.message, androidSdk: androidSdk.ok, androidSdkMessage: androidSdk.message },
+    toolchain: {
+      java: java.ok ? java.version : null,
+      javaMessage: java.message,
+      androidSdk: androidSdk.ok,
+      androidSdkMessage: androidSdk.message
+    },
     developerVerification
   };
 }

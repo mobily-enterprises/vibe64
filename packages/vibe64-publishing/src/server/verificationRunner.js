@@ -40,7 +40,11 @@ function checkEnvironment(home, base = process.env) {
  * @param {() => string} [dependencies.now]
  */
 function createVerificationRunner({
-  runtimeRoot, repository, verify = verifyGenesisProject, processRunner = checkCommandRunner(), now = () => new Date().toISOString()
+  runtimeRoot,
+  repository,
+  verify = verifyGenesisProject,
+  processRunner = checkCommandRunner(),
+  now = () => new Date().toISOString()
 }) {
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("Checks need the project's publishing folder.");
   const file = path.join(runtimeRoot, "verification.json");
@@ -78,7 +82,12 @@ function createVerificationRunner({
         const onEvent = (event) => {
           if (event?.code === "VERIFICATION_STARTED") current = String(event.details?.label || "");
         };
-        const outcome = await repository.withCheckout(repositoryRoot, commit, (root) => verify({ projectRoot: root, environment: checkEnvironment(home), onEvent, processRunner }));
+        const outcome = await repository.withCheckout(repositoryRoot, commit, (root) => verify({
+          projectRoot: root,
+          environment: checkEnvironment(home),
+          onEvent,
+          processRunner
+        }));
         const result = outcome?.status === "passed" ? "passed" : outcome?.status === "unconfigured" ? "unconfigured" : "failed";
         return await record({
           commit,
@@ -90,7 +99,14 @@ function createVerificationRunner({
           finishedAt: now()
         });
       } catch (error) {
-        return record({ commit, status: "failed", summary: String(error?.message || "The checks could not run.").slice(-2000), commands: [], startedAt, finishedAt: now() });
+        return record({
+          commit,
+          status: "failed",
+          summary: String(error?.message || "The checks could not run.").slice(-2000),
+          commands: [],
+          startedAt,
+          finishedAt: now()
+        });
       } finally {
         running.delete(commit);
         await rm(home, { recursive: true, force: true });

@@ -25,37 +25,69 @@ function hasUserReceipt(chat, messageId) {
  * @param {ColleagueWorker} dependencies.worker
  * @param {ColleagueWatches} dependencies.watches
  */
-function createColleagueHistory({ serviceState, records, threads, worker, watches }) {
+function createColleagueHistory({
+  serviceState,
+  records,
+  threads,
+  worker,
+  watches
+}) {
   async function startFresh(input, context) {
     const state = await threads.stateFor(context);
-    const reported = (input.unconfirmedMessages || []).map(message => ({ ...message,
-      source: "client-reported", status: "unconfirmed" }));
+    const reported = (input.unconfirmedMessages || []).map(message => ({
+      ...message,
+      source: "client-reported",
+      status: "unconfirmed"
+    }));
     const rotating = state.admission.then(() => watches.changeWatches(state, async () => {
       const previous = state.record.previousConversations.find(old => old.freshOperation.operationId === input.operationId);
       if (previous) {
         if (previous.scopeId !== input.expectedConversationId || !isDeepStrictEqual(previous.unconfirmedMessages, reported)) {
           throw failure("This recovery ID belongs to another request. Use the original request or a new recovery ID.");
         }
-        return { operationId: input.operationId, previousConversationId: previous.scopeId,
-          conversationId: previous.freshOperation.conversationId, duplicate: true };
+        return {
+          operationId: input.operationId,
+          previousConversationId: previous.scopeId,
+          conversationId: previous.freshOperation.conversationId,
+          duplicate: true
+        };
       }
       threads.assertCurrentConversation(state, input.expectedConversationId);
       for (const message of reported) {
-        const saved = state.record.conversationLog.flatMap(turn => turn.messages).find(candidate => candidate.messageId === message.messageId);
-        if (saved && saved.text !== message.text) throw failure("An unconfirmed message ID belongs to different saved words. Keep the original request before starting fresh.", "ACTION_VALIDATION_FAILED", 400);
+        const saved = state.record.conversationLog.flatMap(turn => turn.messages)
+          .find(candidate => candidate.messageId === message.messageId);
+        if (saved && saved.text !== message.text) {
+          throw failure(
+            "An unconfirmed message ID belongs to different saved words. Keep the original request before starting fresh.",
+            "ACTION_VALIDATION_FAILED",
+            400
+          );
+        }
       }
       const scopeId = `colleague_${randomUUID().replaceAll("-", "")}`;
-      const old = { scopeId: state.record.scopeId, runtimeId: state.record.runtimeId,
+      const old = {
+        scopeId: state.record.scopeId,
+        runtimeId: state.record.runtimeId,
         assistantSelection: structuredClone(state.record.assistantSelection),
         status: state.record.status === "working" ? "interrupted" : state.record.status,
-        error: state.record.error, conversationLog: structuredClone(state.record.conversationLog),
+        error: state.record.error,
+        conversationLog: structuredClone(state.record.conversationLog),
         ...(state.record.conversationMetadata ? { conversationMetadata: structuredClone(state.record.conversationMetadata) } : {}),
         ...(state.record.retiredConversation ? { retiredConversation: structuredClone(state.record.retiredConversation) } : {}),
-        archivedAt: new Date().toISOString(), unconfirmedMessages: structuredClone(reported),
-        freshOperation: { operationId: input.operationId, conversationId: scopeId } };
-      const patch = { runtimeId: `${state.key}:${scopeId}`, scopeId, status: "ready", error: "",
-        conversationLog: [], conversationMetadata: {}, retiredConversation: undefined,
-        previousConversations: [...state.record.previousConversations, old] };
+        archivedAt: new Date().toISOString(),
+        unconfirmedMessages: structuredClone(reported),
+        freshOperation: { operationId: input.operationId, conversationId: scopeId }
+      };
+      const patch = {
+        runtimeId: `${state.key}:${scopeId}`,
+        scopeId,
+        status: "ready",
+        error: "",
+        conversationLog: [],
+        conversationMetadata: {},
+        retiredConversation: undefined,
+        previousConversations: [...state.record.previousConversations, old]
+      };
       try { validateColleagueConversationRecord({ ...state.record, ...patch }, state.key); }
       catch (error) { throw failure(`Cannot start fresh: ${error.message}`, "ACTION_VALIDATION_FAILED", 400); }
       // A summary receipt left after its run is retried before the next
@@ -88,12 +120,18 @@ function createColleagueHistory({ serviceState, records, threads, worker, watche
         state.streamRevision = 0;
         state.requestContext = context;
         for (const connection of state.connections.values()) {
-          answerPendingNavigation(connection, { ok: false,
-            error: "The previous Colleague conversation was retained as history before navigation completed." });
+          answerPendingNavigation(connection, {
+            ok: false,
+            error: "The previous Colleague conversation was retained as history before navigation completed."
+          });
         }
         records.publishReply(state);
-        return { operationId: input.operationId, previousConversationId: old.scopeId,
-          conversationId: scopeId, duplicate: false };
+        return {
+          operationId: input.operationId,
+          previousConversationId: old.scopeId,
+          conversationId: scopeId,
+          duplicate: false
+        };
       } finally {
         state.rotating = false;
         worker.scheduleWatches(state);
@@ -109,11 +147,17 @@ function createColleagueHistory({ serviceState, records, threads, worker, watche
     const state = await threads.stateFor(context);
     const offset = input.offset || 0, limit = input.limit || 20;
     const previous = state.record.previousConversations.slice().reverse();
-    return { ok: true, conversations: previous.slice(offset, offset + limit).map(old => ({
-      conversationId: old.scopeId, archivedAt: old.archivedAt, assistantSelection: old.assistantSelection,
-      unconfirmedCount: old.unconfirmedMessages.filter(message => !hasUserReceipt(old, message.messageId)).length
-    })), hasMore: offset + limit < previous.length,
-    nextOffset: offset + limit < previous.length ? offset + limit : null };
+    return {
+      ok: true,
+      conversations: previous.slice(offset, offset + limit).map(old => ({
+        conversationId: old.scopeId,
+        archivedAt: old.archivedAt,
+        assistantSelection: old.assistantSelection,
+        unconfirmedCount: old.unconfirmedMessages.filter(message => !hasUserReceipt(old, message.messageId)).length
+      })),
+      hasMore: offset + limit < previous.length,
+      nextOffset: offset + limit < previous.length ? offset + limit : null
+    };
   }
 
   async function readHistoryPage(input, context) {
@@ -124,14 +168,23 @@ function createColleagueHistory({ serviceState, records, threads, worker, watche
     const page = await records.transcript.readConversationLogPage(old.runtimeId, { ...options, presentation: true });
     const runtimeState = old.conversationMetadata?.runtime;
     const request = runtimeState?.request;
-    const unconfirmed = request?.messageId && request.origin !== "application" && (runtimeState.engine === "api" || request.attempted || request.inspectionOnly) &&
+    const unconfirmed = request?.messageId &&
+      request.origin !== "application" &&
+      (runtimeState.engine === "api" || request.attempted || request.inspectionOnly) &&
       !hasUserReceipt(old, request.messageId);
-    return { ok: true, ...colleagueBrowserState({ id: old.scopeId, readOnly: true, ...page }),
+    return {
+      ok: true,
+      ...colleagueBrowserState({ id: old.scopeId, readOnly: true, ...page }),
       unconfirmedMessages: old.unconfirmedMessages.filter(message => !hasUserReceipt(old, message.messageId)),
-      ...(unconfirmed ? { unconfirmedDelivery: { messageId: request.messageId, status: "unconfirmed" } } : {}) };
+      ...(unconfirmed ? { unconfirmedDelivery: { messageId: request.messageId, status: "unconfirmed" } } : {})
+    };
   }
 
-  return Object.freeze({ startFresh, readHistory, readHistoryPage });
+  return Object.freeze({
+    startFresh,
+    readHistory,
+    readHistoryPage
+  });
 }
 
 export { createColleagueHistory };

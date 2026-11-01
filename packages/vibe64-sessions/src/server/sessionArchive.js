@@ -55,7 +55,13 @@ function readSessionArchiveOperation(metadata) {
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  */
-function createSessionArchive({ archivePreparation, project, terminals, setupRunner, publishSessionChanged }) {
+function createSessionArchive({
+  archivePreparation,
+  project,
+  terminals,
+  setupRunner,
+  publishSessionChanged
+}) {
   /**
    * Stopping: preview, AI turns and remaining tools stop before anything is removed.
    * The session's live conversations also leave memory: once its source is gone
@@ -123,9 +129,11 @@ function createSessionArchive({ archivePreparation, project, terminals, setupRun
           await runtime.store.assertSessionNotPinned(sessionId);
           const conversations = await runtime.store.listSessionConversations(sessionId);
           const routingRequests = [{ metadata: currentSession.metadata }, ...conversations.map(record => ({
-            conversationId: record.conversationId, metadata: record.routingMetadata
+            conversationId: record.conversationId,
+            metadata: record.routingMetadata
           }))].map(({ conversationId, metadata }) => ({
-            conversationId, request: assistantRoutingRequestFromMetadata(metadata)
+            conversationId,
+            request: assistantRoutingRequestFromMetadata(metadata)
           }));
           const renewalSessions = await runtime.store.listSessionsForRenewal();
           const reservedSuccessor = renewalSessions.find((session) => (
@@ -143,7 +151,8 @@ function createSessionArchive({ archivePreparation, project, terminals, setupRun
           if (routingToCancel.length) {
             if (!routingCancelled) return { routingToCancel };
             throw Object.assign(new Error("Chat routing changed while closing. Retry Close to cancel its remaining work."), {
-              code: "vibe64_assistant_routing_pending", retryable: true
+              code: "vibe64_assistant_routing_pending",
+              retryable: true
             });
           }
           const sourceCreationFailed = currentSession.sourceReady !== true &&
@@ -216,7 +225,8 @@ function createSessionArchive({ archivePreparation, project, terminals, setupRun
             const cancel = conversationId ? terminals.cancelTemporaryConversationRouting : terminals.cancelAssistantRoutingForSelection;
             if (typeof cancel !== "function") {
               throw Object.assign(new Error("Chat routing cancellation is unavailable. Retry Close after reconnecting the workspace."), {
-                code: "vibe64_assistant_routing_pending", retryable: true
+                code: "vibe64_assistant_routing_pending",
+                retryable: true
               });
             }
             await cancel.call(terminals, sessionId, conversationId

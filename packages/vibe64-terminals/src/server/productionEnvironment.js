@@ -46,7 +46,9 @@ function assertProductionEnvironmentProvider(provider) {
       // readable-check: allow method-probe - input validation: a host's production Env provider is checked when it is received
       typeof provider.removeVariable !== "function")
   ) {
-    throw new TypeError("Vibe64 production Env provider must expose readRecords(), isUserValueRecord(), setVariable(), and removeVariable(), or be null.");
+    throw new TypeError(
+      "Vibe64 production Env provider must expose readRecords(), isUserValueRecord(), setVariable(), and removeVariable(), or be null."
+    );
   }
 }
 

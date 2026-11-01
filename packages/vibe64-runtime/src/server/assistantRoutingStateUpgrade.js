@@ -25,10 +25,16 @@ const V4_PURPOSES = ["custom", "senior", "junior", "helper", "review", "deslop",
 
 function currentPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) || !["custom", "senior", "junior", "auto"].includes(value.mode)) {
-    throw Object.assign(new Error("Choose Custom, Senior, Junior, or Auto."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+    throw Object.assign(new Error("Choose Custom, Senior, Junior, or Auto."), {
+      code: "vibe64_assistant_routing_invalid",
+      statusCode: 409
+    });
   }
   if (value.workflowEngineId !== undefined && !engines.has(value.workflowEngineId)) {
-    throw Object.assign(new Error("Choose a supported workflow orchestrator."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+    throw Object.assign(new Error("Choose a supported workflow orchestrator."), {
+      code: "vibe64_assistant_routing_invalid",
+      statusCode: 409
+    });
   }
   if (value.mode === "custom" && !value.override) {
     throw Object.assign(new Error("Choose a custom model first."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
@@ -104,11 +110,17 @@ function assistantRoutingPreferences(value = {}) {
     throw Object.assign(new Error("Choose Plan, Code, Economy, or Auto."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
   }
   if (value.workflowEngineId !== undefined && !Object.values(VIBE64_ASSISTANT_ENGINE_IDS).includes(value.workflowEngineId)) {
-    throw Object.assign(new Error("Choose a supported workflow orchestrator."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+    throw Object.assign(new Error("Choose a supported workflow orchestrator."), {
+      code: "vibe64_assistant_routing_invalid",
+      statusCode: 409
+    });
   }
-  return { mode: value.mode, review: value.review === true,
+  return {
+    mode: value.mode,
+    review: value.review === true,
     ...(value.workflowEngineId ? { workflowEngineId: value.workflowEngineId } : {}),
-    ...(value.override && value.mode !== "auto" ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
+    ...(value.override && value.mode !== "auto" ? { override: defineVibe64AssistantSelection(value.override) } : {})
+  };
 }
 
 function readRecord(raw, label) {
@@ -158,16 +170,21 @@ function upgradeMetadata(metadata, currentSelection, label) {
   if (nativeRequest) validateAssistantRoutingUpgradeRecord(savedRequest, { schemaVersion: savedRequest.schemaVersion, request: true });
   if (nativeGoal) {
     const schemaVersion = savedGoal.configuration?.schemaVersion ?? (savedGoal.mode === "intern" ||
-      savedRequest?.schemaVersion === 3 || Object.values(savedGoal.configuration?.orchestrators || {}).some(roles => Object.hasOwn(roles, "intern")) ? 3 : 4);
+      savedRequest?.schemaVersion === 3 || Object.values(savedGoal.configuration?.orchestrators || {})
+        .some(roles => Object.hasOwn(roles, "intern")) ? 3 : 4);
     validateAssistantRoutingUpgradeRecord(savedGoal, { schemaVersion });
     if (!savedGoal.selection) throw new Error(`${label} has an invalid explicit goal selection.`);
   }
-  if (nativePreferences) validateAssistantRoutingUpgradeRecord(savedPreferences, { preferences: true,
-    schemaVersion: savedPreferences.mode === "intern" ? 3 : 4 });
+  if (nativePreferences) validateAssistantRoutingUpgradeRecord(savedPreferences, {
+    preferences: true,
+    schemaVersion: savedPreferences.mode === "intern" ? 3 : 4
+  });
   const nativeWorkflows = [
     nativePreferences && savedPreferences.workflowEngineId,
     nativeRequest && !["done", "cancelled"].includes(savedRequest.status) && savedRequest.workflowEngineId,
-    nativeGoal && !["complete", "completed"].includes(savedGoal.status) && (savedGoal.workflowEngineId || savedGoal.selection.engineId)].filter(Boolean);
+    nativeGoal &&
+      !["complete", "completed"].includes(savedGoal.status) &&
+      (savedGoal.workflowEngineId || savedGoal.selection.engineId)].filter(Boolean);
   if (new Set(nativeWorkflows).size > 1) throw new Error(`${label} has conflicting unfinished workflow identities.`);
   const preferences = nativePreferences ? null : savedPreferences;
   const request = nativeRequest ? null : savedRequest;
@@ -201,7 +218,10 @@ function upgradeMetadata(metadata, currentSelection, label) {
     }
     for (const [, assigned] of assignments) selection(assigned, label);
     if (request.configuration !== undefined) {
-      validateV2({ ...request.configuration, schemaVersion: request.configuration?.schemaVersion ?? request.schemaVersion }, { legacy: true });
+      validateV2({
+        ...request.configuration,
+        schemaVersion: request.configuration?.schemaVersion ?? request.schemaVersion
+      }, { legacy: true });
     } else {
       // Later role upgrades advance this legacy tag to 4. Preserve explicit
       // fresh-admission evidence rather than accepting any configuration-less 4.
@@ -212,18 +232,30 @@ function upgradeMetadata(metadata, currentSelection, label) {
     // Legacy direct chats retain their exact destination and editing behavior.
     let next = preferences;
     if (!next && activeGoal) next = { mode: goal.mode, review: false, override: goalSelection };
-    if (!next && unfinished) next = { mode: request.mode, review: request.review === true,
-      ...(request.mode !== "auto" && request.assignments[request.mode] ? { override: selection(request.assignments[request.mode], label) } : {}) };
+    if (!next && unfinished) next = {
+      mode: request.mode,
+      review: request.review === true,
+      ...(request.mode !== "auto" && request.assignments[request.mode]
+        ? { override: selection(request.assignments[request.mode], label) }
+        : {})
+    };
     next ||= { mode: "code", review: false, ...(currentSelection ? { override: currentSelection } : {}) };
     if (!nativePreferences) changes.assistant_routing = JSON.stringify({ ...next, workflowEngineId });
   } else if (preferences || unfinished || activeGoal) {
     throw new Error(`${label} has no evidenced workflow identity. Repair its assistant selection before upgrading routing.`);
   }
   if (unfinished && request.schemaVersion !== 2) {
-    const next = { ...request, schemaVersion: 2, workflowEngineId,
-      assignments: { ...request.assignments }, admissionRequired: true };
+    const next = {
+      ...request,
+      schemaVersion: 2,
+      workflowEngineId,
+      assignments: { ...request.assignments },
+      admissionRequired: true
+    };
     if (next.mode === "auto" && !Object.hasOwn(next.assignments, "router")) {
-      if (!next.assignments.economy) throw new Error(`${label} has no captured Auto classifier. Resolve the unfinished request before upgrading routing.`);
+      if (!next.assignments.economy) {
+        throw new Error(`${label} has no captured Auto classifier. Resolve the unfinished request before upgrading routing.`);
+      }
       next.assignments.router = next.assignments.economy;
       delete next.assignments.economy;
     }
@@ -259,7 +291,9 @@ function upgradeAssistantRoutingSession({ sessionId, metadata, conversations, re
     const previousMetadata = conversation.routingMetadata || {};
     const changes = upgradeMetadata(previousMetadata, selected, label);
     const next = { ...conversation, ...(Object.keys(changes).length ? { routingMetadata: { ...previousMetadata, ...changes } } : {}) };
-    if (conversation.nativeBindings !== undefined && !isPlainObject(conversation.nativeBindings)) throw new Error(`${label} has invalid native bindings.`);
+    if (conversation.nativeBindings !== undefined && !isPlainObject(conversation.nativeBindings)) {
+      throw new Error(`${label} has invalid native bindings.`);
+    }
     for (const binding of Object.values(conversation.nativeBindings || {})) {
       if (!isPlainObject(binding) || typeof binding.conversationId !== "string" || !binding.conversationId.trim()) {
         throw new Error(`${label} has an invalid retained native conversation.`);
@@ -271,11 +305,19 @@ function upgradeAssistantRoutingSession({ sessionId, metadata, conversations, re
       const key = selected.engineId === "codex" && previousMetadata.codex_routing_home_provider
         ? "codex" : vibe64AssistantConversationKey(selected);
       const previous = conversation.nativeBindings?.[key];
-      if (previous && previous.conversationId !== conversation.providerConversationId) throw new Error(`${label} has conflicting native conversation identities.`);
-      next.nativeBindings = { ...conversation.nativeBindings, [key]: {
-        conversationId: conversation.providerConversationId, assistantSelection: selected,
-        agentSettings: conversation.agentSettings || {}, runId: conversation.runId || "", messageId: conversation.messageId || ""
-      } };
+      if (previous && previous.conversationId !== conversation.providerConversationId) {
+        throw new Error(`${label} has conflicting native conversation identities.`);
+      }
+      next.nativeBindings = {
+        ...conversation.nativeBindings,
+        [key]: {
+          conversationId: conversation.providerConversationId,
+          assistantSelection: selected,
+          agentSettings: conversation.agentSettings || {},
+          runId: conversation.runId || "",
+          messageId: conversation.messageId || ""
+        }
+      };
     }
     if (JSON.stringify(next) !== JSON.stringify(conversation)) result.conversations.push(next);
   }

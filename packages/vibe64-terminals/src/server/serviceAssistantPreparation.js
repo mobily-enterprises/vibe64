@@ -67,7 +67,10 @@ function createServiceAssistantPreparation({
     const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     await rememberAssistantBeforeChangeover(context, vibe64AssistantConversationKey(selection));
     logOperationalEvent(logger, "info", {
-      event: "vibe64.assistant_changeover.previous_stopped", component: "vibe64.agent_message", sessionId, engineId
+      event: "vibe64.assistant_changeover.previous_stopped",
+      component: "vibe64.agent_message",
+      sessionId,
+      engineId
     }, "Previous assistant stopped; its conversation is retained.");
     return { ok: true };
   }

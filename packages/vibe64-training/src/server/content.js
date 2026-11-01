@@ -20,13 +20,17 @@ function uniqueIds(items, key, label) {
 
 function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value && typeof value === "object") return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
   return JSON.stringify(value);
 }
 
 function recordBundleFile(files, file) {
   const previous = files.get(file.path);
-  if (previous && (previous.sha256 !== file.sha256 || previous.bytes !== file.bytes)) throw new Error(`Source changed between lesson snapshots: ${file.path}. Validate and retry.`);
+  if (previous && (previous.sha256 !== file.sha256 || previous.bytes !== file.bytes)) {
+    throw new Error(`Source changed between lesson snapshots: ${file.path}. Validate and retry.`);
+  }
   files.set(file.path, file);
 }
 
@@ -46,7 +50,9 @@ async function createTopicReader(directory) {
     }
     const filename = path.resolve(base, reference);
     const relative = path.relative(root, filename);
-    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error(`Path escapes topic: ${reference}.`);
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error(`Path escapes topic: ${reference}.`);
+    }
     const resolved = await realpath(filename);
     if (resolved !== filename) throw new Error(`Symlink content is not supported: ${reference}.`);
     return { filename, relative: relative.split(path.sep).join("/") };
@@ -61,7 +67,12 @@ async function createTopicReader(directory) {
     const file = await read(reference, base);
     return { ...file, value: JSON.parse(file.bytes.toString("utf8")) };
   }
-  return Object.freeze({ root, resolve, read, json });
+  return Object.freeze({
+    root,
+    resolve,
+    read,
+    json
+  });
 }
 
 function checkPrerequisiteCycles(lessons) {
@@ -91,14 +102,26 @@ function bundleAssessments(lesson, document, include, checks) {
   uniqueIds(lesson.assessments, "id", "Assessments");
   for (const assessment of lesson.assessments) {
     const [reference, anchor, extra] = assessment.rubric.split("#");
-    if (reference !== lesson.document || !anchor || extra || !new RegExp(`^<a id="${assessment.id}"></a>$`, "mu").test(documentText) || anchor !== assessment.id) {
+    if (reference !== lesson.document ||
+        !anchor ||
+        extra ||
+        !new RegExp(`^<a id="${assessment.id}"></a>$`, "mu").test(documentText) ||
+        anchor !== assessment.id) {
       throw new Error(`Missing explicit rubric anchor for ${assessment.id}.`);
     }
-    if (assessment.kind === "practical" && !assessment.evidence) throw new Error(`Practical assessment ${assessment.id} needs an evidence producer.`);
-    if (assessment.kind === "answer" && assessment.evidence) throw new Error(`Answer assessment ${assessment.id} uses its admitted answer, not a practical producer.`);
+    if (assessment.kind === "practical" && !assessment.evidence) {
+      throw new Error(`Practical assessment ${assessment.id} needs an evidence producer.`);
+    }
+    if (assessment.kind === "answer" && assessment.evidence) {
+      throw new Error(`Answer assessment ${assessment.id} uses its admitted answer, not a practical producer.`);
+    }
     if (assessment.evidence?.check && !checks.has(assessment.evidence.check)) throw new Error(`Unknown check for ${assessment.id}.`);
-    if (assessment.evidence?.producer === "exercise" && (!lesson.exercise || !assessment.evidence.check)) throw new Error(`Exercise assessment ${assessment.id} needs its declared exercise and check.`);
-    if (assessment.evidence?.check && !["exercise", "code"].includes(assessment.evidence.producer)) throw new Error(`Only exercise or code evidence runs a declared check: ${assessment.id}.`);
+    if (assessment.evidence?.producer === "exercise" && (!lesson.exercise || !assessment.evidence.check)) {
+      throw new Error(`Exercise assessment ${assessment.id} needs its declared exercise and check.`);
+    }
+    if (assessment.evidence?.check && !["exercise", "code"].includes(assessment.evidence.producer)) {
+      throw new Error(`Only exercise or code evidence runs a declared check: ${assessment.id}.`);
+    }
     const checkKind = (lesson.checks || []).find(check => check.id === assessment.evidence?.check)?.kind || "response";
     if (assessment.evidence?.producer === "code") {
       if (!lesson.exercise || !assessment.evidence.check || checkKind !== "code" || !assessment.evidence.files?.length) {
@@ -120,7 +143,9 @@ function bundleAssessments(lesson, document, include, checks) {
  */
 function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
   const fail = message => { throw new Error(`Lesson ${code}: ${message}`); };
-  if (lesson.schemaVersion === 3 && lesson.stage === "project" && !lesson.exercise) fail("a project lesson needs its exercise (a practice project).");
+  if (lesson.schemaVersion === 3 && lesson.stage === "project" && !lesson.exercise) {
+    fail("a project lesson needs its exercise (a practice project).");
+  }
   if (!lesson.steps.length) fail("needs at least one step.");
   uniqueIds(lesson.steps, "id", "Steps");
   if (!lesson.steps.some(step => step.required)) fail("needs a required step.");
@@ -133,7 +158,9 @@ function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
         const command = visual.commands.find(item => item.name === entry.name);
         if (!command) fail(`${label} plays undeclared command ${entry.name}.`);
         const parameters = entry.parameters;
-        if (!parameters || typeof parameters !== "object" || Array.isArray(parameters)) fail(`${label} command ${entry.name} needs a parameters object.`);
+        if (!parameters || typeof parameters !== "object" || Array.isArray(parameters)) {
+          fail(`${label} command ${entry.name} needs a parameters object.`);
+        }
         for (const [name, value] of Object.entries(parameters)) {
           const declared = command.parameters.find(item => item.name === name);
           if (!declared) fail(`${label} command ${entry.name} has undeclared parameter ${name}.`);
@@ -142,7 +169,9 @@ function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
           }
         }
         for (const declared of command.parameters) {
-          if (declared.required && !Object.hasOwn(parameters, declared.name)) fail(`${label} command ${entry.name} needs parameter ${declared.name}.`);
+          if (declared.required && !Object.hasOwn(parameters, declared.name)) {
+            fail(`${label} command ${entry.name} needs parameter ${declared.name}.`);
+          }
         }
       }
     }
@@ -165,14 +194,22 @@ function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
       if (needs && !lesson.exercise) fail(`${label} beat ${needs.kind} ${needs.target} needs the lesson's exercise (a practice project).`);
     }
     const check = step.check;
-    const allowed = { auto: ["check", "files"], choice: ["question", "options", "answer"], review: ["rubric", "evidence"],
-      fact: ["fact"], self: [], none: [] }[check.kind];
+    const allowed = {
+      auto: ["check", "files"],
+      choice: ["question", "options", "answer"],
+      review: ["rubric", "evidence"],
+      fact: ["fact"],
+      self: [],
+      none: []
+    }[check.kind];
     const extra = Object.keys(check).filter(key => key !== "kind" && !allowed.includes(key));
     if (extra.length) fail(`${label} ${check.kind} check cannot declare ${extra.join(", ")}.`);
     if (check.kind === "none" && step.required) fail(`${label} has no check and cannot be required.`);
     if (check.kind === "fact") {
       if (lesson.schemaVersion !== 3) fail(`${label} fact check needs lesson format 3.`);
-      if (!check.fact || !vocabulary.hasFact(check.fact)) fail(`${label} checks an unknown fact; declare a host's fact in the topic's facts.`);
+      if (!check.fact || !vocabulary.hasFact(check.fact)) {
+        fail(`${label} checks an unknown fact; declare a host's fact in the topic's facts.`);
+      }
     }
     if (check.kind === "auto") {
       if (!check.check || !checks.has(check.check)) fail(`${label} names an unknown check.`);
@@ -180,7 +217,9 @@ function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
       const declared = lesson.checks.find(item => item.id === check.check);
       const files = check.files || [];
       if (declared.kind === "code" ? files.length < 1 || files.length > 8 : files.length) {
-        fail(`${label} ${declared.kind === "code" ? "code check needs 1-8 exercise files" : "names files, but only a code check edits files"}.`);
+        fail(
+          `${label} ${declared.kind === "code" ? "code check needs 1-8 exercise files" : "names files, but only a code check edits files"}.`
+        );
       }
     }
     if (check.kind === "review") {
@@ -207,13 +246,17 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
   const lesson = validateLesson(descriptor.value, entry.code);
   if (lesson.code !== entry.code) throw new Error(`Lesson code mismatch: ${entry.code}.`);
   if (authoring && lesson.schemaVersion !== 3) {
-    throw new Error(`Lesson ${entry.code} uses retired lesson format ${lesson.schemaVersion}. Author it in format 3 with steps and its stage.`);
+    throw new Error(
+      `Lesson ${entry.code} uses retired lesson format ${lesson.schemaVersion}. Author it in format 3 with steps and its stage.`
+    );
   }
   const base = path.dirname(descriptor.filename);
   const files = new Map();
   function include(file) {
     recordBundleFile(files, { path: file.relative, sha256: sha256Hex(file.bytes), bytes: file.bytes.length });
-    if (files.size > 512 || [...files.values()].reduce((total, item) => total + item.bytes, 0) > 32 * 1024 * 1024) throw new Error(`Lesson ${entry.code} exceeds bundle limits.`);
+    if (files.size > 512 || [...files.values()].reduce((total, item) => total + item.bytes, 0) > 32 * 1024 * 1024) {
+      throw new Error(`Lesson ${entry.code} exceeds bundle limits.`);
+    }
   }
   include(descriptor);
   // Files a learner can read (step bodies, notes, visual resources, exercise
@@ -252,7 +295,9 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
   for (const check of lesson.checks || []) {
     if (check.timeoutSeconds !== undefined && check.kind !== "code") throw new Error(`Only a code check declares a timeout: ${check.id}.`);
   }
-  if (lesson.schemaVersion === 1 && !lesson.assessments.some(assessment => assessment.required)) throw new Error(`Lesson ${entry.code} needs a required assessment.`);
+  if (lesson.schemaVersion === 1 && !lesson.assessments.some(assessment => assessment.required)) {
+    throw new Error(`Lesson ${entry.code} needs a required assessment.`);
+  }
   uniqueIds(lesson.visuals, "id", "Visuals");
   const visuals = new Map();
   for (const resource of lesson.visuals) {
@@ -264,7 +309,9 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
     uniqueIds(visual.commands, "name", "Visual commands");
     for (const command of visual.commands) {
       uniqueIds(command.parameters, "name", "Command parameters");
-      if (command.completionState !== "unchanged" && !states.has(command.completionState)) throw new Error(`Unknown completion state: ${command.name}.`);
+      if (command.completionState !== "unchanged" && !states.has(command.completionState)) {
+        throw new Error(`Unknown completion state: ${command.name}.`);
+      }
     }
     include(visualFile);
     visuals.set(visual.id, visual);
@@ -285,7 +332,10 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
     if (exercise.sequenceId && !validId(exercise.sequenceId)) throw new Error(`Invalid exercise sequence ID.`);
     const source = await reader.resolve(exercise.source, base);
     async function includeDirectory(directory) {
-      for (const item of (await readdir(directory, { withFileTypes: true })).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
+      for (const item of (await readdir(directory, { withFileTypes: true })).sort((
+        a,
+        b
+      ) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
         if (excludedExerciseEntries.has(item.name)) continue;
         const relative = path.relative(reader.root, path.join(directory, item.name));
         const file = await reader.resolve(relative);
@@ -329,8 +379,19 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
       problem = error.message;
     }
   }
-  const manifest = { schemaVersion: 1, code: lesson.code, files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) };
-  return { lesson, manifest, hash: sha256Hex(canonicalJson(manifest)), descriptorPath: descriptor.relative, served, ...(problem ? { problem } : {}) };
+  const manifest = {
+    schemaVersion: 1,
+    code: lesson.code,
+    files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+  };
+  return {
+    lesson,
+    manifest,
+    hash: sha256Hex(canonicalJson(manifest)),
+    descriptorPath: descriptor.relative,
+    served,
+    ...(problem ? { problem } : {})
+  };
 }
 
 /**
@@ -342,14 +403,18 @@ async function bundleLesson(reader, entry, { authoring, installed, vocabulary })
 async function validateTopic(directory, { authoring = false, installed = false } = {}) {
   const reader = await createTopicReader(directory);
   const packageFile = await reader.json("package.json");
-  if (!/^learn-[a-z0-9-]+$/u.test(packageFile.value.name || "") || !/^\d+\.\d+\.\d+$/u.test(packageFile.value.version || "")) throw new Error("Topic package needs a learn- name and an exact release version.");
+  if (!/^learn-[a-z0-9-]+$/u.test(packageFile.value.name || "") || !/^\d+\.\d+\.\d+$/u.test(packageFile.value.version || "")) {
+    throw new Error("Topic package needs a learn- name and an exact release version.");
+  }
   const topic = validateContent(topicSchema, packageFile.value.vibe64Training, "Topic");
   if (!validId(topic.topicId) || !validId(topic.domainId)) throw new Error("Invalid topic or domain ID.");
   const outline = await reader.read(topic.outline);
   uniqueIds(topic.lessons, "code", "Lessons");
   uniqueIds(topic.prerequisites, "topicId", "Topic prerequisites");
   if (!topic.lessons.length) throw new Error("A topic needs lessons.");
-  if (topic.status === "released" && topic.lessons.some(entry => entry.required && entry.status !== "published")) throw new Error("A released topic contains required draft lessons.");
+  if (topic.status === "released" && topic.lessons.some(entry => entry.required && entry.status !== "published")) {
+    throw new Error("A released topic contains required draft lessons.");
+  }
   const vocabulary = declaredLearningVocabulary(topic);
   const bundles = [];
   const served = new Set();
@@ -370,7 +435,9 @@ async function validateTopic(directory, { authoring = false, installed = false }
     for (const { code } of bundle.lesson.prerequisites) {
       const prerequisiteIndex = bundles.findIndex(other => other.lesson.code === code);
       if (prerequisiteIndex >= index) throw new Error(`Prerequisite ${code} must precede ${bundle.lesson.code}.`);
-      if (bundle.status === "published" && bundles[prerequisiteIndex].status !== "published") throw new Error(`Published lesson ${bundle.lesson.code} requires draft ${code}.`);
+      if (bundle.status === "published" && bundles[prerequisiteIndex].status !== "published") {
+        throw new Error(`Published lesson ${bundle.lesson.code} requires draft ${code}.`);
+      }
     }
   }
   const sequences = new Map();
@@ -386,8 +453,13 @@ async function validateTopic(directory, { authoring = false, installed = false }
     }
   }
   const topicFiles = [packageFile, outline].map(file => ({ path: file.relative, sha256: sha256Hex(file.bytes), bytes: file.bytes.length }));
-  const topicManifest = { schemaVersion: 1, topic, release: packageFile.value.version, files: topicFiles,
-    lessons: bundles.map(({ lesson, hash, status, required }) => ({ code: lesson.code, hash, status, required })) };
+  const topicManifest = {
+    schemaVersion: 1,
+    topic,
+    release: packageFile.value.version,
+    files: topicFiles,
+    lessons: bundles.map(({ lesson, hash, status, required }) => ({ code: lesson.code, hash, status, required }))
+  };
   bundleFiles([topicManifest, ...bundles.map(bundle => bundle.manifest)]);
   return { topic, release: packageFile.value.version, bundles, topicManifest, topicHash: sha256Hex(canonicalJson(topicManifest)) };
 }

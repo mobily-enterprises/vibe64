@@ -12,27 +12,41 @@ export async function readUpgradeFile(filePath) {
   try {
     if (!(await lstat(filePath)).isFile()) throw new Error(`Upgrade requires a regular file: ${filePath}`);
     return await readFile(filePath, "utf8");
-  } catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
 }
 export async function verifyUpgradeParents(root, filePath) {
   const relative = path.relative(root, path.dirname(filePath));
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error("State upgrade path is outside its state directory.");
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("State upgrade path is outside its state directory.");
+  }
   let current = root;
   for (const part of ["", ...relative.split(path.sep).filter(Boolean)]) {
     current = path.join(current, part);
     try {
       if (!(await lstat(current)).isDirectory()) throw new Error(`State upgrade requires a regular directory: ${current}`);
-    } catch (error) { if (error.code === "ENOENT") return; throw error; }
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      throw error;
+    }
   }
 }
 function parse(source, label) {
   if (source === null) return null;
-  try { const value = JSON.parse(source); if (isPlainObject(value)) return value; } catch { /* Do not log saved content. */ }
+  try {
+    const value = JSON.parse(source);
+    if (isPlainObject(value)) return value;
+  } catch { /* Do not log saved content. */ }
   throw new Error(`${label} is invalid. Inspect it before upgrading state.`);
 }
 async function fileDigest(filePath) {
   try { if (!(await lstat(filePath)).isFile()) throw new Error(`Upgrade requires a regular file: ${filePath}`); }
-  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(filePath)) hash.update(chunk);
   return hash.digest("hex");
@@ -78,7 +92,9 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
         const beforePath = path.join(backupRoot, "before", update.relative);
         await verifyUpgradeParents(backupRoot, beforePath);
         const saved = await fileDigest(beforePath);
-        if (saved && saved !== update.before) throw new Error(`State backup differs from the original: ${update.relative}. Inspect it before retrying.`);
+        if (saved && saved !== update.before) {
+          throw new Error(`State backup differs from the original: ${update.relative}. Inspect it before retrying.`);
+        }
       }
       if (!apply || !changed.length) return;
       // No application file changes before every before/after copy is durable.
@@ -92,7 +108,9 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
         await verifyUpgradeParents(backupRoot, beforePath);
         if (before !== null) {
           const saved = await fileDigest(beforePath);
-          if (saved && saved !== before) throw new Error(`State backup differs from the original: ${relative}. Inspect it before retrying.`);
+          if (saved && saved !== before) {
+            throw new Error(`State backup differs from the original: ${relative}. Inspect it before retrying.`);
+          }
           if (!saved) await atomicCopy(update.filePath, beforePath);
           if (await fileDigest(beforePath) !== before) throw new Error(`State backup could not be verified: ${relative}.`);
         }
@@ -113,18 +131,26 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
     } finally { await rm(temporaryRoot, { recursive: true, force: true }); }
   }
   if (manifest.version !== 1 || !Array.isArray(manifest.files) || !manifest.files.length ||
-      new Set(manifest.files.map((entry) => entry?.path)).size !== manifest.files.length) throw new Error("State upgrade backup manifest is unsupported.");
+      new Set(manifest.files.map((entry) => entry?.path)).size !== manifest.files.length) throw new Error(
+        "State upgrade backup manifest is unsupported."
+      );
   // Preflight every original, replacement and destination before resuming writes.
   for (const entry of manifest.files) {
     if (!isPlainObject(entry) || typeof entry.path !== "string" || relativeFile(path.join(systemRoot, entry.path)) !== entry.path ||
-        [entry.before, entry.after].some((value) => value !== null && !/^[a-f0-9]{64}$/u.test(value))) throw new Error("State upgrade backup manifest has an invalid file entry.");
+        [entry.before, entry.after].some((value) => value !== null && !/^[a-f0-9]{64}$/u.test(value))) throw new Error(
+          "State upgrade backup manifest has an invalid file entry."
+        );
     await verifyUpgradeParents(systemRoot, path.join(systemRoot, entry.path));
     for (const side of ["before", "after"]) {
       await verifyUpgradeParents(backupRoot, path.join(backupRoot, side, entry.path));
-      if (await fileDigest(path.join(backupRoot, side, entry.path)) !== entry[side]) throw new Error(`State upgrade ${side} copy is missing or changed: ${entry.path}. Restore the backup before retrying.`);
+      if (await fileDigest(path.join(backupRoot, side, entry.path)) !== entry[side]) {
+        throw new Error(`State upgrade ${side} copy is missing or changed: ${entry.path}. Restore the backup before retrying.`);
+      }
     }
     const current = await fileDigest(path.join(systemRoot, entry.path));
-    if (current !== entry.before && current !== entry.after) throw new Error(`Application state differs from both upgrade copies: ${entry.path}. Inspect it before retrying.`);
+    if (current !== entry.before && current !== entry.after) {
+      throw new Error(`Application state differs from both upgrade copies: ${entry.path}. Inspect it before retrying.`);
+    }
   }
   report("info", `Verified ${manifest.files.length} backed-up state changes${apply ? "; finishing publication" : "; ready to resume"}.`);
   if (!apply) return;

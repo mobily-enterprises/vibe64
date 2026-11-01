@@ -96,7 +96,9 @@ function createAgeStore({
       if (error instanceof SyntaxError) throw storeError("The publishing key index is not valid JSON.", "vibe64_publishing_state_invalid");
       throw error;
     }
-    if (value?.contract !== INDEX_CONTRACT) throw storeError("The publishing key index is not in a format this Vibe64 reads.", "vibe64_publishing_state_invalid");
+    if (value?.contract !== INDEX_CONTRACT) {
+      throw storeError("The publishing key index is not in a format this Vibe64 reads.", "vibe64_publishing_state_invalid");
+    }
     return value;
   }
 
@@ -135,7 +137,9 @@ function createAgeStore({
     const decrypted = await ageDecrypt(await readFile(file), passphrase);
     try {
       const value = JSON.parse(decrypted.toString("utf8"));
-      if (value?.contract !== KEYS_CONTRACT) throw storeError("These publishing keys are not in a format this Vibe64 reads.", "vibe64_publishing_state_invalid");
+      if (value?.contract !== KEYS_CONTRACT) {
+        throw storeError("These publishing keys are not in a format this Vibe64 reads.", "vibe64_publishing_state_invalid");
+      }
       return new Map(Object.entries(value.entries).map(([id, encoded]) => [id, Buffer.from(encoded, "base64")]));
     } finally {
       decrypted.fill(0);
@@ -144,7 +148,9 @@ function createAgeStore({
 
   function windowOf(windowMs) {
     const value = windowMs === undefined || windowMs === null ? defaultWindowMs : Number(windowMs);
-    if (!Number.isInteger(value) || value < 1000 || value > MAX_WINDOW_MS) throw storeError("Keys unlock for between a second and eight hours.", "vibe64_publishing_keys_window_invalid");
+    if (!Number.isInteger(value) || value < 1000 || value > MAX_WINDOW_MS) {
+      throw storeError("Keys unlock for between a second and eight hours.", "vibe64_publishing_keys_window_invalid");
+    }
     return value;
   }
 
@@ -228,8 +234,17 @@ function createAgeStore({
       }
       previous?.fill(0);
       const index = await readIndex();
-      const entry = { id, kind: String(kind || "secret"), label: String(label || id).slice(0, 200), createdAt: new Date(now()).toISOString(), ...publicFacts(meta) };
-      await writeIndex({ ...index, entries: [...index.entries.filter((existing) => existing.id !== id), entry].sort((left, right) => left.id.localeCompare(right.id)) });
+      const entry = {
+        id,
+        kind: String(kind || "secret"),
+        label: String(label || id).slice(0, 200),
+        createdAt: new Date(now()).toISOString(),
+        ...publicFacts(meta)
+      };
+      await writeIndex({
+        ...index,
+        entries: [...index.entries.filter((existing) => existing.id !== id), entry].sort((left, right) => left.id.localeCompare(right.id))
+      });
       return entry;
     });
   }

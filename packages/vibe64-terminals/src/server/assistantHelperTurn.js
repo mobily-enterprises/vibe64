@@ -181,7 +181,8 @@ function backgroundTaskHelperRecord(agentContext = {}, taskId = "") {
   const { runtime, session } = agentContext;
   const sessionId = session.sessionId;
   const write = (assistantHelper, kind) => runtime.store.writeBackgroundTaskEvent(sessionId, taskId, {
-    event: { kind }, patch: { assistantHelper }
+    event: { kind },
+    patch: { assistantHelper }
   });
   return {
     async read() {
@@ -201,7 +202,9 @@ function backgroundTaskHelperRecord(agentContext = {}, taskId = "") {
 
 function cleanupBackgroundTaskHelper({ agent, agentContext = {}, fail, prefix, taskId } = {}) {
   return cleanupAssistantHelper({
-    agent, fail, prefix,
+    agent,
+    fail,
+    prefix,
     record: backgroundTaskHelperRecord(agentContext, taskId),
     stateRoot: agentContext.runtime.stateRoot,
     vibe64User: agentContext.vibe64User
@@ -211,7 +214,10 @@ function cleanupBackgroundTaskHelper({ agent, agentContext = {}, fail, prefix, t
 function runBackgroundTaskHelperTurn({ agent, agentContext = {}, fail, prefix, profile, taskId, ...turn } = {}) {
   return runAssistantHelperTurn({
     ...turn,
-    agent, fail, prefix, profile,
+    agent,
+    fail,
+    prefix,
+    profile,
     record: backgroundTaskHelperRecord(agentContext, taskId),
     async resolveIdentity() {
       const decision = await agent.resolveAssistantPurpose({ purpose: profile.workloadId }, agentContext);

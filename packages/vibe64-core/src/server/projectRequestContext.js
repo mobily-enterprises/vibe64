@@ -85,7 +85,9 @@ async function resolveProjectRequestContext({
       throw Object.assign(new Error("Practice access belongs to the exact saved project."), { code: "vibe64_practice_scope_mismatch" });
     }
     const { project } = await projectContext.readWorkspaceProject({
-      ...(request.allowDeleting === true ? { allowDeleting: true } : {}), slug });
+      ...(request.allowDeleting === true ? { allowDeleting: true } : {}),
+      slug
+    });
     return Object.freeze({
       projectRecordPath: project.projectRecordPath,
       projectRuntimeRoot: project.projectRuntimeRoot,
@@ -176,8 +178,12 @@ async function admitPracticeRequest({ projectContext, request, slug, vibe64User 
   const person = Boolean(request?.headers);
   const actor = vibe64User || (person && practiceRequestActor ? await practiceRequestActor({ request }) : null);
   const admitted = await admitPracticeProject({ projectContext, slug, actor, person });
-  return admitted && projectContext.runWithPracticeProjectScope({ ...admitted, access: "write", requireProject: true,
-    ...(request.allowDeleting === true ? { allowDeleting: true } : {}) }, async () => retainPracticeContext("write"));
+  return admitted && projectContext.runWithPracticeProjectScope({
+    ...admitted,
+    access: "write",
+    requireProject: true,
+    ...(request.allowDeleting === true ? { allowDeleting: true } : {})
+  }, async () => retainPracticeContext("write"));
 }
 
 /**

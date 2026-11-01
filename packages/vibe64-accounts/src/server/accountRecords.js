@@ -7,7 +7,12 @@ import { API_KEY_AUTH_MODE, BROWSER_AUTH_MODE, DEVICE_AUTH_MODE } from "./accoun
 // rows each read returns.
 
 const ACCOUNT_DEFINITIONS = Object.freeze({
-  claude: Object.freeze({ id: "claude", label: "Claude Code", required: false, scope: APP_CREDENTIAL_SCOPE }),
+  claude: Object.freeze({
+    id: "claude",
+    label: "Claude Code",
+    required: false,
+    scope: APP_CREDENTIAL_SCOPE
+  }),
   codex: Object.freeze({
     id: "codex",
     label: "Codex",
@@ -140,16 +145,26 @@ function accountConnected({
  */
 function accountReadFailed(id, error) {
   const definition = ACCOUNT_DEFINITIONS[id] || { id, label: id };
-  return { ...accountDisconnected({ ...definition,
-    code: String(error?.code || "") || "vibe64_account_status_failed",
-    message: String(error?.message || error || "") || `${definition.label} status could not be read.`,
-    status: "error" }), required: definition.required !== false };
+  return {
+    ...accountDisconnected({
+      ...definition,
+      code: String(error?.code || "") || "vibe64_account_status_failed",
+      message: String(error?.message || error || "") || `${definition.label} status could not be read.`,
+      status: "error"
+    }),
+    required: definition.required !== false
+  };
 }
 
 function operatorCliAccount(id, { installed = false, observed = "" } = {}) {
   const { install, title, detail, ...problem } = operatorCliProblem(id, { installed });
-  return { ...accountDisconnected({ ...ACCOUNT_DEFINITIONS[id], ...problem, observed }),
-    required: ACCOUNT_DEFINITIONS[id].required, title, detail, install };
+  return {
+    ...accountDisconnected({ ...ACCOUNT_DEFINITIONS[id], ...problem, observed }),
+    required: ACCOUNT_DEFINITIONS[id].required,
+    title,
+    detail,
+    install
+  };
 }
 
 function blockedReason(accounts = []) {

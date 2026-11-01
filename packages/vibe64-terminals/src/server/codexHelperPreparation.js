@@ -6,7 +6,13 @@ import { codexTerminalNamespace } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { trimmedText } from "./trimmedText.js";
 
-function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, accountPreparation, providerHost, runOwner }) {
+function createCodexHelperPreparation({
+  runtimeHost,
+  sessionRuntimeHost,
+  accountPreparation,
+  providerHost,
+  runOwner
+}) {
   const { codexAppServerProviderKey, codexAppServerProviderKeyFields } = runtimeHost;
   const { createRuntimeForSession, codexAppServerHelperRuntimeOptionsForSession } = sessionRuntimeHost;
   const { codexToolHomeResult } = accountPreparation;
@@ -67,7 +73,9 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
             return {
               preserveProcessExitProof: providerOptions.executionMode !== CODEX_APP_SERVER_EXECUTION_MODES.HELPER,
               owner: {
-                sessionKey: codexTerminalNamespace(record.sessionId), sessionId: record.sessionId, projectContext,
+                sessionKey: codexTerminalNamespace(record.sessionId),
+                sessionId: record.sessionId,
+                projectContext,
                 workdir: codexAppServerProviderKeyFields(providerKey).workdir
               },
               observation: codexAppServerObservation({ sessionId: record.sessionId, providerKey, projectContext }),

@@ -20,8 +20,12 @@ const DEFAULT_MANAGED_GIT_BRANCH = "main";
  * @param {((request: { projectContextRoot: string, projectService: ProjectService | null, slug: string }) => Promise<object>) | null} dependencies.configureProject
  *   the defaults a host adds to each new project record
  */
-function createManagedProjectRepositoryService({ initializeManagedProject = initializePublicManagedProject,
-  projectContext, projectService, configureProject }) {
+function createManagedProjectRepositoryService({
+  initializeManagedProject = initializePublicManagedProject,
+  projectContext,
+  projectService,
+  configureProject
+}) {
   /**
    * Internal preparation options are separate from action and HTTP input.
    */
@@ -93,7 +97,11 @@ function createManagedProjectRepositoryService({ initializeManagedProject = init
       const project = await readProjectForService(projectContext, { slug });
       assertProjectRepositoryMode(project, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
       if (record.metadata.deletion || !isDeepStrictEqual(record.metadata.training, training)) {
-        throw repositoryServiceError("VIBE64_TRAINING_PROJECT_CONFLICT", "Practice project ownership changed. Keep it intact and ask the owner to inspect it.", 409);
+        throw repositoryServiceError(
+          "VIBE64_TRAINING_PROJECT_CONFLICT",
+          "Practice project ownership changed. Keep it intact and ask the owner to inspect it.",
+          409
+        );
       }
       return verifyManagedProjectSource({
         branch: project.repository.defaultBranch,

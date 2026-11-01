@@ -25,7 +25,14 @@ import { answerPendingNavigation, releaseObserver } from "./colleaguePresentatio
  * @param {ColleagueConversations} dependencies.conversations
  * @param {ColleagueWorker} dependencies.worker
  */
-function createColleagueTurns({ terminals, serviceState, records, threads, conversations, worker }) {
+function createColleagueTurns({
+  terminals,
+  serviceState,
+  records,
+  threads,
+  conversations,
+  worker
+}) {
   const turns = Object.freeze({
     async read(input = {}, context = {}) {
       const state = await threads.stateFor(context);
@@ -49,11 +56,19 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
     },
     async summarize(input, context) {
       const state = await threads.stateFor(context);
-      if (serviceState.lifecycle.closed || state.stopping || state.summaryRunning) throw failure("Finish or stop the current Colleague summary first.");
+      if (serviceState.lifecycle.closed || state.stopping || state.summaryRunning) {
+        throw failure("Finish or stop the current Colleague summary first.");
+      }
       state.requestContext = context;
-      const scoped = threads.actionContext(state, { clientId: context.colleague?.clientId || "", focus: { projectSlug: input.projectSlug } });
+      const scoped = threads.actionContext(state, {
+        clientId: context.colleague?.clientId || "",
+        focus: { projectSlug: input.projectSlug }
+      });
       state.summaryAbort = new AbortController();
-      state.summaryRunning = records.summaries.read(state, input, scoped).finally(() => { state.summaryRunning = null; state.summaryAbort = null; });
+      state.summaryRunning = records.summaries.read(state, input, scoped).finally(() => {
+        state.summaryRunning = null;
+        state.summaryAbort = null;
+      });
       return state.summaryRunning;
     },
     async selectModel(input, context) {
@@ -61,10 +76,16 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
       const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
       const selecting = state.admission.then(async () => {
         threads.assertCurrentConversation(state, expected);
-        if (serviceState.lifecycle.closed || state.stopping || state.running) throw failure("Finish or stop Colleague's current turn before changing its model.");
+        if (serviceState.lifecycle.closed || state.stopping || state.running) {
+          throw failure("Finish or stop Colleague's current turn before changing its model.");
+        }
         if (!input.assistantSelection) throw failure("Choose a model for Colleague.");
         const selected = await conversations.chooseSelection(context, input.assistantSelection);
-        const settings = await terminals.resolveConversationConfiguration(selected, conversations.promptFor(state), { vibe64User: authenticatedVibe64User(context) });
+        const settings = await terminals.resolveConversationConfiguration(
+          selected,
+          conversations.promptFor(state),
+          { vibe64User: authenticatedVibe64User(context) }
+        );
         const changed = !sameVibe64AssistantSelection(state.record.assistantSelection, selected);
         const pendingRequest = state.record.conversationMetadata?.runtime?.replacement?.request;
         state.requestContext = context;
@@ -90,7 +111,10 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
           if (conversation) await conversation.configure(settings.configuration);
           const previous = state.record.assistantSelection;
           state.record.assistantSelection = selected;
-          try { await records.persist(state); } catch (error) { state.record.assistantSelection = previous; throw error; }
+          try { await records.persist(state); } catch (error) {
+            state.record.assistantSelection = previous;
+            throw error;
+          }
           return;
         }
         // The common runtime owns the native change and continuity. Publish the
@@ -99,8 +123,11 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
         try {
           // A pending request keeps its original policy, including historical
           // absence, so a retry cannot become a different replacement operation.
-          const request = { ...settings,
-            operationId: current.replacement?.operationId || randomUUID(), expectedSegmentId: current.segmentId };
+          const request = {
+            ...settings,
+            operationId: current.replacement?.operationId || randomUUID(),
+            expectedSegmentId: current.segmentId
+          };
           if (pendingRequest) {
             if (Object.hasOwn(pendingRequest, "retireNative")) request.retireNative = pendingRequest.retireNative;
           } else request.retireNative = true;
@@ -127,13 +154,23 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
         if (state.stopping) throw failure("Colleague is stopping its previous turn. Send again once it has stopped.");
         if (state.record.previousConversations.some(old => old.unconfirmedMessages.some(message => message.messageId === input.messageId) ||
             old.conversationLog.some(turn => turn.messages.some(message => message.messageId === input.messageId)) ||
-            [old.conversationMetadata?.runtime, ...(old.conversationMetadata?.runtime?.predecessors || [])].some(segment => segment?.request?.messageId === input.messageId))) {
-          throw failure("This message belongs to retained Colleague history. Nothing was resent; write a new message in the current conversation.", "ACTION_VALIDATION_FAILED", 400);
+            [
+              old.conversationMetadata?.runtime,
+              ...(old.conversationMetadata?.runtime?.predecessors || [])
+            ].some(segment => segment?.request?.messageId === input.messageId))) {
+          throw failure(
+            "This message belongs to retained Colleague history. Nothing was resent; write a new message in the current conversation.",
+            "ACTION_VALIDATION_FAILED",
+            400
+          );
         }
-        const previousTurn = state.record.conversationLog.find(turn => turn.messages.some(message => message.messageId === input.messageId));
+        const previousTurn = state.record.conversationLog.find(turn =>
+          turn.messages.some(message => message.messageId === input.messageId));
         const previousMessage = previousTurn?.messages.find(message => message.messageId === input.messageId);
         if (previousMessage) {
-          if (previousMessage.text !== input.message) throw failure("This message ID belongs to a different request. Use a new message ID.");
+          if (previousMessage.text !== input.message) {
+            throw failure("This message ID belongs to a different request. Use a new message ID.");
+          }
           return { status: "accepted", messageId: input.messageId, turnId: previousTurn.turnId, duplicate: true };
         }
         const engine = state.record.conversationMetadata?.runtime?.engine;
@@ -149,20 +186,33 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
         state.record.error = "";
         records.publishReply(state);
         const previous = state.connections.get(input.clientId) || {};
-        const connection = { ...previous, clientId: input.clientId, focus: input.focus || previous.focus || null, assistantSelection: input.assistantSelection };
+        const connection = {
+          ...previous,
+          clientId: input.clientId,
+          focus: input.focus || previous.focus || null,
+          assistantSelection: input.assistantSelection
+        };
         state.connections.set(input.clientId, connection);
         if (native) {
           // App admission is independent of native admission: these are the
           // actual authored rows, not fabricated native acknowledgements.
           const turn = await records.transcript.writeConversationUserMessage(state.record.runtimeId, {
-            messageId: input.messageId, text: input.message });
+            messageId: input.messageId,
+            text: input.message
+          });
           if (!turn) throw failure("The authored Colleague message could not be admitted.");
           state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId });
           state.nextConnection = { ...connection, focus: structuredClone(connection.focus) };
           if (!state.running) void worker.startWorker(state, state.nextConnection, null, true).catch(() => {});
           return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user" };
         }
-        return worker.startWorker(state, { ...connection, focus: structuredClone(connection.focus) }, { messageId: input.messageId, text: input.message });
+        return worker.startWorker(state, {
+          ...connection,
+          focus: structuredClone(connection.focus)
+        }, {
+          messageId: input.messageId,
+          text: input.message
+        });
       });
       state.admission = admitted.catch(() => {});
       const receipt = await admitted;
@@ -176,21 +226,37 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
       state.stopping = true;
       state.workerAbort?.abort();
       await state.admission;
-      try { threads.assertCurrentConversation(state, expected); } catch (error) { state.stopping = false; throw error; }
+      try { threads.assertCurrentConversation(state, expected); } catch (error) {
+        state.stopping = false;
+        throw error;
+      }
       state.generation += 1;
       state.pendingMessages = [];
       state.streamingReply = null;
       state.interimReply = null;
       records.publishReply(state);
       state.summaryAbort?.abort();
-      for (const connection of state.connections.values()) answerPendingNavigation(connection, { ok: false, error: "Navigation was cancelled when Colleague stopped." });
+      for (const connection of state.connections.values()) answerPendingNavigation(connection, {
+        ok: false,
+        error: "Navigation was cancelled when Colleague stopped."
+      });
       state.record.status = "interrupted";
       for (const assignment of state.record.assignments || []) {
-        suspendAssignment(state.record, assignment.assignmentId, "Colleague was stopped. Ask to resume this assignment when ready.", { pauseWatches: true });
+        suspendAssignment(
+          state.record,
+          assignment.assignmentId,
+          "Colleague was stopped. Ask to resume this assignment when ready.",
+          { pauseWatches: true }
+        );
       }
       state.requestContext = context;
       try {
-        if (!state.conversation && state.record.conversationMetadata?.runtime) await conversations.openConversation(state, threads.actionContext(state, { clientId: "", focus: null }));
+        if (!state.conversation && state.record.conversationMetadata?.runtime) await conversations.openConversation(state,
+          threads.actionContext(state,
+          {
+          clientId: "",
+          focus: null
+        }));
         await state.conversation?.cancel();
         await state.running;
         await state.summaryRunning;
@@ -227,8 +293,10 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
           // Stop running work only, in this thread rather than whichever one the
           // person's mode shows now. A summary receipt left by an earlier run is
           // retried before the thread's next summary, not at shutdown.
-          if (state.running || state.summaryRunning) await turns.stop({}, { ...state.requestContext,
-            colleague: { ...state.requestContext?.colleague, threadKey: state.key } });
+          if (state.running || state.summaryRunning) await turns.stop({}, {
+            ...state.requestContext,
+            colleague: { ...state.requestContext?.colleague, threadKey: state.key }
+          });
           await state.running;
           await state.saving;
         } catch (error) {
@@ -238,7 +306,9 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
       }));
       const runtimes = await Promise.allSettled([conversations.runtime.close(), conversations.nativeRuntime.close()]);
       const failures = [...threadStops, ...runtimes].filter(({ status }) => status === "rejected").map(({ reason }) => reason);
-      if (failures.length) throw new AggregateError(failures, `Colleague did not stop cleanly: ${failures.map(({ message }) => message).join(" ")}`);
+      if (failures.length) {
+        throw new AggregateError(failures, `Colleague did not stop cleanly: ${failures.map(({ message }) => message).join(" ")}`);
+      }
     }
   });
   return turns;

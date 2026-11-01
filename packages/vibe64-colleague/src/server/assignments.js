@@ -25,12 +25,20 @@ function suspendAssignment(record, assignmentId, summary, { pauseWatches = false
 
 function assignmentSummary(assignment, detail = false) {
   return {
-    assignmentId: assignment.assignmentId, requestMessageId: assignment.requestMessageId,
-    projectSlug: assignment.projectSlug, sessionId: assignment.sessionId, conversationId: assignment.conversationId,
+    assignmentId: assignment.assignmentId,
+    requestMessageId: assignment.requestMessageId,
+    projectSlug: assignment.projectSlug,
+    sessionId: assignment.sessionId,
+    conversationId: assignment.conversationId,
     reviewerConversationId: assignment.reviewerConversationId || "",
-    request: detail ? assignment.request : assignment.request.slice(0, 1000), requestTruncated: !detail && assignment.request.length > 1000,
-    criteria: assignment.criteria, status: assignment.status, summary: assignment.summary, evidence: assignment.evidence || "",
-    turnLimit: assignment.turnLimit, turnsUsed: assignment.turns.filter((turn) => turn.status !== "rejected").length,
+    request: detail ? assignment.request : assignment.request.slice(0, 1000),
+    requestTruncated: !detail && assignment.request.length > 1000,
+    criteria: assignment.criteria,
+    status: assignment.status,
+    summary: assignment.summary,
+    evidence: assignment.evidence || "",
+    turnLimit: assignment.turnLimit,
+    turnsUsed: assignment.turns.filter((turn) => turn.status !== "rejected").length,
     links: (assignment.links || []).map(({ request, ...link }) => detail ? { ...link, request } : link),
     waitingForAssignmentId: assignment.waitingForAssignmentId || "",
     ...(detail ? { turns: assignment.turns.map(({ message, ...turn }) => turn), amendments: assignment.amendments } : {})
@@ -45,14 +53,25 @@ function assignmentSummary(assignment, detail = false) {
  * @param {(state: object) => Promise<unknown>} dependencies.persist
  * @param {ConversationTranscript} dependencies.transcript
  */
-function createAssignmentOperations({ actions, persist, transcript }) {
+function createAssignmentOperations({
+  actions,
+  persist,
+  transcript
+}) {
   function scoped(context, assignment) {
-    return { surface: "app", channel: "automation", requestMeta: context.requestMeta,
-      projectSlug: assignment.projectSlug, colleague: context.colleague };
+    return {
+      surface: "app",
+      channel: "automation",
+      requestMeta: context.requestMeta,
+      projectSlug: assignment.projectSlug,
+      colleague: context.colleague
+    };
   }
   async function execute(context, assignment, actionId, input) {
     const result = await actions.execute({ actionId, input, context: scoped(context, assignment) });
-    if (result?.ok === false || result?.readError) throw Object.assign(fail(result.error || "The agent operation failed."), { statusCode: result.statusCode || 409 });
+    if (result?.ok === false || result?.readError) {
+      throw Object.assign(fail(result.error || "The agent operation failed."), { statusCode: result.statusCode || 409 });
+    }
     return result;
   }
   function find(state, id) {
@@ -68,14 +87,18 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       throw fail("This update does not authorize work on that assignment.");
     }
     if (!openStatuses.has(assignment.status)) throw fail("This assignment has ended. A new user instruction is needed.");
-    if (!context.colleague?.userMessageIds?.length && assignment.status === "needs-user") throw fail("This assignment is waiting for the user.");
+    if (!context.colleague?.userMessageIds?.length && assignment.status === "needs-user") {
+      throw fail("This assignment is waiting for the user.");
+    }
   }
   async function inspect(context, assignment, conversationId = assignment.conversationId) {
     return readWatchedConversation(actions, { ...assignment, conversationId }, scoped(context, assignment));
   }
   async function idle(context, assignment) {
     for (const conversationId of [assignment.conversationId, ...(assignment.reviewCreated ? [assignment.reviewerConversationId] : [])]) {
-      if ((await inspect(context, assignment, conversationId)).working) throw fail("Wait for the assignment's current agent turn to finish before sending more work or starting review.");
+      if ((await inspect(context, assignment, conversationId)).working) {
+        throw fail("Wait for the assignment's current agent turn to finish before sending more work or starting review.");
+      }
     }
   }
   async function userMessages(state, context) {
@@ -117,22 +140,41 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       const existing = state.record.assignments?.find((item) => item.assignmentId === input.assignmentId);
       if (existing) {
         if (existing.requestMessageId !== input.requestMessageId || existing.projectSlug !== input.projectSlug ||
-            existing.sessionId !== input.sessionId || existing.conversationId !== (input.conversationId || "")) throw fail("That assignment ID already belongs to another request or target.");
+            existing.sessionId !== input.sessionId || existing.conversationId !== (input.conversationId || "")) throw fail(
+              "That assignment ID already belongs to another request or target."
+            );
         return { ok: true, assignment: assignmentSummary(existing, true) };
       }
       const retained = state.record.assignments || [];
-      if (retained.filter((item) => openStatuses.has(item.status)).length >= 16) throw fail("Finish or cancel an assignment first; up to 16 can remain open.");
-      if (retained.some((item) => openStatuses.has(item.status) && item.projectSlug === input.projectSlug && item.sessionId === input.sessionId)) {
+      if (retained.filter((item) => openStatuses.has(item.status)).length >= 16) {
+        throw fail("Finish or cancel an assignment first; up to 16 can remain open.");
+      }
+      if (retained.some((item) =>
+        openStatuses.has(item.status) && item.projectSlug === input.projectSlug && item.sessionId === input.sessionId)) {
         throw fail("This session already has an open assignment. Amend it or choose another session to avoid overlapping source work.");
       }
-      const assignment = { assignmentId: input.assignmentId, requestMessageId: input.requestMessageId,
-        request: request.text, criteria: input.criteria, projectSlug: input.projectSlug, sessionId: input.sessionId,
-        conversationId: input.conversationId || "", turnLimit: input.turnLimit ?? 8,
-        status: "active", summary: "Ready to send the agreed request.", evidence: "", turns: [], amendments: [] };
+      const assignment = {
+        assignmentId: input.assignmentId,
+        requestMessageId: input.requestMessageId,
+        request: request.text,
+        criteria: input.criteria,
+        projectSlug: input.projectSlug,
+        sessionId: input.sessionId,
+        conversationId: input.conversationId || "",
+        turnLimit: input.turnLimit ?? 8,
+        status: "active",
+        summary: "Ready to send the agreed request.",
+        evidence: "",
+        turns: [],
+        amendments: []
+      };
       await idle(context, assignment);
-      const linked = new Set(retained.filter((item) => openStatuses.has(item.status)).flatMap((item) => (item.links || []).map((link) => link.assignmentId)));
+      const linked = new Set(
+        retained.filter((item) => openStatuses.has(item.status)).flatMap((item) => (item.links || []).map((link) => link.assignmentId))
+      );
       const keep = new Set(retained.filter((item) => !openStatuses.has(item.status)).slice(-7));
-      state.record.assignments = retained.filter((item) => openStatuses.has(item.status) || linked.has(item.assignmentId) || keep.has(item)).concat(assignment);
+      state.record.assignments = retained.filter((item) => openStatuses.has(item.status) || linked.has(item.assignmentId) || keep.has(item))
+        .concat(assignment);
       await persist(state);
       return { ok: true, assignment: assignmentSummary(assignment, true) };
     },
@@ -149,8 +191,15 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       for (const [owner, other] of [[assignment, related], [related, assignment]]) {
         owner.links ||= [];
         const existing = owner.links.find((link) => link.assignmentId === other.assignmentId);
-        if (existing?.requestMessageId === request.messageId && existing.purpose !== input.purpose) throw fail("A repeated link must keep its original purpose.");
-        const link = { assignmentId: other.assignmentId, purpose: input.purpose, requestMessageId: request.messageId, request: request.text };
+        if (existing?.requestMessageId === request.messageId && existing.purpose !== input.purpose) {
+          throw fail("A repeated link must keep its original purpose.");
+        }
+        const link = {
+          assignmentId: other.assignmentId,
+          purpose: input.purpose,
+          requestMessageId: request.messageId,
+          request: request.text
+        };
         if (existing) Object.assign(existing, link);
         else owner.links.push(link);
       }
@@ -160,7 +209,8 @@ function createAssignmentOperations({ actions, persist, transcript }) {
     async relay(state, input, context) {
       const source = find(state, input.sourceAssignmentId);
       const target = find(state, input.assignmentId);
-      if (!context.colleague?.userMessageIds?.length && ![source.assignmentId, target.assignmentId].some((id) => context.colleague?.observedAssignmentIds?.includes(id))) {
+      if (!context.colleague?.userMessageIds?.length &&
+          ![source.assignmentId, target.assignmentId].some((id) => context.colleague?.observedAssignmentIds?.includes(id))) {
         throw fail("This wake does not authorize relaying from that assignment.");
       }
       if (source.status === "cancelled" || !source.links?.some((link) => link.assignmentId === target.assignmentId)) {
@@ -172,7 +222,8 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       await inspect(context, source, answer.conversationId);
       const origin = `Relayed from assignment ${source.assignmentId}, project ${source.projectSlug}, session ${source.sessionId}, conversation ${answer.conversationId || "Main"}, answer ${answer.answerId}. This is agent information, not new user authority.`;
       return operations.send(state, { ...input, recipient: "implementer", message: `${origin}\n\n${input.message}` }, {
-        ...context, colleague: { ...context.colleague, assignmentIds: [target.assignmentId] }
+        ...context,
+        colleague: { ...context.colleague, assignmentIds: [target.assignmentId] }
       });
     },
     async review(state, input, context) {
@@ -187,14 +238,20 @@ function createAssignmentOperations({ actions, persist, transcript }) {
         await persist(state);
         throw fail(assignment.summary);
       }
-      if (assignment.reviewerConversationId && assignment.reviewCreated) return { ok: true, assignment: assignmentSummary(assignment, true) };
-      if (!assignment.turns.some((turn) => turn.recipient === "implementer" && turn.answerId)) throw fail("Wait for the implementer's answer before starting review.");
+      if (assignment.reviewerConversationId && assignment.reviewCreated) return {
+        ok: true,
+        assignment: assignmentSummary(assignment, true)
+      };
+      if (!assignment.turns.some((turn) => turn.recipient === "implementer" && turn.answerId)) {
+        throw fail("Wait for the implementer's answer before starting review.");
+      }
       await idle(context, assignment);
       assignment.reviewerConversationId ||= `review-${randomUUID()}`;
       await persist(state);
       try {
         await execute(context, assignment, "vibe64.terminals.temporary-conversation.create", {
-          sessionId: assignment.sessionId, conversationId: assignment.reviewerConversationId,
+          sessionId: assignment.sessionId,
+          conversationId: assignment.reviewerConversationId,
           presentation: { title: "Colleague review" }
         });
         assignment.reviewCreated = true;
@@ -212,13 +269,25 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       requireAuthority(context, assignment);
       const previous = assignment.turns.find((turn) => turn.messageId === input.messageId);
       if (previous) {
-        if (previous.message !== input.message || previous.recipient !== input.recipient || previous.planRevision !== (input.planRevision || "")) throw fail("A retry must keep its original message, recipient and plan revision.");
-        if (previous.status !== "sent") throw fail("This send was not confirmed. Inspect its conversation before deciding what to do; it will not be repeated automatically.");
+        if (previous.message !== input.message ||
+            previous.recipient !== input.recipient ||
+            previous.planRevision !== (input.planRevision || "")) {
+          throw fail("A retry must keep its original message, recipient and plan revision.");
+        }
+        if (previous.status !== "sent") {
+          throw fail(
+            "This send was not confirmed. Inspect its conversation before deciding what to do; it will not be repeated automatically."
+          );
+        }
         return { ok: true, assignment: assignmentSummary(assignment, true) };
       }
       if (assignment.status === "needs-user") throw fail("This assignment needs a user decision before continuing.");
-      if (assignment.waitingForAssignmentId && assignment.waitingForAssignmentId !== input.sourceAssignmentId) throw fail("This assignment is waiting for an answer from its linked assignment. Relay that answer or update the wait first.");
-      if (assignment.turns.some((turn) => ["reserved", "unknown"].includes(turn.status))) throw fail("Inspect and reconcile the interrupted send before starting another agent turn.");
+      if (assignment.waitingForAssignmentId && assignment.waitingForAssignmentId !== input.sourceAssignmentId) {
+        throw fail("This assignment is waiting for an answer from its linked assignment. Relay that answer or update the wait first.");
+      }
+      if (assignment.turns.some((turn) => ["reserved", "unknown"].includes(turn.status))) {
+        throw fail("Inspect and reconcile the interrupted send before starting another agent turn.");
+      }
       if (assignment.turns.filter((turn) => turn.status !== "rejected").length >= assignment.turnLimit) {
         assignment.status = "needs-user";
         assignment.summary = "The agent-turn allowance is exhausted. Ask the user whether to add turns.";
@@ -231,15 +300,35 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       const conversationId = input.recipient === "reviewer" ? assignment.reviewerConversationId : assignment.conversationId;
       const baseline = await inspect(context, assignment, conversationId);
       const replacesWatch = (watch) => watch.assignmentId === assignment.assignmentId && watch.conversationId === conversationId;
-      if (state.record.watches.filter((watch) => !replacesWatch(watch) && ["active", "pending", "paused"].includes(watch.status)).length >= 16) throw fail("Cancel or finish an existing watch before sending this request.");
-      const turn = { messageId: input.messageId, message: input.message, recipient: input.recipient,
-        conversationId, planRevision: input.planRevision || "", status: "reserved", answerId: "",
+      if (state.record.watches.filter((watch) =>
+        !replacesWatch(watch) && ["active", "pending", "paused"].includes(watch.status)).length >= 16) {
+        throw fail("Cancel or finish an existing watch before sending this request.");
+      }
+      const turn = {
+        messageId: input.messageId,
+        message: input.message,
+        recipient: input.recipient,
+        conversationId,
+        planRevision: input.planRevision || "",
+        status: "reserved",
+        answerId: "",
         ...(input.sourceAssignmentId ? { sourceAssignmentId: input.sourceAssignmentId, sourceMessageId: input.sourceMessageId } : {}),
-        implementationTurn: assignment.turns.filter((item) => item.recipient === "implementer" && item.status === "sent").length };
-      const watch = { watchId: randomUUID(), assignmentId: assignment.assignmentId, messageId: input.messageId,
-        projectSlug: assignment.projectSlug, sessionId: assignment.sessionId, conversationId,
+        implementationTurn: assignment.turns.filter((item) => item.recipient === "implementer" && item.status === "sent").length
+      };
+      const watch = {
+        watchId: randomUUID(),
+        assignmentId: assignment.assignmentId,
+        messageId: input.messageId,
+        projectSlug: assignment.projectSlug,
+        sessionId: assignment.sessionId,
+        conversationId,
         question: "Follow this assignment through within its original requirements and remaining allowance.",
-        condition: "reply", once: true, status: "dispatching", error: "", cursor: watchUpdate({}, baseline).cursor };
+        condition: "reply",
+        once: true,
+        status: "dispatching",
+        error: "",
+        cursor: watchUpdate({}, baseline).cursor
+      };
       assignment.turns.push(turn);
       assignment.status = "waiting";
       delete assignment.waitingForAssignmentId;
@@ -251,9 +340,15 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       state.record.watches = state.record.watches.filter((item) => !["delivered", "cancelled"].includes(item.status)).concat(watch);
       await persist(state);
       try {
-        const result = await execute(context, assignment, conversationId ? "vibe64.terminals.temporary-conversation.turn.start" : "vibe64.sessions.agent-message.send", {
-          sessionId: assignment.sessionId, ...(conversationId ? { conversationId } : {}),
-          messageId: input.messageId, message: input.message, submissionKind: "send",
+        const result = await execute(context,
+          assignment,
+          conversationId ? "vibe64.terminals.temporary-conversation.turn.start" : "vibe64.sessions.agent-message.send",
+          {
+          sessionId: assignment.sessionId,
+          ...(conversationId ? { conversationId } : {}),
+          messageId: input.messageId,
+          message: input.message,
+          submissionKind: "send",
           ...(input.planRevision ? { planRevision: input.planRevision } : {})
         });
         turn.status = "sent";
@@ -275,12 +370,20 @@ function createAssignmentOperations({ actions, persist, transcript }) {
       requireAuthority(context, assignment);
       if (input.waitingForAssignmentId === "" && assignment.waitingForAssignmentId) requireUser(context);
       if (input.waitingForAssignmentId) {
-        if (input.status !== "waiting" || !assignment.links?.some((link) => link.assignmentId === input.waitingForAssignmentId)) throw fail("A dependency wait needs a user-authorized link and waiting status.");
+        if (input.status !== "waiting" || !assignment.links?.some((link) => link.assignmentId === input.waitingForAssignmentId)) {
+          throw fail("A dependency wait needs a user-authorized link and waiting status.");
+        }
         const dependency = find(state, input.waitingForAssignmentId);
-        if (!["active", "waiting"].includes(dependency.status)) throw fail("That assignment is no longer progressing. Read its result or ask the user to resolve the dependency.");
+        if (!["active", "waiting"].includes(dependency.status)) {
+          throw fail("That assignment is no longer progressing. Read its result or ask the user to resolve the dependency.");
+        }
         const seen = new Set([assignment.assignmentId]);
-        for (let current = dependency; current; current = current.waitingForAssignmentId ? find(state, current.waitingForAssignmentId) : null) {
-          if (seen.has(current.assignmentId)) throw fail("These assignments would wait on each other. Ask the user to resolve the dependency.");
+        for (let current = dependency; current; current = current.waitingForAssignmentId
+          ? find(state, current.waitingForAssignmentId)
+          : null) {
+          if (seen.has(current.assignmentId)) {
+            throw fail("These assignments would wait on each other. Ask the user to resolve the dependency.");
+          }
           seen.add(current.assignmentId);
         }
       }
@@ -293,19 +396,29 @@ function createAssignmentOperations({ actions, persist, transcript }) {
           // message ID; absence from a bounded page is never proof of rejection.
           for (const turn of assignment.turns.filter((item) => ["reserved", "unknown"].includes(item.status))) {
             const observed = await inspect(context, assignment, turn.conversationId);
-            if (!observed.userMessageIds.includes(turn.messageId)) throw fail("The interrupted message is not confirmed in the current conversation range. Inspect older messages before deciding; no send has been repeated.");
+            if (!observed.userMessageIds.includes(turn.messageId)) {
+              throw fail(
+                "The interrupted message is not confirmed in the current conversation range. Inspect older messages before deciding; no send has been repeated."
+              );
+            }
             turn.status = "sent";
           }
           if (assignment.reviewerConversationId && !assignment.reviewCreated) {
             const observed = await execute(context, assignment, "vibe64.terminals.temporary-conversation.read", {
-              sessionId: assignment.sessionId, conversationId: assignment.reviewerConversationId, messageLimit: 1
+              sessionId: assignment.sessionId,
+              conversationId: assignment.reviewerConversationId,
+              messageLimit: 1
             });
-            if (observed.conversationId !== assignment.reviewerConversationId) throw fail("The interrupted review creation is not confirmed. Inspect that conversation before continuing.");
+            if (observed.conversationId !== assignment.reviewerConversationId) {
+              throw fail("The interrupted review creation is not confirmed. Inspect that conversation before continuing.");
+            }
             assignment.reviewCreated = true;
           }
         }
         const extraTurns = assignment.budgetGrants?.includes(grantId) ? 0 : (input.extraTurns || 0);
-        if (assignment.turnLimit + extraTurns > 64) throw fail("An assignment can use at most 64 agent turns; start a new scoped assignment after this one ends.");
+        if (assignment.turnLimit + extraTurns > 64) {
+          throw fail("An assignment can use at most 64 agent turns; start a new scoped assignment after this one ends.");
+        }
         for (const message of messages) if (!assignment.amendments.some((item) => item.messageId === message.messageId)) {
           assignment.amendments.push({ messageId: message.messageId, text: message.text });
         }
@@ -316,7 +429,9 @@ function createAssignmentOperations({ actions, persist, transcript }) {
         if (assignment.waitingForAssignmentId) throw fail("Resolve the linked assignment dependency before marking this work ready.");
         await idle(context, assignment);
         const implementationTurns = assignment.turns.filter((turn) => turn.recipient === "implementer" && turn.status === "sent").length;
-        if (!input.evidence || !assignment.turns.some((turn) => turn.recipient === "reviewer" && turn.answerId && turn.implementationTurn === implementationTurns)) {
+        if (!input.evidence ||
+            !assignment.turns.some((turn) =>
+              turn.recipient === "reviewer" && turn.answerId && turn.implementationTurn === implementationTurns)) {
           throw fail("Ready for testing needs concrete evidence and a completed review after the latest implementation turn.");
         }
       }
@@ -337,7 +452,9 @@ function createAssignmentOperations({ actions, persist, transcript }) {
           } else watch.status = "cancelled";
         }
       } else if (input.status !== "waiting") cancelWatches(state, assignment);
-      if (input.status === "cancelled") state.record.observations = state.record.observations.filter((item) => item.assignmentId !== assignment.assignmentId);
+      if (input.status === "cancelled") {
+        state.record.observations = state.record.observations.filter((item) => item.assignmentId !== assignment.assignmentId);
+      }
       await persist(state);
       return { ok: true, assignment: assignmentSummary(assignment, true) };
     }

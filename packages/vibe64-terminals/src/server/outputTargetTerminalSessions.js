@@ -69,7 +69,11 @@ function createOutputTargetTerminalSessions({
 
   async function closeTerminal(sessionId, terminalSessionId) {
     if (state.previewTestRuns.has(sessionId)) {
-      return { ok: false, code: "vibe64_preview_test_busy", error: "Browser tests own this Preview. Stop the test command before closing Preview." };
+      return {
+        ok: false,
+        code: "vibe64_preview_test_busy",
+        error: "Browser tests own this Preview. Stop the test command before closing Preview."
+      };
     }
     await state.launchPreviewProxies.close({
       sessionId,
@@ -94,12 +98,20 @@ function createOutputTargetTerminalSessions({
   async function stopTerminal(sessionId, terminalSessionId) {
     return vibe64Result(async () => launchCoordination.withLaunchStartLock(sessionId, async () => {
       if (state.previewTestRuns.has(sessionId)) {
-        return { ok: false, code: "vibe64_preview_test_busy", error: "Browser tests own this Preview. Stop the test command before stopping Preview." };
+        return {
+          ok: false,
+          code: "vibe64_preview_test_busy",
+          error: "Browser tests own this Preview. Stop the test command before stopping Preview."
+        };
       }
       const active = latestLaunchTerminal(sessionId);
       const requestedId = String(terminalSessionId || "").trim();
       if (requestedId && active?.id && active.id !== requestedId && launchTerminalIsRunning(active)) {
-        return { ok: false, code: "vibe64_preview_run_changed", error: "A newer Preview run is active. Refresh its status before stopping it." };
+        return {
+          ok: false,
+          code: "vibe64_preview_run_changed",
+          error: "A newer Preview run is active. Refresh its status before stopping it."
+        };
       }
       const runtime = await projectService.createRuntime();
       const projectSlug = currentProjectSlug(projectService);

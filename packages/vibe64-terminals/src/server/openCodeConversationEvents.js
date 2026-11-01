@@ -115,10 +115,20 @@ function openCodeRunRealtimePayload(run = {}) {
  * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
  * @param {OpenCodeConversationPresentation} dependencies.presentation
  */
-function createOpenCodeConversationEvents({ projectService, publishSessionChanged, sharedRuntime, presentation }) {
+function createOpenCodeConversationEvents({
+  projectService,
+  publishSessionChanged,
+  sharedRuntime,
+  presentation
+}) {
   const { turns, temporaryConversations } = sharedRuntime;
-  const { disposeReasoningSummary, publishOpenCodeProgress, dropOpenCodeProgress,
-    projectReasoning, publishConversationTurn } = presentation;
+  const {
+    disposeReasoningSummary,
+    publishOpenCodeProgress,
+    dropOpenCodeProgress,
+    projectReasoning,
+    publishConversationTurn
+  } = presentation;
 
   async function writeConversationProjection(context = {}, messages = null, options = {}) {
     return sharedRuntime.writeConversationProjection(context.sessionId, messages, options, {
@@ -154,10 +164,14 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
   async function writeRun(context = {}, turn = {}, state = VIBE64_AGENT_RUN_STATE.ACTIVE, error = "") {
     if (!vibe64AgentRunStateIsActive(state) && turn.id && !context.assistantScope) {
       await checkpointSessionTurn({
-        projectService, runtime: context.runtime, session: context.session, sessionId: context.sessionId,
+        projectService,
+        runtime: context.runtime,
+        session: context.session,
+        sessionId: context.sessionId,
         outerTurnId: `opencode:${turn.threadId}:${turn.id}`,
         outcome: ["completed", "interrupted", "cancelled"].includes(state) ? state : "failed",
-        timestamp: turn.updatedAt || new Date().toISOString(), publishSessionChanged
+        timestamp: turn.updatedAt || new Date().toISOString(),
+        publishSessionChanged
       });
     }
     let written = null;
@@ -269,9 +283,11 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
         return {
           observation: () => observationProjection(context, options.onEvent),
           eventReady: options.eventReady,
-          readiness: options.eventReady ? { timeoutError: openCodeError(
-            "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready. Try sending again.", {}, 504
-          ) } : undefined,
+          readiness: options.eventReady ? {
+            timeoutError: openCodeError(
+              "vibe64_opencode_events_timeout", "OpenCode's event connection did not become ready. Try sending again.", {}, 504
+            )
+          } : undefined,
           finalResponse: {
             get agent() { return context.selection.agentId; },
             get model() { return openCodeModel(context.selection); },
@@ -316,7 +332,8 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
           onRetired() {
             void disposeReasoningSummary(reasoning).catch((error) => {
               vibe64SessionDebugLog("server.opencode.reasoning-cleanup.error", {
-                error: vibe64SessionDebugError(error), sessionId: context.sessionId
+                error: vibe64SessionDebugError(error),
+                sessionId: context.sessionId
               });
             });
           }
@@ -331,7 +348,11 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
     };
   }
 
-  return Object.freeze({ writeRun, observationProjection, messageMonitorProjection });
+  return Object.freeze({
+    writeRun,
+    observationProjection,
+    messageMonitorProjection
+  });
 }
 
 export { createOpenCodeConversationEvents, openCodeMessageError };

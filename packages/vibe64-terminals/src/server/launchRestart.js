@@ -4,7 +4,11 @@ import crypto from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { launchRestartRulesMatcher, normalizeLaunchRestartPath, normalizeLaunchRestartRules } from "@local/vibe64-core/server/launchRestartRules";
+import {
+  launchRestartRulesMatcher,
+  normalizeLaunchRestartPath,
+  normalizeLaunchRestartRules
+} from "@local/vibe64-core/server/launchRestartRules";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 
@@ -218,7 +222,12 @@ async function launchRestartState({
     ? normalizedBaseline.head && normalizedBaseline.head !== currentHead
       ? await committedRestartPathsChangedSinceLaunch(
           root,
-          await changedPathsFromGit(root, ["diff", "--name-only", "-z", `${normalizedBaseline.head}..${currentHead}`, "--"], rules, options),
+          await changedPathsFromGit(
+            root,
+            ["diff", "--name-only", "-z", `${normalizedBaseline.head}..${currentHead}`, "--"],
+            rules,
+            options
+          ),
           normalizedBaseline
         )
       : await committedRestartPathsFromUnbornLaunch(root, normalizedBaseline, rules, options)

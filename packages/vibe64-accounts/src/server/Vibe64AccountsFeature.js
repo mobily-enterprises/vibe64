@@ -116,7 +116,10 @@ function createConnections({
       const codexIndex = connections.findIndex((account) => account.id === "codex");
       if (codexIndex >= 0) connections.splice(codexIndex, 1);
       connections.unshift({
-        id: "ai", label: "AI connection", connected, required: true,
+        id: "ai",
+        label: "AI connection",
+        connected,
+        required: true,
         message: connected ? "An AI provider is connected." : "Connect an AI provider in AI Accounts."
       });
     }
@@ -180,7 +183,16 @@ const Vibe64AccountsFeature = defineFeature({
    * @param {TerminalsService | null} capabilities.terminals
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
-  setup({ accountRuntime, env, events, fastify, http, logger, project, terminals }, { actionCatalogue }) {
+  setup({
+    accountRuntime,
+    env,
+    events,
+    fastify,
+    http,
+    logger,
+    project,
+    terminals
+  }, { actionCatalogue }) {
     warnMissingOperatorClis();
     const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
     const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
@@ -191,7 +203,12 @@ const Vibe64AccountsFeature = defineFeature({
     const personalProfileStore = localRuntime && systemRoot
       ? createPersonalAiProfileStore({ systemRoot })
       : null;
-    const resolvedAccountRuntime = createDefaultAccountRuntime({ accountRuntime, project, systemRoot, targetRoot });
+    const resolvedAccountRuntime = createDefaultAccountRuntime({
+      accountRuntime,
+      project,
+      systemRoot,
+      targetRoot
+    });
     // readable-check: allow method-probe - optional operation: each use of the optional vibe64.terminals checks the operation it needs
     const listAssistantCapabilities = typeof terminals?.listAssistantCapabilities === "function"
       // The reader's user is the authority option, not catalogue input: a page
@@ -219,7 +236,8 @@ const Vibe64AccountsFeature = defineFeature({
         ? () => terminals.readClaudeAccountStatus() : null
     });
     const connections = createConnections({
-      accounts, project,
+      accounts,
+      project,
       listAssistantCapabilities
     });
 
@@ -270,13 +288,18 @@ const Vibe64AccountsFeature = defineFeature({
         })
       : null;
     if (aiConnections) {
-      configureAiConnectionRuntime({ aiConnections, terminals,
-        requireAiManagement: resolvedAccountRuntime.requireAiManagement });
+      configureAiConnectionRuntime({
+        aiConnections,
+        terminals,
+        requireAiManagement: resolvedAccountRuntime.requireAiManagement
+      });
     }
     if (aiConnectionService) {
       actionCatalogue.register({
-        contributorId: "vibe64.accounts.ai-connections", domain: "vibe64-accounts",
-        actions: createAiConnectionActions({ aiConnectionService,
+        contributorId: "vibe64.accounts.ai-connections",
+        domain: "vibe64-accounts",
+        actions: createAiConnectionActions({
+          aiConnectionService,
           requireAiManagement: resolvedAccountRuntime.requireAiManagement
         }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action }))
       });

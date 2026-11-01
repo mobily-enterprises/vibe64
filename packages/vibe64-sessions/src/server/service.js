@@ -61,23 +61,74 @@ function createService({
   workspaceSetupRunner: setupRunner
 }) {
   const workOperations = createSessionWorkOperations();
-  const workspaceSetup = createSessionWorkspaceSetup({ project, publishSessionChanged, setupRunner });
-  const recovery = createSessionWorkRecovery({ terminals, workOperations, workspaceSetup });
-  const repositoryUpdates = createSessionRepositoryUpdates({ project, publishSessionChanged, terminals, workOperations });
-  const archive = createSessionArchive({ archivePreparation, project, terminals, setupRunner, publishSessionChanged });
+  const workspaceSetup = createSessionWorkspaceSetup({
+    project,
+    publishSessionChanged,
+    setupRunner
+  });
+  const recovery = createSessionWorkRecovery({
+    terminals,
+    workOperations,
+    workspaceSetup
+  });
+  const repositoryUpdates = createSessionRepositoryUpdates({
+    project,
+    publishSessionChanged,
+    terminals,
+    workOperations
+  });
+  const archive = createSessionArchive({
+    archivePreparation,
+    project,
+    terminals,
+    setupRunner,
+    publishSessionChanged
+  });
   const connected = createConnectedContributions({
-    actions, project, terminals, publishSessionChanged, workOperations,
+    actions,
+    project,
+    terminals,
+    publishSessionChanged,
+    workOperations,
     sessions: () => service
   });
   const work = createSessionWork({
-    connectedContributions: connected, project, publishSessionChanged, recovery, repositoryUpdates, terminals,
-    workOperations, workspaceSetup
+    connectedContributions: connected,
+    project,
+    publishSessionChanged,
+    recovery,
+    repositoryUpdates,
+    terminals,
+    workOperations,
+    workspaceSetup
   });
-  const catalogue = createSessionCatalogue({ project, publishSessionChanged, sessionPresence, terminals });
-  const assistant = createSessionAssistant({ initializeModelRouting, project, publishSessionChanged, terminals });
-  const creation = createSessionCreation({ assistant, project, publishSessionChanged, setupRunner, terminals, workspaceSetup });
+  const catalogue = createSessionCatalogue({
+    project,
+    publishSessionChanged,
+    sessionPresence,
+    terminals
+  });
+  const assistant = createSessionAssistant({
+    initializeModelRouting,
+    project,
+    publishSessionChanged,
+    terminals
+  });
+  const creation = createSessionCreation({
+    assistant,
+    project,
+    publishSessionChanged,
+    setupRunner,
+    terminals,
+    workspaceSetup
+  });
   const messages = createSessionMessages({
-    project, publishProjectChanged, publishSessionChanged, setupRunner, sourceEditor, terminals
+    project,
+    publishProjectChanged,
+    publishSessionChanged,
+    setupRunner,
+    sourceEditor,
+    terminals
   });
   const repositoryReads = createSessionRepositoryReads({ project, terminals });
   const renewal = createSessionRenewalController({
@@ -191,7 +242,8 @@ function createService({
     const progress = typeof onProgress === "function" ? async label => {
       await onProgress(label);
       await publishSessionChanged(session.sessionId, {
-        operation: "updated", reason: "workspace-setup-progress",
+        operation: "updated",
+        reason: "workspace-setup-progress",
         session: await runtime.getSession(session.sessionId, { inspectSource: false })
       });
     } : null;

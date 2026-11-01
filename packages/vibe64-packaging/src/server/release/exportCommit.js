@@ -11,7 +11,9 @@ import { COMMIT_ID, releaseGit } from "../git.js";
 
 function git(projectRoot, args, env = {}, { workTree = null } = {}) {
   return releaseGit(projectRoot, [...(workTree ? [`--work-tree=${workTree}`] : []), ...args], {
-    code: "VIBE64_PUBLISH_EXPORT_FAILED", env, maxBuffer: 16 * 1024 * 1024
+    code: "VIBE64_PUBLISH_EXPORT_FAILED",
+    env,
+    maxBuffer: 16 * 1024 * 1024
   });
 }
 
@@ -45,7 +47,9 @@ async function exportSavedCommit({ projectRoot, commit, directory, exclude = [] 
   try {
     const env = { GIT_INDEX_FILE: path.join(indexHome, "index") };
     await git(projectRoot, ["read-tree", commit], env);
-    if (exclude.length) await git(projectRoot, ["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", ...exclude], env, { workTree: directory });
+    if (exclude.length) {
+      await git(projectRoot, ["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", ...exclude], env, { workTree: directory });
+    }
     // The export folder is the work tree, so a bare canonical repository exports too.
     await git(projectRoot, ["checkout-index", "--all", "--force", `--prefix=${directory}${path.sep}`], env, { workTree: directory });
   } finally {

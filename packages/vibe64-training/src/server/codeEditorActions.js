@@ -31,7 +31,9 @@ function validOwners(owners) {
  * @param {(request: { actor: object, attemptId: string }) => Promise<object | null>} [dependencies.selectOwners]
  */
 function createTrainingCodeSaveOwner({ authorship, selectOwners } = {}) {
-  if (selectOwners !== undefined && typeof selectOwners !== "function") throw new TypeError("Lesson code save selection must be a function.");
+  if (selectOwners !== undefined && typeof selectOwners !== "function") {
+    throw new TypeError("Lesson code save selection must be a function.");
+  }
   const fixed = selectOwners ? null : validOwners({ authorship });
   const select = selectOwners || (async () => fixed);
   return async function saveCodeFile({ input, save } = {}) {

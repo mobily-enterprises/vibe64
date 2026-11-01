@@ -221,13 +221,20 @@ function normalizedRoutes(value = []) {
     throw vibe64Error("The ERD connection paths are too large.", "vibe64_database_erd_layout_too_large");
   }
   return value.map((route) => {
-    if (!normalizeText(route?.id) || !["left", "right"].includes(route.sourcePosition) || !["left", "right"].includes(route.targetPosition) ||
+    if (!normalizeText(route?.id) ||
+        !["left", "right"].includes(route.sourcePosition) ||
+        !["left", "right"].includes(route.targetPosition) ||
       !Array.isArray(route.points) || route.points.length < 2 || route.points.length > 512 ||
       route.points.some((point) => !Number.isFinite(point?.x) || !Number.isFinite(point?.y))) {
       throw vibe64Error("The ERD connection path is invalid.", "vibe64_database_erd_route_invalid");
     }
-    return { id: normalizeText(route.id).slice(0, 1024), sourcePosition: route.sourcePosition, targetPosition: route.targetPosition,
-      points: route.points.map(({ x, y }) => ({ x: finiteCoordinate(x), y: finiteCoordinate(y) })), obstructed: route.obstructed === true };
+    return {
+      id: normalizeText(route.id).slice(0, 1024),
+      sourcePosition: route.sourcePosition,
+      targetPosition: route.targetPosition,
+      points: route.points.map(({ x, y }) => ({ x: finiteCoordinate(x), y: finiteCoordinate(y) })),
+      obstructed: route.obstructed === true
+    };
   });
 }
 
@@ -271,7 +278,10 @@ async function saveErdLayout(store, sessionId = "", layout = {}, { expectedRevis
   return serializeWrite(`${sessionId}\u0000${ERD_LAYOUT_ARTIFACT_PATH}`, async () => {
     const previous = parseArtifact(await store.readArtifact(sessionId, ERD_LAYOUT_ARTIFACT_PATH), "The database ERD layout");
     if (expectedRevision !== undefined && expectedRevision !== (previous?.revision || 0)) {
-      throw vibe64Error("The ERD changed since you inspected it. Read it again before moving tables.", "vibe64_database_erd_layout_conflict");
+      throw vibe64Error(
+        "The ERD changed since you inspected it. Read it again before moving tables.",
+        "vibe64_database_erd_layout_conflict"
+      );
     }
     normalized.revision = (previous?.revision || 0) + 1;
     normalized.updatedAt = new Date().toISOString();

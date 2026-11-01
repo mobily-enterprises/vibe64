@@ -13,7 +13,11 @@ import { normalizeText } from "@local/vibe64-core/server/core";
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {TerminalsService} dependencies.terminals
  */
-function createRenewalSessionAccess({ project, publishSessionChanged, terminals }) {
+function createRenewalSessionAccess({
+  project,
+  publishSessionChanged,
+  terminals
+}) {
   async function runtimeForRenewal() {
     return project.createRuntime({
       createSessionSource: (context) => terminals.createSessionSource(context),
@@ -44,7 +48,11 @@ function createRenewalSessionAccess({ project, publishSessionChanged, terminals 
     }
   }
 
-  return Object.freeze({ runtimeForRenewal, readInternalSession, publish });
+  return Object.freeze({
+    runtimeForRenewal,
+    readInternalSession,
+    publish
+  });
 }
 
 export { createRenewalSessionAccess };

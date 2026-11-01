@@ -43,7 +43,11 @@ function reconcileResultWithSourceFailures(result = {}, sourceFailures = []) {
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {SessionConversations} dependencies.sessionConversations
  */
-function createServiceAgentReconcile({ projectService, sessionAgent, sessionConversations }) {
+function createServiceAgentReconcile({
+  projectService,
+  sessionAgent,
+  sessionConversations
+}) {
   let knownAgentSessionReset = null;
 
   async function resetKnownAgentSessionsOnce() {
@@ -248,7 +252,11 @@ function createServiceAgentReconcile({ projectService, sessionAgent, sessionConv
         const restored = await sessionConversations.listTemporaryConversations(session.sessionId, options);
         for (const conversation of restored.conversations) {
           if (conversation.state === "closing") {
-            await sessionConversations.deleteTemporaryConversation(session.sessionId, { conversationId: conversation.conversationId }, options);
+            await sessionConversations.deleteTemporaryConversation(
+              session.sessionId,
+              { conversationId: conversation.conversationId },
+              options
+            );
           } else if (conversation.readError) {
             throw new Error(conversation.error);
           }

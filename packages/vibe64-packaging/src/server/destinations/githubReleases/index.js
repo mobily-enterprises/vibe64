@@ -27,7 +27,11 @@ import {
   withToolHome
 } from "../registryCommon.js";
 
-const CREDENTIAL = Object.freeze({ id: "github-token", label: "GitHub sign-in", delivery: "file" });
+const CREDENTIAL = Object.freeze({
+  id: "github-token",
+  label: "GitHub sign-in",
+  delivery: "file"
+});
 const REPOSITORY = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/u;
 const TAG = /^[0-9A-Za-z][0-9A-Za-z._@/+-]{0,199}$/u;
 const CHANNELS = Object.freeze(["draft", "prerelease", "latest"]);
@@ -72,7 +76,9 @@ async function findRelease({ api, repository, tag, token }) {
       accept: "application/vnd.github+json",
       headers: apiHeaders(token)
     });
-    if (response.status === 404) throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `GitHub has no repository ${repository} this sign-in can see.`);
+    if (response.status === 404) {
+      throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `GitHub has no repository ${repository} this sign-in can see.`);
+    }
     if (!response.ok || !Array.isArray(response.json)) {
       throw publishError("VIBE64_PUBLISH_REGISTRY_FAILED", `GitHub answered ${response.status} listing releases of ${repository}.`);
     }
@@ -118,7 +124,11 @@ async function readBack({ target, version, artifacts, credentials }) {
     if (ours.has(asset.name)) assets.push({ name: asset.name, sha256: await assetDigest(asset, token), size: asset.size });
   }
   const differing = assets.some((asset) => ours.get(asset.name) !== asset.sha256);
-  if (!differing && assets.length < files.length) return { published: false, release: release.id, partial: assets.map(({ name }) => name).sort() };
+  if (!differing && assets.length < files.length) return {
+    published: false,
+    release: release.id,
+    partial: assets.map(({ name }) => name).sort()
+  };
   return {
     published: true,
     checksum: namedFilesChecksum(assets),
@@ -140,7 +150,13 @@ async function runGh(settings, args, { token, home, failureMessage }) {
     cwd: home,
     env: toolEnvironment({
       home,
-      extra: { GH_TOKEN: token, GH_CONFIG_DIR: path.join(home, "gh"), GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", GH_SPINNER_DISABLED: "1" }
+      extra: {
+        GH_TOKEN: token,
+        GH_CONFIG_DIR: path.join(home, "gh"),
+        GH_PROMPT_DISABLED: "1",
+        GH_NO_UPDATE_NOTIFIER: "1",
+        GH_SPINNER_DISABLED: "1"
+      }
     }),
     secrets: [token],
     failureCode: "VIBE64_PUBLISH_UPLOAD_FAILED",

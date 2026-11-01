@@ -20,7 +20,11 @@ import { actorIdentity, readSchemaSnapshot, writeSchemaSnapshot } from "./sessio
  * @param {ProjectService} dependencies.projectService
  * @param {typeof import("./connection.js").withSessionKnex} dependencies.withKnex
  */
-function createSessionDatabase({ logger, projectService, withKnex }) {
+function createSessionDatabase({
+  logger,
+  projectService,
+  withKnex
+}) {
   async function sessionContext(input) {
     const sessionId = normalizeText(input.sessionId);
     if (!sessionId) {

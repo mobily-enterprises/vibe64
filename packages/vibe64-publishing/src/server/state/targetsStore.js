@@ -21,7 +21,9 @@ function plainSettings(settings = {}) {
     if (value === null || value === undefined || value === "") continue;
     if (!/^[a-z][A-Za-z0-9]*$/u.test(name)) throw targetError(`Setting ${name} is not a setting name.`);
     if (typeof value !== "string" && typeof value !== "boolean") throw targetError(`Setting ${name} must be text or true/false.`);
-    if (typeof value === "string" && (value.length > 512 || /[\0\r\n]/u.test(value))) throw targetError(`Setting ${name} must be one short line.`);
+    if (typeof value === "string" && (value.length > 512 || /[\0\r\n]/u.test(value))) {
+      throw targetError(`Setting ${name} must be one short line.`);
+    }
     result[name] = value;
   }
   return Object.fromEntries(Object.entries(result).sort(([left], [right]) => left.localeCompare(right)));
@@ -108,7 +110,14 @@ function createTargetsStore({ runtimeRoot, now = () => new Date().toISOString() 
     });
   }
 
-  return Object.freeze({ file, list: read, get, add, update, remove });
+  return Object.freeze({
+    file,
+    list: read,
+    get,
+    add,
+    update,
+    remove
+  });
 }
 
 export { TARGETS_CONTRACT, createTargetsStore, normalizeTarget };

@@ -24,7 +24,9 @@ function roleMap(value) {
   const result = Object.create(null);
   for (const [key, entry] of Object.entries(value)) {
     const nextKey = Object.hasOwn(oldRoles, key) ? oldRoles[key] : key;
-    if (Object.hasOwn(result, nextKey)) throw new Error("Routing contains both old and new names for one role. Resolve the conflict before upgrading.");
+    if (Object.hasOwn(result, nextKey)) {
+      throw new Error("Routing contains both old and new names for one role. Resolve the conflict before upgrading.");
+    }
     result[nextKey] = entry;
   }
   if (result.helperRoutingReview?.reason === "legacy_helpers_differ") {
@@ -38,16 +40,21 @@ function configuration(value) {
       value.schemaVersion !== undefined && ![1, 2, 3].includes(value.schemaVersion)) {
     throw new Error("Routing configuration has an unsupported shape.");
   }
-  return { ...value, ...(value.schemaVersion !== undefined ? { schemaVersion: 3 } : {}),
-    orchestrators: Object.fromEntries(Object.entries(value.orchestrators).map(([engine, assignments]) => [engine, roleMap(assignments)])) };
+  return {
+    ...value,
+    ...(value.schemaVersion !== undefined ? { schemaVersion: 3 } : {}),
+    orchestrators: Object.fromEntries(Object.entries(value.orchestrators).map(([engine, assignments]) => [engine, roleMap(assignments)]))
+  };
 }
 
 function routingRecord(value) {
   if (!isPlainObject(value)) throw new Error("Saved routing must be an object.");
   if (value.schemaVersion === 4 || ["custom", "helper"].some(retiredRole =>
     [value.mode, value.requestedMode, value.resolvedMode, value.role].includes(retiredRole))) {
-    return validateAssistantRoutingUpgradeRecord(value, { schemaVersion: value.schemaVersion ?? 4,
-      request: value.schemaVersion === 4 });
+    return validateAssistantRoutingUpgradeRecord(value, {
+      schemaVersion: value.schemaVersion ?? 4,
+      request: value.schemaVersion === 4
+    });
   }
   const next = { ...value };
   for (const field of ["mode", "requestedMode", "resolvedMode", "role"]) {
@@ -96,12 +103,24 @@ function upgradeAssistantRoleSession({ metadata: saved, conversations, renewal }
   }
   return {
     metadata: metadata(saved),
-    conversations: conversations.map(conversation => ({ ...conversation,
-      ...(conversation.routingMetadata ? { routingMetadata: { ...conversation.routingMetadata, ...metadata(conversation.routingMetadata) } } : {})
+    conversations: conversations.map(conversation => ({
+      ...conversation,
+      ...(conversation.routingMetadata ? {
+        routingMetadata: {
+          ...conversation.routingMetadata,
+          ...metadata(conversation.routingMetadata)
+        }
+      } : {})
     })),
-    ...(renewal?.successor?.assistantRouting ? { renewal: { ...renewal, successor: { ...renewal.successor,
-      assistantRouting: routingRecord(renewal.successor.assistantRouting)
-    } } } : {})
+    ...(renewal?.successor?.assistantRouting ? {
+      renewal: {
+        ...renewal,
+        successor: {
+          ...renewal.successor,
+          assistantRouting: routingRecord(renewal.successor.assistantRouting)
+        }
+      }
+    } : {})
   };
 }
 
@@ -111,42 +130,57 @@ function upgradeAssistantRoleTurn(value) {
 
 async function upgradeAssistantRoles(context) {
   const { systemRoot, report } = context;
-  return publishStateUpgradeFiles({ ...context, prepareUpdates: async temporaryRoot => {
-    const updates = [];
-    const filePath = path.join(systemRoot, "ai-connections", "routing.json");
-    let original;
-    try {
-      const directory = await lstat(path.dirname(filePath));
-      if (!directory.isDirectory() || !(await lstat(filePath)).isFile()) throw new Error("Model routing must be a regular file in a regular directory.");
-      original = await readFile(filePath, "utf8");
-    } catch (error) { if (error.code !== "ENOENT") throw error; }
-    if (original !== undefined) {
-      let parsed;
-      try { parsed = JSON.parse(original); } catch { throw new Error("Model routing is invalid JSON. Repair it before upgrading roles."); }
-      if (!isPlainObject(parsed)) throw new Error("Model routing must be an object. Repair it before upgrading roles.");
-      if (parsed.schemaVersion === 4) validateV4(parsed);
-      else if (parsed.schemaVersion === 3) validateAssistantRoutingConfiguration(parsed);
-      else {
-        validateV2(parsed, { legacy: true });
-        if (parsed.schemaVersion === 1) {
-          if (context.apply) throw new Error("Run the preceding routing V2 upgrade before renaming roles.");
-          report("info", "The preceding routing V2 upgrade will prepare the older configuration first.");
-        } else {
-          const next = validateAssistantRoutingConfiguration(configuration(parsed));
-          updates.push({ filePath, original, contents: `${JSON.stringify(next, null, 2)}\n` });
+  return publishStateUpgradeFiles({
+    ...context,
+    prepareUpdates: async temporaryRoot => {
+      const updates = [];
+      const filePath = path.join(systemRoot, "ai-connections", "routing.json");
+      let original;
+      try {
+        const directory = await lstat(path.dirname(filePath));
+        if (!directory.isDirectory() || !(await lstat(filePath)).isFile()) {
+          throw new Error("Model routing must be a regular file in a regular directory.");
+        }
+        original = await readFile(filePath, "utf8");
+      } catch (error) { if (error.code !== "ENOENT") throw error; }
+      if (original !== undefined) {
+        let parsed;
+        try { parsed = JSON.parse(original); } catch { throw new Error(
+          "Model routing is invalid JSON. Repair it before upgrading roles."
+        ); }
+        if (!isPlainObject(parsed)) throw new Error("Model routing must be an object. Repair it before upgrading roles.");
+        if (parsed.schemaVersion === 4) validateV4(parsed);
+        else if (parsed.schemaVersion === 3) validateAssistantRoutingConfiguration(parsed);
+        else {
+          validateV2(parsed, { legacy: true });
+          if (parsed.schemaVersion === 1) {
+            if (context.apply) throw new Error("Run the preceding routing V2 upgrade before renaming roles.");
+            report("info", "The preceding routing V2 upgrade will prepare the older configuration first.");
+          } else {
+            const next = validateAssistantRoutingConfiguration(configuration(parsed));
+            updates.push({ filePath, original, contents: `${JSON.stringify(next, null, 2)}\n` });
+          }
         }
       }
+      for (const projectRuntimeRoot of await listProjectRuntimeRoots(systemRoot)) {
+        const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
+        const staged = await store.prepareAssistantRoutingStateUpgrade({
+          temporaryRoot,
+          transform: upgradeAssistantRoleSession,
+          transformTurnMetadata: upgradeAssistantRoleTurn
+        });
+        if (staged.length) {
+          report("info", `${path.basename(projectRuntimeRoot)}: ${staged.length} routing metadata/history file(s) to rename.`);
+        }
+        updates.push(...staged);
+      }
+      report(
+        "info",
+        "Senior, Junior and Intern preserve model selections, request receipts and message contents. Native provider histories are unchanged."
+      );
+      return updates;
     }
-    for (const projectRuntimeRoot of await listProjectRuntimeRoots(systemRoot)) {
-      const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-      const staged = await store.prepareAssistantRoutingStateUpgrade({ temporaryRoot,
-        transform: upgradeAssistantRoleSession, transformTurnMetadata: upgradeAssistantRoleTurn });
-      if (staged.length) report("info", `${path.basename(projectRuntimeRoot)}: ${staged.length} routing metadata/history file(s) to rename.`);
-      updates.push(...staged);
-    }
-    report("info", "Senior, Junior and Intern preserve model selections, request receipts and message contents. Native provider histories are unchanged.");
-    return updates;
-  } });
+  });
 }
 
 export { upgradeAssistantRoles, upgradeAssistantRoleSession, upgradeAssistantRoleTurn };

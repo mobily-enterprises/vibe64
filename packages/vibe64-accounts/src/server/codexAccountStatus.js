@@ -148,7 +148,11 @@ async function readCodexStatus({
  * @param {RuntimeEnv} dependencies.env
  * @param {AccountNotifications} dependencies.notifications
  */
-function createCodexAccountStatus({ access, env, notifications }) {
+function createCodexAccountStatus({
+  access,
+  env,
+  notifications
+}) {
   let codexStatusRead = null;
 
   async function invalidateCodexAppServersForAuthChange({

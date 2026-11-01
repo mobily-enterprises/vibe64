@@ -18,13 +18,18 @@ function createPreviewDiagnosticRecorder({ logger, now = Date.now }) {
   return function recordPreviewDiagnostic(input, { projectSlug, sessionId }) {
     if (input?.enabled !== true || !PREVIEW_DIAGNOSTIC_EVENTS.has(input.event)) return { ok: true, recorded: false };
     const current = now();
-    if (current - windowStartedAt >= 60_000) { windowStartedAt = current; recorded = 0; }
+    if (current - windowStartedAt >= 60_000) {
+      windowStartedAt = current;
+      recorded = 0;
+    }
     // One bounded budget per daemon avoids unbounded per-user/session bookkeeping.
     if (recorded >= 120) return { ok: true, recorded: false, limited: true };
     const timestamp = Date.parse(input.timestamp);
     const fields = {
-      event: "vibe64.preview.browser_diagnostic", stage: input.event,
-      projectSlug, sessionId,
+      event: "vibe64.preview.browser_diagnostic",
+      stage: input.event,
+      projectSlug,
+      sessionId,
       observedAt: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null,
       resourceUrl: previewDiagnosticUrl(input.resourceUrl),
       frameUrl: previewDiagnosticUrl(input.frameUrl),

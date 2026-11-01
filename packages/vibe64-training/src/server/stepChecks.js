@@ -35,19 +35,41 @@ function requireResult(result, failure) {
  * Invoke the step's declared exercise response check for one learner-origin
  * App interaction in the exact ready App run.
  */
-async function runExerciseResponseCheck({ actions, checks, context, actor, target,
-  attemptId, observationId, exercise, checkId, stepId }) {
+async function runExerciseResponseCheck({
+  actions,
+  checks,
+  context,
+  actor,
+  target,
+  attemptId,
+  observationId,
+  exercise,
+  checkId,
+  stepId
+}) {
   // readable-check: allow method-probe - optional operation: an installation without exercise checks answers CHECK_UNDECLARED
   if (typeof checks?.runOrientationCheck !== "function") {
     throw stepFailure("The installed exercise response check is unavailable in this host.");
   }
-  const outputs = requireResult(await actions.execute({ actionId: "vibe64.terminals.outputs.read",
-    input: target, context }), stepFailure);
+  const outputs = requireResult(await actions.execute({
+    actionId: "vibe64.terminals.outputs.read",
+    input: target,
+    context
+  }), stepFailure);
   const terminalId = outputs?.activeTerminal?.id;
   if (!terminalId) throw stepFailure("Use the exact ready App run for this exercise before repeating the interaction.");
-  const checked = await checks.runOrientationCheck({ actor, signal: context.signal,
-    attemptId, sessionId: target.sessionId, terminalId, observationId,
-    instanceId: exercise.instanceId, interactionId: exercise.interactionId, requestId: exercise.requestId, stepId });
+  const checked = await checks.runOrientationCheck({
+    actor,
+    signal: context.signal,
+    attemptId,
+    sessionId: target.sessionId,
+    terminalId,
+    observationId,
+    instanceId: exercise.instanceId,
+    interactionId: exercise.interactionId,
+    requestId: exercise.requestId,
+    stepId
+  });
   if (checked?.checkResult?.check !== checkId || checked.checkResult.observationId !== observationId ||
       !["passed", "not-yet-passed"].includes(checked.checkResult.outcome)) {
     throw stepFailure("The declared check did not confirm this exact native observation.");
@@ -109,7 +131,15 @@ function requireLearnerChannel(context, what) {
  * @param {TrainingStepEvidence | null} dependencies.evidence
  * @param {TrainingStepReviewer | null} dependencies.reviewer
  */
-function createTrainingStepChecks({ learners, content, checks, authorship, actions, evidence, reviewer }) {
+function createTrainingStepChecks({
+  learners,
+  content,
+  checks,
+  authorship,
+  actions,
+  evidence,
+  reviewer
+}) {
   async function openStep({ actor, attemptId, stepId, active = true }) {
     if (!uuidPattern.test(attemptId || "") || !idPattern.test(stepId || "")) {
       throw stepFailure("Use an exact saved attempt ID and a declared step ID.", "ACTION_VALIDATION_FAILED", 400);
@@ -118,7 +148,10 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
     if (!attempt) throw stepFailure("This learner has no matching saved attempt.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
     if (active && (state.progress.activeAttemptId !== attemptId || attempt.ended)) {
-      throw stepFailure("Continue this lesson before recording its steps; an ended attempt keeps its results read-only.", "VIBE64_TRAINING_ATTEMPT_INACTIVE");
+      throw stepFailure(
+        "Continue this lesson before recording its steps; an ended attempt keeps its results read-only.",
+        "VIBE64_TRAINING_ATTEMPT_INACTIVE"
+      );
     }
     const lesson = await content.readLesson(pinnedLessonKey(attempt.pin));
     const steps = lessonSteps(lesson);
@@ -149,8 +182,15 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     if (result.stepId !== stepId || !same(result)) {
       throw stepFailure("This request ID already recorded a different step result.", "VIBE64_TRAINING_REQUEST_CONFLICT");
     }
-    return { ok: true, stepId, outcome: result.outcome, recorded: true, replayed: true, ...(result.reason ? { reason: result.reason } : {}),
-      ...(result.review ? { review: structuredClone(result.review) } : {}) };
+    return {
+      ok: true,
+      stepId,
+      outcome: result.outcome,
+      recorded: true,
+      replayed: true,
+      ...(result.reason ? { reason: result.reason } : {}),
+      ...(result.review ? { review: structuredClone(result.review) } : {})
+    };
   }
 
   /**
@@ -166,12 +206,29 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       const existing = entry.results.find(saved => saved.requestId === requestId);
       if (existing) return { value: replayed(existing, result.stepId, same) };
       const passedIds = new Set(entry.results.filter(saved => saved.outcome === "passed").map(saved => saved.stepId));
-      if (passedIds.has(result.stepId)) return { value: { ok: true, stepId: result.stepId, outcome: "passed", recorded: false, replayed: false, alreadyPassed: true } };
+      if (passedIds.has(result.stepId)) return {
+        value: {
+          ok: true,
+          stepId: result.stepId,
+          outcome: "passed",
+          recorded: false,
+          replayed: false,
+          alreadyPassed: true
+        }
+      };
       const outstanding = checkable.filter(id => !passedIds.has(id)).length;
       if (result.outcome !== "passed" && entry.results.length + outstanding >= MAX_STEP_RESULTS) {
-        return { value: { ok: true, stepId: result.stepId, outcome: result.outcome, recorded: false, replayed: false,
-          ...(result.reason ? { reason: result.reason } : {}),
-          diagnostic: "Not saved: this lesson keeps its remaining history for passes. Try again when your work is ready." } };
+        return {
+          value: {
+            ok: true,
+            stepId: result.stepId,
+            outcome: result.outcome,
+            recorded: false,
+            replayed: false,
+            ...(result.reason ? { reason: result.reason } : {}),
+            diagnostic: "Not saved: this lesson keeps its remaining history for passes. Try again when your work is ready."
+          }
+        };
       }
       if (entry.results.length >= MAX_STEP_RESULTS) {
         throw stepFailure(`This lesson reached its ${MAX_STEP_RESULTS} saved step results. Its history is kept; ask the owner to review it.`,
@@ -179,9 +236,17 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       }
       const saved = { ...result, requestId, recordedAt: new Date().toISOString() };
       const receipts = receipt ? [...entry.receipts.filter(kept => kept.stepId !== receipt.stepId), receipt] : entry.receipts;
-      return { entry: { results: [...entry.results, saved], receipts },
-        value: { ok: true, stepId: result.stepId, outcome: saved.outcome, recorded: true, replayed: false,
-          ...(saved.reason ? { reason: saved.reason } : {}) } };
+      return {
+        entry: { results: [...entry.results, saved], receipts },
+        value: {
+          ok: true,
+          stepId: result.stepId,
+          outcome: saved.outcome,
+          recorded: true,
+          replayed: false,
+          ...(saved.reason ? { reason: saved.reason } : {})
+        }
+      };
     });
     return value;
   }
@@ -202,9 +267,14 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const input = validateContent(trainingStepObservationSchema, observation, "Step observation");
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     const check = declaredCheck(lesson, step);
-    if (check.kind === "code") throw stepFailure("This step checks code; use Check instead of an App interaction.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    if (check.kind === "code") {
+      throw stepFailure("This step checks code; use Check instead of an App interaction.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    }
     const target = practiceTarget(attempt);
-    if (!input.workspace.ready || !isDeepStrictEqual({ projectSlug: input.workspace.projectSlug, sessionId: input.workspace.sessionId }, target)) {
+    if (!input.workspace.ready || !isDeepStrictEqual({
+      projectSlug: input.workspace.projectSlug,
+      sessionId: input.workspace.sessionId
+    }, target)) {
       throw stepFailure("Use the ready exercise project and session reserved for this exact lesson.");
     }
     if (!input.workspace.projectVisible || input.workspace.pane !== "preview") {
@@ -215,13 +285,41 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const previous = (await savedEntry(actor, attempt)).results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, stepId);
     const observationId = randomUUID();
-    const checked = await runExerciseResponseCheck({ actions, checks, context, actor, target,
-      attemptId, observationId, exercise: input.exercise, checkId: check.id, stepId });
+    const checked = await runExerciseResponseCheck({
+      actions,
+      checks,
+      context,
+      actor,
+      target,
+      attemptId,
+      observationId,
+      exercise: input.exercise,
+      checkId: check.id,
+      stepId
+    });
     const reason = boundedReason(checked.reason);
-    return record({ actor, attemptId, requestId, lesson,
-      result: { stepId, kind: "auto", outcome: checked.checkResult.outcome, evidence: { checkId: check.id, observationId },
-        origin: "check", ...(reason ? { reason } : {}) },
-      receipt: { stepId, checkId: check.id, observationId, ...input.exercise, sessionId: target.sessionId, observedAt: new Date().toISOString() } });
+    return record({
+      actor,
+      attemptId,
+      requestId,
+      lesson,
+      result: {
+        stepId,
+        kind: "auto",
+        outcome: checked.checkResult.outcome,
+        evidence: { checkId: check.id, observationId },
+        origin: "check",
+        ...(reason ? { reason } : {})
+      },
+      receipt: {
+        stepId,
+        checkId: check.id,
+        observationId,
+        ...input.exercise,
+        sessionId: target.sessionId,
+        observedAt: new Date().toISOString()
+      }
+    });
   }
 
   /**
@@ -235,11 +333,30 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const outcome = fact.holds ? "passed" : "not-yet-passed";
     const reason = boundedReason(fact.reason);
     if (trigger !== "learner") {
-      return { ok: true, stepId: step.id, outcome, recorded: false, replayed: false, ...(reason ? { reason } : {}),
-        diagnostic: "Diagnostic only: a check Colleague runs is never saved in the learner's results." };
+      return {
+        ok: true,
+        stepId: step.id,
+        outcome,
+        recorded: false,
+        replayed: false,
+        ...(reason ? { reason } : {}),
+        diagnostic: "Diagnostic only: a check Colleague runs is never saved in the learner's results."
+      };
     }
-    return record({ actor, attemptId: attempt.attemptId, requestId, lesson,
-      result: { stepId: step.id, kind: "fact", outcome, evidence: { fact: step.check.fact }, origin: "check", ...(reason ? { reason } : {}) } });
+    return record({
+      actor,
+      attemptId: attempt.attemptId,
+      requestId,
+      lesson,
+      result: {
+        stepId: step.id,
+        kind: "fact",
+        outcome,
+        evidence: { fact: step.check.fact },
+        origin: "check",
+        ...(reason ? { reason } : {})
+      }
+    });
   }
 
   /**
@@ -263,31 +380,70 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     let checked;
     let checkEvidence;
     if (check.kind === "code") {
-      checked = await runCodeCheckObservation({ checks, context, actor, attemptId,
-        sessionId: target.sessionId, observationId, checkId: check.id, stepId });
-      checkEvidence = { checkId: check.id, observationId,
-        ...(Array.isArray(checked.files) && checked.files.length ? { filesHash: sha256Hex(canonicalJson(checked.files)) } : {}) };
+      checked = await runCodeCheckObservation({
+        checks,
+        context,
+        actor,
+        attemptId,
+        sessionId: target.sessionId,
+        observationId,
+        checkId: check.id,
+        stepId
+      });
+      checkEvidence = {
+        checkId: check.id,
+        observationId,
+        ...(Array.isArray(checked.files) && checked.files.length ? { filesHash: sha256Hex(canonicalJson(checked.files)) } : {})
+      };
     } else {
       if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
       const receipt = entry.receipts.find(value => value.stepId === stepId && value.checkId === check.id);
       if (!receipt || receipt.sessionId !== target.sessionId) {
-        return { ok: true, stepId, outcome: "not-yet-passed", recorded: false, replayed: false,
-          reason: "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first." };
+        return {
+          ok: true,
+          stepId,
+          outcome: "not-yet-passed",
+          recorded: false,
+          replayed: false,
+          reason: "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first."
+        };
       }
-      checked = await runExerciseResponseCheck({ actions, checks, context, actor, target,
-        attemptId, observationId, exercise: receipt, checkId: check.id, stepId });
+      checked = await runExerciseResponseCheck({
+        actions,
+        checks,
+        context,
+        actor,
+        target,
+        attemptId,
+        observationId,
+        exercise: receipt,
+        checkId: check.id,
+        stepId
+      });
       checkEvidence = { checkId: check.id, observationId };
     }
     const outcome = checked.checkResult.outcome;
     const reason = boundedReason(checked.reason);
     if (trigger !== "learner") {
-      return { ok: true, stepId, outcome, recorded: false, replayed: false, ...(reason ? { reason } : {}),
+      return {
+        ok: true,
+        stepId,
+        outcome,
+        recorded: false,
+        replayed: false,
+        ...(reason ? { reason } : {}),
         diagnostic: outcome === "passed"
           ? "The check verified this work. Only the learner's own Check in the lesson records the pass."
-          : "Diagnostic only: a check Colleague runs is never saved in the learner's results." };
+          : "Diagnostic only: a check Colleague runs is never saved in the learner's results."
+      };
     }
-    return record({ actor, attemptId, requestId, lesson,
-      result: { stepId, kind: "auto", outcome, evidence: checkEvidence, origin: "check", ...(reason ? { reason } : {}) } });
+    return record({
+      actor,
+      attemptId,
+      requestId,
+      lesson,
+      result: { stepId, kind: "auto", outcome, evidence: checkEvidence, origin: "check", ...(reason ? { reason } : {}) }
+    });
   }
 
   /**
@@ -312,8 +468,14 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const chosen = [...selected].sort((left, right) => left - right);
     // The content owner's comparator: exactly the authored answer indexes, in any order.
     const outcome = compareChoiceAnswer(expected, chosen) ? "passed" : "not-yet-passed";
-    return record({ actor, attemptId, requestId, lesson, same: saved => canonicalJson(saved.evidence) === canonicalJson({ selected: chosen }),
-      result: { stepId, kind: "choice", outcome, evidence: { selected: chosen }, origin: "learner" } });
+    return record({
+      actor,
+      attemptId,
+      requestId,
+      lesson,
+      same: saved => canonicalJson(saved.evidence) === canonicalJson({ selected: chosen }),
+      result: { stepId, kind: "choice", outcome, evidence: { selected: chosen }, origin: "learner" }
+    });
   }
 
   /**
@@ -323,12 +485,20 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
    */
   async function done({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "mark a step done");
-    if (!requestPattern.test(requestId || "")) throw stepFailure("Mark a step done with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+    if (!requestPattern.test(requestId || "")) {
+      throw stepFailure("Mark a step done with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+    }
     const { lesson, step } = await openStep({ actor, attemptId, stepId });
     if (!["self", "none"].includes(step.check?.kind)) {
       throw stepFailure("Only a self-check or reading step can be marked done.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
-    return record({ actor, attemptId, requestId, lesson, result: { stepId, kind: step.check.kind === "none" ? "read" : "self", outcome: "passed", evidence: {}, origin: "learner" } });
+    return record({
+      actor,
+      attemptId,
+      requestId,
+      lesson,
+      result: { stepId, kind: step.check.kind === "none" ? "read" : "self", outcome: "passed", evidence: {}, origin: "learner" }
+    });
   }
 
   function requireEvidence() {
@@ -353,7 +523,9 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
    */
   async function review({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "ask for a review of your work");
-    if (!requestPattern.test(requestId || "")) throw stepFailure("Ask for a review with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+    if (!requestPattern.test(requestId || "")) {
+      throw stepFailure("Ask for a review with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+    }
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
     if (step.check?.kind !== "review") throw stepFailure("This step has no review check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     // readable-check: allow method-probe - optional operation: without a reviewer review steps answer CHECK_UNDECLARED
@@ -370,17 +542,40 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       throw stepFailure("Wait until the agent finishes, then check your work again.", "VIBE64_TRAINING_REVIEW_AGENT_WORKING");
     }
     if (practice.empty) {
-      return { ok: true, stepId, outcome: "not-yet-passed", recorded: false, replayed: false,
-        reason: "No changes yet. Change your practice project first, then check your work again." };
+      return {
+        ok: true,
+        stepId,
+        outcome: "not-yet-passed",
+        recorded: false,
+        replayed: false,
+        reason: "No changes yet. Change your practice project first, then check your work again."
+      };
     }
-    const evidenceHash = sha256Hex(canonicalJson({ lessonHash: lesson.hash, stepId, rubric: step.check.rubric, evidence: practice.evidence }));
-    const same = entry.results.findLast(value => value.stepId === stepId && value.kind === "review" && value.evidence.evidenceHash === evidenceHash);
+    const evidenceHash = sha256Hex(canonicalJson({
+      lessonHash: lesson.hash,
+      stepId,
+      rubric: step.check.rubric,
+      evidence: practice.evidence
+    }));
+    const same = entry.results.findLast(value =>
+      value.stepId === stepId && value.kind === "review" && value.evidence.evidenceHash === evidenceHash);
     if (same) return replayed(same, stepId);
     const verdict = await reviewer.review({ actor, lesson, step, evidence: practice.evidence, context });
     const { passed, ...feedback } = verdict;
-    const saved = await record({ actor, attemptId, requestId, lesson,
-      result: { stepId, kind: "review", outcome: passed ? "passed" : "not-yet-passed", origin: "check",
-        evidence: { reviewId: randomUUID(), evidenceHash }, review: feedback } });
+    const saved = await record({
+      actor,
+      attemptId,
+      requestId,
+      lesson,
+      result: {
+        stepId,
+        kind: "review",
+        outcome: passed ? "passed" : "not-yet-passed",
+        origin: "check",
+        evidence: { reviewId: randomUUID(), evidenceHash },
+        review: feedback
+      }
+    });
     return saved.alreadyPassed ? saved : { ...saved, review: structuredClone(feedback) };
   }
 
@@ -394,9 +589,15 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     practiceTarget(attempt);
     const practice = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
     const last = (await savedEntry(actor, attempt)).results.findLast(value => value.stepId === stepId && value.kind === "review");
-    return { ok: true, stepId, agentWorking: practice.session.agentWorking, empty: practice.empty, evidence: practice.evidence,
+    return {
+      ok: true,
+      stepId,
+      agentWorking: practice.session.agentWorking,
+      empty: practice.empty,
+      evidence: practice.evidence,
       ...(step.check?.kind === "review" ? { rubric: step.check.rubric } : {}),
-      lastReview: last ? { outcome: last.outcome, recordedAt: last.recordedAt, ...structuredClone(last.review) } : null };
+      lastReview: last ? { outcome: last.outcome, recordedAt: last.recordedAt, ...structuredClone(last.review) } : null
+    };
   }
 
   /**
@@ -413,9 +614,19 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const passed = new Set(results.filter(result => result.outcome === "passed").map(result => result.stepId));
     const available = availableStepIds(lesson, actor);
     const required = steps.filter(step => step.required && available.has(step.id)).map(step => step.id);
-    return { attemptId, revision, results, passedStepIds: steps.map(step => step.id).filter(id => passed.has(id)),
-      completion: { lessonCode: lesson.lesson.code, lessonHash: lesson.hash, required: required.length,
-        passed: required.filter(id => passed.has(id)).length, completed: required.every(id => passed.has(id)) } };
+    return {
+      attemptId,
+      revision,
+      results,
+      passedStepIds: steps.map(step => step.id).filter(id => passed.has(id)),
+      completion: {
+        lessonCode: lesson.lesson.code,
+        lessonHash: lesson.hash,
+        required: required.length,
+        passed: required.filter(id => passed.has(id)).length,
+        completed: required.every(id => passed.has(id))
+      }
+    };
   }
 
   /**
@@ -438,13 +649,26 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     try {
       baseline = await enterStep({ actor, attemptId, stepId });
     } catch (error) {
-      baseline = { recorded: false, code: error?.code || "VIBE64_TRAINING_CODE_BASELINE_FAILED",
-        reason: String(error?.message || "The step's starting files could not be recorded.").slice(0, 256) };
+      baseline = {
+        recorded: false,
+        code: error?.code || "VIBE64_TRAINING_CODE_BASELINE_FAILED",
+        reason: String(error?.message || "The step's starting files could not be recorded.").slice(0, 256)
+      };
     }
     return { reader, baseline };
   }
 
-  return Object.freeze({ observe, runCheck, answer, done, review, readEvidence, read, enterStep, saveReader });
+  return Object.freeze({
+    observe,
+    runCheck,
+    answer,
+    done,
+    review,
+    readEvidence,
+    read,
+    enterStep,
+    saveReader
+  });
 }
 
 export { createTrainingStepChecks };

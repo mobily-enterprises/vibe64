@@ -114,7 +114,14 @@ function createToolchainManager({
     return { ...install };
   }
 
-  return Object.freeze({ accept, androidToolchains, installAndroid, licence, status, toolchainsRoot });
+  return Object.freeze({
+    accept,
+    androidToolchains,
+    installAndroid,
+    licence,
+    status,
+    toolchainsRoot
+  });
 }
 
 export { createToolchainManager };

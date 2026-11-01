@@ -83,15 +83,20 @@ function createWorkspaceSetupExecution({
       throw new Error("Workspace setup changed while preparing its environment. Retry preparation to run the current steps.");
     }
     const resource = await startWorkflow({
-      session, sourceRoot: sourcePath, operation: { kind: "workspace-setup" },
+      session,
+      sourceRoot: sourcePath,
+      operation: { kind: "workspace-setup" },
       runtimes: recipe.runtimes,
       steps: recipe.steps.map((step) => ({ argv: step.argv, workdir: path.relative(sourcePath, step.cwd) || "." })),
       estimates: currentSetup.resourceEstimates,
       configuration: { environmentFingerprint: environmentRecords.resourceConfigurationFingerprint },
-      kind: "job", label: "Preparing workspace", env: environment
+      kind: "job",
+      label: "Preparing workspace",
+      env: environment
     });
     if (resource?.ok === false) throw Object.assign(new Error(resource.error || "Workspace preparation could not be admitted."), {
-      code: resource.code, details: { admission: resource.admission }
+      code: resource.code,
+      details: { admission: resource.admission }
     });
     let outcome = "failed";
     try {
@@ -128,8 +133,11 @@ function createWorkspaceSetupExecution({
           cwd: step.cwd,
           envPolicy: "project",
           execution: {
-            kind: "job", label: currentLabel, workflowId: resource?.workflow?.id,
-            ownerId: session.sessionId, sessionId: session.sessionId,
+            kind: "job",
+            label: currentLabel,
+            workflowId: resource?.workflow?.id,
+            ownerId: session.sessionId,
+            sessionId: session.sessionId,
             projectSlug: currentProjectRequestContext()?.slug
           },
           mode: "capture",

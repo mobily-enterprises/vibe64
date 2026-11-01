@@ -3,15 +3,27 @@ import { erdObstacles, erdPathClear, routeErdConnection } from "./erdRouting.js"
 
 export function erdRouteSnapshot(routes = []) {
   return routes.map(({ id, sourcePosition, targetPosition, points, obstructed }) => ({
-    id, sourcePosition, targetPosition, points: points.map(({ x, y }) => ({ x, y })), obstructed: Boolean(obstructed)
+    id,
+    sourcePosition,
+    targetPosition,
+    points: points.map(({ x, y }) => ({ x, y })),
+    obstructed: Boolean(obstructed)
   }));
 }
 
-export function createErdRelationshipRoutes(nodes = [], relationships = [], { previousRoutes = [], dragging = false, fixedSides = false, calculatePaths = true, layoutPaths = new Map() } = {}) {
+export function createErdRelationshipRoutes(nodes = [], relationships = [], {
+  previousRoutes = [],
+  dragging = false,
+  fixedSides = false,
+  calculatePaths = true,
+  layoutPaths = new Map()
+} = {}) {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const portsByNode = new Map(nodes.map((node) => [node.id, []]));
   const previous = new Map(previousRoutes.map((route) => [route.id, {
-    ...route, start: route.points?.[0], end: route.points?.at(-1)
+    ...route,
+    start: route.points?.[0],
+    end: route.points?.at(-1)
   }]));
   const routes = [];
   relationships.forEach((relationship, index) => {
@@ -34,9 +46,23 @@ export function createErdRelationshipRoutes(nodes = [], relationships = [], { pr
       portsByNode.get(sourceNode.id).push(sourcePort);
       portsByNode.get(targetNode.id).push(targetPort);
       routes.push({
-        id, relationshipId, relationship, pairIndex, cardinality,
-        source: sourceNode.id, sourceNode, sourceColumn, sourcePosition, sourcePort, sourceHandle: sourcePort.id,
-        target: targetNode.id, targetNode, targetColumn, targetPosition, targetPort, targetHandle: targetPort.id
+        id,
+        relationshipId,
+        relationship,
+        pairIndex,
+        cardinality,
+        source: sourceNode.id,
+        sourceNode,
+        sourceColumn,
+        sourcePosition,
+        sourcePort,
+        sourceHandle: sourcePort.id,
+        target: targetNode.id,
+        targetNode,
+        targetColumn,
+        targetPosition,
+        targetPort,
+        targetHandle: targetPort.id
       });
     });
   });
@@ -71,7 +97,11 @@ export function createErdRelationshipRoutes(nodes = [], relationships = [], { pr
       : (route.start.x + route.end.x) / 2 + (index % 7 - 3) * 8;
     if (!calculatePaths) continue;
     const old = previous.get(route.id);
-    const unchanged = old && old.start.x === route.start.x && old.start.y === route.start.y && old.end.x === route.end.x && old.end.y === route.end.y;
+    const unchanged = old &&
+      old.start.x === route.start.x &&
+      old.start.y === route.start.y &&
+      old.end.x === route.end.x &&
+      old.end.y === route.end.y;
     const layoutPoints = layoutPaths.get(route.id);
     if (layoutPoints && erdPathClear(layoutPoints, obstacles, route.source, route.target) &&
         Math.abs(layoutPoints[0].x - route.start.x) < 1 && Math.abs(layoutPoints[0].y - route.start.y) < 1 &&

@@ -11,7 +11,9 @@ import { sha256Hex } from "./sha256Hex.js";
 async function runTrainingCli(args, { write = text => console.log(text) } = {}) {
   if (args[0] === "install-topic") {
     const [, directory, systemRoot] = args;
-    if (args.length !== 3 || !directory || !systemRoot) throw new Error("Usage: vibe64 training install-topic <committed-topic-directory> <system-root>");
+    if (args.length !== 3 || !directory || !systemRoot) {
+      throw new Error("Usage: vibe64 training install-topic <committed-topic-directory> <system-root>");
+    }
     const sourceRoot = await realpath(directory);
     const { topicId, release, repository, commit, topicHash } = await readPinnedTopic(sourceRoot);
     const pin = { schemaVersion: 1, topicId, release, repository, commit, topicHash };
@@ -27,7 +29,12 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
   }
   if (["enable-course", "disable-course", "remove-course"].includes(args[0])) {
     const [command, first, second, systemRoot, revision] = args;
-    if (args.length !== 5 || !first || !second || !systemRoot || !/^(0|[1-9][0-9]*)$/u.test(revision || "") || !Number.isSafeInteger(Number(revision))) {
+    if (args.length !== 5 ||
+        !first ||
+        !second ||
+        !systemRoot ||
+        !/^(0|[1-9][0-9]*)$/u.test(revision || "") ||
+        !Number.isSafeInteger(Number(revision))) {
       throw new Error(command === "enable-course"
         ? "Usage: vibe64 training enable-course <course.json> <course.lock.json> <system-root> <expected-revision>"
         : `Usage: vibe64 training ${command} <courseId> <release> <system-root> <expected-revision>`);
@@ -35,14 +42,24 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
     const catalogue = createInstalledTrainingCatalogue({ systemRoot: path.resolve(systemRoot) });
     const expectedRevision = Number(revision);
     const result = command === "enable-course"
-      ? await catalogue.enableCourse({ course: JSON.parse(await readFile(first, "utf8")), lock: JSON.parse(await readFile(second, "utf8")), expectedRevision })
-      : await catalogue[command === "remove-course" ? "removeCourse" : "disableCourse"]({ courseId: first, release: second, expectedRevision });
+      ? await catalogue.enableCourse({
+        course: JSON.parse(await readFile(first, "utf8")),
+        lock: JSON.parse(await readFile(second, "utf8")),
+        expectedRevision
+      })
+      : await catalogue[command === "remove-course" ? "removeCourse" : "disableCourse"]({
+        courseId: first,
+        release: second,
+        expectedRevision
+      });
     write(JSON.stringify({ ok: true, ...result }, null, 2));
     return 0;
   }
   if (args[0] === "publish-manifest") {
     const [, coursePath, ...directories] = args;
-    if (!coursePath || !directories.length) throw new Error("Usage: vibe64 training publish-manifest <course.json> <committed-topic-directory...>");
+    if (!coursePath || !directories.length) {
+      throw new Error("Usage: vibe64 training publish-manifest <course.json> <committed-topic-directory...>");
+    }
     const input = await realpath(coursePath);
     const filename = path.join(await realpath(path.dirname(path.resolve(coursePath))), "course.lock.json");
     if (filename === input || path.basename(coursePath) === "course.lock.json") {
@@ -67,25 +84,46 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
     } finally {
       await rm(temporary, { force: true });
     }
-    write(JSON.stringify({ ok: true, courseId: lock.courseId, status: lock.status, lockPath: filename, topics: lock.topics.length }, null, 2));
+    write(JSON.stringify({
+      ok: true,
+      courseId: lock.courseId,
+      status: lock.status,
+      lockPath: filename,
+      topics: lock.topics.length
+    }, null, 2));
     return 0;
   }
   const [command, directory, destination] = args;
-  if (!["validate", "bundle"].includes(command) || !directory || (command === "bundle" && !destination) || args.length !== (command === "bundle" ? 3 : 2)) {
+  if (!["validate", "bundle"].includes(command) ||
+      !directory ||
+      (command === "bundle" && !destination) ||
+      args.length !== (command === "bundle" ? 3 : 2)) {
     throw new Error("Usage: vibe64 training validate <topic-directory> | bundle <topic-directory> <new-output-directory>");
   }
   const source = await realpath(directory);
   // The installer bundles installed topics with this same command.
   const result = await validateTopic(source, { authoring: command === "validate" });
-  const manifest = { schemaVersion: 1, topic: result.topic, release: result.release, topicHash: result.topicHash,
-    topicManifest: result.topicManifest, lessons: result.bundles.map(({ lesson, hash, status, required, manifest: lessonManifest }) => ({
-    code: lesson.code, hash, status, required, manifest: lessonManifest
-  })) };
+  const manifest = {
+    schemaVersion: 1,
+    topic: result.topic,
+    release: result.release,
+    topicHash: result.topicHash,
+    topicManifest: result.topicManifest,
+    lessons: result.bundles.map(({ lesson, hash, status, required, manifest: lessonManifest }) => ({
+      code: lesson.code,
+      hash,
+      status,
+      required,
+      manifest: lessonManifest
+    }))
+  };
   if (command === "bundle") {
     const requestedOutput = path.resolve(destination);
     const output = path.join(await realpath(path.dirname(requestedOutput)), path.basename(requestedOutput));
     const relative = path.relative(source, output);
-    if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) throw new Error("Bundle output must be outside the source topic.");
+    if (!relative || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))) {
+      throw new Error("Bundle output must be outside the source topic.");
+    }
     // Exclusive directory creation preserves existing output. The completion manifest is written last.
     await mkdir(output);
     try {
@@ -103,9 +141,19 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
       throw error;
     }
   }
-  write(JSON.stringify({ ok: true, topicId: result.topic.topicId, status: result.topic.status,
-    lessons: result.bundles.map(({ lesson, hash, status }) => ({ code: lesson.code, hash, status, schemaVersion: lesson.schemaVersion,
-      ...lesson.stage ? { stage: lesson.stage } : {}, ...lessonHasSteps(lesson) ? { steps: lesson.steps.length } : {} })) }, null, 2));
+  write(JSON.stringify({
+    ok: true,
+    topicId: result.topic.topicId,
+    status: result.topic.status,
+    lessons: result.bundles.map(({ lesson, hash, status }) => ({
+      code: lesson.code,
+      hash,
+      status,
+      schemaVersion: lesson.schemaVersion,
+      ...lesson.stage ? { stage: lesson.stage } : {},
+      ...lessonHasSteps(lesson) ? { steps: lesson.steps.length } : {}
+    }))
+  }, null, 2));
   return 0;
 }
 

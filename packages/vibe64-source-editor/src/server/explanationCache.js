@@ -1,6 +1,13 @@
 import { normalizeText } from "@local/vibe64-core/server/core";
 
-import { describeSourceEditorAgentProvider, requiredSourceEditorExecutionProfile, resolveSourceEditorAgentExecutionProfile, SOURCE_EDITOR_EXPLANATION_EXECUTION_PROFILE, sourceEditorExecutionProfileIdentity, sourceEditorExecutionProfileSnapshot } from "./explanationProfile.js";
+import {
+  describeSourceEditorAgentProvider,
+  requiredSourceEditorExecutionProfile,
+  resolveSourceEditorAgentExecutionProfile,
+  SOURCE_EDITOR_EXPLANATION_EXECUTION_PROFILE,
+  sourceEditorExecutionProfileIdentity,
+  sourceEditorExecutionProfileSnapshot
+} from "./explanationProfile.js";
 import { normalizeSourceEditorExplanation } from "./explanationRecords.js";
 import { positiveInteger, sourceEditorExplanationSummary } from "./explanationText.js";
 import { readSourceEditorFile, sourceEditorError } from "./sourceFiles.js";
@@ -61,8 +68,8 @@ function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger
   // Reuse the existing private cache for on-demand file overviews and exact
   // function pseudocode. Neither interpretation changes the authored Program.
   const range = input.range;
-  if (!(range.scope === 'file' && range.presentation === 'description')
-    && !(range.scope === 'selection' && range.presentation === 'steps' && range.symbolId)) return {};
+  if (!(range.scope === "file" && range.presentation === "description")
+    && !(range.scope === "selection" && range.presentation === "steps" && range.symbolId)) return {};
   return {
     readCompleted: () => readSourceInterpretation(context, input, cacheKey).catch(() => null),
     writeCompleted: async (template, currentGeneration) => {
@@ -72,7 +79,7 @@ function sourceEditorInterpretationCacheOptions(context, input, cacheKey, logger
       } catch (error) {
         // Saving an optional interpretation must not fail a completed Helper
         // conversation or replace its existing stop/recovery lifecycle.
-        logger.warn('Source interpretation could not be saved.', { path: input.range.path, error });
+        logger.warn("Source interpretation could not be saved.", { path: input.range.path, error });
       }
     }
   };

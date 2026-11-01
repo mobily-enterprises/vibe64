@@ -23,7 +23,13 @@ const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
  * @param {RuntimeEnv} dependencies.env
  * @param {RecordSessionGitCommandActor} dependencies.recordGitActor
  */
-export function createOpenCodeInteractiveTerminals({ sharedRuntime, contextFor, hostPreparation, env, recordGitActor }) {
+export function createOpenCodeInteractiveTerminals({
+  sharedRuntime,
+  contextFor,
+  hostPreparation,
+  env,
+  recordGitActor
+}) {
   const { processes } = sharedRuntime;
   const { prepareProcess, upstreamSessionOptions, storedUpstreamSessionId } = hostPreparation;
 
@@ -109,5 +115,13 @@ export function createOpenCodeInteractiveTerminals({ sharedRuntime, contextFor, 
     return writeTerminalSessionText(terminalSessionId, data, { namespace });
   }
 
-  return Object.freeze({ startTerminal, readTerminal, closeTerminal, subscribeTerminal, resizeTerminal, writeTerminal, terminalHost });
+  return Object.freeze({
+    startTerminal,
+    readTerminal,
+    closeTerminal,
+    subscribeTerminal,
+    resizeTerminal,
+    writeTerminal,
+    terminalHost
+  });
 }

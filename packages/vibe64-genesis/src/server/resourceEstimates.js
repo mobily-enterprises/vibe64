@@ -100,7 +100,11 @@ function parseVibe64ResourceEstimatesLines(lines, {
     const field = source.match(/^- ([A-Za-z ]+): `([1-9][0-9]*)`$/u);
     const name = field && FIELDS.get(field[1]);
     if (!current || !name) {
-      invalid(resourcePath, `Expected an Output or Workspace setup heading followed by positive integer MiB estimates: ${[...FIELDS.keys()].map((label) => `- ${label}: \`number\``).join("; ")}.`, line);
+      invalid(
+        resourcePath,
+        `Expected an Output or Workspace setup heading followed by positive integer MiB estimates: ${[...FIELDS.keys()].map((label) => `- ${label}: \`number\``).join("; ")}.`,
+        line
+      );
     }
     if (current.fields.has(name)) invalid(resourcePath, `Duplicate resource field: ${field[1]}.`, line);
     const mib = Number(field[2]);

@@ -29,7 +29,15 @@ const LEARN_WATCH_REFUSAL = "In Learn mode Colleague watches only this lesson's 
  * @param {ColleagueThreads} dependencies.threads
  * @param {ColleagueWorker} dependencies.worker
  */
-function createColleagueWatches({ events, watchSources, watchDebounceMs, serviceState, records, threads, worker }) {
+function createColleagueWatches({
+  events,
+  watchSources,
+  watchDebounceMs,
+  serviceState,
+  records,
+  threads,
+  worker
+}) {
   function changeWatches(state, operation) {
     const admitted = state.watchAdmission.then(operation);
     state.watchAdmission = admitted.catch(() => {});
@@ -127,22 +135,37 @@ function createColleagueWatches({ events, watchSources, watchDebounceMs, service
           throw failure(`A ${source.label} watch reports ${Object.keys(source.conditions).join(", ")}.`, "vibe64_colleague_failed", 422);
         }
         const target = watchedInput ? { source: input.source, input: watchedInput, projectSlug: watchedInput.projectSlug || "" }
-          : { ...(input.source ? { source: input.source } : {}), projectSlug: input.projectSlug, sessionId: input.sessionId,
-            conversationId: input.conversationId || "" };
+          : {
+            ...(input.source ? { source: input.source } : {}),
+            projectSlug: input.projectSlug,
+            sessionId: input.sessionId,
+            conversationId: input.conversationId || ""
+          };
         const existing = state.record.watches.find((watch) => watch.watchId === input.watchId);
         if (existing) {
           if (["source", "projectSlug", "sessionId", "conversationId"].some(key => (existing[key] || "") !== (target[key] || "")) ||
               !isDeepStrictEqual(existing.input || null, target.input || null) ||
               ["condition", "question"].some(key => (existing[key] || "") !== (input[key] || "")) ||
-              (existing.once !== false) !== (input.once !== false)) throw failure("This watch ID belongs to a different request. Use a new watch ID.");
+              (existing.once !== false) !== (input.once !== false)) throw failure(
+                "This watch ID belongs to a different request. Use a new watch ID."
+              );
           return { ok: true, watch: publicWatch(existing) };
         }
         if (input.source && !source) throw failure("Colleague cannot watch that here.", "vibe64_colleague_failed", 422);
         if (state.thread.kind === "learn") await assertLearnWatchTarget(state, context, target.projectSlug);
-        if (state.record.watches.filter((watch) => ["active", "pending", "paused"].includes(watch.status)).length >= 16) throw failure("Cancel an existing watch before adding another; up to 16 can be retained.");
+        if (state.record.watches.filter((watch) => ["active", "pending", "paused"].includes(watch.status)).length >= 16) {
+          throw failure("Cancel an existing watch before adding another; up to 16 can be retained.");
+        }
         state.requestContext = context;
-        const watch = { watchId: input.watchId, ...target, condition: input.condition, question: input.question,
-          once: input.once !== false, status: "active", error: "" };
+        const watch = {
+          watchId: input.watchId,
+          ...target,
+          condition: input.condition,
+          question: input.question,
+          once: input.once !== false,
+          status: "active",
+          error: ""
+        };
         // Verify access before retaining the target or admitting a notification.
         await worker.observeWatch(state, watch);
         state.record.watches = state.record.watches.filter((item) => !["delivered", "cancelled"].includes(item.status)).concat(watch);
@@ -158,7 +181,11 @@ function createColleagueWatches({ events, watchSources, watchDebounceMs, service
         const watch = state.record.watches.find((item) => item.watchId === input.watchId);
         if (watch) {
           watch.status = "cancelled";
-          suspendAssignment(state.record, watch.assignmentId, "Assignment watching was cancelled. Ask Colleague to resume or cancel the assignment.");
+          suspendAssignment(
+            state.record,
+            watch.assignmentId,
+            "Assignment watching was cancelled. Ask Colleague to resume or cancel the assignment."
+          );
         }
         await suppressWatchObservation(state, input.watchId);
         return { ok: true };

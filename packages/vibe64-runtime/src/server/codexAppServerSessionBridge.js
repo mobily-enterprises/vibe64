@@ -573,7 +573,12 @@ function codexAppServerThreadPreparationForSession({
       clearPause() { return runtime.store.writeMetadataValue(session.sessionId, "codex_changeover_pause_goal", ""); },
       write({ appServerRuntime, threadId, toolSchemaIdentity, workdir: threadWorkdir }) {
         return writeCodexAppServerIdentityMetadata({
-          appServerRuntime, runtime, sessionId: session.sessionId, threadId, toolSchemaIdentity, workdir: threadWorkdir
+          appServerRuntime,
+          runtime,
+          sessionId: session.sessionId,
+          threadId,
+          toolSchemaIdentity,
+          workdir: threadWorkdir
         });
       }
     },
@@ -603,7 +608,13 @@ async function sendCodexAppServerPromptForSession({
   workdir = ""
 } = {}) {
   return sendCodexAppServerPrompt({
-    attachments, clientUserMessageId, outputSchema, provider, prompt, threadId, readOnly
+    attachments,
+    clientUserMessageId,
+    outputSchema,
+    provider,
+    prompt,
+    threadId,
+    readOnly
   }, {
     get turnSettings() { return codexAppServerTurnSettings({ agentSettings, cwd: workdir }); }
   });

@@ -63,18 +63,53 @@ import { aiReadyFact, registerLearningFact } from "./learningFacts.js";
  * @param {TrainingLearningSpace} dependencies.learningSpace
  * @param {RuntimeEvents | null} [dependencies.events]
  */
-function createTraining({ catalogue, courseInstaller, content, learners, exercises, checks, codeAuthorship, steps,
-  learningSpace, events }) {
-  return Object.freeze({ catalogue, courseInstaller, content, learners, exercises, checks, codeAuthorship, steps,
-    learningSpace, publishLearnerChanged: createTrainingLearnerChangedPublisher(events) });
+function createTraining({
+  catalogue,
+  courseInstaller,
+  content,
+  learners,
+  exercises,
+  checks,
+  codeAuthorship,
+  steps,
+  learningSpace,
+  events
+}) {
+  return Object.freeze({
+    catalogue,
+    courseInstaller,
+    content,
+    learners,
+    exercises,
+    checks,
+    codeAuthorship,
+    steps,
+    learningSpace,
+    publishLearnerChanged: createTrainingLearnerChangedPublisher(events)
+  });
 }
 
 const Vibe64TrainingProvider = defineFeature({
-  id: "vibe64.training", domain: "vibe64-training",
-  requires: { env: "runtime.env", logger: "runtime.logger", http: "runtime.http", project: "vibe64.project", sessions: "vibe64.sessions", terminals: "vibe64.terminals" },
-  optional: { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" },
+  id: "vibe64.training",
+  domain: "vibe64-training",
+  requires: {
+    env: "runtime.env",
+    logger: "runtime.logger",
+    http: "runtime.http",
+    project: "vibe64.project",
+    sessions: "vibe64.sessions",
+    terminals: "vibe64.terminals"
+  },
+  optional: {
+    trainingHost: "vibe64.training.host",
+    sourceEditor: "vibe64.source-editor",
+    events: "runtime.events"
+  },
   provides: { training: "vibe64.training" },
-  actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
+  actionDefaults: {
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"]
+  },
   /**
    * @param {object} capabilities
    * @param {RuntimeEnv} capabilities.env
@@ -88,7 +123,17 @@ const Vibe64TrainingProvider = defineFeature({
    * @param {RuntimeEvents | null} capabilities.events
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
-  setup({ env, logger, http, project, sessions, terminals, trainingHost, sourceEditor, events }, { actionCatalogue }) {
+  setup({
+    env,
+    logger,
+    http,
+    project,
+    sessions,
+    terminals,
+    trainingHost,
+    sourceEditor,
+    events
+  }, { actionCatalogue }) {
     registerTrainingRoutes(http);
     registerTrainingVisualResourceRoutes(http);
     // Built-in fact readers, for every host (a host adds its own by composition).
@@ -99,16 +144,41 @@ const Vibe64TrainingProvider = defineFeature({
     const systemRoot = projectContext.systemRoot;
     const catalogue = createInstalledTrainingCatalogue({ systemRoot });
     // The official catalogue repository is server configuration, never a request input.
-    const courseInstaller = createTrainingCourseInstaller({ systemRoot, catalogue,
-      repository: env?.VIBE64_LEARNING_CATALOG_REPOSITORY });
+    const courseInstaller = createTrainingCourseInstaller({
+      systemRoot,
+      catalogue,
+      repository: env?.VIBE64_LEARNING_CATALOG_REPOSITORY
+    });
     const content = createInstalledTrainingContent({ systemRoot });
     const learners = createTrainingLearnerState({ systemRoot, content });
     const projectRepositoryService = createManagedProjectRepositoryService({ projectContext, projectService: project });
-    const codeAuthorship = createTrainingCodeAuthorship({ learners, content, project });
-    const checks = createTrainingDeclaredCheckOwner({ learners, content, project, terminals });
+    const codeAuthorship = createTrainingCodeAuthorship({
+      learners,
+      content,
+      project
+    });
+    const checks = createTrainingDeclaredCheckOwner({
+      learners,
+      content,
+      project,
+      terminals
+    });
     // Version 2 step results; the action layer supplies the action executor.
-    const steps = createTrainingStepChecks({ learners, content, checks, authorship: codeAuthorship, actions: actionCatalogue,
-      evidence: createTrainingStepEvidence({ project, actions: actionCatalogue }), reviewer: createTrainingStepReviewer({ learners, terminals }) });
+    const steps = createTrainingStepChecks({
+      learners,
+      content,
+      checks,
+      authorship: codeAuthorship,
+      actions: actionCatalogue,
+      evidence: createTrainingStepEvidence({
+        project,
+        actions: actionCatalogue
+      }),
+      reviewer: createTrainingStepReviewer({
+        learners,
+        terminals
+      })
+    });
     /**
      * A browser-supplied actor is never local authority. Retain the original
      * transport check without a host's signed-in-user alternative.
@@ -135,24 +205,66 @@ const Vibe64TrainingProvider = defineFeature({
       onReadFailure: error => logger.warn({ error: String(error?.message || error) }, "Learn mode could not be read; Develop applies.")
     });
     // The standalone project archive service; a host supplies its own through trainingHost.
-    const projectArchive = createProjectArchiveService({ projectContext,
+    const projectArchive = createProjectArchiveService({
+      projectContext,
       closeProjectRuntime: ({ slug, reason }) => project.runInProjectContext(slug, () => terminals.closeProjectRuntime({ reason }),
-        { allowDeleting: true }) });
-    const learningSpace = createTrainingLearningSpace({ learners, content, projectContext, projectArchive });
-    const exercises = createTrainingService({ catalogue, content, learners, learningSpace, projectContext, projectRepositoryService, project, sessions, terminals });
+        { allowDeleting: true })
+    });
+    const learningSpace = createTrainingLearningSpace({
+      learners,
+      content,
+      projectContext,
+      projectArchive
+    });
+    const exercises = createTrainingService({
+      catalogue,
+      content,
+      learners,
+      learningSpace,
+      projectContext,
+      projectRepositoryService,
+      project,
+      sessions,
+      terminals
+    });
     // The learner's ordinary Files editor saves in a practice project record
     // code authorship through the original ledger owner.
     sourceEditor?.setFileSaveOwner(createTrainingCodeSaveOwner({ authorship: codeAuthorship }));
-    return { training: createTraining({ catalogue, courseInstaller, content, learners, exercises, checks, codeAuthorship, steps,
-      learningSpace, events }) };
+    return {
+      training: createTraining({
+        catalogue,
+        courseInstaller,
+        content,
+        learners,
+        exercises,
+        checks,
+        codeAuthorship,
+        steps,
+        learningSpace,
+        events
+      })
+    };
   },
   actions({ training, trainingHost }) {
     if (trainingHost) return [];
-    return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners, content: training.content,
-      exercises: training.exercises, courseInstaller: training.courseInstaller, learningSpace: training.learningSpace,
-      publishLearnerChanged: training.publishLearnerChanged }),
-    ...createTrainingStepActions({ learners: training.learners, attemptLearners: training.learners, content: training.content, steps: training.steps,
-      exercises: training.exercises, learningSpace: training.learningSpace, publishLearnerChanged: training.publishLearnerChanged }),
+    return [...createTrainingActions({
+      catalogue: training.catalogue,
+      learners: training.learners,
+      content: training.content,
+      exercises: training.exercises,
+      courseInstaller: training.courseInstaller,
+      learningSpace: training.learningSpace,
+      publishLearnerChanged: training.publishLearnerChanged
+    }),
+    ...createTrainingStepActions({
+      learners: training.learners,
+      attemptLearners: training.learners,
+      content: training.content,
+      steps: training.steps,
+      exercises: training.exercises,
+      learningSpace: training.learningSpace,
+      publishLearnerChanged: training.publishLearnerChanged
+    }),
     ...createTrainingLearnerNotesActions({ learners: training.learners, publishLearnerChanged: training.publishLearnerChanged }),
     ...createTrainingVisualResourceActions({ learners: training.learners, content: training.content })];
   }

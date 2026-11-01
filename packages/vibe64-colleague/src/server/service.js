@@ -30,21 +30,82 @@ import { createColleagueTurns } from "./colleagueTurns.js";
  * @param {number} [dependencies.watchPollMs]
  * @param {number} [dependencies.watchDebounceMs]
  */
-function createColleagueService({ actions, accounts, terminals, systemRoot, events, resolveName, watchPollMs = 30000, watchDebounceMs = 250 }) {
+function createColleagueService({
+  actions,
+  accounts,
+  terminals,
+  systemRoot,
+  events,
+  resolveName,
+  watchPollMs = 30000,
+  watchDebounceMs = 250
+}) {
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("Colleague needs the private application system root.");
   const serviceState = createColleagueServiceState();
-  const records = createColleagueRecords({ actions, terminals, events, serviceState });
-  const threads = createColleagueThreads({ systemRoot, serviceState, records });
-  const conversations = createColleagueConversations({ actions, accounts, terminals, serviceState, records, threads });
+  const records = createColleagueRecords({
+    actions,
+    terminals,
+    events,
+    serviceState
+  });
+  const threads = createColleagueThreads({
+    systemRoot,
+    serviceState,
+    records
+  });
+  const conversations = createColleagueConversations({
+    actions,
+    accounts,
+    terminals,
+    serviceState,
+    records,
+    threads
+  });
   const watchSources = createWatchSources();
   const worker = createColleagueWorker({
-    actions, terminals, watchSources, watchPollMs, watchDebounceMs, serviceState, records, threads, conversations, resolveName
+    actions,
+    terminals,
+    watchSources,
+    watchPollMs,
+    watchDebounceMs,
+    serviceState,
+    records,
+    threads,
+    conversations,
+    resolveName
   });
-  const watches = createColleagueWatches({ events, watchSources, watchDebounceMs, serviceState, records, threads, worker });
-  const history = createColleagueHistory({ serviceState, records, threads, worker, watches });
+  const watches = createColleagueWatches({
+    events,
+    watchSources,
+    watchDebounceMs,
+    serviceState,
+    records,
+    threads,
+    worker
+  });
+  const history = createColleagueHistory({
+    serviceState,
+    records,
+    threads,
+    worker,
+    watches
+  });
   const navigation = createColleagueFocusAndNavigation({ threads });
-  const browserConversations = createColleagueBrowserConversations({ actions, serviceState, records, threads, conversations });
-  const turns = createColleagueTurns({ terminals, serviceState, records, threads, conversations, worker });
+  const browserConversations = createColleagueBrowserConversations({
+    actions,
+    serviceState,
+    records,
+    threads,
+    conversations
+  });
+  const turns = createColleagueTurns({
+    terminals,
+    serviceState,
+    records,
+    threads,
+    conversations,
+    worker
+  });
 
   return Object.freeze({
     browserConversations,

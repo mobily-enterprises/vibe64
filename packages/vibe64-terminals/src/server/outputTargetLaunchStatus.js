@@ -25,7 +25,11 @@ import { readLaunchContext, listOutputTargets } from "./outputTargetLaunchContex
  * @param {OutputTargetLaunchCoordination} dependencies.launchCoordination
  * @param {ProjectService} dependencies.projectService
  */
-function createOutputTargetLaunchStatus({ state, launchCoordination, projectService }) {
+function createOutputTargetLaunchStatus({
+  state,
+  launchCoordination,
+  projectService
+}) {
   /**
    * The launch status of the session's outputs; launchStatus reads it under
    * the start lock and the session's admission.
@@ -137,7 +141,10 @@ function createOutputTargetLaunchStatus({ state, launchCoordination, projectServ
           id: target.id,
           label: target.label,
           parameters: (declared.get(target.id)?.parameters || []).map(({ default: defaultValue, id, label, required }) => ({
-            ...(defaultValue !== undefined ? { default: defaultValue } : {}), id, label, required: required === true
+            ...(defaultValue !== undefined ? { default: defaultValue } : {}),
+            id,
+            label,
+            required: required === true
           })),
           runtimes: normalizedRuntimeRequirements(declared.get(target.id)?.runtimeRequirements),
           web: isWeb(target)

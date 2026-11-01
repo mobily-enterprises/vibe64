@@ -1,13 +1,22 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { CONNECTED_CUSTOM_RUNNER_CONTRACT, CONNECTED_PACKAGE_TYPE_VALUES, connectedPackageTypeListText } from "@local/vibe64-genesis/shared/connectedPackageTypes";
+import {
+  CONNECTED_CUSTOM_RUNNER_CONTRACT,
+  CONNECTED_PACKAGE_TYPE_VALUES,
+  connectedPackageTypeListText
+} from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { previewApplicationIdentitySchema } from "./inputSchemas.js";
 
 const text = { type: "string", maxLength: 512, required: false };
 const flag = { type: "boolean", required: false };
 const preferenceKeys = ["experience", "explanationStyle", "responseLength", "tone"];
-const source = { type: "object", required: false, schema: createSchema({
-  rootKind: text, sessionId: { ...text, nullable: true }
-}) };
+const source = {
+  type: "object",
+  required: false,
+  schema: createSchema({
+    rootKind: text,
+    sessionId: { ...text, nullable: true }
+  })
+};
 const choiceFields = { id: { ...text, maxLength: 4096, noTrim: true, required: true }, name: text };
 const profileSchema = createSchema({ ...choiceFields, description: { ...text, maxLength: 1200 } });
 
@@ -31,50 +40,137 @@ function sourceSummary(value) {
 }
 
 function profileSummary(value) {
-  return { id: value.id, name: String(value.name || "").slice(0, 512),
-    description: String(value.description || "").slice(0, 1200) };
+  return {
+    id: value.id,
+    name: String(value.name || "").slice(0, 512),
+    description: String(value.description || "").slice(0, 1200)
+  };
 }
 
 export function settingsTool(operation) {
   return {
     description: descriptions[operation],
-    output: { mode: "replace", schema: createSchema({
-      ok: { type: "boolean", required: true }, error: text, code: text, projectSlug: text,
-      env: { type: "object", required: false, schema: createSchema({
-        environment: text, source, warning: flag, unavailable: flag, truncated: flag,
-        total: { type: "integer", required: true }, missingCount: { type: "integer", required: true },
-        records: { type: "array", required: true, items: createSchema({
-          key: { ...text, required: true }, owner: text, scope: text,
-          editable: flag, secret: flag, valuePresent: flag, missing: flag
-        }) }
-      }) },
-      connectedProjects: { type: "object", required: false, schema: createSchema({
-        available: flag, canEdit: flag, exists: flag, revision: text, source, unavailableReason: text,
-        projects: { type: "array", required: true, items: createSchema({ name: text, repository: text, relationship: text,
-          type: { type: "string", required: false, enum: [...CONNECTED_PACKAGE_TYPE_VALUES] },
-          script: { type: "string", required: false, noTrim: true, maxLength: 1024 } }) }
-      }) },
-      identities: { type: "array", items: previewApplicationIdentitySchema, required: false },
-      collaboration: { type: "object", required: false, schema: createSchema({
-        available: flag, canEdit: flag, status: text, unavailableReason: text, source,
-        ...Object.fromEntries(preferenceKeys.map((key) => [key, { ...text, maxLength: 4096, noTrim: true }])),
-        requirements: { ...text, maxLength: 12000, noTrim: true }, requirementsTruncated: flag,
-        choicesTruncated: flag,
-        choices: { type: "object", required: false, schema: createSchema(Object.fromEntries(preferenceKeys.map((key) => [key, {
-          type: "array", required: true, items: createSchema({ ...choiceFields, guidance: text })
-        }]))) }
-      }) },
-      engineering: { type: "object", required: false, schema: createSchema({
-        available: flag, status: text, unavailableReason: text, source,
-        profile: { type: "object", schema: profileSchema, nullable: true, required: true },
-        profiles: { type: "array", items: profileSchema, required: true }, profilesTruncated: flag
-      }) },
-      promptHints: { type: "object", required: false, schema: createSchema({ canEdit: flag, enabled: flag }) },
-      repositoryWorkflow: { type: "object", required: false, schema: createSchema({ available: flag, canEdit: flag, requirePullRequest: flag }) },
-      developmentDatabase: { type: "object", required: false, schema: createSchema({
-        scope: text, canChange: flag, managed: flag, allowSharedDatabaseSessions: flag, disabledReason: text, openSessionCount: { type: "integer", required: false }
-      }) }
-    }) },
+    output: {
+      mode: "replace",
+      schema: createSchema({
+        ok: { type: "boolean", required: true },
+        error: text,
+        code: text,
+        projectSlug: text,
+        env: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            environment: text,
+            source,
+            warning: flag,
+            unavailable: flag,
+            truncated: flag,
+            total: { type: "integer", required: true },
+            missingCount: { type: "integer", required: true },
+            records: {
+              type: "array",
+              required: true,
+              items: createSchema({
+                key: { ...text, required: true },
+                owner: text,
+                scope: text,
+                editable: flag,
+                secret: flag,
+                valuePresent: flag,
+                missing: flag
+              })
+            }
+          })
+        },
+        connectedProjects: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            available: flag,
+            canEdit: flag,
+            exists: flag,
+            revision: text,
+            source,
+            unavailableReason: text,
+            projects: {
+              type: "array",
+              required: true,
+              items: createSchema({
+                name: text,
+                repository: text,
+                relationship: text,
+                type: { type: "string", required: false, enum: [...CONNECTED_PACKAGE_TYPE_VALUES] },
+                script: { type: "string", required: false, noTrim: true, maxLength: 1024 }
+              })
+            }
+          })
+        },
+        identities: { type: "array", items: previewApplicationIdentitySchema, required: false },
+        collaboration: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            available: flag,
+            canEdit: flag,
+            status: text,
+            unavailableReason: text,
+            source,
+            ...Object.fromEntries(preferenceKeys.map((key) => [key, { ...text, maxLength: 4096, noTrim: true }])),
+            requirements: { ...text, maxLength: 12000, noTrim: true },
+            requirementsTruncated: flag,
+            choicesTruncated: flag,
+            choices: {
+              type: "object",
+              required: false,
+              schema: createSchema(Object.fromEntries(preferenceKeys.map((key) => [key, {
+                type: "array",
+                required: true,
+                items: createSchema({ ...choiceFields, guidance: text })
+              }])))
+            }
+          })
+        },
+        engineering: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            available: flag,
+            status: text,
+            unavailableReason: text,
+            source,
+            profile: { type: "object", schema: profileSchema, nullable: true, required: true },
+            profiles: { type: "array", items: profileSchema, required: true },
+            profilesTruncated: flag
+          })
+        },
+        promptHints: { type: "object", required: false, schema: createSchema({ canEdit: flag, enabled: flag }) },
+        repositoryWorkflow: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            available: flag,
+            canEdit: flag,
+            requirePullRequest: flag
+          })
+        },
+        developmentDatabase: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            scope: text,
+            canChange: flag,
+            managed: flag,
+            allowSharedDatabaseSessions: flag,
+            disabledReason: text,
+            openSessionCount: {
+              type: "integer",
+              required: false
+            }
+          })
+        }
+      })
+    },
     transformResult(result) {
       const output = { ok: result.ok === true };
       const failure = { error: result.error || result.errors?.[0]?.message, code: result.code || result.errors?.[0]?.code };
@@ -84,25 +180,40 @@ export function settingsTool(operation) {
         const value = result.env;
         const records = value.records || [];
         output.env = {
-          environment: value.environment, source: sourceSummary(value.configSource),
-          warning: Boolean(value.stackWarning), unavailable: Boolean(value.unavailable),
-          total: records.length, missingCount: records.filter((record) => record.missing === true).length,
+          environment: value.environment,
+          source: sourceSummary(value.configSource),
+          warning: Boolean(value.stackWarning),
+          unavailable: Boolean(value.unavailable),
+          total: records.length,
+          missingCount: records.filter((record) => record.missing === true).length,
           truncated: records.length > 100 || records.some((record) => record.key.length > 512),
           records: records.slice(0, 100).map((record) => ({
-            key: record.key.slice(0, 512), owner: record.owner, scope: record.scope,
-            editable: record.editable, secret: record.secret, valuePresent: record.valuePresent, missing: record.missing
+            key: record.key.slice(0, 512),
+            owner: record.owner,
+            scope: record.scope,
+            editable: record.editable,
+            secret: record.secret,
+            valuePresent: record.valuePresent,
+            missing: record.missing
           }))
         };
       }
       if (result.connectedProjects) {
         const value = result.connectedProjects;
         output.connectedProjects = {
-          available: value.available, canEdit: value.canEdit, source: sourceSummary(value.source),
+          available: value.available,
+          canEdit: value.canEdit,
+          source: sourceSummary(value.source),
           ...(typeof value.exists === "boolean" ? { exists: value.exists } : {}),
           ...(typeof value.revision === "string" ? { revision: value.revision } : {}),
           unavailableReason: String(value.unavailableReason || "").slice(0, 512),
-          projects: (value.projects || []).map(({ name, repository, relationship, type, script }) => ({ name, repository, relationship,
-            ...(type === undefined ? {} : { type }), ...(script === undefined ? {} : { script }) }))
+          projects: (value.projects || []).map(({ name, repository, relationship, type, script }) => ({
+            name,
+            repository,
+            relationship,
+            ...(type === undefined ? {} : { type }),
+            ...(script === undefined ? {} : { script })
+          }))
         };
       }
       if (Array.isArray(result.identities)) output.identities = result.identities.map(({ name, type, value }) => ({ name, type, value }));
@@ -110,23 +221,31 @@ export function settingsTool(operation) {
         const value = result.collaboration;
         const requirements = String(value.requirements || "");
         output.collaboration = {
-          available: value.available, canEdit: value.canEdit, status: value.status,
+          available: value.available,
+          canEdit: value.canEdit,
+          status: value.status,
           unavailableReason: String(value.unavailableReason || "").slice(0, 512),
           source: sourceSummary(value.source),
           ...Object.fromEntries(preferenceKeys.map((key) => [key, value[key]])),
-          requirements: requirements.slice(0, 12000), requirementsTruncated: requirements.length > 12000,
+          requirements: requirements.slice(0, 12000),
+          requirementsTruncated: requirements.length > 12000,
           choicesTruncated: preferenceKeys.some((key) => (value.choices[key] || []).length > 20 ||
-            (value.choices[key] || []).some((choice) => String(choice.name || "").length > 512 || String(choice.guidance || "").length > 512)),
+            (value.choices[key] || []).some((choice) =>
+              String(choice.name || "").length > 512 || String(choice.guidance || "").length > 512)),
           choices: Object.fromEntries(preferenceKeys.map((key) => [key, (value.choices[key] || []).slice(0, 20).map((choice) => ({
-            id: choice.id, name: String(choice.name || "").slice(0, 512), guidance: String(choice.guidance || "").slice(0, 512)
+            id: choice.id,
+            name: String(choice.name || "").slice(0, 512),
+            guidance: String(choice.guidance || "").slice(0, 512)
           }))]))
         };
       }
       if (result.engineering) {
         const value = result.engineering;
-        output.engineering = { available: value.available,
+        output.engineering = {
+          available: value.available,
           ...(typeof value.status === "string" ? { status: value.status } : {}),
-          unavailableReason: String(value.unavailableReason || "").slice(0, 512), source: sourceSummary(value.source),
+          unavailableReason: String(value.unavailableReason || "").slice(0, 512),
+          source: sourceSummary(value.source),
           profile: value.profile ? profileSummary(value.profile) : null,
           profiles: value.profiles.slice(0, 20).map(profileSummary),
           profilesTruncated: value.profiles.length > 20 || [value.profile, ...value.profiles].filter(Boolean).some((profile) =>
@@ -143,11 +262,14 @@ export function settingsTool(operation) {
       const database = operation === "development-database.scope.save" && result.ok === true ? result : result.developmentDatabase;
       if (database) {
         const value = database;
-        output.developmentDatabase = { scope: value.scope, managed: value.managed,
+        output.developmentDatabase = {
+          scope: value.scope,
+          managed: value.managed,
           ...(value.managed ? { allowSharedDatabaseSessions: value.allowSharedDatabaseSessions === true } : {}),
           disabledReason: String(value.disabledReason || "").slice(0, 512),
           ...(typeof value.canChange === "boolean" ? { canChange: value.canChange } : {}),
-          ...(Number.isInteger(value.openSessionCount) ? { openSessionCount: value.openSessionCount } : {}) };
+          ...(Number.isInteger(value.openSessionCount) ? { openSessionCount: value.openSessionCount } : {})
+        };
       }
       return output;
     }

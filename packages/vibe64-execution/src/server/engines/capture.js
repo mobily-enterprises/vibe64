@@ -160,7 +160,9 @@ async function runCaptureCommand(command = "", args = [], {
   const finishedExecution = execution ? { ...execution, state: "finished" } : execution;
   if (signal?.aborted) {
     return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", {
-      ...outcome, execution: finishedExecution, outputEncoding
+      ...outcome,
+      execution: finishedExecution,
+      outputEncoding
     });
   }
   return finishedExecution ? { ...outcome, execution: finishedExecution } : outcome;

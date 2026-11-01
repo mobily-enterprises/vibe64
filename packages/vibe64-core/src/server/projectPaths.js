@@ -2,8 +2,19 @@ import path from "node:path";
 
 import { relativePathInside } from "./core.js";
 import { currentPracticeProjectScope } from "./practiceContext.js";
-import { normalizeProjectSlug, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR, resolveProjectRecordPath, resolveProjectRuntimeRoot, resolveSourceConfigRoot } from "./projectState.js";
-import { localProjectKeyFromTargetRoot, normalizeRoot, resolveCatalogProjectRuntimeRoot, resolveProjectContextRoot } from "./studioProjectRecords.js";
+import {
+  normalizeProjectSlug,
+  EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
+  resolveProjectRecordPath,
+  resolveProjectRuntimeRoot,
+  resolveSourceConfigRoot
+} from "./projectState.js";
+import {
+  localProjectKeyFromTargetRoot,
+  normalizeRoot,
+  resolveCatalogProjectRuntimeRoot,
+  resolveProjectContextRoot
+} from "./studioProjectRecords.js";
 
 /**
  * Where each project's context, record, runtime and sources live, by slug or
@@ -15,7 +26,13 @@ import { localProjectKeyFromTargetRoot, normalizeRoot, resolveCatalogProjectRunt
  * @param {string} dependencies.projectsRoot
  * @param {string} dependencies.systemRoot
  */
-function createProjectPaths({ managedSourceRoot, practiceOwner, projectCatalogEnabled, projectsRoot, systemRoot }) {
+function createProjectPaths({
+  managedSourceRoot,
+  practiceOwner,
+  projectCatalogEnabled,
+  projectsRoot,
+  systemRoot
+}) {
   function practiceScope(slug) {
     const scope = currentPracticeProjectScope(practiceOwner);
     if (scope && slug !== undefined && normalizeProjectSlug(slug) !== scope.slug) {
@@ -136,7 +153,19 @@ function createProjectPaths({ managedSourceRoot, practiceOwner, projectCatalogEn
       : "";
   }
 
-  return Object.freeze({ practiceScope, targetIsCatalogProjectHome, projectContextRootForSlug, projectRecordPathForSlug, projectRecordPathForTarget, projectRuntimeRootForSlug, projectRuntimeRootForTarget, projectSessionSourceRootForSlug, projectSessionSourceRootForTarget, sourceRootForTarget, sourceConfigRootForTarget });
+  return Object.freeze({
+    practiceScope,
+    targetIsCatalogProjectHome,
+    projectContextRootForSlug,
+    projectRecordPathForSlug,
+    projectRecordPathForTarget,
+    projectRuntimeRootForSlug,
+    projectRuntimeRootForTarget,
+    projectSessionSourceRootForSlug,
+    projectSessionSourceRootForTarget,
+    sourceRootForTarget,
+    sourceConfigRootForTarget
+  });
 }
 
 export { createProjectPaths };

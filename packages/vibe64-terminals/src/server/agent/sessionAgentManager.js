@@ -61,7 +61,12 @@ function createSessionAgentManager({
   }
   const state = createSessionAgentManagerState({ defaultProviderId, providerById });
   const sessionBindings = createSessionAgentBindings({ state });
-  const accessChecks = createSessionAgentAccess({ sessionBindings, readAssistantAccess, readProviderUsage, resolveAssistantUser });
+  const accessChecks = createSessionAgentAccess({
+    sessionBindings,
+    readAssistantAccess,
+    readProviderUsage,
+    resolveAssistantUser
+  });
   const conversationOperations = createSessionAgentConversationOperations({ conversationRuntime });
   const providerCalls = createSessionAgentProviderCalls({
     state,
@@ -77,7 +82,11 @@ function createSessionAgentManager({
     readRoutingConfiguration,
     resolveAssistantUser
   });
-  const goals = createSessionAgentGoals({ sessionBindings, accessChecks, conversationOperations });
+  const goals = createSessionAgentGoals({
+    sessionBindings,
+    accessChecks,
+    conversationOperations
+  });
   const lifecycle = createSessionAgentLifecycle({
     state,
     sessionBindings,
@@ -104,8 +113,13 @@ function createSessionAgentManager({
     const executionProfile = input.executionProfile;
     if (!executionProfile) throw new TypeError("A bounded assistant turn requires an execution profile.");
     const profileSnapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-    return conversationRuntime.runScopedTurn({ operations: scopedTurnOperations, scope, input, context: options,
-      executionProfile: profileSnapshot });
+    return conversationRuntime.runScopedTurn({
+      operations: scopedTurnOperations,
+      scope,
+      input,
+      context: options,
+      executionProfile: profileSnapshot
+    });
   }
 
   const manager = Object.freeze({

@@ -17,12 +17,21 @@ function goalOptions(options) {
   const pinned = assistantRoutingGoalFromMetadata(options.session?.metadata);
   if (!pinned?.selection || goalStatusIsComplete(pinned.status)) return options;
   const selection = defineVibe64AssistantSelection(pinned.selection);
-  return { ...options, assistantSelection: selection, session: { ...options.session,
-    metadata: { ...options.session.metadata, [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(selection) } } };
+  return {
+    ...options,
+    assistantSelection: selection,
+    session: {
+      ...options.session,
+      metadata: { ...options.session.metadata, [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(selection) }
+    }
+  };
 }
 
 function requireCanonicalGoalSupport(provider, options) {
-  if (options.canonicalGoal && !CANONICAL_GOAL_ENGINE_IDS.has(provider.id)) throw Object.assign(new Error("Canonical goal policy is not connected for this assistant."), {
+  if (options.canonicalGoal && !CANONICAL_GOAL_ENGINE_IDS.has(provider.id)) throw Object.assign(new Error(
+    "Canonical goal policy is not connected for this assistant."
+  ),
+    {
     code: "conversation_unsupported"
   });
 }
@@ -36,7 +45,11 @@ function requireCanonicalGoalSupport(provider, options) {
  * @param {SessionAgentAccess} dependencies.accessChecks
  * @param {SessionAgentConversationOperations} dependencies.conversationOperations
  */
-function createSessionAgentGoals({ sessionBindings, accessChecks, conversationOperations }) {
+function createSessionAgentGoals({
+  sessionBindings,
+  accessChecks,
+  conversationOperations
+}) {
   async function readGoal(sessionId, options = {}) {
     options = goalOptions(options);
     const provider = sessionBindings.goalProvider(sessionId, options);
@@ -51,10 +64,15 @@ function createSessionAgentGoals({ sessionBindings, accessChecks, conversationOp
       return null;
     }
     requireCanonicalGoalSupport(provider, options);
-    return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session,
+    return operation.call(provider, {
+      sessionId,
+      runtime: options.runtime,
+      session: options.session,
       ...(options.applicationTools ? { applicationTools: options.applicationTools } : {}),
       ...(options.canonicalGoal ? { canonicalGoal: true, onGoalResult: options.onGoalResult } : {}),
-      assistantSelection: sessionAssistantSelection(options), vibe64User: assistantUser(options) });
+      assistantSelection: sessionAssistantSelection(options),
+      vibe64User: assistantUser(options)
+    });
   }
 
   async function updateGoal(sessionId, input = {}, options = {}) {
@@ -76,11 +94,17 @@ function createSessionAgentGoals({ sessionBindings, accessChecks, conversationOp
       throw new TypeError("This assistant does not support goal controls.");
     }
     requireCanonicalGoalSupport(provider, options);
-    return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session, signal: options.signal,
+    return operation.call(provider, {
+      sessionId,
+      runtime: options.runtime,
+      session: options.session,
+      signal: options.signal,
       ...(options.browserAuthority ? { browserAuthority: options.browserAuthority } : {}),
       ...(options.applicationTools ? { applicationTools: options.applicationTools } : {}),
       ...(options.canonicalGoal ? { canonicalGoal: true, onGoalResult: options.onGoalResult } : {}),
-      assistantSelection: sessionAssistantSelection(options), vibe64User: authorization ? authorization.vibe64User : assistantUser(options) }, input);
+      assistantSelection: sessionAssistantSelection(options),
+      vibe64User: authorization ? authorization.vibe64User : assistantUser(options)
+    }, input);
   }
 
   return Object.freeze({

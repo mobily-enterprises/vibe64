@@ -12,7 +12,12 @@ import { failure, MAX_MODE_BYTES, modeSchema, readRecord } from "./learnerRecord
  * @param {(actor: object) => object} dependencies.userPaths
  * @param {(pin: object, options?: { admissionOnly?: boolean }) => Promise<object>} dependencies.verifyInstalled
  */
-function createLearnerMode({ createNamespace, loadState, userPaths, verifyInstalled }) {
+function createLearnerMode({
+  createNamespace,
+  loadState,
+  userPaths,
+  verifyInstalled
+}) {
   /**
    * Learn mode (Rev 4 H1): a saved per-learner flag, independent of any
    * lesson; absent means Develop. The current lesson is the attempt in
@@ -32,13 +37,24 @@ function createLearnerMode({ createNamespace, loadState, userPaths, verifyInstal
     const { progress } = await loadState(paths);
     let on;
     try { on = await readMode(paths); } catch (cause) {
-      throw failure("VIBE64_TRAINING_STATE_INVALID", `Learning mode is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`, null, { cause });
+      throw failure(
+        "VIBE64_TRAINING_STATE_INVALID",
+        `Learning mode is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`,
+        null,
+        { cause }
+      );
     }
     const attempt = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
     // lessonStage: where the lesson runs (format 3), read with its title; ""
     // for a retired format, which has none.
-    const mode = { on, currentAttemptId: attempt?.attemptId || "", lessonCode: attempt?.pin.lesson.code || "", lessonTitle: "",
-      lessonStage: "", practiceSlug: attempt?.preparation && attempt.preparation.phase !== "reserved" ? attempt.projectSlug : "" };
+    const mode = {
+      on,
+      currentAttemptId: attempt?.attemptId || "",
+      lessonCode: attempt?.pin.lesson.code || "",
+      lessonTitle: "",
+      lessonStage: "",
+      practiceSlug: attempt?.preparation && attempt.preparation.phase !== "reserved" ? attempt.projectSlug : ""
+    };
     if (attempt && includeTitle) {
       try {
         const { lesson } = await verifyInstalled(attempt.pin);

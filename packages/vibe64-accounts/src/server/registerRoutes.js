@@ -64,32 +64,70 @@ function registerRoutes(
   const bodyInput = (request) => withoutVibe64User(requestBody(request));
   const queryInput = (request) => withoutVibe64User(requestQuery(request));
   const operationOptions = {
-    read: { buildInput: queryInput, query: accountsReadInputValidator,
-      summary: "Read Vibe64 account readiness." },
-    "codex-providers.read": { buildInput: () => withoutVibe64User(),
-      summary: "Read curated Codex provider connections." },
-    "codex-providers.save": { body: codexProviderInputValidator, buildInput: bodyInput,
-      summary: "Check and connect a curated Codex provider." },
-    "codex-providers.remove": { body: codexProviderInputValidator, buildInput: bodyInput,
-      summary: "Disconnect a curated Codex provider." },
-    "model-routing.read": { query: modelRoutingReadInputValidator, buildInput: queryInput,
-      summary: "Read model roles, availability, and recommendations." },
-    "model-routing.save": { body: modelRoutingInputValidator, buildInput: bodyInput,
-      summary: "Save the workspace's owner and team AI setups." },
-    "model-routing.preview": { body: modelRoutingInputValidator, buildInput: bodyInput,
-      summary: "Preview the owner and team AI setups without saving or running AI." },
-    "auth.start": { body: accountAuthStartInputValidator, buildInput: bodyInput,
-      summary: "Start an Vibe64 account login flow." },
-    logout: { body: accountIdInputValidator, buildInput: bodyInput,
-      summary: "Log out an Vibe64 account." },
-    "git-identity.save": { body: gitIdentityInputValidator, buildInput: bodyInput,
-      summary: "Save the Git identity used for Vibe64 GitHub operations." },
-    "personal-ai-profile.save": { body: personalAiProfileInputValidator, buildInput: bodyInput,
-      summary: "Save the standalone Vibe64 personal AI profile." },
-    "auth-session.read": { buildInput: sessionInput, params: accountAuthSessionParamsValidator,
-      summary: "Read an Vibe64 account login session." },
-    "auth-session.cancel": { buildInput: sessionInput, params: accountAuthSessionParamsValidator,
-      summary: "Cancel an Vibe64 account login session." }
+    read: {
+      buildInput: queryInput,
+      query: accountsReadInputValidator,
+      summary: "Read Vibe64 account readiness."
+    },
+    "codex-providers.read": {
+      buildInput: () => withoutVibe64User(),
+      summary: "Read curated Codex provider connections."
+    },
+    "codex-providers.save": {
+      body: codexProviderInputValidator,
+      buildInput: bodyInput,
+      summary: "Check and connect a curated Codex provider."
+    },
+    "codex-providers.remove": {
+      body: codexProviderInputValidator,
+      buildInput: bodyInput,
+      summary: "Disconnect a curated Codex provider."
+    },
+    "model-routing.read": {
+      query: modelRoutingReadInputValidator,
+      buildInput: queryInput,
+      summary: "Read model roles, availability, and recommendations."
+    },
+    "model-routing.save": {
+      body: modelRoutingInputValidator,
+      buildInput: bodyInput,
+      summary: "Save the workspace's owner and team AI setups."
+    },
+    "model-routing.preview": {
+      body: modelRoutingInputValidator,
+      buildInput: bodyInput,
+      summary: "Preview the owner and team AI setups without saving or running AI."
+    },
+    "auth.start": {
+      body: accountAuthStartInputValidator,
+      buildInput: bodyInput,
+      summary: "Start an Vibe64 account login flow."
+    },
+    logout: {
+      body: accountIdInputValidator,
+      buildInput: bodyInput,
+      summary: "Log out an Vibe64 account."
+    },
+    "git-identity.save": {
+      body: gitIdentityInputValidator,
+      buildInput: bodyInput,
+      summary: "Save the Git identity used for Vibe64 GitHub operations."
+    },
+    "personal-ai-profile.save": {
+      body: personalAiProfileInputValidator,
+      buildInput: bodyInput,
+      summary: "Save the standalone Vibe64 personal AI profile."
+    },
+    "auth-session.read": {
+      buildInput: sessionInput,
+      params: accountAuthSessionParamsValidator,
+      summary: "Read an Vibe64 account login session."
+    },
+    "auth-session.cancel": {
+      buildInput: sessionInput,
+      params: accountAuthSessionParamsValidator,
+      summary: "Cancel an Vibe64 account login session."
+    }
   };
   for (const [method, suffix, operation] of [
     ["GET", "", "read"],

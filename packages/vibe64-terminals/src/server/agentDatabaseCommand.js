@@ -195,7 +195,10 @@ const commandServers = createSessionCommandServers({
   notFound: responseError("Unknown Vibe64 database command route.", "vibe64_agent_database_command_route_not_found"),
   rejection: {
     statusCode: 409,
-    payload: responseError("Managed database control generation is no longer current. Reconnect the assistant.", "vibe64_agent_control_unavailable")
+    payload: responseError(
+      "Managed database control generation is no longer current. Reconnect the assistant.",
+      "vibe64_agent_control_unavailable"
+    )
   },
   requestFailure: {
     fallbackCode: "vibe64_agent_database_command_request_failed",
@@ -210,12 +213,22 @@ const commandServers = createSessionCommandServers({
  * @param {ProjectService} dependencies.projectService
  * @param {() => object | null} dependencies.readDatabaseTools the installed database tools service, or null without one
  */
-function createAgentDatabaseCommandService({ logger, projectService, readDatabaseTools }) {
+function createAgentDatabaseCommandService({
+  logger,
+  projectService,
+  readDatabaseTools
+}) {
   const projectBinding = createAgentCommandProjectBinding(projectService, {
     sessionRequired: ["Vibe64 database command session id is required.", "vibe64_agent_database_command_session_required"],
-    projectRequired: ["Vibe64 database command could not bind this session to a project.", "vibe64_agent_database_command_project_required"],
+    projectRequired: [
+      "Vibe64 database command could not bind this session to a project.",
+      "vibe64_agent_database_command_project_required"
+    ],
     unbound: ["This database command is not bound to an active session.", "vibe64_agent_database_command_session_unbound"],
-    changed: ["Vibe64 database command session project no longer matches its bound project.", "vibe64_agent_database_command_project_binding_changed"]
+    changed: [
+      "Vibe64 database command session project no longer matches its bound project.",
+      "vibe64_agent_database_command_project_binding_changed"
+    ]
   });
   async function bindSession(sessionId = "") {
     const binding = await projectBinding.bind(sessionId);
@@ -250,7 +263,12 @@ function createAgentDatabaseCommandService({ logger, projectService, readDatabas
             sessionId,
             source: "agent"
           }));
-          if (refreshed?.ok === false) throw vibe64Error(refreshed.error || "Database schema refresh failed.", refreshed.code || "vibe64_agent_database_command_failed");
+          if (refreshed?.ok === false) {
+            throw vibe64Error(
+              refreshed.error || "Database schema refresh failed.",
+              refreshed.code || "vibe64_agent_database_command_failed"
+            );
+          }
           const payload = {
             ok: true,
             refreshedAt: refreshed.schema?.refreshedAt || "",
@@ -259,7 +277,9 @@ function createAgentDatabaseCommandService({ logger, projectService, readDatabas
           result = {
             exitCode: 0,
             ok: true,
-            stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : `Database schema refreshed: ${payload.tableCount} tables/views.\n`
+            stdout: parsed.json
+              ? `${JSON.stringify(payload, null, 2)}\n`
+              : `Database schema refreshed: ${payload.tableCount} tables/views.\n`
           };
         }
       }
@@ -290,7 +310,12 @@ function createAgentDatabaseCommandService({ logger, projectService, readDatabas
     return { closed: closed + (bound && closed === 0 ? 1 : 0), ok: true };
   }
 
-  return Object.freeze({ bindSession, closeAllForSession, logger, run });
+  return Object.freeze({
+    bindSession,
+    closeAllForSession,
+    logger,
+    run
+  });
 }
 
 /**
@@ -306,7 +331,9 @@ async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wra
   await commandService.bindSession(normalizedSessionId);
   await writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource());
   const server = await commandServers.ensure({
-    commandService, sessionId: normalizedSessionId, socketPath: commandSocketHostPath(normalizedWrapperHostDir)
+    commandService,
+    sessionId: normalizedSessionId,
+    socketPath: commandSocketHostPath(normalizedWrapperHostDir)
   });
   return {
     env: {

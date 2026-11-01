@@ -20,7 +20,9 @@ function failure(message, code = "vibe64_assistant_routing_unavailable") {
 }
 function parseRequest(value) {
   const request = value ? JSON.parse(value) : null;
-  if (request && request.schemaVersion !== 5) throw failure("Saved workflow needs the candidate stopped-service state upgrade.", "vibe64_assistant_workflow_upgrade_required");
+  if (request && request.schemaVersion !== 5) {
+    throw failure("Saved workflow needs the candidate stopped-service state upgrade.", "vibe64_assistant_workflow_upgrade_required");
+  }
   if (request && !assistantWorkflowStateIsSupported(request)) {
     throw failure("Saved workflow has an unsupported state. Inspect it before continuing.", "vibe64_assistant_workflow_invalid");
   }
@@ -60,8 +62,11 @@ function prepareCopiedAssistantRouting(metadata = {}) {
   if (metadata.assistant_goal_intent) patch.assistant_goal_intent = "null";
   const request = parseRequest(metadata[STATE_KEY]);
   if (request) {
-    if (request.status !== "complete") Object.assign(request, { stopped: true, status: "waiting",
-      error: "Copied workflow is stopped. Inspect retained delivery before continuing." });
+    if (request.status !== "complete") Object.assign(request, {
+      stopped: true,
+      status: "waiting",
+      error: "Copied workflow is stopped. Inspect retained delivery before continuing."
+    });
     if (request.helper) request.helper.executionId = "";
     // Keep uncertain delivery and the original message/turn receipt intact.
     patch[STATE_KEY] = JSON.stringify(request);
@@ -78,8 +83,11 @@ function prepareCopiedAssistantRouting(metadata = {}) {
 async function recentVisibleMessages(store, sessionId, limit) {
   const turns = await store.readConversationTail(sessionId, { userLimit: limit });
   return turns.flatMap((turn) => [
-    ...(turn.user ? [{ role: "user", text: turn.user.text,
-      ...(turn.metadata?.actorId === "app" || turn.metadata?.assistantRouting?.parentMessageId ? { automatic: true } : {}) }] : []),
+    ...(turn.user ? [{
+      role: "user",
+      text: turn.user.text,
+      ...(turn.metadata?.actorId === "app" || turn.metadata?.assistantRouting?.parentMessageId ? { automatic: true } : {})
+    }] : []),
     ...(turn.messages || []).filter(({ role }) => role === "assistant").map(({ text }) => ({ role: "assistant", text }))
   ]).slice(-limit);
 }

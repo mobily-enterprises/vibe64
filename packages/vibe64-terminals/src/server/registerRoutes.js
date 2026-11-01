@@ -328,7 +328,8 @@ function registerRoutes(
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/agent-plan-usage", {
-    actionId: "vibe64.terminals.agent-plan-usage.read", buildInput: sessionInput,
+    actionId: "vibe64.terminals.agent-plan-usage.read",
+    buildInput: sessionInput,
     summary: "Read the selected assistant account's remaining plan allowance."
   });
 
@@ -349,7 +350,8 @@ function registerRoutes(
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-session", {
-    actionId: "vibe64.terminals.agent-session.prepare", buildInput: sessionInput,
+    actionId: "vibe64.terminals.agent-session.prepare",
+    buildInput: sessionInput,
     summary: "Prepare the Vibe64 assistant session."
   });
 
@@ -476,7 +478,8 @@ function registerRoutes(
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/output-runs/:terminalSessionId/stop", {
-    actionId: "vibe64.terminals.output-target.stop", buildInput: terminalRouteInput,
+    actionId: "vibe64.terminals.output-target.stop",
+    buildInput: terminalRouteInput,
     statusCode: 200,
     summary: "Stop a Vibe64 output target without deleting its log."
   });
@@ -492,12 +495,17 @@ function registerRoutes(
   ]) {
     const buildInput = terminalInputFor(prefix);
     routes.actionRoute("GET", path, {
-      actionId: `vibe64.terminals.${prefix}.read`, buildInput,
-      failureStatus: 404, successStatus: 200, summary: readSummary
+      actionId: `vibe64.terminals.${prefix}.read`,
+      buildInput,
+      failureStatus: 404,
+      successStatus: 200,
+      summary: readSummary
     });
     routes.actionRoute("DELETE", path, {
-      actionId: `vibe64.terminals.${prefix}.close`, buildInput,
-      statusCode: 200, summary: closeSummary
+      actionId: `vibe64.terminals.${prefix}.close`,
+      buildInput,
+      statusCode: 200,
+      summary: closeSummary
     });
   }
   for (const [prefix, path] of [
@@ -507,8 +515,11 @@ function registerRoutes(
     const terminalInput = terminalInputFor(prefix);
     for (const suffix of ["snapshot", "quiet"]) {
       routes.actionRoute("GET", `${path}/control/${suffix}`, {
-        actionId: `vibe64.terminals.${prefix}.control.snapshot`, buildInput: terminalInput,
-        failureStatus: 404, successStatus: 200, summary: "Read a terminal control snapshot and quiet state."
+        actionId: `vibe64.terminals.${prefix}.control.snapshot`,
+        buildInput: terminalInput,
+        failureStatus: 404,
+        successStatus: 200,
+        summary: "Read a terminal control snapshot and quiet state."
       });
     }
     for (const [operation, summary] of [
@@ -520,7 +531,9 @@ function registerRoutes(
         actionId: `vibe64.terminals.${prefix}.control.${operation}`,
         body: operation === "key" ? terminalControlKeyInputValidator : terminalControlTextInputValidator,
         buildInput: (request) => ({ ...withoutVibe64User(requestBody(request)), ...terminalInput(request) }),
-        failureStatus: 404, successStatus: 200, summary
+        failureStatus: 404,
+        successStatus: 200,
+        summary
       });
     }
   }

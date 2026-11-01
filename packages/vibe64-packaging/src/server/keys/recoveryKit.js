@@ -22,7 +22,12 @@ function kitError(message, code = "vibe64_publishing_recovery_kit_invalid") {
  * @param {() => string} [request.now]
  * @param {number} [request.workFactor]
  */
-async function createRecoveryKit({ store, passphrase, now = () => new Date().toISOString(), workFactor }) {
+async function createRecoveryKit({
+  store,
+  passphrase,
+  now = () => new Date().toISOString(),
+  workFactor
+}) {
   const index = await store.index();
   const entries = store.snapshot();
   if (!entries.length) throw kitError("There are no publishing keys to put in a recovery kit yet.", "vibe64_publishing_recovery_kit_empty");

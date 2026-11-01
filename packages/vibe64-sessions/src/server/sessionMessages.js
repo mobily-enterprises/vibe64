@@ -30,9 +30,19 @@ function messageText(input = {}) {
  * @param {SourceEditorService} dependencies.sourceEditor
  * @param {TerminalsService} dependencies.terminals
  */
-function createSessionMessages({ project, publishProjectChanged, publishSessionChanged, setupRunner, sourceEditor, terminals }) {
+function createSessionMessages({
+  project,
+  publishProjectChanged,
+  publishSessionChanged,
+  setupRunner,
+  sourceEditor,
+  terminals
+}) {
   const mainChatApprovals = createMainChatApprovals({
-    project, terminals, publishSessionChanged, publishProjectChanged,
+    project,
+    terminals,
+    publishSessionChanged,
+    publishProjectChanged,
     deliver: (sessionId, input, options) => messages.sendAgentMessage(sessionId, input, options)
   });
 
@@ -50,8 +60,14 @@ function createSessionMessages({ project, publishProjectChanged, publishSessionC
       // except in their own lesson, which runs on the team setup.
       const vibe64User = trustedAssistantUser(input);
       if (vibe64User && !isAssistantRoutingOwner(vibe64User) && !currentRequestIsPracticeProject()) {
-        return { ...await mainChatApprovals.enqueue(sessionId, { message: request, messageId: text(input.messageId),
-          attachmentIds: input.attachmentIds || [] }, { vibe64User }), sessionId };
+        return {
+          ...await mainChatApprovals.enqueue(sessionId, {
+            message: request,
+            messageId: text(input.messageId),
+            attachmentIds: input.attachmentIds || []
+          }, { vibe64User }),
+          sessionId
+        };
       }
       const startedAt = Date.now();
       await setupRunner.wait(sessionId);
@@ -117,7 +133,8 @@ function createSessionMessages({ project, publishProjectChanged, publishSessionC
 
     approveMainChatApproval(sessionId, approvalId, input, options) {
       return mainChatApprovals.approve(sessionId, approvalId, input, {
-        vibe64User: trustedAssistantUser(input), browserAuthority: options.browserAuthority || null
+        vibe64User: trustedAssistantUser(input),
+        browserAuthority: options.browserAuthority || null
       });
     },
 
@@ -141,13 +158,16 @@ function createSessionMessages({ project, publishProjectChanged, publishSessionC
         await setupRunner.wait(sessionId);
         const runtime = await project.createRuntime({ inspectSource: false });
         const result = await terminals.resumeIntegrationContinuation(sessionId, {
-          turnId: input.turnId, requestId: input.requestId
+          turnId: input.turnId,
+          requestId: input.requestId
         }, {
-          runtime, vibe64User: trustedAssistantUser(input),
+          runtime,
+          vibe64User: trustedAssistantUser(input),
           readIntegrationConfiguration: () => sourceEditor.readIntegrations({ sessionId })
         });
         await publishSessionChanged(sessionId, {
-          reason: "integration-setup-completed", session: null
+          reason: "integration-setup-completed",
+          session: null
         });
         return { ...result, sessionId, turnId: input.turnId };
       });
@@ -157,10 +177,12 @@ function createSessionMessages({ project, publishProjectChanged, publishSessionC
       return sessionResult(async () => {
         const runtime = await project.createRuntime({ inspectSource: false });
         const integrationSetup = await runtime.store.skipIntegrationSetupRequest(sessionId, {
-          turnId: input.turnId, requestId: input.requestId
+          turnId: input.turnId,
+          requestId: input.requestId
         });
         await publishSessionChanged(sessionId, {
-          reason: "integration-setup-skipped", session: null
+          reason: "integration-setup-skipped",
+          session: null
         });
         return { ok: true, sessionId, turnId: input.turnId, integrationSetup };
       });

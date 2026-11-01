@@ -45,9 +45,13 @@ function unionField(left, right, path) {
   if (!isDeepStrictEqual(rest(a), rest(b)) || Boolean(a.schema) !== Boolean(b.schema) || Boolean(a.enum) !== Boolean(b.enum)) {
     throw conflict(path, "incompatible constraints");
   }
-  return { ...rest(a), required, ...Object.assign({}, ...bounds.map(key => looserBound(key, a, b))),
+  return {
+    ...rest(a),
+    required,
+    ...Object.assign({}, ...bounds.map(key => looserBound(key, a, b))),
     ...(a.enum ? { enum: [...new Set([...a.enum, ...b.enum])] } : {}),
-    ...(a.schema ? { schema: unionSchemas([nestedSchema(a), nestedSchema(b)], path) } : {}) };
+    ...(a.schema ? { schema: unionSchemas([nestedSchema(a), nestedSchema(b)], path) } : {})
+  };
 }
 
 /**

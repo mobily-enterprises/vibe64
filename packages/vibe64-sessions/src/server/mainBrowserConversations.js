@@ -38,12 +38,25 @@ function pickFields(input, fields) {
  * is not an authored transcript receipt.
  */
 function operationResult(result) {
-  const fields = { delivered: "boolean", duplicate: "boolean", messageId: "string", deliveryMode: "string",
-    code: "string", error: "string", status: "string", interrupted: "boolean", routingCancelled: "boolean",
-    operationOutcome: "string", retryable: "boolean", refreshRecommended: "boolean" };
-  return { ok: result?.ok !== false,
+  const fields = {
+    delivered: "boolean",
+    duplicate: "boolean",
+    messageId: "string",
+    deliveryMode: "string",
+    code: "string",
+    error: "string",
+    status: "string",
+    interrupted: "boolean",
+    routingCancelled: "boolean",
+    operationOutcome: "string",
+    retryable: "boolean",
+    refreshRecommended: "boolean"
+  };
+  return {
+    ok: result?.ok !== false,
     ...Object.fromEntries(Object.entries(fields).filter(([key, type]) => typeof result?.[key] === type)
-      .map(([key]) => [key, result[key]])) };
+      .map(([key]) => [key, result[key]]))
+  };
 }
 
 /**
@@ -104,7 +117,9 @@ function createMainBrowserConversations({ actions, terminals }) {
           ...(Object.hasOwn(input, "attachmentIds") ? { attachmentIds: input.attachmentIds } : {})
         }));
       },
-      async cancel() { return operationResult(temporary ? await withConversation(conversation => conversation.cancel()) : await execute(ACTION_INTERRUPT_AGENT_TURN)); },
+      async cancel() { return operationResult(
+        temporary ? await withConversation(conversation => conversation.cancel()) : await execute(ACTION_INTERRUPT_AGENT_TURN)
+      ); },
       async select(input) {
         if (temporary) return operationResult(await withConversation(conversation => conversation.select(input)));
         return operationResult(await execute(ACTION_UPDATE_ASSISTANT_SELECTION, pickFields(input, selectionFields)));
@@ -115,11 +130,18 @@ function createMainBrowserConversations({ actions, terminals }) {
        */
       async cancelDelivery(input) {
         return withTerminals(options => temporary
-          ? terminals.cancelTemporaryConversationMessage(target.sessionId, { conversationId: target.conversationId, messageId: input.messageId }, options)
+          ? terminals.cancelTemporaryConversationMessage(target.sessionId, {
+            conversationId: target.conversationId,
+            messageId: input.messageId
+          }, options)
           : terminals.cancelAgentMessage(target.sessionId, { messageId: input.messageId }, options));
       },
-      async readGoal() { return temporary ? withConversation(conversation => conversation.readGoal()) : execute(ACTION_READ_CANONICAL_AGENT_GOAL); },
-      async updateGoal(input) { return temporary ? withConversation(conversation => conversation.updateGoal(input)) : execute(ACTION_UPDATE_CANONICAL_AGENT_GOAL, input); },
+      async readGoal() { return temporary
+        ? withConversation(conversation => conversation.readGoal())
+        : execute(ACTION_READ_CANONICAL_AGENT_GOAL); },
+      async updateGoal(input) { return temporary
+        ? withConversation(conversation => conversation.updateGoal(input))
+        : execute(ACTION_UPDATE_CANONICAL_AGENT_GOAL, input); },
       async subscribe(listener) {
         if (typeof listener !== "function") throw new TypeError("A conversation listener is required.");
         return withConversation(conversation => conversation.subscribe(event => listener({ ...event, conversationId: id })));

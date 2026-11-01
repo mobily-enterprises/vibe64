@@ -11,7 +11,9 @@ const routeKeys = ["engineId", "agentId", "modelProviderId", "modelId", "variant
 const setupKeys = Object.keys(ASSISTANT_SETUP_ROLES);
 const roleNames = ASSISTANT_SETUP_ROLES.owner;
 const previewSchema = createSchema({
-  purpose: text, available: flag, code: text,
+  purpose: text,
+  available: flag,
+  code: text,
   route: { type: "object", required: true, schema: createSchema(Object.fromEntries(routeKeys.map(key => [key, text]))) }
 });
 const descriptions = {
@@ -27,62 +29,137 @@ function routingSelection(value) {
 export function modelRoutingTool(operation) {
   return {
     description: descriptions[operation],
-    output: { mode: "replace", schema: createSchema({
-      ok: flag, error: text, code: text,
-      invalidRoles: { type: "array", items: text, maxItems: 15, required: false },
-      revision: { ...count, required: false }, canConfigure: { ...flag, required: false },
-      setup: text, choiceRole: text, choiceCount: { ...count, required: false },
-      nextOffset: { ...count, nullable: true, required: false },
-      choices: { type: "array", maxItems: 20, required: false, items: createSchema({
-        selection, label: text, providerLabel: text, engineLabel: text,
-        available: flag, ownerOnly: flag, compatible: flag, accessLabel: text,
-        variantCount: count,
-        variants: { type: "array", maxItems: 100, required: true, items: createSchema({ id: text, label: text }) }
-      }) },
-      engines: { type: "array", maxItems: 3, required: false, items: createSchema({
-        engineId: text, label: text, connected: flag, catalogueAvailable: flag
-      }) },
-      setups: { type: "array", maxItems: 2, required: false, items: createSchema({
-        setup: { type: "string", enum: setupKeys, required: true },
-        roles: { type: "array", maxItems: 7, required: true, items: createSchema({
-          role: { type: "string", enum: roleNames, required: true },
-          configured: flag, value: selection, follows: text, effective: selection,
-          recommendation: selection, recommendedFollows: text, valueValid: flag
-        }) },
-        preview: { type: "array", maxItems: 9, items: previewSchema, required: true }
-      }) }
-    }) },
+    output: {
+      mode: "replace",
+      schema: createSchema({
+        ok: flag,
+        error: text,
+        code: text,
+        invalidRoles: { type: "array", items: text, maxItems: 15, required: false },
+        revision: { ...count, required: false },
+        canConfigure: { ...flag, required: false },
+        setup: text,
+        choiceRole: text,
+        choiceCount: { ...count, required: false },
+        nextOffset: { ...count, nullable: true, required: false },
+        choices: {
+          type: "array",
+          maxItems: 20,
+          required: false,
+          items: createSchema({
+            selection,
+            label: text,
+            providerLabel: text,
+            engineLabel: text,
+            available: flag,
+            ownerOnly: flag,
+            compatible: flag,
+            accessLabel: text,
+            variantCount: count,
+            variants: { type: "array", maxItems: 100, required: true, items: createSchema({ id: text, label: text }) }
+          })
+        },
+        engines: {
+          type: "array",
+          maxItems: 3,
+          required: false,
+          items: createSchema({
+            engineId: text,
+            label: text,
+            connected: flag,
+            catalogueAvailable: flag
+          })
+        },
+        setups: {
+          type: "array",
+          maxItems: 2,
+          required: false,
+          items: createSchema({
+            setup: { type: "string", enum: setupKeys, required: true },
+            roles: {
+              type: "array",
+              maxItems: 7,
+              required: true,
+              items: createSchema({
+                role: { type: "string", enum: roleNames, required: true },
+                configured: flag,
+                value: selection,
+                follows: text,
+                effective: selection,
+                recommendation: selection,
+                recommendedFollows: text,
+                valueValid: flag
+              })
+            },
+            preview: { type: "array", maxItems: 9, items: previewSchema, required: true }
+          })
+        }
+      })
+    },
     transformResult(result) {
       if (result.ok !== true) return {
-        ok: false, code: String(result.code || "").slice(0, 512),
+        ok: false,
+        code: String(result.code || "").slice(0, 512),
         error: "The AI setup could not be applied or read. Reread its current revision and inspect invalidRoles; open Models for details.",
         invalidRoles: Object.keys(result.fieldErrors || {}).filter(key => /^(owner|nonOwner)\.[a-zA-Z]+$/u.test(key))
       };
       const output = { ok: true, revision: result.revision, canConfigure: result.canConfigure };
-      if (result.choices) return { ...output, setup: result.setup, choiceRole: result.choiceRole,
-        choiceCount: result.choiceCount, nextOffset: result.nextOffset,
+      if (result.choices) return {
+        ...output,
+        setup: result.setup,
+        choiceRole: result.choiceRole,
+        choiceCount: result.choiceCount,
+        nextOffset: result.nextOffset,
         choices: result.choices.map(choice => ({
           selection: routingSelection({ ...choice, schema: "vibe64.assistant-selection.v1", selectionSource: "explicit" }),
-          ...Object.fromEntries(["label", "providerLabel", "engineLabel", "accessLabel"].map(key => [key, String(choice[key] || "").slice(0, 512)])),
-          available: choice.available === true, ownerOnly: choice.ownerOnly !== false, compatible: !choice.compatibilityError,
+          ...Object.fromEntries(
+            ["label", "providerLabel", "engineLabel", "accessLabel"].map(key => [key, String(choice[key] || "").slice(0, 512)])
+          ),
+          available: choice.available === true,
+          ownerOnly: choice.ownerOnly !== false,
+          compatible: !choice.compatibilityError,
           variantCount: choice.variants.length,
-          variants: choice.variants.slice(0, 100).map(variant => ({ id: String(variant.id).slice(0, 512), label: String(variant.label || "").slice(0, 512) }))
-        })) };
-      return { ...output,
-        engines: result.engines.map(engine => ({ engineId: engine.engineId, label: String(engine.label || "").slice(0, 512),
-          connected: engine.connected, catalogueAvailable: !engine.error })),
+          variants: choice.variants.slice(0, 100).map(variant => ({
+            id: String(variant.id).slice(0, 512),
+            label: String(variant.label || "").slice(0, 512)
+          }))
+        }))
+      };
+      return {
+        ...output,
+        engines: result.engines.map(engine => ({
+          engineId: engine.engineId,
+          label: String(engine.label || "").slice(0, 512),
+          connected: engine.connected,
+          catalogueAvailable: !engine.error
+        })),
         setups: setupKeys.map(setup => {
           const view = result.setups[setup];
-          return { setup, roles: ASSISTANT_SETUP_ROLES[setup].map(role => {
-            const state = view.roles[role];
-            return { role, configured: state.configured, value: routingSelection(state.value), follows: String(state.value?.follows || ""),
-              effective: routingSelection(state.effective), recommendation: routingSelection(state.recommendation),
-              recommendedFollows: String(state.recommendation?.follows || ""), valueValid: state.configured && !state.error };
-          }), preview: Object.entries(view.preview).map(([purpose, decision]) => ({ purpose, available: decision.available === true,
-            code: String(decision.reasonCode || "").slice(0, 512),
-            route: Object.fromEntries(routeKeys.filter(key => typeof decision.effectiveSelection?.[key] === "string")
-              .map(key => [key, decision.effectiveSelection[key].slice(0, 512)])) })) };
-        }) };
+          return {
+            setup,
+            roles: ASSISTANT_SETUP_ROLES[setup].map(role => {
+              const state = view.roles[role];
+              return {
+                role,
+                configured: state.configured,
+                value: routingSelection(state.value),
+                follows: String(state.value?.follows || ""),
+                effective: routingSelection(state.effective),
+                recommendation: routingSelection(state.recommendation),
+                recommendedFollows: String(state.recommendation?.follows || ""),
+                valueValid: state.configured && !state.error
+              };
+            }),
+            preview: Object.entries(view.preview).map(([purpose, decision]) => ({
+              purpose,
+              available: decision.available === true,
+              code: String(decision.reasonCode || "").slice(0, 512),
+              route: Object.fromEntries(routeKeys.filter(key => typeof decision.effectiveSelection?.[key] === "string")
+                .map(key => [key, decision.effectiveSelection[key].slice(0, 512)]))
+            }))
+          };
+        })
+      };
     }
   };
 }

@@ -171,7 +171,10 @@ async function checkSessionUpdatesDirect({
     );
   }
   const historyReview = historyRewritten ? {
-    baseCommit: context.baseCommit, canonicalCommit, sessionHead, worktreeTree,
+    baseCommit: context.baseCommit,
+    canonicalCommit,
+    sessionHead,
+    worktreeTree,
     changedPaths: (await changedPathsBetween(runCommand, context, context.baseCommit, worktreeTree,
       { commandOptions, project })).slice(0, 100)
   } : null;
@@ -423,7 +426,11 @@ async function applySessionUpdate(runCommand, context, {
 }
 
 async function captureSessionWorkUpdateCheckpointDirect({
-  commandOptions = {}, operationId, project = {}, runCommand = runVibe64Command, session = {}
+  commandOptions = {},
+  operationId,
+  project = {},
+  runCommand = runVibe64Command,
+  session = {}
 } = {}) {
   const context = repositoryContext(session, project);
   await assertBranch(runCommand, context, { commandOptions, project });
@@ -444,9 +451,16 @@ async function captureSessionWorkUpdateCheckpointDirect({
 }
 
 async function prepareSessionWorkUpdateDirect({
-  checkpoint = {}, commandOptions = {}, conflictRecovery = null, derivedArtifactPaths = [],
-  historyReview = null, operationId, project = {}, reviewedConflictId = "",
-  runCommand = runVibe64Command, session = {}
+  checkpoint = {},
+  commandOptions = {},
+  conflictRecovery = null,
+  derivedArtifactPaths = [],
+  historyReview = null,
+  operationId,
+  project = {},
+  reviewedConflictId = "",
+  runCommand = runVibe64Command,
+  session = {}
 } = {}) {
   const context = repositoryContext(session, project);
   const { checkpointCommit, checkpointTree, oldHead, oldIndexTree } = checkpoint;
@@ -561,42 +575,69 @@ async function prepareSessionWorkUpdateDirect({
 }
 
 async function regenerateSessionWorkUpdateDirect({
-  commandOptions = {}, derivedArtifactPaths = [], prepared = {}, project = {},
-  refreshDerivedArtifacts = null, runCommand = runVibe64Command, session = {}
+  commandOptions = {},
+  derivedArtifactPaths = [],
+  prepared = {},
+  project = {},
+  refreshDerivedArtifacts = null,
+  runCommand = runVibe64Command,
+  session = {}
 } = {}) {
   const context = repositoryContext(session, project);
   const mergedTree = await regenerateDerivedArtifactTree(runCommand, context, {
     baseCommit: prepared.canonicalCommit,
-    commandOptions, derivedArtifactPaths, project, refreshDerivedArtifacts,
+    commandOptions,
+    derivedArtifactPaths,
+    project,
+    refreshDerivedArtifacts,
     tree: prepared.mergedSourceTree
   });
   const mergedCommit = mergedTree === prepared.canonicalTree
     ? prepared.canonicalCommit
     : await createVirtualCommit(runCommand, context, {
-        baseCommit: prepared.canonicalCommit, commandOptions,
-        message: "Vibe64 session update result", project, tree: mergedTree
+        baseCommit: prepared.canonicalCommit,
+        commandOptions,
+        message: "Vibe64 session update result",
+        project,
+        tree: mergedTree
       });
   return { ...prepared, mergedCommit, mergedTree };
 }
 
 async function applySessionWorkUpdateDirect({
-  commandOptions = {}, prepared = {}, project = {}, runCommand = runVibe64Command, session = {}
+  commandOptions = {},
+  prepared = {},
+  project = {},
+  runCommand = runVibe64Command,
+  session = {}
 } = {}) {
   const context = repositoryContext(session, project);
   const reconciliation = await applySessionUpdate(runCommand, context, {
-    ...prepared, commandOptions, project
+    ...prepared,
+    commandOptions,
+    project
   });
   return { ...prepared, ok: true, ...reconciliation };
 }
 
 async function runSessionUpdateStages({
-  beforeSourceChange = async () => {}, derivedArtifactPaths = [], onProgress = async () => null,
-  operationId = crypto.randomUUID(), project = {}, runProjectSourceExclusive = async (operation) => operation(),
-  session = {}, ...input
+  beforeSourceChange = async () => {},
+  derivedArtifactPaths = [],
+  onProgress = async () => null,
+  operationId = crypto.randomUUID(),
+  project = {},
+  runProjectSourceExclusive = async (operation) => operation(),
+  session = {},
+  ...input
 }, runStage) {
   const context = repositoryContext(session, project);
   const stage = (operation, values = {}) => runStage(operation, {
-    ...input, derivedArtifactPaths, operationId, project, session, ...values
+    ...input,
+    derivedArtifactPaths,
+    operationId,
+    project,
+    session,
+    ...values
   });
   await onProgress({ kind: "lock", message: "Waiting for exclusive repository access.", stage: "repository-lock" });
   return runProjectSourceExclusive(async () => {
@@ -606,9 +647,13 @@ async function runSessionUpdateStages({
     await onProgress({ kind: "update", message: "Fetching the latest saved version and merging session changes.", stage: "merging" });
     let prepared = await stage("update-prepare", { checkpoint });
     if (prepared.status === "already_current") return prepared;
-    await onProgress({ kind: "update", message: derivedArtifactPaths.length
-      ? "Regenerating project diagrams from the merged source."
-      : "Preparing the merged session worktree.", stage: "regenerating" });
+    await onProgress({
+      kind: "update",
+      message: derivedArtifactPaths.length
+        ? "Regenerating project diagrams from the merged source."
+        : "Preparing the merged session worktree.",
+      stage: "regenerating"
+    });
     prepared = await stage("update-derived", { prepared });
     await onProgress({ ...prepared, kind: "update", message: "A conflict-free session update is ready.", stage: "prepared" });
     await onProgress({ kind: "update", message: "Applying and verifying the session update.", stage: "mutating" });

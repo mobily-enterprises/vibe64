@@ -4,7 +4,23 @@ import path from "node:path";
 import { normalizeText, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import { checkpointRefRoot } from "@local/vibe64-execution/server";
 
-import { inspectWorktreeDirty, metadataValue, parseNullSeparatedPaths, readWorktreeGitFact, RECOVERY_ARTIFACT_ROOT, RECOVERY_BRANCH_BUNDLE_ARTIFACT, RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT, RECOVERY_PATCH_ARTIFACT, RECOVERY_UNTRACKED_ARTIFACT, RECOVERY_UNTRACKED_LIST_ARTIFACT, recoverySessionName, runCommand, runGit, SNAPSHOT_TIMEOUT_MS, writeMetadataValues } from "./sessionWorktreeGit.js";
+import {
+  inspectWorktreeDirty,
+  metadataValue,
+  parseNullSeparatedPaths,
+  readWorktreeGitFact,
+  RECOVERY_ARTIFACT_ROOT,
+  RECOVERY_BRANCH_BUNDLE_ARTIFACT,
+  RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT,
+  RECOVERY_PATCH_ARTIFACT,
+  RECOVERY_UNTRACKED_ARTIFACT,
+  RECOVERY_UNTRACKED_LIST_ARTIFACT,
+  recoverySessionName,
+  runCommand,
+  runGit,
+  SNAPSHOT_TIMEOUT_MS,
+  writeMetadataValues
+} from "./sessionWorktreeGit.js";
 
 /**
  * Recovery of a session's source before it is archived: its uncommitted work,

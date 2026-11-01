@@ -9,7 +9,23 @@ import { normalizeProjectDeletion } from "./projectDeletion.js";
 import { updateProjectRecordMetadata } from "./projectRecordMetadata.js";
 import { PROJECT_REPOSITORY_MODE_MANAGED_GIT, projectRepositoryView } from "./projectRepository.js";
 import { normalizeProjectSlug, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR, resolveProjectRecordPath } from "./projectState.js";
-import { DEFAULT_HOSTED_REPOSITORY_BRANCH, assertCatalogueSlugAllowed, assertDirectoryUsable, assertHostedRepositoryMetadata, normalizeProjectMetadata, practiceOwnershipDiffers, projectCatalogUnavailableError, projectDeletingError, projectMetadataFromInput, projectSlugExistsError, projectSlugFromInput, projectStateMissingError, readProjectMetadata, workspaceProjectRecordForPath, writeProjectMetadata } from "./studioProjectRecords.js";
+import {
+  DEFAULT_HOSTED_REPOSITORY_BRANCH,
+  assertCatalogueSlugAllowed,
+  assertDirectoryUsable,
+  assertHostedRepositoryMetadata,
+  normalizeProjectMetadata,
+  practiceOwnershipDiffers,
+  projectCatalogUnavailableError,
+  projectDeletingError,
+  projectMetadataFromInput,
+  projectSlugExistsError,
+  projectSlugFromInput,
+  projectStateMissingError,
+  readProjectMetadata,
+  workspaceProjectRecordForPath,
+  writeProjectMetadata
+} from "./studioProjectRecords.js";
 
 // Sessions registers how many main-chat messages wait for the owner's approval.
 let approvalCountReader = null;
@@ -31,7 +47,13 @@ function registerApprovalCountReader(reader) {
  * @param {string} dependencies.projectsRoot
  * @param {string} dependencies.systemRoot
  */
-function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalogEnabled, projectsRoot, systemRoot }) {
+function createWorkspaceProjectRecords({
+  learningProjects,
+  paths,
+  projectCatalogEnabled,
+  projectsRoot,
+  systemRoot
+}) {
   async function listWorkspaceProjects() {
     const scope = paths.practiceScope();
     if (scope) {
@@ -83,7 +105,8 @@ function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalog
     return {
       ok: true,
       projects: approvalCountReader ? await Promise.all(projects.map(async (project) => ({
-        ...project, approvalsWaiting: await approvalCountReader(project)
+        ...project,
+        approvalsWaiting: await approvalCountReader(project)
       }))) : projects,
       projectsRoot
     };
@@ -165,7 +188,10 @@ function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalog
     const projectContextRoot = paths.projectContextRootForSlug(slug);
     const projectRuntimeRoot = paths.projectRuntimeRootForSlug(slug);
     if (scope && (scope.access !== "create" || !isDeepStrictEqual(normalizeProjectTraining(input.training), scope.training))) {
-      throw Object.assign(new Error("Practice creation requires its exact saved training marker."), { code: "vibe64_practice_scope_mismatch" });
+      throw Object.assign(
+        new Error("Practice creation requires its exact saved training marker."),
+        { code: "vibe64_practice_scope_mismatch" }
+      );
     }
     if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot)) {
       throw projectSlugExistsError();
@@ -241,7 +267,7 @@ function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalog
     }
     return {
       projectContextRoot: paths.projectContextRootForSlug(slug),
-      slug,
+      slug
     };
   }
 
@@ -306,7 +332,10 @@ function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalog
     }));
     if (scope && (Object.keys(metadata).length || await pathExists(scope.targetRoot) || await pathExists(scope.projectRuntimeRoot)) &&
         practiceOwnershipDiffers(metadata, scope.training, scope.allowDeleting === true)) {
-      throw Object.assign(new Error("Practice project ownership changed. Keep it intact and ask the owner to inspect it."), { code: "vibe64_practice_scope_mismatch" });
+      throw Object.assign(
+        new Error("Practice project ownership changed. Keep it intact and ask the owner to inspect it."),
+        { code: "vibe64_practice_scope_mismatch" }
+      );
     }
     return {
       metadata,
@@ -419,7 +448,18 @@ function createWorkspaceProjectRecords({ learningProjects, paths, projectCatalog
     ]);
   }
 
-  return Object.freeze({ listWorkspaceProjects, sweepOrphanProjectRuntimeRoots, createWorkspaceProjectRecord, assertWorkspaceProjectAvailable, readWorkspaceProject, updateWorkspaceProjectMetadata, readWorkspaceProjectState, beginWorkspaceProjectDeletion, completeWorkspaceProjectDeletionStep, discardWorkspaceProjectRecord });
+  return Object.freeze({
+    listWorkspaceProjects,
+    sweepOrphanProjectRuntimeRoots,
+    createWorkspaceProjectRecord,
+    assertWorkspaceProjectAvailable,
+    readWorkspaceProject,
+    updateWorkspaceProjectMetadata,
+    readWorkspaceProjectState,
+    beginWorkspaceProjectDeletion,
+    completeWorkspaceProjectDeletionStep,
+    discardWorkspaceProjectRecord
+  });
 }
 
 export { createWorkspaceProjectRecords, registerApprovalCountReader };

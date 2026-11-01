@@ -65,9 +65,27 @@ function patchAppBuildGradle(text, spec) {
 function patchStrings(text, spec) {
   const file = "res/values/strings.xml";
   const scheme = spec.deepLinkScheme || spec.applicationId;
-  let result = replaceOnce(text, /<string name="app_name">[^<]*<\/string>/u, `<string name="app_name">${resourceText(spec.name)}</string>`, file, "app_name");
-  result = replaceOnce(result, /<string name="title_activity_main">[^<]*<\/string>/u, `<string name="title_activity_main">${resourceText(spec.name)}</string>`, file, "title_activity_main");
-  return replaceOnce(result, /<string name="custom_url_scheme">[^<]*<\/string>/u, `<string name="custom_url_scheme">${resourceText(scheme)}</string>`, file, "custom_url_scheme");
+  let result = replaceOnce(
+    text,
+    /<string name="app_name">[^<]*<\/string>/u,
+    `<string name="app_name">${resourceText(spec.name)}</string>`,
+    file,
+    "app_name"
+  );
+  result = replaceOnce(
+    result,
+    /<string name="title_activity_main">[^<]*<\/string>/u,
+    `<string name="title_activity_main">${resourceText(spec.name)}</string>`,
+    file,
+    "title_activity_main"
+  );
+  return replaceOnce(
+    result,
+    /<string name="custom_url_scheme">[^<]*<\/string>/u,
+    `<string name="custom_url_scheme">${resourceText(scheme)}</string>`,
+    file,
+    "custom_url_scheme"
+  );
 }
 
 function linkFilters(spec) {
@@ -147,7 +165,9 @@ async function rewrite(file, transform) {
 
 async function applyShellPatch(shellRoot) {
   const spec = await readSpec(shellRoot);
-  if (spec.template !== CAPACITOR_SHELL_TEMPLATE.id) throw new Error(`Shell spec ${spec.template} does not match ${CAPACITOR_SHELL_TEMPLATE.id}.`);
+  if (spec.template !== CAPACITOR_SHELL_TEMPLATE.id) {
+    throw new Error(`Shell spec ${spec.template} does not match ${CAPACITOR_SHELL_TEMPLATE.id}.`);
+  }
   const android = path.join(shellRoot, "android");
   await writeFile(path.join(android, "variables.gradle"), variablesGradle());
   await rewrite(path.join(android, "app", "build.gradle"), (text) => patchAppBuildGradle(text, spec));

@@ -19,7 +19,8 @@ const PRACTICE_PROJECT_DELETED_CODE = "vibe64_practice_project_deleted";
 
 function practiceProjectDeletedError() {
   return Object.assign(new Error("This practice project was deleted. Its lesson is still in Learning."), {
-    code: PRACTICE_PROJECT_DELETED_CODE, statusCode: 404
+    code: PRACTICE_PROJECT_DELETED_CODE,
+    statusCode: 404
   });
 }
 
@@ -52,11 +53,17 @@ function practiceLearnerActor(learnerKey = "") {
 function practiceNamespace(root = "", { learnerKey, practiceId }) {
   const slug = practiceSlug(practiceId);
   const projectsRoot = path.join(root, learnerKey, practiceId);
-  return Object.freeze({ slug, projectsRoot, projectContextRoot: path.join(projectsRoot, slug) });
+  return Object.freeze({
+    slug,
+    projectsRoot,
+    projectContextRoot: path.join(projectsRoot, slug)
+  });
 }
 
 function trainingInvalidError() {
-  return Object.assign(new Error("Project training provenance must contain the exact bounded learner, practice, content pin and bundled exercise identity."),
+  return Object.assign(new Error(
+    "Project training provenance must contain the exact bounded learner, practice, content pin and bundled exercise identity."
+  ),
     { code: "vibe64_project_training_invalid" });
 }
 
@@ -97,7 +104,9 @@ function normalizeProjectTraining(value) {
       typeof pin.course.release !== "string" || pin.course.release.length > 256 || !releasePattern.test(pin.course.release) ||
       typeof pin.topic.topicId !== "string" || !idPattern.test(pin.topic.topicId) ||
       typeof pin.topic.release !== "string" || pin.topic.release.length > 256 || !releasePattern.test(pin.topic.release) ||
-      typeof pin.topic.repository !== "string" || pin.topic.repository.length > 256 || !/^[a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+$/u.test(pin.topic.repository) ||
+      typeof pin.topic.repository !== "string" || pin.topic.repository.length > 256 || !/^[a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+$/u.test(
+        pin.topic.repository
+      ) ||
       typeof pin.topic.commit !== "string" || !/^[a-f0-9]{40}$/u.test(pin.topic.commit) ||
       typeof pin.topic.topicHash !== "string" || !/^[a-f0-9]{64}$/u.test(pin.topic.topicHash) ||
       typeof pin.lesson.code !== "string" || !idPattern.test(pin.lesson.code) ||

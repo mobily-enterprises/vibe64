@@ -188,7 +188,11 @@ function createService({
   timing = {}
 }) {
   const times = { ...DEFAULT_TIMING, ...timing };
-  const records = createRecordingRecords({ events, logger, now });
+  const records = createRecordingRecords({
+    events,
+    logger,
+    now
+  });
   const recordingTargets = createRecordingTargets({ terminals });
   // Recordings this process is running or finishing, by id.
   const live = new Map();
@@ -417,7 +421,10 @@ function createService({
         if (target.kind === "web") {
           result = await terminals.startOutputTargetTerminal(record.sessionId, { restartPreview: true });
           if (result?.ok === false && result.code === "vibe64_preview_not_started") {
-            result = await terminals.startOutputTargetTerminal(record.sessionId, { ensurePreview: true, outputTargetId: target.outputTargetId });
+            result = await terminals.startOutputTargetTerminal(record.sessionId, {
+              ensurePreview: true,
+              outputTargetId: target.outputTargetId
+            });
           }
         } else {
           result = await terminals.startOutputTargetTerminal(record.sessionId, {
@@ -551,7 +558,10 @@ function createService({
         throw recordingError(422, "Preview takes no parameters.", "vibe64_usage_recording_parameters_invalid");
       }
       const decision = await admission({
-        sessionId: context.sessionId, projectSlug: context.projectSlug, targetKind: target.kind, runtimes: target.runtimes
+        sessionId: context.sessionId,
+        projectSlug: context.projectSlug,
+        targetKind: target.kind,
+        runtimes: target.runtimes
       });
       if (decision?.admitted !== true) {
         const reason = String(decision?.reason || "Recording cannot start right now.");
@@ -567,10 +577,19 @@ function createService({
       const tracers = [];
       const tracerRecords = [];
       for (const tracer of usageTracersForRuntimes(target.runtimes)) {
-        const prepared = tracer.prepare({ recordingDirectory: directory, sourceRoot: context.sourceRoot, recordingId: id, targetKind: target.kind });
+        const prepared = tracer.prepare({
+          recordingDirectory: directory,
+          sourceRoot: context.sourceRoot,
+          recordingId: id,
+          targetKind: target.kind
+        });
         if (prepared.available && prepared.nodePreload) prepared.realPreload = await realpath(prepared.nodePreload);
         if (prepared.available) tracers.push({ tracer, prepared });
-        tracerRecords.push({ runtime: tracer.runtime, state: prepared.available ? "starting" : "unavailable", reason: prepared.available ? "" : prepared.reason });
+        tracerRecords.push({
+          runtime: tracer.runtime,
+          state: prepared.available ? "starting" : "unavailable",
+          reason: prepared.available ? "" : prepared.reason
+        });
       }
       const record = {
         id,
@@ -590,7 +609,11 @@ function createService({
         requestLog: { assets: 0, full: false }
       };
       const entry = liveEntry({
-        context, record, directory, tracers, outputParameters,
+        context,
+        record,
+        directory,
+        tracers,
+        outputParameters,
         target: { ...target, outputTargetId: target.outputTarget.id }
       });
       // Registered before its files exist, so no reader takes it for a

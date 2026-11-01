@@ -26,7 +26,11 @@ import {
 import { diffFileLists, listNpmTarball, npmTarballManifest } from "./tarball.js";
 
 const DEFAULT_REGISTRY = "https://registry.npmjs.org/";
-const CREDENTIAL = Object.freeze({ id: "npm-userconfig", label: "npm sign-in", delivery: "file" });
+const CREDENTIAL = Object.freeze({
+  id: "npm-userconfig",
+  label: "npm sign-in",
+  delivery: "file"
+});
 
 function npmSettings(target) {
   const settings = settingsOf(target);
@@ -213,7 +217,9 @@ async function dryRun({ target, version, artifacts, credentials }) {
       accept: "application/octet-stream",
       headers: token ? { authorization: `Bearer ${token}` } : {}
     });
-    if (!response.ok) throw publishError("VIBE64_PUBLISH_REGISTRY_FAILED", `Could not download ${manifest.name}@${previousVersion} to compare.`);
+    if (!response.ok) {
+      throw publishError("VIBE64_PUBLISH_REGISTRY_FAILED", `Could not download ${manifest.name}@${previousVersion} to compare.`);
+    }
     previousEntries = listNpmTarball(Buffer.from(await response.arrayBuffer()));
   }
   return {

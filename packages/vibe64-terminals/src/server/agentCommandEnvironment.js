@@ -66,8 +66,14 @@ async function agentSessionCommandEnvironmentIsHealthy(env = {}) {
 }
 
 async function prepareOpenCodeSessionCommandEnvironment(context = {}, {
-  agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
-  codexGitCommand, env, prepareCommandEnvironment, projectService
+  agentDatabaseCommand,
+  agentEnvCommand,
+  agentPreviewCommand,
+  agentSessionCommand,
+  codexGitCommand,
+  env,
+  prepareCommandEnvironment,
+  projectService
 }) {
   if (context.assistantScope) {
     return {
@@ -219,7 +225,10 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   const projectDropZoneRoot = normalizeText(filePaths?.projectDropZoneRoot);
   if (projectBackupsRoot || projectDropZoneRoot) await runtime.store.prepareProjectFileAreas();
   return {
-    env: Object.assign({}, genesisParserEnvironment({ environment: env }), ...steps.map((step) => record(step.result?.env)), dropZoneRoot ? {
+    env: Object.assign({},
+      genesisParserEnvironment({ environment: env }),
+      ...steps.map((step) => record(step.result?.env)),
+      dropZoneRoot ? {
       VIBE64_DROP_ZONE: dropZoneRoot
     } : {}, projectDropZoneRoot ? { VIBE64_PROJECT_DROP_ZONE: projectDropZoneRoot } : {},
     projectBackupsRoot ? { VIBE64_PROJECT_BACKUPS: projectBackupsRoot } : {}),

@@ -9,11 +9,13 @@ function projectOnboardingRequest(kind, { purpose = "", diagnostic = "", nextAct
     },
     adopt: {
       title: "Set up this project",
-      message: `Set up this existing project for guided editing. What this project is and what I want to run: ${description}. Inspect its current implementation and work backwards into Genesis Blueprint, Stack, and Program, including its actual setup and run outputs. Preserve its source and Git history.` + previewIdentitySetup
+      message: `Set up this existing project for guided editing. What this project is and what I want to run: ${description}. Inspect its current implementation and work backwards into Genesis Blueprint, Stack, and Program, including its actual setup and run outputs. Preserve its source and Git history.` +
+        previewIdentitySetup
     },
     inspect: {
       title: "Inspect project setup",
-      message: "Set up this existing project for guided editing. Inspect it for me to identify what it does and its run targets. Ask me only where the evidence is ambiguous. Work backwards into Genesis Blueprint, Stack, and Program while preserving the implementation and Git history." + previewIdentitySetup
+      message: "Set up this existing project for guided editing. Inspect it for me to identify what it does and its run targets. Ask me only where the evidence is ambiguous. Work backwards into Genesis Blueprint, Stack, and Program while preserving the implementation and Git history." +
+        previewIdentitySetup
     },
     repair: {
       title: "Fix project setup",
@@ -23,7 +25,9 @@ function projectOnboardingRequest(kind, { purpose = "", diagnostic = "", nextAct
     }
   };
   const request = requests[kind];
-  if (!request || kind === "adopt" && !description) throw new Error("Choose a setup request and describe the existing project before adopting it.");
+  if (!request || kind === "adopt" && !description) {
+    throw new Error("Choose a setup request and describe the existing project before adopting it.");
+  }
   return {
     ...request,
     displayMessage: kind === "adopt" ? `${request.title}: ${description}` : `${request.title}.`,

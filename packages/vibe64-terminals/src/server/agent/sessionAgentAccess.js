@@ -41,13 +41,16 @@ function createSessionAgentAccess({
       sessionId: normalizeText(sessionId),
       vibe64User
     }));
-    return { vibe64User, access: Object.freeze({
-      ...access,
-      canUse: canUseVibe64Assistant(access, vibe64User),
-      engineId: provider.id,
-      modelProviderId: assistantSelection?.modelProviderId || "",
-      transportId: provider.transportId
-    }) };
+    return {
+      vibe64User,
+      access: Object.freeze({
+        ...access,
+        canUse: canUseVibe64Assistant(access, vibe64User),
+        engineId: provider.id,
+        modelProviderId: assistantSelection?.modelProviderId || "",
+        transportId: provider.transportId
+      })
+    };
   }
 
   async function accessFor(provider, sessionId, options) {
@@ -60,7 +63,8 @@ function createSessionAgentAccess({
     assertCanUseVibe64Assistant(access, vibe64User);
     if (options.expectedConnectionIdentity && access.connectionIdentity !== options.expectedConnectionIdentity) {
       throw Object.assign(new Error("The selected AI connection changed. Start a new request."), {
-        code: "vibe64_assistant_connection_changed", statusCode: 409
+        code: "vibe64_assistant_connection_changed",
+        statusCode: 409
       });
     }
     return context;
@@ -81,8 +85,11 @@ function createSessionAgentAccess({
     if (typeof provider.readPlanUsage !== "function" || !access.ownerOnly || !planUsage) {
       return unsupportedPlanUsage();
     }
-    return { ...await provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session }),
-      providerLabel: planUsage.label, managementUrl: planUsage.managementUrl };
+    return {
+      ...await provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session }),
+      providerLabel: planUsage.label,
+      managementUrl: planUsage.managementUrl
+    };
   }
 
   async function assistantAccess(sessionId = "", options = {}) {

@@ -41,7 +41,12 @@ function openCodeReasoningHeadline(value = "") {
  * @param {OpenCodeSharedRuntime["turns"]} dependencies.turns
  * @param {OpenCodeSharedRuntime["temporaryConversations"]} dependencies.temporaryConversations
  */
-function createOpenCodeConversationPresentation({ getAssistantManager, publishSessionChanged, turns, temporaryConversations }) {
+function createOpenCodeConversationPresentation({
+  getAssistantManager,
+  publishSessionChanged,
+  turns,
+  temporaryConversations
+}) {
   const progressPublishes = new Map();
   const progressPublishedAt = new Map();
 
@@ -78,40 +83,61 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
     signal.throwIfAborted();
     const id = `reasoning_${randomUUID()}`;
     const root = path.join(context.runtime.stateRoot, "assistant-helpers", id);
-    const helper = { selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity,
-      conversationId: "", runId: "", executionId: "",
-      scope: { id, environment: {}, workdir: path.join(root, "workdir"), runtimeRoot: path.join(root, "runtime"),
-        stableContext: "Return only a short progress summary of the supplied text. You have no tools or project access." } };
+    const helper = {
+      selection: decision.effectiveSelection,
+      connectionIdentity: decision.connectionIdentity,
+      conversationId: "",
+      runId: "",
+      executionId: "",
+      scope: {
+        id,
+        environment: {},
+        workdir: path.join(root, "workdir"),
+        runtimeRoot: path.join(root, "runtime"),
+        stableContext: "Return only a short progress summary of the supplied text. You have no tools or project access."
+      }
+    };
     const retain = () => context.runtime.store.writeAgentRunEvent(context.sessionId, OPENCODE_AGENT_RUN_ID, {
-      event: { kind: "reasoning-helper" }, patch: { reasoningSummaryHelper: helper }
+      event: { kind: "reasoning-helper" },
+      patch: { reasoningSummaryHelper: helper }
     });
     await retain();
-    const options = { assistantSelection: helper.selection, vibe64User: context.vibe64User,
-      expectedConnectionIdentity: helper.connectionIdentity, signal,
+    const options = {
+      assistantSelection: helper.selection,
+      vibe64User: context.vibe64User,
+      expectedConnectionIdentity: helper.connectionIdentity,
+      signal,
       async onEvent(event) {
         if (event.type === "thread") helper.conversationId = normalizeText(event.threadId);
         else if (event.type === "turn") helper.runId = normalizeText(event.turnId);
         else if (event.type === "helper-execution") helper.executionId = normalizeText(event.executionId);
         else return;
         await retain();
-      } };
+      }
+    };
     let result;
     let failure;
     try {
       await mkdir(helper.scope.workdir, { recursive: true });
       await mkdir(helper.scope.runtimeRoot, { recursive: true });
       const executionProfile = await agent.resolveEphemeralExecutionProfile(helper.scope, {
-        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER, workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.CONVERSATION_SUMMARY
+        profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
+        workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.CONVERSATION_SUMMARY
       }, options);
       helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
       await retain();
       result = await agent.runEphemeralChatTurn(helper.scope, {
-        executionProfile, prompt: reasoningSummaryInstruction(value), promptLabel: "Summarize progress"
+        executionProfile,
+        prompt: reasoningSummaryInstruction(value),
+        promptLabel: "Summarize progress"
       }, options);
       if (result?.ok !== true) throw new Error(result?.error || "The progress summary did not complete.");
     } catch (error) { failure = error; }
     try { await cleanupReasoningSummary(context); }
-    catch (error) { if (failure && error !== failure) error.cause = failure; failure = error; }
+    catch (error) {
+      if (failure && error !== failure) error.cause = failure;
+      failure = error;
+    }
     if (failure) throw failure;
     return normalizeText(result.text);
   }
@@ -134,12 +160,14 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
       if (!/^reasoning_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
           helper.scope.runtimeRoot !== path.join(root, "runtime")) throw new Error("The progress summary has invalid cleanup paths.");
       const result = await agent.deleteEphemeralConversation(helper.scope, {
-        conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
+        conversationId: helper.conversationId,
+        cleanupExecutionId: helper.executionId,
         ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
       }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
       if (result?.ok !== true) throw new Error(result?.error || "The progress summary could not be closed.");
       await context.runtime.store.writeAgentRunEvent(context.sessionId, OPENCODE_AGENT_RUN_ID, {
-        event: { kind: "reasoning-helper-closed" }, patch: { reasoningSummaryHelper: null }
+        event: { kind: "reasoning-helper-closed" },
+        patch: { reasoningSummaryHelper: null }
       });
       await rm(root, { recursive: true, force: true });
     };
@@ -259,7 +287,8 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
           } catch (error) {
             if (!state.abortController.signal.aborted) {
               vibe64SessionDebugLog("server.opencode.reasoning-summary.error", {
-                error: vibe64SessionDebugError(error), sessionId: context.sessionId
+                error: vibe64SessionDebugError(error),
+                sessionId: context.sessionId
               });
             }
           }
@@ -269,14 +298,21 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
         }
       }).catch((error) => {
         vibe64SessionDebugLog("server.opencode.reasoning-summary.error", {
-          error: vibe64SessionDebugError(error), sessionId: context.sessionId
+          error: vibe64SessionDebugError(error),
+          sessionId: context.sessionId
         });
       });
     }
   }
 
-  return Object.freeze({ cleanupReasoningSummary, disposeReasoningSummary, publishOpenCodeProgress,
-    dropOpenCodeProgress, projectReasoning, publishConversationTurn });
+  return Object.freeze({
+    cleanupReasoningSummary,
+    disposeReasoningSummary,
+    publishOpenCodeProgress,
+    dropOpenCodeProgress,
+    projectReasoning,
+    publishConversationTurn
+  });
 }
 
 export { createOpenCodeConversationPresentation, conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID };

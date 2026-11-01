@@ -92,7 +92,11 @@ function openProjectRuntimeRecords(listed = {}) {
  * @param {ProjectService} dependencies.projectService
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  */
-function createServiceSessionAccess({ logger, projectService, publishSessionChanged }) {
+function createServiceSessionAccess({
+  logger,
+  projectService,
+  publishSessionChanged
+}) {
   async function runMainAgentWrite(sessionId = "", options = {}, operation, lockOptions = {}) {
     const runtime = options.runtime || await projectService.createRuntime({
       inspectSource: false
@@ -105,8 +109,12 @@ function createServiceSessionAccess({ logger, projectService, publishSessionChan
         if (options.deliveryMessageId) {
           const durationMs = performance.now() - lockStartedAt;
           logOperationalEvent(logger, durationMs >= 1000 ? "warn" : "info", {
-            event: "vibe64.agent_message.lock_acquired", component: "vibe64.agent_message",
-            sessionId, messageId: options.deliveryMessageId, operation: lockOptions.operation, durationMs
+            event: "vibe64.agent_message.lock_acquired",
+            component: "vibe64.agent_message",
+            sessionId,
+            messageId: options.deliveryMessageId,
+            operation: lockOptions.operation,
+            durationMs
           }, "Assistant message acquired its application write lock.");
         }
         // readable-check: allow method-probe - optional operation: a write without a session reader runs on the session it was given

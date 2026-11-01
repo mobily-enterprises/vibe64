@@ -616,13 +616,20 @@ async function inspectMysqlSchema(knex, connection = {}) {
 async function inspectSqliteSchema(knex, connection = {}) {
   const rows = async (sql, bindings = []) => (await knex.raw(sql, bindings)).rows;
   const version = (await rows("SELECT sqlite_version() AS version"))[0].version;
-  const records = await rows("SELECT name, type, sql FROM main.sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name");
+  const records = await rows(
+    "SELECT name, type, sql FROM main.sqlite_schema WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY name"
+  );
   const tableList = await rows("PRAGMA main.table_list");
   const tables = [];
   for (const record of records) {
     const properties = tableList.find((entry) => entry.schema === "main" && entry.name === record.name);
-    const table = normalizedTable({ schema_name: "main", table_name: record.name,
-      table_id: record.name, storage_engine: "SQLite", is_updatable: record.type === "table" }, record.type);
+    const table = normalizedTable({
+      schema_name: "main",
+      table_name: record.name,
+      table_id: record.name,
+      storage_engine: "SQLite",
+      is_updatable: record.type === "table"
+    }, record.type);
     const columns = await rows("SELECT * FROM pragma_table_xinfo(?) ORDER BY cid", [record.name]);
     const indexes = await rows("SELECT * FROM pragma_index_list(?) ORDER BY seq", [record.name]);
     const primary = columns.filter((column) => Number(column.pk) > 0).sort((a, b) => Number(a.pk) - Number(b.pk));
@@ -631,12 +638,17 @@ async function inspectSqliteSchema(knex, connection = {}) {
     table.columns = columns.filter((column) => Number(column.hidden) !== 1).map((column) => {
       const identity = rowidAlias && Number(column.pk) === 1;
       return {
-        characterSet: "", collation: "", comment: "",
-        dataType: normalizeText(column.type).toLowerCase(), nativeType: normalizeText(column.type),
+        characterSet: "",
+        collation: "",
+        comment: "",
+        dataType: normalizeText(column.type).toLowerCase(),
+        nativeType: normalizeText(column.type),
         databaseIdentity: { columnId: Number(column.cid), tableId: record.name },
         default: column.dflt_value == null ? null : String(column.dflt_value),
-        generated: Number(column.hidden) > 1, generatedExpression: "",
-        identity, identityKind: identity ? "rowid" : "",
+        generated: Number(column.hidden) > 1,
+        generatedExpression: "",
+        identity,
+        identityKind: identity ? "rowid" : "",
         immutable: identity || Number(column.hidden) > 1,
         name: column.name,
         nullable: !(Number(column.notnull) || identity || (Number(column.pk) && (Number(properties?.wr) || Number(properties?.strict)))),
@@ -644,25 +656,40 @@ async function inspectSqliteSchema(knex, connection = {}) {
       };
     });
     if (primary.length) table.constraints.push({
-      name: `${record.name}_primary`, type: "primary-key", columns: primary.map((column) => column.name), definition: ""
+      name: `${record.name}_primary`,
+      type: "primary-key",
+      columns: primary.map((column) => column.name),
+      definition: ""
     });
     for (const index of indexes) {
       const entries = await rows("SELECT * FROM pragma_index_xinfo(?) WHERE key = 1 ORDER BY seqno", [index.name]);
       const definition = (await rows("SELECT sql FROM main.sqlite_schema WHERE type = 'index' AND name = ?", [index.name]))[0]?.sql || "";
       table.indexes.push({
-        id: index.name, name: index.name, columns: entries.map((entry) => entry.name).filter(Boolean),
-        unique: Boolean(Number(index.unique)), primary: index.origin === "pk", ready: true,
+        id: index.name,
+        name: index.name,
+        columns: entries.map((entry) => entry.name).filter(Boolean),
+        unique: Boolean(Number(index.unique)),
+        primary: index.origin === "pk",
+        ready: true,
         valid: entries.every((entry) => Number(entry.cid) >= 0),
-        predicate: Number(index.partial) ? definition : "", definition, method: "btree", comment: ""
+        predicate: Number(index.partial) ? definition : "",
+        definition,
+        method: "btree",
+        comment: ""
       });
     }
     const foreignKeys = await rows("SELECT * FROM pragma_foreign_key_list(?) ORDER BY id, seq", [record.name]);
     for (const [id, parts] of groupedRows(foreignKeys, (entry) => String(entry.id))) {
       table.constraints.push({
-        name: `${record.name}_foreign_${id}`, type: "foreign-key",
-        columns: parts.map((entry) => entry.from), referencedTable: `main.${parts[0].table}`,
-        referencedColumns: parts.map((entry) => entry.to), deleteAction: parts[0].on_delete,
-        updateAction: parts[0].on_update, matchType: parts[0].match, definition: ""
+        name: `${record.name}_foreign_${id}`,
+        type: "foreign-key",
+        columns: parts.map((entry) => entry.from),
+        referencedTable: `main.${parts[0].table}`,
+        referencedColumns: parts.map((entry) => entry.to),
+        deleteAction: parts[0].on_delete,
+        updateAction: parts[0].on_update,
+        matchType: parts[0].match,
+        definition: ""
       });
     }
     table.keys = editableTableKeys(table);

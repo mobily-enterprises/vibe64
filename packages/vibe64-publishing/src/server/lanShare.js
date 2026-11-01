@@ -15,7 +15,9 @@ function lanAddresses(interfaces = os.networkInterfaces()) {
   const addresses = [];
   for (const [name, entries] of Object.entries(interfaces)) {
     for (const entry of entries || []) {
-      if (entry.family === "IPv4" && !entry.internal && !/^(docker|br-|veth|virbr|incus|lxd|tun|tap)/u.test(name)) addresses.push(entry.address);
+      if (entry.family === "IPv4" && !entry.internal && !/^(docker|br-|veth|virbr|incus|lxd|tun|tap)/u.test(name)) {
+        addresses.push(entry.address);
+      }
     }
   }
   return addresses.sort((left, right) => Number(right.startsWith("192.168.")) - Number(left.startsWith("192.168.")));
@@ -27,7 +29,11 @@ function lanAddresses(interfaces = os.networkInterfaces()) {
  * @param {string} [dependencies.host]
  * @param {typeof lanAddresses} [dependencies.addresses]
  */
-function createLanShare({ now = () => Date.now(), host = "0.0.0.0", addresses = lanAddresses } = {}) {
+function createLanShare({
+  now = () => Date.now(),
+  host = "0.0.0.0",
+  addresses = lanAddresses
+} = {}) {
   let share = null; // { server, key, file, fileName, url, expiresAt, timer }
 
   async function stop() {
@@ -44,15 +50,31 @@ function createLanShare({ now = () => Date.now(), host = "0.0.0.0", addresses = 
   }
 
   function status() {
-    return share ? { sharing: true, key: share.key, url: share.url, fileName: share.fileName, expiresAt: new Date(share.expiresAt).toISOString() } : { sharing: false };
+    return share ? {
+      sharing: true,
+      key: share.key,
+      url: share.url,
+      fileName: share.fileName,
+      expiresAt: new Date(share.expiresAt).toISOString()
+    } : { sharing: false };
   }
 
   async function start({ key, file, fileName, ttlMs = DEFAULT_TTL_MS }) {
     const details = await stat(file).catch(() => null);
-    if (!details?.isFile()) throw Object.assign(new Error("The signed APK is no longer on this computer. Release again."), { code: "vibe64_publishing_download_missing" });
+    if (!details?.isFile()) {
+      throw Object.assign(
+        new Error("The signed APK is no longer on this computer. Release again."),
+        { code: "vibe64_publishing_download_missing" }
+      );
+    }
     await stop();
     const [address] = addresses();
-    if (!address) throw Object.assign(new Error("This computer is not on a network a phone can reach. Download the APK instead."), { code: "vibe64_publishing_no_network" });
+    if (!address) {
+      throw Object.assign(
+        new Error("This computer is not on a network a phone can reach. Download the APK instead."),
+        { code: "vibe64_publishing_no_network" }
+      );
+    }
     const secret = randomBytes(18).toString("base64url");
     const route = `/${secret}/${encodeURIComponent(fileName)}`;
     const server = http.createServer((request, response) => {
@@ -87,7 +109,11 @@ function createLanShare({ now = () => Date.now(), host = "0.0.0.0", addresses = 
     return status();
   }
 
-  return Object.freeze({ start, status, stop });
+  return Object.freeze({
+    start,
+    status,
+    stop
+  });
 }
 
 export { createLanShare, lanAddresses };

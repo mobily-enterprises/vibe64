@@ -1,6 +1,13 @@
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "../shared/assistantSelection.js";
-import { VIBE64_CODEX_DEFAULT_MODEL, VIBE64_CODEX_DEFAULT_THINKING, effectiveVibe64AgentExecutionSettings } from "../shared/agentSettings.js";
-import { codexAppServerThreadSettings as nativeCodexAppServerThreadSettings, codexAppServerTurnSettings as nativeCodexAppServerTurnSettings } from "@jskit-ai/assistant-core/server/codex-configuration";
+import {
+  VIBE64_CODEX_DEFAULT_MODEL,
+  VIBE64_CODEX_DEFAULT_THINKING,
+  effectiveVibe64AgentExecutionSettings
+} from "../shared/agentSettings.js";
+import {
+  codexAppServerThreadSettings as nativeCodexAppServerThreadSettings,
+  codexAppServerTurnSettings as nativeCodexAppServerTurnSettings
+} from "@jskit-ai/assistant-core/server/codex-configuration";
 import { normalizeAgentText } from "./agentProviders.js";
 import { isPlainRecord } from "../shared/isPlainRecord.js";
 
@@ -36,7 +43,12 @@ function codexAppServerThreadSettings({
   }
   const effectiveSettings = codexEffectiveAgentExecutionSettings(agentSettings);
   return nativeCodexAppServerThreadSettings({
-    effectiveSettings, config, cwd: normalizedCwd, systemPrompt, hostContext, model,
+    effectiveSettings,
+    config,
+    cwd: normalizedCwd,
+    systemPrompt,
+    hostContext,
+    model,
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
     reasoningSummary: CODEX_SESSION_REASONING_SUMMARY,
     sandbox: CODEX_SESSION_SANDBOX
@@ -55,7 +67,10 @@ function codexAppServerTurnSettings({
   }
   const effectiveSettings = codexEffectiveAgentExecutionSettings(agentSettings);
   return nativeCodexAppServerTurnSettings({
-    effectiveSettings, cwd: normalizedCwd, effort, model,
+    effectiveSettings,
+    cwd: normalizedCwd,
+    effort,
+    model,
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
     reasoningSummary: CODEX_SESSION_REASONING_SUMMARY,
     externalSandbox: true

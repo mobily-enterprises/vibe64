@@ -75,7 +75,10 @@ function passphraseBytes(passphrase) {
 async function wrapKey(passphrase, salt, workFactor) {
   const N = 2 ** workFactor;
   return scrypt(passphrase, Buffer.concat([Buffer.from(SCRYPT_LABEL, "utf8"), salt]), 32, {
-    N, r: 8, p: 1, maxmem: 256 * N * 8 + 16 * 1024 * 1024
+    N,
+    r: 8,
+    p: 1,
+    maxmem: 256 * N * 8 + 16 * 1024 * 1024
   });
 }
 
@@ -87,7 +90,9 @@ function wrapLines(text) {
 }
 
 async function ageEncrypt(plaintext, passphrase, { workFactor = DEFAULT_WORK_FACTOR } = {}) {
-  if (!Number.isInteger(workFactor) || workFactor < 10 || workFactor > MAX_WORK_FACTOR) throw ageError("The scrypt work factor is out of range.");
+  if (!Number.isInteger(workFactor) || workFactor < 10 || workFactor > MAX_WORK_FACTOR) {
+    throw ageError("The scrypt work factor is out of range.");
+  }
   const data = Buffer.isBuffer(plaintext) ? plaintext : Buffer.from(String(plaintext), "utf8");
   const fileKey = randomBytes(16);
   const salt = randomBytes(16);

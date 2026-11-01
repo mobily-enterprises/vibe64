@@ -29,7 +29,11 @@ import {
  * @param {typeof import("@local/vibe64-execution/server").runVibe64Command} dependencies.runCommand
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
  */
-function createWorkspaceSetupMigration({ projectService, runCommand, runnerState }) {
+function createWorkspaceSetupMigration({
+  projectService,
+  runCommand,
+  runnerState
+}) {
   /**
    * Runs `genesis migrate` for a retried outdated project, then reinspects it.
    * Returns { state } when the migration or reinspection failed.

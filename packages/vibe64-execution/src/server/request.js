@@ -341,10 +341,14 @@ function normalizeVibe64CommandRequest(input = {}) {
   const project = recordValue(request.project);
   const session = recordValue(request.session);
   const releaseEnvironmentFile = request.releaseEnvironmentFile ?? "";
-  if (typeof releaseEnvironmentFile !== "string" || (releaseEnvironmentFile && (!releaseEnvironmentFile.startsWith("/") || /[\r\n\0]/u.test(releaseEnvironmentFile) ||
+  if (typeof releaseEnvironmentFile !== "string" || (releaseEnvironmentFile && (!releaseEnvironmentFile.startsWith("/") ||
+      /[\r\n\0]/u.test(releaseEnvironmentFile) ||
       mode !== "capture" || request.actor !== "app" || request.envPolicy !== "deployment" ||
       Object.keys(normalizedEnv.env).length || normalizedEnv.envFactory || Object.keys(baseEnv).length))) {
-    throw commandRequestError("Release environment files require a finite application deployment command without caller Env.", "vibe64_command_release_environment_invalid");
+    throw commandRequestError(
+      "Release environment files require a finite application deployment command without caller Env.",
+      "vibe64_command_release_environment_invalid"
+    );
   }
   // A usage recording launch names the recorder's Node preload; Vibe64 or its
   // host helper turns it into NODE_OPTIONS only after checking the file.
@@ -352,7 +356,10 @@ function normalizeVibe64CommandRequest(input = {}) {
   if (typeof usageRecordingPreload !== "string" || (usageRecordingPreload &&
       (!usageRecordingPreload.startsWith("/") || /[\s"'\\\0]/u.test(usageRecordingPreload) ||
       !["preview", "output"].includes(purpose) || request.actor === "app"))) {
-    throw commandRequestError("A usage recording preload belongs only to a Preview or Output target launch.", "vibe64_command_usage_recording_preload_invalid");
+    throw commandRequestError(
+      "A usage recording preload belongs only to a Preview or Output target launch.",
+      "vibe64_command_usage_recording_preload_invalid"
+    );
   }
   const applicationAccount = request.applicationAccount ?? "";
   if (typeof applicationAccount !== "string" || (applicationAccount &&

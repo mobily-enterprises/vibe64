@@ -18,7 +18,10 @@ function refuse(code, message) {
 
 function personId(actor) {
   if (actor?.kind !== "person") {
-    refuse("VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", "Only the person can confirm publishing, in Vibe64's own confirmation. An assistant's request is not a confirmation.");
+    refuse(
+      "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON",
+      "Only the person can confirm publishing, in Vibe64's own confirmation. An assistant's request is not a confirmation."
+    );
   }
   const id = typeof actor.id === "string" ? actor.id.trim() : "";
   if (!id) refuse("VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", "A publish confirmation needs the confirming person's identity.");
@@ -77,7 +80,9 @@ function redeemPublishConfirmation({ token, planHash, actor, record, now = Date.
   if (!publishConfirmationTokenMatches(record, token)) {
     refuse("VIBE64_PUBLISH_CONFIRMATION_INVALID", "This publish confirmation is not valid.");
   }
-  if (record.usedAt) refuse("VIBE64_PUBLISH_CONFIRMATION_USED", "This publish confirmation was already used. Confirm again to publish again.");
+  if (record.usedAt) {
+    refuse("VIBE64_PUBLISH_CONFIRMATION_USED", "This publish confirmation was already used. Confirm again to publish again.");
+  }
   if (record.planHash !== planHash) {
     refuse("VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED", "The plan changed after it was confirmed. Review and confirm the new plan.");
   }

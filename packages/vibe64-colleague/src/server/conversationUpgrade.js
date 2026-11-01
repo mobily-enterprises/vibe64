@@ -4,7 +4,12 @@ import path from "node:path";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
 
-export { upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeColleagueHistoricalInteractiveContinuity } from "./nativeConversationUpgrade.js";
+export {
+  upgradeColleagueNativeContinuity,
+  upgradeColleagueCodexCompletedPolicy,
+  upgradeColleagueNativeInstructions,
+  upgradeColleagueHistoricalInteractiveContinuity
+} from "./nativeConversationUpgrade.js";
 export { repairColleagueRetiredOperation } from "./retiredOperationUpgrade.js";
 export { retireColleagueLearningWatches } from "./learningWatchUpgrade.js";
 export { retireColleagueFreeModel } from "./freeModelUpgrade.js";
@@ -16,16 +21,24 @@ export async function upgradeColleagueConversations({ systemRoot, apply, backupR
   try {
     if (!(await lstat(root)).isDirectory()) throw new Error("Colleague state must be a regular directory.");
     entries = await readdir(root, { withFileTypes: true });
-  } catch (error) { if (error.code === "ENOENT") return; throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
   const updates = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected entry in Colleague state. Inspect it before upgrading.");
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) {
+      throw new Error("Unexpected entry in Colleague state. Inspect it before upgrading.");
+    }
     const file = path.join(root, entry.name, "conversation.json");
     let original;
     try {
       if (!(await lstat(file)).isFile()) throw new Error("Colleague history must be a regular file.");
       original = await readFile(file, "utf8");
-    } catch (error) { if (error.code === "ENOENT") continue; throw error; }
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
     let saved;
     try { saved = JSON.parse(original); } catch { throw new Error("Colleague history is invalid JSON. Restore it before upgrading."); }
     if (saved?.schemaVersion === 3) {
@@ -40,15 +53,30 @@ export async function upgradeColleagueConversations({ systemRoot, apply, backupR
       throw new Error("Colleague history has an unsupported shape. Inspect it before upgrading.");
     }
     if (saved.schemaVersion === 2) continue;
-    if (saved.conversationMetadata?.runtime || saved.retiredConversation) throw new Error("Colleague history contains conflicting runtime state. Inspect it before upgrading.");
+    if (saved.conversationMetadata?.runtime || saved.retiredConversation) {
+      throw new Error("Colleague history contains conflicting runtime state. Inspect it before upgrading.");
+    }
     const { conversationId, runId, currentTurnId, operation, ...retained } = saved;
     const interrupted = saved.status === "working" || operation?.status === "executing";
-    const next = { ...retained, schemaVersion: 2,
-      retiredConversation: { conversationId: conversationId || "", runId: runId || "", currentTurnId: currentTurnId || "",
+    const next = {
+      ...retained,
+      schemaVersion: 2,
+      retiredConversation: {
+        conversationId: conversationId || "",
+        runId: runId || "",
+        currentTurnId: currentTurnId || "",
         assistantSelection: saved.assistantSelection,
-        ...(operation ? { operation: { ...operation, ...(operation.status === "executing" ? { status: "unknown" } : {}) } } : {}) },
-      ...(interrupted ? { status: "interrupted", error: "Colleague was interrupted before this upgrade. Inspect unfinished operations before continuing; nothing was repeated." } : {}) };
-    report(interrupted ? "warning" : "info", `${entry.name}: retain written history and retire the old native binding. Stop all services and native writers before applying; no model request will be sent.`);
+        ...(operation ? { operation: { ...operation, ...(operation.status === "executing" ? { status: "unknown" } : {}) } } : {})
+      },
+      ...(interrupted ? {
+        status: "interrupted",
+        error: "Colleague was interrupted before this upgrade. Inspect unfinished operations before continuing; nothing was repeated."
+      } : {})
+    };
+    report(
+      interrupted ? "warning" : "info",
+      `${entry.name}: retain written history and retire the old native binding. Stop all services and native writers before applying; no model request will be sent.`
+    );
     updates.push({ file, original, next, backup: path.join(backupRoot, entry.name, "conversation.json") });
   }
   if (!apply || !updates.length) return;
@@ -82,16 +110,24 @@ export async function upgradeColleagueConversationRuntime({ systemRoot, apply, b
   try {
     if (!(await lstat(root)).isDirectory()) throw new Error("Colleague state must be a regular directory.");
     entries = await readdir(root, { withFileTypes: true });
-  } catch (error) { if (error.code === "ENOENT") return; throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
   const updates = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected entry in Colleague state. Inspect it before upgrading.");
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) {
+      throw new Error("Unexpected entry in Colleague state. Inspect it before upgrading.");
+    }
     const file = path.join(root, entry.name, "conversation.json");
     let original;
     try {
       if (!(await lstat(file)).isFile()) throw new Error("Colleague history must be a regular file.");
       original = await readFile(file, "utf8");
-    } catch (error) { if (error.code === "ENOENT") continue; throw error; }
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
     let saved;
     try { saved = JSON.parse(original); } catch { throw new Error("Colleague history is invalid JSON. Restore it before upgrading."); }
     if (saved?.schemaVersion === 3) {
@@ -110,17 +146,30 @@ export async function upgradeColleagueConversationRuntime({ systemRoot, apply, b
         throw new Error("Complete the earlier Colleague conversation upgrade before upgrading its runtime metadata.");
       }
       // The runner checks every pending step before applying the earlier one.
-      report("info", `${entry.name}: the earlier Colleague upgrade will retain this pre-runtime transcript; no native journal needs conversion.`);
+      report(
+        "info",
+        `${entry.name}: the earlier Colleague upgrade will retain this pre-runtime transcript; no native journal needs conversion.`
+      );
       continue;
     }
     let result;
-    try { result = upgradeConversationRuntimeState({ metadata: saved.conversationMetadata || {}, conversationLog: saved.conversationLog }); }
+    try { result = upgradeConversationRuntimeState({
+      metadata: saved.conversationMetadata || {},
+      conversationLog: saved.conversationLog
+    }); }
     catch (error) { throw new Error(`${entry.name}: ${error.message}`, { cause: error }); }
     if (!result.changed) continue;
     for (const warning of result.warnings) report("warning", `${entry.name}: ${warning}`);
-    report("info", `${entry.name}: upgrade native delivery metadata while retaining conversation identity and history. Stop all services and native writers before applying; no native request or database conversion will run.`);
-    updates.push({ file, original, next: { ...saved, conversationMetadata: result.metadata },
-      backup: path.join(backupRoot, entry.name, "conversation.json") });
+    report(
+      "info",
+      `${entry.name}: upgrade native delivery metadata while retaining conversation identity and history. Stop all services and native writers before applying; no native request or database conversion will run.`
+    );
+    updates.push({
+      file,
+      original,
+      next: { ...saved, conversationMetadata: result.metadata },
+      backup: path.join(backupRoot, entry.name, "conversation.json")
+    });
   }
   if (!apply || !updates.length) return;
   // Back up every original before replacing the first record.
@@ -149,7 +198,9 @@ export async function upgradeColleagueConversationRuntime({ systemRoot, apply, b
 function validateCurrentRuntimeHistories(record) {
   for (const chat of [record, ...record.previousConversations]) {
     const result = upgradeConversationRuntimeState({ metadata: chat.conversationMetadata || {}, conversationLog: chat.conversationLog });
-    if (result.changed) throw new Error("Colleague history contains an older runtime format. Complete its numbered runtime upgrade before starting fresh.");
+    if (result.changed) {
+      throw new Error("Colleague history contains an older runtime format. Complete its numbered runtime upgrade before starting fresh.");
+    }
   }
 }
 
@@ -160,20 +211,31 @@ export async function upgradeColleagueConversationHistory({ systemRoot, apply, b
   try {
     if (!(await lstat(root)).isDirectory()) throw new Error("Colleague state must be a regular directory.");
     entries = await readdir(root, { withFileTypes: true });
-  } catch (error) { if (error.code === "ENOENT") return; throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
   const updates = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected entry in Colleague state. Inspect it before upgrading.");
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) {
+      throw new Error("Unexpected entry in Colleague state. Inspect it before upgrading.");
+    }
     const file = path.join(root, entry.name, "conversation.json");
     let original;
     try {
       if (!(await lstat(file)).isFile()) throw new Error("Colleague history must be a regular file.");
       original = await readFile(file, "utf8");
-    } catch (error) { if (error.code === "ENOENT") continue; throw error; }
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
     let saved;
     try { saved = JSON.parse(original); } catch { throw new Error("Colleague history is invalid JSON. Restore it before upgrading."); }
     validateColleagueConversationRecord(saved, entry.name);
-    if (saved.schemaVersion === 3) { validateCurrentRuntimeHistories(saved); continue; }
+    if (saved.schemaVersion === 3) {
+      validateCurrentRuntimeHistories(saved);
+      continue;
+    }
     if (saved.schemaVersion === 1) {
       if (apply) throw new Error("Complete the earlier Colleague conversation upgrade before retaining conversation history.");
       report("info", `${entry.name}: earlier numbered upgrades will retain this conversation before adding fresh-chat identity support.`);
@@ -186,7 +248,10 @@ export async function upgradeColleagueConversationHistory({ systemRoot, apply, b
     if (apply && runtime.changed) throw new Error("Complete the earlier native delivery upgrade before retaining conversation history.");
     const next = { ...saved, schemaVersion: 3, runtimeId: entry.name, previousConversations: [] };
     validateColleagueConversationRecord(next, entry.name);
-    report("info", `${entry.name}: retain the exact active native identity, history and user policy while enabling explicit fresh conversations. Stop all writers before applying; nothing will be sent or resumed.`);
+    report(
+      "info",
+      `${entry.name}: retain the exact active native identity, history and user policy while enabling explicit fresh conversations. Stop all writers before applying; nothing will be sent or resumed.`
+    );
     updates.push({ file, original, next, backup: path.join(backupRoot, entry.name, "conversation.json") });
   }
   if (!apply || !updates.length) return;

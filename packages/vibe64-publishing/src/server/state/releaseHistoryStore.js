@@ -97,7 +97,14 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
     return records.sort((left, right) => activity(right).localeCompare(activity(left)) || right.id.localeCompare(left.id)).slice(0, limit);
   }
 
-  return Object.freeze({ directory, read, update, create, appendLog, list });
+  return Object.freeze({
+    directory,
+    read,
+    update,
+    create,
+    appendLog,
+    list
+  });
 }
 
 export { RELEASE_RECORD_CONTRACT, createReleaseHistoryStore };

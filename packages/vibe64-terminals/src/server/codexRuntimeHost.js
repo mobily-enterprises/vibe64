@@ -352,17 +352,20 @@ function createCodexSessionRuntimeHost({
       path.resolve(metadataRuntimeDir) === path.resolve(expectedRuntimeDir)
       ? metadataRuntimeDir
       : "";
-    return { ...codexAppServerRuntimeOptions({
-      runtimeDir: trimmedText(runtimeDir) || reusableMetadataRuntimeDir || expectedRuntimeDir,
-      session,
-      executionRoot: effectiveExecutionRoot,
-      terminalEnv: effectiveTerminalEnv,
-      toolHomeSource,
-      workdir: effectiveWorkdir
-    }), ...(effectiveRuntime.learningScope ? { learningRuntime: effectiveRuntime } : {}),
+    return {
+      ...codexAppServerRuntimeOptions({
+        runtimeDir: trimmedText(runtimeDir) || reusableMetadataRuntimeDir || expectedRuntimeDir,
+        session,
+        executionRoot: effectiveExecutionRoot,
+        terminalEnv: effectiveTerminalEnv,
+        toolHomeSource,
+        workdir: effectiveWorkdir
+      }),
+      ...(effectiveRuntime.learningScope ? { learningRuntime: effectiveRuntime } : {}),
       routingModelProviderId: vibe64AssistantSelectionFromMetadata(session.metadata, { required: false })?.modelProviderId,
       ...(session.status === VIBE64_SESSION_STATUS.RENEWAL_PENDING && trimmedText(metadata.renewal_id)
-        ? { renewalId: trimmedText(metadata.renewal_id) } : {}) };
+        ? { renewalId: trimmedText(metadata.renewal_id) } : {})
+    };
   }
 
   function codexAppServerRuntimeOptionsForSession(session, options) {

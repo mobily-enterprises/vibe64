@@ -7,7 +7,10 @@ import { validateColleagueConversationRecord } from "./conversationRecord.js";
 const object = value => value && typeof value === "object" && !Array.isArray(value);
 const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/iu;
 function parse(source) {
-  try { const value = JSON.parse(source); if (object(value)) return value; } catch { /* Never report private contents. */ }
+  try {
+    const value = JSON.parse(source);
+    if (object(value)) return value;
+  } catch { /* Never report private contents. */ }
   throw new Error("Colleague operation-receipt state is invalid. Inspect it before repairing.");
 }
 function completedAction(operation) {
@@ -31,7 +34,9 @@ export async function repairColleagueRetiredOperation({ systemRoot, apply, backu
   });
   const records = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected Colleague state entry. Inspect it before repairing.");
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) {
+      throw new Error("Unexpected Colleague state entry. Inspect it before repairing.");
+    }
     const filePath = path.join(root, entry.name, "conversation.json");
     await verifyUpgradeParents(systemRoot, filePath);
     const original = await readUpgradeFile(filePath);
@@ -44,7 +49,9 @@ export async function repairColleagueRetiredOperation({ systemRoot, apply, backu
     const retired = saved.retiredConversation;
     if (!retired?.operation || retired.assistantSelection?.engineId !== "codex" ||
         saved.conversationMetadata?.runtime || saved.previousConversations?.length || saved.freshOperation) return null;
-    const refuse = () => { throw new Error(`${ownerKey}: the retired operation is not an unchanged completed legacy receipt. Inspect original completion and native receipts; no work was replayed.`); };
+    const refuse = () => { throw new Error(
+      `${ownerKey}: the retired operation is not an unchanged completed legacy receipt. Inspect original completion and native receipts; no work was replayed.`
+    ); };
     const operation = retired.operation;
     if (saved.schemaVersion !== 3 || saved.status !== "ready" || saved.operation ||
         !isDeepStrictEqual(saved.assistantSelection, retired.assistantSelection) ||
@@ -54,7 +61,8 @@ export async function repairColleagueRetiredOperation({ systemRoot, apply, backu
         ["request", "replacement", "rewind", "continuity"].some(key => Object.hasOwn(saved.conversationMetadata || {}, key)) ||
         saved.conversationLog.some(turn => ["running", "working", "inProgress"].includes(turn.metadata?.runtime?.status) ||
           turn.metadata?.applicationTools?.some(call => call.status !== "complete" || !call.result)) ||
-        (saved.assignments || []).some(assignment => assignment.turns?.some(turn => ["reserved", "unknown"].includes(turn.status)))) refuse();
+        (saved.assignments || []).some(assignment =>
+          assignment.turns?.some(turn => ["reserved", "unknown"].includes(turn.status)))) refuse();
     const { operation: completedOperationReceipt, ...retained } = retired;
     const next = { ...saved, retiredConversation: { ...retained, completedOperationReceipt } };
     validateColleagueConversationRecord(next, ownerKey);
@@ -84,14 +92,23 @@ export async function repairColleagueRetiredOperation({ systemRoot, apply, backu
       }
     }
   }
-  await publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates: async () => {
-    const updates = [];
-    for (const record of records) {
-      const update = inspect(record);
-      if (!update) continue;
-      report("warning", `${record.ownerKey}: retain the completed operation as a receipt with all writers stopped. Native continuity must still pass its original proof; no request or native file changes.`);
-      updates.push(update);
+  await publishStateUpgradeFiles({
+    systemRoot,
+    apply,
+    backupRoot,
+    report,
+    prepareUpdates: async () => {
+      const updates = [];
+      for (const record of records) {
+        const update = inspect(record);
+        if (!update) continue;
+        report(
+          "warning",
+          `${record.ownerKey}: retain the completed operation as a receipt with all writers stopped. Native continuity must still pass its original proof; no request or native file changes.`
+        );
+        updates.push(update);
+      }
+      return updates;
     }
-    return updates;
-  } });
+  });
 }

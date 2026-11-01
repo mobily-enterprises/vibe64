@@ -41,26 +41,85 @@ const INTEGRATION_PROVIDERS = Object.freeze([googleCalendarDefinition, ...connec
 
 // Providers whose own OAuth client Vibe64 can register, keyed by provider id.
 const OAUTH_CLIENT_REGISTRARS = Object.freeze({
-  amplitude: (integration, { callbackUrl, fetchImpl }) => registerAmplitudeClient({ region: integration.settings?.region, clientName: integration.displayName || "Amplitude",
-    callbackUrl, scopes: integration.scopes }, { fetchImpl }),
-  heygen: (integration, { callbackUrl, fetchImpl }) => registerHeyGenClient({ clientName: integration.displayName || "HeyGen", callbackUrl }, { fetchImpl }),
-  hex: (integration, { callbackUrl, fetchImpl }) => registerHexClient({ endpoint: integration.settings?.endpoint, clientName: integration.displayName || "Hex", callbackUrl, scopes: integration.scopes }, { fetchImpl }),
-  granola: (integration, { callbackUrl, fetchImpl }) => registerGranolaClient({ clientName: integration.displayName || "Granola", callbackUrl }, { fetchImpl }),
-  atlassian: (integration, { callbackUrl, fetchImpl }) => registerAtlassianClient({ clientName: integration.displayName || "Atlassian", callbackUrl, scopes: integration.scopes }, { fetchImpl }),
+  amplitude: (integration, {
+    callbackUrl,
+    fetchImpl
+  }) => registerAmplitudeClient({
+    region: integration.settings?.region,
+    clientName: integration.displayName || "Amplitude",
+    callbackUrl,
+    scopes: integration.scopes
+  }, { fetchImpl }),
+  heygen: (integration, {
+    callbackUrl,
+    fetchImpl
+  }) => registerHeyGenClient({
+    clientName: integration.displayName || "HeyGen",
+    callbackUrl
+  }, { fetchImpl }),
+  hex: (integration, {
+    callbackUrl,
+    fetchImpl
+  }) => registerHexClient({
+    endpoint: integration.settings?.endpoint,
+    clientName: integration.displayName || "Hex",
+    callbackUrl,
+    scopes: integration.scopes
+  }, { fetchImpl }),
+  granola: (integration, {
+    callbackUrl,
+    fetchImpl
+  }) => registerGranolaClient({
+    clientName: integration.displayName || "Granola",
+    callbackUrl
+  }, { fetchImpl }),
+  atlassian: (integration, {
+    callbackUrl,
+    fetchImpl
+  }) => registerAtlassianClient({
+    clientName: integration.displayName || "Atlassian",
+    callbackUrl,
+    scopes: integration.scopes
+  }, { fetchImpl }),
   "confidence-exp": registerConfidenceOAuthClient,
   "confidence-flags": registerConfidenceOAuthClient,
-  sanity: (integration, { callbackUrl, fetchImpl }) => registerSanityClient({ clientName: integration.displayName || "Sanity", callbackUrl, scopes: integration.scopes }, { fetchImpl }),
-  sentry: (integration, { callbackUrl, fetchImpl }) => registerSentryClient({ clientName: integration.displayName || "Sentry", callbackUrl, scopes: integration.scopes }, { fetchImpl }),
-  n8n: (integration, { callbackUrl, fetchImpl, expectedEndpoint }) => registerN8nClient({ serverUrl: integration.settings?.serverUrl,
-    clientName: integration.displayName || "n8n", callbackUrl, scopes: integration.scopes
-  }, { fetchImpl: (address, options) => {
-    if (options.method === "POST" && String(address) !== expectedEndpoint) throw new Error("OAuth authority changed. Discover settings again.");
-    return fetchImpl(address, options);
-  } })
+  sanity: (integration, {
+    callbackUrl,
+    fetchImpl
+  }) => registerSanityClient({
+    clientName: integration.displayName || "Sanity",
+    callbackUrl,
+    scopes: integration.scopes
+  }, { fetchImpl }),
+  sentry: (integration, {
+    callbackUrl,
+    fetchImpl
+  }) => registerSentryClient({
+    clientName: integration.displayName || "Sentry",
+    callbackUrl,
+    scopes: integration.scopes
+  }, { fetchImpl }),
+  n8n: (integration, { callbackUrl, fetchImpl, expectedEndpoint }) => registerN8nClient({
+    serverUrl: integration.settings?.serverUrl,
+    clientName: integration.displayName || "n8n",
+    callbackUrl,
+    scopes: integration.scopes
+  }, {
+    fetchImpl: (address, options) => {
+      if (options.method === "POST" && String(address) !== expectedEndpoint) {
+        throw new Error("OAuth authority changed. Discover settings again.");
+      }
+      return fetchImpl(address, options);
+    }
+  })
 });
 
 function registerConfidenceOAuthClient(integration, { callbackUrl, fetchImpl }) {
-  return registerConfidenceClient({ clientName: integration.displayName || "Confidence", callbackUrl, scopes: integration.scopes }, { fetchImpl });
+  return registerConfidenceClient({
+    clientName: integration.displayName || "Confidence",
+    callbackUrl,
+    scopes: integration.scopes
+  }, { fetchImpl });
 }
 
 async function readApplicationIntegrations({ sourceRoot }) {
@@ -79,10 +138,20 @@ async function inspectApplicationIntegrationSetup(context, input) {
   if (!integration) throw sourceEditorError("Choose an integration saved in this project.", "vibe64_integration_missing", {}, 404);
   // readable-check: allow optional-call - data: an integration provider definition decides per settings only when it has configurationOnlyForSettings()
   if (INTEGRATION_PROVIDERS.some((provider) => provider.id === integration.provider && (provider.configurationOnly || provider.configurationOnlyForSettings?.(integration?.settings || {})))) {
-    throw sourceEditorError("This integration uses public configuration, not an account connection. Save its settings and wire them into the application.", "vibe64_integration_configuration_only", {}, 422);
+    throw sourceEditorError(
+      "This integration uses public configuration, not an account connection. Save its settings and wire them into the application.",
+      "vibe64_integration_configuration_only",
+      {},
+      422
+    );
   }
   if (integration.accountMode === "per-user" && input.operation !== "status") {
-    throw sourceEditorError("Each application user connects through the application's own account screen.", "vibe64_integration_app_user_required", {}, 422);
+    throw sourceEditorError(
+      "Each application user connects through the application's own account screen.",
+      "vibe64_integration_app_user_required",
+      {},
+      422
+    );
   }
   if (input.operation.startsWith("ads-") && (integration.provider !== "google-ads" || integration.accountMode !== "shared")) {
     throw sourceEditorError("Select a shared Google Ads project connection.", "vibe64_ads_binding_invalid", {}, 422);
@@ -95,8 +164,10 @@ async function inspectApplicationIntegrationSetup(context, input) {
     }
     paymentAccountId = payment.providerAccountId;
   }
-  const setup = await inspectVibe64IntegrationSetup({ projectRoot: context.sourceRoot,
-    rootMode: context.releaseEnvironmentFile ? "directory" : "repository" });
+  const setup = await inspectVibe64IntegrationSetup({
+    projectRoot: context.sourceRoot,
+    rootMode: context.releaseEnvironmentFile ? "directory" : "repository"
+  });
   if (setup.status !== "ready") {
     return { ok: true, status: "unconfigured", setupStatus: setup.status };
   }
@@ -112,19 +183,42 @@ async function inspectApplicationIntegrationSetup(context, input) {
  * the application's executionRoot.
  */
 async function runApplicationIntegrationSetup({
-  sourceRoot, executionRoot = sourceRoot, applicationAccount, env, releaseEnvironmentFile, project, session, selection,
+  sourceRoot,
+  executionRoot = sourceRoot,
+  applicationAccount,
+  env,
+  releaseEnvironmentFile,
+  project,
+  session,
+  selection,
   runCommand = runVibe64Command
 }) {
   createIntegrationSetupRequest(selection);
-  const checked = await inspectApplicationIntegrationSetup({ sourceRoot, releaseEnvironmentFile, policy: sourceEditorFilePolicy() }, selection);
+  const checked = await inspectApplicationIntegrationSetup({
+    sourceRoot,
+    releaseEnvironmentFile,
+    policy: sourceEditorFilePolicy()
+  }, selection);
   if (!checked.setup) return checked;
   const result = await runIntegrationSetupCommand({
-    runCommand, command: checked.setup.command, sourceRoot: executionRoot, applicationAccount,
-    runtimes: checked.runtime.runtimes, env, releaseEnvironmentFile,
-    project, session, selection
+    runCommand,
+    command: checked.setup.command,
+    sourceRoot: executionRoot,
+    applicationAccount,
+    runtimes: checked.runtime.runtimes,
+    env,
+    releaseEnvironmentFile,
+    project,
+    session,
+    selection
   });
   if (checked.paymentAccountId && result.providerAccountId !== checked.paymentAccountId) {
-    throw sourceEditorError("The application returned a different payment account. Check its configuration before continuing.", "vibe64_payment_account_mismatch", {}, 409);
+    throw sourceEditorError(
+      "The application returned a different payment account. Check its configuration before continuing.",
+      "vibe64_payment_account_mismatch",
+      {},
+      409
+    );
   }
   // A CLI or the application command can edit source outside the editor lock.
   // Do not attribute the result to configuration that changed while it ran.
@@ -189,10 +283,17 @@ function createIntegrationOperations({
   async function runIntegrationSetup(input = {}) {
     return runSourceEditorOperation(async () => {
       if (input.environment !== "development") {
-        throw sourceEditorError("Session integration setup requires the development environment.", "vibe64_integration_environment_invalid", {}, 422);
+        throw sourceEditorError(
+          "Session integration setup requires the development environment.",
+          "vibe64_integration_environment_invalid",
+          {},
+          422
+        );
       }
       createIntegrationSetupRequest(input);
-      if ((input.operation.startsWith("payments-") || input.operation.startsWith("ads-")) && input.vibe64User && input.vibe64User.role !== "owner") {
+      if ((input.operation.startsWith("payments-") || input.operation.startsWith("ads-")) &&
+          input.vibe64User &&
+          input.vibe64User.role !== "owner") {
         throw sourceEditorError("Only the workspace owner can manage project payments or advertising.", "vibe64_owner_required", {}, 403);
       }
       const preflight = await runSourceEditorWriteExclusive(input, async (context) => {
@@ -206,15 +307,19 @@ function createIntegrationOperations({
       return runSourceEditorWriteExclusive(input, async (context) => {
         const savedRequest = await inspectIntegrationSetupRequest(context, input);
         const setupOptions = {
-          sourceRoot: context.sourceRoot, env,
-          project: await projectService.readCurrentProject(), session: context.session,
-          selection: input, runCommand: integrationCommandRunner
+          sourceRoot: context.sourceRoot,
+          env,
+          project: await projectService.readCurrentProject(),
+          session: context.session,
+          selection: input,
+          runCommand: integrationCommandRunner
         };
         // A repeated chat Connect must recover an existing attempt rather
         // than replace it. Keep status and creation inside the same write lock.
         let result;
         if (savedRequest?.outcome === "pending" && input.operation === "connect") {
-          result = await runApplicationIntegrationSetup({ ...setupOptions,
+          result = await runApplicationIntegrationSetup({
+            ...setupOptions,
             selection: { ...input, operation: "status", verificationInput: undefined }
           });
         }
@@ -228,7 +333,8 @@ function createIntegrationOperations({
               "vibe64_integration_setup_unverified", {}, 409);
           }
           const integrationSetup = await context.runtime.store.completeIntegrationSetupRequest(context.sessionId, {
-            ...input.setupRequest, verifiedAt: result.verifiedAt
+            ...input.setupRequest,
+            verifiedAt: result.verifiedAt
           });
           if (integrationSetup.outcome === "completed") {
             await publishSessionChanged(context.sessionId, { reason: "integration-setup-completed", session: null });
@@ -250,23 +356,41 @@ function createIntegrationOperations({
       const candidateRegistration = draft?.registrations?.[candidate?.authentication?.registrationRef];
       if (candidateRegistration?.clientId === "") candidateRegistration.clientId = "MISSING";
       const configuration = validateIntegrationConfiguration(draft, {
-        providers: INTEGRATION_PROVIDERS, allowUnknownProviders: true
+        providers: INTEGRATION_PROVIDERS,
+        allowUnknownProviders: true
       });
       const integration = configuration.integrations[input.integrationId];
       const registration = configuration.registrations[integration?.authentication.registrationRef];
-      if (!Object.hasOwn(OAUTH_CLIENT_REGISTRARS, integration?.provider) || integration.authentication.method !== "oauth2" || registration?.source !== "own" ||
+      if (!Object.hasOwn(OAUTH_CLIENT_REGISTRARS, integration?.provider) ||
+          integration.authentication.method !== "oauth2" ||
+          registration?.source !== "own" ||
         registration.clientId !== "MISSING" || Object.values(configuration.integrations).filter((item) =>
           item.authentication.registrationRef === integration.authentication.registrationRef).length !== 1) {
-        throw sourceEditorError("Choose a new, unshared supported OAuth registration before registering.", "vibe64_integration_registration_invalid", {}, 422);
+        throw sourceEditorError(
+          "Choose a new, unshared supported OAuth registration before registering.",
+          "vibe64_integration_registration_invalid",
+          {},
+          422
+        );
       }
       const secretKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(registration.clientSecretRef || "")?.[1];
       const callbackKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(registration.callbackUrlRef || "")?.[1];
       const clientIdKey = `${input.integrationId.toUpperCase().replaceAll("-", "_")}_CLIENT_ID`;
       const keys = [secretKey, callbackKey, clientIdKey];
-      if (!secretKey || !callbackKey || new Set(keys).size !== 3 || keys.some(runtimeConfigKeyIsVibe64Reserved) || !/^[A-Z_][A-Z0-9_]*$/u.test(clientIdKey)) {
-        throw sourceEditorError("Use distinct Env references for this client's secret, callback and recovery client ID.", "vibe64_integration_registration_invalid", {}, 422);
+      if (!secretKey ||
+          !callbackKey ||
+          new Set(keys).size !== 3 ||
+          keys.some(runtimeConfigKeyIsVibe64Reserved) ||
+          !/^[A-Z_][A-Z0-9_]*$/u.test(clientIdKey)) {
+        throw sourceEditorError(
+          "Use distinct Env references for this client's secret, callback and recovery client ID.",
+          "vibe64_integration_registration_invalid",
+          {},
+          422
+        );
       }
-      if (integration.provider === "n8n" && integration.settings?.oauthDiscovery?.resource !== new URL(integration.settings.serverUrl).href) {
+      if (integration.provider === "n8n" &&
+          integration.settings?.oauthDiscovery?.resource !== new URL(integration.settings.serverUrl).href) {
         throw sourceEditorError("Discover settings for the current n8n Server URL first.", "connector_discovery_required", {}, 422);
       }
       return runSourceEditorWriteExclusive(input, async (context) => {
@@ -280,26 +404,46 @@ function createIntegrationOperations({
           throw sourceEditorError("Read project Env before registering a client.", "vibe64_integration_registration_unavailable", {}, 503);
         }
         if (environment.env.records.some((record) => keys.includes(record.key) && record.valuePresent)) {
-          throw sourceEditorError("Registration Env keys already contain values. Recover the existing client or choose unused keys before registering another.", "vibe64_integration_registration_exists", {}, 409);
+          throw sourceEditorError(
+            "Registration Env keys already contain values. Recover the existing client or choose unused keys before registering another.",
+            "vibe64_integration_registration_exists",
+            {},
+            409
+          );
         }
         const expectedEndpoint = integration.settings?.oauthDiscovery?.oauth.registration_endpoint;
         const client = await OAUTH_CLIENT_REGISTRARS[integration.provider](integration, {
-          callbackUrl: input.callbackUrl, fetchImpl: integrationDiscoveryFetch, expectedEndpoint
+          callbackUrl: input.callbackUrl,
+          fetchImpl: integrationDiscoveryFetch,
+          expectedEndpoint
         });
         try {
-          const savedEnv = await projectService.saveEnvUserValues({ ...envInput, values: {
-            [secretKey]: { value: client.clientSecret, secret: true },
-            [callbackKey]: { value: input.callbackUrl, secret: false },
-            [clientIdKey]: { value: client.clientId, secret: false }
-          } });
+          const savedEnv = await projectService.saveEnvUserValues({
+            ...envInput,
+            values: {
+              [secretKey]: { value: client.clientSecret, secret: true },
+              [callbackKey]: { value: input.callbackUrl, secret: false },
+              [clientIdKey]: { value: client.clientId, secret: false }
+            }
+          });
           if (!savedEnv?.ok) throw new Error("Env save failed.");
           registration.clientId = client.clientId;
-          if (integration.provider === "n8n") integration.settings = { ...integration.settings, serverUrl: client.resource,
-            oauthDiscovery: { resource: client.resource, oauth: client.oauth, scopes: client.scopes } };
+          if (integration.provider === "n8n") integration.settings = {
+            ...integration.settings,
+            serverUrl: client.resource,
+            oauthDiscovery: { resource: client.resource, oauth: client.oauth, scopes: client.scopes }
+          };
           const change = { ...input, path: "integrations.json", text: `${JSON.stringify(configuration, null, 2)}\n` };
-          const file = input.baseHash === null ? await createSourceEditorFile(context, change) : await saveSourceEditorFile(context, change);
-          return { ok: true, configuration, baseHash: file.hash, fileChange: sourceEditorFileChange(context, change, file),
-            ...(client.clientSecretExpiresAt === undefined ? {} : { clientSecretExpiresAt: client.clientSecretExpiresAt }) };
+          const file = input.baseHash === null
+            ? await createSourceEditorFile(context, change)
+            : await saveSourceEditorFile(context, change);
+          return {
+            ok: true,
+            configuration,
+            baseHash: file.hash,
+            fileChange: sourceEditorFileChange(context, change, file),
+            ...(client.clientSecretExpiresAt === undefined ? {} : { clientSecretExpiresAt: client.clientSecretExpiresAt })
+          };
         } catch {
           throw sourceEditorError(`The provider created a client, but local setup did not finish. Inspect Env for ${clientIdKey}, ${secretKey} and ${callbackKey}; values may already be saved. Recover that client before registering again.`,
             "vibe64_integration_registration_incomplete", {}, 409);
@@ -331,9 +475,13 @@ function createIntegrationOperations({
         `${provider.id} ${provider.name} ${provider.description || ""}`.toLowerCase().includes(search));
       const offset = input.offset || 0;
       return {
-        ok: true, total: matches.length, nextOffset: offset + 20 < matches.length ? offset + 20 : null,
+        ok: true,
+        total: matches.length,
+        nextOffset: offset + 20 < matches.length ? offset + 20 : null,
         providers: matches.slice(offset, offset + 20).map((provider) => ({
-          id: provider.id, name: provider.name, description: String(provider.description || "").slice(0, 512),
+          id: provider.id,
+          name: provider.name,
+          description: String(provider.description || "").slice(0, 512),
           descriptionTruncated: String(provider.description || "").length > 512
         }))
       };
@@ -388,8 +536,15 @@ function createIntegrationOperations({
 
 function applyIntegrationConfigurationChanges(configuration, changes) {
   const records = ["integrations", "registrations"].flatMap((key) => Object.keys(changes[key] || {}));
-  if (!records.length || records.length > 50 || records.some((id) => !/^[a-z][a-z0-9-]*$/u.test(id) || ["constructor", "prototype"].includes(id))) {
-    throw sourceEditorError("Supply between 1 and 50 named integration or registration changes.", "vibe64_integration_changes_invalid", {}, 422);
+  if (!records.length ||
+      records.length > 50 ||
+      records.some((id) => !/^[a-z][a-z0-9-]*$/u.test(id) || ["constructor", "prototype"].includes(id))) {
+    throw sourceEditorError(
+      "Supply between 1 and 50 named integration or registration changes.",
+      "vibe64_integration_changes_invalid",
+      {},
+      422
+    );
   }
   /**
    * JSON merge-patch semantics: omissions preserve values, null removes, arrays

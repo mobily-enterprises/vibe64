@@ -59,13 +59,17 @@ function createCodexConversationPreparation({
 }) {
   const { codexAppServerProviderKey } = runtimeHost;
   const {
-    createRuntimeForSession, codexAppServerManagedThreadIdentity,
-    codexAppServerRuntimeOptionsForSession, codexAppServerControlRuntimeOptionsForSession
+    createRuntimeForSession,
+    codexAppServerManagedThreadIdentity,
+    codexAppServerRuntimeOptionsForSession,
+    codexAppServerControlRuntimeOptionsForSession
   } = sessionRuntimeHost;
   const { codexToolHomeResult, codexReconnectTerminalFailureForError } = accountPreparation;
   const {
-    vibe64SessionContextInput, withCodexSessionStartupGate,
-    codexProjectTerminalEnv, codexProjectTerminalEnvFailureResult
+    vibe64SessionContextInput,
+    withCodexSessionStartupGate,
+    codexProjectTerminalEnv,
+    codexProjectTerminalEnvFailureResult
   } = sessionEnvironment;
   const {
     running: writeCodexAppServerRunning,
@@ -128,7 +132,8 @@ function createCodexConversationPreparation({
         const workdir = learningRoot || sessionSourcePath(session);
         const threadId = codexThreadIdForWorkdir(session, workdir);
         return {
-          workdir, threadId,
+          workdir,
+          threadId,
           get available() {
             return !sessionIsClosing(session) && session.status !== VIBE64_SESSION_STATUS.ARCHIVED;
           }
@@ -319,7 +324,8 @@ function createCodexConversationPreparation({
           },
           preparation(currentSession) {
             const conversation = createMainConversationBinding(runtime.store, currentSession.sessionId, {
-              runtime, session: currentSession
+              runtime,
+              session: currentSession
             }).conversation({ publish: publishSessionChanged, checkpoint: checkpointCodexAppServerTurn });
             return conversation.preparation({ agentSettings, hostContext: vibe64SessionContextInput(), workdir });
           },
@@ -349,8 +355,10 @@ function createCodexConversationPreparation({
   async function readCodexAppServerGoalContext(sessionId, options = {}) {
     const context = await codexAppServerSessionContext(sessionId, options);
     if (context.ok === false) return context;
-    return { threadId: codexAppServerTurnState(context.session).threadId ||
-      codexThreadIdForWorkdir(context.session, context.workdir) };
+    return {
+      threadId: codexAppServerTurnState(context.session).threadId ||
+        codexThreadIdForWorkdir(context.session, context.workdir)
+    };
   }
 
   function codexAppServerControlPreparation(sessionId, context) {
@@ -400,7 +408,8 @@ function createCodexConversationPreparation({
 
   async function control(sessionId, options, input = {}) {
     if (codexAppServerAdmissionError(sessionId)) return codexAppServerFrozenTurnInterruptResponse({
-      threadId: input.threadId || input.codexSessionId, turnId: input.turnId || input.codexTurnId
+      threadId: input.threadId || input.codexSessionId,
+      turnId: input.turnId || input.codexTurnId
     });
     const { session: _openingSession, ...currentOptions } = options || {};
     const current = await codexAppServerSessionContext(sessionId, { ...currentOptions, allowClosing: true });

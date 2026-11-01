@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { assertSessionRepositoryReview, parseSessionConnectedContribution, serializeSessionConnectedSources, serializeSessionConnectedSubmissions, sessionConnectedContribution,
+import { assertSessionRepositoryReview,
+  parseSessionConnectedContribution,
+  serializeSessionConnectedSources,
+  serializeSessionConnectedSubmissions,
+  sessionConnectedContribution,
   sessionConnectedSources, sessionConnectedSubmissions } from "@local/vibe64-core/server/projectRepository";
 import { assertProjectEffectAdmission, currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
@@ -44,7 +48,14 @@ function connectedUpdateOutcome(update, branch) {
  * @param {SessionWorkOperations} dependencies.workOperations
  * @param {() => SessionsService} dependencies.sessions
  */
-function createConnectedContributions({ actions, project, terminals, publishSessionChanged, workOperations, sessions }) {
+function createConnectedContributions({
+  actions,
+  project,
+  terminals,
+  publishSessionChanged,
+  workOperations,
+  sessions
+}) {
   function executeConnectedAction(projectSlug, actionId, input, requestContext = {}) {
     const origin = currentProjectRequestContext();
     if (!origin?.slug || origin.learningScope || origin.slug === projectSlug ||
@@ -54,12 +65,20 @@ function createConnectedContributions({ actions, project, terminals, publishSess
       });
     }
     return actions.execute({
-      actionId, input: { ...input, projectSlug },
-      context: { surface: "app", channel: "internal", requestMeta: {
-        ...requestContext.requestMeta,
-        request: { ...requestContext.requestMeta.request, headers: requestContext.requestMeta.request.headers,
-          params: { slug: projectSlug } }
-      } }
+      actionId,
+      input: { ...input, projectSlug },
+      context: {
+        surface: "app",
+        channel: "internal",
+        requestMeta: {
+          ...requestContext.requestMeta,
+          request: {
+            ...requestContext.requestMeta.request,
+            headers: requestContext.requestMeta.request.headers,
+            params: { slug: projectSlug }
+          }
+        }
+      }
     });
   }
 
@@ -74,23 +93,32 @@ function createConnectedContributions({ actions, project, terminals, publishSess
       }, requestContext);
       if (work?.ok !== true) throw Object.assign(new Error(work?.error || "The connected source could not be inspected."), {
         code: work?.code || "vibe64_connected_source_unavailable",
-        details: { repository: binding.contribution.repository, projectSlug: binding.projectSlug,
-          sessionId: binding.contribution.id, ...work?.details }
+        details: {
+          repository: binding.contribution.repository,
+          projectSlug: binding.projectSlug,
+          sessionId: binding.contribution.id,
+          ...work?.details
+        }
       });
       const publishedCommit = work.publishedCommit === binding.contribution.baseCommit ? "" : text(work.publishedCommit);
       connected.push({
-        ...binding, sessionId: work.sessionId, destination: work.destination,
-        ...(captureSnapshots ? { snapshot: {
-          contribution: binding.contribution,
-          sessionId: work.sessionId,
-          worktreePath: work.worktreePath,
-          baseCommit: work.baseCommit,
-          canonicalCommit: work.canonicalCommit,
-          sessionHead: work.sessionHead,
-          worktreeTree: work.worktreeTree
-        } } : {}),
+        ...binding,
+        sessionId: work.sessionId,
+        destination: work.destination,
+        ...(captureSnapshots ? {
+          snapshot: {
+            contribution: binding.contribution,
+            sessionId: work.sessionId,
+            worktreePath: work.worktreePath,
+            baseCommit: work.baseCommit,
+            canonicalCommit: work.canonicalCommit,
+            sessionHead: work.sessionHead,
+            worktreeTree: work.worktreeTree
+          }
+        } : {}),
         unsaved: work.unsaved === true || work.ahead > 0,
-        publishedCommit, submittedCommit,
+        publishedCommit,
+        submittedCommit,
         needsSave: work.unsaved === true || work.ahead > 0 || Boolean(publishedCommit && publishedCommit !== submittedCommit),
         reconciled: work.operation?.status !== "running" && work.operation?.reconciled !== false
       });
@@ -123,10 +151,14 @@ function createConnectedContributions({ actions, project, terminals, publishSess
       pending.needsSave
         ? `Save connected work in ${pending.contribution.repository} before saving the main project.`
         : `Reconcile the pushed work in ${pending.contribution.repository} before saving the main project.`
-    ), { code: "vibe64_connected_save_required", details: {
-      repository: pending.contribution.repository, projectSlug: pending.projectSlug,
-      sessionId: pending.sessionId
-    } });
+    ), {
+      code: "vibe64_connected_save_required",
+      details: {
+        repository: pending.contribution.repository,
+        projectSlug: pending.projectSlug,
+        sessionId: pending.sessionId
+      }
+    });
     const behind = checks.find(({ check }) => check.behind > 0);
     if (behind) {
       const { binding, check } = behind;
@@ -172,20 +204,28 @@ function createConnectedContributions({ actions, project, terminals, publishSess
         if (!item.needsSave) continue;
         const publication = item.unsaved
           ? await executeConnectedAction(item.projectSlug, "vibe64.sessions.connected.work.save", {
-              contribution: item.contribution, destinationReview: item.destination
-            }, requestContext)
+            contribution: item.contribution,
+            destinationReview: item.destination
+          }, requestContext)
           : { ok: true, status: "already_published", saveCommit: item.publishedCommit, reconciled: item.reconciled };
         if (publication?.ok !== true) throw Object.assign(new Error(publication?.error || "Connected Save was not confirmed."), {
-          code: publication?.code || "vibe64_connected_save_failed", details: publication?.details
+          code: publication?.code || "vibe64_connected_save_failed",
+          details: publication?.details
         });
         const entry = { contribution: item.contribution, submittedCommit: publication.saveCommit };
         const previous = submissions.findIndex(value => value.contribution.id === item.contribution.id);
         if (previous < 0) submissions.push(entry);
         else submissions[previous] = entry;
         const serialized = serializeSessionConnectedSubmissions(submissions);
-        const completed = { projectSlug: item.projectSlug, repository: item.contribution.repository,
-          sessionId: item.sessionId, saveCommit: publication.saveCommit,
-          status: publication.status, reconciled: publication.reconciled, recorded: false };
+        const completed = {
+          projectSlug: item.projectSlug,
+          repository: item.contribution.repository,
+          sessionId: item.sessionId,
+          saveCommit: publication.saveCommit,
+          status: publication.status,
+          reconciled: publication.reconciled,
+          recorded: false
+        };
         saved.push(completed);
         // Persist every confirmed publication before attempting the next repository.
         // If this write fails, the receiving session's normal Save recovery remains
@@ -212,7 +252,8 @@ function createConnectedContributions({ actions, project, terminals, publishSess
       visited.add(session.sessionId);
       if (!isDeepStrictEqual(sessionConnectedContribution(session), contribution)) {
         throw Object.assign(new Error("The receiving source binding changed. Preserve its checkout and review the connection."), {
-          code: "vibe64_contribution_authority_changed", details: { sessionId: session.sessionId }
+          code: "vibe64_contribution_authority_changed",
+          details: { sessionId: session.sessionId }
         });
       }
       const successorId = text(session.metadata?.renewed_to);
@@ -227,8 +268,12 @@ function createConnectedContributions({ actions, project, terminals, publishSess
       if (successor?.metadata?.renewed_from !== session.sessionId) break;
       session = successor;
     }
-    throw Object.assign(new Error("This contribution's current session is unavailable. Complete its renewal or recover its source in the receiving project."), {
-      code: "vibe64_connected_source_unavailable", details: { sessionId: session?.sessionId || contribution.id }
+    throw Object.assign(new Error(
+      "This contribution's current session is unavailable. Complete its renewal or recover its source in the receiving project."
+    ),
+      {
+      code: "vibe64_connected_source_unavailable",
+      details: { sessionId: session?.sessionId || contribution.id }
     });
   }
 
@@ -274,15 +319,24 @@ function createConnectedContributions({ actions, project, terminals, publishSess
           code: "vibe64_contribution_authority_changed"
         });
         let binding = sources.find(item => item.contribution.repository === repository);
-        if (binding && (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
-          throw Object.assign(new Error("This connection already owns a different source binding. Preserve its work and reconcile that binding before changing its project or target."), {
+        if (binding &&
+            (binding.projectSlug !== target.projectSlug || binding.contribution.integrationBranch !== source.integrationBranch)) {
+          throw Object.assign(new Error(
+            "This connection already owns a different source binding. Preserve its work and reconcile that binding before changing its project or target."
+          ),
+            {
             code: "vibe64_contribution_authority_changed"
           });
         }
         if (!binding) {
-          binding = { projectSlug: target.projectSlug, contribution: {
-            schemaVersion: 1, id: crypto.randomUUID(), ...source
-          } };
+          binding = {
+            projectSlug: target.projectSlug,
+            contribution: {
+              schemaVersion: 1,
+              id: crypto.randomUUID(),
+              ...source
+            }
+          };
           sources.push(binding);
           // Reserve the exact identity before creation, so a lost response or
           // partial preparation retries the same source instead of cloning again.
@@ -314,7 +368,9 @@ function createConnectedContributions({ actions, project, terminals, publishSess
         }
         remaining.delete(names[index]);
         if (remaining.size) {
-          report(`Preparing connected projects: ${[...remaining].join(", ")} (${targets.length - remaining.size} of ${targets.length} ready)`);
+          report(
+            `Preparing connected projects: ${[...remaining].join(", ")} (${targets.length - remaining.size} of ${targets.length} ready)`
+          );
         }
         return { repository, binding, allocation, update };
       }));
@@ -323,9 +379,14 @@ function createConnectedContributions({ actions, project, terminals, publishSess
         if (allocated[index].status === "rejected") throw allocated[index].reason;
         const { repository, binding, allocation, update } = allocated[index].value;
         if (allocation?.ok === false) return { ...allocation, prepared };
-        prepared.push({ repository, projectSlug: binding.projectSlug, sessionId: allocation.sessionId,
-          sourceReady: allocation.sourceReady === true, workspaceSetup: allocation.workspaceSetup,
-          update: connectedUpdateOutcome(update, binding.contribution.integrationBranch) });
+        prepared.push({
+          repository,
+          projectSlug: binding.projectSlug,
+          sessionId: allocation.sessionId,
+          sourceReady: allocation.sourceReady === true,
+          workspaceSetup: allocation.workspaceSetup,
+          update: connectedUpdateOutcome(update, binding.contribution.integrationBranch)
+        });
         if (allocation.sourceReady !== true) return {
           ok: false,
           code: "vibe64_connected_source_unavailable",
@@ -344,7 +405,8 @@ function createConnectedContributions({ actions, project, terminals, publishSess
     });
     await progress;
     return result?.ok === false ? {
-      ...result, prepared,
+      ...result,
+      prepared,
       ...(preparingRepository ? { failedRepository: preparingRepository } : {})
     } : result;
   }
@@ -380,8 +442,12 @@ function createConnectedContributions({ actions, project, terminals, publishSess
       }
       return skipped(text(updated.error) || `It could not be updated to ${branch}.`);
     }
-    return { ok: true, sessionId, status: updated.status === "already_current" ? "current" : "updated",
-      commit: text(updated.operation?.canonicalCommit || updated.canonicalCommit) };
+    return {
+      ok: true,
+      sessionId,
+      status: updated.status === "already_current" ? "current" : "updated",
+      commit: text(updated.operation?.canonicalCommit || updated.canonicalCommit)
+    };
   }
 
   async function inspectConnectedReplacement(session, input, requestContext) {
@@ -441,9 +507,15 @@ function createConnectedContributions({ actions, project, terminals, publishSess
               code: "vibe64_connected_replacement_changed"
             });
           }
-          const replacement = { ...binding, contribution: { ...binding.contribution,
-            id: crypto.randomUUID(), replaces: binding.contribution.id, baseCommit: entry.discardedHead
-          } };
+          const replacement = {
+            ...binding,
+            contribution: {
+              ...binding.contribution,
+              id: crypto.randomUUID(),
+              replaces: binding.contribution.id,
+              baseCommit: entry.discardedHead
+            }
+          };
           sources[sources.indexOf(previous)] = replacement;
           const serialized = serializeSessionConnectedSources(sources);
           await runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
@@ -493,18 +565,27 @@ function createConnectedContributions({ actions, project, terminals, publishSess
           await runtime.getSession(contribution.id, { inspectSource: false }));
         if (operation === "inputs") return session;
         if (operation === "update") return refreshConnectedContribution(runtime, session, contribution.integrationBranch);
-        if (operation === "check") return { ...await sessions().checkSessionUpdates(session.sessionId, { force: true }), sessionId: session.sessionId };
+        if (operation === "check") return {
+          ...await sessions().checkSessionUpdates(session.sessionId, { force: true }),
+          sessionId: session.sessionId
+        };
         const work = operation === "incoming"
           ? await sessions().inspectIncomingContributions(session.sessionId, { id: contribution.id })
           : operation === "save"
             ? await sessions().saveSessionWork(session.sessionId, input, requestContext)
             : await sessions().inspectSessionWork(session.sessionId, {}, {
-                includeConnected: false, inspectContributionPublication: true, knownSubmittedCommit: text(input.submittedCommit)
-              });
+              includeConnected: false,
+              inspectContributionPublication: true,
+              knownSubmittedCommit: text(input.submittedCommit)
+            });
         if (work.ok === false) return { ...work, details: { ...work.details, sessionId: session.sessionId } };
         if (work.operation?.status === "failed" && work.operation.code === "vibe64_session_save_publication_unknown") {
-          throw Object.assign(new Error(work.operation.error || "Whether the connected Save was pushed is still unknown. Inspect work before retrying."), {
-            code: work.operation.code, details: { sessionId: session.sessionId }
+          throw Object.assign(new Error(
+            work.operation.error || "Whether the connected Save was pushed is still unknown. Inspect work before retrying."
+          ),
+            {
+            code: work.operation.code,
+            details: { sessionId: session.sessionId }
           });
         }
         return { ...work, sessionId: session.sessionId };
@@ -528,7 +609,10 @@ function createConnectedContributions({ actions, project, terminals, publishSess
           predecessor = await runtime.getSession(contribution.replaces, { inspectSource: false });
           const saved = sessionConnectedContribution(predecessor);
           if (!saved || saved.repository !== contribution.repository || saved.integrationBranch !== contribution.integrationBranch) {
-            throw Object.assign(new Error("The replacement's original source binding changed. Preserve both sources and review the connection."), {
+            throw Object.assign(new Error(
+              "The replacement's original source binding changed. Preserve both sources and review the connection."
+            ),
+              {
               code: "vibe64_contribution_authority_changed"
             });
           }
@@ -550,7 +634,8 @@ function createConnectedContributions({ actions, project, terminals, publishSess
             return { ...allocated, sessionName };
           } catch (error) {
             vibe64SessionDebugLog("server.sessions.connected.name.error", {
-              error: vibe64SessionDebugError(error), sessionId: allocated.sessionId
+              error: vibe64SessionDebugError(error),
+              sessionId: allocated.sessionId
             });
             return allocated;
           }
@@ -566,19 +651,30 @@ function createConnectedContributions({ actions, project, terminals, publishSess
           const incoming = await sessions().inspectIncomingContributions(predecessor.sessionId, { id: contribution.replaces });
           const entry = incoming.contributions?.find(item => item.id === contribution.replaces);
           if (incoming.ok !== true || entry?.activeHead || entry?.discardedHead !== contribution.baseCommit) {
-            throw Object.assign(new Error("The discarded source changed before replacement creation. Preserve the reserved binding and inspect its original branch."), {
+            throw Object.assign(new Error(
+              "The discarded source changed before replacement creation. Preserve the reserved binding and inspect its original branch."
+            ),
+              {
               code: "vibe64_connected_replacement_changed"
             });
           }
         }
         return named(await sessions().createSession({ vibe64User: trustedAssistantUser(input) }, {
-          sessionId: contribution.id, expectedCommit: contribution.baseCommit, connectedContribution: contribution
+          sessionId: contribution.id,
+          expectedCommit: contribution.baseCommit,
+          connectedContribution: contribution
         }));
       });
-    },
+    }
   });
 
-  return Object.freeze({ assertConnectedWorkSaved, inspectConnectedWork, methods, prepareConnectedSourcesInsideAgentWrite, saveConnectedWork });
+  return Object.freeze({
+    assertConnectedWorkSaved,
+    inspectConnectedWork,
+    methods,
+    prepareConnectedSourcesInsideAgentWrite,
+    saveConnectedWork
+  });
 }
 
 export { createConnectedContributions };

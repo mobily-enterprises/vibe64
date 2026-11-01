@@ -108,11 +108,18 @@ function createAgentPreviewCommandLine({
     const words = (Array.isArray(args) ? args : []).map(trimmedText).filter(Boolean);
     const subcommand = words[1] || "";
     if (words[0] !== "identities" || words.length > (subcommand === "save" ? 2 : 1) || (subcommand && subcommand !== "save")) {
-      return responseError("Usage: vibe64-helper preview identities [save < identities.json]", "vibe64_agent_preview_identities_usage", { exitCode: 64 });
+      return responseError(
+        "Usage: vibe64-helper preview identities [save < identities.json]",
+        "vibe64_agent_preview_identities_usage",
+        { exitCode: 64 }
+      );
     }
     const projectSlug = workerRegistry.sessionProjectSlug(sessionId);
     if (!projectSlug) {
-      return responseError("Managed app identities are not bound to this session's project. Reconnect the assistant.", "vibe64_agent_preview_identities_project_required");
+      return responseError(
+        "Managed app identities are not bound to this session's project. Reconnect the assistant.",
+        "vibe64_agent_preview_identities_project_required"
+      );
     }
     return projectService.runInProjectContext(projectSlug, async () => {
       const status = await launchTarget.launchStatus(sessionId);
@@ -128,7 +135,11 @@ function createAgentPreviewCommandLine({
           // Invalid JSON is reported with the usage error below.
         }
         if (!Array.isArray(identities)) {
-          return responseError("Provide the complete ordered identity list as a JSON array on stdin.", "vibe64_agent_preview_identities_input_invalid", { exitCode: 64 });
+          return responseError(
+            "Provide the complete ordered identity list as a JSON array on stdin.",
+            "vibe64_agent_preview_identities_input_invalid",
+            { exitCode: 64 }
+          );
         }
         const undeclared = identities.filter((identity) => !identityTypes.includes(trimmedText(identity?.type)));
         if (undeclared.length) {
@@ -267,9 +278,13 @@ function createAgentPreviewCommandLine({
       const status = await launchTarget.launchStatus(sessionId);
       if (status?.ok === false) return finish({ ...status, exitCode: 1, stderr: `${status.error}\n` });
       const summary = statusSummary(status, sessionId);
-      return finish({ ok: true, exitCode: 0, stdout: parsed.json
-        ? `${JSON.stringify(summary, null, 2)}\n`
-        : `${previewSummaryLines(summary).join("\n")}\n` });
+      return finish({
+        ok: true,
+        exitCode: 0,
+        stdout: parsed.json
+          ? `${JSON.stringify(summary, null, 2)}\n`
+          : `${previewSummaryLines(summary).join("\n")}\n`
+      });
     }
     if (parsed.command === "identities") {
       const result = await previewIdentities(sessionId, input.args, input.stdin);

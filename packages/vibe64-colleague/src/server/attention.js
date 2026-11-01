@@ -11,12 +11,18 @@ const attention = new Set(["failed", "interrupted", "cancelled", "closing", "arc
 async function readWatchedConversation(actions, watch, context) {
   const execute = async (actionId, input) => {
     const result = await actions.execute({ actionId, input, context: { ...context, projectSlug: watch.projectSlug } });
-    if (result?.ok === false || result?.readError) throw Object.assign(new Error(result.error || "The conversation could not be observed."), { statusCode: result.statusCode });
+    if (result?.ok === false || result?.readError) {
+      throw Object.assign(new Error(result.error || "The conversation could not be observed."), { statusCode: result.statusCode });
+    }
     return result;
   };
   let status, runId, messages, error, route;
   if (watch.conversationId) {
-    const result = await execute("vibe64.terminals.temporary-conversation.read", { sessionId: watch.sessionId, conversationId: watch.conversationId, messageLimit: 12 });
+    const result = await execute("vibe64.terminals.temporary-conversation.read", {
+      sessionId: watch.sessionId,
+      conversationId: watch.conversationId,
+      messageLimit: 12
+    });
     status = result.status || "unknown";
     runId = result.runId || "";
     error = result.error || "";
@@ -35,8 +41,14 @@ async function readWatchedConversation(actions, watch, context) {
     messages = (log.conversationLog || []).flatMap((item) => item.messages || []);
   }
   const needsUser = route?.status === "waiting";
-  return conversationObservation({ status, runId, messages, error, needsUser,
-    replyDuringWork: watch.condition === "reply" && !watch.assignmentId });
+  return conversationObservation({
+    status,
+    runId,
+    messages,
+    error,
+    needsUser,
+    replyDuringWork: watch.condition === "reply" && !watch.assignmentId
+  });
 }
 
 export { conversationObservation, readWatchedConversation, watchUpdate };

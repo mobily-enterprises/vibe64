@@ -109,12 +109,15 @@ function createTemporaryConversationTurns({
   }
   function savingTemporaryOutput(sessionId, conversationId, ctx) {
     const forward = ctx.onEvent;
-    return { ...ctx, onEvent(event) {
-      if (event?.type === "message" && event.message?.complete !== false && String(event.message?.text || "").trim()) {
-        scheduleTemporarySave(sessionId, conversationId, ctx.runtime);
+    return {
+      ...ctx,
+      onEvent(event) {
+        if (event?.type === "message" && event.message?.complete !== false && String(event.message?.text || "").trim()) {
+          scheduleTemporarySave(sessionId, conversationId, ctx.runtime);
+        }
+        return forward?.(event);
       }
-      return forward?.(event);
-    } };
+    };
   }
 
   const nativeContext = (ctx) => ({ ...ctx, runtime: ctx.conversationContext.runtime });
@@ -150,7 +153,8 @@ function createTemporaryConversationTurns({
     async inspectMessageAdmission(id, input, ctx) {
       let record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
       const turn = (await ctx.conversationContext.runtime.store.readConversationLog({
-        sessionId: id, conversationId: record.conversationId
+        sessionId: id,
+        conversationId: record.conversationId
       })).find(entry => entry.user?.messageId === input.messageId);
       if (turn?.metadata?.assistantSelection) {
         const requested = { ...record, assistantSelection: turn.metadata.assistantSelection };
@@ -158,12 +162,20 @@ function createTemporaryConversationTurns({
         if (key !== chatRecords.bindingKey(ctx.conversationContext, record)) {
           const retained = record.nativeBindings?.[key];
           if (!retained?.conversationId) return { admission: "unknown", turnId: "" };
-          record = { ...record, ...retained, conversationId: record.conversationId,
-            providerConversationId: retained.conversationId };
+          record = {
+            ...record,
+            ...retained,
+            conversationId: record.conversationId,
+            providerConversationId: retained.conversationId
+          };
         }
       }
       return conversationRuntime.inspectPersistentConversationAdmission({
-        sessionId: id, record, input, operations: sessionAgent, inputFor: chatRecords.providerInput,
+        sessionId: id,
+        record,
+        input,
+        operations: sessionAgent,
+        inputFor: chatRecords.providerInput,
         get context() { return chatRecords.selectedContext(nativeContext(ctx), record); }
       });
     }
@@ -175,7 +187,9 @@ function createTemporaryConversationTurns({
    */
   async function routingContext(ctx, conversationId, { cleanup = false } = {}) {
     const record = await chatRecords.recordFor(ctx, conversationId);
-    if (record.state === "closing" && !cleanup) throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
+    if (record.state === "closing" && !cleanup) {
+      throw Object.assign(new Error("This conversation is closing."), { code: "vibe64_conversation_closing" });
+    }
     const selected = chatRecords.selectedContext(ctx, record);
     const metadata = selected.session.metadata;
     const store = ctx.runtime.store;
@@ -188,7 +202,9 @@ function createTemporaryConversationTurns({
        */
       writeMetadataValue: async (_id, key, value) => store.mutateSession(ctx.session.sessionId, async () => {
         const current = await chatRecords.recordFor(ctx, conversationId);
-        if (current.state === "closing" && !(cleanup && key === "assistant_routing_request")) throw new Error("This conversation is closing.");
+        if (current.state === "closing" && !(cleanup && key === "assistant_routing_request")) {
+          throw new Error("This conversation is closing.");
+        }
         const routingMetadata = { ...current.routingMetadata, [key]: value };
         const patch = { routingMetadata };
         if (key === "assistant_selection") {
@@ -196,9 +212,14 @@ function createTemporaryConversationTurns({
           const nextKey = chatRecords.bindingKey(ctx, { ...current, ...patch });
           if (nextKey !== chatRecords.bindingKey(ctx, current)) {
             const retained = current.nativeBindings?.[nextKey];
-            Object.assign(patch, { providerConversationId: retained?.conversationId || "", runId: retained?.runId || "",
-              messageId: retained?.messageId || "", status: "ready", error: "",
-              agentSettings: { model: patch.assistantSelection.modelId, thinking: patch.assistantSelection.variantId } });
+            Object.assign(patch, {
+              providerConversationId: retained?.conversationId || "",
+              runId: retained?.runId || "",
+              messageId: retained?.messageId || "",
+              status: "ready",
+              error: "",
+              agentSettings: { model: patch.assistantSelection.modelId, thinking: patch.assistantSelection.variantId }
+            });
           }
         }
         await chatRecords.save(ctx, current, patch);
@@ -207,12 +228,20 @@ function createTemporaryConversationTurns({
     };
     scopedStore.readConversationTail = async () => (await store.readConversationLog(scope)).slice(-12);
     scopedStore.readConversationLog = async () => (await store.readConversationLog(scope)).map(turn =>
-      turn.metadata?.assistantRouting ? turn : { ...turn,
+      turn.metadata?.assistantRouting ? turn : {
+        ...turn,
         ...(turn.user ? { user: { ...turn.user, receipt: false } } : {}),
-        messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message) });
+        messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message)
+      });
     scopedStore.writeConversationUserMessage = (_id, ...args) => store.writeConversationUserMessage(scope, ...args);
-    const context = { ...selected, routingConversationId: conversationId, conversationContext: ctx, recentChatContext: record.recentChatContext,
-      runtime: { ...ctx.runtime, store: scopedStore }, session: { ...ctx.session, metadata } };
+    const context = {
+      ...selected,
+      routingConversationId: conversationId,
+      conversationContext: ctx,
+      recentChatContext: record.recentChatContext,
+      runtime: { ...ctx.runtime, store: scopedStore },
+      session: { ...ctx.session, metadata }
+    };
     scopedStore.conversationMessageIdExists = async (_id, messageId) => {
       if (!await store.conversationMessageIdExists(scope, messageId)) return false;
       const turn = (await scopedStore.readConversationLog()).find(entry => entry.user?.messageId === messageId);
@@ -247,13 +276,19 @@ function createTemporaryConversationTurns({
       const record = await chatRecords.recordFor(ctx.conversationContext, ctx.routingConversationId);
       if (selection.engineId === "codex" && Object.entries(record.nativeBindings || {}).some(([key, binding]) =>
         binding.assistantSelection.engineId === "codex" && key !== "codex")) {
-        throw Object.assign(new Error("This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed."), {
-          code: "vibe64_codex_history_unsupported", statusCode: 409
+        throw Object.assign(new Error(
+          "This temporary chat has unsupported Codex history. Start a new temporary chat to use Codex. Its saved history has not been changed."
+        ),
+          {
+          code: "vibe64_codex_history_unsupported",
+          statusCode: 409
         });
       }
       if (record.assistantSelection.engineId !== selection.engineId) {
         await conversationRuntime.preparePersistentConversationChangeover({
-          ...persistentConversationOptions(nativeContext(ctx), record), sessionId: id, changeoverContext: ctx
+          ...persistentConversationOptions(nativeContext(ctx), record),
+          sessionId: id,
+          changeoverContext: ctx
         });
       }
       await prepareSelection(id, selection, ctx);
@@ -261,9 +296,14 @@ function createTemporaryConversationTurns({
     dispatch: (id, input, ctx) => sendWithAssistantChangeover(id, input, ctx, {
       inspectMessageAdmission: routingAgent.inspectMessageAdmission,
       sendMessage: (sessionId, message, context) => startInsideWrite(sessionId, {
-        ...message, conversationId: context.routingConversationId,
-        ...(message.turnMetadata?.assistantRouting ? { agentSettings: {
-          model: context.assistantSelection.modelId, thinking: context.assistantSelection.variantId } } : {})
+        ...message,
+        conversationId: context.routingConversationId,
+        ...(message.turnMetadata?.assistantRouting ? {
+          agentSettings: {
+            model: context.assistantSelection.modelId,
+            thinking: context.assistantSelection.variantId
+          }
+        } : {})
       }, nativeContext(context))
     }, undefined, ctx.recentChatContext?.messages)
   });
@@ -272,7 +312,9 @@ function createTemporaryConversationTurns({
     const record = await chatRecords.recordFor(ctx, input.conversationId);
     if (record.state === "closing") throw new Error("This conversation is closing.");
     return conversationRuntime.startPersistentConversationTurn({
-      ...persistentConversationOptions(savingTemporaryOutput(sessionId, record.conversationId, ctx), record), sessionId, input
+      ...persistentConversationOptions(savingTemporaryOutput(sessionId, record.conversationId, ctx), record),
+      sessionId,
+      input
     });
   }
 
@@ -284,22 +326,38 @@ function createTemporaryConversationTurns({
       read: chatRecords.recordFor,
       save: (ctx, record, patch) => chatRecords.save(ctx, record, patch, { lifecycle: true }),
       bind(ctx, record, patch, binding) {
-        return chatRecords.save(ctx, record, { ...patch,
-          nativeBindings: { ...record.nativeBindings,
-            [chatRecords.bindingKey(ctx, { ...record, assistantSelection: binding.assistantSelection })]: chatRecords.nativeBinding(binding) }
+        return chatRecords.save(ctx, record, {
+          ...patch,
+          nativeBindings: {
+            ...record.nativeBindings,
+            [chatRecords.bindingKey(ctx, {
+              ...record,
+              assistantSelection: binding.assistantSelection
+            })]: chatRecords.nativeBinding(binding)
+          }
         }, { lifecycle: true });
       },
       retained: record => Object.entries(record.nativeBindings || {}),
-      select: (record, binding) => ({ ...record, assistantSelection: binding.assistantSelection, providerConversationId: binding.conversationId,
-        agentSettings: binding.agentSettings || {}, runId: binding.runId || "", messageId: binding.messageId || "" }),
+      select: (record, binding) => ({
+        ...record,
+        assistantSelection: binding.assistantSelection,
+        providerConversationId: binding.conversationId,
+        agentSettings: binding.agentSettings || {},
+        runId: binding.runId || "",
+        messageId: binding.messageId || ""
+      }),
       release(ctx, record, key, binding) {
         const nativeBindings = { ...record.nativeBindings };
         delete nativeBindings[key];
-        return chatRecords.save(ctx, record, { nativeBindings,
-          ...(record.providerConversationId === binding.conversationId ? { providerConversationId: "" } : {}) });
+        return chatRecords.save(ctx, record, {
+          nativeBindings,
+          ...(record.providerConversationId === binding.conversationId ? { providerConversationId: "" } : {})
+        });
       },
       async delete(ctx, record, sessionId) {
-        if (record.providerConversationId) throw new Error("This conversation's native history has not been upgraded for cleanup. Run the state upgrade before closing it.");
+        if (record.providerConversationId) {
+          throw new Error("This conversation's native history has not been upgraded for cleanup. Run the state upgrade before closing it.");
+        }
         await attachments.deleteConversationAttachments({ ...ctx, sessionId }, {
           conversationId: record.conversationId
         });
@@ -309,14 +367,21 @@ function createTemporaryConversationTurns({
     receipts: {
       persisted: turn => Boolean(turn.metadata?.assistantRouting),
       afterAdmission: input => Boolean(input.turnMetadata?.assistantRouting),
-      pending: ctx => JSON.parse(ctx.session.metadata.assistant_changeover || "null")?.engines?.[sessionConversationKey(ctx.session)]?.pending
+      pending: ctx =>
+        JSON.parse(ctx.session.metadata.assistant_changeover || "null")?.engines?.[sessionConversationKey(ctx.session)]?.pending
     },
     projection: {
       context: chatRecords.selectedContext,
       messageScope(ctx, scope, requestTurn) {
         const assistantSelection = requestTurn?.metadata?.assistantSelection || ctx.assistantSelection;
-        return { ...scope, turnMetadata: { engineId: assistantSelection.engineId, assistantSelection,
-          ...(requestTurn?.metadata?.assistantRouting ? { assistantRouting: requestTurn.metadata.assistantRouting } : {}) } };
+        return {
+          ...scope,
+          turnMetadata: {
+            engineId: assistantSelection.engineId,
+            assistantSelection,
+            ...(requestTurn?.metadata?.assistantRouting ? { assistantRouting: requestTurn.metadata.assistantRouting } : {})
+          }
+        };
       },
       messageMetadata(turn) {
         return { assistantSelection: turn.metadata?.assistantSelection, assistantRouting: turn.metadata?.assistantRouting };
@@ -326,17 +391,27 @@ function createTemporaryConversationTurns({
           // The scoped stream owner has already matched this captured native
           // thread. Keep its admitted selection, not a later composer choice.
           const route = routingRequest(record);
-          const attributed = { ...message, metadata: { assistantSelection: record.assistantSelection,
-            ...(route?.resolvedMode ? { assistantRouting: { resolvedMode: route.resolvedMode } } : {}) } };
+          const attributed = {
+            ...message,
+            metadata: {
+              assistantSelection: record.assistantSelection,
+              ...(route?.resolvedMode ? { assistantRouting: { resolvedMode: route.resolvedMode } } : {})
+            }
+          };
           if (record.recoveryOperation !== "update" || (message.role || "assistant") !== "assistant") return attributed;
           const outcome = normalizeVibe64AgentTaskResult(message.text);
           return outcome ? { ...attributed, text: outcome.message, delta: undefined } : null;
         }
         const outcome = message.role === "assistant" ? normalizeVibe64AgentTaskResult(message.text) : null;
         if (phase === "incomplete" && message.role === "assistant" && record.recoveryOperation === "update" && !outcome) return null;
-        return { ...message, text: outcome?.message || message.text,
-          ...(phase === "incomplete" ? { assistantSelection: record.assistantSelection,
-            assistantRouting: routingRequest(record) } : {}) };
+        return {
+          ...message,
+          text: outcome?.message || message.text,
+          ...(phase === "incomplete" ? {
+            assistantSelection: record.assistantSelection,
+            assistantRouting: routingRequest(record)
+          } : {})
+        };
       },
       async snapshot({ context: ctx, record, response, messages, includeAccess, readPage, savedOnly = false }) {
         const sessionId = ctx.session.sessionId;
@@ -346,8 +421,18 @@ function createTemporaryConversationTurns({
             !["starting", "inProgress", "ready"].includes(response.status)) {
           // Schedule after releasing the existing write lock. Native idle events
           // normally do this; a read also recovers a missed completion notification.
-          void routing.afterTurn(sessionId, { payload: { agentRun: { state: response.status,
-            providerTurnId: response.runId, active: false } } }, { ...ctx, conversationId: record.conversationId }, { recovered: true }).catch(() => {});
+          void routing.afterTurn(sessionId, {
+            payload: {
+              agentRun: {
+                state: response.status,
+                providerTurnId: response.runId,
+                active: false
+              }
+            }
+          }, {
+              ...ctx,
+              conversationId: record.conversationId
+            }, { recovered: true }).catch(() => {});
         }
         const page = readPage ? await readPage() : null;
         return {
@@ -380,10 +465,16 @@ function createTemporaryConversationTurns({
         const id = remember ? ctx.session.sessionId : sessionId;
         const messages = [...(ctx.recentChatContext?.messages || []), ...await readMainConversationHistory(store, id)];
         const binding = createMainConversationBinding(store, id, remember ? undefined : ctx);
-        return { state: binding.state, identity: binding.identity, transcript: binding.transcript,
-          presentation: MAIN_CONVERSATION_PRESENTATION, engineId, messages,
+        return {
+          state: binding.state,
+          identity: binding.identity,
+          transcript: binding.transcript,
+          presentation: MAIN_CONVERSATION_PRESENTATION,
+          engineId,
+          messages,
           ...(ctx.recentChatContext ? { maximumInitialMessages: 40 } : {}),
-          ...(!remember ? { turnMetadata: { engineId: engineId.split("/")[0] } } : {}) };
+          ...(!remember ? { turnMetadata: { engineId: engineId.split("/")[0] } } : {})
+        };
       },
       async selection(sessionId, input, record, steering, ctx) {
         const selection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
@@ -397,7 +488,10 @@ function createTemporaryConversationTurns({
         }, { ...ctx, vibe64User: input.vibe64User || ctx.vibe64User });
         ctx = { ...ctx, assistantSelection };
         if (!steering) await prepareAgentSkills(sessionId, { ...ctx, vibe64User: input.vibe64User || ctx.vibe64User });
-        return { context: ctx, settings, assistantSelection,
+        return {
+          context: ctx,
+          settings,
+          assistantSelection,
           get creation() {
             return { agentSettings: input.agentSettings || record.agentSettings, persistent: true, vibe64User: input.vibe64User };
           }
@@ -405,11 +499,18 @@ function createTemporaryConversationTurns({
       },
       async message(sessionId, input, record, ctx, assistantSelection) {
         const prepared = await attachments.prepareMessage({ ...ctx, sessionId }, input, {
-          durable: true, conversationId: record.conversationId
+          durable: true,
+          conversationId: record.conversationId
         });
-        const receipt = { messageId: input.messageId, text: input.displayMessage || input.message,
-          attachments: prepared.displayAttachments, turnMetadata: { ...input.turnMetadata, assistantSelection } };
-        return { input: prepared, receipt,
+        const receipt = {
+          messageId: input.messageId,
+          text: input.displayMessage || input.message,
+          attachments: prepared.displayAttachments,
+          turnMetadata: { ...input.turnMetadata, assistantSelection }
+        };
+        return {
+          input: prepared,
+          receipt,
           get presentation() { return presentation(input.presentation); }
         };
       }
@@ -417,13 +518,20 @@ function createTemporaryConversationTurns({
   });
 
   function persistentConversationOptions(ctx, record) {
-    return { ...persistentConversationFacilities, sessionId: ctx.session.sessionId,
-      context: ctx, record, store: ctx.runtime.store };
+    return {
+      ...persistentConversationFacilities,
+      sessionId: ctx.session.sessionId,
+      context: ctx,
+      record,
+      store: ctx.runtime.store
+    };
   }
 
   async function snapshot(ctx, record, includeAccess = false, transcriptQuery) {
     const result = await conversationRuntime.readPersistentConversation({
-      ...persistentConversationOptions(ctx, record), includeAccess, transcriptQuery
+      ...persistentConversationOptions(ctx, record),
+      includeAccess,
+      transcriptQuery
     });
     // The record keeps the last goal its assistant reported; showing a settled
     // chat uses it instead of asking again.
@@ -436,7 +544,8 @@ function createTemporaryConversationTurns({
   async function savedSnapshot(ctx, record, transcriptQuery) {
     const projection = persistentConversationFacilities.projection;
     return conversationRuntime.projectStoredPersistentConversation({
-      ...persistentConversationOptions(ctx, record), transcriptQuery,
+      ...persistentConversationOptions(ctx, record),
+      transcriptQuery,
       projection: { ...projection, snapshot: input => projection.snapshot({ ...input, savedOnly: true }) }
     });
   }
@@ -453,7 +562,9 @@ function createTemporaryConversationTurns({
       return snapshot(ctx, record, true, transcriptQuery);
     }
     return conversationRuntime.projectStoredPersistentConversation({
-      ...persistentConversationOptions(ctx, record), includeAccess: true, transcriptQuery
+      ...persistentConversationOptions(ctx, record),
+      includeAccess: true,
+      transcriptQuery
     });
   }
 

@@ -13,7 +13,9 @@ function helperAssignments(value) {
   if (!isPlainObject(value)) throw new Error("Saved model assignments must be an object.");
   const next = { ...value };
   if (Object.hasOwn(next, "intern")) {
-    if (Object.hasOwn(next, "helper")) throw new Error("Both previous and current Helper assignments exist. Resolve the conflict before upgrading.");
+    if (Object.hasOwn(next, "helper")) {
+      throw new Error("Both previous and current Helper assignments exist. Resolve the conflict before upgrading.");
+    }
     next.helper = next.intern;
     delete next.intern;
   }
@@ -21,7 +23,9 @@ function helperAssignments(value) {
 }
 
 function helperConfiguration(value) {
-  if (!isPlainObject(value) || !isPlainObject(value.orchestrators) || value.schemaVersion !== undefined && ![3, 4].includes(value.schemaVersion)) {
+  if (!isPlainObject(value) ||
+      !isPlainObject(value.orchestrators) ||
+      value.schemaVersion !== undefined && ![3, 4].includes(value.schemaVersion)) {
     throw new Error("Run the preceding model-routing upgrades before upgrading Helper settings.");
   }
   const next = {
@@ -61,8 +65,11 @@ function routingRecord(value, { preferences = false, history = false } = {}) {
   if (value.schemaVersion === 4 || value.schemaVersion === undefined && !previousConfiguration && (currentRole || currentPreferences)) {
     return upgradeHelperProfiles(validateAssistantRoutingUpgradeRecord(value, { preferences, request: value.schemaVersion === 4 }));
   }
-  if (value.mode === "custom") validateAssistantRoutingUpgradeRecord(value, { schemaVersion: 3, preferences,
-    request: value.schemaVersion === 3 });
+  if (value.mode === "custom") validateAssistantRoutingUpgradeRecord(value, {
+    schemaVersion: 3,
+    preferences,
+    request: value.schemaVersion === 3
+  });
   const previousChat = value.mode === "intern";
   const next = upgradeHelperProfiles(value);
   for (const key of ["mode", "requestedMode", "resolvedMode", "role", "purpose", "instructionPurpose"]) {
@@ -99,7 +106,9 @@ function routingRecord(value, { preferences = false, history = false } = {}) {
   if (!selection || !next.configuration) return next;
   next.workflowEngineId = selection.engineId;
   next.configuration.orchestrators[selection.engineId] = {
-    ...next.configuration.orchestrators[selection.engineId], senior: selection, junior: selection
+    ...next.configuration.orchestrators[selection.engineId],
+    senior: selection,
+    junior: selection
   };
   if (next.decision) {
     const captured = {
@@ -170,73 +179,95 @@ async function readOptional(filePath) {
 
 async function upgradeAssistantHelpers(context) {
   const { systemRoot, report } = context;
-  return publishStateUpgradeFiles({ ...context, prepareUpdates: async temporaryRoot => {
-    const updates = [];
-    const filePath = path.join(systemRoot, "ai-connections/routing.json");
-    const original = await readOptional(filePath);
-    if (original !== null) {
-      const parsed = JSON.parse(original);
-      if (parsed.schemaVersion < 3) {
-        if (context.apply) throw new Error("Run the preceding model-routing upgrades first.");
-        report("info", "Earlier upgrades will prepare the existing model choices before Helper conversion.");
-        return updates;
-      }
-      const next = validateAssistantRoutingConfiguration(helperConfiguration(parsed));
-      if (JSON.stringify(next) !== JSON.stringify(parsed)) updates.push({ filePath, original, contents: upgradeFileText(next) });
-    }
-    const connectionsPath = path.join(systemRoot, "ai-connections/connections.json");
-    const connectionsSource = await readOptional(connectionsPath);
-    if (connectionsSource !== null) {
-      const connections = JSON.parse(connectionsSource);
-      if (!isPlainObject(connections) || !isPlainObject(connections.connections) ||
-          Object.values(connections.connections).some(entry => !isPlainObject(entry))) throw new Error("AI connections have an unsupported shape.");
-      let changed = false;
-      for (const entry of Object.values(connections.connections)) {
-        if (!Object.hasOwn(entry, "economyModelId")) continue;
-        if (entry.defaultModelId !== undefined && entry.defaultModelId !== entry.economyModelId) throw new Error("Provider defaults conflict. Review AI connections before upgrading.");
-        entry.defaultModelId = entry.economyModelId;
-        delete entry.economyModelId;
-        changed = true;
-      }
-      if (changed) updates.push({ filePath: connectionsPath, original: connectionsSource, contents: upgradeFileText(connections) });
-    }
-    for (const projectRuntimeRoot of await listProjectRuntimeRoots(systemRoot)) {
-      const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-      const staged = await store.prepareAssistantRoutingStateUpgrade({ temporaryRoot,
-        transform: upgradeAssistantHelperSession, transformTurnMetadata: upgradeAssistantHelperTurn,
-        transformHelperRecord: upgradeHelperProfiles });
-      updates.push(...staged);
-      const oldRoot = path.join(projectRuntimeRoot, "codex-economy-thread-ownership");
-      let entries = [];
-      try {
-        if (!(await lstat(oldRoot)).isDirectory()) throw new Error("Helper ownership must be a regular directory.");
-        entries = await readdir(oldRoot, { withFileTypes: true });
-      } catch (error) { if (error.code !== "ENOENT") throw error; }
-      for (const entry of entries) {
-        if (entry.isDirectory() && entry.name === ".locks") {
-          if ((await readdir(path.join(oldRoot, entry.name))).length) throw new Error("Stop helper writers and resolve retained ownership locks before upgrading.");
-          continue;
+  return publishStateUpgradeFiles({
+    ...context,
+    prepareUpdates: async temporaryRoot => {
+      const updates = [];
+      const filePath = path.join(systemRoot, "ai-connections/routing.json");
+      const original = await readOptional(filePath);
+      if (original !== null) {
+        const parsed = JSON.parse(original);
+        if (parsed.schemaVersion < 3) {
+          if (context.apply) throw new Error("Run the preceding model-routing upgrades first.");
+          report("info", "Earlier upgrades will prepare the existing model choices before Helper conversion.");
+          return updates;
         }
-        if (!entry.isFile() || !/^[a-f0-9]{64}\.json$/u.test(entry.name)) throw new Error("Inspect unexpected helper ownership files before upgrading.");
-        const from = path.join(oldRoot, entry.name);
-        const source = await readOptional(from);
-        const target = path.join(projectRuntimeRoot, "codex-helper-thread-ownership", entry.name);
-        const record = upgradeHelperProfiles(JSON.parse(source));
-        if (!isPlainObject(record) || !record.threadId || !record.ownershipId || !record.executionProfile) throw new Error("Helper ownership is incomplete. Inspect it before upgrading.");
-        vibe64AgentExecutionProfileAuditSnapshot(record.executionProfile);
-        if (["economy", "intern"].includes(record.identity?.runtime?.executionMode)) {
-          record.identity = { ...record.identity, runtime: { ...record.identity.runtime, executionMode: "helper" } };
-        }
-        const contents = upgradeFileText(record);
-        const existing = await readOptional(target);
-        if (existing !== null && existing !== contents) throw new Error("Conflicting Helper ownership records require inspection before upgrading.");
-        updates.push({ filePath: target, original: existing, contents }, { filePath: from, original: source, contents: null });
+        const next = validateAssistantRoutingConfiguration(helperConfiguration(parsed));
+        if (JSON.stringify(next) !== JSON.stringify(parsed)) updates.push({ filePath, original, contents: upgradeFileText(next) });
       }
-      if (staged.length || entries.length) report("info", `${path.basename(projectRuntimeRoot)}: converting saved Helper settings and ownership.`);
+      const connectionsPath = path.join(systemRoot, "ai-connections/connections.json");
+      const connectionsSource = await readOptional(connectionsPath);
+      if (connectionsSource !== null) {
+        const connections = JSON.parse(connectionsSource);
+        if (!isPlainObject(connections) || !isPlainObject(connections.connections) ||
+            Object.values(connections.connections)
+              .some(entry => !isPlainObject(entry))) throw new Error("AI connections have an unsupported shape.");
+        let changed = false;
+        for (const entry of Object.values(connections.connections)) {
+          if (!Object.hasOwn(entry, "economyModelId")) continue;
+          if (entry.defaultModelId !== undefined && entry.defaultModelId !== entry.economyModelId) {
+            throw new Error("Provider defaults conflict. Review AI connections before upgrading.");
+          }
+          entry.defaultModelId = entry.economyModelId;
+          delete entry.economyModelId;
+          changed = true;
+        }
+        if (changed) updates.push({ filePath: connectionsPath, original: connectionsSource, contents: upgradeFileText(connections) });
+      }
+      for (const projectRuntimeRoot of await listProjectRuntimeRoots(systemRoot)) {
+        const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
+        const staged = await store.prepareAssistantRoutingStateUpgrade({
+          temporaryRoot,
+          transform: upgradeAssistantHelperSession,
+          transformTurnMetadata: upgradeAssistantHelperTurn,
+          transformHelperRecord: upgradeHelperProfiles
+        });
+        updates.push(...staged);
+        const oldRoot = path.join(projectRuntimeRoot, "codex-economy-thread-ownership");
+        let entries = [];
+        try {
+          if (!(await lstat(oldRoot)).isDirectory()) throw new Error("Helper ownership must be a regular directory.");
+          entries = await readdir(oldRoot, { withFileTypes: true });
+        } catch (error) { if (error.code !== "ENOENT") throw error; }
+        for (const entry of entries) {
+          if (entry.isDirectory() && entry.name === ".locks") {
+            if ((await readdir(path.join(oldRoot, entry.name))).length) {
+              throw new Error("Stop helper writers and resolve retained ownership locks before upgrading.");
+            }
+            continue;
+          }
+          if (!entry.isFile() || !/^[a-f0-9]{64}\.json$/u.test(entry.name)) {
+            throw new Error("Inspect unexpected helper ownership files before upgrading.");
+          }
+          const from = path.join(oldRoot, entry.name);
+          const source = await readOptional(from);
+          const target = path.join(projectRuntimeRoot, "codex-helper-thread-ownership", entry.name);
+          const record = upgradeHelperProfiles(JSON.parse(source));
+          if (!isPlainObject(record) || !record.threadId || !record.ownershipId || !record.executionProfile) {
+            throw new Error("Helper ownership is incomplete. Inspect it before upgrading.");
+          }
+          vibe64AgentExecutionProfileAuditSnapshot(record.executionProfile);
+          if (["economy", "intern"].includes(record.identity?.runtime?.executionMode)) {
+            record.identity = { ...record.identity, runtime: { ...record.identity.runtime, executionMode: "helper" } };
+          }
+          const contents = upgradeFileText(record);
+          const existing = await readOptional(target);
+          if (existing !== null && existing !== contents) {
+            throw new Error("Conflicting Helper ownership records require inspection before upgrading.");
+          }
+          updates.push({ filePath: target, original: existing, contents }, { filePath: from, original: source, contents: null });
+        }
+        if (staged.length || entries.length) {
+          report("info", `${path.basename(projectRuntimeRoot)}: converting saved Helper settings and ownership.`);
+        }
+      }
+      report(
+        "info",
+        "Helper keeps the saved model and thinking. Former third-role chats switch to Junior; accepted work and authored messages retain their destination and identity."
+      );
+      return updates;
     }
-    report("info", "Helper keeps the saved model and thinking. Former third-role chats switch to Junior; accepted work and authored messages retain their destination and identity.");
-    return updates;
-  } });
+  });
 }
 
 export { upgradeAssistantHelpers, upgradeAssistantHelperSession, upgradeAssistantHelperTurn };

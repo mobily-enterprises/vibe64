@@ -1,7 +1,12 @@
 import crypto from "node:crypto";
 
 import { normalizeText } from "@local/vibe64-core/server/core";
-import { VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS, defineVibe64AgentExecutionProfileRequest, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+import {
+  VIBE64_AGENT_EXECUTION_PROFILE_IDS,
+  VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
+  defineVibe64AgentExecutionProfileRequest,
+  vibe64AgentExecutionProfileAuditSnapshot
+} from "@local/vibe64-runtime/shared";
 
 import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
 
@@ -112,7 +117,9 @@ function sourceEditorAgentOperationOptions(context = {}, options = {}, {
  */
 async function describeSourceEditorAgentProvider(terminalService, context = {}) {
   const decision = await terminalService.resolveAssistantPurpose({ purpose: "source_explanation" }, {
-    runtime: context.runtime, session: context.session, vibe64User: context.vibe64User
+    runtime: context.runtime,
+    session: context.session,
+    vibe64User: context.vibe64User
   });
   if (!decision.available) throw sourceEditorError(decision.message, decision.reasonCode, {}, 409);
   return { providerId: decision.effectiveSelection.engineId, accountIdentitySignature: decision.connectionIdentity, decision };
@@ -135,8 +142,11 @@ async function resolveSourceEditorAgentExecutionProfile(terminalService, context
   const resolved = await terminalService.resolveEphemeralAgentExecutionProfile(
     context.assistantHelper.scope,
     sourceEditorExecutionProfileRequest(),
-    { assistantSelection: context.assistantHelper.selection, vibe64User: context.vibe64User,
-      expectedConnectionIdentity: context.assistantHelper.connectionIdentity }
+    {
+      assistantSelection: context.assistantHelper.selection,
+      vibe64User: context.vibe64User,
+      expectedConnectionIdentity: context.assistantHelper.connectionIdentity
+    }
   );
   const executionProfile = requiredSourceEditorExecutionProfile(resolved);
   if (executionProfile.providerId !== normalizeText(context.agentProviderId)) {
@@ -160,10 +170,13 @@ async function runSourceEditorHelperTurn(terminalService, context, input, option
   const { onEvent: forwardEvent = async () => {} } = options;
   const helper = context.assistantHelper;
   const result = await terminalService.runEphemeralAgentChatTurn(helper.scope, {
-    ...input, executionProfile: resolvedSourceEditorExecutionProfile(context.agentExecutionProfile)
+    ...input,
+    executionProfile: resolvedSourceEditorExecutionProfile(context.agentExecutionProfile)
   }, {
-    assistantSelection: helper.selection, vibe64User: context.vibe64User,
-    expectedConnectionIdentity: helper.connectionIdentity, signal: context.signal,
+    assistantSelection: helper.selection,
+    vibe64User: context.vibe64User,
+    expectedConnectionIdentity: helper.connectionIdentity,
+    signal: context.signal,
     async onEvent(event) {
       if (event.type === "thread") helper.conversationId = normalizeText(event.threadId);
       else if (event.type === "turn") helper.runId = normalizeText(event.turnId);

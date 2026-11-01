@@ -124,7 +124,11 @@ async function describeAndroidSdk({ androidHome } = {}) {
  * The first complete SDK: Vibe64's install in `directory`, then ANDROID_HOME / ANDROID_SDK_ROOT.
  */
 async function findAndroidSdk({ directory = null, baseEnvironment = process.env } = {}) {
-  const candidates = [directory, baseEnvironment.ANDROID_HOME, baseEnvironment.ANDROID_SDK_ROOT].filter((value) => typeof value === "string" && path.isAbsolute(value));
+  const candidates = [
+    directory,
+    baseEnvironment.ANDROID_HOME,
+    baseEnvironment.ANDROID_SDK_ROOT
+  ].filter((value) => typeof value === "string" && path.isAbsolute(value));
   let last = null;
   for (const androidHome of [...new Set(candidates)]) {
     last = await describeAndroidSdk({ androidHome });
@@ -154,7 +158,9 @@ async function installAndroidSdk({
   repositoryUrl,
   signal
 } = {}, { fetchImpl = fetch, runCommand = spawnCommand } = {}) {
-  if (typeof directory !== "string" || !path.isAbsolute(directory)) throw toolchainError("The Android SDK needs an absolute install folder.");
+  if (typeof directory !== "string" || !path.isAbsolute(directory)) {
+    throw toolchainError("The Android SDK needs an absolute install folder.");
+  }
   if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) throw toolchainError("Installing the Android SDK needs a Java home.");
   const licence = licenceFromRepository(await fetchRepository({ fetchImpl, repositoryUrl, signal }));
   assertAcceptance(acceptance, licence);

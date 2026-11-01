@@ -165,7 +165,13 @@ function createTraceReader(directory) {
         scope.label = line.label ?? scope.label;
         scope.startedAt = scope.startedAt || line.startedAt;
       } else {
-        scopes.set(line.scope, { kind: line.kind, label: line.label ?? null, startedAt: line.startedAt, endedAt: line.endedAt ?? null, hits: new Map() });
+        scopes.set(line.scope, {
+          kind: line.kind,
+          label: line.label ?? null,
+          startedAt: line.startedAt,
+          endedAt: line.endedAt ?? null,
+          hits: new Map()
+        });
       }
     } else if (line.type === "hits") {
       if (!scopes.has(line.scope)) {
@@ -263,8 +269,16 @@ function createTraceReader(directory) {
           continue;
         }
         files.set(name, {
-          decoder: new StringDecoder("utf8"), diagnostics: new Set(), files: new Map(), functions: new Map(),
-          header: null, offset: 0, rest: "", skipping: false, state: "", truncated: false
+          decoder: new StringDecoder("utf8"),
+          diagnostics: new Set(),
+          files: new Map(),
+          functions: new Map(),
+          header: null,
+          offset: 0,
+          rest: "",
+          skipping: false,
+          state: "",
+          truncated: false
         });
       }
       if (hitsBytes >= USAGE_RECORDING_LIMITS.hitsBytesPerRecording) break;

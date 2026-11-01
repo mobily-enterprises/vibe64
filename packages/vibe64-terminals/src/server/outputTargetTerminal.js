@@ -84,9 +84,24 @@ function createOutputTargetTerminalController({
     finishWorkflow,
     setWorkflowPhase
   });
-  const previewTests = createOutputTargetPreviewTests({ state, launchCoordination, launchStart, projectService, stopExecution });
-  const outputStatus = createOutputTargetLaunchStatus({ state, launchCoordination, projectService });
-  const terminalSessions = createOutputTargetTerminalSessions({ state, launchCoordination, projectService, stopPreviewBrowsers });
+  const previewTests = createOutputTargetPreviewTests({
+    state,
+    launchCoordination,
+    launchStart,
+    projectService,
+    stopExecution
+  });
+  const outputStatus = createOutputTargetLaunchStatus({
+    state,
+    launchCoordination,
+    projectService
+  });
+  const terminalSessions = createOutputTargetTerminalSessions({
+    state,
+    launchCoordination,
+    projectService,
+    stopPreviewBrowsers
+  });
 
   return Object.freeze({
     close: terminalSessions.close,

@@ -124,8 +124,12 @@ const LOCAL_TOOL_CHECKS = Object.freeze({
 });
 
 function playwrightTool() {
-  return { name: "Playwright browser", status: "missing", guideUrl: "https://playwright.dev/docs/browsers",
-    install: localToolInstall("playwright", { family: process.platform === "darwin" ? "brew" : "apt" }) };
+  return {
+    name: "Playwright browser",
+    status: "missing",
+    guideUrl: "https://playwright.dev/docs/browsers",
+    install: localToolInstall("playwright", { family: process.platform === "darwin" ? "brew" : "apt" })
+  };
 }
 
 function notInstalledVerb(name = "") {
@@ -144,7 +148,11 @@ function localToolRow(tool, { group, id = tool.id, need, explanation }) {
     missing: `${tool.name} ${notInstalledVerb(tool.name)} installed on this computer.`
   }[tool.status];
   return {
-    id, label: tool.name, group, need, explanation,
+    id,
+    label: tool.name,
+    group,
+    need,
+    explanation,
     expected: `${tool.name} runs on this computer.`,
     observed,
     status: tool.status === "ready" ? "pass" : need === "needed" ? "fail" : "warn",
@@ -170,15 +178,21 @@ async function inspectLocalTools({ nodeMajor, runCommand, studioRoot }) {
   const ai = AI_TOOLS.map((id) => byId[id]);
   const ready = ai.filter((tool) => tool.status === "ready");
   const aiRow = {
-    id: "ai-tool", label: "An AI tool", group: "AI tools", need: "needed",
+    id: "ai-tool",
+    label: "An AI tool",
+    group: "AI tools",
+    need: "needed",
     expected: "At least one of Claude Code, Codex or opencode runs on this computer.",
     explanation: "One is enough. Choose and connect it in AI setup.",
     observed: ready.length ? ready.map((tool) => `${tool.name} ${tool.version}`.trim()).join(", ")
       : "No AI tool is installed on this computer yet.",
     status: ready.length ? "pass" : "fail"
   };
-  const aiRows = ai.map((tool) => localToolRow(tool, { group: "AI tools", need: "optional",
-    explanation: `Another AI tool Vibe64 can use.` }));
+  const aiRows = ai.map((tool) => localToolRow(tool, {
+    group: "AI tools",
+    need: "optional",
+    explanation: `Another AI tool Vibe64 can use.`
+  }));
   return [...rows.slice(0, 2), aiRow, ...rows.slice(2), ...aiRows];
 }
 
@@ -273,7 +287,9 @@ async function inspectAccounts({ connectionsService, input, packs = true }) {
     return connections.map((account) => {
       const label = account.label || (account.id === "github" ? "GitHub authentication" : "AI connection");
       const check = {
-        id: `${account.id}-auth`, label, group: "Credentials",
+        id: `${account.id}-auth`,
+        label,
+        group: "Credentials",
         expected: `${label} is connected.`,
         observed: account.message || account.observed || account.status || "No status was returned.",
         explanation: packs ? "Account readiness is inspected by the account service; Studio Health does not attempt a repair."
@@ -283,7 +299,9 @@ async function inspectAccounts({ connectionsService, input, packs = true }) {
     });
   } catch (error) {
     return [failedCheck({
-      id: "accounts-auth", label: "Account readiness", group: "Credentials",
+      id: "accounts-auth",
+      label: "Account readiness",
+      group: "Credentials",
       expected: "The account service returns an explicit connection state.",
       observed: error?.message || error,
       explanation: "Studio Health could not inspect accounts and does not infer their state."

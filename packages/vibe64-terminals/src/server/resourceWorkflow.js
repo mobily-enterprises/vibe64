@@ -50,7 +50,10 @@ async function dependencyIdentity(root, file, budget) {
       length += bytesRead;
     }
     const after = await handle.stat({ bigint: true });
-    if (length !== Number(before.size) || after.size !== before.size || after.mtimeNs !== before.mtimeNs || after.ctimeNs !== before.ctimeNs) {
+    if (length !== Number(before.size) ||
+        after.size !== before.size ||
+        after.mtimeNs !== before.mtimeNs ||
+        after.ctimeNs !== before.ctimeNs) {
       throw new Error("dependency_identity_changed");
     }
     const hash = sha256Hex(buffer.subarray(0, length));
@@ -112,8 +115,13 @@ async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], 
     return { argv: step.argv, workdir: path.relative(root, cwd) || ".", role: step.role || "" };
   });
   const description = {
-    version: 1, operation, runtimes: runtimeNames, steps: commandSteps,
-    architecture: process.arch, platform: process.platform, configuration
+    version: 1,
+    operation,
+    runtimes: runtimeNames,
+    steps: commandSteps,
+    architecture: process.arch,
+    platform: process.platform,
+    configuration
   };
   let compatibilityStatus = "complete";
   let compatibilityDiagnostic = "";
@@ -145,7 +153,14 @@ async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], 
     }
   } catch (error) {
     compatibilityStatus = "incomplete";
-    compatibilityDiagnostic = ["configuration_identity_unavailable", "dependency_outside_source", "dependency_identity_too_large", "dependency_identity_changed"].includes(error.message)
+    compatibilityDiagnostic = [
+      "configuration_identity_unavailable",
+      "dependency_outside_source",
+      "dependency_identity_too_large",
+      "dependency_identity_changed"
+    ].includes(
+      error.message
+    )
       ? error.message : "runtime_or_dependency_identity_unavailable";
   }
   // No source path, command text, environment value or file contents cross into
@@ -153,13 +168,32 @@ async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], 
   return { compatibilityKey: sha256Hex(JSON.stringify(description)), compatibilityStatus, compatibilityDiagnostic };
 }
 
-async function startResourceWorkflow({ session, sourceRoot, operation, runtimes, steps, configuration, estimates, environment = "development", kind, label, env = process.env }) {
+async function startResourceWorkflow({
+  session,
+  sourceRoot,
+  operation,
+  runtimes,
+  steps,
+  configuration,
+  estimates,
+  environment = "development",
+  kind,
+  label,
+  env = process.env
+}) {
   if (!vibe64ManagedExecutionProvider() && !vibe64ManagedExecutionRequired()) return { ok: true, workflow: null };
   const project = currentProjectRequestContext();
   if (!project?.slug || !session?.sessionId) throw new Error("Managed resource accounting requires the resolved project and session.");
   return startVibe64Workflow({
-    projectSlug: project.slug, sessionId: session.sessionId, ownerId: session.sessionId,
-    operation, environment, kind, label, estimates, mode: configuration?.mode || "finite",
+    projectSlug: project.slug,
+    sessionId: session.sessionId,
+    ownerId: session.sessionId,
+    operation,
+    environment,
+    kind,
+    label,
+    estimates,
+    mode: configuration?.mode || "finite",
     ...await resourceWorkflowIdentity({ sourceRoot, operation, runtimes, steps, configuration, env })
   });
 }

@@ -318,12 +318,18 @@ function sessionRepositoryProject(project = {}, session, { sourcePreparation = f
       throw projectRepositoryMetadataError("vibe64_contribution_authority_changed",
         "This contribution's repository or integration branch changed. Review its source binding before saving.");
     }
-    return { ...project, githubMirrorOptional: true,
-      repository: { ...project.repository, defaultBranch: sourcePreparation
-        ? contribution.replaces && !session.metadata.renewed_from
-          ? `vibe64-incoming/${contribution.replaces}_discarded`
-          : contribution.integrationBranch
-        : `vibe64-incoming/${contribution.id}` } };
+    return {
+      ...project,
+      githubMirrorOptional: true,
+      repository: {
+        ...project.repository,
+        defaultBranch: sourcePreparation
+          ? contribution.replaces && !session.metadata.renewed_from
+            ? `vibe64-incoming/${contribution.replaces}_discarded`
+            : contribution.integrationBranch
+          : `vibe64-incoming/${contribution.id}`
+      }
+    };
   }
   const serialized = session?.metadata?.github_pull_request;
   if (!serialized) {
@@ -349,7 +355,10 @@ function sessionRepositoryProject(project = {}, session, { sourcePreparation = f
     !validRepositoryBranch(source.headBranch) ||
     project.repositoryMode === PROJECT_REPOSITORY_MODE_MANAGED_GIT
   ) {
-    throw projectRepositoryMetadataError("vibe64_pull_request_authority_invalid", "This session's pull request source is invalid. Its Save destination could not be verified.");
+    throw projectRepositoryMetadataError(
+      "vibe64_pull_request_authority_invalid",
+      "This session's pull request source is invalid. Its Save destination could not be verified."
+    );
   }
   const github = { fullName: source.headRepository, cloneUrl: `https://github.com/${source.headRepository}.git` };
   return {

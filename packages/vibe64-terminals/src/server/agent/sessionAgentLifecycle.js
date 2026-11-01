@@ -48,8 +48,10 @@ function createSessionAgentLifecycle({
     }
     return stored.filter(({ status }) => status === "running" || status === "closing").map((terminal) => {
       const binding = state.terminalBindings.get(terminal.id);
-      return { binding: binding?.providerId === engineId ? binding : null,
-        sessionId: binding?.sessionId || String(terminal.namespace).split(":").at(-1) };
+      return {
+        binding: binding?.providerId === engineId ? binding : null,
+        sessionId: binding?.sessionId || String(terminal.namespace).split(":").at(-1)
+      };
     });
   }
 

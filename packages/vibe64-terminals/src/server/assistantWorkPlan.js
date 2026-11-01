@@ -36,7 +36,9 @@ async function readPlanFile(file, { plainText = false } = {}) {
     if (!status) throw planError("This plan needs the stopped-service state upgrade before it can be used.");
     const items = parseWorkPlanLines(text).filter((item) => item.checked !== undefined);
     return {
-      text, status, revision: sha256Hex(text),
+      text,
+      status,
+      revision: sha256Hex(text),
       title: /^# (.+)$/mu.exec(text)?.[1]?.trim() || "Untitled plan",
       checked: items.filter((item) => item.checked).length,
       total: items.length
@@ -69,7 +71,8 @@ function parsePairRecord(source, id = "") {
   try { record = JSON.parse(source); } catch { throw planError("The plan and progress record is invalid. Inspect its saved snapshot."); }
   if (!record || record.schemaVersion !== 1 || !/^[a-f0-9]{64}$/u.test(record.planRevision) ||
       !(record.progressRevision === null || /^[a-f0-9]{64}$/u.test(record.progressRevision)) ||
-      Object.keys(record).some(key => !["schemaVersion", "planRevision", "progressRevision", "archivedAt", "legacyArchive"].includes(key)) ||
+      Object.keys(record)
+        .some(key => !["schemaVersion", "planRevision", "progressRevision", "archivedAt", "legacyArchive"].includes(key)) ||
       (record.archivedAt !== undefined && !Number.isFinite(Date.parse(record.archivedAt))) ||
       (record.legacyArchive !== undefined && record.legacyArchive !== true)) throw planError("The plan and progress binding is invalid.");
   if (id && !record.archivedAt) throw planError("The archived pair has no recorded archive time.");
@@ -83,11 +86,20 @@ async function readPair(context, id = "") {
   if (source === null) return null;
   const record = parsePairRecord(source, id);
   const plan = await readPlanFile(documentPath(context, "plan", record.planRevision));
-  const progressText = record.progressRevision === null ? null : await readPlanFile(documentPath(context, "progress", record.progressRevision), { plainText: true });
+  const progressText = record.progressRevision === null
+    ? null
+    : await readPlanFile(documentPath(context, "progress", record.progressRevision), { plainText: true });
   if (!plan || plan.revision !== record.planRevision || (record.progressRevision !== null &&
-      (progressText === null || sha256Hex(progressText) !== record.progressRevision))) throw planError("A plan or progress document is missing or changed. Restore the saved pair before continuing.");
-  return { ...plan, progressText, progressRevision: record.progressRevision, artifactRevision: pairIdentity(record),
-    ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}) };
+      (progressText === null || sha256Hex(progressText) !== record.progressRevision))) throw planError(
+        "A plan or progress document is missing or changed. Restore the saved pair before continuing."
+      );
+  return {
+    ...plan,
+    progressText,
+    progressRevision: record.progressRevision,
+    artifactRevision: pairIdentity(record),
+    ...(record.archivedAt ? { archivedAt: record.archivedAt } : {})
+  };
 }
 async function readWorkPlanUnlocked(context) {
   const pair = await readPair(context);
@@ -104,19 +116,30 @@ async function readArchived(context, id) {
   const legacy = await readPlanFile(archivePath(context, id));
   if (pair && legacy) throw planError("Both legacy and paired archive records exist. Finish the stopped-service state upgrade.");
   if (legacy && legacy.revision !== id) throw planError("An archived plan has changed. Restore its saved snapshot before continuing.");
-  return pair || (legacy ? { ...legacy, progressText: null, progressRevision: null, legacy: true,
-    archivedAt: (await lstat(archivePath(context, id))).mtime.toISOString() } : null);
+  return pair || (legacy ? {
+    ...legacy,
+    progressText: null,
+    progressRevision: null,
+    legacy: true,
+    archivedAt: (await lstat(archivePath(context, id))).mtime.toISOString()
+  } : null);
 }
 async function readWorkPlanHistoryUnlocked(context) {
   try {
     if (!(await lstat(planDirectory(context))).isDirectory()) throw planError("The plan directory must not be a link.");
-  } catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
   const directory = path.join(planDirectory(context), "archive");
   let entries;
   try {
     if (!(await lstat(directory)).isDirectory()) throw planError("Plan history must not be a link.");
     entries = await readdir(directory);
-  } catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
   const history = [];
   const ids = new Set(entries.filter(name => /^[a-f0-9]{64}\.(md|json)$/u.test(name)).map(name => name.slice(0, 64)));
   for (const id of ids) {
@@ -127,26 +150,54 @@ async function readWorkPlanHistoryUnlocked(context) {
   }
   return history.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
 }
-async function readWorkPlanPageUnlocked(context, { offset = 0, limit = 16000, expectedRevision = "", expectedProgressRevision = "", archiveId = "" } = {}) {
-  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16000) throw planError("Invalid plan page bounds.");
-  if (offset > 0 && !expectedRevision) throw planError("Further plan pages require the revision from the first page.", "vibe64_work_plan_revision_required");
+async function readWorkPlanPageUnlocked(context, {
+  offset = 0,
+  limit = 16000,
+  expectedRevision = "",
+  expectedProgressRevision = "",
+  archiveId = ""
+} = {}) {
+  if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 16000) {
+    throw planError("Invalid plan page bounds.");
+  }
+  if (offset > 0 && !expectedRevision) {
+    throw planError("Further plan pages require the revision from the first page.", "vibe64_work_plan_revision_required");
+  }
   const current = await readWorkPlanUnlocked(context);
   const plan = archiveId ? await readArchived(context, archiveId) : current;
   const history = offset === 0 ? await readWorkPlanHistoryUnlocked(context) : undefined;
-  const summary = current ? { title: current.title, status: current.status, revision: current.revision, progressRevision: current.progressRevision || "" } : null;
+  const summary = current ? {
+    title: current.title,
+    status: current.status,
+    revision: current.revision,
+    progressRevision: current.progressRevision || ""
+  } : null;
   if (!plan) return { available: false, current: summary, ...(history ? { history } : {}) };
   if (expectedRevision && expectedRevision !== plan.revision || (offset > 0 || expectedProgressRevision) &&
-      expectedProgressRevision !== (plan.progressRevision || "")) throw planError("The plan or progress changed. Read both again from the beginning.", "vibe64_work_plan_changed");
+      expectedProgressRevision !== (plan.progressRevision || "")) throw planError(
+        "The plan or progress changed. Read both again from the beginning.",
+        "vibe64_work_plan_changed"
+      );
   const characters = Array.from(plan.text);
   const progress = Array.from(plan.progressText || "");
   const totalCharacters = characters.length + progress.length;
   if (offset > totalCharacters) throw planError("The plan page begins after the end of the document.", "vibe64_work_plan_offset_invalid");
   const nextOffset = Math.min(offset + limit, totalCharacters);
-  return { ...plan, available: true, archiveId, current: summary, ...(history ? { history } : {}),
+  return {
+    ...plan,
+    available: true,
+    archiveId,
+    current: summary,
+    ...(history ? { history } : {}),
     text: characters.slice(offset, Math.min(nextOffset, characters.length)).join(""),
-    progressRevision: plan.progressRevision || "", progressAvailable: plan.progressText !== null,
+    progressRevision: plan.progressRevision || "",
+    progressAvailable: plan.progressText !== null,
     progressText: progress.slice(Math.max(0, offset - characters.length), Math.max(0, nextOffset - characters.length)).join(""),
-    offset, nextOffset, totalCharacters, hasMore: nextOffset < totalCharacters };
+    offset,
+    nextOffset,
+    totalCharacters,
+    hasMore: nextOffset < totalCharacters
+  };
 }
 
 async function writePlan(file, text) {
@@ -178,7 +229,9 @@ async function archiveCurrent(context, current) {
   const record = pairRecord(current, current.progressRevision);
   const id = pairIdentity(record);
   const previous = await readPair(context, id);
-  if (previous && (previous.text !== current.text || previous.progressText !== current.progressText)) throw planError("The archived pair conflicts with the current documents.");
+  if (previous && (previous.text !== current.text || previous.progressText !== current.progressText)) {
+    throw planError("The archived pair conflicts with the current documents.");
+  }
   if (!previous) await writePlan(pairPath(context, id), JSON.stringify({ ...record, archivedAt: new Date().toISOString() }) + "\n");
 }
 
@@ -200,7 +253,10 @@ async function retireUnreferencedDocuments(context) {
     try {
       if (!(await lstat(directory)).isDirectory()) throw planError("Plan documents must not be stored through a link.");
       names = await readdir(directory);
-    } catch (error) { if (error.code === "ENOENT") continue; throw error; }
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      throw error;
+    }
     for (const name of names) {
       if (!/^[a-f0-9]{64}\.md$/u.test(name)) throw planError("Unknown plan document. Inspect the owned directory before cleanup.");
       const revision = name.slice(0, 64);
@@ -232,25 +288,41 @@ function readWorkPlanPage(context, options) {
  */
 async function manageWorkPlan(context, input, role) {
   return withWorkPlan(context, async () => {
-    const { operation, expectedRevision = "", expectedProgressRevision = "", archiveId = "", archiveCurrent: acknowledgeArchive = false } = input;
+    const {
+      operation,
+      expectedRevision = "",
+      expectedProgressRevision = "",
+      archiveId = "",
+      archiveCurrent: acknowledgeArchive = false
+    } = input;
     if (operation === "read") return readWorkPlanPageUnlocked(context, input);
     if (operation === "history") return { history: await readWorkPlanHistoryUnlocked(context) };
-    if (!["new", "write", "progress-write", "complete", "archive", "reopen"].includes(operation)) throw planError("Unknown plan operation.");
+    if (!["new", "write", "progress-write", "complete", "archive", "reopen"].includes(operation)) {
+      throw planError("Unknown plan operation.");
+    }
     const canEdit = ["senior", "review"].includes(role) || (role === "junior" && ["write", "progress-write"].includes(operation)) ||
       (role === "user" && (operation === "archive" || (operation === "reopen" && Boolean(archiveId))));
     if (!canEdit) {
-      throw planError("Only Senior can change the scope, create, reopen, archive or complete a plan. Junior can update checklist ticks and Progress.");
+      throw planError(
+        "Only Senior can change the scope, create, reopen, archive or complete a plan. Junior can update checklist ticks and Progress."
+      );
     }
     const current = await readWorkPlanUnlocked(context);
     if (current?.legacy) throw planError("This plan needs the stopped-service plan-progress upgrade before it can be changed.");
     if (role === "user" && operation === "reopen" && current) {
       throw planError("There is already a current plan. Archive it before making another plan current.");
     }
-    if (current && expectedRevision !== current.revision) throw planError("The plan changed. Read the current plan before editing it.", "vibe64_work_plan_changed");
-    if (current && expectedProgressRevision !== (current.progressRevision || "")) throw planError("Progress changed. Read both documents before editing them.", "vibe64_work_plan_changed");
+    if (current && expectedRevision !== current.revision) {
+      throw planError("The plan changed. Read the current plan before editing it.", "vibe64_work_plan_changed");
+    }
+    if (current && expectedProgressRevision !== (current.progressRevision || "")) {
+      throw planError("Progress changed. Read both documents before editing them.", "vibe64_work_plan_changed");
+    }
     if (!current && expectedRevision) throw planError("There is no current plan at that revision.", "vibe64_work_plan_changed");
     if (["write", "progress-write", "complete", "archive"].includes(operation) && !current) throw planError("There is no current plan.");
-    if (["write", "progress-write"].includes(operation) && current.status !== "active") throw planError("The plan is completed. Senior must explicitly reopen it before changes.");
+    if (["write", "progress-write"].includes(operation) && current.status !== "active") {
+      throw planError("The plan is completed. Senior must explicitly reopen it before changes.");
+    }
     let next;
     let progressText = operation === "new" ? "# Progress\n\n" : current?.progressText ?? null;
     switch (operation) {
@@ -264,7 +336,11 @@ async function manageWorkPlan(context, input, role) {
         if (Buffer.byteLength(next) > PLAN_LIMIT) throw planError("The plan is too large.");
         if (role === "junior") {
           const scopes = [current.text, next].map(workPlanScope);
-          if (scopes[0] !== scopes[1]) throw planError("Only Senior can change Plan content. Junior may change existing checklist ticks only; record evidence in Progress.");
+          if (scopes[0] !== scopes[1]) {
+            throw planError(
+              "Only Senior can change Plan content. Junior may change existing checklist ticks only; record evidence in Progress."
+            );
+          }
         }
         break;
       }
@@ -288,7 +364,11 @@ async function manageWorkPlan(context, input, role) {
     }
     const replacing = operation === "new" || (operation === "reopen" && Boolean(archiveId));
     if (replacing && current && !acknowledgeArchive) {
-      throw planError("Ask the user whether to update “" + current.title + "” or archive it and replace it. Explain that the archive remains accessible. Once the user has authorized replacement, repeat with archiveCurrent: true.");
+      throw planError(
+        "Ask the user whether to update “" +
+          current.title +
+          "” or archive it and replace it. Explain that the archive remains accessible. Once the user has authorized replacement, repeat with archiveCurrent: true."
+      );
     }
     // Save the exact record before replacement. Content identity makes retry safe.
     if (current && (replacing || operation === "archive")) await archiveCurrent(context, current);
@@ -317,8 +397,12 @@ function workPlanInstructions(role) {
     "Refer to View plan and Plan history in chat, not internal paths. Read archived plans on demand instead of loading all history. A completed plan remains accessible. A finished turn never completes a plan. After successful automatic final Senior review and any enabled Deslop, Vibe64 archives the exact explicitly completed Plan and Progress once your final explanation is delivered and that review turn ends; do not archive it early during review.",
     "Only report a plan created or updated after the helper succeeds and its returned current plan confirms the requested checklist. If it fails, report the failure; a plan written only in chat is not a saved Vibe64 plan."
   ].join(" ");
-  if (role === "junior") return common + " You are Junior. When asked to implement the active plan, read all pages of BOTH Plan and Progress first, preserve delivered work, and record actual evidence using progress-write. You may use write to tick or untick existing checklist items only; the server rejects any other Plan content change. You cannot retarget the agreed Plan scope. Complete the authorised scope rather than stopping after a useful slice. Context compaction and task size do not reduce that scope. Continue independent work when one item needs a user decision. Record incomplete or failed work and exact blockers in Progress; lead a partial final response with Implementation incomplete, not Done. You cannot create, archive, reopen or complete the plan. If asked for those operations, explain that Senior must perform them; do not substitute a chat-only outline for a saved plan. Completed implementation in Auto receives a separate Senior review; do not ask the user to request that review or final completion. Stop for changed scope or unresolved product decisions; do not start a planning/review loop yourself.";
-  return common + " You are Senior and own the plan's scope and lifecycle. Read all pages of BOTH current Plan and Progress first. If none exists, use new. If a current plan exists and the user has not clearly chosen, ask whether to update it or archive it and start a new plan; wait for their answer before replacing it. Use write for an agreed update, reopen for an agreed return to a completed plan, archive when requested, and complete ONLY when every required acceptance item is supported by evidence. Before new or reopening an archived plan replaces a current plan, identify the plan that will be archived and explain that it remains accessible. Pass archiveCurrent:true only after the user authorizes that replacement; an explicit instruction to archive and replace already counts, so do not ask again. Reopening an archive moves it back to current as active, removing that entry from History while retaining the exact Plan and Progress pair. Replacement archives BOTH old documents and begins fresh Progress. During review, verify each agreed acceptance requirement against actual implementation and evidence. Reconcile checklist ticks against the evidence, unticking unsupported claims. Record missing verification and blockers in Progress without rewriting scope; fix in-scope defects and verify them. If review or checks remain unfinished, leave the plan active and continue authorised review. In Auto, report continue through the workflow outcome command. For substantial necessary rework within the agreed outcome, update the Technical details and Progress, then report handoff so Junior implements and Senior reviews and deslops again. Ask only when a genuinely changed product requirement or required decision blocks progress. Explicit pauses and Stops remain respected. Never invent requirements or mark unverified work completed. Direct modes retain their direct behaviour and do not start automatic handoffs.";
+  if (role === "junior") {
+    return common +
+      " You are Junior. When asked to implement the active plan, read all pages of BOTH Plan and Progress first, preserve delivered work, and record actual evidence using progress-write. You may use write to tick or untick existing checklist items only; the server rejects any other Plan content change. You cannot retarget the agreed Plan scope. Complete the authorised scope rather than stopping after a useful slice. Context compaction and task size do not reduce that scope. Continue independent work when one item needs a user decision. Record incomplete or failed work and exact blockers in Progress; lead a partial final response with Implementation incomplete, not Done. You cannot create, archive, reopen or complete the plan. If asked for those operations, explain that Senior must perform them; do not substitute a chat-only outline for a saved plan. Completed implementation in Auto receives a separate Senior review; do not ask the user to request that review or final completion. Stop for changed scope or unresolved product decisions; do not start a planning/review loop yourself.";
+  }
+  return common +
+    " You are Senior and own the plan's scope and lifecycle. Read all pages of BOTH current Plan and Progress first. If none exists, use new. If a current plan exists and the user has not clearly chosen, ask whether to update it or archive it and start a new plan; wait for their answer before replacing it. Use write for an agreed update, reopen for an agreed return to a completed plan, archive when requested, and complete ONLY when every required acceptance item is supported by evidence. Before new or reopening an archived plan replaces a current plan, identify the plan that will be archived and explain that it remains accessible. Pass archiveCurrent:true only after the user authorizes that replacement; an explicit instruction to archive and replace already counts, so do not ask again. Reopening an archive moves it back to current as active, removing that entry from History while retaining the exact Plan and Progress pair. Replacement archives BOTH old documents and begins fresh Progress. During review, verify each agreed acceptance requirement against actual implementation and evidence. Reconcile checklist ticks against the evidence, unticking unsupported claims. Record missing verification and blockers in Progress without rewriting scope; fix in-scope defects and verify them. If review or checks remain unfinished, leave the plan active and continue authorised review. In Auto, report continue through the workflow outcome command. For substantial necessary rework within the agreed outcome, update the Technical details and Progress, then report handoff so Junior implements and Senior reviews and deslops again. Ask only when a genuinely changed product requirement or required decision blocks progress. Explicit pauses and Stops remain respected. Never invent requirements or mark unverified work completed. Direct modes retain their direct behaviour and do not start automatic handoffs.";
 }
 
 /**
@@ -334,7 +418,9 @@ function planProgressUpgradeChanges(files) {
     if (old === null) changes.set(name, text);
   };
   const validatePlan = text => {
-    if (Buffer.byteLength(text) > PLAN_LIMIT || !/^Status: (active|completed)\r?$/mu.test(text)) throw planError("A legacy plan is malformed. Inspect it before upgrading.");
+    if (Buffer.byteLength(text) > PLAN_LIMIT || !/^Status: (active|completed)\r?$/mu.test(text)) {
+      throw planError("A legacy plan is malformed. Inspect it before upgrading.");
+    }
   };
   const validateRecord = (source, id = "") => {
     const record = parsePairRecord(source, id);
@@ -343,7 +429,9 @@ function planProgressUpgradeChanges(files) {
     validatePlan(text);
     if (record.progressRevision !== null) {
       const progress = find("progress/" + record.progressRevision + ".md");
-      if (progress === null || Buffer.byteLength(progress) > PLAN_LIMIT || sha256Hex(progress) !== record.progressRevision) throw planError("The paired progress document is missing or changed.");
+      if (progress === null || Buffer.byteLength(progress) > PLAN_LIMIT || sha256Hex(progress) !== record.progressRevision) {
+        throw planError("The paired progress document is missing or changed.");
+      }
     }
     return record;
   };
@@ -365,11 +453,26 @@ function planProgressUpgradeChanges(files) {
     const next = "archive/" + id + ".json";
     if (saved.has(next)) throw planError("Both archived formats exist. Finish the original publication retry before upgrading.");
     put("plan/" + id + ".md", file.text);
-    put(next, JSON.stringify({ schemaVersion: 1, planRevision: id, progressRevision: null, legacyArchive: true, archivedAt: file.archivedAt }) + "\n");
+    put(next, JSON.stringify({
+      schemaVersion: 1,
+      planRevision: id,
+      progressRevision: null,
+      legacyArchive: true,
+      archivedAt: file.archivedAt
+    }) + "\n");
     changes.set(file.name, null);
   }
-  for (const file of files.filter(entry => /^archive\/[a-f0-9]{64}\.json$/u.test(entry.name))) validateRecord(file.text, file.name.slice(8, 72));
+  for (const file of files.filter(entry =>
+    /^archive\/[a-f0-9]{64}\.json$/u.test(entry.name))) validateRecord(file.text, file.name.slice(8, 72));
   return Array.from(changes, ([name, text]) => ({ name, text }));
 }
 
-export { readWorkPlan, readWorkPlanPage, readWorkPlanHistory, manageWorkPlan, workPlanPath, workPlanInstructions, planProgressUpgradeChanges };
+export {
+  readWorkPlan,
+  readWorkPlanPage,
+  readWorkPlanHistory,
+  manageWorkPlan,
+  workPlanPath,
+  workPlanInstructions,
+  planProgressUpgradeChanges
+};

@@ -80,7 +80,10 @@ const commandServers = createSessionCommandServers({
   notFound: responseError("Unknown Vibe64 Env command route.", "vibe64_agent_env_command_route_not_found"),
   rejection: {
     statusCode: 409,
-    payload: responseError("Managed Env control generation is no longer current. Reconnect the assistant.", "vibe64_agent_control_unavailable")
+    payload: responseError(
+      "Managed Env control generation is no longer current. Reconnect the assistant.",
+      "vibe64_agent_control_unavailable"
+    )
   },
   requestFailure: {
     fallbackCode: "vibe64_agent_env_command_request_failed",

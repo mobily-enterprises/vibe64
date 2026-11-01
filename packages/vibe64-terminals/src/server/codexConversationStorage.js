@@ -3,7 +3,10 @@ import { normalizeCodexThreadId } from "@jskit-ai/assistant-core/server/codex-co
 import { codexAppServerTurnState as nativeCodexAppServerTurnState } from "@jskit-ai/assistant-core/server/codex-turn";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
-import { codexAppServerThreadIdForSession, codexAppServerToolSchemaIdentityForSession } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import {
+  codexAppServerThreadIdForSession,
+  codexAppServerToolSchemaIdentityForSession
+} from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { agentTerminalIdentityForWorkdir, agentTerminalIdentityState } from "./agentTerminalIdentity.js";
 import { activeCodexTerminal } from "./codexTerminalAccess.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
@@ -146,10 +149,12 @@ function createCodexConversationStorage({ projectService, runOwner }) {
       },
       async read() {
         const current = await readCodexStateSession(sessionId);
-        return { session: current,
+        return {
+          session: current,
           get threadId() { return codexThreadIdForWorkdir(current, nativeStateWorkdir(current)); },
           get run() { return current.agentRuns[0] || null; },
-          get nativeResult() { return { ok: true, sessionId, sessionUpdated: false, ...codexState(current) }; } };
+          get nativeResult() { return { ok: true, sessionId, sessionUpdated: false, ...codexState(current) }; }
+        };
       }
     };
   }

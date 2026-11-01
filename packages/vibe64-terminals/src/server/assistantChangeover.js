@@ -1,4 +1,11 @@
-import { createMainConversationBinding, readMainConversationHistory as history, MAIN_CONVERSATION_PRESENTATION, requireCompletedNativeConversationReplacement, requireCompletedConversationRewind, requireMainConversationAdmission } from "./mainConversationBinding.js";
+import {
+  createMainConversationBinding,
+  readMainConversationHistory as history,
+  MAIN_CONVERSATION_PRESENTATION,
+  requireCompletedNativeConversationReplacement,
+  requireCompletedConversationRewind,
+  requireMainConversationAdmission
+} from "./mainConversationBinding.js";
 import { createConversationChangeover } from "@jskit-ai/assistant-core/server/conversation";
 import { vibe64AssistantConversationKey, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 export function sessionConversationKey(session) {
@@ -28,16 +35,25 @@ export async function replaceNativeConversation(sessionId, input, context, agent
   const expectedId = String(input.expectedConversationId || "");
   const handover = typeof input.handover === "string" ? input.handover.trim() : "";
   const fail = (message) => { throw Object.assign(new Error(message), {
-    code: "vibe64_conversation_replacement_unavailable", statusCode: 409
+    code: "vibe64_conversation_replacement_unavailable",
+    statusCode: 409
   }); };
   if (!/^[a-zA-Z0-9_-]{1,128}$/u.test(operationId) || !expectedId || !handover || handover.length > 64 * 1024) {
     fail("Replacement requires an operation id, exact predecessor id and a handover of at most 65536 characters.");
   }
-  if (conversation) return conversation.replace({ operationId,
-    expectedSegmentId: `${engineId}:${expectedId}`, reason: "renewal", briefing: handover });
+  if (conversation) return conversation.replace({
+    operationId,
+    expectedSegmentId: `${engineId}:${expectedId}`,
+    reason: "renewal",
+    briefing: handover
+  });
   const messages = await history(store, sessionId);
   return changeoverFor(store, sessionId, { agent, context }).replace({
-    engineId, messages, operationId, expectedId, handover
+    engineId,
+    messages,
+    operationId,
+    expectedId,
+    handover
   });
 }
 
@@ -77,9 +93,15 @@ export async function sendWithAssistantChangeover(sessionId, input, context, age
   const store = context.runtime.store;
   const engineId = sessionConversationKey(context.session);
   const messages = [...initialMessages, ...await history(store, sessionId)];
-  return changeoverFor(store, sessionId, { agent, context, log,
-    ...(initialMessages.length ? { maximumInitialMessages: 40 } : {}) }).send({
-    engineId, messages, input,
-    turnMetadata: { engineId: engineId.split("/")[0] }
-  });
+  return changeoverFor(store, sessionId, {
+    agent,
+    context,
+    log,
+    ...(initialMessages.length ? { maximumInitialMessages: 40 } : {})
+  }).send({
+      engineId,
+      messages,
+      input,
+      turnMetadata: { engineId: engineId.split("/")[0] }
+    });
 }

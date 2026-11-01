@@ -62,11 +62,20 @@ function fileSections(diff) {
  * @param {ActionCatalogue} dependencies.actions
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
-function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Command }) {
+function createTrainingStepEvidence({
+  project,
+  actions,
+  runCommand = runVibe64Command
+}) {
   async function git(source, slug, args, { maxBuffer = GIT_MAX_BUFFER } = {}) {
     const result = await runCommand({ actor: "daemon", command: "git", args: ["-c", "core.quotePath=false", ...args],
       // Optional locks off: reading never refreshes the clone's index.
-      cwd: source, env: { GIT_OPTIONAL_LOCKS: "0" }, allowedRoots: [source], gitSafeDirectories: [source], envPolicy: "session", purpose: "source",
+      cwd: source,
+      env: { GIT_OPTIONAL_LOCKS: "0" },
+        allowedRoots: [source],
+        gitSafeDirectories: [source],
+        envPolicy: "session",
+        purpose: "source",
       runtimes: ["git"], mode: "capture", project: { slug }, timeout: GIT_TIMEOUT_MS, maxBuffer });
     if (result?.ok !== true) {
       throw evidenceFailure("Your practice project's changes could not be read. Nothing was recorded; try again in a moment.");
@@ -87,16 +96,29 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
     if (bytes.includes(0)) return { omitted: "binary" };
     const text = bytes.toString("utf8");
     const lines = text ? text.replace(/\n$/u, "").split("\n") : [];
-    return { added: lines.length, section: `diff --git a/${relative} b/${relative}\nnew file (not yet committed)\n--- /dev/null\n+++ b/${relative}\n${lines.map(line => `+${line}`).join("\n")}\n` };
+    return {
+      added: lines.length,
+      section: `diff --git a/${relative} b/${relative}\nnew file (not yet committed)\n--- /dev/null\n+++ b/${relative}\n${lines.map(line => `+${line}`).join("\n")}\n`
+    };
   }
 
   async function readChanges(source, slug, startCommit) {
     await git(source, slug, ["cat-file", "-e", `${startCommit}^{commit}`]);
-    const numstat = nulList(await git(source, slug, ["diff", "--no-color", "--no-ext-diff", "--no-renames", "--numstat", "-z", startCommit, "--", ".", ...excludes]));
+    const numstat = nulList(
+      await git(
+        source,
+        slug,
+        ["diff", "--no-color", "--no-ext-diff", "--no-renames", "--numstat", "-z", startCommit, "--", ".", ...excludes]
+      )
+    );
     const tracked = numstat.map(row => {
       const [added, removed, ...rest] = row.split("\t");
       const binary = added === "-" || removed === "-";
-      return { path: rest.join("\t"), status: "changed", ...(binary ? { binary: true } : { added: Number(added), removed: Number(removed) }) };
+      return {
+        path: rest.join("\t"),
+        status: "changed",
+        ...(binary ? { binary: true } : { added: Number(added), removed: Number(removed) })
+      };
     });
     const untracked = nulList(await git(source, slug, ["ls-files", "--others", "--exclude-standard", "-z", "--", ".", ...excludes]))
       .map(relative => ({ path: relative, status: "new" }));
@@ -105,7 +127,9 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
     let truncated = all.length > files.length;
     const textTracked = files.filter(file => file.status === "changed" && !file.binary).map(file => file.path);
     const sections = textTracked.length
-      ? fileSections(await git(source, slug, ["diff", "--no-color", "--no-ext-diff", "--no-renames", "-U3", startCommit, "--", ...textTracked]))
+      ? fileSections(
+        await git(source, slug, ["diff", "--no-color", "--no-ext-diff", "--no-renames", "-U3", startCommit, "--", ...textTracked])
+      )
       : new Map();
     let used = 0;
     const chunks = [];
@@ -114,11 +138,22 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
       if (file.binary) file.omitted = "binary";
       else if (file.status === "new") {
         const added = await untrackedSection(source, file.path);
-        if (added.omitted) file.omitted = added.omitted; else { file.added = added.added; file.removed = 0; section = added.section; }
+        if (added.omitted) file.omitted = added.omitted; else {
+          file.added = added.added;
+          file.removed = 0;
+          section = added.section;
+        }
       } else section = sections.get(file.path) || "";
       if (!section) continue;
-      if (section.length > EVIDENCE_LIMITS.fileDiffCharacters) { file.omitted = "large"; continue; }
-      if (used + section.length > EVIDENCE_LIMITS.diffCharacters) { file.omitted = "budget"; truncated = true; continue; }
+      if (section.length > EVIDENCE_LIMITS.fileDiffCharacters) {
+        file.omitted = "large";
+        continue;
+      }
+      if (used + section.length > EVIDENCE_LIMITS.diffCharacters) {
+        file.omitted = "budget";
+        truncated = true;
+        continue;
+      }
       used += section.length;
       chunks.push(section);
     }
@@ -130,8 +165,11 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
    * agent's own words, newest kept first within the budget.
    */
   async function readConversation(attempt, sessionId, context) {
-    const result = await actions.execute({ actionId: "vibe64.sessions.conversation-log.read",
-      input: { projectSlug: attempt.projectSlug, sessionId, limit: String(EVIDENCE_LIMITS.conversationTurns) }, context });
+    const result = await actions.execute({
+      actionId: "vibe64.sessions.conversation-log.read",
+      input: { projectSlug: attempt.projectSlug, sessionId, limit: String(EVIDENCE_LIMITS.conversationTurns) },
+      context
+    });
     if (result?.ok === false || result?.readError) {
       throw evidenceFailure("The lesson's coding conversation could not be read. Nothing was recorded; try again in a moment.");
     }
@@ -144,10 +182,17 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
       const value = String(message.text);
       const text = value.slice(0, Math.min(remaining, EVIDENCE_LIMITS.messageCharacters));
       remaining -= text.length;
-      messages.unshift({ role: message.role === "user" ? "learner" : "agent", text, ...(text.length < value.length ? { truncated: true } : {}) });
+      messages.unshift({
+        role: message.role === "user" ? "learner" : "agent",
+        text,
+        ...(text.length < value.length ? { truncated: true } : {})
+      });
     }
-    return { messages, truncated: eligible.length > messages.length || messages.some(message => message.truncated) ||
-      result.pagination?.hasMoreBefore === true };
+    return {
+      messages,
+      truncated: eligible.length > messages.length || messages.some(message => message.truncated) ||
+        result.pagination?.hasMoreBefore === true
+    };
   }
 
   /**
@@ -193,8 +238,10 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
         throw evidenceFailure("This lesson's practice session is unavailable. Resume the lesson, then try again.");
       }
       const working = sessionAgentWorking(session);
-      return { agentWorking: working,
-        changes: working ? null : await readChanges(source, attempt.projectSlug, startCommit) };
+      return {
+        agentWorking: working,
+        changes: working ? null : await readChanges(source, attempt.projectSlug, startCommit)
+      };
     });
     const session = { sessionId, agentWorking: observed.agentWorking };
     if (observed.agentWorking) return { session, evidence: null, empty: false };

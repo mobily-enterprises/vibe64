@@ -9,7 +9,11 @@ import { runtimePackRoot } from "./runtimePacks.js";
 // The AI tools Vibe64 runs, with their install lines from the shared table.
 const OPERATOR_CLIS = Object.freeze(Object.fromEntries(["claude", "codex", "opencode"].map((tool) => {
   const { name, guideUrl, any } = LOCAL_TOOLS[tool];
-  return [tool, Object.freeze({ name, guideUrl, install: any })];
+  return [tool, Object.freeze({
+    name,
+    guideUrl,
+    install: any
+  })];
 })));
 
 function executable(file = "") {
@@ -87,13 +91,24 @@ function operatorCliProblem(tool = "", { installed = false, purpose = "" } = {})
   const { name, guideUrl } = OPERATOR_CLIS[tool];
   const use = purpose ? `Vibe64 uses it to work with ${purpose}.` : "Vibe64 uses it to run your AI.";
   const problem = installed
-    ? { code: "vibe64_cli_unavailable", status: "unavailable", title: `${name} didn't start`,
-        detail: `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.` }
-    : { code: "vibe64_cli_not_installed", status: "not_installed", title: `${name} isn't installed on this computer`,
-        detail: `${use} Install it, then choose Check again.` };
+    ? {
+      code: "vibe64_cli_unavailable",
+      status: "unavailable",
+      title: `${name} didn't start`,
+      detail: `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.`
+    }
+    : {
+      code: "vibe64_cli_not_installed",
+      status: "not_installed",
+      title: `${name} isn't installed on this computer`,
+      detail: `${use} Install it, then choose Check again.`
+    };
   // `message` reads on its own; the install notice shows `title` above `detail`.
-  return { ...problem, message: installed ? problem.detail : `${problem.title}. ${problem.detail}`,
-    install: { command: operatorCliInstall(tool), guideUrl } };
+  return {
+    ...problem,
+    message: installed ? problem.detail : `${problem.title}. ${problem.detail}`,
+    install: { command: operatorCliInstall(tool), guideUrl }
+  };
 }
 
 export {

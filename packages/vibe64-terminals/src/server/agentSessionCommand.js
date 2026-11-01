@@ -1,4 +1,8 @@
-import { captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import {
+  captureProjectRequestContext,
+  currentProjectRequestContext,
+  runWithProjectRequestContext
+} from "@local/vibe64-core/server/projectRequestContext";
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -7,7 +11,11 @@ import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
 import { sessionWorkProblem } from "../shared/sessionWorkProblem.js";
-import { WORKSPACE_SETUP_METADATA_NAME, workspaceSetupState, workspaceSetupStateFromMetadata } from "@local/vibe64-runtime/server/workspaceSetupState";
+import {
+  WORKSPACE_SETUP_METADATA_NAME,
+  workspaceSetupState,
+  workspaceSetupStateFromMetadata
+} from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import { normalizeText, vibe64Error } from "@local/vibe64-core/server/core";
 import {
@@ -97,27 +105,33 @@ const commandServers = createSessionCommandServers({
   routes: {
     "/agent-session-command/message-project": {
       handle: ({ commandService, input, sessionId }) => commandService.messageProject(sessionId, input),
-      status: vibe64StatusCode, token: "controlToken"
+      status: vibe64StatusCode,
+      token: "controlToken"
     },
     "/agent-session-command/project-preview": {
       handle: ({ commandService, input, sessionId }) => commandService.projectPreview(sessionId, input),
-      status: vibe64StatusCode, token: "controlToken"
+      status: vibe64StatusCode,
+      token: "controlToken"
     },
     "/agent-session-command/rename": {
       handle: ({ commandService, input, sessionId }) => commandService.renameSession(sessionId, input.name),
-      status: vibe64StatusCode, token: "controlToken"
+      status: vibe64StatusCode,
+      token: "controlToken"
     },
     "/agent-session-command/setup-retry": {
       handle: ({ commandService, sessionId }) => commandService.retrySetup(sessionId),
-      status: vibe64StatusCode, token: "controlToken"
+      status: vibe64StatusCode,
+      token: "controlToken"
     },
     "/agent-session-command/status": {
       handle: ({ commandService, sessionId }) => commandService.sessionStatus(sessionId),
-      status: vibe64StatusCode, token: "controlToken"
+      status: vibe64StatusCode,
+      token: "controlToken"
     },
     "/agent-session-command/plan": {
       handle: ({ commandService, input, sessionId }) => commandService.managePlan(sessionId, input),
-      status: vibe64StatusCode, token: "controlToken"
+      status: vibe64StatusCode,
+      token: "controlToken"
     },
     "/agent-session-command/run": {
       handle({ commandService, input, request, response }) {
@@ -139,7 +153,10 @@ const commandServers = createSessionCommandServers({
   notFound: responseError("Unknown Vibe64 session command route.", "vibe64_agent_session_command_route_not_found"),
   rejection: {
     statusCode: 403,
-    payload: responseError("Vibe64 session command identity is invalid. Reconnect the affected assistant before retrying. If only a child agent is affected, ask its parent to replace that child and preserve its work.", "vibe64_agent_session_command_identity_invalid")
+    payload: responseError(
+      "Vibe64 session command identity is invalid. Reconnect the affected assistant before retrying. If only a child agent is affected, ask its parent to replace that child and preserve its work.",
+      "vibe64_agent_session_command_identity_invalid"
+    )
   },
   requestFailure: {
     fallbackCode: "vibe64_agent_session_command_request_failed",
@@ -196,7 +213,10 @@ function createAgentSessionCommandService({
     // Practice sessions are ordinary project sessions; no host binds a
     // learning-scoped session command any more, so one is refused.
     if (requestContext?.learningScope) {
-      throw vibe64Error("Session commands are unavailable in a Learning-scoped context.", "vibe64_agent_session_command_learning_unavailable");
+      throw vibe64Error(
+        "Session commands are unavailable in a Learning-scoped context.",
+        "vibe64_agent_session_command_learning_unavailable"
+      );
     }
     const binding = await projectBinding.bind(normalizedSessionId);
     Object.assign(binding, {
@@ -254,10 +274,12 @@ function createAgentSessionCommandService({
   async function messageProject(sessionId, input) {
     return runInSessionProject(sessionId, async ({ binding, store }) => {
       return sendProjectMessage({
-        projectSlug: normalizeText(input.projectSlug), message: normalizeText(input.message),
+        projectSlug: normalizeText(input.projectSlug),
+        message: normalizeText(input.message),
         ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
         messageId: normalizeText(input.messageId) || randomUUID(),
-        sourceProject: binding.projectSlug, sourceSession: sessionId,
+        sourceProject: binding.projectSlug,
+        sourceSession: sessionId,
         actor: await requestActor(store, sessionId, binding)
       });
     });
@@ -268,7 +290,8 @@ function createAgentSessionCommandService({
       return readProjectPreview({
         projectSlug: normalizeText(input.projectSlug),
         ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
-        sourceProject: binding.projectSlug, sourceSession: sessionId,
+        sourceProject: binding.projectSlug,
+        sourceSession: sessionId,
         actor: await requestActor(store, sessionId, binding)
       });
     });
@@ -285,12 +308,15 @@ function createAgentSessionCommandService({
   async function sessionStatus(sessionId) {
     return runInSessionProject(sessionId, async ({ descriptor, sourceRoot, project, store }) => {
       const environment = await projectService.projectEnvironmentStatus({
-        sessionId, session: { ...descriptor, sessionId }
+        sessionId,
+        session: { ...descriptor, sessionId }
       });
       let setup;
       try {
-        setup = await projectService.inspectWorkspaceSetup({ projectRoot: sourceRoot,
-          session: await (await projectService.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false }) });
+        setup = await projectService.inspectWorkspaceSetup({
+          projectRoot: sourceRoot,
+          session: await (await projectService.createRuntime({ inspectSource: false })).getSession(sessionId, { inspectSource: false })
+        });
       } catch (error) {
         // The agent repairing or deciding a project contract still needs status;
         // report Genesis's actionable message instead of failing the command.
@@ -371,16 +397,28 @@ function createAgentSessionCommandService({
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
       }
       let role = "";
-      if (request?.reason !== "conversation" && request?.task !== "deslop" && request?.status === "working" && request.delivery === "accepted") {
+      if (request?.reason !== "conversation" &&
+          request?.task !== "deslop" &&
+          request?.status === "working" &&
+          request.delivery === "accepted") {
         role = request.stage === "review" && request.followup ? "review" : request.resolvedMode;
       }
       const result = await manageWorkPlan({ runtime: { store }, session: { sessionId } }, input, role);
       if (!["read", "history"].includes(input.operation)) {
         await publishSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice || "" } });
       }
-      return { ok: true, ...result, ...(input.operation === "read" ? { workflow: request?.mode === "auto" && (request.workflow || request.stage === "planning") ? {
-        messageId: request.messageId, turnId: request.turnId || "", stage: request.stage, status: request.status
-      } : null } : {}) };
+      return {
+        ok: true,
+        ...result,
+        ...(input.operation === "read" ? {
+          workflow: request?.mode === "auto" && (request.workflow || request.stage === "planning") ? {
+            messageId: request.messageId,
+            turnId: request.turnId || "",
+            stage: request.stage,
+            status: request.status
+          } : null
+        } : {})
+      };
     });
   }
 
@@ -640,8 +678,12 @@ async function prepareAgentSessionCommand({
   return {
     controlGenerationId: server.generationId,
     env: {
-      [SESSION_RENAME_CONTROL_ENV]: JSON.stringify({ socketPath: server.socketPath, sessionId: normalizedSessionId,
-        generationId: server.generationId, token: server.controlToken }),
+      [SESSION_RENAME_CONTROL_ENV]: JSON.stringify({
+        socketPath: server.socketPath,
+        sessionId: normalizedSessionId,
+        generationId: server.generationId,
+        token: server.controlToken
+      }),
       [VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV]: AGENT_SESSION_COMMAND_CONTRACT_VERSION,
       [VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV]: server.generationId,
       [VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV]: normalizedSessionId,

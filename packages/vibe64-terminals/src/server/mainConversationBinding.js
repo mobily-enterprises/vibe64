@@ -35,7 +35,9 @@ export function requireCompletedConversationRewind(session) {
   requireCompletedNativeConversationReplacement(session);
   const state = JSON.parse(session?.metadata?.[STATE_KEY] || "null");
   if (state?.rewind && !state.rewind.completed) {
-    throw Object.assign(new Error("An unfinished conversation Undo from a previous release blocks assistant work. Complete it using the previous release before upgrading."),
+    throw Object.assign(new Error(
+      "An unfinished conversation Undo from a previous release blocks assistant work. Complete it using the previous release before upgrading."
+    ),
       { code: "vibe64_conversation_rewind_pending", statusCode: 409 });
   }
 }
@@ -118,8 +120,12 @@ export async function prepareSessionConversationCreation(provider, sessionId, co
  */
 export async function prepareSessionConversationActivity(provider, sessionId, context) {
   const host = await provider.prepareConversationHost(sessionId, context, "activity");
-  return { sessionId, engine: provider.id, native: host.native,
-    context: Object.hasOwn(host, "context") ? host.context : context };
+  return {
+    sessionId,
+    engine: provider.id,
+    native: host.native,
+    context: Object.hasOwn(host, "context") ? host.context : context
+  };
 }
 
 /**
@@ -129,9 +135,13 @@ export async function prepareSessionConversationActivity(provider, sessionId, co
 export function prepareSessionConversationRenewalProof(provider, sessionId, context, input, method) {
   const request = provider.prepareConversationRequest(method, context, input);
   const host = synchronousConversationHost(provider, sessionId, context, "renewalProof", "Renewal proof release");
-  return { sessionId, engine: provider.id, native: host.native,
+  return {
+    sessionId,
+    engine: provider.id,
+    native: host.native,
     context: Object.hasOwn(request, "context") ? request.context : context,
-    input: Object.hasOwn(request, "input") ? request.input : input };
+    input: Object.hasOwn(request, "input") ? request.input : input
+  };
 }
 
 /**
@@ -147,8 +157,14 @@ export async function prepareSessionConversationRenewal(provider, sessionId, con
  */
 export async function prepareSessionConversationDisposal(provider, sessionId, context, options) {
   const host = await provider.prepareConversationHost(sessionId, context, "dispose");
-  return { sessionId, namespace: host.namespace, engine: provider.id, native: host.native, context,
-    options: Object.hasOwn(host, "cleanupOptions") ? host.cleanupOptions : options };
+  return {
+    sessionId,
+    namespace: host.namespace,
+    engine: provider.id,
+    native: host.native,
+    context,
+    options: Object.hasOwn(host, "cleanupOptions") ? host.cleanupOptions : options
+  };
 }
 
 /**
@@ -194,12 +210,16 @@ export async function createSessionConversationBinding(provider, sessionId, opti
     engine === "codex" ? "The scoped conversation must retain its original scope and native identity." : undefined);
   const host = await provider.prepareConversationHost(sessionId, openingContext, scoped ? "scoped" : "main");
   if (scoped) return {
-    sessionId, namespace: `${host.namespace}\0${conversationId}`, engine,
+    sessionId,
+    namespace: `${host.namespace}\0${conversationId}`,
+    engine,
     native: { ...host.native, scoped: { conversationId, context: openingContext } }
   };
   const { runtime, session } = host.context;
   const original = createMainConversationBinding(runtime.store, sessionId, {
-    runtime, session, readSession: () => runtime.getSession(sessionId, { inspectSource: false })
+    runtime,
+    session,
+    readSession: () => runtime.getSession(sessionId, { inspectSource: false })
   });
   const conversation = original.conversation({ engine, publish: host.publish, checkpoint: host.checkpoint });
   const binding = {
@@ -238,7 +258,9 @@ export async function createSessionConversationBinding(provider, sessionId, opti
             if (await host.compactContext({ context, signal, input }) === false) return Math.max(bytes, 1024);
           } catch (error) {
             if (signal?.aborted) throw error;
-            throw Object.assign(new Error(`The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`),
+            throw Object.assign(new Error(
+              `The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`
+            ),
               { code: "vibe64_assistant_context_full", statusCode: 409 });
           } finally {
             await setPhase?.("preparing");
@@ -246,7 +268,9 @@ export async function createSessionConversationBinding(provider, sessionId, opti
           bytes = await room();
         }
         if (bytes < 1024) {
-          throw Object.assign(new Error("The assistant's memory is too full to receive this conversation. Your chat is saved; try again, or switch to another assistant."),
+          throw Object.assign(new Error(
+            "The assistant's memory is too full to receive this conversation. Your chat is saved; try again, or switch to another assistant."
+          ),
             { code: "vibe64_assistant_context_full", statusCode: 409 });
         }
         return bytes;
@@ -265,13 +289,22 @@ export async function createSessionConversationBinding(provider, sessionId, opti
       const value = await host.state.read(current, representation, nativeResult);
       if (!Object.hasOwn(value, "session")) return value;
       const configuration = vibe64AssistantSelectionFromMetadata(value.session.metadata);
-      return { threadId: value.threadId, configuration,
+      return {
+        threadId: value.threadId,
+        configuration,
         ...(Object.hasOwn(value, "run") ? { run: value.run } : {}),
         ...(Object.hasOwn(value, "turn") ? { turn: value.turn } : {}),
-        delivery: await original.state.read(), nativeResult: value.nativeResult };
+        delivery: await original.state.read(),
+        nativeResult: value.nativeResult
+      };
     },
-    ...(host.state.readIdentity ? { identity: { ...conversation.identity, read: host.state.readIdentity,
-      ...(host.state.readToolSchemaIdentity ? { readToolSchemaIdentity: host.state.readToolSchemaIdentity } : {}) } } : {}),
+    ...(host.state.readIdentity ? {
+      identity: {
+        ...conversation.identity,
+        read: host.state.readIdentity,
+        ...(host.state.readToolSchemaIdentity ? { readToolSchemaIdentity: host.state.readToolSchemaIdentity } : {})
+      }
+    } : {}),
     native: engine === "codex" ? {
       ...host.native,
       messagePreparation: createCodexMainMessagePreparation(sessionId, host.messageEnvironment, host.native.messagePreparation)
@@ -294,8 +327,11 @@ export function requireScopedConversationContext(sessionId, context, conversatio
 
 export async function openMainConversation(conversationRuntime, context, prepareInput, representation = "native") {
   if (!conversationRuntime || context.assistantScope) return null;
-  return conversationRuntime.open({ id: context.sessionId, representation,
-    context: { ...context, ...(prepareInput ? { prepareInput } : {}) } });
+  return conversationRuntime.open({
+    id: context.sessionId,
+    representation,
+    context: { ...context, ...(prepareInput ? { prepareInput } : {}) }
+  });
 }
 
 export async function publishMainConversationEvent(namespaceForSession, publishApplicationSessionChanged, publishConversation, sessionId, event, applicationEvent = event) {
@@ -342,7 +378,8 @@ export function createMainConversationBinding(store, sessionId, context) {
         const selection = vibe64AssistantSelectionFromMetadata(current.metadata);
         const metadata = current.metadata;
         const fail = (message) => { throw Object.assign(new Error(message), {
-          code: "vibe64_conversation_replacement_unavailable", statusCode: 409
+          code: "vibe64_conversation_replacement_unavailable",
+          statusCode: 409
         }); };
         if (metadata.agent_identity_provider !== selection.engineId || metadata.agent_identity_conversation_id !== expectedId ||
             !metadata.agent_identity_workdir) fail("The native predecessor identity changed or is incomplete.");
@@ -353,9 +390,15 @@ export function createMainConversationBinding(store, sessionId, context) {
         if (selection.engineId === "codex" && Object.hasOwn(metadata, "codex_conversation_tool_schema_identity")) {
           bindingNames.push("codex_conversation_tool_schema_identity");
         }
-        return { bindingNames, previous: { conversationId: expectedId, assistantSelection: selection,
-          modelProviderId: metadata.codex_routing_home_provider || metadata.agent_identity_model_provider || selection.modelProviderId,
-          workdir: metadata.agent_identity_workdir } };
+        return {
+          bindingNames,
+          previous: {
+            conversationId: expectedId,
+            assistantSelection: selection,
+            modelProviderId: metadata.codex_routing_home_provider || metadata.agent_identity_model_provider || selection.modelProviderId,
+            workdir: metadata.agent_identity_workdir
+          }
+        };
       }
     },
     transcript: {
@@ -363,14 +406,18 @@ export function createMainConversationBinding(store, sessionId, context) {
       readConversationLog: () => store.readConversationLog(sessionId),
       readConversationLogPage: query => store.readConversationLogPage(sessionId, query),
       hasMessage: (messageId) => store.conversationMessageIdExists(sessionId, messageId),
-      ...(store.findSubmittedConversationTurn ? { findSubmittedTurn: (messageId) => store.findSubmittedConversationTurn(sessionId, messageId) } : {}),
+      ...(store.findSubmittedConversationTurn
+        ? { findSubmittedTurn: (messageId) => store.findSubmittedConversationTurn(sessionId, messageId) }
+        : {}),
       ...(store.readConversationLogTurn ? { readTurn: (turnId) => store.readConversationLogTurn(sessionId, turnId) } : {}),
       async writeUserMessage(message) {
         const current = context.readSession ? await context.readSession() : context.session;
         return store.writeConversationUserMessage(sessionId, {
           ...message,
-          turnMetadata: { ...message.turnMetadata,
-            assistantSelection: vibe64AssistantSelectionFromMetadata(current.metadata) }
+          turnMetadata: {
+            ...message.turnMetadata,
+            assistantSelection: vibe64AssistantSelectionFromMetadata(current.metadata)
+          }
         });
       }
     },

@@ -47,7 +47,14 @@ function stoppedRecoveryResult({ discoveredSessionIds = [] } = {}) {
  * @param {number} dependencies.workflowLockRetryMs
  */
 function createRenewalScheduler({
-  admission, clearTimeoutFn, renewalAccess, restoration, restoreRenewalActor, setTimeoutFn, workflow, workflowLockRetryMs
+  admission,
+  clearTimeoutFn,
+  renewalAccess,
+  restoration,
+  restoreRenewalActor,
+  setTimeoutFn,
+  workflow,
+  workflowLockRetryMs
 }) {
   const pendingWorkflowLockRetries = new Map();
   const workflowLockRetryDelayMs = Math.max(
@@ -273,7 +280,12 @@ function createRenewalScheduler({
     return admission.drain();
   }
 
-  return Object.freeze({ clearWorkflowLockRetry, closeSessionRenewalWork, resumeSessionRenewals, schedule });
+  return Object.freeze({
+    clearWorkflowLockRetry,
+    closeSessionRenewalWork,
+    resumeSessionRenewals,
+    schedule
+  });
 }
 
 export { SESSION_RENEWAL_WORKFLOW_LOCK_RETRY_MS, createRenewalScheduler };

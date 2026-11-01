@@ -19,7 +19,11 @@ import { assertWorkspaceIdle, manualDraftTemplate, renewalError, sourceEnvelopes
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
  * @param {TerminalsService} dependencies.terminals
  */
-function createRenewalPredecessorSession({ renewalAccess, setupRunner, terminals }) {
+function createRenewalPredecessorSession({
+  renewalAccess,
+  setupRunner,
+  terminals
+}) {
   async function freezePredecessorTerminalAdmission(state = {}) {
     return terminals.freezeSessionTerminalAdmissionForRenewal(state.sessionId, {
       renewalId: state.renewalId
@@ -128,7 +132,15 @@ function createRenewalPredecessorSession({ renewalAccess, setupRunner, terminals
     });
   }
 
-  return Object.freeze({ freezePredecessorTerminalAdmission, thawPredecessorTerminalAdmission, closePredecessorTerminals, releasePredecessorProcessExitProof, assertPredecessorIdle, returnToRenewalReview, validateReviewedHandover });
+  return Object.freeze({
+    freezePredecessorTerminalAdmission,
+    thawPredecessorTerminalAdmission,
+    closePredecessorTerminals,
+    releasePredecessorProcessExitProof,
+    assertPredecessorIdle,
+    returnToRenewalReview,
+    validateReviewedHandover
+  });
 }
 
 export { createRenewalPredecessorSession };

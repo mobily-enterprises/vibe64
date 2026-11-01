@@ -45,10 +45,16 @@ function createAgentPreviewBrowserTests({
 
   function playwrightStatus(sessionId) {
     const pending = state.browserTestRuns.get(sessionId);
-    return { ok: true, run: pending ? {
-      id: pending.id, targetId: pending.targetId, state: pending.state,
-      startedAt: pending.startedAt, elapsedMs: Date.now() - Date.parse(pending.startedAt)
-    } : null };
+    return {
+      ok: true,
+      run: pending ? {
+        id: pending.id,
+        targetId: pending.targetId,
+        state: pending.state,
+        startedAt: pending.startedAt,
+        elapsedMs: Date.now() - Date.parse(pending.startedAt)
+      } : null
+    };
   }
 
   async function cancelPlaywrightRun(sessionId, runId) {
@@ -135,7 +141,8 @@ function createAgentPreviewBrowserTests({
       },
       waitUntilReady: async (terminal, { restoring = false } = {}) => {
         const waited = await waitForPreviewReady(launchTarget, sessionId, {
-          terminalSessionId: terminal.id, signal: restoring ? null : options.signal
+          terminalSessionId: terminal.id,
+          signal: restoring ? null : options.signal
         });
         if (!waited.ok) throw new Error(waited.status?.error || (waited.timeout
           ? "Timed out waiting for Preview readiness." : "Preview failed to become ready."));
@@ -150,7 +157,9 @@ function createAgentPreviewBrowserTests({
     const provider = resourceProvider();
     const identity = { projectSlug: descriptor.project.slug, sessionId, admissionId: admission.id };
     const wait = await provider.beginWorkflowApprovalWait({
-      ...identity, parentExecutionId: input.parentExecutionId, controlGenerationId: descriptor.controlGenerationId
+      ...identity,
+      parentExecutionId: input.parentExecutionId,
+      controlGenerationId: descriptor.controlGenerationId
     });
     let outcome = "interrupted";
     let timer;
@@ -175,7 +184,9 @@ function createAgentPreviewBrowserTests({
     if (options.signal.aborted) abort();
     timer = setTimeout(() => pending.cancel("expired"), Math.max(0, Date.parse(wait.expiresAt) - Date.now()));
     try {
-      onOutput("Waiting for resources. Normal Preview has been restored. Retry or Cancel in Vibe64 within five minutes; tests have not run.\n");
+      onOutput(
+        "Waiting for resources. Normal Preview has been restored. Retry or Cancel in Vibe64 within five minutes; tests have not run.\n"
+      );
       await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
       const authorizeStart = await decision;
       if (!authorizeStart) return responseError(
@@ -202,7 +213,8 @@ function createAgentPreviewBrowserTests({
   async function playwrightRun(sessionId, input, options = {}) {
     input = structuredClone(input);
     if (state.browserTestRuns.has(sessionId) && !input.testRunToken) return responseError(
-      "A browser test still owns this session. Use vibe64-helper playwright status, then cancel its run ID or wait for completion.", "vibe64_test_approval_busy"
+      "A browser test still owns this session. Use vibe64-helper playwright status, then cancel its run ID or wait for completion.",
+      "vibe64_test_approval_busy"
     );
     const admission = launchTarget.previewTestRunAdmission(sessionId, trimmedText(input.testRunToken));
     if (admission) return admission;

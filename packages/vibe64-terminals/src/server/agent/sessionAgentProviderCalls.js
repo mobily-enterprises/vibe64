@@ -142,7 +142,10 @@ function createSessionAgentProviderCalls({
     try {
       return await invokeSessionProvider(method, ...args);
     } finally {
-      if (opening) { state.terminalStarts.delete(opening.promise); opening.resolve(); }
+      if (opening) {
+        state.terminalStarts.delete(opening.promise);
+        opening.resolve();
+      }
     }
   }
 
@@ -164,15 +167,22 @@ function createSessionAgentProviderCalls({
     if (method === "writeTerminal" && (!terminalBinding || terminalBinding.invalidated ||
         terminalBinding.sessionId !== normalizeText(sessionId))) {
       throw Object.assign(new Error("Reopen the AI terminal before sending input. Its connection is no longer bound to this session."), {
-        code: "vibe64_assistant_terminal_reopen_required", statusCode: 409
+        code: "vibe64_assistant_terminal_reopen_required",
+        statusCode: 409
       });
     }
     const boundTerminal = terminalBinding?.sessionId === normalizeText(sessionId) && method.endsWith("Terminal");
     if (boundTerminal) {
-      operationOptions = { ...operationOptions, session: null, assistantSelection: terminalBinding.selection,
-        expectedConnectionIdentity: terminalBinding.connectionIdentity };
+      operationOptions = {
+        ...operationOptions,
+        session: null,
+        assistantSelection: terminalBinding.selection,
+        expectedConnectionIdentity: terminalBinding.connectionIdentity
+      };
     }
-    const provider = boundTerminal ? state.providerById.get(terminalBinding.providerId) : sessionBindings.bindSession(sessionId, operationOptions);
+    const provider = boundTerminal
+      ? state.providerById.get(terminalBinding.providerId)
+      : sessionBindings.bindSession(sessionId, operationOptions);
     if (method === "startTerminal" && state.connectionChanges.has(provider.id)) {
       throw connectionChangeBusy(provider.id);
     }
@@ -287,8 +297,12 @@ function createSessionAgentProviderCalls({
       if (method === "startTerminal" && result?.ok !== false && normalizeText(result?.id)) {
         // A reused PTY keeps its original connection until explicitly closed.
         if (!state.terminalBindings.has(result.id)) {
-          state.terminalBindings.set(result.id, { sessionId: context.sessionId, providerId: provider.id,
-            selection: context.assistantSelection, connectionIdentity: context.assistantAccess.connectionIdentity });
+          state.terminalBindings.set(result.id, {
+            sessionId: context.sessionId,
+            providerId: provider.id,
+            selection: context.assistantSelection,
+            connectionIdentity: context.assistantAccess.connectionIdentity
+          });
         }
       }
       if (method === "closeTerminal" && result?.ok !== false) state.terminalBindings.delete(terminalId);

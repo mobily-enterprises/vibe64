@@ -86,9 +86,19 @@ function requireOpenCodeConnection(value = null, modelProviderId = "") {
  * @param {OpenCodeSharedRuntime} dependencies.sharedRuntime
  */
 function createOpenCodeHostPreparation({
-  agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
-  codexGitCommand, command, createServerProcess, env, getAssistantManager,
-  listConnections, prepareCommandEnvironment, projectService, resolveConnection,
+  agentDatabaseCommand,
+  agentEnvCommand,
+  agentPreviewCommand,
+  agentSessionCommand,
+  codexGitCommand,
+  command,
+  createServerProcess,
+  env,
+  getAssistantManager,
+  listConnections,
+  prepareCommandEnvironment,
+  projectService,
+  resolveConnection,
   sharedRuntime
 }) {
   const { processes, temporaryConversations } = sharedRuntime;
@@ -188,38 +198,49 @@ function createOpenCodeHostPreparation({
     const connections = await configuredConnections(context, options, selected);
     const roots = sharedRoots();
     await writeSessionEnvironmentRegistry();
-    return { connections, create: createServerProcess, options: {
-      cacheRoot: roots.cacheRoot,
-      command,
-      dbPath: roots.dbPath,
-      env,
-      execution: {
-        label: "OpenCode assistant",
-        operationId: "opencode-server",
-        ownerId: "opencode"
-      },
-      privateRoot: path.join(roots.root, `private-${randomUUID()}`),
-      hostContextResolver: vibe64HostContextResolverPath(),
-      providerConnections: connections,
-      sessionEnvironmentRegistry: roots.registryPath,
-      shimDirs,
-      workdir: roots.workdir
-    } };
+    return {
+      connections,
+      create: createServerProcess,
+      options: {
+        cacheRoot: roots.cacheRoot,
+        command,
+        dbPath: roots.dbPath,
+        env,
+        execution: {
+          label: "OpenCode assistant",
+          operationId: "opencode-server",
+          ownerId: "opencode"
+        },
+        privateRoot: path.join(roots.root, `private-${randomUUID()}`),
+        hostContextResolver: vibe64HostContextResolverPath(),
+        providerConnections: connections,
+        sessionEnvironmentRegistry: roots.registryPath,
+        shimDirs,
+        workdir: roots.workdir
+      }
+    };
   }
 
   async function conversationHost({ connection }, options = {}) {
     if (sharedRuntime.closed) throw openCodeError("vibe64_opencode_closed", "The OpenCode bridge is shutting down.", {}, 503);
     const selected = requireOpenCodeConnection(await resolveConnection({
       engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-      modelProviderId: connection.providerId, vibe64User: options.vibe64User || null
+      modelProviderId: connection.providerId,
+      vibe64User: options.vibe64User || null
     }), connection.providerId);
     if (selected.apiKey !== connection.apiKey || (selected.canonicalUrl || "") !== (connection.baseURL || "")) {
       throw new Error("The selected OpenCode connection changed. Resolve the current authorized connection before continuing.");
     }
     const roots = sharedRoots();
-    return { runtime: sharedRuntime, runtimeDirectory: roots.root, registryPath: roots.registryPath,
+    return {
+      runtime: sharedRuntime,
+      runtimeDirectory: roots.root,
+      registryPath: roots.registryPath,
       allowCredentialRefresh: true,
-      databasePath: roots.dbPath, selected, prepareServer: () => prepareSharedProcess({}, options, selected, [genesisCommandShimDirectory()]) };
+      databasePath: roots.dbPath,
+      selected,
+      prepareServer: () => prepareSharedProcess({}, options, selected, [genesisCommandShimDirectory()])
+    };
   }
 
   async function prepareProcess(context = {}, options = {}) {
@@ -235,56 +256,70 @@ function createOpenCodeHostPreparation({
     }), context.selection.modelProviderId);
     const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
     const projectContextRoot = learningRoot || path.resolve(context.runtime.projectContextRoot);
-    return { key: context.key, connection, failure: throwVibe64OpenCodeError, async configure() {
-      let helperModelId = "";
-      if (!context.assistantScope && getAssistantManager()) {
-        const helper = await getAssistantManager().resolveAssistantPurpose({ purpose: "quick_helper" }, {
-          ...context, vibe64User: options.vibe64User || null
-        }).catch(() => null);
-        if (helper?.available && helper.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&
-            helper.effectiveSelection.modelProviderId === context.selection.modelProviderId) {
-          helperModelId = helper.effectiveSelection.modelId;
+    return {
+      key: context.key,
+      connection,
+      failure: throwVibe64OpenCodeError,
+      async configure() {
+        let helperModelId = "";
+        if (!context.assistantScope && getAssistantManager()) {
+          const helper = await getAssistantManager().resolveAssistantPurpose({ purpose: "quick_helper" }, {
+            ...context,
+            vibe64User: options.vibe64User || null
+          }).catch(() => null);
+          if (helper?.available && helper.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&
+              helper.effectiveSelection.modelProviderId === context.selection.modelProviderId) {
+            helperModelId = helper.effectiveSelection.modelId;
+          }
         }
-      }
-      const commands = await prepareOpenCodeSessionCommandEnvironment(context, {
-        agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
-        codexGitCommand, env, prepareCommandEnvironment, projectService
-      });
-      sessionEnvironments.set(context.key, {
-        helperModelId,
-        modelProviderId: context.selection.modelProviderId,
-        env: commands.env,
-        pathEntries: commands.shimDirs,
-        projectContextRoot,
-        promptContext: promptContext("main", context.assistantScope),
-        sessionId: context.sessionId,
-        upstreamSessionId: storedUpstreamSessionId(context),
-        workdir: context.workdir
-      });
-      await writeSessionEnvironmentRegistry();
-      const shimDirs = [genesisCommandShimDirectory()];
-      return {
-        prepareServer: () => prepareSharedProcess(context, options, connection, shimDirs),
-        target: {
-          connection,
+        const commands = await prepareOpenCodeSessionCommandEnvironment(context, {
+          agentDatabaseCommand,
+          agentEnvCommand,
+          agentPreviewCommand,
+          agentSessionCommand,
+          codexGitCommand,
+          env,
+          prepareCommandEnvironment,
+          projectService
+        });
+        sessionEnvironments.set(context.key, {
           helperModelId,
+          modelProviderId: context.selection.modelProviderId,
+          env: commands.env,
+          pathEntries: commands.shimDirs,
           projectContextRoot,
-          get selection() { return context.selection; },
-          get sessionId() { return context.sessionId; },
-          get upstreamSessionId() { return storedUpstreamSessionId(context); },
-          get workdir() { return context.workdir; }
-        }
-      };
-    }, async onFailure() {
-      sessionEnvironments.delete(context.key);
-      await writeSessionEnvironmentRegistry().catch(() => null);
-    } };
+          promptContext: promptContext("main", context.assistantScope),
+          sessionId: context.sessionId,
+          upstreamSessionId: storedUpstreamSessionId(context),
+          workdir: context.workdir
+        });
+        await writeSessionEnvironmentRegistry();
+        const shimDirs = [genesisCommandShimDirectory()];
+        return {
+          prepareServer: () => prepareSharedProcess(context, options, connection, shimDirs),
+          target: {
+            connection,
+            helperModelId,
+            projectContextRoot,
+            get selection() { return context.selection; },
+            get sessionId() { return context.sessionId; },
+            get upstreamSessionId() { return storedUpstreamSessionId(context); },
+            get workdir() { return context.workdir; }
+          }
+        };
+      },
+      async onFailure() {
+        sessionEnvironments.delete(context.key);
+        await writeSessionEnvironmentRegistry().catch(() => null);
+      }
+    };
   }
 
   function upstreamSessionOptions(context) {
     return {
       selection: context.selection,
-      model: openCodeModel(context.selection), workdir: context.workdir,
+      model: openCodeModel(context.selection),
+      workdir: context.workdir,
       invalidIdentity: () => openCodeError("vibe64_opencode_session_id_invalid", "OpenCode did not return a native conversation ID."),
       identity: {
         write(nativeId) {
@@ -299,9 +334,16 @@ function createOpenCodeHostPreparation({
   }
 
   return Object.freeze({
-    configuredConnections, conversationHost, prepareProcess, prepareSharedProcess, promptContext,
-    sessionEnvironments, sharedRoots, storedUpstreamSessionId,
-    upstreamSessionOptions, writeSessionEnvironmentRegistry
+    configuredConnections,
+    conversationHost,
+    prepareProcess,
+    prepareSharedProcess,
+    promptContext,
+    sessionEnvironments,
+    sharedRoots,
+    storedUpstreamSessionId,
+    upstreamSessionOptions,
+    writeSessionEnvironmentRegistry
   });
 }
 

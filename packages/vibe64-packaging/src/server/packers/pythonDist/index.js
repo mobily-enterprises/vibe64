@@ -32,7 +32,10 @@ function checkPythonDistributions(fileNames, { version = null } = {}) {
   const files = names.map((name) => ({ name, ...distributionFileVersion(name) }));
   const unknown = files.filter((file) => !file.kind);
   if (unknown.length) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `The Output folder holds files that are not Python distributions: ${unknown.map(({ name }) => name).join(", ")}.`);
+    throw publishError(
+      "VIBE64_PUBLISH_BUILD_INVALID",
+      `The Output folder holds files that are not Python distributions: ${unknown.map(({ name }) => name).join(", ")}.`
+    );
   }
   const sdists = files.filter((file) => file.kind === "sdist");
   if (sdists.length !== 1 || !files.some((file) => file.kind === "wheel")) {
@@ -69,7 +72,10 @@ async function buildRecipe({ sourceRoot, entry, version = null, commitTime = nul
   }
   const output = path.join(sourceRoot, entry.output);
   if (await stat(output).catch(() => null)) {
-    throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `${entry.output} is committed in the source; remove it so the build makes it fresh.`);
+    throw publishError(
+      "VIBE64_PUBLISH_BUILD_INVALID",
+      `${entry.output} is committed in the source; remove it so the build makes it fresh.`
+    );
   }
   return {
     version: version ? pep440FromSemver(version) : null,

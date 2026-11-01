@@ -53,7 +53,12 @@ function projectEnvironmentResult(resolved, input, userRecords) {
  * @param {ProjectSelection} dependencies.selection
  * @param {ProjectSessionWork} dependencies.sessionWork
  */
-function createProjectSessionEnvironment({ environment, resourceEnvironmentProvider, selection, sessionWork }) {
+function createProjectSessionEnvironment({
+  environment,
+  resourceEnvironmentProvider,
+  selection,
+  sessionWork
+}) {
   const sessionEnvironment = Object.freeze({
     async projectExecutionEnvironment(input = {}) {
       if (input.reusePrepared === true) {
@@ -110,7 +115,9 @@ function createProjectSessionEnvironment({ environment, resourceEnvironmentProvi
           : "ready",
         keys: Object.keys(resolved.projectEnvironment).sort(),
         resources,
-        ...(resolved.warning ? { diagnostic: "Project environment declarations could not be read. Correct their configuration and retry." } : {})
+        ...(resolved.warning
+          ? { diagnostic: "Project environment declarations could not be read. Correct their configuration and retry." }
+          : {})
       };
     },
 
@@ -133,7 +140,8 @@ function createProjectSessionEnvironment({ environment, resourceEnvironmentProvi
     },
 
     async sessionDatabaseEnvironment(input = {}) {
-      const resolve = async () => environment.resolvedProjectEnvironment(input, await environment.userEnvRecords(), { provisionResources: false });
+      const resolve = async () =>
+        environment.resolvedProjectEnvironment(input, await environment.userEnvRecords(), { provisionResources: false });
       const notPrepared = (resolved) => !resolved.resourcesPrepared && !resolved.databaseToolEnvironment &&
         resolved.resources.some(({ resource }) => resourceKindIsDatabase(resource.kind));
       let resolved = await resolve();
@@ -159,7 +167,7 @@ function createProjectSessionEnvironment({ environment, resourceEnvironmentProvi
       return {
         ...(await selection.currentDevelopmentDatabaseConfiguration()),
         databaseToolEnvironment,
-        source: resolved.source,
+        source: resolved.source
       };
     },
 

@@ -76,15 +76,25 @@ async function checkLocalTools(ids = [], {
   const needsMise = wanted.some((id) => LOCAL_TOOLS[id].mise && !LOCAL_TOOLS[id].any && !LOCAL_TOOLS[id][family]);
   const [xcode, mise] = await Promise.all([
     platform === "darwin"
-      ? runCommand({ actor: "app", args: ["-p"], command: "xcode-select", cwd, mode: "capture", purpose: "health",
-          timeout: CHECK_TIMEOUT_MS }).then((result) => result?.ok === true)
+      ? runCommand({
+        actor: "app",
+        args: ["-p"],
+        command: "xcode-select",
+        cwd,
+        mode: "capture",
+        purpose: "health",
+        timeout: CHECK_TIMEOUT_MS
+      }).then((result) => result?.ok === true)
       : true,
     needsMise ? probe(["mise"], { ...options, runtimes: [] }).then((result) => result.ok) : false
   ]);
   const tools = await Promise.all(wanted.map(async (id) => {
     const tool = LOCAL_TOOLS[id];
     const groups = await Promise.all(tool.run.map((commands) => probe(commands, {
-      ...options, runtimes: Object.hasOwn(RUNTIME_PACKS, id) ? [id] : [], skipStubs: !xcode, version: tool.version
+      ...options,
+      runtimes: Object.hasOwn(RUNTIME_PACKS, id) ? [id] : [],
+      skipStubs: !xcode,
+      version: tool.version
     })));
     const broken = groups.find((group) => !group.ok && group.path);
     const missing = groups.some((group) => !group.ok);

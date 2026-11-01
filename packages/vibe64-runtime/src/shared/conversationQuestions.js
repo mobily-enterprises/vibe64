@@ -1,4 +1,8 @@
-import { latestAssistantMessageAwaitingUserReply, parseAnswerChoicePrompt, parseNumberedQuestionPrompt } from "@jskit-ai/assistant-core/shared/conversation";
+import {
+  latestAssistantMessageAwaitingUserReply,
+  parseAnswerChoicePrompt,
+  parseNumberedQuestionPrompt
+} from "@jskit-ai/assistant-core/shared/conversation";
 
 export { latestAssistantMessageAwaitingUserReply };
 

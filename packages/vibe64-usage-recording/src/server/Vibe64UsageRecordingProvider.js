@@ -21,7 +21,13 @@ import { createService } from "./service.js";
  * @param {ProjectService} dependencies.projectService
  * @param {TerminalsService} dependencies.terminals
  */
-function createUsageRecording({ admission, events, logger, projectService, terminals }) {
+function createUsageRecording({
+  admission,
+  events,
+  logger,
+  projectService,
+  terminals
+}) {
   const {
     readTargets,
     start,
@@ -33,7 +39,13 @@ function createUsageRecording({ admission, events, logger, projectService, termi
     readRequestFunctions,
     recordInteraction,
     delete: deleteRecording
-  } = createService({ admission, events, logger, projectService, terminals });
+  } = createService({
+    admission,
+    events,
+    logger,
+    projectService,
+    terminals
+  });
   return Object.freeze({
     admit: admission,
     readTargets,
@@ -62,7 +74,10 @@ const Vibe64UsageRecordingProvider = defineFeature({
   // A composed host may replace the admission decision; the default admits.
   optional: { admission: USAGE_RECORDING_ADMISSION_TOKEN },
   provides: { usageRecording: "vibe64.usage-recording" },
-  actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
+  actionDefaults: {
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"]
+  },
   /**
    * @param {object} capabilities
    * @param {typeof admitUsageRecording | null} capabilities.admission
@@ -72,9 +87,22 @@ const Vibe64UsageRecordingProvider = defineFeature({
    * @param {ProjectService} capabilities.project
    * @param {TerminalsService} capabilities.terminals
    */
-  setup({ admission, events, http, logger, project, terminals }) {
+  setup({
+    admission,
+    events,
+    http,
+    logger,
+    project,
+    terminals
+  }) {
     const admit = admission || admitUsageRecording;
-    const usageRecording = createUsageRecording({ admission: admit, events, logger, projectService: project, terminals });
+    const usageRecording = createUsageRecording({
+      admission: admit,
+      events,
+      logger,
+      projectService: project,
+      terminals
+    });
     registerRoutes(http);
     return { usageRecording };
   },

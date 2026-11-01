@@ -35,9 +35,18 @@ import {
  * @param {SessionRecordFiles} dependencies.recordFiles
  * @param {SessionArchiveRecords} dependencies.archiveRecords
  */
-function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, archiveRecords }) {
+function createSessionArchiveAccess({
+  state,
+  storePaths,
+  locks,
+  recordFiles,
+  archiveRecords
+}) {
   async function withExtractedSessionArchive(record, operation, { temporaryRoot = "" } = {}) {
-    const extractionRoot = path.join(temporaryRoot || path.join(storePaths.paths().sessionsRoot, ".archive-read"), `${record.sessionId}-${randomUUID()}`);
+    const extractionRoot = path.join(
+      temporaryRoot || path.join(storePaths.paths().sessionsRoot, ".archive-read"),
+      `${record.sessionId}-${randomUUID()}`
+    );
     const extractedSessionRoot = path.join(extractionRoot, record.sessionId);
     try {
       await mkdir(extractionRoot, {
@@ -197,12 +206,17 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
           requireExclusive();
           publishing = true;
           try { return await work(); }
-          catch (error) { available = false; throw error; }
+          catch (error) {
+            available = false;
+            throw error;
+          }
           finally { publishing = false; }
         };
         const publishArtifacts = async (files) => {
           requireExclusive();
-          if (!Array.isArray(files) || !files.length || files.length > 1000) throw new TypeError("Archived artifact publication requires a bounded file list.");
+          if (!Array.isArray(files) || !files.length || files.length > 1000) {
+            throw new TypeError("Archived artifact publication requires a bounded file list.");
+          }
           return change(async () => {
             const published = new Set();
             for (const file of files) {
@@ -233,7 +247,10 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
                   throw new Error("Archived artifact source changed during publication.");
                 }
                 await rename(temporary, target);
-              } finally { await source.close(); await rm(temporary, { force: true }); }
+              } finally {
+                await source.close();
+                await rm(temporary, { force: true });
+              }
             }
             await publishExtractedSessionArchive(archived, { beforeWork });
             return { ok: true, paths: [...published].sort() };
@@ -263,8 +280,13 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
     for (let index = 0; index < parts.length; index++) {
       current = path.join(current, parts[index]);
       const parent = index < parts.length - 1;
-      if (parent && createParents) await mkdir(current, { recursive: false }).catch((error) => { if (error.code !== "EEXIST") throw error; });
-      const info = await lstat(current).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
+      if (parent && createParents) {
+        await mkdir(current, { recursive: false }).catch((error) => { if (error.code !== "EEXIST") throw error; });
+      }
+      const info = await lstat(current).catch((error) => {
+        if (isMissingPathError(error)) return null;
+        throw error;
+      });
       if (!info) continue;
       if (info.isSymbolicLink() || (parent ? !info.isDirectory() : !info.isFile())) {
         throw new Error("Archived artifact paths must contain only regular directories and files.");
@@ -278,7 +300,8 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
     const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
     try {
       const result = await runCommand("tar", ["-czf", candidatePath, "-C", path.dirname(session.sessionRoot), session.sessionId], {
-        allowedRoots: [path.dirname(session.sessionRoot), path.dirname(session.archivePath)], cwd: state.normalizedProjectContextRoot,
+        allowedRoots: [path.dirname(session.sessionRoot), path.dirname(session.archivePath)],
+        cwd: state.normalizedProjectContextRoot,
         execution: ARCHIVE_EXECUTIONS.write
       });
       if (!result.ok) {
@@ -298,7 +321,9 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
 
   function artifactExpiryRequest(relativePaths, beforePrune) {
     if (typeof beforePrune !== "function") throw new TypeError("Artifact expiry requires a host callback.");
-    if (!Array.isArray(relativePaths) || relativePaths.length > 1000) throw new TypeError("Artifact expiry requires a bounded exact path list.");
+    if (!Array.isArray(relativePaths) || relativePaths.length > 1000) {
+      throw new TypeError("Artifact expiry requires a bounded exact path list.");
+    }
     return [...new Set(relativePaths.map(assertSafeArtifactPath))].sort();
   }
 
@@ -306,7 +331,10 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
     const removed = [];
     for (const relativePath of requested) {
       const target = await archivedArtifactPath(session, relativePath);
-      try { await rm(target); removed.push(relativePath); }
+      try {
+        await rm(target);
+        removed.push(relativePath);
+      }
       catch (error) { if (!isMissingPathError(error)) throw error; }
     }
     if (removed.length) {
@@ -325,7 +353,10 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
     const attachmentRoot = path.join(session.artifactsRoot, "attachments");
     const removed = [];
     for (const directory of [session.artifactsRoot, attachmentRoot]) {
-      const info = await lstat(directory).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
+      const info = await lstat(directory).catch((error) => {
+        if (isMissingPathError(error)) return null;
+        throw error;
+      });
       if (!info) return { ok: true, attachmentIds: [] };
       if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Archived attachments must use regular directories.");
     }
@@ -334,7 +365,10 @@ function createSessionArchiveAccess({ state, storePaths, locks, recordFiles, arc
         throw new Error("Archived attachments contain an unknown entry; inspect it before expiry.");
       }
       const payload = path.join(attachmentRoot, entry.name, "file");
-      const info = await lstat(payload).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
+      const info = await lstat(payload).catch((error) => {
+        if (isMissingPathError(error)) return null;
+        throw error;
+      });
       if (!info) continue;
       if (!info.isFile() || info.isSymbolicLink()) throw new Error("Archived attachment payload is not a regular file.");
       await rm(payload);

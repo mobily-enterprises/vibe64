@@ -258,11 +258,18 @@ function createPromptHintRequests({
       ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
     const artifacts = await readPaths(normalizedSessionId, async (paths) => {
       try { return await readdir(path.join(paths.artifactsRoot, PROMPT_HINT_TASK_DIRECTORY)); }
-      catch (error) { if (isMissingPathError(error)) return []; throw error; }
+      catch (error) {
+        if (isMissingPathError(error)) return [];
+        throw error;
+      }
     });
     for (const filename of artifacts) {
       if (/^[a-f0-9]{64}\.json$/u.test(filename)) {
-        await hintContext.cleanupHelper({ runtime, session, renewalCleanup: options.renewalCleanup }, `${PROMPT_HINT_TASK_DIRECTORY}/${filename}`, null);
+        await hintContext.cleanupHelper({
+          runtime,
+          session,
+          renewalCleanup: options.renewalCleanup
+        }, `${PROMPT_HINT_TASK_DIRECTORY}/${filename}`, null);
       }
     }
     return {

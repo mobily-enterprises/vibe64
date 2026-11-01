@@ -16,8 +16,14 @@ export function createErdNodes(schema, layout) {
       id: table.qualifiedName,
       position: { x: record.x || 0, y: record.y || 0 },
       dimensions: { width: ERD_NODE_WIDTH, height: erdNodeHeight(columns, record.collapsed) },
-      data: { table, columns, group: record.group || "", collapsed: record.collapsed === true,
-        expanded: record.expanded === true, pinned: record.pinned === true }
+      data: {
+        table,
+        columns,
+        group: record.group || "",
+        collapsed: record.collapsed === true,
+        expanded: record.expanded === true,
+        pinned: record.pinned === true
+      }
     };
   });
   const membership = new Map(erdLayoutGroups(nodes, schema.relationships || [])
@@ -131,7 +137,10 @@ export function erdLayoutGroups(nodes, relationships) {
       let score = (weights.get(current) || 0) - degree.get(id) * totals.get(current) / totalDegree;
       for (const [label, weight] of [...weights].sort(([a], [b]) => a.localeCompare(b))) {
         const candidate = weight - degree.get(id) * totals.get(label) / totalDegree;
-        if (candidate > score + 0.0001) { score = candidate; best = label; }
+        if (candidate > score + 0.0001) {
+          score = candidate;
+          best = label;
+        }
       }
       labels.set(id, best);
       totals.set(best, totals.get(best) + degree.get(id));
@@ -147,7 +156,13 @@ export function erdLayoutGroups(nodes, relationships) {
   }
   return [...groups].map(([id, tables]) => {
     const anchor = [...tables].sort((a, b) => degree.get(b) - degree.get(a) || a.localeCompare(b))[0];
-    return { id, tables, name: id === "erd-disconnected" ? "Disconnected tables" : `${nodes.find((node) => node.id === anchor)?.data?.table?.name || anchor} & related` };
+    return {
+      id,
+      tables,
+      name: id === "erd-disconnected"
+        ? "Disconnected tables"
+        : `${nodes.find((node) => node.id === anchor)?.data?.table?.name || anchor} & related`
+    };
   });
 }
 
@@ -167,7 +182,9 @@ export function placeErdNodes(nodes, positions, stored = [], force = false) {
     const rectangle = { ...node.position, ...node.dimensions };
     let collision;
     while ((collision = occupied.find((box) => rectangle.x < box.x + box.width + 36 &&
-      rectangle.x + rectangle.width + 36 > box.x && rectangle.y < box.y + box.height + 36 && rectangle.y + rectangle.height + 36 > box.y))) {
+      rectangle.x + rectangle.width + 36 > box.x && rectangle.y < box.y + box.height + 36 && rectangle.y +
+        rectangle.height +
+        36 > box.y))) {
       rectangle.y = collision.y + collision.height + 48;
     }
     node.position = { x: rectangle.x, y: rectangle.y };

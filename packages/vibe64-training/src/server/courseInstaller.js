@@ -40,18 +40,35 @@ const domainsSchema = createSchema({ schemaVersion: version, domains: list(creat
 const topicsSchema = createSchema({
   schemaVersion: version,
   topics: list(createSchema({
-    topicId: id, repository: text,
+    topicId: id,
+    repository: text,
     // Optional catalogue grouping: the domain this whole topic belongs to.
     domainId: { ...id, required: false },
-    releases: list(createSchema({ release: text, status, commit: text, manifestHash: text }), 256)
+    releases: list(createSchema({
+      release: text,
+      status,
+      commit: text,
+      manifestHash: text
+    }), 256)
   }), 256)
 });
 const lockSchema = createSchema({
-  schemaVersion: version, courseId: id, release: text, status,
+  schemaVersion: version,
+  courseId: id,
+  release: text,
+  status,
   topics: list(createSchema({
-    topicId: id, release: text, repository: text, commit: text, manifestHash: text,
-    lessons: list(createSchema({ code: id, hash: text, status: { ...text, enum: ["draft", "published"] },
-      required: { type: "boolean", required: true } }), 64)
+    topicId: id,
+    release: text,
+    repository: text,
+    commit: text,
+    manifestHash: text,
+    lessons: list(createSchema({
+      code: id,
+      hash: text,
+      status: { ...text, enum: ["draft", "published"] },
+      required: { type: "boolean", required: true }
+    }), 64)
   }), 32)
 });
 
@@ -63,7 +80,8 @@ function compareReleases(left, right) {
 
 function invalid(message) {
   return causedFailure("VIBE64_TRAINING_AVAILABLE_INVALID",
-    `The official course catalogue is invalid: ${message} Nothing was installed. Ask the catalogue maintainers to publish a corrected catalogue.`, 502);
+    `The official course catalogue is invalid: ${message} Nothing was installed. Ask the catalogue maintainers to publish a corrected catalogue.`,
+    502);
 }
 
 function validateLock(course, lock) {
@@ -97,8 +115,15 @@ function validateLock(course, lock) {
  * @param {() => number} [dependencies.now]
  * @param {number} [dependencies.cacheMs]
  */
-function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "", runCommand = runVibe64Command,
-  remoteUrl = slug => `https://github.com/${slug}.git`, now = () => Date.now(), cacheMs = CACHE_MS }) {
+function createTrainingCourseInstaller({
+  systemRoot,
+  catalogue,
+  repository = "",
+  runCommand = runVibe64Command,
+  remoteUrl = slug => `https://github.com/${slug}.git`,
+  now = () => Date.now(),
+  cacheMs = CACHE_MS
+}) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) !== systemRoot ||
       systemRoot === path.parse(systemRoot).root) {
     throw new Error("Course installation needs a canonical absolute, non-root server-owned system root.");
@@ -139,12 +164,25 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
   async function git(root, args, { maxBuffer = 1024 * 1024, timeout = 120_000 } = {}) {
     // Hooks are disabled; no fetched file is executed. Install runs no authored code.
     const result = await runCommand({
-      actor: "daemon", allowedRoots: [root], args: ["-C", root, "-c", "core.hooksPath=/dev/null", "-c", "init.defaultBranch=main", ...args],
-      command: "git", cwd: root, envPolicy: "project", gitSafeDirectories: [root],
-      maxBuffer, mode: "capture", outputEncoding: "utf8", purpose: "source", runtimes: ["git"], timeout
+      actor: "daemon",
+      allowedRoots: [root],
+      args: ["-C", root, "-c", "core.hooksPath=/dev/null", "-c", "init.defaultBranch=main", ...args],
+      command: "git",
+      cwd: root,
+      envPolicy: "project",
+      gitSafeDirectories: [root],
+      maxBuffer,
+      mode: "capture",
+      outputEncoding: "utf8",
+      purpose: "source",
+      runtimes: ["git"],
+      timeout
     });
     if (result?.ok !== true) {
-      throw causedFailure("VIBE64_TRAINING_SOURCE_FETCH_FAILED", String(result?.error || result?.stderr || "Git could not read the source.").slice(0, 300));
+      throw causedFailure(
+        "VIBE64_TRAINING_SOURCE_FETCH_FAILED",
+        String(result?.error || result?.stderr || "Git could not read the source.").slice(0, 300)
+      );
     }
     return String(result.stdout || "");
   }
@@ -156,7 +194,9 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
         await git(root, ["fetch", "-q", "--depth=1", "--no-tags", remoteUrl(catalogueRepository), "HEAD"]);
       } catch (cause) {
         throw causedFailure("VIBE64_TRAINING_AVAILABLE_UNREACHABLE",
-          `The official course catalogue (${catalogueRepository}) could not be downloaded. Check this server's internet access to GitHub and retry. Installed courses are unchanged.`, 503, cause);
+          `The official course catalogue (${catalogueRepository}) could not be downloaded. Check this server's internet access to GitHub and retry. Installed courses are unchanged.`,
+          503,
+            cause);
       }
       const commit = (await git(root, ["rev-parse", "FETCH_HEAD"])).trim();
       if (!COMMIT.test(commit)) throw invalid("its fetched revision is not a commit.");
@@ -248,14 +288,17 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
         topics: course.topics.map(topic => ({ topicId: topic.topicId, release: topic.release })),
         lessonCount: lock.topics.reduce((total, topic) => total + topic.lessons.length, 0),
         installed: installState(installed, { course, lock }),
-        otherReleases: installed.courses.filter(entry => entry.course.courseId === course.courseId && entry.course.release !== course.release)
+        otherReleases: installed.courses.filter(entry =>
+          entry.course.courseId === course.courseId && entry.course.release !== course.release)
           .map(entry => entry.course.release),
         // An update is this newer catalogue release of an already installed course.
         updateFrom: installed.courses.filter(entry => entry.course.courseId === course.courseId)
           .map(entry => entry.course.release).sort(compareReleases).at(-1) || null,
         installing: progress.get(`${course.courseId}@${course.release}`) || null
-      })).map(course => ({ ...course,
-        updateFrom: course.updateFrom && compareReleases(course.updateFrom, course.release) < 0 ? course.updateFrom : null }))
+      })).map(course => ({
+        ...course,
+        updateFrom: course.updateFrom && compareReleases(course.updateFrom, course.release) < 0 ? course.updateFrom : null
+      }))
     };
   }
 
@@ -321,16 +364,24 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
       // the operator's deliberate `vibe64 training enable-course`.
       if (state === "disabled") {
         throw causedFailure("VIBE64_TRAINING_COURSE_DISABLED",
-          `Course ${key} was disabled on this server, and installing does not enable it again. Only the server's operator can enable it again. Nothing was changed.`, 409);
+          `Course ${key} was disabled on this server, and installing does not enable it again. Only the server's operator can enable it again. Nothing was changed.`,
+          409);
       }
       if (state === "not-installed" && installed.courses.length >= MAX_INSTALLED_RELEASES) {
         throw causedFailure("VIBE64_TRAINING_COURSE_LIMIT",
-          `This server already keeps ${MAX_INSTALLED_RELEASES} installed course releases, its limit, so ${key} cannot be added. The server's operator can free a place by removing a release; saved lessons keep their content. Nothing was changed.`, 409);
+          `This server already keeps ${MAX_INSTALLED_RELEASES} installed course releases, its limit, so ${key} cannot be added. The server's operator can free a place by removing a release; saved lessons keep their content. Nothing was changed.`,
+          409);
       }
       const total = lock.topics.length;
       for (const [index, topic] of lock.topics.entries()) {
-        const pin = { schemaVersion: 1, topicId: topic.topicId, release: topic.release, repository: topic.repository,
-          commit: topic.commit, topicHash: topic.manifestHash };
+        const pin = {
+          schemaVersion: 1,
+          topicId: topic.topicId,
+          release: topic.release,
+          repository: topic.repository,
+          commit: topic.commit,
+          topicHash: topic.manifestHash
+        };
         report({ phase: "topic", topicsDone: index, topicsTotal: total, topicId: topic.topicId });
         let present = false;
         try {
@@ -342,14 +393,24 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
         await withScratch("topic", async sourceRoot => {
           try {
             await git(sourceRoot, ["init", "-q"]);
-            await git(sourceRoot, ["fetch", "-q", "--depth=1", "--no-tags", remoteUrl(topic.repository), topic.commit], { timeout: 300_000 });
+            await git(
+              sourceRoot,
+              ["fetch", "-q", "--depth=1", "--no-tags", remoteUrl(topic.repository), topic.commit],
+              { timeout: 300_000 }
+            );
             await git(sourceRoot, ["checkout", "-q", "--detach", topic.commit]);
           } catch (cause) {
             throw causedFailure("VIBE64_TRAINING_TOPIC_UNREACHABLE",
-              `Topic ${topic.topicId} could not be downloaded from ${topic.repository} at its pinned commit. Check this server's internet access to GitHub and retry. Nothing was enabled.`, 503, cause);
+              `Topic ${topic.topicId} could not be downloaded from ${topic.repository} at its pinned commit. Check this server's internet access to GitHub and retry. Nothing was enabled.`,
+              503,
+                cause);
           }
           if ((await git(sourceRoot, ["rev-parse", "HEAD"])).trim() !== topic.commit) {
-            throw causedFailure("VIBE64_TRAINING_TOPIC_COMMIT_MISMATCH", `Topic ${topic.topicId} did not check out its exact pinned commit. Nothing was enabled.`, 502);
+            throw causedFailure(
+              "VIBE64_TRAINING_TOPIC_COMMIT_MISMATCH",
+              `Topic ${topic.topicId} did not check out its exact pinned commit. Nothing was enabled.`,
+              502
+            );
           }
           // The original owner re-verifies the clean commit, canonical source,
           // byte hashes and manifest hash against this exact pin.
@@ -382,7 +443,12 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
     return shared;
   }
 
-  return Object.freeze({ repository: catalogueRepository, readAvailable, listAvailable, installCourse });
+  return Object.freeze({
+    repository: catalogueRepository,
+    readAvailable,
+    listAvailable,
+    installCourse
+  });
 }
 
 export { DEFAULT_CATALOGUE_REPOSITORY, createTrainingCourseInstaller };

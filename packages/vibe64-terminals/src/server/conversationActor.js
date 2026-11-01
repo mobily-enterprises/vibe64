@@ -71,4 +71,9 @@ async function codexTerminalConversationMetadata(store, sessionId) {
   };
 }
 
-export { conversationActorMetadata, conversationReviewActorMetadata, codexDeliveredConversationMetadata, codexTerminalConversationMetadata };
+export {
+  conversationActorMetadata,
+  conversationReviewActorMetadata,
+  codexDeliveredConversationMetadata,
+  codexTerminalConversationMetadata
+};

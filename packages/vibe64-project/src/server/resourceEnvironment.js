@@ -129,14 +129,20 @@ function validateVoiceResource(resource, bindings, values) {
     throw resourceEnvironmentError("A voice resource id must use letters, numbers, underscores or hyphens.");
   }
   if (Object.keys(bindings || {}).sort().join(",") !== "accessTokenFile,endpoint" || Object.keys(resource.optionalBindings || {}).length) {
-    throw resourceEnvironmentError("A voice resource requires endpoint and accessTokenFile bindings.", "vibe64_voice_resource_bindings_invalid");
+    throw resourceEnvironmentError(
+      "A voice resource requires endpoint and accessTokenFile bindings.",
+      "vibe64_voice_resource_bindings_invalid"
+    );
   }
   if (!values) return;
   let endpoint;
   try { endpoint = new URL(values.endpoint); } catch { /* Report the same safe setup error below. */ }
   if (!endpoint || !["ws:", "wss:"].includes(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.hash ||
       !path.isAbsolute(values.accessTokenFile || "") || /[\0\r\n]/u.test(values.accessTokenFile)) {
-    throw resourceEnvironmentError("Voice requires a ws:// or wss:// endpoint without credentials and an absolute accessTokenFile path.", "vibe64_voice_resource_values_invalid");
+    throw resourceEnvironmentError(
+      "Voice requires a ws:// or wss:// endpoint without credentials and an absolute accessTokenFile path.",
+      "vibe64_voice_resource_values_invalid"
+    );
   }
 }
 
@@ -176,7 +182,11 @@ function satisfiedAlternative(resource = {}, environment = {}) {
     if (bindings && Object.entries(bindings).every(([semantic, name]) => (
       bindingValuePresent(environment, semantic, name, allowEmpty)
     ))) {
-      validateVoiceResource(resource, bindings, Object.fromEntries(Object.entries(bindings).map(([semantic, name]) => [semantic, environment[name]])));
+      validateVoiceResource(
+        resource,
+        bindings,
+        Object.fromEntries(Object.entries(bindings).map(([semantic, name]) => [semantic, environment[name]]))
+      );
       return alternative;
     }
   }
@@ -332,7 +342,10 @@ function normalizeResourceEnvironment(resources = [], provided, {
       Object.keys(preparation).some(key => !["identity", "preserved"].includes(key)) ||
       typeof preparation.identity !== "string" || !/^[a-f0-9]{64}$/u.test(preparation.identity) ||
       typeof preparation.preserved !== "boolean")) {
-    throw resourceEnvironmentError("The host returned invalid resource preparation evidence.", "vibe64_resource_environment_contract_invalid");
+    throw resourceEnvironmentError(
+      "The host returned invalid resource preparation evidence.",
+      "vibe64_resource_environment_contract_invalid"
+    );
   }
   const entries = new Map();
   for (const providedResource of provided.resourceValues) {

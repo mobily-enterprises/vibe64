@@ -1,5 +1,9 @@
 import { VIBE64_CONNECTED_DEVELOPMENT_SECTION, vibe64ConnectedDevelopmentInspection } from "./connectedDevelopment.js";
-import { readArchitecturePreviewLocator, vibe64ArchitectureInspection, VIBE64_ARCHITECTURE_INSPECTION_SECTION } from "./architectureInspection.js";
+import {
+  readArchitecturePreviewLocator,
+  vibe64ArchitectureInspection,
+  VIBE64_ARCHITECTURE_INSPECTION_SECTION
+} from "./architectureInspection.js";
 import { vibe64ArchitectureLayout, VIBE64_ARCHITECTURE_LAYOUT_SECTION } from "./architectureLayout.js";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -313,7 +317,9 @@ async function vibe64ConversationInstructions({ workdir, promptContext }) {
   const contribution = vibe64Driver(promptContext);
   if (promptContext.scope === "ephemeral") return contribution;
   const result = await runGenesisOperation(genesisCompiler.projectSessionContext, {
-    projectRoot: workdir, hostDriver: vibe64Driver, hostDriverInput: promptContext
+    projectRoot: workdir,
+    hostDriver: vibe64Driver,
+    hostDriverInput: promptContext
   });
   return result.output;
 }

@@ -427,7 +427,10 @@ function validateLearningSessionScope(value) {
       value.noExercise !== false || !isPlainObject(value.pin) ||
       !["course", "topic", "lesson"].every(name => isPlainObject(value.pin[name]))) throw invalid();
   let bytes, pin;
-  try { bytes = JSON.stringify(value.pin); pin = JSON.parse(bytes); } catch { throw invalid(); }
+  try {
+    bytes = JSON.stringify(value.pin);
+    pin = JSON.parse(bytes);
+  } catch { throw invalid(); }
   if (Buffer.byteLength(bytes) > 4096 || !isDeepStrictEqual(pin, value.pin)) throw invalid();
   return deepFreeze({ learnerId: value.learnerId, attemptId: value.attemptId, pin, noExercise: value.noExercise });
 }
@@ -455,8 +458,12 @@ function genuineLearningBinding(raw, sessionId) {
   if (!isPlainObject(binding) || binding.schemaVersion !== 1 || binding.conversationId !== sessionId ||
       Object.keys(binding).length !== 6) return false;
   try {
-    validateLearningSessionScope({ learnerId: binding.learnerId, attemptId: binding.attemptId,
-      pin: binding.pin, noExercise: binding.noExercise });
+    validateLearningSessionScope({
+      learnerId: binding.learnerId,
+      attemptId: binding.attemptId,
+      pin: binding.pin,
+      noExercise: binding.noExercise
+    });
     return true;
   } catch { return false; }
 }

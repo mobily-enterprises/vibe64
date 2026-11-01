@@ -46,8 +46,13 @@ import {
 } from "./sessionWorkPublication.js";
 import { recoverSessionWorkSave } from "./sessionWorkSaveRecovery.js";
 
-async function prepareSessionPullRequestBranch({ project, session, connectedWorkSnapshots: suppliedSnapshots = [],
-  commandOptions = {}, runCommand = runVibe64Command }) {
+async function prepareSessionPullRequestBranch({
+  project,
+  session,
+  connectedWorkSnapshots: suppliedSnapshots = [],
+  commandOptions = {},
+  runCommand = runVibe64Command
+}) {
   const context = repositoryContext(session, project);
   const ref = `refs/heads/${context.branch}`;
   const options = { commandOptions, project, connectedWorkSnapshots: connectedWorkSnapshots(suppliedSnapshots) };
@@ -129,7 +134,9 @@ async function prepareSessionWorkSaveMessageDirect({
   });
   if (!changes.totalCount) {
     await assertConnectedSubmissionsIntegrated(runCommand, context, {
-      commandOptions, connectedWorkSnapshots: connectedWorkSnapshots(suppliedConnectedSnapshots), project
+      commandOptions,
+      connectedWorkSnapshots: connectedWorkSnapshots(suppliedConnectedSnapshots),
+      project
     });
     throw saveError(
       "This session has no work to save.",
@@ -512,7 +519,8 @@ async function saveSessionWorkDirect({
         // leaving it behind would make a first contribution's absent ref look
         // like a lost publication forever. The source checkpoint remains.
         await git(runCommand, context, ["update-ref", "-d", prepared.preparedRef, prepared.saveCommit], {
-          commandOptions, project
+          commandOptions,
+          project
         });
       }
       throw error;

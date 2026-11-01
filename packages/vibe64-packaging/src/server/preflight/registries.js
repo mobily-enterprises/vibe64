@@ -42,7 +42,10 @@ const credentialsValid = definePreflightCheck({
   run: ({ plan = {}, credentials = {} }) => {
     const failing = (plan.targets || []).filter((target) => credentials[target.id]?.ok !== true);
     if (failing.length) {
-      return { ok: false, message: failing.map((target) => credentials[target.id]?.message || `${target.id} has no working sign-in.`).join(" ") };
+      return {
+        ok: false,
+        message: failing.map((target) => credentials[target.id]?.message || `${target.id} has no working sign-in.`).join(" ")
+      };
     }
     const unverified = (plan.targets || []).filter((target) => credentials[target.id]?.verified === false).map(({ id }) => id);
     return {

@@ -8,11 +8,23 @@ import { publishError } from "../errors.js";
 
 const PREFLIGHT_SEVERITIES = Object.freeze(["block", "warn", "ack"]);
 
-function definePreflightCheck({ id, label, severity, applies = () => true, run } = {}) {
+function definePreflightCheck({
+  id,
+  label,
+  severity,
+  applies = () => true,
+  run
+} = {}) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(id || "") || !label || !PREFLIGHT_SEVERITIES.includes(severity) || typeof run !== "function") {
     throw new TypeError("A preflight check needs an id, a label, a severity of block, warn or ack, and run().");
   }
-  return Object.freeze({ id, label, severity, applies, run });
+  return Object.freeze({
+    id,
+    label,
+    severity,
+    applies,
+    run
+  });
 }
 
 function outcome(check, value) {
@@ -73,7 +85,10 @@ const baselineSavedAndPushed = definePreflightCheck({
   run: ({ baseline = {}, plan = {} }) => {
     if (!baseline.saved) return { ok: false, message: "Save your changes before releasing." };
     if (!baseline.pushed) return { ok: false, message: "Push the saved baseline before releasing." };
-    if (baseline.commit !== plan.savedCommit) return { ok: false, message: "The plan does not use the saved baseline. Review the plan again." };
+    if (baseline.commit !== plan.savedCommit) return {
+      ok: false,
+      message: "The plan does not use the saved baseline. Review the plan again."
+    };
     return { ok: true, message: `Releasing saved commit ${baseline.commit.slice(0, 7)}.` };
   }
 });

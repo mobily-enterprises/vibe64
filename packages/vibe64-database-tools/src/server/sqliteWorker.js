@@ -30,7 +30,8 @@ process.on("message", async ({ id, operation, filename, readOnly, sql, bindings 
           const pragma = String(first || "").toLowerCase();
           if (forbiddenPragmas.has(pragma)) return constants.SQLITE_DENY;
           if (readOnly && (!readPragmas.has(pragma) ||
-              (second !== null && !["table_info", "table_xinfo", "index_list", "index_info", "index_xinfo", "foreign_key_list"].includes(pragma)))) {
+              (second !== null &&
+                !["table_info", "table_xinfo", "index_list", "index_info", "index_xinfo", "foreign_key_list"].includes(pragma)))) {
             return constants.SQLITE_DENY;
           }
         } else if (readOnly && ![

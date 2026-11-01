@@ -27,7 +27,11 @@ import {
  * @param {RenewalSessionAccess} dependencies.renewalAccess
  * @param {RenewalSuccessorSession} dependencies.successorSession
  */
-function createRenewalRestoration({ predecessorSession, renewalAccess, successorSession }) {
+function createRenewalRestoration({
+  predecessorSession,
+  renewalAccess,
+  successorSession
+}) {
   /**
    * @param {Vibe64SessionRuntime} runtime
    * @param {object} state
@@ -261,7 +265,11 @@ function createRenewalRestoration({ predecessorSession, renewalAccess, successor
       : failed;
   }
 
-  return Object.freeze({ restorePreAcknowledgementSource, completeFailureRestoration, fail });
+  return Object.freeze({
+    restorePreAcknowledgementSource,
+    completeFailureRestoration,
+    fail
+  });
 }
 
 export { createRenewalRestoration };

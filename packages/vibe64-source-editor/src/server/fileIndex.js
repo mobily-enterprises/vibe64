@@ -17,7 +17,11 @@ function keepNamesInMemory() {
  * @param {(context: object) => string} [dependencies.snapshotPath]
  * @param {() => number} [dependencies.now]
  */
-function createSourceEditorFileIndex({ load, snapshotPath = keepNamesInMemory, now = Date.now }) {
+function createSourceEditorFileIndex({
+  load,
+  snapshotPath = keepNamesInMemory,
+  now = Date.now
+}) {
   const entries = new Map();
   const maxAgeMs = 30_000;
   const maxEntries = 8;
@@ -83,7 +87,11 @@ function createSourceEditorFileIndex({ load, snapshotPath = keepNamesInMemory, n
     entries.clear();
   }
 
-  return Object.freeze({ read, invalidate, clear });
+  return Object.freeze({
+    read,
+    invalidate,
+    clear
+  });
 }
 
 export { createSourceEditorFileIndex };

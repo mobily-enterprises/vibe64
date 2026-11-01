@@ -47,10 +47,19 @@ async function localRepositoryRemote(project, input = {}, {
   const operationId = randomUUID();
   function runGit(args) {
     return runCommand({
-      actor: "daemon", allowedRoots: [root], command: "git", args, cwd: root,
-      envPolicy: "project", gitSafeDirectories: [root], inheritProcessEnv: true,
-      mode: "capture", purpose: "source", runtimes: ["git"],
-      timeout: 60_000, maxBuffer: 2 * 1024 * 1024
+      actor: "daemon",
+      allowedRoots: [root],
+      command: "git",
+      args,
+      cwd: root,
+      envPolicy: "project",
+      gitSafeDirectories: [root],
+      inheritProcessEnv: true,
+      mode: "capture",
+      purpose: "source",
+      runtimes: ["git"],
+      timeout: 60_000,
+      maxBuffer: 2 * 1024 * 1024
     });
   }
   async function git(args, { optional = false } = {}) {
@@ -123,7 +132,10 @@ async function localRepositoryRemote(project, input = {}, {
     const commit = listed.split("\n").map((line) => line.split(/\s+/u))
       .find(([, ref]) => ref === remoteRef)?.[0] || "";
     if (!commit && !allowMissing) {
-      throw failure(`The upstream branch ${target.remote}/${target.branch} no longer exists. Choose an upstream in Remote settings.`, "vibe64_remote_branch_missing");
+      throw failure(
+        `The upstream branch ${target.remote}/${target.branch} no longer exists. Choose an upstream in Remote settings.`,
+        "vibe64_remote_branch_missing"
+      );
     }
     if (commit) {
       await git(["fetch", "--no-tags", "--no-write-fetch-head", "--refmap=", "--", target.url,
@@ -134,7 +146,14 @@ async function localRepositoryRemote(project, input = {}, {
     return "";
   }
   async function fetchState(state) {
-    const checked = { configId: state.configId, attemptedAt: new Date().toISOString(), checkedAt: "", upstreamCommit: "", pushCommit: "", error: "" };
+    const checked = {
+      configId: state.configId,
+      attemptedAt: new Date().toISOString(),
+      checkedAt: "",
+      upstreamCommit: "",
+      pushCommit: "",
+      error: ""
+    };
     try {
       if (state.upstream) checked.upstreamCommit = await observe(state.upstream);
       if (state.push) checked.pushCommit = JSON.stringify(state.push) === JSON.stringify(state.upstream)
@@ -165,17 +184,31 @@ async function localRepositoryRemote(project, input = {}, {
     const localBranches = (await git(["for-each-ref", "--format=%(refname:lstrip=2)", "refs/heads"])).split("\n").filter(Boolean);
     const target = (value) => value ? { remote: value.remote, branch: value.branch, url: safeText(value.url) } : null;
     return {
-      ok: true, supported: true, branch: state.branch, head: state.head, dirty,
+      ok: true,
+      supported: true,
+      branch: state.branch,
+      head: state.head,
+      dirty,
       remotes: state.remotes.map((remote) => ({ name: remote.name, url: safeText(remote.url) })),
-      branches, localBranches, upstream: target(state.upstream), push: target(state.push),
-      incoming, localAhead, outgoing, checkedAt: checked?.checkedAt || "", error: checked?.error || "",
+      branches,
+      localBranches,
+      upstream: target(state.upstream),
+      push: target(state.push),
+      incoming,
+      localAhead,
+      outgoing,
+      checkedAt: checked?.checkedAt || "",
+      error: checked?.error || "",
       review: { branch: state.branch, head: state.head, configId: state.configId, upstreamCommit, pushCommit }
     };
   }
   async function assertClean(state) {
     if (!state.branch || !state.head) throw failure("Check out a branch with at least one commit first.", "vibe64_remote_branch_required");
     if (await git(["status", "--porcelain", "--untracked-files=all"])) {
-      throw failure("The opened project folder has uncommitted changes. Commit or stash them before changing its files.", "vibe64_remote_dirty");
+      throw failure(
+        "The opened project folder has uncommitted changes. Commit or stash them before changing its files.",
+        "vibe64_remote_dirty"
+      );
     }
     for (const marker of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD"]) {
       if (await git(["rev-parse", "--verify", "-q", marker], { optional: true })) {
@@ -192,7 +225,10 @@ async function localRepositoryRemote(project, input = {}, {
   function assertReview(state) {
     if (input.review?.configId !== state.configId || input.review?.head !== state.head ||
         input.review?.branch !== state.branch) {
-      throw failure("The project branch, commits or remote settings changed. Refresh and review the operation again.", "vibe64_remote_review_changed");
+      throw failure(
+        "The project branch, commits or remote settings changed. Refresh and review the operation again.",
+        "vibe64_remote_review_changed"
+      );
     }
   }
   async function configureRemotes(state) {
@@ -230,13 +266,23 @@ async function localRepositoryRemote(project, input = {}, {
       // Only on the person's click: Vibe64 never starts version control by itself.
       await git(["init", "--initial-branch=main"]);
       observations.delete(root);
-      logger.info({ event: "vibe64.remote.initialized", operationId, project: project.slug }, "Version control started in the opened folder.");
+      logger.info({
+        event: "vibe64.remote.initialized",
+        operationId,
+        project: project.slug
+      }, "Version control started in the opened folder.");
       return { ...await publicState(await readRepository()), operationId, remoteChanged: true };
     }
     if (action === "init") throw failure("This folder already uses Git.", "vibe64_remote_already_repository");
     const state = await readRepository();
     if (action === "status") return publicState(state);
-    logger.info({ event: "vibe64.remote.started", operationId, action, project: project.slug, branch: state.branch }, "Git remote operation started.");
+    logger.info({
+      event: "vibe64.remote.started",
+      operationId,
+      action,
+      project: project.slug,
+      branch: state.branch
+    }, "Git remote operation started.");
     try {
       if (action === "fetch") {
         const prior = observations.get(root);
@@ -268,16 +314,28 @@ async function localRepositoryRemote(project, input = {}, {
           if (action === "pull") await assertClean(state);
           const commit = await observe(target, { allowMissing: action === "push" });
           const reviewedCommit = input.review[action === "pull" ? "upstreamCommit" : "pushCommit"];
-          if (commit !== reviewedCommit) throw failure("The remote changed. Fetch and review its new commits first.", "vibe64_remote_review_changed");
+          if (commit !== reviewedCommit) {
+            throw failure("The remote changed. Fetch and review its new commits first.", "vibe64_remote_review_changed");
+          }
           assertReview(await readRepository());
           if (action === "pull") {
             await assertClean(state);
             if (await git(["merge-base", "--is-ancestor", commit, state.head], { optional: true }) === null) {
               const fastForward = await git(["merge-base", "--is-ancestor", state.head, commit], { optional: true }) !== null;
-              if (!fastForward && input.merge !== true) throw failure("Local and remote commits have diverged. Review and choose Merge remote changes.", "vibe64_remote_merge_required");
+              if (!fastForward && input.merge !== true) {
+                throw failure(
+                  "Local and remote commits have diverged. Review and choose Merge remote changes.",
+                  "vibe64_remote_merge_required"
+                );
+              }
               if (!fastForward) {
                 const preview = await git(["merge-tree", "--write-tree", state.head, commit], { optional: true });
-                if (preview === null) throw failure("The remote changes conflict with the local project. Resolve the merge in the project folder, then refresh Vibe64. No working files were changed.", "vibe64_remote_merge_conflict");
+                if (preview === null) {
+                  throw failure(
+                    "The remote changes conflict with the local project. Resolve the merge in the project folder, then refresh Vibe64. No working files were changed.",
+                    "vibe64_remote_merge_conflict"
+                  );
+                }
               }
               try {
                 await git(["merge", fastForward ? "--ff-only" : "--no-ff", "--no-edit", commit]);
@@ -290,20 +348,39 @@ async function localRepositoryRemote(project, input = {}, {
             }
           } else {
             if (commit && await git(["merge-base", "--is-ancestor", commit, state.head], { optional: true }) === null) {
-              throw failure("The push destination has changes missing locally. Integrate them before pushing.", "vibe64_remote_push_rejected");
+              throw failure(
+                "The push destination has changes missing locally. Integrate them before pushing.",
+                "vibe64_remote_push_rejected"
+              );
             }
             await git(["push", "--porcelain", "--no-follow-tags", "--", target.url, `${state.head}:refs/heads/${target.branch}`]);
             const verified = await observe(target);
-            if (verified !== state.head) throw failure("The remote changed after Push. Fetch to inspect the result before another push.", "vibe64_remote_push_unconfirmed");
+            if (verified !== state.head) {
+              throw failure(
+                "The remote changed after Push. Fetch to inspect the result before another push.",
+                "vibe64_remote_push_unconfirmed"
+              );
+            }
           }
           await fetchState(await readRepository());
         }
       }
       const result = await publicState(await readRepository());
       if (result.error) {
-        logger.warn({ event: "vibe64.remote.failed", operationId, action, code: "vibe64_remote_fetch_failed" }, "Git remote refresh failed.");
+        logger.warn({
+          event: "vibe64.remote.failed",
+          operationId,
+          action,
+          code: "vibe64_remote_fetch_failed"
+        }, "Git remote refresh failed.");
       } else {
-        logger.info({ event: "vibe64.remote.completed", operationId, action, branch: result.branch, head: result.head }, "Git remote operation completed.");
+        logger.info({
+          event: "vibe64.remote.completed",
+          operationId,
+          action,
+          branch: result.branch,
+          head: result.head
+        }, "Git remote operation completed.");
       }
       return { ...result, operationId, remoteChanged: ["pull", "push", "configure", "switch", "create"].includes(action) };
     } catch (error) {

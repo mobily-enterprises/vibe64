@@ -77,7 +77,9 @@ function registerRoutes(http, {
     ["PUT", "/issues/:number", "edit", "Edit this project's GitHub issue title and description.", 300_000],
     ["PATCH", "/issues/:number/comments/:commentId", "edit-comment", "Edit a comment on this project's GitHub issue.", 300_000]
   ]) routes.actionRoute(method, path, {
-    actionId: `vibe64.project.issues.${operation}`, summary, bodyLimit,
+    actionId: `vibe64.project.issues.${operation}`,
+    summary,
+    bodyLimit,
     buildInput: githubActionInput(method, projectIssueInputValidators[operation])
   });
   for (const [method, path, operation, summary] of [
@@ -87,7 +89,8 @@ function registerRoutes(http, {
     ["POST", "/pull-requests/:number/update-branch", "update-branch", "Apply the reviewed update-branch action to a GitHub pull request."],
     ["POST", "/pull-requests/:number/merge", "merge", "Apply the reviewed merge action to a GitHub pull request."]
   ]) routes.actionRoute(method, path, {
-    actionId: `vibe64.project.pull-requests.${operation}`, summary,
+    actionId: `vibe64.project.pull-requests.${operation}`,
+    summary,
     buildInput: githubActionInput(method, projectPullRequestInputValidators[operation])
   });
 

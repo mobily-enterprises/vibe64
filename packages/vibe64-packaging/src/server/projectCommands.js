@@ -69,12 +69,34 @@ async function runStageCommand({ command, args, cwd, env, signal, projectSlug } 
  */
 function checkCommandRunner({ projectSlug = "", runCommand = runVibe64Command } = {}) {
   return async (command, args, { cwd, env = {}, signal, timeoutMs, code = "VERIFICATION_FAILED" } = {}) => {
-    const result = await runCommand(projectCommandRequest({ command, args, cwd, env, signal, projectSlug, operationId: "publish-check", timeout: timeoutMs }));
-    if (result?.ok === true) return { status: 0, signal: null, stdout: Buffer.from(result.stdout || ""), stderr: Buffer.from(result.stderr || "") };
-    const reason = result?.timedOut ? "timed out" : result?.exitCode == null ? String(result?.error || "could not start") : `exited with status ${result.exitCode}`;
+    const result = await runCommand(projectCommandRequest({
+      command,
+      args,
+      cwd,
+      env,
+      signal,
+      projectSlug,
+      operationId: "publish-check",
+      timeout: timeoutMs
+    }));
+    if (result?.ok === true) return {
+      status: 0,
+      signal: null,
+      stdout: Buffer.from(result.stdout || ""),
+      stderr: Buffer.from(result.stderr || "")
+    };
+    const reason = result?.timedOut
+      ? "timed out"
+      : result?.exitCode == null ? String(result?.error || "could not start") : `exited with status ${result.exitCode}`;
     throw Object.assign(new Error(`${command} failed: ${reason}.`), {
       code: result?.timedOut ? "PROCESS_TIMEOUT" : code,
-      details: { command, args, status: result?.exitCode ?? null, stdout: tail(result?.stdout), stderr: tail(result?.stderr || result?.error) }
+      details: {
+        command,
+        args,
+        status: result?.exitCode ?? null,
+        stdout: tail(result?.stdout),
+        stderr: tail(result?.stderr || result?.error)
+      }
     });
   };
 }

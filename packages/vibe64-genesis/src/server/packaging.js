@@ -179,7 +179,11 @@ function singleValue(field, source, prefix, packagingPath, line) {
   }
   if (field === "applicationId") {
     if (!APPLICATION_ID.test(value) || value.length > 150) {
-      invalid(packagingPath, `${label} must be a reverse-DNS id such as \`com.example.notes\` (letters, digits and underscores; each part starts with a letter).`, line);
+      invalid(
+        packagingPath,
+        `${label} must be a reverse-DNS id such as \`com.example.notes\` (letters, digits and underscores; each part starts with a letter).`,
+        line
+      );
     }
     return value;
   }
@@ -209,7 +213,11 @@ function packageDraft(match, packagingPath, line) {
 
 function parsePackageLine(draft, source, packagingPath, line) {
   if (/^- Plugins?\b/u.test(source)) {
-    invalid(packagingPath, "Packaging takes no Plugin list: the generated shell installs the native plugins of the Content package at its lockfile versions.", line);
+    invalid(
+      packagingPath,
+      "Packaging takes no Plugin list: the generated shell installs the native plugins of the Content package at its lockfile versions.",
+      line
+    );
   }
   for (const [prefix, field] of SINGLE_ENTRIES) {
     if (source.startsWith(prefix)) {
@@ -257,9 +265,15 @@ function parsePackageLine(draft, source, packagingPath, line) {
     const id = packageId(permission[1], packagingPath, "Packaging Permission id", line);
     const reason = oneLineText(permission[2], ERROR_CODE, packagingPath, "Packaging Permission reason", line);
     if (reason.includes("`") || reason.length > MAX_PERMISSION_REASON_LENGTH) {
-      invalid(packagingPath, `Packaging Permission reason is plain user-facing text of at most ${MAX_PERMISSION_REASON_LENGTH} characters.`, line);
+      invalid(
+        packagingPath,
+        `Packaging Permission reason is plain user-facing text of at most ${MAX_PERMISSION_REASON_LENGTH} characters.`,
+        line
+      );
     }
-    if (draft.permissions.some((entry) => entry.id === id)) invalid(packagingPath, `Package ${draft.id} has a duplicate Permission ${id}.`, line);
+    if (draft.permissions.some((entry) => entry.id === id)) {
+      invalid(packagingPath, `Package ${draft.id} has a duplicate Permission ${id}.`, line);
+    }
     draft.permissions.push({ id, reason });
     draft.lines.permission ??= line;
     return;
@@ -282,7 +296,13 @@ function normalizePackage(draft, packagingPath) {
     }
   }
   for (const field of packer.required) {
-    if (!present.has(field)) invalid(packagingPath, `Package ${draft.id} (${packerId}) needs ${/^[AEIOU]/u.test(ENTRY_LABELS[field]) ? "an" : "a"} ${ENTRY_LABELS[field]} entry.`, draft.line);
+    if (!present.has(field)) {
+      invalid(
+        packagingPath,
+        `Package ${draft.id} (${packerId}) needs ${/^[AEIOU]/u.test(ENTRY_LABELS[field]) ? "an" : "a"} ${ENTRY_LABELS[field]} entry.`,
+        draft.line
+      );
+    }
   }
   if (draft.fields.versionFrom && !packer.versionSources.includes(draft.fields.versionFrom)) {
     invalid(packagingPath, `The ${packerId} packer reads its version from ${choices(packer.versionSources)}.`, draft.lines.versionFrom);
@@ -349,7 +369,9 @@ function parseVibe64PackagingLines(lines, {
     if (!content || content.packer !== "web-bundle") {
       invalid(packagingPath, `Package ${entry.id} Content must name a web-bundle package declared in Packaging.`);
     }
-    if (applicationIds.has(entry.application.id)) invalid(packagingPath, `Packaging declares application id ${entry.application.id} twice.`);
+    if (applicationIds.has(entry.application.id)) {
+      invalid(packagingPath, `Packaging declares application id ${entry.application.id} twice.`);
+    }
     applicationIds.add(entry.application.id);
   }
   return { version: 1, packages };
@@ -376,14 +398,24 @@ function resolveVibe64PackagingEnvironment(packaging, environmentDefaults = [], 
       if (entry.packer !== "capacitor") return entry;
       const resolved = { ...entry, deepLinkScheme: null, appLinkDomains: [] };
       if (entry.deepLinkSchemeFrom) {
-        const scheme = environmentDefaultValue(environmentDefaults, entry.deepLinkSchemeFrom, packagingPath, `Package ${entry.id} Deep link scheme from`);
+        const scheme = environmentDefaultValue(
+          environmentDefaults,
+          entry.deepLinkSchemeFrom,
+          packagingPath,
+          `Package ${entry.id} Deep link scheme from`
+        );
         if (!URL_SCHEME.test(scheme) || ["http", "https", "file", "content", "javascript"].includes(scheme)) {
           invalid(packagingPath, `${entry.deepLinkSchemeFrom} must be a custom lowercase URL scheme such as \`notes\`.`);
         }
         resolved.deepLinkScheme = scheme;
       }
       if (entry.appLinkDomainsFrom) {
-        const domains = environmentDefaultValue(environmentDefaults, entry.appLinkDomainsFrom, packagingPath, `Package ${entry.id} App link domains from`)
+        const domains = environmentDefaultValue(
+          environmentDefaults,
+          entry.appLinkDomainsFrom,
+          packagingPath,
+          `Package ${entry.id} App link domains from`
+        )
           .split(/[\s,]+/u)
           .filter(Boolean);
         if (domains.some((domain) => !DOMAIN_NAME.test(domain))) {

@@ -196,7 +196,16 @@ function createVibe64SessionsFeature() {
      * @param {TerminalsService} capabilities.terminals
      * @param {{ actionCatalogue: ActionCatalogue }} context
      */
-    setup({ accounts, archivePreparation, events, http, project, renewalActorResolver, sourceEditor, terminals }, { actionCatalogue }) {
+    setup({
+      accounts,
+      archivePreparation,
+      events,
+      http,
+      project,
+      renewalActorResolver,
+      sourceEditor,
+      terminals
+    }, { actionCatalogue }) {
       assertArchivePreparation(archivePreparation);
       assertRenewalActorResolver(renewalActorResolver);
       const sessionPresence = createSessionPresenceService({
@@ -314,9 +323,16 @@ function createRepositoryUpdates({ probe, closeWatches }) {
 const Vibe64RepositoryUpdatesProvider = defineFeature({
   id: "vibe64.sessions.repository-updates",
   domain: "vibe64-sessions",
-  requires: { events: "runtime.events", realtime: "runtime.realtime", sessions: "vibe64.sessions" },
+  requires: {
+    events: "runtime.events",
+    realtime: "runtime.realtime",
+    sessions: "vibe64.sessions"
+  },
   provides: { repositoryUpdates: "vibe64.sessions.repository-updates" },
-  actionDefaults: { channels: ["api"], surfaces: ["app"] },
+  actionDefaults: {
+    channels: ["api"],
+    surfaces: ["app"]
+  },
   /**
    * @param {object} capabilities
    * @param {RuntimeEvents} capabilities.events
@@ -324,7 +340,11 @@ const Vibe64RepositoryUpdatesProvider = defineFeature({
    * @param {SessionsService} capabilities.sessions
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
-  setup({ events, realtime, sessions }, { actionCatalogue }) {
+  setup({
+    events,
+    realtime,
+    sessions
+  }, { actionCatalogue }) {
     const probe = createRepositoryUpdateProbe({
       probe: (slug, state) => sessions.probeRepositoryUpdates(slug, state),
       onError: (error, projectSlug) => {

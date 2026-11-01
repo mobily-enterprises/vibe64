@@ -44,7 +44,10 @@ async function assertTeamAiAllowsProject({ actor = null } = {}) {
   if (!isTeamMember(actor) || await readTeamAiReady({ actor })) return;
   const { ownerName } = await readWorkspaceTeam();
   throw Object.assign(new Error(`Ask ${ownerName || "the workspace owner"} to set up AI for team members.`), {
-    code: TEAM_AI_REQUIRED_CODE, statusCode: 403, ownerName, details: { ownerName }
+    code: TEAM_AI_REQUIRED_CODE,
+    statusCode: 403,
+    ownerName,
+    details: { ownerName }
   });
 }
 

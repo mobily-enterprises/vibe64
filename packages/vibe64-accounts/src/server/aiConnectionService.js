@@ -15,7 +15,12 @@ import { runLoggedAccountChange } from "./accountChangeLog.js";
  * @param {AccountsService["initializeModelRouting"]} dependencies.initializeModelRouting
  * @param {RuntimeLogger} dependencies.logger
  */
-function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting, logger }) {
+function createAiConnectionService({
+  aiConnections,
+  readAssistantCapabilities,
+  initializeModelRouting,
+  logger
+}) {
   /**
    * OpenCode connection changes are account changes too: one line each.
    */
@@ -173,7 +178,13 @@ function createAiConnectionService({ aiConnections, readAssistantCapabilities, i
     });
   }
 
-  return Object.freeze({ list, catalog, save, remove, modelAccess });
+  return Object.freeze({
+    list,
+    catalog,
+    save,
+    remove,
+    modelAccess
+  });
 }
 
 export { createAiConnectionService };

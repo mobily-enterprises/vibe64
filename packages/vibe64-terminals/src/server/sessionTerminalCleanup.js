@@ -153,8 +153,12 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
     } catch (error) {
       failures.push({ controller: entry.label, error });
       logOperationalEvent(logger, "warn", {
-        component: "vibe64.session_close", event: "vibe64.session_close.step_failed",
-        sessionId, controller: entry.label, code: error?.code || "", error: error?.message || String(error)
+        component: "vibe64.session_close",
+        event: "vibe64.session_close.step_failed",
+        sessionId,
+        controller: entry.label,
+        code: error?.code || "",
+        error: error?.message || String(error)
       }, "A session cleanup step failed; the remaining steps still ran.");
     }
   }

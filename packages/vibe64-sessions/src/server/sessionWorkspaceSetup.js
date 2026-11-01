@@ -34,7 +34,12 @@ function createTerminalsSetupRunner(terminals) {
 
   const wait = (sessionId) => terminals.waitForWorkspaceSetup(sessionId);
 
-  return Object.freeze({ isRunning, start, startRenewal, wait });
+  return Object.freeze({
+    isRunning,
+    start,
+    startRenewal,
+    wait
+  });
 }
 
 /**
@@ -45,7 +50,11 @@ function createTerminalsSetupRunner(terminals) {
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {WorkspaceSetupRunner} dependencies.setupRunner
  */
-function createSessionWorkspaceSetup({ project, publishSessionChanged, setupRunner }) {
+function createSessionWorkspaceSetup({
+  project,
+  publishSessionChanged,
+  setupRunner
+}) {
   function observeWorkspaceSetup(sessionId, completion, {
     originId = ""
   } = {}) {

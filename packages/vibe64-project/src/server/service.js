@@ -76,10 +76,14 @@ function createService({
   env = process.env,
   logger,
   inspectConnectedRepository = (fullName, input) => githubApi(input, {
-    env, feature: "Connected projects", failureCode: "vibe64_connections_access_failed"
+    env,
+    feature: "Connected projects",
+    failureCode: "vibe64_connections_access_failed"
   })(`repos/${fullName}`, undefined, "GET"),
   inspectConnectedBranch = (fullName, branch, input) => githubApi(input, {
-    env, feature: "Connected projects", failureCode: "vibe64_connections_access_failed"
+    env,
+    feature: "Connected projects",
+    failureCode: "vibe64_connections_access_failed"
   })(`repos/${fullName}/branches/${encodeURI(branch)}`, undefined, "GET", { allowNotFound: true }),
   inspectCollaboration = inspectGenesisCollaboration,
   inspectEngineering = inspectGenesisEngineering,
@@ -96,16 +100,51 @@ function createService({
 }) {
   const slots = createProjectServiceSlots();
   const selection = createProjectSelection({ logger, projectContext });
-  const environment = createProjectEnvironment({ env, inspectEnvironment, resourceEnvironmentProvider, savedEnvValues, selection });
-  const sessionWork = createProjectSessionWork({ environment, selection });
-  const developmentDatabase = createProjectDevelopmentDatabase({ projectContext, resourceEnvironmentProvider, selection, sessionWork });
-  const projectSettings = createProjectSettings({
-    inspectCollaboration, inspectConnectedRepository, inspectEngineering, selection, sessionWork, setCollaboration, setEngineeringProfile
+  const environment = createProjectEnvironment({
+    env,
+    inspectEnvironment,
+    resourceEnvironmentProvider,
+    savedEnvValues,
+    selection
   });
-  const onboarding = createProjectOnboarding({ applyTemplate, environment, inspectProject, listTemplates, selection, sessionWork });
-  const sessionEnvironment = createProjectSessionEnvironment({ environment, resourceEnvironmentProvider, selection, sessionWork });
+  const sessionWork = createProjectSessionWork({ environment, selection });
+  const developmentDatabase = createProjectDevelopmentDatabase({
+    projectContext,
+    resourceEnvironmentProvider,
+    selection,
+    sessionWork
+  });
+  const projectSettings = createProjectSettings({
+    inspectCollaboration,
+    inspectConnectedRepository,
+    inspectEngineering,
+    selection,
+    sessionWork,
+    setCollaboration,
+    setEngineeringProfile
+  });
+  const onboarding = createProjectOnboarding({
+    applyTemplate,
+    environment,
+    inspectProject,
+    listTemplates,
+    selection,
+    sessionWork
+  });
+  const sessionEnvironment = createProjectSessionEnvironment({
+    environment,
+    resourceEnvironmentProvider,
+    selection,
+    sessionWork
+  });
   const repositories = createProjectRepositories({
-    env, inspectConnectedBranch, inspectConnectedRepository, logger, publishProjectChanged, projectSettings, selection
+    env,
+    inspectConnectedBranch,
+    inspectConnectedRepository,
+    logger,
+    publishProjectChanged,
+    projectSettings,
+    selection
   });
 
   function readOnboarding(input) {

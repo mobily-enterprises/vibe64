@@ -2,7 +2,11 @@
 // mirror, and reconciling the session with what was published.
 
 import path from "node:path";
-import { PROJECT_REPOSITORY_MODE_GITHUB, PROJECT_REPOSITORY_MODE_LOCAL_SOURCE, PROJECT_REPOSITORY_MODE_MANAGED_GIT } from "@local/vibe64-core/server/projectRepository";
+import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT
+} from "@local/vibe64-core/server/projectRepository";
 import { githubMirrorRefreshInvocation, writeGitWorktreeTree } from "@local/vibe64-execution/server";
 import {
   commandProject,

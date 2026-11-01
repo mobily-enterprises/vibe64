@@ -58,8 +58,10 @@ function workspaceSetupState(value = {}) {
       ? { resourceAdmissionId } : {}),
     // The Stack runtimes the failed preparation used, so its panel can show them.
     ...(status === "failed" && Array.isArray(source.runtimes) && source.runtimes.length
-      ? { runtimes: [...new Set(source.runtimes.map((runtime) => normalizeText(runtime))
-          .filter((runtime) => /^[a-z0-9-]{1,40}$/u.test(runtime)))].slice(0, 16) } : {}),
+      ? {
+        runtimes: [...new Set(source.runtimes.map((runtime) => normalizeText(runtime))
+            .filter((runtime) => /^[a-z0-9-]{1,40}$/u.test(runtime)))].slice(0, 16)
+      } : {}),
     startedAt: normalizeText(source.startedAt),
     status: WORKSPACE_SETUP_STATUSES.has(status) ? status : "unconfigured",
     transcript: workspaceSetupTranscript(source.transcript),

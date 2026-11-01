@@ -63,9 +63,30 @@ const PUBLISH_DESTINATION_CATALOG = Object.freeze([
 ]);
 
 const PUBLISH_ACCOUNT_KINDS = Object.freeze({
-  npm: Object.freeze({ id: "npm", label: "npm", destination: "npm", tokenLabel: "npm access token", addressLabel: "Registry", defaultAddress: "https://registry.npmjs.org/" }),
-  pypi: Object.freeze({ id: "pypi", label: "PyPI", destination: "pypi", tokenLabel: "PyPI API token", addressLabel: "Upload address", defaultAddress: "https://upload.pypi.org/legacy/" }),
-  github: Object.freeze({ id: "github", label: "GitHub", destination: "github-releases", tokenLabel: "GitHub token", addressLabel: "", defaultAddress: "" })
+  npm: Object.freeze({
+    id: "npm",
+    label: "npm",
+    destination: "npm",
+    tokenLabel: "npm access token",
+    addressLabel: "Registry",
+    defaultAddress: "https://registry.npmjs.org/"
+  }),
+  pypi: Object.freeze({
+    id: "pypi",
+    label: "PyPI",
+    destination: "pypi",
+    tokenLabel: "PyPI API token",
+    addressLabel: "Upload address",
+    defaultAddress: "https://upload.pypi.org/legacy/"
+  }),
+  github: Object.freeze({
+    id: "github",
+    label: "GitHub",
+    destination: "github-releases",
+    tokenLabel: "GitHub token",
+    addressLabel: "",
+    defaultAddress: ""
+  })
 });
 
 export { PUBLISH_ACCOUNT_KINDS, PUBLISH_DESTINATION_CATALOG };

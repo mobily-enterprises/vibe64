@@ -28,8 +28,16 @@ import {
 } from "../registryCommon.js";
 
 const INSTANCES = Object.freeze({
-  pypi: Object.freeze({ repository: "https://upload.pypi.org/legacy/", index: "https://pypi.org/simple/", web: "https://pypi.org/" }),
-  testpypi: Object.freeze({ repository: "https://test.pypi.org/legacy/", index: "https://test.pypi.org/simple/", web: "https://test.pypi.org/" })
+  pypi: Object.freeze({
+    repository: "https://upload.pypi.org/legacy/",
+    index: "https://pypi.org/simple/",
+    web: "https://pypi.org/"
+  }),
+  testpypi: Object.freeze({
+    repository: "https://test.pypi.org/legacy/",
+    index: "https://test.pypi.org/simple/",
+    web: "https://test.pypi.org/"
+  })
 });
 function uploadAddress(address) {
   const url = new URL(address);
@@ -56,7 +64,11 @@ function pypiSettingsForAddress(address = "") {
   return { repository, index: new URL("simple/", new URL("../", repository)).href };
 }
 
-const CREDENTIAL = Object.freeze({ id: "pypi-token", label: "PyPI token", delivery: "file" });
+const CREDENTIAL = Object.freeze({
+  id: "pypi-token",
+  label: "PyPI token",
+  delivery: "file"
+});
 const SIMPLE_JSON = "application/vnd.pypi.simple.v1+json";
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 
@@ -64,7 +76,9 @@ function pypiSettings(target) {
   const settings = settingsOf(target);
   const custom = Boolean(settings.repository || settings.index);
   const instance = settings.instance ?? (custom ? null : "pypi");
-  if (instance !== null && !INSTANCES[instance]) throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "The PyPI instance is pypi or testpypi.");
+  if (instance !== null && !INSTANCES[instance]) {
+    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "The PyPI instance is pypi or testpypi.");
+  }
   if (instance && custom) {
     throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "Give either a PyPI instance or repository and index addresses, not both.");
   }

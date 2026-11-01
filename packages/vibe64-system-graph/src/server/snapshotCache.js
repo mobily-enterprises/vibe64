@@ -14,7 +14,11 @@ const GENESIS_SNAPSHOT_IDLE_MS = 2 * 60 * 1000;
  * @param {number} [dependencies.idleMs]
  * @param {() => number} [dependencies.now]
  */
-function createSnapshotCache({ capacity, idleMs = GENESIS_SNAPSHOT_IDLE_MS, now = () => Date.now() }) {
+function createSnapshotCache({
+  capacity,
+  idleMs = GENESIS_SNAPSHOT_IDLE_MS,
+  now = () => Date.now()
+}) {
   const entries = new Map();
   let timer = null;
 

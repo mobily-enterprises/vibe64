@@ -39,13 +39,31 @@ function followNoCompletedPlan() {
  * @param {(timing: object) => void} [dependencies.onTiming]
  * @param {(sessionId: string, details: object) => unknown} [dependencies.onPlanCompleted]
  */
-function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection,
-  open, interrupt, discardPending,
+function createAssistantRouting({
+  systemRoot,
+  allowAuto = true,
+  agent,
+  exclusive,
+  dispatch,
+  publish,
+  prepareSelection,
+  open,
+  interrupt,
+  discardPending,
   onTiming = doNothing,
-  onPlanCompleted = followNoCompletedPlan }) {
+  onPlanCompleted = followNoCompletedPlan
+}) {
   const routingState = createAssistantRoutingState({ systemRoot, allowAuto });
-  const records = createAssistantRoutingRecords({ routingState, agent, publish });
-  const decisions = createAssistantRoutingDecisions({ records, agent, exclusive });
+  const records = createAssistantRoutingRecords({
+    routingState,
+    agent,
+    publish
+  });
+  const decisions = createAssistantRoutingDecisions({
+    records,
+    agent,
+    exclusive
+  });
   const delivery = createAssistantRoutingDelivery({
     routingState,
     records,
@@ -89,7 +107,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     publish,
     onPlanCompleted
   });
-  const goals = createAssistantRoutingGoals({ records, decisions, agent, prepareSelection });
+  const goals = createAssistantRoutingGoals({
+    records,
+    decisions,
+    agent,
+    prepareSelection
+  });
 
   return Object.freeze({
     send: admission.send,

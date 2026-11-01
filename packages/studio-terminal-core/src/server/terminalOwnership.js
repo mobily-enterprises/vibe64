@@ -37,7 +37,8 @@ function terminalOwnerFromGithubToolHome(result = {}) {
     ? TERMINAL_OWNER_SCOPE_USER
     : TERMINAL_OWNER_SCOPE_LOCAL;
   return {
-    githubCredentialScope: normalizeText(result.credentialScope) || (ownerScope === TERMINAL_OWNER_SCOPE_USER ? USER_CREDENTIAL_SCOPE : APP_CREDENTIAL_SCOPE),
+    githubCredentialScope: normalizeText(result.credentialScope) ||
+      (ownerScope === TERMINAL_OWNER_SCOPE_USER ? USER_CREDENTIAL_SCOPE : APP_CREDENTIAL_SCOPE),
     githubToolHomeSource: normalizeText(result.githubToolHomeSource || result.toolHomeSource),
     ownerScope,
     ownerUserKey: normalizeText(result.ownerUserKey) || (ownerScope === TERMINAL_OWNER_SCOPE_LOCAL ? GITHUB_ACCOUNT_MODE_LOCAL : "")
@@ -131,7 +132,8 @@ function terminalOwnerMetadata(owner = {}) {
   const ownerScope = normalizeTerminalOwnerScope(owner.ownerScope);
   return {
     terminalOwner: {
-      githubCredentialScope: normalizeText(owner.githubCredentialScope) || (ownerScope === TERMINAL_OWNER_SCOPE_USER ? USER_CREDENTIAL_SCOPE : APP_CREDENTIAL_SCOPE),
+      githubCredentialScope: normalizeText(owner.githubCredentialScope) ||
+        (ownerScope === TERMINAL_OWNER_SCOPE_USER ? USER_CREDENTIAL_SCOPE : APP_CREDENTIAL_SCOPE),
       githubToolHomeSource: normalizeText(owner.githubToolHomeSource),
       ownerScope,
       ownerUserKey: normalizeText(owner.ownerUserKey) || (ownerScope === TERMINAL_OWNER_SCOPE_LOCAL ? GITHUB_ACCOUNT_MODE_LOCAL : "")

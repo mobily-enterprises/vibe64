@@ -25,7 +25,9 @@ const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const PLAN_HASH = /^sha256:([0-9a-f]{64})$/u;
 
 function absolute(value, label) {
-  if (typeof value !== "string" || !path.isAbsolute(value)) throw publishError("VIBE64_PUBLISH_STAGE_INVALID", `${label} must be an absolute path.`);
+  if (typeof value !== "string" || !path.isAbsolute(value)) {
+    throw publishError("VIBE64_PUBLISH_STAGE_INVALID", `${label} must be an absolute path.`);
+  }
   return path.resolve(value);
 }
 
@@ -61,7 +63,10 @@ function buildStageEnvironment({ baseEnvironment = process.env, declared = [], h
       throw publishError("VIBE64_PUBLISH_STAGE_INVALID", "Build Environment entries need an uppercase name and a text value.");
     }
     if (CREDENTIAL_NAME.test(entry.name)) {
-      throw publishError("VIBE64_PUBLISH_CREDENTIAL_IN_BUILD", `Build Environment ${entry.name} looks like a credential; builds run without credentials.`);
+      throw publishError(
+        "VIBE64_PUBLISH_CREDENTIAL_IN_BUILD",
+        `Build Environment ${entry.name} looks like a credential; builds run without credentials.`
+      );
     }
     if (Object.hasOwn(environment, entry.name)) {
       throw publishError("VIBE64_PUBLISH_STAGE_INVALID", `Build Environment ${entry.name} is reserved by the build stage.`);
@@ -198,7 +203,9 @@ async function runBuildStage({
       }
       const result = await runCommand({ command: step.argv[0], args: step.argv.slice(1), cwd: step.cwd, env, signal, projectSlug });
       if (result?.ok !== true) {
-        throw publishError("VIBE64_PUBLISH_BUILD_FAILED", `${step.label} failed${result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`}.`, {
+        throw publishError("VIBE64_PUBLISH_BUILD_FAILED",
+          `${step.label} failed${result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`}.`,
+          {
           step: step.label,
           output: tail(`${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`)
         });
@@ -292,7 +299,17 @@ function credentialSpecs(destination, field, target) {
 async function readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains = {} }) {
   const credentials = credentialSpecs(destination, "readBackCredentials", target);
   const result = credentials.length
-    ? await withStageCredentials({ credentials, obtainCredential, tempRoot }, (supplied) => destination.readBack({ target, version, artifacts, credentials: supplied, toolchains }))
+    ? await withStageCredentials({
+      credentials,
+      obtainCredential,
+      tempRoot
+    }, (supplied) => destination.readBack({
+      target,
+      version,
+      artifacts,
+      credentials: supplied,
+      toolchains
+    }))
     : await destination.readBack({ target, version, artifacts, toolchains });
   if (!result || typeof result.published !== "boolean") {
     throw publishError("VIBE64_PUBLISH_READ_BACK_INVALID", `${destination.label} returned no read-back result.`);
@@ -329,7 +346,16 @@ async function publishTarget({
   if (previous?.status === "proven" && previous.version === version && previous.checksum === checksum) return previous;
   const before = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains });
   if (before.published) {
-    return { target: target.id, version, checksum, status: "proven", alreadyPublished: true, proof: before.proof || null, startedAt, finishedAt: now() };
+    return {
+      target: target.id,
+      version,
+      checksum,
+      status: "proven",
+      alreadyPublished: true,
+      proof: before.proof || null,
+      startedAt,
+      finishedAt: now()
+    };
   }
   const upload = await withStageCredentials({
     credentials: credentialSpecs(destination, "credentials", target),
@@ -344,7 +370,16 @@ async function publishTarget({
       upload: upload ?? null
     });
   }
-  return { target: target.id, version, checksum, status: "proven", alreadyPublished: false, proof: after.proof || null, startedAt, finishedAt: now() };
+  return {
+    target: target.id,
+    version,
+    checksum,
+    status: "proven",
+    alreadyPublished: false,
+    proof: after.proof || null,
+    startedAt,
+    finishedAt: now()
+  };
 }
 
 export {

@@ -471,7 +471,10 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
   };
   if (!scopedPreview) return runCommand(request);
   if (requestedEnv.PLAYWRIGHT_BASE_URL || storageStatePath) {
-    return responseError("--target requires its own managed Preview URL and identity; do not supply an external URL or storage state.", "vibe64_preview_target_conflict");
+    return responseError(
+      "--target requires its own managed Preview URL and identity; do not supply an external URL or storage state.",
+      "vibe64_preview_target_conflict"
+    );
   }
   async function validate() {
     const current = registeredBrowserWorkerForInput(sessionId, input, browserWorkers);
@@ -483,7 +486,9 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
     }
     if (runner === "npm") {
       const latest = JSON.parse(await readFile(path.join(cwd, "package.json"), "utf8"));
-      if (latest.scripts?.[args[1]] !== scriptText) throw new Error("The test script changed while awaiting approval. Run the new command explicitly.");
+      if (latest.scripts?.[args[1]] !== scriptText) {
+        throw new Error("The test script changed while awaiting approval. Run the new command explicitly.");
+      }
     }
     return current;
   }
@@ -497,7 +502,8 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
       ...(runner === "node" ? ["test", ...args.slice(2)] : ["npm-run", ...args.slice(1)])
     ],
     env: {
-      ...request.env, ...descriptor.env,
+      ...request.env,
+      ...descriptor.env,
       VIBE64_PLAYWRIGHT_TARGET_RUN: testRunToken,
       PLAYWRIGHT_BASE_URL: "",
       PLAYWRIGHT_STORAGE_STATE: ""

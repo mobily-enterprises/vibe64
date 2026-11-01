@@ -194,28 +194,38 @@ function createServiceSessionTerminals({
       const assistantRan = controllerOptions.session?.sourceReady !== false || learningNativeAvailable;
       return closeTerminalControllersForSession(sessionId, [
         {
-          controller: { closeAllForSession: async (id, options) => {
-            const agentContext = await assistantContext.assistantSessionOptions(id, options);
-            await sessionNaming.closeSession(agentContext);
-            await cleanupSessionSaveCommitMessage({ agent: sessionAgent, agentContext });
-            return { ok: true };
-          } },
+          controller: {
+            closeAllForSession: async (id, options) => {
+              const agentContext = await assistantContext.assistantSessionOptions(id, options);
+              await sessionNaming.closeSession(agentContext);
+              await cleanupSessionSaveCommitMessage({ agent: sessionAgent, agentContext });
+              return { ok: true };
+            }
+          },
           label: "Naming helpers"
         },
         {
           controller: { closeAllForSession: (id, options) => sessionPromptHints.cancelSessionPromptHintsForSession(id, options) },
           label: "Prompt suggestions"
         },
-        { controller: { closeAllForSession: (id, options) => state.slots.databaseToolsProvider?.closeAssistantsForSession(id, options) },
-          label: "Database copilot" },
-        { controller: { closeAllForSession: (id) => state.slots.sourceEditorProvider?.closeExplanationsForSession(id) },
-          label: "Source explanations" },
+        {
+          controller: { closeAllForSession: (id, options) => state.slots.databaseToolsProvider?.closeAssistantsForSession(id, options) },
+          label: "Database copilot"
+        },
+        {
+          controller: { closeAllForSession: (id) => state.slots.sourceEditorProvider?.closeExplanationsForSession(id) },
+          label: "Source explanations"
+        },
         { controller: outputTarget, label: "outputTarget" },
-        { controller: { closeAllForSession: (id) => projectServices.closeSession(sessionAccess.projectRuntimeContext(), id) },
-          label: "sessionServices" },
+        {
+          controller: { closeAllForSession: (id) => projectServices.closeSession(sessionAccess.projectRuntimeContext(), id) },
+          label: "sessionServices"
+        },
         ...(!controllerOptions.renewalCleanup && assistantRan ? [{
-          controller: { closeAllForSession: async (id, options) =>
-            sessionAgent.interruptTurn(id, {}, await assistantContext.assistantSessionOptions(id, options)) },
+          controller: {
+            closeAllForSession: async (id, options) =>
+              sessionAgent.interruptTurn(id, {}, await assistantContext.assistantSessionOptions(id, options))
+          },
           label: "assistantTurn"
         }] : []),
         ...(assistantRan ? [{
@@ -286,8 +296,10 @@ function createServiceSessionTerminals({
   async function recordPreviewDiagnostic(sessionId, input) {
     // Action admission owns project access; read the exact existing session without preparing it.
     const { session } = await assistantContext.assistantSessionOptions(sessionId);
-    return previewDiagnostics(input, { projectSlug: currentProjectRequestContext()?.slug || "",
-      sessionId: session.sessionId });
+    return previewDiagnostics(input, {
+      projectSlug: currentProjectRequestContext()?.slug || "",
+      sessionId: session.sessionId
+    });
   }
 
   async function closeSessionTerminals(sessionId, options = {}) {
@@ -459,7 +471,11 @@ function createServiceSessionTerminals({
 
   async function stopOutputTargetTerminal(sessionId, terminalSessionId) {
     const result = await outputTarget.stopTerminal(sessionId, terminalSessionId);
-    await sessionAccess.publishTerminalSessionChanged("outputTargetStopped", sessionId, result?.ok === false ? "output-target-stop-failed" : "output-target-stopped");
+    await sessionAccess.publishTerminalSessionChanged(
+      "outputTargetStopped",
+      sessionId,
+      result?.ok === false ? "output-target-stop-failed" : "output-target-stopped"
+    );
     return result;
   }
 

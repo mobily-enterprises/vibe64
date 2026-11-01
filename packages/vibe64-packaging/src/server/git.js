@@ -28,9 +28,19 @@ async function releaseGit(root, args, {
   runCommand = runVibe64Command
 } = {}) {
   const result = await runCommand({
-    actor: "daemon", allowedRoots: [root], command: "git", args, cwd: root,
-    envPolicy: "project", gitSafeDirectories: [root], inheritProcessEnv: true,
-    mode: "capture", purpose: "source", runtimes: ["git"], timeout, maxBuffer,
+    actor: "daemon",
+    allowedRoots: [root],
+    command: "git",
+    args,
+    cwd: root,
+    envPolicy: "project",
+    gitSafeDirectories: [root],
+    inheritProcessEnv: true,
+    mode: "capture",
+    purpose: "source",
+    runtimes: ["git"],
+    timeout,
+    maxBuffer,
     ...(env ? { env } : {}),
     ...(stdin === undefined ? {} : { input: stdin })
   });

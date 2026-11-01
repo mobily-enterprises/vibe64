@@ -65,7 +65,12 @@ function createAgentCommandProjectBinding(projectService, errors, { capture = ()
 
   const get = (sessionId = "") => bindings.get(normalizeText(sessionId)) || null;
 
-  return Object.freeze({ bind, forget, get, run });
+  return Object.freeze({
+    bind,
+    forget,
+    get,
+    run
+  });
 }
 
 export { createAgentCommandProjectBinding };

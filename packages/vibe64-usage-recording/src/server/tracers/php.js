@@ -11,7 +11,10 @@ import { PHP_USAGE_INI_NAME, phpUsageBuildCommand, phpUsageScanDirectory } from 
 function prepare() {
   const scanDirectory = phpUsageScanDirectory();
   if (scanDirectory.includes(path.delimiter)) {
-    return { available: false, reason: `PHP recording cannot use a module folder whose path contains "${path.delimiter}": ${scanDirectory}` };
+    return {
+      available: false,
+      reason: `PHP recording cannot use a module folder whose path contains "${path.delimiter}": ${scanDirectory}`
+    };
   }
   try {
     if (statSync(path.join(scanDirectory, PHP_USAGE_INI_NAME)).isFile()) {

@@ -31,20 +31,33 @@ function claudeProviderAccountIdentity(configRoot, providerId, apiKey) {
 function claudeCapabilities(initialization, connected, connections = []) {
   const models = claudeCatalogueModels(initialization);
   const external = CURATED_CODEX_PROVIDERS.map((provider) => ({
-    id: provider.id, label: provider.label, description: provider.description,
+    id: provider.id,
+    label: provider.label,
+    description: provider.description,
     connected: connections.some((item) => item.id === provider.id && item.claudeReady),
-    models: provider.models.map((model) => ({ id: model.id, label: model.label, status: "available",
-      variants: model.variants.map((id) => ({ id, label: id })), capabilities: { images: model.images === true } }))
+    models: provider.models.map((model) => ({
+      id: model.id,
+      label: model.label,
+      status: "available",
+      variants: model.variants.map((id) => ({ id, label: id })),
+      capabilities: { images: model.images === true }
+    }))
   }));
   const defaultProvider = connected ? { id: "anthropic", models } : external.find((provider) => provider.connected);
   const selected = defaultProvider?.models.find((model) => model.id === "default") || defaultProvider?.models[0];
   const available = connected || external.some((provider) => provider.connected);
   return {
-    engineId: ENGINE, transportId: TRANSPORT, label: "Claude Code",
+    engineId: ENGINE,
+    transportId: TRANSPORT,
+    label: "Claude Code",
     agents: [{ id: ENGINE, label: "Claude Code", mode: "primary", description: "Anthropic's native coding agent" }],
     authentication: { management: "account-owner", modes: ["oauth", "api-key"] },
-    defaults: { agentId: ENGINE, modelId: selected?.id || "", modelProviderId: defaultProvider?.id || "anthropic",
-      variantId: selected?.variants.some((variant) => variant.id === "high") ? "high" : "" },
+    defaults: {
+      agentId: ENGINE,
+      modelId: selected?.id || "",
+      modelProviderId: defaultProvider?.id || "anthropic",
+      variantId: selected?.variants.some((variant) => variant.id === "high") ? "high" : ""
+    },
     health: { status: available ? "ready" : "unavailable", message: available ? "" : "Connect Claude Code to use your Claude plan." },
     modelProviders: [{ id: "anthropic", label: PLAN_LABEL, connected, models }, ...external],
     revision: `sha256:${sha256Hex(JSON.stringify({ models, connected, external }))}`
@@ -66,13 +79,33 @@ function claudeCapabilities(initialization, connected, connections = []) {
  * @param {object} dependencies.credentialHome
  * @param {RuntimeEnv} dependencies.env
  */
-function createClaudeConversationAccounts({ owner, configRoot, providerConnections, accountStatus, connectionStatus,
-  createProcess, command, commandRunner, stopExecution, credentialHome, env }) {
+function createClaudeConversationAccounts({
+  owner,
+  configRoot,
+  providerConnections,
+  accountStatus,
+  connectionStatus,
+  createProcess,
+  command,
+  commandRunner,
+  stopExecution,
+  credentialHome,
+  env
+}) {
   const accountQueries = owner.createAccountQueries({
     accountIdentity,
-    createProcess: ({ signal, purpose }) => createProcess({ command: command(), commandRunner, stopExecution, credentialHome, env, signal,
+    createProcess: ({ signal, purpose }) => createProcess({
+      command: command(),
+      commandRunner,
+      stopExecution,
+      credentialHome,
+      env,
+      signal,
       accountQuery: purpose,
-      workdir: credentialHome.home, toolFree: true, onEvent: async () => {} })
+      workdir: credentialHome.home,
+      toolFree: true,
+      onEvent: async () => {}
+    })
   });
   function accountQueryFailure(failure) {
     if (failure.code === "claude_account_query_failed") throw error(failure.message);
@@ -111,19 +144,30 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
   }
 
   const accounts = {
-    prepareAccount, queries: accountQueries, queryFailure: accountQueryFailure,
+    prepareAccount,
+    queries: accountQueries,
+    queryFailure: accountQueryFailure,
     async assistantAccess(context) {
       const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
       if (external) {
         const connection = (await providerConnections.list()).find(({ id }) => id === external.id);
         const available = connection?.claudeReady === true;
-        return { available, missingAccountLabel: available ? "" : external.label,
-          connectionIdentity: connection?.claudeConnectionIdentity || "", endpointCode: external.id,
-          ownerOnly: external.ownerOnly };
+        return {
+          available,
+          missingAccountLabel: available ? "" : external.label,
+          connectionIdentity: connection?.claudeConnectionIdentity || "",
+          endpointCode: external.id,
+          ownerOnly: external.ownerOnly
+        };
       }
       const available = await connectionStatus(context);
-      return { available, missingAccountLabel: available ? "" : PLAN_LABEL, ownerOnly: true, endpointCode: "claude_subscription",
-        connectionIdentity: available ? await accountIdentity(context) : "" };
+      return {
+        available,
+        missingAccountLabel: available ? "" : PLAN_LABEL,
+        ownerOnly: true,
+        endpointCode: "claude_subscription",
+        connectionIdentity: available ? await accountIdentity(context) : ""
+      };
     },
     async capabilities(context, input = {}) {
       const connected = await connectionStatus(context);
@@ -149,7 +193,9 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
     },
     async resolveExecutionProfile(context, request) {
       const limits = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[request.workloadId];
-      if (request.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER || !limits) throw error("Unsupported Claude helper execution profile.");
+      if (request.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER || !limits) {
+        throw error("Unsupported Claude helper execution profile.");
+      }
       const modelId = context.assistantSelection?.modelId;
       const modelProviderId = context.assistantSelection?.modelProviderId;
       const catalog = await accounts.capabilities(context, { modelProviderId });
@@ -167,7 +213,7 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
         revision: `claude-${CLAUDE_CODE_VERSION}-${modelId}-tool-free-v1`,
         thinking
       });
-    },
+    }
   };
   return Object.freeze(accounts);
 }

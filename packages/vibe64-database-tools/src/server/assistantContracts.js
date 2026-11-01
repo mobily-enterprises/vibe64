@@ -12,40 +12,70 @@ const descriptions = {
 export function databaseControlTool(operation) {
   return {
     description: descriptions[operation],
-    output: { mode: "replace", schema: createSchema({
-      ok: { type: "boolean", required: true }, error: text, code: text,
-      schema: { type: "object", required: false, schema: createSchema({
-        database: { ...text, required: true }, engine: { ...text, required: true },
-        refreshedAt: { ...text, required: true }, objectCount: count, schemaCount: count
-      }) },
-      developmentDatabaseScope: text,
-      queryCount: { ...count, required: false }, queriesTruncated: { type: "boolean", required: false },
-      activeQueries: { type: "array", required: false, maxItems: 50, items: createSchema({
-        queryId: { type: "string", required: true, maxLength: 128 },
-        readOnly: { type: "boolean", required: true }, startedAt: { ...text, required: true },
-        cancellable: { type: "boolean", required: true }
-      }) },
-      queryId: { type: "string", required: false, maxLength: 128 },
-      cancelled: { type: "boolean", required: false }
-    }) },
+    output: {
+      mode: "replace",
+      schema: createSchema({
+        ok: { type: "boolean", required: true },
+        error: text,
+        code: text,
+        schema: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            database: { ...text, required: true },
+            engine: { ...text, required: true },
+            refreshedAt: { ...text, required: true },
+            objectCount: count,
+            schemaCount: count
+          })
+        },
+        developmentDatabaseScope: text,
+        queryCount: { ...count, required: false },
+        queriesTruncated: { type: "boolean", required: false },
+        activeQueries: {
+          type: "array",
+          required: false,
+          maxItems: 50,
+          items: createSchema({
+            queryId: { type: "string", required: true, maxLength: 128 },
+            readOnly: { type: "boolean", required: true },
+            startedAt: { ...text, required: true },
+            cancellable: { type: "boolean", required: true }
+          })
+        },
+        queryId: { type: "string", required: false, maxLength: 128 },
+        cancelled: { type: "boolean", required: false }
+      })
+    },
     transformResult(result) {
       if (result.ok !== true) return {
-        ok: false, code: String(result.code || "").slice(0, 512),
+        ok: false,
+        code: String(result.code || "").slice(0, 512),
         error: "The database operation failed. Open Database for details, or ask a coding agent to investigate."
       };
       if (operation === "query.cancel") return { ok: true, queryId: result.queryId, cancelled: result.cancelled };
       const summary = databaseSchemaSummary(result.schema);
-      const output = { ok: true, schema: {
-        database: summary.database.slice(0, 512), engine: summary.engine.slice(0, 512),
-        refreshedAt: summary.refreshedAt.slice(0, 512), objectCount: summary.objectCount, schemaCount: summary.schemaCount
-      } };
+      const output = {
+        ok: true,
+        schema: {
+          database: summary.database.slice(0, 512),
+          engine: summary.engine.slice(0, 512),
+          refreshedAt: summary.refreshedAt.slice(0, 512),
+          objectCount: summary.objectCount,
+          schemaCount: summary.schemaCount
+        }
+      };
       if (operation === "state.read") {
         const queries = result.activeQueries;
         Object.assign(output, {
           developmentDatabaseScope: String(result.connection.developmentDatabaseScope || "").slice(0, 512),
-          queryCount: queries.length, queriesTruncated: queries.length > 50,
+          queryCount: queries.length,
+          queriesTruncated: queries.length > 50,
           activeQueries: queries.slice(0, 50).map(({ queryId, readOnly, startedAt, cancellable }) => ({
-            queryId, readOnly, startedAt, cancellable
+            queryId,
+            readOnly,
+            startedAt,
+            cancellable
           }))
         });
       }

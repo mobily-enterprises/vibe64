@@ -169,9 +169,16 @@ function createService({
       return state.slots.connectedPreparation(options);
     }
   });
-  const sessionAccess = createServiceSessionAccess({ logger, projectService, publishSessionChanged });
+  const sessionAccess = createServiceSessionAccess({
+    logger,
+    projectService,
+    publishSessionChanged
+  });
   const workspacePreparation = createServiceWorkspacePreparation({
-    sessionAccess, projectService, publishSessionChanged, workspaceSetup
+    sessionAccess,
+    projectService,
+    publishSessionChanged,
+    workspaceSetup
   });
 
   const publishAgentSessionChanged = async (sessionId, payload = {}) => {
@@ -188,7 +195,12 @@ function createService({
     if (state.lifecycle.closing) return;
     if (payload.reason === "temporary-agent-turn-idle") {
       const completion = sessionConversations?.afterTemporaryTurn(sessionId, payload.payload).catch((error) => {
-        logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.temporary_review_deferred", sessionId, code: error.code }, "Temporary chat review needs attention.");
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64.assistant_routing",
+          event: "vibe64.assistant_routing.temporary_review_deferred",
+          sessionId,
+          code: error.code
+        }, "Temporary chat review needs attention.");
       });
       if (completion) {
         state.turnCompletions.add(completion);
@@ -203,11 +215,21 @@ function createService({
     }
     const completion = Promise.all([
       assistantRouting?.afterTurn(sessionId, payload, {}).catch((error) => {
-        logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.review_deferred", sessionId, code: error.code }, "Automatic review needs attention.");
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64.assistant_routing",
+          event: "vibe64.assistant_routing.review_deferred",
+          sessionId,
+          code: error.code
+        }, "Automatic review needs attention.");
       }),
       // A goal's automatic continuation follows each of its turns.
       goals.cancelGoalIfMainAiChanged(sessionId, null, { activeOnly: true }).catch((error) => {
-        logOperationalEvent(logger, "warn", { component: "vibe64.agent_goal", event: "vibe64.agent_goal.main_ai_cancel_failed", sessionId, code: error.code }, "A goal on the previous main AI could not be cancelled.");
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64.agent_goal",
+          event: "vibe64.agent_goal.main_ai_cancel_failed",
+          sessionId,
+          code: error.code
+        }, "A goal on the previous main AI could not be cancelled.");
       }),
       workspacePreparation.prepareWorkspaceSetup(sessionId, {
         publish: true,
@@ -238,7 +260,9 @@ function createService({
         return { completion: null, state: context.session.workspaceSetup };
       }
       return workspacePreparation.prepareWorkspaceSetup(sessionId, {
-        publish: true, rerunFailed: context.rerunFailedSetup === true, waitForCompletion: true
+        publish: true,
+        rerunFailed: context.rerunFailedSetup === true,
+        waitForCompletion: true
       });
     },
     projectService,
@@ -279,7 +303,10 @@ function createService({
       prepare: async (sessionId, options) => {
         const access = await assistant.inspectAssistantAccess(sessionId, options);
         if (access.available !== true || access.canUse !== true) {
-          throw vibe64Error(access.disabledReason || "The selected session has no available assistant.", "vibe64_project_message_assistant_unavailable");
+          throw vibe64Error(
+            access.disabledReason || "The selected session has no available assistant.",
+            "vibe64_project_message_assistant_unavailable"
+          );
         }
         const { runtime: openState } = await sessionAccess.currentProjectRuntimeOpenState();
         projectServices.assertOpen(sessionAccess.projectRuntimeContext());
@@ -288,13 +315,20 @@ function createService({
           : await options.runtime.store.readSession(sessionId);
         if (!openState.open || destination?.sessionId !== sessionId ||
             (!options.requireSelectedSession && destination.status !== VIBE64_SESSION_STATUS.ACTIVE)) {
-          throw vibe64Error("The destination closed, became unavailable or its selected session changed. Check it before sending again.", "vibe64_project_message_destination_changed");
+          throw vibe64Error(
+            "The destination closed, became unavailable or its selected session changed. Check it before sending again.",
+            "vibe64_project_message_destination_changed"
+          );
         }
       },
       send: (sessionId, message, options) => assistant.sendAgentMessage(sessionId, message, options),
       reportFailure: (error, receipt) => logger.warn({
-        event: "vibe64.project_message.delivery_failed", error: error.message, code: error.code,
-        sourceProject: input.sourceProject, sourceSession: input.sourceSession, ...receipt
+        event: "vibe64.project_message.delivery_failed",
+        error: error.message,
+        code: error.code,
+        sourceProject: input.sourceProject,
+        sourceSession: input.sourceSession,
+        ...receipt
       }, "Accepted project message failed during asynchronous delivery.")
     }),
     reportWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),
@@ -338,10 +372,16 @@ function createService({
     onDeliveryTiming(event) {
       const slow = event.elapsedMs >= 1000 && ["accepted", "first-response"].includes(event.stage);
       logOperationalEvent(logger, slow || event.stage === "failed" ? "warn" : "info", {
-        event: "vibe64.agent_message.delivery_timing", component: "vibe64.agent_message",
-        sessionId: event.conversationId, engineId: event.engine, messageId: event.messageId,
-        stage: event.stage, previousStage: event.previousStage,
-        durationMs: event.durationMs, elapsedMs: event.elapsedMs, timings: event.timings
+        event: "vibe64.agent_message.delivery_timing",
+        component: "vibe64.agent_message",
+        sessionId: event.conversationId,
+        engineId: event.engine,
+        messageId: event.messageId,
+        stage: event.stage,
+        previousStage: event.previousStage,
+        durationMs: event.durationMs,
+        elapsedMs: event.elapsedMs,
+        timings: event.timings
       }, "Assistant delivery timing.");
     },
     ...(assistantContext.mainToolCatalog ? { toolCatalog: assistantContext.mainToolCatalog } : {}),
@@ -371,16 +411,26 @@ function createService({
   });
   const sessionAttachments = createSessionAttachments({ projectService, env });
   const claudeProvider = createClaudeConversationHost({
-    env, projectService, logger, publishSessionChanged: publishAgentSessionChanged,
+    env,
+    projectService,
+    logger,
+    publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
     systemRoot: codexProviderOptions.systemRoot,
     runNativeDetachedConversation,
-    codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
+    codexGitCommand,
+    agentDatabaseCommand,
+    agentEnvCommand,
+    agentPreviewCommand,
+    agentSessionCommand,
     accountStatus: readClaudeAccountStatus,
     connectionStatus: (context) => state.assistantRuntime.claudeConnectionStatus(context)
   });
   const providerAccess = createServiceProviderAccess({
-    state, claudeProvider, codex, codexProviderConnections
+    state,
+    claudeProvider,
+    codex,
+    codexProviderConnections
   });
 
   const readRoutingConfiguration = () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read();
@@ -411,11 +461,20 @@ function createService({
     projectService
   });
   const assistantPreparation = createServiceAssistantPreparation({
-    sessionAccess, workspacePreparation, inspectAgentSkills, logger, projectService, sessionAgent
+    sessionAccess,
+    workspacePreparation,
+    inspectAgentSkills,
+    logger,
+    projectService,
+    sessionAgent
   });
 
-  const sessionNaming = createSessionNaming({ agent: sessionAgent, publishSessionChanged: publishAgentSessionChanged, logger,
-    signal: state.shutdownSignal.signal });
+  const sessionNaming = createSessionNaming({
+    agent: sessionAgent,
+    publishSessionChanged: publishAgentSessionChanged,
+    logger,
+    signal: state.shutdownSignal.signal
+  });
   assistantRouting = createAssistantRouting({
     systemRoot: codexProviderOptions.systemRoot, agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {
@@ -444,7 +503,9 @@ function createService({
       // Timing is diagnostic only; a failing log sink must not fail the send.
       try {
         logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
-          event: "vibe64.agent_message.routing_timing", component: "vibe64.agent_message", ...event
+          event: "vibe64.agent_message.routing_timing",
+          component: "vibe64.agent_message",
+          ...event
         }, "Assistant routing timing.");
       } catch {
         // Ignore: timing diagnostics are best-effort.
@@ -473,50 +534,131 @@ function createService({
      * Always rereads the session; a conversation's caller may hold an older copy.
      */
     readSessionContext: async (sessionId, options = {}) => ({
-      ...options, ...await sessionAccess.sessionContext(sessionId, { runtime: options.runtime })
+      ...options,
+      ...await sessionAccess.sessionContext(sessionId, { runtime: options.runtime })
     }),
     prepareAgentSkills: assistantPreparation.prepareAgentSkillsInsideAgentWrite,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event)
   });
   const terminals = createServiceSessionTerminals({
-    state, sessionAccess, assistantContext, assistantPreparation, agentDatabaseCommand, agentEnvCommand,
-    agentPreviewCommand, agentSessionCommand, codex, env, logger, outputTarget, previewDiagnostics,
-    projectService, projectServices, providerUsage, sessionAgent, sessionConversations, sessionNaming,
+    state,
+    sessionAccess,
+    assistantContext,
+    assistantPreparation,
+    agentDatabaseCommand,
+    agentEnvCommand,
+    agentPreviewCommand,
+    agentSessionCommand,
+    codex,
+    env,
+    logger,
+    outputTarget,
+    previewDiagnostics,
+    projectService,
+    projectServices,
+    providerUsage,
+    sessionAgent,
+    sessionConversations,
+    sessionNaming,
     sessionPromptHints
   });
   goals = createServiceGoals({
-    state, sessionAccess, assistantContext, assistantPreparation, actions, assistantRouting, logger,
-    projectService, publishAgentSessionChanged, readRoutingConfiguration, sessionAgent
+    state,
+    sessionAccess,
+    assistantContext,
+    assistantPreparation,
+    actions,
+    assistantRouting,
+    logger,
+    projectService,
+    publishAgentSessionChanged,
+    readRoutingConfiguration,
+    sessionAgent
   });
   assistant = createServiceAssistant({
-    state, sessionAccess, assistantContext, goals, assistantRouting, codexProviderConnections,
-    codexProviderOptions, env, logger, mainConversations, opencode, opencodeTerminalController, sessionAgent,
-    sessionConversations, sessionNaming, sessionPromptHints
+    state,
+    sessionAccess,
+    assistantContext,
+    goals,
+    assistantRouting,
+    codexProviderConnections,
+    codexProviderOptions,
+    env,
+    logger,
+    mainConversations,
+    opencode,
+    opencodeTerminalController,
+    sessionAgent,
+    sessionConversations,
+    sessionNaming,
+    sessionPromptHints
   });
   mainConversationHost = createServiceMainConversationHost({
-    assistantContext, goals, assistant, actions, env, logger, projectService, sessionAgent,
+    assistantContext,
+    goals,
+    assistant,
+    actions,
+    env,
+    logger,
+    projectService,
+    sessionAgent,
     sessionConversations
   });
   const agentConversations = createServiceAgentConversations({
-    sessionAccess, assistantContext, mainConversations, projectService, publishAgentSessionChanged,
-    sessionAgent, sessionAttachments, workspaceSetup
+    sessionAccess,
+    assistantContext,
+    mainConversations,
+    projectService,
+    publishAgentSessionChanged,
+    sessionAgent,
+    sessionAttachments,
+    workspaceSetup
   });
   const sessionWork = createServiceSessionWork({
-    state, sessionAccess, workspacePreparation, agentConversations, codexGitCommand, env, logger,
-    projectService, sessionAgent, workspaceSetup
+    state,
+    sessionAccess,
+    workspacePreparation,
+    agentConversations,
+    codexGitCommand,
+    env,
+    logger,
+    projectService,
+    sessionAgent,
+    workspaceSetup
   });
   const workInspection = createServiceSessionWorkInspection({
-    sessionAccess, sessionWork, codexGitCommand, projectService
+    sessionAccess,
+    sessionWork,
+    codexGitCommand,
+    projectService
   });
-  const reconcile = createServiceAgentReconcile({ projectService, sessionAgent, sessionConversations });
+  const reconcile = createServiceAgentReconcile({
+    projectService,
+    sessionAgent,
+    sessionConversations
+  });
   const projectRuntime = createServiceProjectRuntime({
-    sessionAccess, terminals, goals, reconcile, agentPreviewCommand, outputTarget, projectService,
-    projectServices, publishProjectRuntimeChanged, sessionAgent
+    sessionAccess,
+    terminals,
+    goals,
+    reconcile,
+    agentPreviewCommand,
+    outputTarget,
+    projectService,
+    projectServices,
+    publishProjectRuntimeChanged,
+    sessionAgent
   });
   const shutdown = createServiceShutdown({
-    state, assistantRouting, mainConversations, outputTarget, projectServices, sessionAgent,
-    sessionConversations, sessionNaming
+    state,
+    assistantRouting,
+    mainConversations,
+    outputTarget,
+    projectServices,
+    sessionAgent,
+    sessionConversations,
+    sessionNaming
   });
   const hostSlots = createServiceHostSlots({ state });
 

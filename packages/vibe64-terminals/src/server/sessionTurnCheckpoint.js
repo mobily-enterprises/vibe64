@@ -14,8 +14,14 @@ import { trimmedText } from "./trimmedText.js";
 const SESSION_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
 
 async function checkpointSessionTurn({
-  projectService, runtime, session, sessionId, outerTurnId, outcome = "completed",
-  timestamp = new Date().toISOString(), publishSessionChanged = async () => {},
+  projectService,
+  runtime,
+  session,
+  sessionId,
+  outerTurnId,
+  outcome = "completed",
+  timestamp = new Date().toISOString(),
+  publishSessionChanged = async () => {},
   createCheckpoint = createGitTurnCheckpointAsOneJob
 }) {
   if (!outerTurnId) return { ok: true, processed: false, reason: "outer_turn_unavailable" };
@@ -23,14 +29,21 @@ async function checkpointSessionTurn({
   session ||= await runtime.getSession(sessionId, { inspectSource: false });
   const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true });
   if (learningRoot) {
-    return { ok: true, processed: false, reason: "learning_session_no_git_checkpoint",
-      checkpoint: { applicable: false, outerTurnId, outcome } };
+    return {
+      ok: true,
+      processed: false,
+      reason: "learning_session_no_git_checkpoint",
+      checkpoint: { applicable: false, outerTurnId, outcome }
+    };
   }
   let checkpoint;
   let failure = "";
   try {
     checkpoint = await createCheckpoint({
-      outerTurnId, outcome, timestamp, sessionId,
+      outerTurnId,
+      outcome,
+      timestamp,
+      sessionId,
       project: await projectService.readCurrentProject(),
       worktreePath: sessionSourcePath(session)
     });
@@ -101,12 +114,19 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
   } = {}) {
     if (conversationOuterTurnId) {
       await checkpointSessionTurn({
-        projectService, sessionId, outerTurnId: conversationOuterTurnId,
-        outcome: checkpointOutcomeForCodexTurn(status, turnOutcome), publishSessionChanged
+        projectService,
+        sessionId,
+        outerTurnId: conversationOuterTurnId,
+        outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
+        publishSessionChanged
       });
-      return publishSessionChanged(sessionId, { reason: "temporary-agent-turn-idle", payload: {
-        conversationId: threadId, temporaryRun: { active: false, state: status, providerTurnId: turnId }
-      } });
+      return publishSessionChanged(sessionId, {
+        reason: "temporary-agent-turn-idle",
+        payload: {
+          conversationId: threadId,
+          temporaryRun: { active: false, state: status, providerTurnId: turnId }
+        }
+      });
     }
     const normalizedSessionId = trimmedText(sessionId);
     const runtime = await projectService.createRuntime({ inspectSource: false });
@@ -114,9 +134,14 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
     const turn = codexAppServerTurnState(session, normalizeVibe64AgentRunState);
     const outerTurnId = trimmedText(turn.outerTurnId);
     return checkpointSessionTurn({
-      projectService, runtime, session, sessionId: normalizedSessionId, outerTurnId,
+      projectService,
+      runtime,
+      session,
+      sessionId: normalizedSessionId,
+      outerTurnId,
       outcome: checkpointOutcomeForCodexTurn(status, turnOutcome),
-      timestamp: trimmedText(turn.completedAt || turn.updatedAt), publishSessionChanged
+      timestamp: trimmedText(turn.completedAt || turn.updatedAt),
+      publishSessionChanged
     });
   }
 

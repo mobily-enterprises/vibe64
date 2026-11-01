@@ -41,55 +41,77 @@ const gitIdentityText = { type: "string", maxLength: 512, required: false };
 // Saves only the person's own Git name and email; the account object stays out.
 const gitIdentityTool = Object.freeze({
   description: "Save the signed-in person's own Git name and email (git config --global user.name and user.email in their tool home), as Save Git identity does on Account settings → GitHub; this clears Health's Your name in Git warning. Use only values the person stated in this conversation for this purpose; never guess them from a GitHub username, an email seen elsewhere or a stand-in name. The email must be a valid address. This replaces both values for future Saves; it does not rewrite earlier commits, sign in to GitHub or change anyone else's identity. Report the returned values.",
-  output: { mode: "replace", schema: createSchema({
-    ok: { type: "boolean", required: true }, error: gitIdentityText, code: gitIdentityText,
-    gitUserName: gitIdentityText, gitUserEmail: gitIdentityText
-  }) },
+  output: {
+    mode: "replace",
+    schema: createSchema({
+      ok: { type: "boolean", required: true },
+      error: gitIdentityText,
+      code: gitIdentityText,
+      gitUserName: gitIdentityText,
+      gitUserEmail: gitIdentityText
+    })
+  },
   transformResult(result = {}) {
     const identity = result.account?.gitIdentity || {};
     const code = result.code || result.errors?.[0]?.code;
-    return { ok: result.ok === true,
+    return {
+      ok: result.ok === true,
       ...(typeof result.error === "string" ? { error: result.error.slice(0, 512) } : {}),
       ...(typeof code === "string" ? { code: code.slice(0, 512) } : {}),
       ...(typeof identity.name === "string" ? { gitUserName: identity.name.slice(0, 512) } : {}),
-      ...(typeof identity.email === "string" ? { gitUserEmail: identity.email.slice(0, 512) } : {}) };
+      ...(typeof identity.email === "string" ? { gitUserEmail: identity.email.slice(0, 512) } : {})
+    };
   }
 });
 
 // The owner's saved API connections, as facts only.
 const aiConnectionsListTool = Object.freeze({
   description: "Read the owner's saved API connections in AI Accounts, without a project: one row per saved provider (for example Z.AI, Z.AI Coding Plan, OpenRouter or OpenCode Zen) with provider, label, ready, reason when not ready, preferred, defaultModelId and modelAccessMode. An empty list means nothing is saved; unavailable means the host has no connection store. ready is saved state only: it does not verify current credentials, balance, model entitlement or running conversations. Claude and Codex sign-ins are not saved connections. Regular Z.AI and a Z.AI Coding Plan are separate connections. Use Model routing read for actual future workflow assignments and offered choices; the preferred provider/default model is not the Senior assignment or Colleague's model. The person must register, enter the key and consent to paid models in AI Accounts. Never request a key in chat or infer setup completion from a quiz answer.",
-  output: { mode: "replace", schema: createSchema({
-    ok: { type: "boolean", required: true },
-    unavailable: { type: "boolean", required: true },
-    error: { type: "string", maxLength: 512, required: false },
-    connections: { type: "array", required: true, maxItems: 100, items: createSchema({
-      provider: { type: "string", maxLength: 256, required: true },
-      label: { type: "string", maxLength: 256, required: true },
-      ready: { type: "boolean", required: true },
-      reason: { type: "string", maxLength: 256, required: true },
-      preferred: { type: "boolean", required: true },
-      defaultModelId: { type: "string", maxLength: 512, required: true },
-      modelAccessMode: { type: "string", maxLength: 64, nullable: true, required: true }
-    }) }
-  }) },
+  output: {
+    mode: "replace",
+    schema: createSchema({
+      ok: { type: "boolean", required: true },
+      unavailable: { type: "boolean", required: true },
+      error: { type: "string", maxLength: 512, required: false },
+      connections: {
+        type: "array",
+        required: true,
+        maxItems: 100,
+        items: createSchema({
+          provider: { type: "string", maxLength: 256, required: true },
+          label: { type: "string", maxLength: 256, required: true },
+          ready: { type: "boolean", required: true },
+          reason: { type: "string", maxLength: 256, required: true },
+          preferred: { type: "boolean", required: true },
+          defaultModelId: { type: "string", maxLength: 512, required: true },
+          modelAccessMode: { type: "string", maxLength: 64, nullable: true, required: true }
+        })
+      }
+    })
+  },
   /**
    * Only facts about each connection: never its key, key hint or fingerprint.
    */
   transformResult(result) {
     if (result.ok !== true) return {
-      ok: false, unavailable: false, connections: [],
+      ok: false,
+      unavailable: false,
+      connections: [],
       error: "Saved AI connection status could not be read. Go to AI Accounts for details."
     };
-    return { ok: true, unavailable: result.unavailable === true, connections: result.connections.slice(0, 100).map(row => ({
-      provider: String(row.modelProviderId || "").slice(0, 256),
-      label: String(row.label || row.modelProviderId || "").slice(0, 256),
-      ready: row.connected === true,
-      reason: row.connected === true ? "" : "No default model is known for this provider. Reconnect it in AI Accounts.",
-      preferred: row.preferred === true,
-      defaultModelId: String(row.defaultModelId || "").slice(0, 512),
-      modelAccessMode: typeof row.modelAccess?.mode === "string" ? row.modelAccess.mode.slice(0, 64) : null
-    })) };
+    return {
+      ok: true,
+      unavailable: result.unavailable === true,
+      connections: result.connections.slice(0, 100).map(row => ({
+        provider: String(row.modelProviderId || "").slice(0, 256),
+        label: String(row.label || row.modelProviderId || "").slice(0, 256),
+        ready: row.connected === true,
+        reason: row.connected === true ? "" : "No default model is known for this provider. Reconnect it in AI Accounts.",
+        preferred: row.preferred === true,
+        defaultModelId: String(row.defaultModelId || "").slice(0, 512),
+        modelAccessMode: typeof row.modelAccess?.mode === "string" ? row.modelAccess.mode.slice(0, 64) : null
+      }))
+    };
   }
 });
 
@@ -101,20 +123,32 @@ function createAccountsActions({ accounts }) {
   return Object.freeze([
     Object.freeze({
       extensions: { assistant: modelRoutingTool("read"), vibe64: WORKSPACE_OPERATION },
-      id: ACTION_READ_MODEL_ROUTING, version: 1, kind: "query", input: modelRoutingReadInputValidator,
-      output: null, idempotency: "none",
+      id: ACTION_READ_MODEL_ROUTING,
+      version: 1,
+      kind: "query",
+      input: modelRoutingReadInputValidator,
+      output: null,
+      idempotency: "none",
       execute: (input) => accounts.readModelRouting(input)
     }),
     Object.freeze({
       extensions: { assistant: modelRoutingTool("preview"), vibe64: WORKSPACE_OPERATION },
-      id: ACTION_PREVIEW_MODEL_ROUTING, version: 1, kind: "query", input: modelRoutingInputValidator,
-      output: null, idempotency: "none",
+      id: ACTION_PREVIEW_MODEL_ROUTING,
+      version: 1,
+      kind: "query",
+      input: modelRoutingInputValidator,
+      output: null,
+      idempotency: "none",
       execute: (input) => accounts.previewModelRouting(input)
     }),
     Object.freeze({
       extensions: { assistant: modelRoutingTool("save"), vibe64: WORKSPACE_OPERATION },
-      id: ACTION_SAVE_MODEL_ROUTING, version: 1, kind: "command", input: modelRoutingInputValidator,
-      output: null, idempotency: "optional",
+      id: ACTION_SAVE_MODEL_ROUTING,
+      version: 1,
+      kind: "command",
+      input: modelRoutingInputValidator,
+      output: null,
+      idempotency: "optional",
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
       execute: (input) => accounts.saveModelRouting(input)
     }),

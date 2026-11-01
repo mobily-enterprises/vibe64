@@ -346,7 +346,11 @@ function createAiConnectionStore({
     }
     const route = connectionPolicy(connection, id);
     if (!route) {
-      throw aiConnectionError("vibe64_ai_endpoint_selection_required", "The owner must choose this provider's billing endpoint before it can be used.", 409);
+      throw aiConnectionError(
+        "vibe64_ai_endpoint_selection_required",
+        "The owner must choose this provider's billing endpoint before it can be used.",
+        409
+      );
     }
     return {
       apiKey: connection.apiKey,

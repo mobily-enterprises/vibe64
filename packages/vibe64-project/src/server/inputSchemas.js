@@ -60,13 +60,18 @@ const projectSettingsReadInputValidator = inputSchema({
 const projectConnectedProjectsInputValidator = inputSchema({
   sessionId: { type: "string", noTrim: false },
   revision: { type: "string", required: true, maxLength: 64 },
-  projects: { type: "array", required: true, maxItems: 64, items: createSchema({
-    name: { type: "string", required: true, minLength: 1, maxLength: 100 },
-    repository: { type: "string", required: true, minLength: 1, maxLength: 512 },
-    relationship: { type: "string", required: true, enum: ["dependency", "composition"] },
-    type: { type: "string", required: false, enum: [...CONNECTED_PACKAGE_TYPE_VALUES] },
-    script: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 1024 }
-  }) }
+  projects: {
+    type: "array",
+    required: true,
+    maxItems: 64,
+    items: createSchema({
+      name: { type: "string", required: true, minLength: 1, maxLength: 100 },
+      repository: { type: "string", required: true, minLength: 1, maxLength: 512 },
+      relationship: { type: "string", required: true, enum: ["dependency", "composition"] },
+      type: { type: "string", required: false, enum: [...CONNECTED_PACKAGE_TYPE_VALUES] },
+      script: { type: "string", required: false, noTrim: true, minLength: 1, maxLength: 1024 }
+    })
+  }
 });
 
 const projectEngineeringSettingsReadInputValidator = inputSchema({
@@ -254,11 +259,22 @@ const projectIssueInputValidators = {
   create: inputSchema({ title: issueTitle, body: issueBody, labels }),
   edit: inputSchema({ number: issueNumber, title: issueTitle, body: { ...issueBody, required: true } }),
   comment: inputSchema({ number: issueNumber, body: commentBody, originId: { type: "string", maxLength: 200 } }),
-  "edit-comment": inputSchema({ number: issueNumber, commentId: { type: "string", minLength: 1, maxLength: 256, required: true }, body: commentBody }),
+  "edit-comment": inputSchema({
+    number: issueNumber,
+    commentId: { type: "string", minLength: 1, maxLength: 256, required: true },
+    body: commentBody
+  }),
   state: inputSchema({ number: issueNumber, state: { type: "string", enum: ["open", "closed"], required: true } }),
   labels: inputSchema(issueCatalogueFields),
-  "create-label": inputSchema({ name: { type: "string", minLength: 1, maxLength: 50, required: true }, color: { type: "string", pattern: /^[a-f\d]{6}$/iu, required: true } }),
-  "set-labels": inputSchema({ number: issueNumber, labels: { ...labels, required: true }, labelMode: { type: "string", enum: ["replace", "add", "remove"] } }),
+  "create-label": inputSchema({
+    name: { type: "string", minLength: 1, maxLength: 50, required: true },
+    color: { type: "string", pattern: /^[a-f\d]{6}$/iu, required: true }
+  }),
+  "set-labels": inputSchema({
+    number: issueNumber,
+    labels: { ...labels, required: true },
+    labelMode: { type: "string", enum: ["replace", "add", "remove"] }
+  }),
   mentions: inputSchema({ number: { ...issueNumber, required: false }, ...issueCatalogueFields })
 };
 const pullRequestReviewSchema = createSchema({
@@ -274,7 +290,11 @@ const projectPullRequestInputValidators = {
   read: inputSchema({ number: issueNumber }),
   ready: inputSchema({ number: issueNumber, review: pullRequestReview }),
   "update-branch": inputSchema({ number: issueNumber, review: pullRequestReview }),
-  merge: inputSchema({ number: issueNumber, review: pullRequestReview, mergeMethod: { type: "string", enum: ["merge", "squash", "rebase"], required: true } })
+  merge: inputSchema({
+    number: issueNumber,
+    review: pullRequestReview,
+    mergeMethod: { type: "string", enum: ["merge", "squash", "rebase"], required: true }
+  })
 };
 
 export {

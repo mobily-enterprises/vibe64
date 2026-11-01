@@ -63,17 +63,32 @@ function lockEntry(lockfile, workspaceKey, name) {
 function nativePlugins({ manifest, lockfile, workspaceKey = "" }) {
   const problems = [];
   if (!manifest || typeof manifest !== "object") {
-    return { plugins: [], core: null, problems: [{ code: "content-manifest-missing", message: "The Content package has no readable package.json." }] };
+    return {
+      plugins: [],
+      core: null,
+      problems: [{ code: "content-manifest-missing", message: "The Content package has no readable package.json." }]
+    };
   }
   if (!lockfile || typeof lockfile.packages !== "object" || lockfile.packages === null) {
-    return { plugins: [], core: null, problems: [{ code: "lockfile-missing", message: "The Content package needs a package-lock.json (lockfile version 2 or later) so the app's native plugins have exact versions." }] };
+    return {
+      plugins: [],
+      core: null,
+      problems: [{
+        code: "lockfile-missing",
+        message: "The Content package needs a package-lock.json (lockfile version 2 or later) so the app's native plugins have exact versions."
+      }]
+    };
   }
   const plugins = [];
   let core = null;
   for (const [name, wanted] of Object.entries(manifest.dependencies || {}).sort(([left], [right]) => left.localeCompare(right))) {
     const entry = lockEntry(lockfile, workspaceKey, name);
     if (!entry || typeof entry.version !== "string") {
-      problems.push({ code: "lockfile-stale", package: name, message: `${name} is in package.json but not in package-lock.json. Install dependencies and save the lockfile.` });
+      problems.push({
+        code: "lockfile-stale",
+        package: name,
+        message: `${name} is in package.json but not in package-lock.json. Install dependencies and save the lockfile.`
+      });
       continue;
     }
     if (EXACT_VERSION.test(String(wanted)) && wanted !== entry.version) {
@@ -161,7 +176,9 @@ function shellFiles({ entry, plugins, version, versionCode }) {
  */
 async function generateShell({ sourceRoot, entry, content, version, versionCode }) {
   if (entry?.packer !== "capacitor") throw shellError("Only a capacitor package has a native shell.");
-  if (content?.packer !== "web-bundle" || content.id !== entry.content) throw shellError(`Package ${entry.id} needs its web-bundle Content package.`);
+  if (content?.packer !== "web-bundle" || content.id !== entry.content) {
+    throw shellError(`Package ${entry.id} needs its web-bundle Content package.`);
+  }
   const found = nativePlugins(await readContentDependencies({ sourceRoot, content }));
   if (found.problems.length) {
     throw shellError(found.problems.map(({ message }) => message).join(" "), { problems: found.problems });

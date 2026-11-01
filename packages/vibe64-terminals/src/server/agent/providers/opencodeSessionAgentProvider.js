@@ -90,28 +90,38 @@ function createOpenCodeSessionAgentProvider({
   function prepareConversationHost(sessionId, openingContext = {}, mode = "main") {
     if (mode === "activity") return { native: { owner: sharedRuntime, sessionId: safeSessionId(sessionId) } };
     if (mode === "storage") return {
-      native: { owner: sharedRuntime, preparation: {
-        storage(options) {
-          const context = { sessionId, runtime: options.runtime, session: options.session };
-          return { process: () => prepareSharedProcess(context, options), failure: runtimeFailure };
+      native: {
+        owner: sharedRuntime,
+        preparation: {
+          storage(options) {
+            const context = { sessionId, runtime: options.runtime, session: options.session };
+            return { process: () => prepareSharedProcess(context, options), failure: runtimeFailure };
+          }
         }
-      } }
+      }
     };
     if (mode === "renewalProof") return {
-      native: { owner: sharedRuntime, preparation: {
-        get cleanup() {
-          return prepareSessionCleanup(openingContext.sessionId, {
-            runtime: openingContext.runtime, session: openingContext.session
-          });
-        },
-        get sessionId() { return safeSessionId(openingContext.sessionId); }
-      } }
+      native: {
+        owner: sharedRuntime,
+        preparation: {
+          get cleanup() {
+            return prepareSessionCleanup(openingContext.sessionId, {
+              runtime: openingContext.runtime,
+              session: openingContext.session
+            });
+          },
+          get sessionId() { return safeSessionId(openingContext.sessionId); }
+        }
+      }
     };
     if (mode === "renewal") return {
-      native: { owner: sharedRuntime, preparation: {
-        handover: (input, context) => prepareRenewalHandover(sessionId, input, context),
-        seed: (input, context) => prepareRenewalSeed(sessionId, input, context)
-      } }
+      native: {
+        owner: sharedRuntime,
+        preparation: {
+          handover: (input, context) => prepareRenewalHandover(sessionId, input, context),
+          seed: (input, context) => prepareRenewalSeed(sessionId, input, context)
+        }
+      }
     };
     if (mode === "reconciliation") return {
       native: { owner: sharedRuntime, preparation: { session: prepareSessionReconciliation } }
@@ -129,10 +139,15 @@ function createOpenCodeSessionAgentProvider({
       } }
     };
     if (mode === "projectCleanup") return {
-      native: { owner: sharedRuntime, preparation: { projectCleanup: () => ({
-        ...processRelease,
-        ownsTarget: (target) => sessionEnvironments.has(target.key)
-      }) } }
+      native: {
+        owner: sharedRuntime,
+        preparation: {
+          projectCleanup: () => ({
+            ...processRelease,
+            ownsTarget: (target) => sessionEnvironments.has(target.key)
+          })
+        }
+      }
     };
     return (async () => {
       if (mode === "readiness") return {
@@ -145,7 +160,9 @@ function createOpenCodeSessionAgentProvider({
            * Preserve the original uncached provider's field projection.
            */
           cleanup: current => prepareSessionCleanup(sessionId, {
-            assistantScope: current.assistantScope, runtime: current.runtime, session: current.session,
+            assistantScope: current.assistantScope,
+            runtime: current.runtime,
+            session: current.session,
             renewalCleanup: current.renewalCleanup
           })
         } }
@@ -167,7 +184,9 @@ function createOpenCodeSessionAgentProvider({
       const context = await contextFor(sessionId, openingContext);
       const { runtime } = context;
       return {
-        context, namespace: opencodeTerminalNamespace(sessionId), publish: publishSessionChanged,
+        context,
+        namespace: opencodeTerminalNamespace(sessionId),
+        publish: publishSessionChanged,
         state: {
           async read(current, representation, nativeResult) {
             if (representation === "native") return { nativeResult };
@@ -181,8 +200,11 @@ function createOpenCodeSessionAgentProvider({
             const options = current || context;
             const selected = await contextFor(sessionId, options);
             const projectContext = captureProjectRequestContext();
-            return { key: selected.key, options,
-              runInContext: operation => runWithProjectRequestContext(projectContext || {}, operation) };
+            return {
+              key: selected.key,
+              options,
+              runInContext: operation => runWithProjectRequestContext(projectContext || {}, operation)
+            };
           },
           preparation: {
             state: {
@@ -203,7 +225,9 @@ function createOpenCodeSessionAgentProvider({
   async function runDetachedChatTurn(context, input = {}) {
     const executionProfile = emitVibe64AgentExecutionProfile(context, input.executionProfile);
     const result = await runNativeDetachedConversation({
-      id: context.sessionId, context, input,
+      id: context.sessionId,
+      context,
+      input,
       options: { onEvent: context.onEvent, runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
     });
     return executionProfile ? { ...result, executionProfile } : result;
@@ -211,7 +235,8 @@ function createOpenCodeSessionAgentProvider({
 
   function prepareConversationRequest(method, context, input = {}) {
     if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
-      input, context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+      input,
+      context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
     };
     if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return {
       input: { conversationId: input.threadId || input.conversationId },
@@ -222,22 +247,34 @@ function createOpenCodeSessionAgentProvider({
     };
     if (method === "createConversation") return {
       input,
-      context: { assistantScope: context.assistantScope, assistantSelection: context.assistantSelection,
-        runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+      context: {
+        assistantScope: context.assistantScope,
+        assistantSelection: context.assistantSelection,
+        runtime: context.runtime,
+        session: context.session,
+        vibe64User: context.vibe64User
+      }
     };
     if (method === "closeSession") return {
-      namespace: opencodeTerminalNamespace(context.sessionId), sessionId: context.sessionId,
-      context, options: context
+      namespace: opencodeTerminalNamespace(context.sessionId),
+      sessionId: context.sessionId,
+      context,
+      options: context
     };
-    if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(method)) {
+    if (["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"].includes(
+      method
+    )) {
       return { scopedConversationId: String(input.conversationId || "").trim() ? input.conversationId : undefined, input };
     }
     if (method === "sessionState") return {};
     if (method !== "sendMessage") return { input };
-    const request = message => ({ input: message, prepareInput(prepared) {
-      const current = { ...message, ...prepared };
-      return context.prepareMessage ? context.prepareMessage(current) : current;
-    } });
+    const request = message => ({
+      input: message,
+      prepareInput(prepared) {
+        const current = { ...message, ...prepared };
+        return context.prepareMessage ? context.prepareMessage(current) : current;
+      }
+    });
     if (String(input.message || "").trim()) {
       return request({ ...input, messageId: String(input.messageId || "").trim() || randomUUID() });
     }
@@ -326,7 +363,32 @@ function createOpenCodeSessionAgentProvider({
 
   return Object.freeze({
     prepareConversationHost,
-    conversationOperations: Object.freeze(["createConversation", "ensureSession", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation"]),
+    conversationOperations: Object.freeze([
+      "createConversation",
+      "ensureSession",
+      "sendMessage",
+      "sessionState",
+      "inspectMessageAdmission",
+      "interruptTurn",
+      "readConversation",
+      "startConversationTurn",
+      "waitForConversationTurn",
+      "stopConversation",
+      "deleteConversation",
+      "closeSession",
+      "closeProject",
+      "invalidateRuntimes",
+      "reconcileSessions",
+      "generateSessionRenewalHandover",
+      "seedSessionRenewalHandover",
+      "releaseRenewalPredecessorProcessExitProof",
+      "releaseRenewalSuccessorProcessExitProof",
+      "interruptDetachedChatTurn",
+      "deleteDetachedChatThread",
+      "listNativeConversationStorage",
+      "retireConversationHistory",
+      "hasActiveTemporaryConversation"
+    ]),
     runDetachedChatTurn,
     streamDetachedChatTurn: runDetachedChatTurn,
     prepareConversationRequest,

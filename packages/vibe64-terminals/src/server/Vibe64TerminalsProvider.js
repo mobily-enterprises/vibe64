@@ -116,7 +116,16 @@ function createVibe64TerminalsFeature({
      * @param {SavedEnvValueLinks | null} capabilities.savedEnvValueLinks
      * @param {{ actionCatalogue: ActionCatalogue }} context
      */
-    setup({ env, events, fastify, http, logger, productionEnvironmentProvider, project, savedEnvValueLinks }, { actionCatalogue }) {
+    setup({
+      env,
+      events,
+      fastify,
+      http,
+      logger,
+      productionEnvironmentProvider,
+      project,
+      savedEnvValueLinks
+    }, { actionCatalogue }) {
       assertProductionEnvironmentProvider(productionEnvironmentProvider);
       assertSavedEnvValueLinks(savedEnvValueLinks);
       const terminals = createService({

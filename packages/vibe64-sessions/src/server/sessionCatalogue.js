@@ -52,7 +52,12 @@ function conversationPage(result = {}, options = {}) {
  * @param {SessionPresenceService} dependencies.sessionPresence
  * @param {TerminalsService} dependencies.terminals
  */
-function createSessionCatalogue({ project, publishSessionChanged, sessionPresence, terminals }) {
+function createSessionCatalogue({
+  project,
+  publishSessionChanged,
+  sessionPresence,
+  terminals
+}) {
   function closeSessionPresence() {
     sessionPresence.close();
   }
@@ -64,7 +69,10 @@ function createSessionCatalogue({ project, publishSessionChanged, sessionPresenc
         runtime.store.mutateSession(sessionId, async () => {
           const renewal = input.pinned ? await readSessionRenewalState(runtime, sessionId) : null;
           if (renewal && ![SESSION_RENEWAL_STATUS.COMPLETED, SESSION_RENEWAL_STATUS.CANCELLED].includes(renewal.status)) {
-            throw Object.assign(new Error("Finish or cancel renewal before pinning this session."), { code: "vibe64_session_pin_unavailable" });
+            throw Object.assign(
+              new Error("Finish or cancel renewal before pinning this session."),
+              { code: "vibe64_session_pin_unavailable" }
+            );
           }
           return runtime.store.updatePinnedSession(sessionId, input.pinned);
         })
@@ -83,7 +91,8 @@ function createSessionCatalogue({ project, publishSessionChanged, sessionPresenc
       const runtime = await project.createRuntime({ inspectSource: false });
       const sessionName = await runtime.store.writeSessionLabel(sessionId, input.name);
       await publishSessionChanged(sessionId, {
-        originId: text(input.originId), reason: "session-renamed",
+        originId: text(input.originId),
+        reason: "session-renamed",
         payload: { clientRefresh: { includeList: true } }
       });
       return { ok: true, sessionId, sessionName };

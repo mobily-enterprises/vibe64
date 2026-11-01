@@ -9,10 +9,18 @@ const ASSISTANT_MODES = Object.freeze([
   { id: "custom", label: "Custom", description: "Choose a model and thinking level for this chat." },
   { id: "senior", label: "Senior", description: "Talk directly to your most capable model. Ask questions or request changes." },
   { id: "junior", label: "Junior", description: "Talk directly to your everyday model. Ask questions or request changes." },
-  { id: "auto", label: "Auto", description: "Name either role, or let Senior handle plans and reviews and Junior handle other requests. Implementation always gets Senior review." }
+  {
+    id: "auto",
+    label: "Auto",
+    description: "Name either role, or let Senior handle plans and reviews and Junior handle other requests. Implementation always gets Senior review."
+  }
 ]);
 // Temporary repair chats only; main chat never uses it.
-const ASSISTANT_FIX_MODE = Object.freeze({ id: "fix", label: "Fix it with AI", description: "Repair what went wrong with the Fix it with AI model." });
+const ASSISTANT_FIX_MODE = Object.freeze({
+  id: "fix",
+  label: "Fix it with AI",
+  description: "Repair what went wrong with the Fix it with AI model."
+});
 const ASSISTANT_ROUTING_METADATA = "assistant_routing";
 // The owner's setup drives main chat; the team setup serves everyone else's helpers.
 const ASSISTANT_SETUP_ROLES = Object.freeze({
@@ -25,13 +33,27 @@ const ASSISTANT_ROUTING_ROLE_DEFINITIONS = Object.freeze([
   { id: "junior", label: "Junior", description: "Everyday changes in main chat.", group: "main" },
   { id: "router", label: "Router", description: "Chooses Senior or Junior when main chat is on Auto.", group: "main" },
   { id: "colleague", label: "Colleague", description: "The default for Colleague. Each person can change their own.", group: "helpers" },
-  { id: "fix", label: "Fix it with AI", description: "Repair chats opened from errors and conflicts. Can run in a different tool from the chat it fixes.", group: "helpers" },
-  { id: "explain", label: "Explain & check", description: "Explain this code, the database assistant and Check my work.", group: "helpers" },
+  {
+    id: "fix",
+    label: "Fix it with AI",
+    description: "Repair chats opened from errors and conflicts. Can run in a different tool from the chat it fixes.",
+    group: "helpers"
+  },
+  {
+    id: "explain",
+    label: "Explain & check",
+    description: "Explain this code, the database assistant and Check my work.",
+    group: "helpers"
+  },
   { id: "quickHelper", label: "Quick helper", description: "Titles, commit messages, prompt hints and summaries.", group: "helpers" }
 ].map(Object.freeze));
 // Recommended "Same as" defaults; other roles are scored selections.
 const ASSISTANT_ROLE_DEFAULT_FOLLOWS = Object.freeze({
-  owner: Object.freeze({ colleague: "senior", fix: "junior", explain: "quickHelper" }),
+  owner: Object.freeze({
+    colleague: "senior",
+    fix: "junior",
+    explain: "quickHelper"
+  }),
   nonOwner: Object.freeze({ fix: "colleague", explain: "quickHelper" })
 });
 const ROUTING_REASONS = Object.freeze([
@@ -40,15 +62,34 @@ const ROUTING_REASONS = Object.freeze([
 // Main chat always runs on the owner's setup.
 const MAIN_CHAT_PURPOSES = Object.freeze(["custom", "senior", "junior", "auto", "review", "deslop", "request_routing"]);
 const ASSISTANT_PURPOSE_ROLES = Object.freeze({
-  custom: "custom", senior: "senior", junior: "junior", review: "senior", deslop: "senior",
-  request_routing: "router", colleague: "colleague", fix: "fix",
-  source_explanation: "explain", database_assistant: "explain", lesson_review: "explain",
-  commit_title: "quickHelper", session_title: "quickHelper", prompt_hint: "quickHelper",
-  conversation_summary: "quickHelper", voice_turn: "quickHelper", quick_helper: "quickHelper"
+  custom: "custom",
+  senior: "senior",
+  junior: "junior",
+  review: "senior",
+  deslop: "senior",
+  request_routing: "router",
+  colleague: "colleague",
+  fix: "fix",
+  source_explanation: "explain",
+  database_assistant: "explain",
+  lesson_review: "explain",
+  commit_title: "quickHelper",
+  session_title: "quickHelper",
+  prompt_hint: "quickHelper",
+  conversation_summary: "quickHelper",
+  voice_turn: "quickHelper",
+  quick_helper: "quickHelper"
 });
 // The purpose whose model rules (catalogue compatibility) a role's choices follow.
-const ASSISTANT_ROLE_PURPOSES = Object.freeze({ senior: "senior", junior: "junior", router: "request_routing",
-  colleague: "colleague", fix: "fix", explain: "source_explanation", quickHelper: "prompt_hint" });
+const ASSISTANT_ROLE_PURPOSES = Object.freeze({
+  senior: "senior",
+  junior: "junior",
+  router: "request_routing",
+  colleague: "colleague",
+  fix: "fix",
+  explain: "source_explanation",
+  quickHelper: "prompt_hint"
+});
 
 function assistantModeLabel(mode) {
   return ASSISTANT_MODES.find(({ id }) => id === mode)?.label || (mode === "fix" ? ASSISTANT_FIX_MODE.label : "") ||
@@ -77,8 +118,11 @@ function assistantRoutingPreferences(value = {}) {
   if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.");
   // review controls optional Deslop (Auto review is mandatory); autoSave runs
   // Save after Auto completes a plan.
-  return { mode: value.mode, ...(choosesAutomation(value.mode) ? assistantRoutingAutomation(value) : { review: false, autoSave: false }),
-    ...(value.override && !["auto", "fix"].includes(value.mode) ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
+  return {
+    mode: value.mode,
+    ...(choosesAutomation(value.mode) ? assistantRoutingAutomation(value) : { review: false, autoSave: false }),
+    ...(value.override && !["auto", "fix"].includes(value.mode) ? { override: defineVibe64AssistantSelection(value.override) } : {})
+  };
 }
 
 /**
@@ -169,8 +213,13 @@ function assistantRoutingSetupValues(configuration, purpose, actor, options = {}
   const setup = assistantRoutingSetupFor(purpose, actor, options);
   const values = configuration?.[setup] || {};
   if (setup !== "nonOwner" || !isMainChatPurpose(purpose, options)) return values;
-  return { ...values, colleague: assistantSetupRoleValue(values, "colleague").value,
-    senior: { follows: "colleague" }, junior: { follows: "colleague" }, router: { follows: "quickHelper" } };
+  return {
+    ...values,
+    colleague: assistantSetupRoleValue(values, "colleague").value,
+    senior: { follows: "colleague" },
+    junior: { follows: "colleague" },
+    router: { follows: "quickHelper" }
+  };
 }
 
 /**
@@ -224,10 +273,20 @@ function routingModelChoices(engine, { purpose = "senior" } = {}) {
       const compatibilityError = engine.engineId === "codex" && provider.id !== "openai" &&
         !(curated?.modelProviderId === provider.id && (isolated || curated.codexHistoryRouting === true))
         ? `${model.label} is connected, but switching models in Codex has not been verified. Choose a supported routing model.` : "";
-      return [{ agentId: agent.id, engineId: engine.engineId, modelProviderId: provider.id, modelId: model.id,
+      return [{
+        agentId: agent.id,
+        engineId: engine.engineId,
+        modelProviderId: provider.id,
+        modelId: model.id,
         variantId: agent.variantId || (model.variants.some(({ id }) => id === engine.defaults.variantId) ? engine.defaults.variantId : ""),
-        catalogRevision: engine.revision, label: model.label, providerLabel: provider.label,
-        description: provider.description, variants: model.variants, capabilities: model.capabilities, compatibilityError }];
+        catalogRevision: engine.revision,
+        label: model.label,
+        providerLabel: provider.label,
+        description: provider.description,
+        variants: model.variants,
+        capabilities: model.capabilities,
+        compatibilityError
+      }];
     }));
 }
 
@@ -244,9 +303,16 @@ function routingRunsInChoices(models = []) {
     if (!groups.has(key)) groups.set(key, { modelProviderId: model.modelProviderId, modelId: model.modelId, billing, choices: [] });
     groups.get(key).choices.push(model);
   }
-  return [...groups.values()].map((group) => ({ ...group, engineIds: group.choices.map(({ engineId }) => engineId),
-    ...(group.billing === "key" ? {} : { fixedRunsIn: { engineId: group.choices[0].engineId,
-      reason: group.billing === "claude_subscription" ? "claude_plan" : "chatgpt_plan" } }) }));
+  return [...groups.values()].map((group) => ({
+    ...group,
+    engineIds: group.choices.map(({ engineId }) => engineId),
+    ...(group.billing === "key" ? {} : {
+      fixedRunsIn: {
+        engineId: group.choices[0].engineId,
+        reason: group.billing === "claude_subscription" ? "claude_plan" : "chatgpt_plan"
+      }
+    })
+  }));
 }
 
 function routingScoreRow(selection) {
@@ -255,7 +321,9 @@ function routingScoreRow(selection) {
 }
 
 function routingModelScore(selection, role) {
-  return (routingScoreRow(selection)?.scores || routingScores.providerDefaultScores[selection.modelProviderId] || routingScores.defaultScores)[role];
+  return (routingScoreRow(selection)?.scores ||
+    routingScores.providerDefaultScores[selection.modelProviderId] ||
+    routingScores.defaultScores)[role];
 }
 
 /**
@@ -267,8 +335,10 @@ function routingRecommendedEffort(selection, role) {
 }
 
 function routingConnectionAccess(selection, connections = []) {
-  return connections.find((entry) => entry.engineId === selection.engineId && entry.modelProviderId === selection.modelProviderId && entry.modelId === selection.modelId)
-    || connections.find((entry) => entry.engineId === selection.engineId && entry.modelProviderId === selection.modelProviderId && !entry.modelId);
+  return connections.find((entry) =>
+    entry.engineId === selection.engineId && entry.modelProviderId === selection.modelProviderId && entry.modelId === selection.modelId)
+    || connections.find((entry) =>
+      entry.engineId === selection.engineId && entry.modelProviderId === selection.modelProviderId && !entry.modelId);
 }
 
 const isRoutingSelection = (value) => Boolean(value?.schema);
@@ -284,7 +354,10 @@ function recommendedRoutingAssignments({ catalogs = [], setup = "owner", values 
   const stableKey = (choice) => JSON.stringify([choice.engineId, choice.modelProviderId, choice.modelId, choice.agentId]);
   for (const role of ASSISTANT_SETUP_ROLES[setup]) {
     const follows = ASSISTANT_ROLE_DEFAULT_FOLLOWS[setup][role];
-    if (follows) { recommended[role] = { follows }; continue; }
+    if (follows) {
+      recommended[role] = { follows };
+      continue;
+    }
     const scoreRole = role === "colleague" ? "senior" : role;
     const purpose = ASSISTANT_ROLE_PURPOSES[scoreRole];
     const seniorEngine = role === "junior" ? recommended.senior?.engineId : "";
@@ -296,8 +369,12 @@ function recommendedRoutingAssignments({ catalogs = [], setup = "owner", values 
         return access?.available !== false && (setup !== "nonOwner" || access?.ownerOnly === false);
       });
     if (preferProvider) {
-      const preferred = choices.filter((choice) => choice.modelProviderId === preferProvider.modelProviderId && choice.engineId === preferProvider.engineId);
-      if (!preferred.length) { recommended[role] = values[role] ?? null; continue; }
+      const preferred = choices.filter((choice) =>
+        choice.modelProviderId === preferProvider.modelProviderId && choice.engineId === preferProvider.engineId);
+      if (!preferred.length) {
+        recommended[role] = values[role] ?? null;
+        continue;
+      }
       choices = preferred;
     }
     choices.sort((left, right) => routingModelScore(right, scoreRole) - routingModelScore(left, scoreRole)
@@ -305,16 +382,24 @@ function recommendedRoutingAssignments({ catalogs = [], setup = "owner", values 
       || Number(sameRoute(right, values[role])) - Number(sameRoute(left, values[role]))
       || stableKey(left).localeCompare(stableKey(right), "en"));
     const choice = choices[0];
-    if (!choice) { recommended[role] = null; continue; }
+    if (!choice) {
+      recommended[role] = null;
+      continue;
+    }
     const selectedEngine = catalogs.find((catalog) => catalog.engineId === choice.engineId);
     if (sameRoute(choice, values[role])) {
-      try { recommended[role] = { ...routingAssignmentSelection(selectedEngine, values[role], { purpose }), selectionSource: "recommended" }; continue; }
+      try { recommended[role] = {
+        ...routingAssignmentSelection(selectedEngine, values[role], { purpose }),
+        selectionSource: "recommended"
+      }; continue; }
       catch { /* An obsolete variant must not prevent an otherwise eligible recommendation. */ }
     }
     const preferredEffort = routingRecommendedEffort(choice, scoreRole);
     const agent = selectedEngine.agents.find(({ id }) => id === choice.agentId);
-    const selection = resolveVibe64AssistantSelection(selectedEngine, { ...choice,
-      variantId: agent.variantId || (choice.variants.some(({ id }) => id === preferredEffort) ? preferredEffort : choice.variantId) });
+    const selection = resolveVibe64AssistantSelection(selectedEngine, {
+      ...choice,
+      variantId: agent.variantId || (choice.variants.some(({ id }) => id === preferredEffort) ? preferredEffort : choice.variantId)
+    });
     recommended[role] = { ...selection, selectionSource: "recommended" };
   }
   return recommended;
@@ -326,7 +411,8 @@ function routingAssignmentSelection(engine, assignment, { purpose = "senior" } =
   if (!assignment) throw routingError("Choose this model in Models first.");
   if (!engine || assignment.engineId !== engine.engineId) throw routingError("The chosen model's tool is not available.");
   const selection = resolveVibe64AssistantSelection(engine, { ...assignment, catalogRevision: engine.revision });
-  const choice = routingModelChoices(engine, { purpose }).find((item) => item.modelProviderId === selection.modelProviderId && item.modelId === selection.modelId);
+  const choice = routingModelChoices(engine, { purpose }).find((item) =>
+    item.modelProviderId === selection.modelProviderId && item.modelId === selection.modelId);
   if (choice?.compatibilityError) throw routingError(choice.compatibilityError);
   return selection;
 }
@@ -335,41 +421,82 @@ function joinedLabels(labels) {
   return labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
 }
 
-function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [], connectionAccess = [],
-  override, requirements = {}, reviewEnabled = false, validateModels = true, temporaryChat = false, practice = false } = {}) {
+function resolveAssistantPurpose({
+  purpose,
+  actor,
+  configuration,
+  catalogs = [],
+  connectionAccess = [],
+  override,
+  requirements = {},
+  reviewEnabled = false,
+  validateModels = true,
+  temporaryChat = false,
+  practice = false
+} = {}) {
   const role = ASSISTANT_PURPOSE_ROLES[purpose];
   const setup = assistantRoutingSetupFor(purpose, actor, { temporaryChat, practice });
-  const result = { available: false, reasonCode: "", message: "", role: role || purpose, setup, followedRole: "",
-    settingsRevision: configuration?.revision, configuredSelection: null, effectiveSelection: null,
-    connectionIdentity: "", instructionPurpose: purpose, executionProfileRequest: null };
+  const result = {
+    available: false,
+    reasonCode: "",
+    message: "",
+    role: role || purpose,
+    setup,
+    followedRole: "",
+    settingsRevision: configuration?.revision,
+    configuredSelection: null,
+    effectiveSelection: null,
+    connectionIdentity: "",
+    instructionPurpose: purpose,
+    executionProfileRequest: null
+  };
   try {
     if (actor === undefined) throw routingError("The requesting user is required to resolve model routing.");
     if (configuration && (configuration.orchestrators || !configuration.owner)) throw upgradeRequired();
     if (needsMainChatApproval(purpose, actor, { temporaryChat, practice })) {
-      return { ...result, reasonCode: "vibe64_main_chat_approval_required", approvalRequired: true,
-        message: "Main chat runs on the owner's AI. Your messages wait for their approval." };
+      return {
+        ...result,
+        reasonCode: "vibe64_main_chat_approval_required",
+        approvalRequired: true,
+        message: "Main chat runs on the owner's AI. Your messages wait for their approval."
+      };
     }
     const values = assistantRoutingSetupValues(configuration, purpose, actor, { temporaryChat, practice });
     if (purpose === "auto") {
-      const missingRoles = ["senior", "junior", "router"].filter((name) => !isRoutingSelection(assistantSetupRoleValue(values, name).value));
+      const missingRoles = ["senior", "junior", "router"].filter((name) =>
+        !isRoutingSelection(assistantSetupRoleValue(values, name).value));
       if (missingRoles.length && setup === "nonOwner") {
         const names = joinedLabels([...new Set(missingRoles.map((name) => assistantModeLabel(values[name].follows)))]);
-        return { ...result, reasonCode: "vibe64_team_ai_role_unconfigured", missingRoles,
-          message: `The workspace owner hasn't chosen a ${names} model for team members yet.` };
+        return {
+          ...result,
+          reasonCode: "vibe64_team_ai_role_unconfigured",
+          missingRoles,
+          message: `The workspace owner hasn't chosen a ${names} model for team members yet.`
+        };
       }
       if (missingRoles.length) {
         const names = joinedLabels(missingRoles.map(assistantModeLabel));
-        return { ...result, reasonCode: "vibe64_assistant_role_unconfigured", missingRoles,
+        return {
+          ...result,
+          reasonCode: "vibe64_assistant_role_unconfigured",
+          missingRoles,
           message: missingRoles.length === 1 ? `Auto needs a ${names} model. Choose one in Models.`
-            : `Auto needs models for ${names}. Choose them in Models.` };
+            : `Auto needs models for ${names}. Choose them in Models.`
+        };
       }
       const input = { actor, configuration, catalogs, connectionAccess, validateModels, practice };
       const junior = resolveAssistantPurpose({ ...input, purpose: "junior", requirements, reviewEnabled: true });
       const router = resolveAssistantPurpose({ ...input, purpose: "request_routing" });
       const unavailable = [junior, router].find((decision) => !decision.available);
       if (unavailable) return { ...result, reasonCode: unavailable.reasonCode, message: unavailable.message };
-      return { ...result, available: true, engineId: junior.engineId, seniorJuniorPair: junior.seniorJuniorPair,
-        router: router.effectiveSelection, routerConnectionIdentity: router.connectionIdentity };
+      return {
+        ...result,
+        available: true,
+        engineId: junior.engineId,
+        seniorJuniorPair: junior.seniorJuniorPair,
+        router: router.effectiveSelection,
+        routerConnectionIdentity: router.connectionIdentity
+      };
     }
     if (!role) throw routingError("Unknown assistant purpose.");
     if (override && (!["custom", "senior", "junior"].includes(override.role) || !override.selection)) {
@@ -382,7 +509,10 @@ function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [],
       if (!value) {
         if (roleName === "custom") throw routingError("Choose a custom model from Chat mode.");
         if (setup === "nonOwner") {
-          throw routingError(`The workspace owner hasn't chosen ${withArticle(assistantModeLabel(named))} model for team members yet.`, "vibe64_team_ai_role_unconfigured");
+          throw routingError(
+            `The workspace owner hasn't chosen ${withArticle(assistantModeLabel(named))} model for team members yet.`,
+            "vibe64_team_ai_role_unconfigured"
+          );
         }
         throw routingError(`Choose ${withArticle(assistantModeLabel(named))} model in Models.`, "vibe64_assistant_role_unconfigured");
       }
@@ -390,7 +520,10 @@ function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [],
       const access = routingConnectionAccess(selection, connectionAccess);
       if (!access || typeof access.ownerOnly !== "boolean" || typeof access.available !== "boolean" ||
           typeof access.connectionIdentity !== "string" || !access.connectionIdentity.trim()) {
-        throw routingError("The chosen connection is no longer recognised. Review Models.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
+        throw routingError(
+          "The chosen connection is no longer recognised. Review Models.",
+          VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE
+        );
       }
       if (!canUseVibe64Assistant({ ...access, available: true }, actor)) {
         throw routingError(roleName === "custom" ? "This custom model uses a personal connection. Choose a model you can access."
@@ -400,27 +533,38 @@ function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [],
       return { selection, access };
     };
     const validate = (destination, instructionPurpose, requiredCapabilities = []) => {
-      if (destination.access.available === false) throw routingError("The selected AI connection is unavailable.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
+      if (destination.access.available === false) {
+        throw routingError("The selected AI connection is unavailable.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
+      }
       // Read-only mode choices need connection/access decisions, without
       // launching model discovery. Dispatch always validates the model catalogue.
       if (!validateModels) return destination;
       const engine = catalogs.find((entry) => entry.engineId === destination.selection.engineId);
       const selection = routingAssignmentSelection(engine, destination.selection, { purpose: instructionPurpose });
-      const model = engine.modelProviders.find(({ id }) => id === selection.modelProviderId).models.find(({ id }) => id === selection.modelId);
+      const model = engine.modelProviders.find(({ id }) =>
+        id === selection.modelProviderId).models.find(({ id }) => id === selection.modelId);
       if (["junior", "review", "deslop", "fix"].includes(instructionPurpose) && model.capabilities?.toolcall === false) {
         throw routingError("The selected model cannot perform coding or review tools.", "vibe64_assistant_capability_unavailable");
       }
       if (!Array.isArray(requiredCapabilities) || requiredCapabilities.some((name) => model.capabilities?.[name] !== true)) {
-        throw routingError("The selected model does not support this request's required capabilities.", "vibe64_assistant_capability_unavailable");
+        throw routingError(
+          "The selected model does not support this request's required capabilities.",
+          "vibe64_assistant_capability_unavailable"
+        );
       }
       return { ...destination, selection };
     };
-    const snapshot = (original, effective) => ({ configuredSelection: original.selection, effectiveSelection: effective.selection,
-      connectionIdentity: effective.access.connectionIdentity });
+    const snapshot = (original, effective) => ({
+      configuredSelection: original.selection,
+      effectiveSelection: effective.selection,
+      connectionIdentity: effective.access.connectionIdentity
+    });
     if (role === "senior" || role === "junior") {
       const original = { senior: identity(configured("senior"), "senior"), junior: identity(configured("junior"), "junior") };
       if (original.senior.selection.engineId !== original.junior.selection.engineId) {
-        throw routingError(override ? "Senior and Junior overrides must run in your main AI's tool." : "Senior and Junior must run in the same tool.");
+        throw routingError(
+          override ? "Senior and Junior overrides must run in your main AI's tool." : "Senior and Junior must run in the same tool."
+        );
       }
       const effective = { ...original };
       for (const key of ["senior", "junior"]) effective[key] = validate(effective[key], key, requirements[key]);
@@ -446,7 +590,9 @@ function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [],
 
 function parseRoutingDecision(text) {
   let result;
-  try { result = JSON.parse(String(text).trim()); } catch { throw routingError("Routing returned an unreadable decision. Retry routing or choose Senior."); }
+  try { result = JSON.parse(String(text).trim()); } catch { throw routingError(
+    "Routing returned an unreadable decision. Retry routing or choose Senior."
+  ); }
   if (!result || !["senior", "junior"].includes(result.mode) || !ROUTING_REASONS.includes(result.reason) ||
       Object.keys(result).some((key) => !["mode", "reason"].includes(key))) {
     throw routingError("Routing returned an invalid decision. Retry routing or choose Senior.");
@@ -475,10 +621,15 @@ function assistantRoutingPrompt({ message, messages = [], attachments = [], plan
   const render = () => instruction + JSON.stringify(input);
   const recent = messages.slice(-3);
   if (recent.length) input.messages = [recent.at(-1)];
-  if (Array.from(render()).length > maxCharacters) throw routingError("This request and its latest context are too long for routing. Choose Senior or Junior directly.");
+  if (Array.from(render()).length > maxCharacters) {
+    throw routingError("This request and its latest context are too long for routing. Choose Senior or Junior directly.");
+  }
   for (let index = recent.length - 2; index >= 0; index -= 1) {
     input.messages.unshift(recent[index]);
-    if (Array.from(render()).length > maxCharacters) { input.messages.shift(); break; }
+    if (Array.from(render()).length > maxCharacters) {
+      input.messages.shift();
+      break;
+    }
   }
   return render();
 }
@@ -526,7 +677,8 @@ function assistantModePrompt(mode, message, { planInstructions = "", intent = ""
         "Clarify ambiguous references before changing a plan. Junior may update paired Progress and existing checklist ticks as work is verified; agreed Plan scope and lifecycle changes require Senior.";
       break;
     case "implementation":
-      instruction = direct + " Implement the requested work, including any explicitly requested planning changes within your role's authority. " +
+      instruction = direct +
+        " Implement the requested work, including any explicitly requested planning changes within your role's authority. " +
         "For a plan's explicitly authorised removal or deferral, record the exact deferred requirement and its agreed timing in a Deferred work section of paired Progress before removing it from Plan's current acceptance scope. Preserve completed implementation evidence and do not perform deferred work. Reassess the remaining requirements against that evidence; if none remain to implement, hand off for review rather than treating the scope edit as planning-only. Junior still cannot edit Plan scope. " +
         "Continue until the authorised scope is implemented and checked. Task size, context compaction, or finishing one useful slice is not a reason to end the task. " +
         "Stop for an unresolved architectural or product decision outside the agreed scope only where it blocks the remaining work; continue independent authorised work. " +
@@ -539,7 +691,12 @@ function assistantModePrompt(mode, message, { planInstructions = "", intent = ""
   if (!planInstructions && intent !== "conversation") {
     planInstructions = "This direct request is independent of the current Auto plan unless the user explicitly refers to it. Senior may use vibe64-helper plan to manage it; Junior may update Progress and existing checklist ticks after reading both documents, never change scope or mark the plan completed.";
   }
-  if (intent !== "conversation" && intent !== "planning" && intent !== "deslop" && intent !== "review" && mode !== "review" && mode !== "deslop") {
+  if (intent !== "conversation" &&
+      intent !== "planning" &&
+      intent !== "deslop" &&
+      intent !== "review" &&
+      mode !== "review" &&
+      mode !== "deslop") {
     instruction += " When the requested feature is implemented, its required runtime resources are prepared and Preview is responding, promptly tell the user: Ready to try—give it a spin. Verification is still running. Do not claim full completion before verification, and do not wait for the user to test before continuing your checks. If Preview is unavailable, report that instead of inviting the user to try it.";
     instruction += browserReview
       ? " A separate Senior review owns in-depth browser testing and visual inspection. Do not run those checks in this implementation turn. Run relevant focused code tests and basic smoke checks: confirm server startup, relevant routes and API responses, and if needed make a brief managed-browser check that the changed page renders and its main control is present. Leave full end-to-end browser suites, multi-step user journeys and visual inspection to Senior; do not expand the smoke check into those checks. Prepare the app and report exact checks, remaining gaps and browser acceptance cases to Senior; browser verification pending is an expected handoff, not an implementation blocker. Tell the user that Senior will perform the remaining browser checks."
@@ -597,17 +754,27 @@ function assistantWorkflowInstructions(state) {
 
 function assistantRoutingOutcomeNotice(request) {
   if (!request?.messageId || !request.outcome || request.stopped) return null;
-  const headings = { continue: "Continuing work.", handoff: request.stage === "review" ? "Ready for Senior review." : "Returning to Junior for rework.",
-    wait: "Waiting to continue.", complete: "Review complete." };
-  return { messageId: `assistant-routing-outcome:${request.messageId}:${request.outcome.turnId}:${request.outcome.decision}`,
-    text: `${headings[request.outcome.decision]}\n\n${request.outcome.explanation}` };
+  const headings = {
+    continue: "Continuing work.",
+    handoff: request.stage === "review" ? "Ready for Senior review." : "Returning to Junior for rework.",
+    wait: "Waiting to continue.",
+    complete: "Review complete."
+  };
+  return {
+    messageId: `assistant-routing-outcome:${request.messageId}:${request.outcome.turnId}:${request.outcome.decision}`,
+    text: `${headings[request.outcome.decision]}\n\n${request.outcome.explanation}`
+  };
 }
 
 function assistantRoutingStatusLabel(request) {
   if (!request) return "";
   const selection = request.assignments?.[assistantWorkflowRole(request)];
   const recipient = selection ? vibe64AssistantSelectionLabel(selection) : "";
-  const stage = { planning: "Planning", implementation: "Implementing", review: "Reviewing" }[request.stage] || assistantModeLabel(request.resolvedMode);
+  const stage = {
+    planning: "Planning",
+    implementation: "Implementing",
+    review: "Reviewing"
+  }[request.stage] || assistantModeLabel(request.resolvedMode);
   if (request.delivery === "uncertain") return `Delivery unconfirmed · ${recipient}`;
   if (request.status === "waiting") return request.stopped ? "Paused at your request." : `${stage} waiting · ${recipient}`;
   if (request.status === "complete") return request.workflow ? "Review complete — read the findings above." : "Reply finished.";
@@ -631,13 +798,36 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
       if (!assistantWorkflowStateIsSupported(previous)) throw new Error("Saved workflow has an unsupported state.");
       return raw;
     }
-    const statuses = ["routing", "sending", "uncertain", "sent", "failed", "cancelled", "done", "review_pending", "review_sending", "review_uncertain", "reviewing", "planning_pending", "planning_sending", "planning_uncertain", "planning", "implementation_pending", "implementation_sending", "implementation_uncertain"];
+    const statuses = [
+      "routing",
+      "sending",
+      "uncertain",
+      "sent",
+      "failed",
+      "cancelled",
+      "done",
+      "review_pending",
+      "review_sending",
+      "review_uncertain",
+      "reviewing",
+      "planning_pending",
+      "planning_sending",
+      "planning_uncertain",
+      "planning",
+      "implementation_pending",
+      "implementation_sending",
+      "implementation_uncertain"
+    ];
     if (![3, 4].includes(previous.schemaVersion) || !statuses.includes(previous.status) ||
-        !previous.messageId || !previous.input || !previous.assignments) throw new Error("Saved routing request is unsupported. Finish earlier routing upgrades first.");
+        !previous.messageId || !previous.input || !previous.assignments) throw new Error(
+          "Saved routing request is unsupported. Finish earlier routing upgrades first."
+        );
     const { continuation, implementationMessage, reviewMessageId, autoExecution, reviewStatus, outcome, ...request } = previous;
     let stage = null;
     if (previous.status.startsWith("planning") || previous.reason === "planning" && !reviewMessageId) stage = "planning";
-    else if (previous.status.startsWith("review") || reviewMessageId && continuation !== "implementation" || previous.reason === "review") stage = "review";
+    else if (previous.status.startsWith("review") ||
+      reviewMessageId && continuation !== "implementation" ||
+      previous.reason === "review") stage = "review";
     else if (["plan_implementation", "explicit_implementation"].includes(previous.reason)) stage = "implementation";
     const suffix = previous.status.split("_").at(-1);
     let delivery = ["routing", "sending", "uncertain", "failed"].includes(suffix) ? suffix : suffix === "pending" ? "pending" : "accepted";
@@ -647,23 +837,75 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
     const followup = continuation === "implementation" ? implementationMessage
       : reviewMessageId && ["review", "planning"].includes(stage)
         ? { messageId: reviewMessageId, message: previous.reviewMessage, planRevision: previous.workPlan?.revision || null } : null;
-    return JSON.stringify({ ...request, schemaVersion: 5, status: completedRequest ? "complete" : "waiting", delivery,
-      stage, workflow, planInvolved: Boolean(previous.workPlan),
-      reason: previous.reason === "discussion" ? "conversation" : ["plan_implementation", "explicit_implementation"].includes(previous.reason) ? "implementation" : previous.reason === "deslop" ? "review" : previous.reason,
-      steps: autoExecution?.continuations || 0, stalledTurns: autoExecution?.stalledTurns || 0, steering: autoExecution?.steering || [],
-      ...(followup ? { followup } : {}), stopped: previous.stopped === true || previous.status === "cancelled",
-      ...(!completedRequest ? { error: previous.error || "Workflow retained after upgrade. Inspect the saved delivery and request a continuation when ready." } : {}) });
+    return JSON.stringify({
+      ...request,
+      schemaVersion: 5,
+      status: completedRequest ? "complete" : "waiting",
+      delivery,
+      stage,
+      workflow,
+      planInvolved: Boolean(previous.workPlan),
+      reason: previous.reason === "discussion"
+        ? "conversation"
+        : ["plan_implementation", "explicit_implementation"].includes(previous.reason)
+          ? "implementation"
+          : previous.reason === "deslop" ? "review" : previous.reason,
+      steps: autoExecution?.continuations || 0,
+      stalledTurns: autoExecution?.stalledTurns || 0,
+      steering: autoExecution?.steering || [],
+      ...(followup ? { followup } : {}),
+      stopped: previous.stopped === true || previous.status === "cancelled",
+      ...(!completedRequest
+        ? { error: previous.error || "Workflow retained after upgrade. Inspect the saved delivery and request a continuation when ready." }
+        : {})
+    });
   }
   const change = values => values.assistant_routing_request ? { assistant_routing_request: convert(values.assistant_routing_request) } : {};
-  return { metadata: change(metadata), conversations: conversations.map(record => ({ ...record,
-    routingMetadata: { ...(record.routingMetadata || {}), ...change(record.routingMetadata || {}) } })) };
+  return {
+    metadata: change(metadata),
+    conversations: conversations.map(record => ({
+      ...record,
+      routingMetadata: { ...(record.routingMetadata || {}), ...change(record.routingMetadata || {}) }
+    }))
+  };
 }
 
 export { ASSISTANT_MODES, ASSISTANT_FIX_MODE, ASSISTANT_ROUTING_METADATA, ASSISTANT_SETUP_ROLES, ASSISTANT_FOLLOWING_ROLES,
-  ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, MAIN_CHAT_PURPOSES, ROUTING_REASONS,
-  routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue, assistantMainAiChanged,
+  ASSISTANT_ROUTING_ROLE_DEFINITIONS,
+  ASSISTANT_ROLE_DEFAULT_FOLLOWS,
+    ASSISTANT_PURPOSE_ROLES,
+    ASSISTANT_ROLE_PURPOSES,
+    MAIN_CHAT_PURPOSES,
+    ROUTING_REASONS,
+  routingModelScore,
+  resolveAssistantPurpose,
+    assistantRoutingPreferences,
+    assistantRoutingAutomation,
+    assistantRoutingSetupFor,
+    assistantRoutingSetupValues,
+    assistantSetupRoleValue,
+    assistantMainAiChanged,
   isAssistantRoutingOwner, isMainChatPurpose, needsMainChatApproval, routingRunsInChoices,
-  assistantRoutingFromMetadata, assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingRequestForDisplay, goalStatusIsComplete, assistantGoalIsActive, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
+  assistantRoutingFromMetadata,
+  assistantRoutingGoalFromMetadata,
+    assistantRoutingRequestFromMetadata,
+    assistantRoutingRequestForDisplay,
+    goalStatusIsComplete,
+    assistantGoalIsActive,
+    hasConnectedAssistantModels,
+    routingModelChoices,
+    recommendedRoutingAssignments,
+    routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,
-  assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantGoalManagementMessage, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
-  assistantRoutingOutcomeNotice, assistantWorkflowUpgradeChanges, assistantWorkflowStateIsSupported, assistantWorkflowRole, assistantWorkflowMessageIds };
+  assistantModeLabel,
+  assistantModePrompt,
+    assistantGoalObjective,
+    assistantGoalManagementMessage,
+    assistantRoutingStatusIsPending,
+    assistantRoutingRequestCanBeReplaced,
+    assistantRoutingStatusLabel,
+  assistantRoutingOutcomeNotice,
+  assistantWorkflowUpgradeChanges,
+    assistantWorkflowStateIsSupported,
+    assistantWorkflowRole,
+    assistantWorkflowMessageIds };

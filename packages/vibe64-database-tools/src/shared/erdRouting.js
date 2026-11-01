@@ -104,13 +104,19 @@ export function routeErdConnection(route, obstacles, occupied = [], index = 0, d
   if (dragging) return { points: basic, obstructed: !erdPathClear(basic, obstacles, route.source, route.target) };
   // Expanded or overlapping cards can enclose an endpoint. No grid search can
   // escape that obstacle, regardless of how many corridors it explores.
-  if (obstacles.some((box) => [from, to].some((point) => point.x > box.left && point.x < box.right && point.y > box.top && point.y < box.bottom)) ||
+  if (obstacles.some((box) =>
+    [from, to].some((point) => point.x > box.left && point.x < box.right && point.y > box.top && point.y < box.bottom)) ||
       segmentBlocked(start, from, obstacles.filter((box) => box.id !== route.source)) ||
       segmentBlocked(to, end, obstacles.filter((box) => box.id !== route.target))) {
     return { points: basic, obstructed: true };
   }
   const gap = 4 + (index % 7) * 8;
-  const xs = [...new Set([from.x, to.x, route.laneX, ...obstacles.flatMap((box) => [box.left - gap, box.right + gap])])].sort((a, b) => a - b);
+  const xs = [...new Set([
+    from.x,
+    to.x,
+    route.laneX,
+    ...obstacles.flatMap((box) => [box.left - gap, box.right + gap])
+  ])].sort((a, b) => a - b);
   const ys = [...new Set([from.y, to.y, ...obstacles.flatMap((box) => [box.top - gap, box.bottom + gap])])].sort((a, b) => a - b);
   // Most links need only one clear horizontal or vertical corridor. Check those
   // before searching the full obstacle grid; dense schemas otherwise make the
@@ -154,7 +160,10 @@ export function routeErdConnection(route, obstacles, occupied = [], index = 0, d
     const current = pop(queue);
     if (costs.get(current.key) !== current.cost) continue;
     const id = Math.floor(current.key / 2);
-    if (id === endId) { finish = current.key; break; }
+    if (id === endId) {
+      finish = current.key;
+      break;
+    }
     const x = id % width;
     const y = Math.floor(id / width);
     const a = point(id);
@@ -188,7 +197,8 @@ export function routeErdConnection(route, obstacles, occupied = [], index = 0, d
 export function erdPolylinePath(points = []) {
   if (!points.length) return ["", 0, 0];
   const segments = points.slice(1).map((point, index) => ({
-    a: points[index], b: point,
+    a: points[index],
+    b: point,
     length: Math.abs(point.x - points[index].x) + Math.abs(point.y - points[index].y)
   }));
   const longest = [...segments].sort((a, b) => b.length - a.length)[0];

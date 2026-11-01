@@ -68,12 +68,20 @@ function createSessionAgentRouting({
   async function routingSelectionAccess(assistantSelection, options = {}) {
     const provider = sessionBindings.providerFor({ engineId: assistantSelection.engineId });
     const access = defineVibe64AssistantAccess(await Promise.resolve().then(() => readAssistantAccess({
-      assistantSelection, engineId: provider.id, modelProviderId: assistantSelection.modelProviderId,
-      session: options.session || null, sessionId: normalizeText(options.session?.sessionId),
+      assistantSelection,
+      engineId: provider.id,
+      modelProviderId: assistantSelection.modelProviderId,
+      session: options.session || null,
+      sessionId: normalizeText(options.session?.sessionId),
       vibe64User: assistantUser(options)
     })).catch(() => ({ available: false, ownerOnly: true, connectionIdentity: "" })));
-    return { ...access, available: access.available && Boolean(access.connectionIdentity), engineId: provider.id, modelProviderId: assistantSelection.modelProviderId,
-      modelId: assistantSelection.modelId };
+    return {
+      ...access,
+      available: access.available && Boolean(access.connectionIdentity),
+      engineId: provider.id,
+      modelProviderId: assistantSelection.modelProviderId,
+      modelId: assistantSelection.modelId
+    };
   }
 
   async function resolvePurpose(input = {}, options = {}, { facts = new Map(), validateModels = true } = {}) {
@@ -104,8 +112,10 @@ function createSessionAgentRouting({
       ? override.selection : assistantSetupRoleValue(values, key).value).filter(Boolean);
     const connectionAccess = [];
     async function readSelectionAccess(assistantSelection) {
-      const fact = { ...await readFact(`access:${JSON.stringify(assistantSelection)}`,
-        () => routingSelectionAccess(assistantSelection, options)) };
+      const fact = {
+        ...await readFact(`access:${JSON.stringify(assistantSelection)}`,
+          () => routingSelectionAccess(assistantSelection, options))
+      };
       connectionAccess.push(fact);
       return fact;
     }
@@ -140,8 +150,11 @@ function createSessionAgentRouting({
         // then combine only pages from the same catalogue revision.
         let catalog;
         for (const selection of selectionsForEngine) {
-          const page = await readCatalog(provider, { modelProviderId: selection.modelProviderId,
-            modelId: selection.modelId, limit: "1" });
+          const page = await readCatalog(provider, {
+            modelProviderId: selection.modelProviderId,
+            modelId: selection.modelId,
+            limit: "1"
+          });
           catalog = mergeRoutingCatalogPage(catalog, page, "The model catalogue changed. Retry routing.");
         }
         catalogs.push(catalog);
@@ -159,7 +172,10 @@ function createSessionAgentRouting({
     const facts = new Map();
     const purposes = [...Object.keys(ASSISTANT_PURPOSE_ROLES), "auto"];
     return Object.fromEntries(await Promise.all(purposes.map(async (purpose) => [purpose,
-      await resolvePurpose({ purpose, reviewEnabled: purpose === "auto", temporaryChat: input.temporaryChat === true,
+      await resolvePurpose({
+        purpose,
+        reviewEnabled: purpose === "auto",
+        temporaryChat: input.temporaryChat === true,
         ...(input.override && purpose === input.mode
           ? { override: { role: input.mode, selection: input.override } } : {})
       }, { ...options, configuration }, { facts, validateModels: false })
@@ -226,13 +242,20 @@ function createSessionAgentRouting({
       return [purpose, JSON.parse(JSON.stringify(decision, (key, value) =>
         ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value))];
     }));
-    const previewPurposes = { owner: ["senior", "junior", "request_routing", "review", "auto", "colleague", "fix", "source_explanation", "prompt_hint"],
-      nonOwner: ["colleague", "fix", "source_explanation", "prompt_hint"] };
+    const previewPurposes = {
+      owner: ["senior", "junior", "request_routing", "review", "auto", "colleague", "fix", "source_explanation", "prompt_hint"],
+      nonOwner: ["colleague", "fix", "source_explanation", "prompt_hint"]
+    };
     const illustrative = { owner: { role: "owner" }, nonOwner: { role: "member" } };
     const setups = Object.fromEntries(Object.keys(ASSISTANT_SETUP_ROLES).map((setup) => {
       const values = configuration[setup];
-      const recommendations = recommendedRoutingAssignments({ catalogs, setup, values, connectionAccess,
-        preferProvider: options.preferProvider?.setup === setup ? options.preferProvider : null });
+      const recommendations = recommendedRoutingAssignments({
+        catalogs,
+        setup,
+        values,
+        connectionAccess,
+        preferProvider: options.preferProvider?.setup === setup ? options.preferProvider : null
+      });
       // Setup fills only absent roles; an explicit null stays off. The owner's
       // main chat needs both Senior and Junior before anything is filled.
       const setupValues = { ...values };
@@ -247,8 +270,14 @@ function createSessionAgentRouting({
         const purpose = ASSISTANT_ROLE_PURPOSES[role];
         const choices = catalogs.flatMap((catalog) => routingModelChoices(catalog, { purpose }).map((choice) => {
           const fact = access.get(routeKey(choice));
-          return { ...choice, engineLabel: catalog.label, ownerOnly: fact?.ownerOnly !== false, endpointCode: fact?.endpointCode || "",
-            accessLabel: fact?.accessLabel || "Unavailable", available: fact?.available === true && Boolean(fact.connectionIdentity) };
+          return {
+            ...choice,
+            engineLabel: catalog.label,
+            ownerOnly: fact?.ownerOnly !== false,
+            endpointCode: fact?.endpointCode || "",
+            accessLabel: fact?.accessLabel || "Unavailable",
+            available: fact?.available === true && Boolean(fact.connectionIdentity)
+          };
         })).filter((choice) => setup !== "nonOwner" || !choice.ownerOnly);
         const value = Object.hasOwn(values, role) ? values[role] : undefined;
         let error = "";
@@ -256,26 +285,52 @@ function createSessionAgentRouting({
           try {
             routingAssignmentSelection(catalogs.find((row) => row.engineId === value.engineId), value, { purpose });
             const fact = access.get(routeKey(value));
-            if (setup === "nonOwner" && fact?.ownerOnly !== false) throw new Error("Team members can't use personal plans. Choose a Workspace-use model.");
+            if (setup === "nonOwner" && fact?.ownerOnly !== false) {
+              throw new Error("Team members can't use personal plans. Choose a Workspace-use model.");
+            }
             const choice = choices.find((row) => routeKey(row) === routeKey(value));
             if (!choice?.available) throw new Error("The selected AI connection is unavailable.");
-            if (["junior", "fix"].includes(role) && choice.capabilities?.toolcall === false) throw new Error("Choose a model that supports coding tools.");
-            if (role === "junior" && values.senior?.schema && values.senior.engineId !== value.engineId) throw new Error("Senior and Junior must run in the same tool.");
+            if (["junior", "fix"].includes(role) && choice.capabilities?.toolcall === false) {
+              throw new Error("Choose a model that supports coding tools.");
+            }
+            if (role === "junior" && values.senior?.schema && values.senior.engineId !== value.engineId) {
+              throw new Error("Senior and Junior must run in the same tool.");
+            }
           } catch (cause) { error = cause.message; }
         }
         const { value: effective, followedRole } = assistantSetupRoleValue(values, role);
-        return [role, { value: value ?? null, configured: value !== undefined, effective: effective?.schema ? effective : null,
-          followedRole, recommendation: recommendations[role] ?? null, choices, error }];
+        return [role, {
+          value: value ?? null,
+          configured: value !== undefined,
+          effective: effective?.schema ? effective : null,
+          followedRole,
+          recommendation: recommendations[role] ?? null,
+          choices,
+          error
+        }];
       }));
-      return [setup, { roles, setupValues, preview: decide(previewPurposes[setup], illustrative[setup], configuration),
-        setupPreview: decide(previewPurposes[setup], illustrative[setup], { ...configuration, [setup]: setupValues }) }];
+      return [setup, {
+        roles,
+        setupValues,
+        preview: decide(previewPurposes[setup], illustrative[setup], configuration),
+        setupPreview: decide(previewPurposes[setup], illustrative[setup], { ...configuration, [setup]: setupValues })
+      }];
     }));
     return {
       engines: [...state.providerById.keys()].filter((id) => connectedEngineIds.has(id) || catalogErrors.has(id)).map((engineId) => ({
-        engineId, label: catalogs.find((entry) => entry.engineId === engineId)?.label || VIBE64_AGENT_PROVIDERS.find(({ id }) => id === engineId)?.label || engineId,
-        connected: connectedEngineIds.has(engineId), error: catalogErrors.get(engineId) || "" })),
+        engineId,
+        label: catalogs.find((entry) => entry.engineId === engineId)?.label ||
+          VIBE64_AGENT_PROVIDERS.find(({ id }) => id === engineId)?.label ||
+          engineId,
+        connected: connectedEngineIds.has(engineId),
+        error: catalogErrors.get(engineId) || ""
+      })),
       setups,
-      viewer: decide(["senior", "junior", "auto", "colleague", "fix", "source_explanation", "prompt_hint"], assistantUser(options), configuration)
+      viewer: decide(
+        ["senior", "junior", "auto", "colleague", "fix", "source_explanation", "prompt_hint"],
+        assistantUser(options),
+        configuration
+      )
     };
   }
 
@@ -292,7 +347,13 @@ function createSessionAgentRouting({
         if (isAssistantRoutingOwner(actor)) return catalog;
         // Team members never see a personal plan's models as choices.
         const personal = await Promise.all(catalog.modelProviders.map(async ({ id, connected }) => connected &&
-          (await routingSelectionAccess({ engineId: provider.id, modelProviderId: id }, { ...options, vibe64User: actor })).ownerOnly !== false));
+          (await routingSelectionAccess({
+            engineId: provider.id,
+            modelProviderId: id
+          }, {
+            ...options,
+            vibe64User: actor
+          })).ownerOnly !== false));
         return { ...catalog, modelProviders: catalog.modelProviders.filter((row, index) => !personal[index]) };
       }))),
       ok: true

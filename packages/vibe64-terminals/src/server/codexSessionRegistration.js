@@ -209,9 +209,13 @@ function createCodexSessionRegistration({
   }
   codexAppServerProviderOptions = initialCodexRuntime.providerOptions;
   codexToolHomeSource = initialCodexRuntime.toolHomeSource;
-  const codexRuntimeHost = createCodexRuntimeHost({ env, codexAppServerProviderOptions, codexToolHomeSource });
+  const codexRuntimeHost = createCodexRuntimeHost({
+    env,
+    codexAppServerProviderOptions,
+    codexToolHomeSource
+  });
   const {
-    codexAppServerProviderKeyFields,
+    codexAppServerProviderKeyFields
   } = codexRuntimeHost;
   const studioRuntimeProfile = getStudioProjectContext().runtimeProfile || {};
   const localRuntime = studioRuntimeProfile.local === true ||
@@ -320,8 +324,10 @@ function createCodexSessionRegistration({
       connectionPolicy: codexAppServerConnectionPolicy
     },
     helperThreads: {
-      ledgerOwner: { ...codexHelperThreadLedgerOwner,
-        createCodexHelperThreadLedger: codexHelperThreadLedgerFactory },
+      ledgerOwner: {
+        ...codexHelperThreadLedgerOwner,
+        createCodexHelperThreadLedger: codexHelperThreadLedgerFactory
+      },
       applicationName: "Vibe64"
     },
     conversationPreparation: {
@@ -380,7 +386,8 @@ function createCodexSessionRegistration({
   });
   const codexConversationStorage = createCodexConversationStorage({ projectService, runOwner: codexAppServerRunOwner });
   const codexAttachments = createCodexSessionAttachmentRenewal({
-    sessionRuntimeHost: codexSessionRuntimeHost, sessionEnvironment: codexSessionEnvironment
+    sessionRuntimeHost: codexSessionRuntimeHost,
+    sessionEnvironment: codexSessionEnvironment
   });
   const codexStartupHealth = createCodexStartupHealth(publishSessionChanged);
   const blockCodexAppServerForUnavailableWorktree = createCodexUnavailableWorktreeHandler({

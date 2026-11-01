@@ -15,7 +15,12 @@
 const LEARNING_MODE_PROJECT_CODE = "vibe64_learning_mode_project";
 const LEARNING_MODE_PROJECT_MESSAGE = "You're in Learn mode. Press L to go back to your projects.";
 const PRACTICE_PROJECT_MODE_MESSAGE = "This is a practice project. Press L to switch to Learn.";
-const DEVELOP_MODE = Object.freeze({ on: false, currentAttemptId: "", lessonCode: "", practiceSlug: "" });
+const DEVELOP_MODE = Object.freeze({
+  on: false,
+  currentAttemptId: "",
+  lessonCode: "",
+  practiceSlug: ""
+});
 
 let learningModeReader = null;
 let learningModeReadFailure = null;

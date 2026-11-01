@@ -258,7 +258,8 @@ async function markCodexAppServerReconnectRequired(options = {}, {
     reason
   });
   throw codexReconnectRequiredError({
-    modelProviderId: options.modelProviderId, observed
+    modelProviderId: options.modelProviderId,
+    observed
   });
 }
 
@@ -364,7 +365,8 @@ function codexAppServerRuntimeHost(options = {}) {
     async observeFailure(logTail) {
       if (codexAuthOutputRequiresReconnect(logTail)) {
         await markCodexAppServerReconnectRequired(options, {
-          observed: logTail, reason: "codex-app-server-start"
+          observed: logTail,
+          reason: "codex-app-server-start"
         });
       }
     }
@@ -396,13 +398,19 @@ function codexAppServerRuntimeHost(options = {}) {
         execution: {
           ...request.execution,
           controlGenerationId: helper ? "" : codexAppServerControlGeneration(normalizedTerminalEnv),
-          ...(processProfile ? { resourceProfile: {
-            key: helper ? "codex-helper" : "codex-app-server",
-            environment: "development",
-            compatibilityKey: createHash("sha256").update(JSON.stringify({
-              command, helper: profileHelper, executionMode, runtimes: normalizedRuntimes, ...profile
-            })).digest("hex")
-          } } : {})
+          ...(processProfile ? {
+            resourceProfile: {
+              key: helper ? "codex-helper" : "codex-app-server",
+              environment: "development",
+              compatibilityKey: createHash("sha256").update(JSON.stringify({
+                command,
+                helper: profileHelper,
+                executionMode,
+                runtimes: normalizedRuntimes,
+                ...profile
+              })).digest("hex")
+            }
+          } : {})
         },
         project: helper || options.project === undefined ? {} : options.project,
         purpose: "codex",
@@ -429,7 +437,11 @@ function codexAppServerRuntimeHost(options = {}) {
     socketPathHelp: "Configure VIBE64_AGENT_RUNTIME_DIR or XDG_RUNTIME_DIR to a shorter host runtime directory.",
     umask: vibe64ProcessUmask()
   };
-  const runtime = createCodexAppServerRuntime({ credentials, execution, configuration });
+  const runtime = createCodexAppServerRuntime({
+    credentials,
+    execution,
+    configuration
+  });
   const parameters = {
     accountIdentitySignature: options.accountIdentitySignature,
     authStateSignature: options.authStateSignature,
@@ -477,11 +489,14 @@ function codexAppServerRuntimeHost(options = {}) {
 function codexAppServerControlsLog(logger) {
   return (event, fields, { threadId, environment = {}, connectionGeneration }) => logOperationalEvent(logger,
     ["recovery_failed", "settings_failed"].includes(event) ? "warn" : "info", {
-      component: "vibe64.codex_controls", event: `vibe64.codex_controls.${event}`,
-      threadId, sessionId: environment.VIBE64_AGENT_SESSION_COMMAND_SESSION_ID || "",
+      component: "vibe64.codex_controls",
+      event: `vibe64.codex_controls.${event}`,
+      threadId,
+      sessionId: environment.VIBE64_AGENT_SESSION_COMMAND_SESSION_ID || "",
       generations: Object.fromEntries(Object.entries(environment).filter(([key, value]) =>
         key.endsWith("_COMMAND_GENERATION") && /^[0-9a-f-]{36}$/iu.test(value))),
-      connectionGeneration, ...fields
+      connectionGeneration,
+      ...fields
     }, "Codex managed controls changed.");
 }
 
@@ -492,10 +507,15 @@ async function ensureCodexAppServerRuntime(options = {}) {
 
 async function startCodexAppServerProcess(options = {}) {
   const { runtime, parameters } = codexAppServerRuntimeHost(options);
-  return runtime.start({ ...parameters, runtimeDir: options.runtimeDir === undefined ? codexAppServerRuntimeDir({
-    env: options.env, executionRoot: options.executionRoot,
-    runtimeInstanceId: options.runtimeInstanceId, workdir: options.workdir
-  }) : options.runtimeDir });
+  return runtime.start({
+    ...parameters,
+    runtimeDir: options.runtimeDir === undefined ? codexAppServerRuntimeDir({
+      env: options.env,
+      executionRoot: options.executionRoot,
+      runtimeInstanceId: options.runtimeInstanceId,
+      workdir: options.workdir
+    }) : options.runtimeDir
+  });
 }
 
 async function stopCodexAppServerRuntime(options = {}) {

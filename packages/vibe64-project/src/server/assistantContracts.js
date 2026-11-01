@@ -4,8 +4,11 @@ import { pullRequestReviewSchema } from "./inputSchemas.js";
 const text = { type: "string", maxLength: 512, required: false };
 const summaryFields = {
   number: { type: "integer", required: true },
-  title: { ...text, maxLength: 256 }, url: { ...text, maxLength: 2048 },
-  state: text, updatedAt: text, author: text,
+  title: { ...text, maxLength: 256 },
+  url: { ...text, maxLength: 2048 },
+  state: text,
+  updatedAt: text,
+  author: text,
   headRefName: { ...text, maxLength: 4096, noTrim: true },
   baseRefName: { ...text, maxLength: 4096, noTrim: true },
   isDraft: { type: "boolean", required: true }
@@ -13,9 +16,12 @@ const summaryFields = {
 
 function pullRequestSummary(pr) {
   const fields = { ...pr, author: pr.author?.login };
-  return { number: pr.number, isDraft: pr.isDraft === true,
+  return {
+    number: pr.number,
+    isDraft: pr.isDraft === true,
     ...Object.fromEntries(Object.entries(summaryFields).flatMap(([key, schema]) =>
-      schema.type === "string" && typeof fields[key] === "string" ? [[key, fields[key].slice(0, schema.maxLength)]] : [])) };
+      schema.type === "string" && typeof fields[key] === "string" ? [[key, fields[key].slice(0, schema.maxLength)]] : []))
+  };
 }
 
 const descriptions = {
@@ -29,31 +35,57 @@ const descriptions = {
 export function pullRequestTool(operation) {
   return {
     description: descriptions[operation],
-    output: { mode: "replace", schema: createSchema({
-      ok: { type: "boolean", required: true }, error: text, message: text,
-      pending: { type: "boolean", required: false }, repository: { ...text, maxLength: 4096, noTrim: true },
-      total: { type: "integer", required: false },
-      pullRequests: { type: "array", items: createSchema(summaryFields), required: false },
-      pageInfo: { type: "object", required: false, schema: createSchema({
-        hasNextPage: { type: "boolean", required: true },
-        endCursor: { type: "string", noTrim: true, maxLength: 500, nullable: true, required: true }
-      }) },
-      pullRequest: { type: "object", required: false, schema: createSchema({
-        ...summaryFields,
-        body: { type: "string", noTrim: true, maxLength: 4000, required: true },
-        bodyTruncated: { type: "boolean", required: true },
-        unavailableReason: text, checksState: { ...text, nullable: true }, reviewDecision: { ...text, nullable: true },
-        ...Object.fromEntries(["additions", "deletions", "changedFiles", "behindBase"].map((key) =>
-          [key, { type: "integer", nullable: true, required: false }])),
-        actions: { type: "object", required: false, schema: createSchema({ ready: text, "update-branch": text, merge: text }) },
-        mergeMethods: { type: "array", items: { type: "string", enum: ["merge", "squash", "rebase"] }, required: false },
-        review: { type: "object", schema: pullRequestReviewSchema, required: false }
-      }) }
-    }) },
+    output: {
+      mode: "replace",
+      schema: createSchema({
+        ok: { type: "boolean", required: true },
+        error: text,
+        message: text,
+        pending: { type: "boolean", required: false },
+        repository: { ...text, maxLength: 4096, noTrim: true },
+        total: { type: "integer", required: false },
+        pullRequests: { type: "array", items: createSchema(summaryFields), required: false },
+        pageInfo: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            hasNextPage: { type: "boolean", required: true },
+            endCursor: { type: "string", noTrim: true, maxLength: 500, nullable: true, required: true }
+          })
+        },
+        pullRequest: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            ...summaryFields,
+            body: { type: "string", noTrim: true, maxLength: 4000, required: true },
+            bodyTruncated: { type: "boolean", required: true },
+            unavailableReason: text,
+            checksState: { ...text, nullable: true },
+            reviewDecision: { ...text, nullable: true },
+            ...Object.fromEntries(["additions", "deletions", "changedFiles", "behindBase"].map((key) =>
+              [key, { type: "integer", nullable: true, required: false }])),
+            actions: {
+              type: "object",
+              required: false,
+              schema: createSchema({
+                ready: text,
+                "update-branch": text,
+                merge: text
+              })
+            },
+            mergeMethods: { type: "array", items: { type: "string", enum: ["merge", "squash", "rebase"] }, required: false },
+            review: { type: "object", schema: pullRequestReviewSchema, required: false }
+          })
+        }
+      })
+    },
     transformResult(result) {
-      const output = { ok: result.ok === true,
+      const output = {
+        ok: result.ok === true,
         ...Object.fromEntries(["error", "message", "repository"].flatMap((key) => typeof result[key] === "string"
-          ? [[key, result[key].slice(0, key === "repository" ? 4096 : 512)]] : [])) };
+          ? [[key, result[key].slice(0, key === "repository" ? 4096 : 512)]] : []))
+      };
       if (typeof result.pending === "boolean") output.pending = result.pending;
       if (Array.isArray(result.pullRequests)) {
         // The native GitHub owner already pages at 25; preserve its matching cursor.
@@ -64,13 +96,17 @@ export function pullRequestTool(operation) {
       if (result.pullRequest) {
         const pr = result.pullRequest;
         const body = String(pr.body || "");
-        output.pullRequest = { ...pullRequestSummary(pr), body: body.slice(0, 4000), bodyTruncated: body.length > 4000,
+        output.pullRequest = {
+          ...pullRequestSummary(pr),
+          body: body.slice(0, 4000),
+          bodyTruncated: body.length > 4000,
           ...Object.fromEntries(["unavailableReason", "checksState", "reviewDecision"].flatMap((key) =>
             typeof pr[key] === "string" ? [[key, pr[key].slice(0, 512)]] : pr[key] === null ? [[key, null]] : [])),
           ...Object.fromEntries(["additions", "deletions", "changedFiles", "behindBase"].flatMap((key) =>
             Number.isSafeInteger(pr[key]) || pr[key] === null ? [[key, pr[key]]] : [])),
           actions: Object.fromEntries(["ready", "update-branch", "merge"].map((key) => [key, String(pr.actions[key]).slice(0, 512)])),
-          mergeMethods: pr.mergeMethods };
+          mergeMethods: pr.mergeMethods
+        };
         const review = pr.review;
         const strings = ["repository", "headRepository", "headBranch", "headCommit", "baseBranch", "baseCommit"];
         // A deleted ref remains readable but cannot supply a usable write review.
@@ -85,53 +121,77 @@ export function pullRequestTool(operation) {
 
 const labelFields = {
   name: { type: "string", maxLength: 50, noTrim: true, required: true },
-  color: { type: "string", maxLength: 6, required: false }, description: text
+  color: { type: "string", maxLength: 6, required: false },
+  description: text
 };
 const commentFields = {
   id: { type: "string", maxLength: 256, noTrim: true, required: true },
-  author: text, createdAt: text, viewerCanUpdate: { type: "boolean", required: false },
+  author: text,
+  createdAt: text,
+  viewerCanUpdate: { type: "boolean", required: false },
   body: { type: "string", maxLength: 1000, noTrim: true, required: true },
   bodyTruncated: { type: "boolean", required: true }
 };
 const issueFields = {
   number: { type: "integer", required: true },
-  title: { ...text, maxLength: 256 }, url: { ...text, maxLength: 2048 },
-  state: text, stateReason: text, author: text, updatedAt: text,
-  body: { ...text, maxLength: 4000, noTrim: true }, bodyTruncated: { type: "boolean", required: false },
+  title: { ...text, maxLength: 256 },
+  url: { ...text, maxLength: 2048 },
+  state: text,
+  stateReason: text,
+  author: text,
+  updatedAt: text,
+  body: { ...text, maxLength: 4000, noTrim: true },
+  bodyTruncated: { type: "boolean", required: false },
   ...Object.fromEntries(["locked", "viewerCanClose", "viewerCanReopen", "viewerCanUpdate", "canEditLabels", "labelsTruncated"].map((key) =>
     [key, { type: "boolean", required: false }])),
   labels: { type: "array", items: createSchema(labelFields), required: false },
   labelCount: { type: "integer", required: false },
-  comments: { type: "object", required: false, schema: createSchema({
-    totalCount: { type: "integer", required: false },
-    nodes: { type: "array", items: createSchema(commentFields), required: false },
-    pageInfo: { type: "object", required: false, schema: createSchema({
-      hasPreviousPage: { type: "boolean", required: true },
-      startCursor: { type: "string", noTrim: true, maxLength: 500, nullable: true, required: true }
-    }) }
-  }) }
+  comments: {
+    type: "object",
+    required: false,
+    schema: createSchema({
+      totalCount: { type: "integer", required: false },
+      nodes: { type: "array", items: createSchema(commentFields), required: false },
+      pageInfo: {
+        type: "object",
+        required: false,
+        schema: createSchema({
+          hasPreviousPage: { type: "boolean", required: true },
+          startCursor: { type: "string", noTrim: true, maxLength: 500, nullable: true, required: true }
+        })
+      }
+    })
+  }
 };
 
 function issueLabel(label) {
-  return { name: label.name,
+  return {
+    name: label.name,
     ...Object.fromEntries(["color", "description"].flatMap((key) => typeof label[key] === "string"
-      ? [[key, label[key].slice(0, key === "color" ? 6 : 512)]] : [])) };
+      ? [[key, label[key].slice(0, key === "color" ? 6 : 512)]] : []))
+  };
 }
 
 function issueComment(comment) {
   const body = String(comment.body || "");
-  return { id: comment.id, body: body.slice(0, 1000), bodyTruncated: body.length > 1000,
+  return {
+    id: comment.id,
+    body: body.slice(0, 1000),
+    bodyTruncated: body.length > 1000,
     ...(typeof comment.author?.login === "string" ? { author: comment.author.login.slice(0, 512) } : {}),
     ...(typeof comment.createdAt === "string" ? { createdAt: comment.createdAt.slice(0, 512) } : {}),
-    ...(typeof comment.viewerCanUpdate === "boolean" ? { viewerCanUpdate: comment.viewerCanUpdate } : {}) };
+    ...(typeof comment.viewerCanUpdate === "boolean" ? { viewerCanUpdate: comment.viewerCanUpdate } : {})
+  };
 }
 
 function issueSummary(issue) {
   const fields = { ...issue, author: issue.author?.login };
-  const result = { number: issue.number,
+  const result = {
+    number: issue.number,
     ...Object.fromEntries(Object.entries(issueFields).flatMap(([key, schema]) =>
       schema.type === "string" && typeof fields[key] === "string" ? [[key, fields[key].slice(0, schema.maxLength)]] :
-      schema.type === "boolean" && typeof fields[key] === "boolean" ? [[key, fields[key]]] : [])) };
+      schema.type === "boolean" && typeof fields[key] === "boolean" ? [[key, fields[key]]] : []))
+  };
   if (typeof issue.body === "string") result.bodyTruncated = issue.body.length > 4000;
   if (issue.labels?.nodes) {
     result.labels = issue.labels.nodes.map(issueLabel);
@@ -141,8 +201,10 @@ function issueSummary(issue) {
   if (issue.comments) {
     result.comments = { ...(Number.isSafeInteger(issue.comments.totalCount) ? { totalCount: issue.comments.totalCount } : {}) };
     if (issue.comments.nodes) result.comments.nodes = issue.comments.nodes.map(issueComment);
-    if (issue.comments.pageInfo) result.comments.pageInfo = { hasPreviousPage: issue.comments.pageInfo.hasPreviousPage,
-      startCursor: issue.comments.pageInfo.startCursor ?? null };
+    if (issue.comments.pageInfo) result.comments.pageInfo = {
+      hasPreviousPage: issue.comments.pageInfo.hasPreviousPage,
+      startCursor: issue.comments.pageInfo.startCursor ?? null
+    };
   }
   return result;
 }
@@ -164,28 +226,57 @@ const issueDescriptions = {
 export function issueTool(operation) {
   return {
     description: issueDescriptions[operation],
-    output: { mode: "replace", schema: createSchema({
-      ok: { type: "boolean", required: true }, error: text, code: text, warning: text, state: text, stateReason: text,
-      repository: { ...text, maxLength: 4096, noTrim: true },
-      total: { type: "integer", required: false }, offset: { type: "integer", required: false },
-      nextOffset: { type: "integer", nullable: true, required: false }, searchLimit: { type: "integer", nullable: true, required: false },
-      pageInfo: { type: "object", required: false, schema: createSchema({
-        hasNextPage: { type: "boolean", required: true }, endCursor: { type: "string", noTrim: true, maxLength: 500, nullable: true, required: true }
-      }) },
-      ...Object.fromEntries(["canCreateLabels", "canCreateWithLabels", "canEditLabels"].map((key) => [key, { type: "boolean", required: false }])),
-      issues: { type: "array", items: createSchema(issueFields), required: false },
-      issue: { type: "object", schema: createSchema(issueFields), required: false },
-      comment: { type: "object", schema: createSchema(commentFields), required: false },
-      label: { type: "object", schema: createSchema(labelFields), required: false },
-      labels: { type: "array", items: createSchema(labelFields), required: false },
-      users: { type: "array", items: createSchema({ login: { ...text, noTrim: true }, name: text }), required: false }
-    }) },
+    output: {
+      mode: "replace",
+      schema: createSchema({
+        ok: { type: "boolean", required: true },
+        error: text,
+        code: text,
+        warning: text,
+        state: text,
+        stateReason: text,
+        repository: { ...text, maxLength: 4096, noTrim: true },
+        total: { type: "integer", required: false },
+        offset: { type: "integer", required: false },
+        nextOffset: { type: "integer", nullable: true, required: false },
+        searchLimit: { type: "integer", nullable: true, required: false },
+        pageInfo: {
+          type: "object",
+          required: false,
+          schema: createSchema({
+            hasNextPage: {
+              type: "boolean",
+              required: true
+            },
+            endCursor: {
+              type: "string",
+              noTrim: true,
+              maxLength: 500,
+              nullable: true,
+              required: true
+            }
+          })
+        },
+        ...Object.fromEntries(["canCreateLabels", "canCreateWithLabels", "canEditLabels"].map((key) => [key, {
+          type: "boolean",
+          required: false
+        }])),
+        issues: { type: "array", items: createSchema(issueFields), required: false },
+        issue: { type: "object", schema: createSchema(issueFields), required: false },
+        comment: { type: "object", schema: createSchema(commentFields), required: false },
+        label: { type: "object", schema: createSchema(labelFields), required: false },
+        labels: { type: "array", items: createSchema(labelFields), required: false },
+        users: { type: "array", items: createSchema({ login: { ...text, noTrim: true }, name: text }), required: false }
+      })
+    },
     transformResult(result) {
-      const output = { ok: result.ok === true,
+      const output = {
+        ok: result.ok === true,
         ...Object.fromEntries(["error", "code", "warning", "state", "stateReason", "repository"].flatMap((key) =>
           typeof result[key] === "string" ? [[key, result[key].slice(0, key === "repository" ? 4096 : 512)]] : [])),
         ...Object.fromEntries(["canCreateLabels", "canCreateWithLabels", "canEditLabels"].flatMap((key) =>
-          typeof result[key] === "boolean" ? [[key, result[key]]] : [])) };
+          typeof result[key] === "boolean" ? [[key, result[key]]] : []))
+      };
       if (result.issues) {
         output.issues = result.issues.map(issueSummary);
         output.total = result.total;
@@ -197,7 +288,10 @@ export function issueTool(operation) {
       if (result.label) output.label = issueLabel(result.label);
       for (const key of ["labels", "users"]) {
         if (!Array.isArray(result[key])) continue;
-        output[key] = result[key].slice(0, 20).map(key === "labels" ? issueLabel : (user) => ({ login: user.login, name: String(user.name || "").slice(0, 512) }));
+        output[key] = result[key].slice(0, 20).map(key === "labels" ? issueLabel : (user) => ({
+          login: user.login,
+          name: String(user.name || "").slice(0, 512)
+        }));
         output.offset = result.offset ?? 0;
         output.total = result.total ?? result[key].length;
         output.nextOffset = output.offset + output[key].length < output.total ? output.offset + output[key].length : null;

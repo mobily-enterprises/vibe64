@@ -37,19 +37,30 @@ function registerColleagueFocus({ realtime, actions }) {
         if (!current()) return;
         attachDirectRequestActionExecutor({ actions, request });
         const result = await request.executeAction({
-          actionId: "vibe64.colleague.focus.update", channel: "api", surface: "app", input,
-          deps: { browserBinding: { owner: binding.owner, current, onRelease(detach) {
-            if (binding.release && binding.release !== detach) void binding.release().catch(error => {
-              console.error("Colleague previous actor focus cleanup failed.", error);
-            });
-            binding.release = detach;
-            if (!current()) release(input.clientId);
-          } } }
+          actionId: "vibe64.colleague.focus.update",
+          channel: "api",
+          surface: "app",
+          input,
+          deps: {
+            browserBinding: {
+              owner: binding.owner,
+              current,
+              onRelease(detach) {
+                if (binding.release && binding.release !== detach) void binding.release().catch(error => {
+                  console.error("Colleague previous actor focus cleanup failed.", error);
+                });
+                binding.release = detach;
+                if (!current()) release(input.clientId);
+              }
+            }
+          }
         });
         if (current()) acknowledge(result);
       } catch (error) {
-        if (!closed && socket.connected) acknowledge({ ok: false,
-          error: Number(error.statusCode || error.status || 500) < 500 ? error.message : "Colleague could not update this browser's focus." });
+        if (!closed && socket.connected) acknowledge({
+          ok: false,
+          error: Number(error.statusCode || error.status || 500) < 500 ? error.message : "Colleague could not update this browser's focus."
+        });
       }
     }
     function leave(input) { release(input?.clientId); }

@@ -67,7 +67,11 @@ function createUsageService({
     const session = await runtime.getSession(normalizedSessionId);
     const sourceRoot = sessionSourcePath(session);
     if (!sourceRoot || !await pathExists(sourceRoot)) {
-      throw usageError("Create the active session source before opening Architecture.", "vibe64_system_source_unavailable", { sessionId: normalizedSessionId });
+      throw usageError(
+        "Create the active session source before opening Architecture.",
+        "vibe64_system_source_unavailable",
+        { sessionId: normalizedSessionId }
+      );
     }
     return sourceRoot;
   }

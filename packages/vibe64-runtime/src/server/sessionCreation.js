@@ -39,7 +39,13 @@ import { enqueueSessionMutation, SESSION_MUTATION_LOCK_WAIT_MS } from "./session
  * @param {SessionRecords} dependencies.sessionRecords
  * @param {SessionListing} dependencies.listing
  */
-function createSessionCreation({ state, storePaths, locks, sessionRecords, listing }) {
+function createSessionCreation({
+  state,
+  storePaths,
+  locks,
+  sessionRecords,
+  listing
+}) {
   async function createSessionRecord({
     metadata = {},
     runtimeKind = "",
@@ -65,7 +71,9 @@ function createSessionCreation({ state, storePaths, locks, sessionRecords, listi
     const sessionPaths = storePaths.paths(resolvedSessionId);
     if (state.admittedLearningScope) {
       normalizedMetadata[LEARNING_SESSION_METADATA] = JSON.stringify({
-        schemaVersion: 1, ...state.admittedLearningScope, conversationId: resolvedSessionId
+        schemaVersion: 1,
+        ...state.admittedLearningScope,
+        conversationId: resolvedSessionId
       });
     }
     const release = await locks.acquireStoreSessionLock(sessionPaths, "create", {

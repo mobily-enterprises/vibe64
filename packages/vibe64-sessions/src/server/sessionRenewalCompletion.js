@@ -45,7 +45,13 @@ async function updateRenewalMaintenance(runtime, state, operation) {
  * @param {RenewalSessionAccess} dependencies.renewalAccess
  * @param {TerminalsService} dependencies.terminals
  */
-function createRenewalCompletion({ predecessorSession, prepareArchive, project, renewalAccess, terminals }) {
+function createRenewalCompletion({
+  predecessorSession,
+  prepareArchive,
+  project,
+  renewalAccess,
+  terminals
+}) {
   /**
    * @param {Vibe64SessionRuntime} runtime
    * @param {object} state
@@ -373,7 +379,11 @@ function createRenewalCompletion({ predecessorSession, prepareArchive, project, 
     return finalizeCommittedRenewal(runtime, committed, input);
   }
 
-  return Object.freeze({ completeRenewalArchive, finalizeCommittedRenewal, finalizeCompletedRenewal });
+  return Object.freeze({
+    completeRenewalArchive,
+    finalizeCommittedRenewal,
+    finalizeCompletedRenewal
+  });
 }
 
 export { createRenewalCompletion };

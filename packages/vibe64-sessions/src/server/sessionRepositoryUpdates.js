@@ -76,7 +76,12 @@ async function persistRepositoryUpdateCheck(runtime, sessionId, result = {}) {
  * @param {TerminalsService} dependencies.terminals
  * @param {SessionWorkOperations} dependencies.workOperations
  */
-function createSessionRepositoryUpdates({ project, publishSessionChanged, terminals, workOperations }) {
+function createSessionRepositoryUpdates({
+  project,
+  publishSessionChanged,
+  terminals,
+  workOperations
+}) {
   const activeRepositoryUpdateChecks = new Map();
 
   /**
@@ -238,12 +243,18 @@ function createSessionRepositoryUpdates({ project, publishSessionChanged, termin
             if (!failure && moved && !renewing) {
               const check = await updates.checkSessionUpdates(sessionId, { force: true });
               if (check?.ok === false) {
-                failure = { code: text(check.code), message: text(check.error) || "The project's repository could not be checked for updates." };
+                failure = {
+                  code: text(check.code),
+                  message: text(check.error) || "The project's repository could not be checked for updates."
+                };
               }
             }
             if (!failure && renewing) continue;
           } catch (error) {
-            failure = { code: text(error?.code), message: text(error?.message) || "The project's repository could not be checked for updates." };
+            failure = {
+              code: text(error?.code),
+              message: text(error?.message) || "The project's repository could not be checked for updates."
+            };
           }
           if (!failure) {
             if (read.authority) memory.set(sessionId, { authority: read.authority });

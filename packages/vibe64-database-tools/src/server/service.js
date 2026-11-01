@@ -40,7 +40,13 @@ import { createSessionDatabase } from "./sessionDatabase.js";
 import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "./dataOverview.js";
 import { inspectErdLayout, moveErdLayoutTables } from "./erdLayout.js";
 import { defaultTableQuery } from "../shared/sqlQuoting.js";
-import { DATA_OVERVIEW_INSTRUCTIONS, DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, dataOverviewCoverage, validateDataOverview } from "../shared/dataOverview.js";
+import {
+  DATA_OVERVIEW_INSTRUCTIONS,
+  DATA_OVERVIEW_MAX_BYTES,
+  DATA_OVERVIEW_PATH,
+  dataOverviewCoverage,
+  validateDataOverview
+} from "../shared/dataOverview.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -100,7 +106,11 @@ function createService({
   terminalService,
   withKnex = withSessionKnex
 }) {
-  const sessionDatabase = createSessionDatabase({ logger, projectService, withKnex });
+  const sessionDatabase = createSessionDatabase({
+    logger,
+    projectService,
+    withKnex
+  });
   const activeQueries = new Map();
   const activeAssistants = new Set();
 
@@ -110,7 +120,8 @@ function createService({
 
   async function assistantDecision(context) {
     return terminalService.resolveAssistantPurpose({ purpose: "database_assistant" }, {
-      session: context.session, vibe64User: context.vibe64User
+      session: context.session,
+      vibe64User: context.vibe64User
     });
   }
 
@@ -129,15 +140,22 @@ function createService({
       : await runtime.store.readArtifact(sessionId, artifact);
     let helper = null;
     try { helper = saved ? JSON.parse(saved) : null; }
-    catch { throw databaseError(`The saved database copilot receipt ${artifact} is unreadable; it was left unchanged.`, "vibe64_database_assistant_receipt_invalid"); }
+    catch { throw databaseError(
+      `The saved database copilot receipt ${artifact} is unreadable; it was left unchanged.`,
+      "vibe64_database_assistant_receipt_invalid"
+    ); }
     if (!helper) return;
     const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope?.id || "");
     if (!/^database_[a-f0-9-]+$/u.test(helper.scope?.id || "") || helper.scope.workdir !== path.join(root, "workdir") ||
         helper.scope.runtimeRoot !== path.join(root, "runtime")) {
-      throw databaseError(`The saved database copilot receipt ${artifact} has invalid cleanup paths; it was left unchanged.`, "vibe64_database_assistant_receipt_invalid");
+      throw databaseError(
+        `The saved database copilot receipt ${artifact} has invalid cleanup paths; it was left unchanged.`,
+        "vibe64_database_assistant_receipt_invalid"
+      );
     }
     const result = await terminalService.deleteEphemeralAgentConversation(helper.scope, {
-      conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
+      conversationId: helper.conversationId,
+      cleanupExecutionId: helper.executionId,
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
     }, { assistantSelection: helper.selection, vibe64User });
     if (result?.ok !== true) {
@@ -167,7 +185,10 @@ function createService({
       ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
     const files = await readPaths(sessionId, async (paths) => {
       try { return await readdir(path.join(paths.artifactsRoot, "database/assistant-tasks")); }
-      catch (error) { if (error.code === "ENOENT") return []; throw error; }
+      catch (error) {
+        if (error.code === "ENOENT") return [];
+        throw error;
+      }
     });
     const failures = [];
     for (const file of files) if (/^[a-f0-9]{20}\.json$/u.test(file)) {
@@ -176,8 +197,14 @@ function createService({
         await cleanupAssistant(runtime, sessionId, artifact, null, options.renewalCleanup);
       } catch (error) {
         failures.push(error);
-        logOperationalEvent(logger, "warn", { component: "vibe64-database-tools", event: "vibe64.database.assistant_cleanup_failed",
-          sessionId, artifact, code: error.code || "", error: error.message }, "A database copilot helper could not be closed; its receipt was kept.");
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64-database-tools",
+          event: "vibe64.database.assistant_cleanup_failed",
+          sessionId,
+          artifact,
+          code: error.code || "",
+          error: error.message
+        }, "A database copilot helper could not be closed; its receipt was kept.");
       }
     }
     if (failures.length === 1) throw failures[0];
@@ -241,14 +268,27 @@ function createService({
         relationships: relationships.map((relationship) => ({ id: relationship.reference }))
       }, overview.definition);
       return {
-        ok: true, overview, coverage, valid: !overview.error && !coverage.missing.length && !coverage.missingRelationships.length,
+        ok: true,
+        overview,
+        coverage,
+        valid: !overview.error && !coverage.missing.length && !coverage.missingRelationships.length,
         instructions: DATA_OVERVIEW_INSTRUCTIONS,
         schema: {
-          database: schema.database, engine: schema.engine, refreshedAt: schema.refreshedAt,
+          database: schema.database,
+          engine: schema.engine,
+          refreshedAt: schema.refreshedAt,
           tables: schema.tables.map((table) => ({
-            reference: reference(table.qualifiedName), qualifiedName: table.qualifiedName, kind: table.kind, comment: table.comment,
+            reference: reference(table.qualifiedName),
+            qualifiedName: table.qualifiedName,
+            kind: table.kind,
+            comment: table.comment,
             keys: table.keys,
-            columns: table.columns.map((column) => ({ name: column.name, nativeType: column.nativeType, nullable: column.nullable, comment: column.comment }))
+            columns: table.columns.map((column) => ({
+              name: column.name,
+              nativeType: column.nativeType,
+              nullable: column.nullable,
+              comment: column.comment
+            }))
           })),
           relationships
         }
@@ -270,7 +310,12 @@ function createService({
       catch (error) { decision = { available: false, message: error.message }; }
       return {
         activeQueries: [...(activeQueries.get(sessionQueryKey(context.sessionId)) || [])]
-          .map(([queryId, query]) => ({ queryId, readOnly: query.readOnly, startedAt: query.startedAt, cancellable: Boolean(query.cancel) })),
+          .map(([queryId, query]) => ({
+            queryId,
+            readOnly: query.readOnly,
+            startedAt: query.startedAt,
+            cancellable: Boolean(query.cancel)
+          })),
         assistant: databaseAssistantAvailability(decision),
         connection: safeConnectionDescriptor(context.writeConnection, context),
         layout,
@@ -316,11 +361,20 @@ function createService({
       if (!current.present && input.baseHash) {
         throw databaseError("The data overview was removed. Reload it before saving.", "vibe64_database_overview_conflict");
       }
-      const payload = { sessionId: context.sessionId, path: DATA_OVERVIEW_PATH, text, baseHash: current.hash, vibe64User: context.vibe64User };
+      const payload = {
+        sessionId: context.sessionId,
+        path: DATA_OVERVIEW_PATH,
+        text,
+        baseHash: current.hash,
+        vibe64User: context.vibe64User
+      };
       const result = current.present ? await sourceEditor.saveFile(payload) : await sourceEditor.createFile(payload);
       if (result.ok === false) return result;
       await publishLayoutChanged(context.sessionId, context.session);
-      return { ok: true, overview: { path: DATA_OVERVIEW_PATH, present: true, hash: result.file.hash, error: "", definition: resolvedDefinition } };
+      return {
+        ok: true,
+        overview: { path: DATA_OVERVIEW_PATH, present: true, hash: result.file.hash, error: "", definition: resolvedDefinition }
+      };
     });
   }
 
@@ -526,8 +580,12 @@ function createService({
   }
 
   function askAssistant(input) {
-    const task = { sessionId: normalizeText(input.sessionId), projectScope: currentProjectScopeKey(),
-      actor: actorKey(input.vibe64User), controller: new AbortController() };
+    const task = {
+      sessionId: normalizeText(input.sessionId),
+      projectScope: currentProjectScopeKey(),
+      actor: actorKey(input.vibe64User),
+      controller: new AbortController()
+    };
     task.promise = databaseResult(async () => {
       if ([...activeAssistants].some((other) => other !== task && other.sessionId === task.sessionId &&
           other.projectScope === task.projectScope && other.actor === task.actor)) {
@@ -545,28 +603,46 @@ function createService({
         task.controller.signal.throwIfAborted();
         const id = `database_${randomUUID()}`;
         const root = path.join(runtime.stateRoot, "assistant-helpers", id);
-        const helper = { scope: { id, environment: {}, runtimeRoot: path.join(root, "runtime"), workdir: path.join(root, "workdir"),
-          stableContext: "Answer only from the supplied database information. You have no tools or project access." },
-          selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity,
-          conversationId: "", runId: "", executionId: "" };
+        const helper = {
+          scope: {
+            id,
+            environment: {},
+            runtimeRoot: path.join(root, "runtime"),
+            workdir: path.join(root, "workdir"),
+            stableContext: "Answer only from the supplied database information. You have no tools or project access."
+          },
+          selection: decision.effectiveSelection,
+          connectionIdentity: decision.connectionIdentity,
+          conversationId: "",
+          runId: "",
+          executionId: ""
+        };
         const retain = () => runtime.store.writeJsonArtifact(context.sessionId, artifact, helper);
         await retain();
-        const options = { assistantSelection: helper.selection, vibe64User: context.vibe64User,
-          expectedConnectionIdentity: helper.connectionIdentity, signal: task.controller.signal,
+        const options = {
+          assistantSelection: helper.selection,
+          vibe64User: context.vibe64User,
+          expectedConnectionIdentity: helper.connectionIdentity,
+          signal: task.controller.signal,
           async onEvent(event) {
             if (event.type === "thread") helper.conversationId = event.threadId;
             else if (event.type === "turn") helper.runId = event.turnId;
             else if (event.type === "helper-execution") helper.executionId = event.executionId;
             else return;
             await retain();
-          } };
+          }
+        };
         const startedAt = Date.now();
         let result = null;
         let failure = null;
         try {
           await mkdir(helper.scope.workdir, { recursive: true, mode: 0o700 });
           await mkdir(helper.scope.runtimeRoot, { recursive: true, mode: 0o700 });
-          const profile = await terminalService.resolveEphemeralAgentExecutionProfile(helper.scope, { ...DATABASE_ASSISTANT_EXECUTION_PROFILE }, options);
+          const profile = await terminalService.resolveEphemeralAgentExecutionProfile(
+            helper.scope,
+            { ...DATABASE_ASSISTANT_EXECUTION_PROFILE },
+            options
+          );
           helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(profile);
           await retain();
           task.controller.signal.throwIfAborted();

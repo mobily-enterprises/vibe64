@@ -73,5 +73,10 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
     if (!runtimeDirectory) await rm(directory, { recursive: true, force: true });
   }
 
-  return Object.freeze({ registryPath, get, register, close });
+  return Object.freeze({
+    registryPath,
+    get,
+    register,
+    close
+  });
 }

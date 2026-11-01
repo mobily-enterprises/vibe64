@@ -3,7 +3,19 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 import { LEARNER_NOTES_MAX_CHARS as MAX_NOTES_CHARS, TRAINING_NOTES_CHANGED_CODE } from "../shared/learnerContract.js";
 import { validateContent } from "./contentSchemas.js";
-import { failure, inspectDirectoryChain, inspectPath, isoTime, MAX_NOTES_BYTES, MAX_NOTES_REQUESTS, notesSchema, readRecord, requestPattern, sha256Pattern, validNotesText } from "./learnerRecords.js";
+import {
+  failure,
+  inspectDirectoryChain,
+  inspectPath,
+  isoTime,
+  MAX_NOTES_BYTES,
+  MAX_NOTES_REQUESTS,
+  notesSchema,
+  readRecord,
+  requestPattern,
+  sha256Pattern,
+  validNotesText
+} from "./learnerRecords.js";
 import { sha256Hex } from "./sha256Hex.js";
 
 /**
@@ -14,7 +26,12 @@ import { sha256Hex } from "./sha256Hex.js";
  * @param {string} dependencies.systemRoot
  * @param {(actor: object) => object} dependencies.userPaths
  */
-function createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, userPaths }) {
+function createLearnerNotes({
+  acquireRecordLock,
+  createNamespace,
+  systemRoot,
+  userPaths
+}) {
   /**
    * Learner notes (contract C7): the teacher's private summary of this one
    * learner, in that learner's own Learning state with its own lock. The
@@ -65,7 +82,11 @@ function createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, us
     }
     const textHash = sha256Hex(value);
     await createNamespace(paths);
-    const release = await acquireRecordLock(paths.notesLock, "VIBE64_TRAINING_NOTES_BUSY", "The learner notes are being saved. Retry the same request in a moment.");
+    const release = await acquireRecordLock(
+      paths.notesLock,
+      "VIBE64_TRAINING_NOTES_BUSY",
+      "The learner notes are being saved. Retry the same request in a moment."
+    );
     try {
       let record;
       try {
@@ -77,7 +98,11 @@ function createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, us
       const replay = record?.requests.find(request => request.requestId === requestId);
       if (replay) {
         if (replay.textHash !== textHash) {
-          throw failure("VIBE64_TRAINING_NOTES_REQUEST_REUSED", "This request ID already saved different notes. Use a new request ID.", 409);
+          throw failure(
+            "VIBE64_TRAINING_NOTES_REQUEST_REUSED",
+            "This request ID already saved different notes. Use a new request ID.",
+            409
+          );
         }
         return { notes: notesProjection(record), replayed: true, changed: false };
       }
@@ -86,19 +111,33 @@ function createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, us
         throw failure(TRAINING_NOTES_CHANGED_CODE,
           "The notes changed since they were read. Read them again and save the combined summary; nothing was saved.", 409);
       }
-      if (current === Number.MAX_SAFE_INTEGER) throw failure("VIBE64_TRAINING_NOTES_REVISION_LIMIT", "Learner notes reached their revision limit. Nothing was saved.", null);
-      const next = { schemaVersion: 1, learnerId: paths.learner.id, revision: current + 1, text: value,
-        updatedAt: new Date().toISOString(), updatedBy,
-        requests: [...record?.requests || [], { requestId, textHash, revision: current + 1 }].slice(-MAX_NOTES_REQUESTS) };
+      if (current === Number.MAX_SAFE_INTEGER) {
+        throw failure("VIBE64_TRAINING_NOTES_REVISION_LIMIT", "Learner notes reached their revision limit. Nothing was saved.", null);
+      }
+      const next = {
+        schemaVersion: 1,
+        learnerId: paths.learner.id,
+        revision: current + 1,
+        text: value,
+        updatedAt: new Date().toISOString(),
+        updatedBy,
+        requests: [...record?.requests || [], { requestId, textHash, revision: current + 1 }].slice(-MAX_NOTES_REQUESTS)
+      };
       const validated = validateContent(notesSchema, next, "Learner notes");
       if (Buffer.byteLength(JSON.stringify(validated)) > MAX_NOTES_BYTES) {
-        throw failure("VIBE64_TRAINING_NOTES_INVALID", "The learner notes exceed their storage bound. Shorten them; nothing was saved.", 400);
+        throw failure(
+          "VIBE64_TRAINING_NOTES_INVALID",
+          "The learner notes exceed their storage bound. Shorten them; nothing was saved.",
+          400
+        );
       }
       try {
         await writeJsonFileAtomic(paths.notes, validated, { directoryMode: 0o700, fileMode: 0o600 });
       } catch (cause) {
         throw failure("VIBE64_TRAINING_NOTES_SAVE_UNCONFIRMED",
-          "The notes save was not confirmed; the atomic rename may have succeeded. Read the notes or retry the same request ID.", null, { cause });
+          "The notes save was not confirmed; the atomic rename may have succeeded. Read the notes or retry the same request ID.",
+          null,
+            { cause });
       }
       return { notes: notesProjection(validated), replayed: false, changed: true };
     } finally {

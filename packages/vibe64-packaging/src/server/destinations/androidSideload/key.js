@@ -39,7 +39,10 @@ async function runKeytool(javaHome, args, { cwd, password, runCommand = spawnCom
   });
   if (result?.ok !== true) {
     // keytool never echoes the password; its output is still kept short.
-    throw keyError("keytool failed.", { exitCode: result?.exitCode ?? null, output: `${result?.stdout || ""}${result?.stderr || ""}`.slice(-2000) });
+    throw keyError("keytool failed.", {
+      exitCode: result?.exitCode ?? null,
+      output: `${result?.stdout || ""}${result?.stderr || ""}`.slice(-2000)
+    });
   }
   return result;
 }
@@ -87,7 +90,11 @@ async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.t
       "-noprompt"
     ], { cwd: directory, password: passwordText, runCommand });
     const certificateSha256 = await exportCertificateSha256({
-      javaHome, keystore: store, alias: SIDELOAD_KEY_ALIAS, password: passwordText, cwd: directory
+      javaHome,
+      keystore: store,
+      alias: SIDELOAD_KEY_ALIAS,
+      password: passwordText,
+      cwd: directory
     }, { runCommand });
     keystore = await readFile(store);
     await sink({ keystore, password, alias: SIDELOAD_KEY_ALIAS, certificateSha256 });

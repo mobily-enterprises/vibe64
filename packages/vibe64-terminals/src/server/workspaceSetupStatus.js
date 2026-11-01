@@ -21,7 +21,11 @@ import {
  * @param {WorkspaceSetupRunnerState} dependencies.runnerState
  * @param {WorkspaceSetupExecution} dependencies.setupExecution
  */
-function createWorkspaceSetupStatus({ projectService, runnerState, setupExecution }) {
+function createWorkspaceSetupStatus({
+  projectService,
+  runnerState,
+  setupExecution
+}) {
   async function invalidate({ runtime, session, diagnostic } = {}) {
     const previous = workspaceSetupState(session.workspaceSetup);
     return persist(runtime, session.sessionId, {
@@ -85,7 +89,12 @@ function createWorkspaceSetupStatus({ projectService, runnerState, setupExecutio
     return runnerState.activeRuns.get(workspaceSetupRunKey(normalizeText(sessionId))) || null;
   }
 
-  return Object.freeze({ invalidate, isPrepared, isRunning, wait });
+  return Object.freeze({
+    invalidate,
+    isPrepared,
+    isRunning,
+    wait
+  });
 }
 
 export {

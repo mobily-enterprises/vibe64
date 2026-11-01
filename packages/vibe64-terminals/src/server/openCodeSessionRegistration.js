@@ -126,36 +126,85 @@ function createOpenCodeSessionRegistration({
   });
   const { turns, temporaryConversations } = sharedRuntime;
   const hostPreparation = createOpenCodeHostPreparation({
-    agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
-    codexGitCommand, command, createServerProcess, env, getAssistantManager,
-    listConnections, prepareCommandEnvironment, projectService, resolveConnection,
+    agentDatabaseCommand,
+    agentEnvCommand,
+    agentPreviewCommand,
+    agentSessionCommand,
+    codexGitCommand,
+    command,
+    createServerProcess,
+    env,
+    getAssistantManager,
+    listConnections,
+    prepareCommandEnvironment,
+    projectService,
+    resolveConnection,
     sharedRuntime
   });
-  const presentation = createOpenCodeConversationPresentation({ getAssistantManager, publishSessionChanged, turns, temporaryConversations });
-  const events = createOpenCodeConversationEvents({ projectService, publishSessionChanged, sharedRuntime, presentation });
+  const presentation = createOpenCodeConversationPresentation({
+    getAssistantManager,
+    publishSessionChanged,
+    turns,
+    temporaryConversations
+  });
+  const events = createOpenCodeConversationEvents({
+    projectService,
+    publishSessionChanged,
+    sharedRuntime,
+    presentation
+  });
   const mainMessagePreparation = createOpenCodeMainMessagePreparation({
-    projectService, env, recordGitActor, hostPreparation, events, presentation
+    projectService,
+    env,
+    recordGitActor,
+    hostPreparation,
+    events,
+    presentation
   });
   const { contextFor } = mainMessagePreparation;
   const accounts = createOpenCodeConversationAccounts({
-    command, createServerProcess, env, listConnections, readCatalogCommand,
-    readZenModelsCommand, sharedRoots: hostPreparation.sharedRoots, verifyConnectionCommand,
-    mainMessagePreparation, resolveConnection
+    command,
+    createServerProcess,
+    env,
+    listConnections,
+    readCatalogCommand,
+    readZenModelsCommand,
+    sharedRoots: hostPreparation.sharedRoots,
+    verifyConnectionCommand,
+    mainMessagePreparation,
+    resolveConnection
   });
   const scopedPreparation = createOpenCodeScopedPreparation({
-    projectService, contextFor, hostPreparation, events, publishSessionChanged, prepareSessionCleanup
+    projectService,
+    contextFor,
+    hostPreparation,
+    events,
+    publishSessionChanged,
+    prepareSessionCleanup
   });
 
   const lifecyclePreparation = createOpenCodeLifecyclePreparation({
-    projectService, getAssistantManager, sharedRuntime, hostPreparation,
-    mainMessagePreparation, events, presentation, resolveConnection
+    projectService,
+    getAssistantManager,
+    sharedRuntime,
+    hostPreparation,
+    mainMessagePreparation,
+    events,
+    presentation,
+    resolveConnection
   });
   const renewalPreparation = createOpenCodeSessionRenewalPreparation({
-    mainMessagePreparation, hostPreparation, lifecyclePreparation
+    mainMessagePreparation,
+    hostPreparation,
+    lifecyclePreparation
   });
 
   const terminals = createOpenCodeInteractiveTerminals({
-    sharedRuntime, contextFor, hostPreparation, env, recordGitActor
+    sharedRuntime,
+    contextFor,
+    hostPreparation,
+    env,
+    recordGitActor
   });
 
   function prepareSessionCleanup(sessionId = "", options = {}) {
@@ -163,9 +212,17 @@ function createOpenCodeSessionRegistration({
   }
 
   const provider = createOpenCodeSessionAgentProvider({
-    sharedRuntime, hostPreparation, accounts, mainMessagePreparation, scopedPreparation,
-    lifecyclePreparation, renewalPreparation, terminals, publishSessionChanged,
-    prepareSessionCleanup, runNativeDetachedConversation
+    sharedRuntime,
+    hostPreparation,
+    accounts,
+    mainMessagePreparation,
+    scopedPreparation,
+    lifecyclePreparation,
+    renewalPreparation,
+    terminals,
+    publishSessionChanged,
+    prepareSessionCleanup,
+    runNativeDetachedConversation
   });
   return { provider, hostPreparation, accounts, terminals };
 }

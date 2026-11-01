@@ -18,10 +18,19 @@ function writerError(message, code = "vibe64_publishing_prepare_failed") {
  * @param {SourceEditorService} dependencies.sourceEditor
  * @param {() => string} [dependencies.today]
  */
-function createSessionReleaseWriter({ project, sourceEditor, today = () => new Date().toISOString().slice(0, 10) }) {
+function createSessionReleaseWriter({
+  project,
+  sourceEditor,
+  today = () => new Date().toISOString().slice(0, 10)
+}) {
   async function sessionRoot(sessionId) {
     const id = String(sessionId || "").trim();
-    if (!id) throw writerError("Open a session first: the version change is written into it for you to review and Save.", "vibe64_publishing_session_required");
+    if (!id) {
+      throw writerError(
+        "Open a session first: the version change is written into it for you to review and Save.",
+        "vibe64_publishing_session_required"
+      );
+    }
     const store = await project.createSessionStore();
     const session = await store.readSession(id);
     const root = session ? sessionSourcePath(session) : "";
@@ -55,7 +64,12 @@ function createSessionReleaseWriter({ project, sourceEditor, today = () => new D
 
   async function write({ sessionId, file, baseHash, user }) {
     const result = file.before === null
-      ? await sourceEditor.createFile({ sessionId, path: file.path, text: file.after, vibe64User: user || undefined })
+      ? await sourceEditor.createFile({
+        sessionId,
+        path: file.path,
+        text: file.after,
+        vibe64User: user || undefined
+      })
       : await sourceEditor.saveFile({ sessionId, path: file.path, text: file.after, baseHash, vibe64User: user || undefined });
     if (result?.ok === false) throw writerError(result.error || `Could not ${file.before === null ? "create" : "change"} ${file.path}.`);
   }

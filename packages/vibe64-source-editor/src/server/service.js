@@ -204,8 +204,12 @@ function createService({
     closeExplanationsForSession,
     close: closeExplanations
   } = createExplanationOperations({
-    explanationCacheNow, logger,
-    projectService, sourceEditorContext, temporaryRoot, terminalService
+    explanationCacheNow,
+    logger,
+    projectService,
+    sourceEditorContext,
+    temporaryRoot,
+    terminalService
   });
 
   /**
@@ -225,8 +229,14 @@ function createService({
     readIntegrationProviders,
     saveIntegrations
   } = createIntegrationOperations({
-    fileIndex, integrationCommandRunner, integrationDiscoveryFetch, projectService,
-    publishSessionChanged, runSourceEditorWriteExclusive, searchIndex, sourceEditorContext
+    fileIndex,
+    integrationCommandRunner,
+    integrationDiscoveryFetch,
+    projectService,
+    publishSessionChanged,
+    runSourceEditorWriteExclusive,
+    searchIndex,
+    sourceEditorContext
   });
 
   async function readTree(input = {}) {

@@ -80,7 +80,10 @@ function createSessionAttachments({ projectService, env = process.env }) {
         try {
           await copyFile(upload.path, path.join(staging, "file"));
           const [record] = normalizeVibe64ConversationAttachments([upload]);
-          await writeFile(path.join(staging, "attachment.json"), JSON.stringify({ ...record, conversationId }), { mode: vibe64SharedModes().file });
+          await writeFile(path.join(staging, "attachment.json"), JSON.stringify({
+            ...record,
+            conversationId
+          }), { mode: vibe64SharedModes().file });
           await rename(staging, directory);
         } finally {
           await rm(staging, { force: true, recursive: true });
@@ -92,24 +95,36 @@ function createSessionAttachments({ projectService, env = process.env }) {
 
   async function uploadAttachment(context, input) {
     const { executionRoot, runtime, sessionId } = await attachmentContext(context);
-    return storeUpload({ executionRoot, sessionId, input, env, beforeCreate: async () => {
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
-      if (sessionIsClosing(session) || !vibe64SessionStatusIsOpen(session.status)) {
-        const closingReason = sessionClosingReason(session);
-        throw Object.assign(new Error(closingReason
-          ? `Session is ${closingReason}. Attachments cannot be added while it is closing.`
-          : "This session is closing. Attachments cannot be added now."), {
-          code: "vibe64_agent_attachment_session_unavailable", statusCode: 409
-        });
+    return storeUpload({
+      executionRoot,
+      sessionId,
+      input,
+      env,
+      beforeCreate: async () => {
+        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        if (sessionIsClosing(session) || !vibe64SessionStatusIsOpen(session.status)) {
+          const closingReason = sessionClosingReason(session);
+          throw Object.assign(new Error(closingReason
+            ? `Session is ${closingReason}. Attachments cannot be added while it is closing.`
+            : "This session is closing. Attachments cannot be added now."), {
+              code: "vibe64_agent_attachment_session_unavailable",
+              statusCode: 409
+            });
+        }
       }
-    } });
+    });
   }
 
   async function deleteAttachment(context, input) {
     const { executionRoot, runtime, sessionId } = await attachmentContext(context);
     const saved = await runtime.store.withReadableSessionPaths(sessionId, (paths) => readSavedAttachment(paths, input.attachmentId));
     if (saved) {
-      return { ok: false, statusCode: 409, code: "vibe64_agent_attachment_retained", error: "Sent attachments stay with the conversation." };
+      return {
+        ok: false,
+        statusCode: 409,
+        code: "vibe64_agent_attachment_retained",
+        error: "Sent attachments stay with the conversation."
+      };
     }
     await cleanupUploads(executionRoot, sessionId, input.attachmentId, { env });
     return { ok: true, attachmentId: input.attachmentId };
@@ -186,7 +201,8 @@ function createSessionAttachments({ projectService, env = process.env }) {
       } catch (error) {
         if (error.code === "ENOENT" && !vibe64SessionStatusIsOpen(session.status)) {
           throw Object.assign(new Error("This attachment is no longer retained. Its description remains in the chat."), {
-            code: "vibe64_agent_attachment_expired", statusCode: 410
+            code: "vibe64_agent_attachment_expired",
+            statusCode: 410
           });
         }
         throw error;

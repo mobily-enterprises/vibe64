@@ -375,17 +375,44 @@ async function createOpenCodeServerProcess({
     stateRoot: path.join(normalizedPrivateRoot, "state")
   });
   const native = await startOpenCodeServer({
-    command: executable, workdir: normalizedWorkdir, privateRoot: normalizedPrivateRoot, port: Number(port),
-    fetchImpl, expectedVersion, readinessTimeoutMs, allowAttachmentDirectories: true,
-    env: safeOpenCodeEnvironment(env, { cacheRoot, canonicalUrl, dbPath: normalizedDbPath,
-      hostContextResolver, managedEnv, modelProviderId, packageInstalls, privateRoot: normalizedPrivateRoot,
-      providerConnections, sessionEnvironmentRegistry, shimDirs }),
+    command: executable,
+    workdir: normalizedWorkdir,
+    privateRoot: normalizedPrivateRoot,
+    port: Number(port),
+    fetchImpl,
+    expectedVersion,
+    readinessTimeoutMs,
+    allowAttachmentDirectories: true,
+    env: safeOpenCodeEnvironment(env, {
+      cacheRoot,
+      canonicalUrl,
+      dbPath: normalizedDbPath,
+      hostContextResolver,
+      managedEnv,
+      modelProviderId,
+      packageInstalls,
+      privateRoot: normalizedPrivateRoot,
+      providerConnections,
+      sessionEnvironmentRegistry,
+      shimDirs
+    }),
     connections: [...(normalizeText(modelProviderId) || String(apiKey) ? [{ apiKey, modelProviderId }] : []),
-      ...(Array.isArray(providerConnections) ? providerConnections : [])].map(connection => ({ providerId: normalizeText(connection?.modelProviderId), apiKey: String(connection?.apiKey || "") })),
+      ...(Array.isArray(providerConnections) ? providerConnections : [])].map(connection => ({
+        providerId: normalizeText(connection?.modelProviderId),
+        apiKey: String(connection?.apiKey || "")
+      })),
     execution: createVibe64ConversationExecution({
-      commandRunner: request => commandRunner({ ...request, command: "/bin/sh", runtimes: VIBE64_INTERACTIVE_RUNTIME_PACKS,
-        args: ["-c", startupScript, "vibe64-opencode-server", logPath, request.command, ...request.args] }),
-      stopExecution, inspectExecution, credentialHome, logPath, shimDirs,
+      commandRunner: request => commandRunner({
+        ...request,
+        command: "/bin/sh",
+        runtimes: VIBE64_INTERACTIVE_RUNTIME_PACKS,
+        args: ["-c", startupScript, "vibe64-opencode-server", logPath, request.command, ...request.args]
+      }),
+      stopExecution,
+      inspectExecution,
+      credentialHome,
+      logPath,
+      shimDirs,
       label: normalizeText(execution.label) || "OpenCode assistant",
       operationId: normalizeText(execution.operationId) || "opencode-server",
       execution: {
@@ -394,8 +421,11 @@ async function createOpenCodeServerProcess({
           key: normalizeText(execution.operationId) === "opencode-catalog" ? "opencode-catalog-service" : "opencode-server",
           environment: "development",
           compatibilityKey: createHash("sha256").update(JSON.stringify({
-            command: executable, version: OPENCODE_EXPECTED_VERSION,
-            platform: process.platform, architecture: process.arch, startup: startupScript
+            command: executable,
+            version: OPENCODE_EXPECTED_VERSION,
+            platform: process.platform,
+            architecture: process.arch,
+            startup: startupScript
           })).digest("hex")
         },
         ownerId: normalizeText(execution.ownerId) || stableHash(`${normalizedDbPath}\0${normalizedWorkdir}`)
@@ -583,11 +613,16 @@ async function verifyOpenCodeApiKey({
             lifecycle: "finite",
             operationId: "opencode-catalog",
             resourceProfile: {
-              key: "opencode-key-verification", environment: "development",
+              key: "opencode-key-verification",
+              environment: "development",
               compatibilityKey: createHash("sha256").update(JSON.stringify({
-                command: executable, version: OPENCODE_EXPECTED_VERSION,
-                platform: process.platform, architecture: process.arch,
-                providerId, model: selectedModelId, outputTokenMax
+                command: executable,
+                version: OPENCODE_EXPECTED_VERSION,
+                platform: process.platform,
+                architecture: process.arch,
+                providerId,
+                model: selectedModelId,
+                outputTokenMax
               })).digest("hex")
             },
             ownerId: "opencode-catalog"

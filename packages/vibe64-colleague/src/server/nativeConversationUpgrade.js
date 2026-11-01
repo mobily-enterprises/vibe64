@@ -8,7 +8,12 @@ import { codexRuntimeContext } from "@local/studio-terminal-core/server/codexRun
 import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
 import { readAssistantResponseEnvelope } from "@jskit-ai/assistant-core/server";
 import { readOpenCodeConversationDatabase } from "@jskit-ai/assistant-core/server/opencode-client";
-import { openCodeDetachedPrompt, openCodeRowsForInput, openCodeLastAssistantResult, openCodeStructuredOutput } from "@jskit-ai/assistant-core/server/opencode-turn";
+import {
+  openCodeDetachedPrompt,
+  openCodeRowsForInput,
+  openCodeLastAssistantResult,
+  openCodeStructuredOutput
+} from "@jskit-ai/assistant-core/server/opencode-turn";
 import { readStoppedNativeDatabase } from "@jskit-ai/assistant-core/server/native-history";
 import { resolveVibe64ServiceDataRoot } from "@local/vibe64-core/server/studioRoots";
 import { conversationHistoryVersions, upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
@@ -36,11 +41,17 @@ const emptyCodexToolSchema = "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c
 // bounded output schema. Use its original native formatter to identify only
 // this known suffix; never strip arbitrary instructions or alter native files.
 const originalOpenCodeOutputSchema = {
-  type: "object", additionalProperties: false,
+  type: "object",
+  additionalProperties: false,
   required: ["kind", "text", "toolName", "arguments"],
   properties: {
     kind: { type: "string", enum: ["reply", "tool"] },
-    text: { type: "string", description: "The final reply, or a brief progress sentence for the first tool request; empty for subsequent tool requests." }, toolName: { type: "string" }, arguments: { type: "string" }
+    text: {
+      type: "string",
+      description: "The final reply, or a brief progress sentence for the first tool request; empty for subsequent tool requests."
+    },
+    toolName: { type: "string" },
+    arguments: { type: "string" }
   }
 };
 const originalOpenCodePromptSuffix = openCodeDetachedPrompt({ outputSchema: originalOpenCodeOutputSchema });
@@ -68,7 +79,13 @@ export async function upgradeColleagueHistoricalInteractiveContinuity(context) {
   return restoreColleagueNativeContinuity(context, true);
 }
 
-async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot, report, env = process.env }, historicalInteractive = false) {
+async function restoreColleagueNativeContinuity({
+  systemRoot,
+  apply,
+  backupRoot,
+  report,
+  env = process.env
+}, historicalInteractive = false) {
   const root = path.join(systemRoot, "colleague");
   await verifyUpgradeParents(systemRoot, path.join(root, "placeholder"));
   const entries = await readdir(root, { withFileTypes: true }).catch(error => {
@@ -84,7 +101,9 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
     claims.set(id, owners);
   };
   for (const entry of entries) {
-    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected Colleague state entry. Inspect it before upgrading.");
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) {
+      throw new Error("Unexpected Colleague state entry. Inspect it before upgrading.");
+    }
     const filePath = path.join(root, entry.name, "conversation.json");
     await verifyUpgradeParents(systemRoot, filePath);
     const original = await readUpgradeFile(filePath);
@@ -96,17 +115,26 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
       const owner = `${entry.name}:${chat.scopeId}`;
       const retired = chat.schemaVersion === 1 ? chat : chat.retiredConversation;
       if (retired?.conversationId && !restoredNative(retired.assistantSelection)) {
-        report("warning", `${entry.name}: this older provider binding is outside the supported native continuity correction; its retired identity and written history remain unchanged.`);
+        report(
+          "warning",
+          `${entry.name}: this older provider binding is outside the supported native continuity correction; its retired identity and written history remain unchanged.`
+        );
       }
-      if (restoredNative(retired?.assistantSelection)) claim(nativeClaim(retired.assistantSelection.engineId, retired.conversationId), owner);
+      if (restoredNative(retired?.assistantSelection)) {
+        claim(nativeClaim(retired.assistantSelection.engineId, retired.conversationId), owner);
+      }
       const runtime = chat.conversationMetadata?.runtime;
       if (runtime) {
         const checked = upgradeConversationRuntimeState({ metadata: chat.conversationMetadata, conversationLog: chat.conversationLog });
-        if (apply && checked.changed) throw new Error("Complete the earlier native delivery upgrade before restoring Colleague continuity.");
+        if (apply && checked.changed) {
+          throw new Error("Complete the earlier native delivery upgrade before restoring Colleague continuity.");
+        }
       }
       for (const segment of [runtime, ...(runtime?.predecessors || []), runtime?.replacement]) {
         if (["claude", "opencode", "codex"].includes(segment?.engine)) {
-          const id = segment.engine === "claude" ? segment.binding?.conversationId : segment.engine === "codex" ? segment.binding?.threadId : segment.binding?.sessionId;
+          const id = segment.engine === "claude"
+            ? segment.binding?.conversationId
+            : segment.engine === "codex" ? segment.binding?.threadId : segment.binding?.sessionId;
           if (id) claim(nativeClaim(segment.engine, id), owner);
         }
       }
@@ -126,9 +154,13 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
         !isDeepStrictEqual(saved.assistantSelection, retired.assistantSelection) ||
         saved.status === "working" || saved.operation || retired.operation ||
         ["request", "replacement", "rewind", "continuity"].some(key => Object.hasOwn(saved.conversationMetadata || {}, key))) {
-      refuse(`The retired ${label} binding has changed selection or unfinished/unsupported state. Inspect its original receipts before retrying.`);
+      refuse(
+        `The retired ${label} binding has changed selection or unfinished/unsupported state. Inspect its original receipts before retrying.`
+      );
     }
-    if (claims.get(nativeClaim(engine, retired.conversationId))?.size !== 1) refuse(`The native ${label} identity is claimed by another Colleague scope. Resolve ownership before retrying.`);
+    if (claims.get(nativeClaim(engine, retired.conversationId))?.size !== 1) {
+      refuse(`The native ${label} identity is claimed by another Colleague scope. Resolve ownership before retrying.`);
+    }
     const scopeWorkdir = path.join(root, ownerKey, saved.scopeId);
     await verifyUpgradeParents(systemRoot, path.join(scopeWorkdir, "placeholder"));
     if (await realpath(scopeWorkdir) !== scopeWorkdir) refuse("The original private scope is not canonical.");
@@ -142,10 +174,22 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
     }
     const update = (binding, verify) => {
       const configuration = conversationConfiguration(saved.assistantSelection, systemPrompt).configuration;
-      const next = { ...saved, conversationMetadata: { ...saved.conversationMetadata, runtime: {
-        version: 3, segmentId, engine, configuration, predecessors: [],
-        seen: conversationHistoryVersions(saved.conversationLog), lastEngine: engine, binding
-      } } };
+      const next = {
+        ...saved,
+        conversationMetadata: {
+          ...saved.conversationMetadata,
+          runtime: {
+            version: 3,
+            segmentId,
+            engine,
+            configuration,
+            predecessors: [],
+            seen: conversationHistoryVersions(saved.conversationLog),
+            lastEngine: engine,
+            binding
+          }
+        }
+      };
       upgradeConversationRuntimeState({ metadata: next.conversationMetadata, conversationLog: next.conversationLog });
       return { filePath, original, contents: JSON.stringify(next), verify };
     };
@@ -160,7 +204,9 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
         await createCodexProviderConnectionStore({ systemRoot }).runtimeOptions(providerId);
       const context = providerId === "openai" ? appContext :
         codexRuntimeContext({ env, home: env.HOME || homedir(), systemRoot, providerOptions });
-      if (appContext.ok !== true || context.ok !== true) refuse("The original Codex credential home could not be resolved. Restore the original daemon configuration.");
+      if (appContext.ok !== true || context.ok !== true) {
+        refuse("The original Codex credential home could not be resolved. Restore the original daemon configuration.");
+      }
       // The existing host's binding fence uses app HOME, while its selected
       // native runtime uses the provider HOME. Preserve both actual owners.
       const configRoot = path.join(appContext.toolHomeSource, ".codex");
@@ -179,12 +225,16 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
         `archived_sessions/rollout-*-${retired.conversationId}.jsonl*`
       ], { cwd: nativeRoot })) paths.push(path.join(nativeRoot, relative));
       if (paths.length !== 1 || !paths[0].endsWith(".jsonl")) {
-        refuse("The original native Codex rollout is missing, ambiguous or compressed. Keep its original files unchanged until supported inspection is possible.");
+        refuse(
+          "The original native Codex rollout is missing, ambiguous or compressed. Keep its original files unchanged until supported inspection is possible."
+        );
       }
       const nativePath = paths[0];
       await verifyUpgradeParents(nativeRoot, nativePath);
       const before = await lstat(nativePath);
-      if (!before.isFile() || before.isSymbolicLink() || await realpath(nativePath) !== nativePath) refuse("The original Codex rollout is not a canonical regular file.");
+      if (!before.isFile() || before.isSymbolicLink() || await realpath(nativePath) !== nativePath) {
+        refuse("The original Codex rollout is not a canonical regular file.");
+      }
       const file = await open(nativePath, "r");
       let metadataCount = 0, activeRun = "", lastRun = "", lastInput = null, lastAuthoredInput = null,
         finalText = "", lastCompletedRun = "", completionError = null, contextCount = 0, originalInteractiveInputs = true;
@@ -193,12 +243,19 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
           const value = row.payload;
           if (row.type === "session_meta") {
             metadataCount++;
-            if (value?.id !== retired.conversationId || value.cwd !== scopeWorkdir || value.model_provider !== providerId || value.forked_from_id || value.parent_thread_id ||
+            if (value?.id !== retired.conversationId ||
+                value.cwd !== scopeWorkdir ||
+                value.model_provider !== providerId ||
+                value.forked_from_id ||
+                value.parent_thread_id ||
                 value.history_base != null || value.forked_from_ordinal_exclusive != null || value.subagent_history_start_ordinal != null ||
                 value.source?.subagent != null || value.thread_source === "subagent" ||
                 value.session_id !== undefined && !uuid.test(value.session_id) ||
                 value.history_mode !== undefined && !["legacy", "paginated"].includes(value.history_mode) ||
-                value.dynamic_tools !== undefined && (!Array.isArray(value.dynamic_tools) || value.dynamic_tools.length)) refuse("The original Codex rollout does not prove this exact private native scope and provider.");
+                value.dynamic_tools !== undefined &&
+                  (!Array.isArray(value.dynamic_tools) || value.dynamic_tools.length)) refuse(
+                    "The original Codex rollout does not prove this exact private native scope and provider."
+                  );
           }
           // Qualified original0.151/0.156 and current0.159 formats retain the
           // raw rollout across compaction. Inspect actual rows, not replacement
@@ -207,7 +264,9 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
             refuse("This original Codex rollout has an unsupported rewound history. Preserve it for its original owner.");
           }
           if (row.type === "event_msg" && value?.type === "task_started") {
-            if (activeRun || !uuid.test(value.turn_id || "")) refuse("The original Codex rollout has overlapping or unconfirmed native work.");
+            if (activeRun || !uuid.test(value.turn_id || "")) {
+              refuse("The original Codex rollout has overlapping or unconfirmed native work.");
+            }
             activeRun = lastRun = value.turn_id;
             finalText = "";
             completionError = null;
@@ -221,14 +280,24 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
             // Original31d4c318^ service prompt: every interactive exchange has
             // this exact shape, no autonomous field, no observed watch update.
             if (historicalInteractive) {
-              const originalKeys = ["focus", "userMessages", "observations", "readOnly", "recentConversation", "previousOperation", "feedback", "tools"];
+              const originalKeys = [
+                "focus",
+                "userMessages",
+                "observations",
+                "readOnly",
+                "recentConversation",
+                "previousOperation",
+                "feedback",
+                "tools"
+              ];
               originalInteractiveInputs &&= Boolean(lastInput && Object.keys(lastInput).every(key => originalKeys.includes(key)) &&
                 lastInput.focus && typeof lastInput.focus === "object" && !Array.isArray(lastInput.focus) &&
                 lastInput.readOnly === false && Array.isArray(lastInput.userMessages) &&
                 Array.isArray(lastInput.observations) && lastInput.observations.length === 0 &&
                 typeof lastInput.feedback === "string" && Array.isArray(lastInput.tools) &&
                 Object.hasOwn(lastInput, "previousOperation") &&
-                (lastInput.previousOperation === null || typeof lastInput.previousOperation === "object" && !Array.isArray(lastInput.previousOperation)) &&
+                (lastInput.previousOperation === null ||
+                  typeof lastInput.previousOperation === "object" && !Array.isArray(lastInput.previousOperation)) &&
                 (!Object.hasOwn(lastInput, "recentConversation") || Array.isArray(lastInput.recentConversation)));
             }
             if (lastInput?.userMessages?.length) lastAuthoredInput = lastInput;
@@ -256,7 +325,9 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
           }
         }
       } catch (error) {
-        if (error instanceof SyntaxError) refuse("The original Codex rollout contains an unreadable native record. Inspect it privately before retrying.");
+        if (error instanceof SyntaxError) {
+          refuse("The original Codex rollout contains an unreadable native record. Inspect it privately before retrying.");
+        }
         throw error;
       } finally { await file.close(); }
       // Current explicit-mode inputs belong to the original strict upgrade.
@@ -265,11 +336,18 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
       if (historicalInteractive && (autonomous || !originalInteractiveInputs)) {
         refuse("The original Codex input is not the known pre-autonomous interactive protocol.");
       }
-      if (metadataCount !== 1 || activeRun || lastRun !== retired.runId || lastCompletedRun !== retired.runId || completionError || contextCount < 1 ||
+      if (metadataCount !== 1 ||
+          activeRun ||
+          lastRun !== retired.runId ||
+          lastCompletedRun !== retired.runId ||
+          completionError ||
+          contextCount < 1 ||
           (autonomous ? lastInput?.autonomous !== true || typeof lastInput.readOnly !== "boolean" ||
             !Array.isArray(lastInput.userMessages) || lastInput.userMessages.length ||
             !Array.isArray(lastInput.observations) || !lastInput.observations.length :
-            (lastInput?.autonomous !== false && !(historicalInteractive && originalInteractiveInputs && lastAuthoredInput)) || typeof lastInput.readOnly !== "boolean" || !Array.isArray(lastInput.userMessages) ||
+            (lastInput?.autonomous !== false && !(historicalInteractive && originalInteractiveInputs && lastAuthoredInput)) ||
+              typeof lastInput.readOnly !== "boolean" ||
+              !Array.isArray(lastInput.userMessages) ||
             lastAuthoredInput?.userMessages?.at(-1)?.messageId !== authored.messageId ||
             lastAuthoredInput?.userMessages?.at(-1)?.text !== authored.text)) {
         refuse("The original Codex history does not prove the exact final admitted product request with no newer native work.");
@@ -277,12 +355,20 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
       let envelope;
       try { envelope = readAssistantResponseEnvelope(finalText); }
       catch { refuse("The original native Codex final answer is not a complete Colleague response."); }
-      if (envelope.kind !== "reply" || envelope.text !== answer) refuse("The original native Codex answer differs from its written product reply.");
+      if (envelope.kind !== "reply" || envelope.text !== answer) {
+        refuse("The original native Codex answer differs from its written product reply.");
+      }
       // Original schema1 had no account digest. Trusted native home and exact
       // scoped history retain custody; fresh native admission still checks the
       // present account before starting any new turn through the shared server.
-      return update({ threadId: retired.conversationId, workdir: scopeWorkdir, configRoot,
-        executionId: "", processInstanceId: "", toolSchemaIdentity: emptyCodexToolSchema }, async () => {
+      return update({
+        threadId: retired.conversationId,
+        workdir: scopeWorkdir,
+        configRoot,
+        executionId: "",
+        processInstanceId: "",
+        toolSchemaIdentity: emptyCodexToolSchema
+      }, async () => {
         const after = await lstat(nativePath);
         if (["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => before[key] !== after[key]) ||
             !isDeepStrictEqual(await readCodexNativeGoal(goalPath, { threadId: retired.conversationId }), goal)) {
@@ -300,7 +386,9 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
       const before = await lstat(databasePath);
       const rows = [];
       let admitted = false, lastAuthoredInput = null;
-      const native = await readOpenCodeConversationDatabase({ databasePath, conversationId: retired.conversationId,
+      const native = await readOpenCodeConversationDatabase({
+        databasePath,
+        conversationId: retired.conversationId,
         onMessage(message) {
           if (message.type === "user") {
             const input = originalOpenCodeInput(message);
@@ -308,7 +396,8 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
           }
           if (message.id === retired.runId && message.type === "user") admitted = true;
           if (admitted) rows.push(message);
-        } });
+        }
+      });
       if (native.session.directory !== scopeWorkdir || native.session.parent_id || native.session.revert || !admitted) {
         refuse("The native OpenCode session does not prove the original private scope and exact unrewound request.");
       }
@@ -337,13 +426,20 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
       let envelope;
       try { envelope = readAssistantResponseEnvelope(openCodeStructuredOutput(final.text)); }
       catch { refuse("The original native OpenCode answer is not a complete Colleague response."); }
-      if (envelope.kind !== "reply" || envelope.text !== answer) refuse("The original native OpenCode answer differs from its written product reply.");
+      if (envelope.kind !== "reply" || envelope.text !== answer) {
+        refuse("The original native OpenCode answer differs from its written product reply.");
+      }
       // The original store had no historical per-thread credential digest. Do not
       // invent one: the existing fresh admission validates and pins the current
       // selected connection before any new work, through the original shared host.
-      return update({ sessionId: retired.conversationId, workdir: scopeWorkdir,
-        directory: path.join(scopeWorkdir, "native", segmentId), databasePath,
-        executionId: "", processDirectory: "" }, async () => {
+      return update({
+        sessionId: retired.conversationId,
+        workdir: scopeWorkdir,
+        directory: path.join(scopeWorkdir, "native", segmentId),
+        databasePath,
+        executionId: "",
+        processDirectory: ""
+      }, async () => {
         await readStoppedNativeDatabase(databasePath, () => {});
         const after = await lstat(databasePath);
         if (["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => before[key] !== after[key])) {
@@ -366,9 +462,17 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
     }
     const workdir = await realpath(env.HOME || homedir());
     const configRoot = path.resolve(scopeWorkdir, env.CLAUDE_CONFIG_DIR || path.join(env.HOME || homedir(), ".claude"));
-    if (receipt.nativeWorkdir !== workdir) refuse("The receipt belongs to another credential home. Restore the original daemon configuration.");
-    const binding = { conversationId: retired.conversationId, workdir, scopeWorkdir, configRoot,
-      executionId: "", sent: true };
+    if (receipt.nativeWorkdir !== workdir) {
+      refuse("The receipt belongs to another credential home. Restore the original daemon configuration.");
+    }
+    const binding = {
+      conversationId: retired.conversationId,
+      workdir,
+      scopeWorkdir,
+      configRoot,
+      executionId: "",
+      sent: true
+    };
     const connections = createCodexProviderConnectionStore({ systemRoot });
     const verifyAccounts = async () => {
       const identities = {};
@@ -378,7 +482,9 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
           identities.anthropic = identity.slice("sha256:".length);
           continue;
         }
-        if (!curatedCodexProvider(providerId)) refuse("A retained Claude provider is unsupported. Keep its original state until it can be verified.");
+        if (!curatedCodexProvider(providerId)) {
+          refuse("A retained Claude provider is unsupported. Keep its original state until it can be verified.");
+        }
         let settings;
         try { settings = await connections.claudeProviderSettings(providerId); }
         catch { refuse("Reconnect the exact original Claude provider key in AI Accounts before converting this history."); }
@@ -394,17 +500,25 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
     const externalIdentities = Object.fromEntries(Object.entries(accountIdentities).filter(([id]) => id !== "anthropic"));
     if (Object.keys(externalIdentities).length) binding.connectionIdentities = externalIdentities;
     const inventory = await listClaudeConversationStorage({ configRoot, binding });
-    if (!inventory.some(item => item.conversationId === binding.conversationId)) refuse("The original native history is missing or not a regular file.");
+    if (!inventory.some(item => item.conversationId === binding.conversationId)) {
+      refuse("The original native history is missing or not a regular file.");
+    }
     const nativeFile = await claudeHistoryPath(binding);
     if (!nativeFile) refuse("The original active native transcript is missing.");
     await verifyUpgradeParents(configRoot, nativeFile.path);
     const before = await lstat(nativeFile.path);
     if (!before.isFile()) refuse("The original active native transcript must be a regular file.");
-    const history = await readClaudeHistory({ ...binding, allowIncompleteTail: false,
-      includeUserMessages: true, includeFinalCarriers: true });
+    const history = await readClaudeHistory({
+      ...binding,
+      allowIncompleteTail: false,
+      includeUserMessages: true,
+      includeFinalCarriers: true
+    });
     if (!history.exists || history.userIds.at(-1) !== receipt.lastMessageId || history.goal?.status === "active" ||
         history.failedResults.some(result => result.userId === receipt.lastMessageId)) {
-      refuse("Native history has a newer/unconfirmed request, active goal or no final answer for the exact stopped turn. Inspect it before retrying.");
+      refuse(
+        "Native history has a newer/unconfirmed request, active goal or no final answer for the exact stopped turn. Inspect it before retrying."
+      );
     }
     let latestInput = null, lastAuthoredInput = null;
     for (const message of history.userMessages) {
@@ -427,7 +541,8 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
     }
     const completed = history.completedResults.filter(result => result.userId === receipt.lastMessageId);
     const structured = history.structuredOutputs.filter(result => result.userId === receipt.lastMessageId);
-    const plain = history.messages.filter(message => message.role === "assistant" && message.userId === receipt.lastMessageId && message.text.trim());
+    const plain = history.messages.filter(message =>
+      message.role === "assistant" && message.userId === receipt.lastMessageId && message.text.trim());
     // A native successful result has the original live owner's authority. A
     // recorded StructuredOutput is only a candidate: the completed scoped
     // receipt and exact last input must also qualify, with no competing value.
@@ -437,13 +552,19 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
       let envelope;
       try { envelope = readAssistantResponseEnvelope(final.text); }
       catch { refuse("The original native Claude answer is not a complete Colleague response."); }
-      if (envelope.kind !== "reply" || envelope.text !== answer) refuse("The original native Claude answer differs from its written product reply.");
+      if (envelope.kind !== "reply" || envelope.text !== answer) {
+        refuse("The original native Claude answer differs from its written product reply.");
+      }
     }
     return update(binding, async () => {
-      if (!isDeepStrictEqual(await verifyAccounts(), accountIdentities)) refuse("A retained Claude provider key changed during inspection. Stop its writers before retrying.");
+      if (!isDeepStrictEqual(await verifyAccounts(), accountIdentities)) {
+        refuse("A retained Claude provider key changed during inspection. Stop its writers before retrying.");
+      }
       const after = await lstat(nativeFile.path);
       if (!after.isFile() || ["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => before[key] !== after[key]) ||
-          await readUpgradeFile(receiptPath) !== receiptBytes) refuse("Native history or its receipt changed during inspection. Stop all writers before retrying.");
+          await readUpgradeFile(receiptPath) !== receiptBytes) refuse(
+            "Native history or its receipt changed during inspection. Stop all writers before retrying."
+          );
     });
   };
 
@@ -470,28 +591,43 @@ async function restoreColleagueNativeContinuity({ systemRoot, apply, backupRoot,
       // Preserve an already prepared original empty-prompt replacement exactly.
       // The subsequent numbered instructions repair owns its correction.
       const systemPrompt = after.conversationMetadata.runtime.configuration.systemPrompt;
-      if (systemPrompt !== "" && systemPrompt !== instructions) throw new Error("The prepared Colleague instructions are unsupported. Inspect the verified backup before retrying.");
+      if (systemPrompt !== "" && systemPrompt !== instructions) {
+        throw new Error("The prepared Colleague instructions are unsupported. Inspect the verified backup before retrying.");
+      }
       const update = await inspect({ ...record, saved, original, segmentId: after.conversationMetadata.runtime.segmentId, systemPrompt });
       if (!update) throw new Error("The native-continuity backup is not an eligible original conversation. Inspect it before retrying.");
       if (!isDeepStrictEqual(parse(update.contents, "Reinspected Colleague history"), after)) {
-        throw new Error("The prepared native binding differs from its current original evidence. Restore the original daemon configuration and receipts before retrying.");
+        throw new Error(
+          "The prepared native binding differs from its current original evidence. Restore the original daemon configuration and receipts before retrying."
+        );
       }
       prepared.push(update);
     }
   }
   if (manifestSource !== null) for (const update of prepared) await update.verify();
-  await publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates: async () => {
-    prepared = [];
-    for (const record of records) {
-      const update = await inspect(record);
-      if (!update) continue;
-      if (apply && record.saved.schemaVersion !== 3) throw new Error("Complete earlier numbered Colleague upgrades before restoring native continuity.");
-      report("warning", `${record.ownerKey}: retain the exact original native identity and verified scope; no old request will be replayed. Stop all services and native writers before applying. Fresh account validation still runs before subsequent native work.`);
-      prepared.push(update);
+  await publishStateUpgradeFiles({
+    systemRoot,
+    apply,
+    backupRoot,
+    report,
+    prepareUpdates: async () => {
+      prepared = [];
+      for (const record of records) {
+        const update = await inspect(record);
+        if (!update) continue;
+        if (apply && record.saved.schemaVersion !== 3) {
+          throw new Error("Complete earlier numbered Colleague upgrades before restoring native continuity.");
+        }
+        report(
+          "warning",
+          `${record.ownerKey}: retain the exact original native identity and verified scope; no old request will be replayed. Stop all services and native writers before applying. Fresh account validation still runs before subsequent native work.`
+        );
+        prepared.push(update);
+      }
+      for (const update of prepared) await update.verify();
+      return prepared;
     }
-    for (const update of prepared) await update.verify();
-    return prepared;
-  } });
+  });
 }
 
 /** Stopped application metadata only; no native writer, file or goal is changed. */
@@ -504,7 +640,9 @@ export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, 
   });
   const records = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected Colleague state entry. Inspect it before upgrading.");
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) {
+      throw new Error("Unexpected Colleague state entry. Inspect it before upgrading.");
+    }
     const filePath = path.join(root, entry.name, "conversation.json");
     await verifyUpgradeParents(systemRoot, filePath);
     const original = await readUpgradeFile(filePath);
@@ -530,16 +668,21 @@ export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, 
     // These are saved application receipts, not a claim about offline native
     // process/goal state. The caller must keep all product writers stopped.
     if (saved.status === "working" || saved.operation &&
-        !["completed", "complete", "failed", "cancelled", "not-executed"].includes(saved.operation.status) || saved.retiredConversation?.operation &&
+        !["completed", "complete", "failed", "cancelled", "not-executed"].includes(
+          saved.operation.status
+        ) || saved.retiredConversation?.operation &&
         !["completed", "complete", "failed", "cancelled", "not-executed"].includes(saved.retiredConversation.operation.status) ||
         runtime.request !== undefined || runtime.replacement !== undefined ||
         binding.observationLoss && binding.observationLoss.stopped !== true ||
         runtime.nativeTurn?.active === true || binding.codexAppServerRun &&
-        (codexAppServerTurnStateFromAgentRun(binding.codexAppServerRun).active || binding.codexAppServerRun.pendingUserMessageClientIds?.length) ||
+        (codexAppServerTurnStateFromAgentRun(binding.codexAppServerRun).active ||
+          binding.codexAppServerRun.pendingUserMessageClientIds?.length) ||
         saved.conversationLog.some(turn => ["running", "working", "inProgress"].includes(turn.metadata?.runtime?.status) ||
           turn.metadata?.applicationTools?.some(call => !call.result || call.status !== "complete")) ||
         (saved.assignments || []).some(assignment => assignment.turns?.some(turn => ["reserved", "unknown"].includes(turn.status)))) {
-      refuse("The application has active, pending or unconfirmed work. Resolve its original receipts with the compatible candidate before retrying; nothing will be replayed.");
+      refuse(
+        "The application has active, pending or unconfirmed work. Resolve its original receipts with the compatible candidate before retrying; nothing will be replayed."
+      );
     }
     if (apply && (saved.schemaVersion !== 3 || checked.changed)) {
       refuse("Complete earlier numbered Colleague upgrades before retiring this tool policy.");
@@ -548,9 +691,19 @@ export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, 
       report("warning", `${ownerKey}: earlier native delivery upgrades must complete before this tool-policy transition.`);
       return null;
     }
-    const result = upgradeConversationRuntimeState({ metadata: saved.conversationMetadata, conversationLog: saved.conversationLog,
-      retirement: { operationId, successorSegmentId, expectedSegmentId: runtime.segmentId, expectedThreadId: binding.threadId,
-        expectedToolSchemaIdentity: oldCodexToolSchema, workdir: binding.workdir, configRoot: binding.configRoot } });
+    const result = upgradeConversationRuntimeState({
+      metadata: saved.conversationMetadata,
+      conversationLog: saved.conversationLog,
+      retirement: {
+        operationId,
+        successorSegmentId,
+        expectedSegmentId: runtime.segmentId,
+        expectedThreadId: binding.threadId,
+        expectedToolSchemaIdentity: oldCodexToolSchema,
+        workdir: binding.workdir,
+        configRoot: binding.configRoot
+      }
+    });
     const next = { ...saved, conversationMetadata: result.metadata };
     validateColleagueConversationRecord(next, ownerKey);
     return { filePath, original, contents: JSON.stringify(next) };
@@ -567,7 +720,9 @@ export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, 
     const manifest = parse(manifestSource, "Codex tool-policy backup manifest");
     for (const record of records) {
       if (!manifest.files.some(entry => entry.path === path.relative(systemRoot, record.filePath)) && inspect(record)) {
-        throw new Error("A new eligible Colleague owner appeared after preparation. Keep product writers stopped and inspect the original backup before retrying.");
+        throw new Error(
+          "A new eligible Colleague owner appeared after preparation. Keep product writers stopped and inspect the original backup before retrying."
+        );
       }
     }
     for (const entry of manifest.files) {
@@ -580,23 +735,39 @@ export async function upgradeColleagueCodexCompletedPolicy({ systemRoot, apply, 
       validateColleagueConversationRecord(after, record.ownerKey);
       const runtime = after.conversationMetadata?.runtime;
       const retired = runtime?.predecessors?.at(-1);
-      const update = inspect({ ...record, saved, original, operationId: retired?.replacement?.operationId,
-        successorSegmentId: runtime?.segmentId });
+      const update = inspect({
+        ...record,
+        saved,
+        original,
+        operationId: retired?.replacement?.operationId,
+        successorSegmentId: runtime?.segmentId
+      });
       if (!update || !isDeepStrictEqual(parse(update.contents, "Reinspected Colleague history"), after)) {
-        throw new Error("The prepared Codex transition differs from its original binding or history. Inspect the verified backup before retrying.");
+        throw new Error(
+          "The prepared Codex transition differs from its original binding or history. Inspect the verified backup before retrying."
+        );
       }
     }
   }
-  await publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates: async () => {
-    const updates = [];
-    for (const record of records) {
-      const update = inspect(record);
-      if (!update) continue;
-      report("warning", `${record.ownerKey}: retire only the known old Codex tool binding and retain its full history. Keep application, watch and independent product writers stopped through publication; native files and goals are untouched. The next explicit request validates the current account and uses a new native binding without replaying old work.`);
-      updates.push(update);
+  await publishStateUpgradeFiles({
+    systemRoot,
+    apply,
+    backupRoot,
+    report,
+    prepareUpdates: async () => {
+      const updates = [];
+      for (const record of records) {
+        const update = inspect(record);
+        if (!update) continue;
+        report(
+          "warning",
+          `${record.ownerKey}: retire only the known old Codex tool binding and retain its full history. Keep application, watch and independent product writers stopped through publication; native files and goals are untouched. The next explicit request validates the current account and uses a new native binding without replaying old work.`
+        );
+        updates.push(update);
+      }
+      return updates;
     }
-    return updates;
-  } });
+  });
 }
 
 
@@ -610,7 +781,9 @@ export async function upgradeColleagueNativeInstructions({ systemRoot, apply, ba
   });
   const records = [];
   for (const entry of entries) {
-    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) throw new Error("Unexpected Colleague state entry. Inspect it before upgrading.");
+    if (!entry.isDirectory() || !/^[\w-]+$/u.test(entry.name)) {
+      throw new Error("Unexpected Colleague state entry. Inspect it before upgrading.");
+    }
     const filePath = path.join(root, entry.name, "conversation.json");
     await verifyUpgradeParents(systemRoot, filePath);
     const original = await readUpgradeFile(filePath);
@@ -633,7 +806,9 @@ export async function upgradeColleagueNativeInstructions({ systemRoot, apply, ba
         nativeId !== retired.conversationId || !nativeId || runtime.predecessors?.length !== 0 ||
         saved.previousConversations?.length || saved.freshOperation || binding.executionId !== "" ||
         !isDeepStrictEqual(runtime.configuration, conversationConfiguration(saved.assistantSelection, "").configuration)) {
-      refuse("The empty configuration is not the known unchanged imported native binding. Inspect its original conversion before retrying.");
+      refuse(
+        "The empty configuration is not the known unchanged imported native binding. Inspect its original conversion before retrying."
+      );
     }
     if (saved.status === "working" || saved.operation &&
         !["completed", "complete", "failed", "cancelled", "not-executed"].includes(saved.operation.status) || retired.operation ||
@@ -644,12 +819,19 @@ export async function upgradeColleagueNativeInstructions({ systemRoot, apply, ba
         saved.conversationLog.some(turn => ["running", "working", "inProgress"].includes(turn.metadata?.runtime?.status) ||
           turn.metadata?.applicationTools?.some(call => !call.result || call.status !== "complete")) ||
         (saved.assignments || []).some(assignment => assignment.turns?.some(turn => ["reserved", "unknown"].includes(turn.status)))) {
-      refuse("The application has active, pending or unconfirmed work. Resolve its original receipts and stop all writers before retrying; nothing will be replayed.");
+      refuse(
+        "The application has active, pending or unconfirmed work. Resolve its original receipts and stop all writers before retrying; nothing will be replayed."
+      );
     }
     const checked = upgradeConversationRuntimeState({ metadata: saved.conversationMetadata, conversationLog: saved.conversationLog });
     if (checked.changed) refuse("Complete earlier numbered runtime upgrades before repairing instructions.");
-    const next = { ...saved, conversationMetadata: { ...saved.conversationMetadata,
-      runtime: { ...runtime, configuration: { ...runtime.configuration, systemPrompt: instructions } } } };
+    const next = {
+      ...saved,
+      conversationMetadata: {
+        ...saved.conversationMetadata,
+        runtime: { ...runtime, configuration: { ...runtime.configuration, systemPrompt: instructions } }
+      }
+    };
     return { filePath, original, contents: JSON.stringify(next) };
   };
   await verifyUpgradeParents(systemRoot, path.join(backupRoot, "manifest.json"));
@@ -659,7 +841,9 @@ export async function upgradeColleagueNativeInstructions({ systemRoot, apply, ba
     const manifest = parse(manifestSource, "Colleague instructions backup manifest");
     for (const record of records) {
       if (!manifest.files.some(entry => entry.path === path.relative(systemRoot, record.filePath)) && inspect(record)) {
-        throw new Error("A new eligible Colleague owner appeared after preparation. Keep writers stopped and inspect the original backup before retrying.");
+        throw new Error(
+          "A new eligible Colleague owner appeared after preparation. Keep writers stopped and inspect the original backup before retrying."
+        );
       }
     }
     for (const entry of manifest.files) {
@@ -672,18 +856,29 @@ export async function upgradeColleagueNativeInstructions({ systemRoot, apply, ba
       validateColleagueConversationRecord(after, record.ownerKey);
       const update = inspect({ ...record, original, saved });
       if (!update || !isDeepStrictEqual(parse(update.contents, "Reinspected Colleague history"), after)) {
-        throw new Error("The prepared Colleague instructions differ from the original binding or history. Inspect the verified backup before retrying.");
+        throw new Error(
+          "The prepared Colleague instructions differ from the original binding or history. Inspect the verified backup before retrying."
+        );
       }
     }
   }
-  await publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates: async () => {
-    const updates = [];
-    for (const record of records) {
-      const update = inspect(record);
-      if (!update) continue;
-      report("warning", `${record.ownerKey}: restore only the missing Colleague instructions with all product writers stopped. The failed request, native binding, account and full history remain unchanged; no request is sent or retried.`);
-      updates.push(update);
+  await publishStateUpgradeFiles({
+    systemRoot,
+    apply,
+    backupRoot,
+    report,
+    prepareUpdates: async () => {
+      const updates = [];
+      for (const record of records) {
+        const update = inspect(record);
+        if (!update) continue;
+        report(
+          "warning",
+          `${record.ownerKey}: restore only the missing Colleague instructions with all product writers stopped. The failed request, native binding, account and full history remain unchanged; no request is sent or retried.`
+        );
+        updates.push(update);
+      }
+      return updates;
     }
-    return updates;
-  } });
+  });
 }

@@ -136,13 +136,17 @@ function createCodexScopedConversationPreparation({
     if (toolHome.ok === false) {
       return { result: toolHome };
     }
-    const providerOptions = { ...codexAppServerRuntimeOptions({
-      session: { sessionId: normalizedSessionId },
-      executionRoot: workdir,
-      terminalEnv: scope.environment || {},
-      toolHomeSource: toolHome.toolHomeSource,
-      workdir
-    }), assistantScope: scope, routingModelProviderId: input.agentSettings?.modelProviderId || "openai" };
+    const providerOptions = {
+      ...codexAppServerRuntimeOptions({
+        session: { sessionId: normalizedSessionId },
+        executionRoot: workdir,
+        terminalEnv: scope.environment || {},
+        toolHomeSource: toolHome.toolHomeSource,
+        workdir
+      }),
+      assistantScope: scope,
+      routingModelProviderId: input.agentSettings?.modelProviderId || "openai"
+    };
     return {
       providerOptions,
       context: { assistantScope: scope, workdir },
@@ -209,8 +213,11 @@ function createCodexScopedConversationPreparation({
         return (helperTurn
           ? codexAppServerHelperRuntimeOptionsForSession
           : codexAppServerRuntimeOptionsForSession)(session, {
-          runtime, executionRoot, toolHomeSource, workdir
-        });
+            runtime,
+            executionRoot,
+            toolHomeSource,
+            workdir
+          });
       },
       async project(provider, providerOptions, helperRestore) {
         const agentSettings = isRecord(input.agentSettings) ? input.agentSettings : {};
@@ -230,14 +237,16 @@ function createCodexScopedConversationPreparation({
 
   function codexAppServerConversationThreadPreparation(context = {}) {
     if (context.assistantScope) {
-      return { settings: () => codexAppServerReadOnlyThreadSettings(
-        codexAppServerThreadSettings({
-          agentSettings: context.agentSettings,
-          config: context.isolationConfig,
-          cwd: context.workdir,
-          systemPrompt: context.assistantScope.stableContext
-        })
-      ) };
+      return {
+        settings: () => codexAppServerReadOnlyThreadSettings(
+          codexAppServerThreadSettings({
+            agentSettings: context.agentSettings,
+            config: context.isolationConfig,
+            cwd: context.workdir,
+            systemPrompt: context.assistantScope.stableContext
+          })
+        )
+      };
     }
     return {
       workdir: context.workdir,
@@ -281,8 +290,11 @@ function createCodexScopedConversationPreparation({
         executionProfile,
         get threadPreparation() {
           return executionProfile
-            ? codexAppServerHelperThreadStartPreparation({ executionProfile,
-                systemPrompt: context.assistantScope.stableContext, ephemeral: true })
+            ? codexAppServerHelperThreadStartPreparation({
+              executionProfile,
+              systemPrompt: context.assistantScope.stableContext,
+              ephemeral: true
+            })
             : codexAppServerConversationThreadPreparation(context);
         }
       };
@@ -299,11 +311,17 @@ function createCodexScopedConversationPreparation({
       get threadPreparation() {
         return executionProfile
           ? codexAppServerHelperThreadResumePreparation({
-              executionProfile, systemPrompt: context.assistantScope.stableContext })
+            executionProfile,
+            systemPrompt: context.assistantScope.stableContext
+          })
           : codexAppServerConversationThreadPreparation(context);
       },
       prepareTurn: () => prepareCodexAppServerHelperTurn({
-        executionProfile, outputSchema: input.outputSchema, prompt, provider: context.provider, threadId: conversationId
+        executionProfile,
+        outputSchema: input.outputSchema,
+        prompt,
+        provider: context.provider,
+        threadId: conversationId
       }),
       authorized: {
         get turnSettings() { return codexAppServerTurnSettings({ agentSettings: context.agentSettings, cwd: context.workdir }); }
@@ -379,9 +397,11 @@ function createCodexScopedConversationPreparation({
       ? codexAppServerFrozenThreadDeleteResponse(threadId)
       : codexAppServerFrozenTurnInterruptResponse({ threadId, turnId });
     if (operation === "delete" ? !threadId : !threadId || !turnId) {
-      return { result: operation === "delete"
-        ? { ok: true, status: "notFound" }
-        : codexAppServerInterruptUnavailableResponse({ active: false, threadId, turnId }) };
+      return {
+        result: operation === "delete"
+          ? { ok: true, status: "notFound" }
+          : codexAppServerInterruptUnavailableResponse({ active: false, threadId, turnId })
+      };
     }
     const admission = beginTerminalNamespaceOperation(codexTerminalNamespace(sessionId));
     if (admission.ok === false) return { result: frozen() };

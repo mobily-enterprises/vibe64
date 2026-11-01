@@ -24,7 +24,9 @@ export async function rejectedClaudeInputChanges({ metadata, runs, configRoot })
   if (request.delivery !== "uncertain") return {};
   const run = runs.findLast(value => value.engineId === "claude");
   if (run?.error !== rejectedBeforeWrite) return {};
-  const refuse = () => { throw new Error("Rejected Claude input has conflicting delivery evidence. Inspect its original request and native receipt before retrying."); };
+  const refuse = () => { throw new Error(
+    "Rejected Claude input has conflicting delivery evidence. Inspect its original request and native receipt before retrying."
+  ); };
   if (request.schemaVersion !== 5 || request.status !== "waiting" ||
       typeof request.messageId !== "string" || !request.messageId ||
       request.attemptedMessageId !== request.messageId || request.followup ||
@@ -38,8 +40,12 @@ export async function rejectedClaudeInputChanges({ metadata, runs, configRoot })
       typeof native.nativeWorkdir !== "string" || !path.isAbsolute(native.nativeWorkdir)) refuse();
   // The original guard proves rejection. Current-branch native admission is an
   // additional conflict check, not proof inferred from a missing receipt.
-  const history = await readClaudeHistory({ configRoot, workdir: native.nativeWorkdir,
-    conversationId: request.threadId, allowIncompleteTail: false });
+  const history = await readClaudeHistory({
+    configRoot,
+    workdir: native.nativeWorkdir,
+    conversationId: request.threadId,
+    allowIncompleteTail: false
+  });
   if (!history.exists || history.userIds.includes(uuid)) refuse();
   const next = { ...request, status: "waiting", delivery: "failed", error: rejectedBeforeWrite };
   delete next.attemptedMessageId;
@@ -66,10 +72,16 @@ export async function upgradeClaudeRejectedInput(context) {
           const beforePath = path.join(context.backupRoot, "before", relative);
           await verifyUpgradeParents(context.backupRoot, beforePath);
           const original = resuming ? await readUpgradeFile(beforePath) : null;
-          const patch = await rejectedClaudeInputChanges({ metadata: original === null ? metadata
-            : { ...metadata, assistant_routing_request: original }, runs: await store.readAgentRuns(sessionId), configRoot });
+          const patch = await rejectedClaudeInputChanges({
+            metadata: original === null ? metadata
+              : { ...metadata, assistant_routing_request: original },
+            runs: await store.readAgentRuns(sessionId),
+            configRoot
+          });
           if (resuming && patch.assistant_routing_request) {
-            if (original === null) throw new Error("A new rejected Claude input appeared after preparation. Keep writers stopped and inspect before retrying.");
+            if (original === null) {
+              throw new Error("A new rejected Claude input appeared after preparation. Keep writers stopped and inspect before retrying.");
+            }
             const afterPath = path.join(context.backupRoot, "after", relative);
             await verifyUpgradeParents(context.backupRoot, afterPath);
             if ((await readUpgradeFile(afterPath)) !== `${patch.assistant_routing_request}\n`) {
@@ -78,7 +90,10 @@ export async function upgradeClaudeRejectedInput(context) {
           } else if (original !== null) throw new Error("Original Claude repair evidence is no longer eligible. Inspect before retrying.");
           return { metadata: patch };
         } });
-      context.report("info", `${path.basename(projectRuntimeRoot)}: ${changes.length} rejected Claude routing file(s); explicit Retry is required and nothing is sent.`);
+      context.report(
+        "info",
+        `${path.basename(projectRuntimeRoot)}: ${changes.length} rejected Claude routing file(s); explicit Retry is required and nothing is sent.`
+      );
       updates.push(...changes);
     }
     return updates;

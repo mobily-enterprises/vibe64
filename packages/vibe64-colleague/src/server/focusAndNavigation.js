@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { learningPlaceOpenTo, learningVocabulary, trainingGuideCommand, trainingGuideRequest } from "@local/vibe64-training/shared/learning-vocabulary";
+import {
+  learningPlaceOpenTo,
+  learningVocabulary,
+  trainingGuideCommand,
+  trainingGuideRequest
+} from "@local/vibe64-training/shared/learning-vocabulary";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_COLLEAGUE_SESSION_PANES } from "../shared/navigationPanes.js";
 import { failure } from "./colleagueFailure.js";
@@ -36,13 +41,16 @@ function createColleagueFocusAndNavigation({ threads }) {
     if (browserBinding) {
       if (connection.browserBinding?.owner !== browserBinding.owner) {
         const owner = browserBinding.owner;
-        connection.browserBinding = { owner, async release() {
-          const current = state.connections.get(input.clientId);
-          if (current?.browserBinding?.owner !== owner) return;
-          state.connections.delete(input.clientId);
-          answerPendingNavigation(current, { ok: false, error: "The initiating browser disconnected." });
-          current.focus = null;
-        } };
+        connection.browserBinding = {
+          owner,
+          async release() {
+            const current = state.connections.get(input.clientId);
+            if (current?.browserBinding?.owner !== owner) return;
+            state.connections.delete(input.clientId);
+            answerPendingNavigation(current, { ok: false, error: "The initiating browser disconnected." });
+            current.focus = null;
+          }
+        };
       }
       browserBinding.onRelease(connection.browserBinding.release);
     }
@@ -53,7 +61,10 @@ function createColleagueFocusAndNavigation({ threads }) {
   async function navigate(input, context) {
     const state = await threads.stateFor(context);
     if (input.learning && typeof input.learning.open === "boolean" && (input.learning.attemptId || input.learning.stepId)) {
-      return { ok: false, error: "open opens or closes the Courses catalogue only. To show a lesson step in the Lesson pane, send learning={attemptId, stepId} without open." };
+      return {
+        ok: false,
+        error: "open opens or closes the Courses catalogue only. To show a lesson step in the Lesson pane, send learning={attemptId, stepId} without open."
+      };
     }
     if (input.learning?.stepId && !input.learning.attemptId) {
       return { ok: false, error: "Choose the exact lesson attempt before its step." };
@@ -80,16 +91,23 @@ function createColleagueFocusAndNavigation({ threads }) {
     const connection = state.connections.get(context.colleague?.clientId);
     if (!connection) return { ok: false, error: "The initiating browser is no longer connected." };
     if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
-    const command = { id: randomUUID(), projectSlug: input.projectSlug,
+    const command = {
+      id: randomUUID(),
+      projectSlug: input.projectSlug,
       ...(input.pane ? { pane: input.pane } : {}),
       ...(input.integrationId ? { integrationId: input.integrationId } : {}),
       ...(input.integrationEnvironment ? { integrationEnvironment: input.integrationEnvironment } : {}),
       ...(input.databaseView ? { databaseView: input.databaseView } : {}),
       ...(input.databaseTable ? { databaseTable: input.databaseTable } : {}),
       ...(input.planView ? { planView: input.planView } : {}),
-      ...(input.learning ? { learning: typeof input.learning.open === "boolean" ? { open: input.learning.open }
-        : { attemptId: input.learning.attemptId, ...(input.learning.stepId ? { stepId: input.learning.stepId } : {}) } } : {}),
-      sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
+      ...(input.learning ? {
+        learning: typeof input.learning.open === "boolean" ? { open: input.learning.open }
+          : { attemptId: input.learning.attemptId, ...(input.learning.stepId ? { stepId: input.learning.stepId } : {}) }
+      } : {}),
+      sessionId: input.sessionId || "",
+      conversationId: input.conversationId || "",
+      status: "pending"
+    };
     return state.navigation.begin(connection, command);
   }
 
@@ -113,7 +131,10 @@ function createColleagueFocusAndNavigation({ threads }) {
     if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
     const focus = connection.focus || {};
     if (guided.navigate && place.open.pane) {
-      if (!focus.projectSlug) return { ok: false, error: `${place.label} is in a project. Open the project with navigation.open first, then guide again.` };
+      if (!focus.projectSlug) return {
+        ok: false,
+        error: `${place.label} is in a project. Open the project with navigation.open first, then guide again.`
+      };
       if (place.open.pane !== "preview" && !focus.sessionId) {
         return { ok: false, error: `${place.label} belongs to a session. Open one of the project's sessions first, then guide again.` };
       }

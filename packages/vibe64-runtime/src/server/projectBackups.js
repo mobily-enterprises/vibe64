@@ -24,13 +24,15 @@ async function withProjectAreaLock(stateRoot, name, busy, operation) {
  */
 function withProjectBackupsLock(stateRoot, operation) {
   return withProjectAreaLock(stateRoot, "project-backups", {
-    message: "Project backups are busy. Try again shortly.", code: "project_backups_busy"
+    message: "Project backups are busy. Try again shortly.",
+    code: "project_backups_busy"
   }, operation);
 }
 
 function withProjectDropZoneLock(stateRoot, operation) {
   return withProjectAreaLock(stateRoot, "project-drop-zone", {
-    message: "Project Dropzone is busy. Try again shortly.", code: "project_drop_zone_busy"
+    message: "Project Dropzone is busy. Try again shortly.",
+    code: "project_drop_zone_busy"
   }, operation);
 }
 
@@ -69,7 +71,10 @@ async function maintainProjectBackups({ stateRoot, dryRun = false, now = Date.no
           await visit(target);
         } else if (info.isFile() && info.dev === rootInfo.dev && info.nlink === 1) {
           const bytes = info.blocks * 512;
-          if (Math.max(info.mtimeMs, info.ctimeMs) > cutoff) { result.retainedBytes += bytes; continue; }
+          if (Math.max(info.mtimeMs, info.ctimeMs) > cutoff) {
+            result.retainedBytes += bytes;
+            continue;
+          }
           // Recheck parents and identity after traversal, before unlinking. A
           // newly copied old file gets a fresh ctime and a full retention window.
           if (await realpath(directory) !== directory) throw new Error("project_backups_path_changed");
@@ -80,7 +85,10 @@ async function maintainProjectBackups({ stateRoot, dryRun = false, now = Date.no
           if (!current || current.dev !== info.dev || current.ino !== info.ino ||
               current.mtimeMs !== info.mtimeMs || current.ctimeMs !== info.ctimeMs) continue;
           result.eligibleBytes += bytes;
-          if (!dryRun) { await unlink(target); result.reclaimedBytes += bytes; }
+          if (!dryRun) {
+            await unlink(target);
+            result.reclaimedBytes += bytes;
+          }
           else result.retainedBytes += bytes;
         } else {
           result.issues.push({ code: "project_backups_entry_unverified" });

@@ -62,59 +62,104 @@ function describeFailure(error, { kind, endpoint }) {
   const database = nameIn(endpoint, "database");
   const address = where(endpoint);
   if (code === "ECONNREFUSED") {
-    return { state: "not-running", message: `Nothing is answering at ${address}. Start your ${label} server, or put its address in the settings below.` };
+    return {
+      state: "not-running",
+      message: `Nothing is answering at ${address}. Start your ${label} server, or put its address in the settings below.`
+    };
   }
   if (code === "ENOTFOUND" || code === "EAI_AGAIN") {
-    return { state: "unreachable", message: `Vibe64 can't find a computer called ${normalizeText(endpoint.host) || address}. Check the host in the settings below.` };
+    return {
+      state: "unreachable",
+      message: `Vibe64 can't find a computer called ${normalizeText(endpoint.host) || address}. Check the host in the settings below.`
+    };
   }
   if (NETWORK_UNREACHABLE.has(code)) {
-    return { state: "unreachable", message: `${address} didn't answer in time. Check that the server is running and the host and port are right.` };
+    return {
+      state: "unreachable",
+      message: `${address} didn't answer in time. Check that the server is running and the host and port are right.`
+    };
   }
   if (kind === "mysql") {
     // 1698: the account signs in only through the system account (unix_socket or auth_socket).
     if (errno === 1698 || /unix_socket|auth_socket/u.test(message)) {
-      return { state: "login-method", message: `${user ? `“${user}”` : "This user"} can only sign in from the computer's own administrator account, not with a password. Create a separate user for this project with the command below.` };
+      return {
+        state: "login-method",
+        message: `${user ? `“${user}”` : "This user"} can only sign in from the computer's own administrator account, not with a password. Create a separate user for this project with the command below.`
+      };
     }
     if (errno === 1251 || code === "AUTH_SWITCH_PLUGIN_ERROR" || /authentication plugin|auth(?:entication)? method/iu.test(message)) {
-      return { state: "login-method", message: `The server asks ${user ? `“${user}”` : "this user"} to sign in a way Vibe64 can't use. Create the user with a password, as in the command below.` };
+      return {
+        state: "login-method",
+        message: `The server asks ${user ? `“${user}”` : "this user"} to sign in a way Vibe64 can't use. Create the user with a password, as in the command below.`
+      };
     }
     if (errno === 1045) {
-      return { state: "wrong-login", message: `The server is running, but it didn't accept the user ${user ? `“${user}”` : ""} with that password.` };
+      return {
+        state: "wrong-login",
+        message: `The server is running, but it didn't accept the user ${user ? `“${user}”` : ""} with that password.`
+      };
     }
     if (errno === 1049) {
-      return { state: "database-missing", message: `Your login works, but there's no database called ${database} yet. Create it with the command below.` };
+      return {
+        state: "database-missing",
+        message: `Your login works, but there's no database called ${database} yet. Create it with the command below.`
+      };
     }
     if (errno === 1044) {
-      return { state: "no-access", message: `${user ? `“${user}”` : "This user"} can sign in but isn't allowed to use the database ${database}.` };
+      return {
+        state: "no-access",
+        message: `${user ? `“${user}”` : "This user"} can sign in but isn't allowed to use the database ${database}.`
+      };
     }
   }
   if (kind === "postgresql") {
     if (code === "3D000") {
-      return { state: "database-missing", message: `Your login works, but there's no database called ${database} yet. Create it with the command below.` };
+      return {
+        state: "database-missing",
+        message: `Your login works, but there's no database called ${database} yet. Create it with the command below.`
+      };
     }
     if (code === "28P01" || /password authentication failed/iu.test(message)) {
-      return { state: "wrong-login", message: `The server is running, but it didn't accept the user ${user ? `“${user}”` : ""} with that password.` };
+      return {
+        state: "wrong-login",
+        message: `The server is running, but it didn't accept the user ${user ? `“${user}”` : ""} with that password.`
+      };
     }
     if (/client password must be a string|password must be a string/iu.test(message)) {
-      return { state: "wrong-login", message: `The server wants a password for ${user ? `“${user}”` : "this user"}. Add it in the settings below.` };
+      return {
+        state: "wrong-login",
+        message: `The server wants a password for ${user ? `“${user}”` : "this user"}. Add it in the settings below.`
+      };
     }
     if (/(peer|ident) authentication failed/iu.test(message)) {
-      return { state: "login-method", message: `${user ? `“${user}”` : "This user"} can only sign in from the computer's own account with that name, not with a password. Create a separate user for this project with the command below.` };
+      return {
+        state: "login-method",
+        message: `${user ? `“${user}”` : "This user"} can only sign in from the computer's own account with that name, not with a password. Create a separate user for this project with the command below.`
+      };
     }
     if (code === "28000" && /role .* does not exist/iu.test(message)) {
       return { state: "wrong-login", message: `The server is running, but it has no user called “${user}”.` };
     }
     if (code === "28000" && /pg_hba\.conf/iu.test(message)) {
-      return { state: "login-method", message: `The server doesn't accept password sign-ins from this computer for ${user ? `“${user}”` : "this user"}.` };
+      return {
+        state: "login-method",
+        message: `The server doesn't accept password sign-ins from this computer for ${user ? `“${user}”` : "this user"}.`
+      };
     }
     if (code === "42501") {
-      return { state: "no-access", message: `${user ? `“${user}”` : "This user"} can sign in but isn't allowed to use the database ${database}.` };
+      return {
+        state: "no-access",
+        message: `${user ? `“${user}”` : "This user"} can sign in but isn't allowed to use the database ${database}.`
+      };
     }
   }
   if (/invalid url|invalid connection string/iu.test(message)) {
     return { state: "invalid", message: "The database address in your settings isn't a valid address." };
   }
-  return { state: "failed", message: `The ${label} server answered with an error: ${message.split("\n")[0].slice(0, 200) || "unknown error"}.` };
+  return {
+    state: "failed",
+    message: `The ${label} server answered with an error: ${message.split("\n")[0].slice(0, 200) || "unknown error"}.`
+  };
 }
 
 async function mysqlCheck(endpoint, { timeoutMs }) {

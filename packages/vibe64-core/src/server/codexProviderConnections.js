@@ -75,17 +75,23 @@ function createCodexProviderConnectionStore({
         const paths = codexProviderPaths(systemRoot, provider.id, engineId);
         const status = saved ? await readCodexAuthStatus(paths.systemRoot) : null;
         const marker = saved ? await readFile(codexAuthMarkerPath(paths.systemRoot), "utf8")
-          .then(JSON.parse).catch((error) => { if (error.code === "ENOENT") return null; throw error; }) : null;
+          .then(JSON.parse).catch((error) => {
+            if (error.code === "ENOENT") return null;
+            throw error;
+          }) : null;
         states[engineId] = {
-          configured: Boolean(saved), connected: Boolean(saved && !status),
+          configured: Boolean(saved),
+          connected: Boolean(saved && !status),
           connectionIdentity: marker?.connected === true && typeof marker.generation === "string"
             ? `curated:${engineId}:${provider.id}:${marker.generation}` : "",
           status: status?.status || (saved ? "connected" : "not_connected")
         };
       }
       return {
-        id: provider.id, label: provider.label,
-        connected: states.codex.connected, claudeReady: states.claude.connected,
+        id: provider.id,
+        label: provider.label,
+        connected: states.codex.connected,
+        claudeReady: states.claude.connected,
         configuredEngines: ["codex", "claude"].filter((id) => states[id].configured),
         connectionIdentity: states.codex.connectionIdentity,
         claudeConnectionIdentity: states.claude.connectionIdentity,
@@ -125,8 +131,11 @@ function createCodexProviderConnectionStore({
     if (await readCodexAuthStatus(codexProviderPaths(systemRoot, providerId, "claude").systemRoot)) {
       throw new Error(`Reconnect ${provider.label} in AI Accounts before continuing.`);
     }
-    return { providerId, apiKey: connection.apiKey,
-      baseUrl: provider.claudeBaseUrl };
+    return {
+      providerId,
+      apiKey: connection.apiKey,
+      baseUrl: provider.claudeBaseUrl
+    };
   }
   async function change(providerId, input = {}) {
     const provider = curatedCodexProvider(providerId);
@@ -186,13 +195,22 @@ function createCodexProviderConnectionStore({
         toolHomeSource: paths.toolHomeSource,
         ...(engineId === "claude" ? { prepare, publish } : {})
       });
-      if (stopped?.ok === false) throw new Error(stopped.failed?.[0]?.error || "The previous connection could not be stopped. Retry before changing its key.");
+      if (stopped?.ok === false) {
+        throw new Error(stopped.failed?.[0]?.error || "The previous connection could not be stopped. Retry before changing its key.");
+      }
       if (engineId === "codex") return publish();
       if (!published) throw new Error("Claude Code did not complete the connection change. Retry before changing its key.");
       return list();
     });
   }
-  return Object.freeze({ change, list, read, runtimeOptions, threadConfig, claudeProviderSettings });
+  return Object.freeze({
+    change,
+    list,
+    read,
+    runtimeOptions,
+    threadConfig,
+    claudeProviderSettings
+  });
 }
 
 export { codexProviderModelCatalog, codexProviderPaths, createCodexProviderConnectionStore };

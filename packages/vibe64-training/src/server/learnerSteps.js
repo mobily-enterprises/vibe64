@@ -2,7 +2,19 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
-import { attemptStepEntry, failure, idPattern, lessonSteps, MAX_READER_BYTES, MAX_STEP_RECORD_BYTES, readerSchema, readRecord, uuidPattern, validateLessonStepResults, validateStepProgress } from "./learnerRecords.js";
+import {
+  attemptStepEntry,
+  failure,
+  idPattern,
+  lessonSteps,
+  MAX_READER_BYTES,
+  MAX_STEP_RECORD_BYTES,
+  readerSchema,
+  readRecord,
+  uuidPattern,
+  validateLessonStepResults,
+  validateStepProgress
+} from "./learnerRecords.js";
 
 /**
  * A learner's step results and reader position, each under its own short
@@ -14,7 +26,13 @@ import { attemptStepEntry, failure, idPattern, lessonSteps, MAX_READER_BYTES, MA
  * @param {(progress: object, options?: { admissionOnly?: boolean }) => Promise<object | null>} dependencies.verifyActiveLesson
  * @param {(pin: object, options?: { admissionOnly?: boolean }) => Promise<object>} dependencies.verifyInstalled
  */
-function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyActiveLesson, verifyInstalled }) {
+function createLearnerSteps({
+  acquireRecordLock,
+  loadState,
+  userPaths,
+  verifyActiveLesson,
+  verifyInstalled
+}) {
   async function readStepProgressRecord(paths) {
     const value = await readRecord(paths.stepProgress, MAX_STEP_RECORD_BYTES);
     return value ? validateStepProgress(value, paths.learner.id) : null;
@@ -28,13 +46,17 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
       const record = await readStepProgressRecord(paths);
       const entry = attemptStepEntry(record, attempt);
       if (record?.attemptId === attempt.attemptId) {
-        if (canonicalJson(record.lesson) !== canonicalJson(attempt.pin.lesson)) throw new Error("Step progress names another lesson than its attempt.");
+        if (canonicalJson(record.lesson) !== canonicalJson(attempt.pin.lesson)) {
+          throw new Error("Step progress names another lesson than its attempt.");
+        }
         validateLessonStepResults(entry, lesson);
       }
       return { ...entry, revision: record?.attemptId === attempt.attemptId ? record.revision : 0 };
     } catch (cause) {
       throw failure("VIBE64_TRAINING_STATE_INVALID",
-        `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`, null, { cause });
+        `Learning step progress is invalid: ${cause.message} Keep the files and ask the owner to inspect them; no automatic conversion was performed.`,
+        null,
+          { cause });
     }
   }
 
@@ -82,17 +104,30 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
       const result = await operation(structuredClone(entry), { lesson, attempt, revision: stepRevision, learnerId: paths.learner.id });
       if (!result?.entry) return { revision: stepRevision, entry, value: result?.value };
       if (stepRevision === Number.MAX_SAFE_INTEGER) throw new Error("Step progress reached its revision limit. No result was written.");
-      const next = { schemaVersion: 3, learnerId: paths.learner.id, revision: stepRevision + 1, attemptId, lesson: entry.lesson,
-        results: result.entry.results, receipts: result.entry.receipts || [] };
+      const next = {
+        schemaVersion: 3,
+        learnerId: paths.learner.id,
+        revision: stepRevision + 1,
+        attemptId,
+        lesson: entry.lesson,
+        results: result.entry.results,
+        receipts: result.entry.receipts || []
+      };
       validateStepProgress(next, paths.learner.id);
       validateLessonStepResults(next, lesson);
       try {
         await writeJsonFileAtomic(paths.stepProgress, next, { directoryMode: 0o700, fileMode: 0o600 });
       } catch (cause) {
         throw failure("VIBE64_TRAINING_STEP_PROGRESS_SAVE_UNCONFIRMED",
-          "The step result save was not confirmed; the atomic rename may have succeeded. Read or retry the same request ID.", null, { cause });
+          "The step result save was not confirmed; the atomic rename may have succeeded. Read or retry the same request ID.",
+          null,
+            { cause });
       }
-      return { revision: next.revision, entry: { lesson: next.lesson, results: next.results, receipts: next.receipts }, value: result.value };
+      return {
+        revision: next.revision,
+        entry: { lesson: next.lesson, results: next.results, receipts: next.receipts },
+        value: result.value
+      };
     } finally {
       await release();
     }
@@ -136,17 +171,31 @@ function createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyAct
     if (!lessonSteps(lesson)?.some(step => step.id === stepId)) {
       throw failure("VIBE64_TRAINING_STEP_MISSING", "The step is not declared in this attempt's pinned lesson.", 404);
     }
-    const release = await acquireRecordLock(paths.readerLock, "VIBE64_TRAINING_READER_BUSY", "The reader position is being saved. Retry in a moment.");
+    const release = await acquireRecordLock(
+      paths.readerLock,
+      "VIBE64_TRAINING_READER_BUSY",
+      "The reader position is being saved. Retry in a moment."
+    );
     try {
       const reader = { schemaVersion: 1, learnerId: paths.learner.id, attemptId, stepId, scroll };
-      await writeJsonFileAtomic(paths.reader, validateContent(readerSchema, reader, "Lesson reader position"), { directoryMode: 0o700, fileMode: 0o600 });
+      await writeJsonFileAtomic(paths.reader, validateContent(readerSchema, reader, "Lesson reader position"), {
+        directoryMode: 0o700,
+        fileMode: 0o600
+      });
       return { attemptId, stepId, scroll };
     } finally {
       await release();
     }
   }
 
-  return Object.freeze({ readAttemptSteps, readStepProgress, readStepProgressRecord, updateStepProgress, readReader, saveReader });
+  return Object.freeze({
+    readAttemptSteps,
+    readStepProgress,
+    readStepProgressRecord,
+    updateStepProgress,
+    readReader,
+    saveReader
+  });
 }
 
 export { createLearnerSteps };

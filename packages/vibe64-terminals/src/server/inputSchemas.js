@@ -74,17 +74,26 @@ const agentAttachmentDeleteActionInputValidator = validator({
 });
 const temporaryConversationListInputValidator = validator({ sessionId: sessionIdField });
 const temporaryConversationPresentationField = { type: "object", additionalProperties: true, required: false };
-const temporaryConversationRoutingField = { type: "object", required: false, schema: createSchema({
-  mode: { type: "string", enum: [...ASSISTANT_MODES.filter(({ id }) => id !== "auto").map(({ id }) => id), "fix"], required: true },
-  review: { type: "boolean", required: false },
-  override: { type: "object", required: false, schema: createSchema({
-    engineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
-    ...Object.fromEntries(["schema", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision"]
-      .map((key) => [key, optionalText]))
-  }) }
-}) };
+const temporaryConversationRoutingField = {
+  type: "object",
+  required: false,
+  schema: createSchema({
+    mode: { type: "string", enum: [...ASSISTANT_MODES.filter(({ id }) => id !== "auto").map(({ id }) => id), "fix"], required: true },
+    review: { type: "boolean", required: false },
+    override: {
+      type: "object",
+      required: false,
+      schema: createSchema({
+        engineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
+        ...Object.fromEntries(["schema", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision"]
+          .map((key) => [key, optionalText]))
+      })
+    }
+  })
+};
 const temporaryConversationUpdateInputValidator = validator({
-  conversationId: requiredText, sessionId: sessionIdField,
+  conversationId: requiredText,
+  sessionId: sessionIdField,
   assistantRouting: temporaryConversationRoutingField,
   agentSettings: { type: "object", additionalProperties: true, required: false },
   presentation: temporaryConversationPresentationField,
@@ -169,8 +178,11 @@ const openOutputTargetActionInputValidator = validator({
 });
 const previewDiagnosticFields = {
   enabled: { type: "boolean", required: true },
-  event: { ...requiredText, enum: ["resource.failed", "resource.retry", "resource.retry.skipped",
-    "resource.retry.unavailable", "frame.requested", "iframe.loaded", "iframe.ready"] },
+  event: {
+    ...requiredText,
+    enum: ["resource.failed", "resource.retry", "resource.retry.skipped",
+      "resource.retry.unavailable", "frame.requested", "iframe.loaded", "iframe.ready"]
+  },
   timestamp: { ...optionalText, maxLength: 40 },
   resourceUrl: { ...optionalText, maxLength: 2048 },
   frameUrl: { ...optionalText, maxLength: 2048 },
@@ -245,8 +257,10 @@ const workPlanRestoreInputValidator = validator({
   archiveId: { ...requiredText, minLength: 64, maxLength: 64 }
 });
 const outputStatusInputValidator = validator({
-  sessionId: sessionIdField, editorOrigin: optionalText,
-  publicHost: { ...optionalText, defaultTo: "" }, publicProtocol: { ...optionalText, defaultTo: "" },
+  sessionId: sessionIdField,
+  editorOrigin: optionalText,
+  publicHost: { ...optionalText, defaultTo: "" },
+  publicProtocol: { ...optionalText, defaultTo: "" },
   outputTargetId: { ...optionalText, minLength: 1 },
   targetOffset: { type: "integer", min: 0, required: false },
   runOffset: { type: "integer", min: 0, required: false }
@@ -269,10 +283,14 @@ const canonicalAgentGoalInputValidator = validator({
 const agentTerminalStartInputValidator = validator({
   sessionId: sessionIdField,
   originId: optionalText,
-  size: { type: "object", required: false, schema: createSchema({
-    cols: { type: "integer", min: 1, required: false },
-    rows: { type: "integer", min: 1, required: false }
-  }) }
+  size: {
+    type: "object",
+    required: false,
+    schema: createSchema({
+      cols: { type: "integer", min: 1, required: false },
+      rows: { type: "integer", min: 1, required: false }
+    })
+  }
 });
 const terminalInputValidator = validator({ sessionId: sessionIdField, terminalSessionId: requiredText });
 const globalTerminalInputValidator = validator({ terminalSessionId: requiredText });

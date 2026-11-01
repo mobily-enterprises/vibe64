@@ -36,8 +36,17 @@ function createVoice(proxyConfig) {
 
 const Vibe64VoiceProvider = defineFeature({
   id: "vibe64.voice",
-  actionDefaults: { channels: ["api", "internal"], surfaces: ["app"] },
-  requires: { colleague: "vibe64.colleague", env: "runtime.env", fastify: "runtime.fastify", project: "vibe64.project", sessions: "vibe64.sessions" },
+  actionDefaults: {
+    channels: ["api", "internal"],
+    surfaces: ["app"]
+  },
+  requires: {
+    colleague: "vibe64.colleague",
+    env: "runtime.env",
+    fastify: "runtime.fastify",
+    project: "vibe64.project",
+    sessions: "vibe64.sessions"
+  },
   provides: { voice: "vibe64.voice" },
   /**
    * @param {object} capabilities
@@ -46,14 +55,26 @@ const Vibe64VoiceProvider = defineFeature({
    * @param {SessionsService} capabilities.sessions
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
-  setup({ env, fastify, sessions }, { actionCatalogue }) {
+  setup({
+    env,
+    fastify,
+    sessions
+  }, { actionCatalogue }) {
     const config = { ...process.env, ...env };
-    const proxyConfig = resolveVoiceProxyConfig({ endpoint: config.VIBE64_VOICE_ENDPOINT, accessTokenFile: config.VIBE64_VOICE_ACCESS_TOKEN_FILE });
+    const proxyConfig = resolveVoiceProxyConfig({
+      endpoint: config.VIBE64_VOICE_ENDPOINT,
+      accessTokenFile: config.VIBE64_VOICE_ACCESS_TOKEN_FILE
+    });
     registerVoiceCatalogueRoute(fastify, actionCatalogue);
     function authorizeOrigin(request) {
-      if (!isTrustedStudioWebSocketRequest(request)) throw Object.assign(new Error("Sign in to use voice."), { code: "voice_auth_required", statusCode: 403 });
+      if (!isTrustedStudioWebSocketRequest(request)) throw Object.assign(new Error("Sign in to use voice."), {
+        code: "voice_auth_required",
+        statusCode: 403
+      });
     }
-    registerVoiceProxyRoute(fastify, { proxyConfig, route: "/api/app/:slug/vibe64/sessions/:sessionId/voice/ws",
+    registerVoiceProxyRoute(fastify, {
+      proxyConfig,
+      route: "/api/app/:slug/vibe64/sessions/:sessionId/voice/ws",
       async authorize(request) {
         authorizeOrigin(request);
         const context = await resolveProjectRequestContext({ projectContext: getStudioProjectContext(), request });
@@ -64,11 +85,16 @@ const Vibe64VoiceProvider = defineFeature({
         }
       }
     });
-    registerVoiceProxyRoute(fastify, { proxyConfig, route: COLLEAGUE_VOICE_SOCKET_URL,
+    registerVoiceProxyRoute(fastify, {
+      proxyConfig,
+      route: COLLEAGUE_VOICE_SOCKET_URL,
       async authorize(request) {
         authorizeOrigin(request);
-        await actionCatalogue.execute({ actionId: "vibe64.colleague.state.read", input: {},
-          context: { channel: "api", surface: "app", requestMeta: { request } } });
+        await actionCatalogue.execute({
+          actionId: "vibe64.colleague.state.read",
+          input: {},
+          context: { channel: "api", surface: "app", requestMeta: { request } }
+        });
       }
     });
     return { voice: createVoice(proxyConfig) };

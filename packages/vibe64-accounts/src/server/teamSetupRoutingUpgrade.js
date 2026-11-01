@@ -32,42 +32,57 @@ function offlinePersonal(selection, openCodeConnections) {
 export async function upgradeTeamSetupRouting({ systemRoot, apply, backupRoot, report }) {
   const filePath = path.join(systemRoot, "ai-connections", "routing.json");
   await verifyUpgradeParents(systemRoot, filePath);
-  await publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates: async () => {
-    const original = await readUpgradeFile(filePath);
-    if (original === null) return [];
-    let saved;
-    try { saved = JSON.parse(original); } catch { throw new Error("Saved model routing is unreadable. Inspect it before upgrading."); }
-    if (saved?.schemaVersion === 5) return [];
-    if (!apply && saved?.schemaVersion !== 4) {
-      report("info", "Earlier upgrades will prepare the saved model routing first; apply checks it again.");
-      return [];
+  await publishStateUpgradeFiles({
+    systemRoot,
+    apply,
+    backupRoot,
+    report,
+    prepareUpdates: async () => {
+      const original = await readUpgradeFile(filePath);
+      if (original === null) return [];
+      let saved;
+      try { saved = JSON.parse(original); } catch { throw new Error("Saved model routing is unreadable. Inspect it before upgrading."); }
+      if (saved?.schemaVersion === 5) return [];
+      if (!apply && saved?.schemaVersion !== 4) {
+        report("info", "Earlier upgrades will prepare the saved model routing first; apply checks it again.");
+        return [];
+      }
+      try { validateV4(saved); }
+      catch { throw new Error("Saved model routing is not in the schema-4 format. Inspect it before upgrading."); }
+      const { orchestrators } = saved;
+      const sourceEngineId = v4SourceEngineId(orchestrators);
+      for (const engineId of V4_ENGINE_ORDER) {
+        if (engineId === sourceEngineId || !orchestrators[engineId]) continue;
+        const roles = Object.keys(ROLE_LABELS).filter((role) => orchestrators[engineId][role]).map((role) => ROLE_LABELS[role]);
+        report(
+          "warning",
+          `${ENGINE_LABELS[engineId]} routing${roles.length ? ` (${roles.join(", ")})` : ""} is left in the backup, not carried over.`
+        );
+      }
+      if (orchestrators[sourceEngineId]?.helperRoutingReview) {
+        report("warning", "The Helper choice was waiting for review; Quick helper is off until the owner chooses its model.");
+      }
+      const backup = orchestrators[sourceEngineId]?.sharedBackup ??
+        V4_ENGINE_ORDER.map((engineId) => orchestrators[engineId]?.sharedBackup).find(Boolean);
+      const openCodeConnections = backup?.engineId === "opencode"
+        ? await createAiConnectionStore({
+          filePath: path.join(systemRoot, "ai-connections", "connections.json"),
+          verifyConnection: () => { throw new Error("Offline routing upgrade cannot call a provider."); }
+        }).listConnections()
+        : [];
+      let nonOwner = {};
+      if (backup && !offlinePersonal(backup, openCodeConnections)) {
+        nonOwner = { colleague: backup, quickHelper: backup, fix: { follows: "colleague" }, explain: { follows: "quickHelper" } };
+      } else {
+        report("warning", "Team members will be asked to wait until the owner sets up team AI.");
+      }
+      const next = validateAssistantRoutingConfiguration({
+        schemaVersion: 5,
+        revision: saved.revision + 1,
+        owner: v4OwnerSetup(orchestrators[sourceEngineId]),
+        nonOwner
+      });
+      return [{ filePath, original, contents: `${JSON.stringify(next)}\n` }];
     }
-    try { validateV4(saved); }
-    catch { throw new Error("Saved model routing is not in the schema-4 format. Inspect it before upgrading."); }
-    const { orchestrators } = saved;
-    const sourceEngineId = v4SourceEngineId(orchestrators);
-    for (const engineId of V4_ENGINE_ORDER) {
-      if (engineId === sourceEngineId || !orchestrators[engineId]) continue;
-      const roles = Object.keys(ROLE_LABELS).filter((role) => orchestrators[engineId][role]).map((role) => ROLE_LABELS[role]);
-      report("warning", `${ENGINE_LABELS[engineId]} routing${roles.length ? ` (${roles.join(", ")})` : ""} is left in the backup, not carried over.`);
-    }
-    if (orchestrators[sourceEngineId]?.helperRoutingReview) {
-      report("warning", "The Helper choice was waiting for review; Quick helper is off until the owner chooses its model.");
-    }
-    const backup = orchestrators[sourceEngineId]?.sharedBackup ??
-      V4_ENGINE_ORDER.map((engineId) => orchestrators[engineId]?.sharedBackup).find(Boolean);
-    const openCodeConnections = backup?.engineId === "opencode"
-      ? await createAiConnectionStore({ filePath: path.join(systemRoot, "ai-connections", "connections.json"),
-        verifyConnection: () => { throw new Error("Offline routing upgrade cannot call a provider."); } }).listConnections()
-      : [];
-    let nonOwner = {};
-    if (backup && !offlinePersonal(backup, openCodeConnections)) {
-      nonOwner = { colleague: backup, quickHelper: backup, fix: { follows: "colleague" }, explain: { follows: "quickHelper" } };
-    } else {
-      report("warning", "Team members will be asked to wait until the owner sets up team AI.");
-    }
-    const next = validateAssistantRoutingConfiguration({ schemaVersion: 5, revision: saved.revision + 1,
-      owner: v4OwnerSetup(orchestrators[sourceEngineId]), nonOwner });
-    return [{ filePath, original, contents: `${JSON.stringify(next)}\n` }];
-  } });
+  });
 }

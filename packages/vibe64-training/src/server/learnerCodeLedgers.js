@@ -15,7 +15,12 @@ import { failure, inspectPath, MAX_CODE_LEDGER_BYTES, readRecord, uuidPattern, v
  * @param {(paths: object) => Promise<object>} dependencies.loadState
  * @param {(actor: object) => object} dependencies.userPaths
  */
-function createLearnerCodeLedgers({ activeAttemptForProject, createNamespace, loadState, userPaths }) {
+function createLearnerCodeLedgers({
+  activeAttemptForProject,
+  createNamespace,
+  loadState,
+  userPaths
+}) {
   /**
    * Code ledgers: one private record per attempt in progress, so autosaves
    * never advance the learning revision. Ending the attempt removes it.
@@ -49,7 +54,11 @@ function createLearnerCodeLedgers({ activeAttemptForProject, createNamespace, lo
     await inspectPath(paths.codeLedgerLock, false);
     const release = await tryAcquireExclusiveFileLock(paths.codeLedgerLock);
     if (!release) {
-      throw failure("VIBE64_TRAINING_CODE_LEDGER_BUSY", "Another save of this lesson's code is being recorded. Save again in a moment.", 409);
+      throw failure(
+        "VIBE64_TRAINING_CODE_LEDGER_BUSY",
+        "Another save of this lesson's code is being recorded. Save again in a moment.",
+        409
+      );
     }
     try { return await operation(); } finally { await release(); }
   }
@@ -71,7 +80,12 @@ function createLearnerCodeLedgers({ activeAttemptForProject, createNamespace, lo
     });
   }
 
-  return Object.freeze({ ledgerPath, readCodeLedger, updateCodeLedger, withLedgerLock });
+  return Object.freeze({
+    ledgerPath,
+    readCodeLedger,
+    updateCodeLedger,
+    withLedgerLock
+  });
 }
 
 export { createLearnerCodeLedgers };

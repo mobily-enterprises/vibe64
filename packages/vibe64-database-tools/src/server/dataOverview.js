@@ -31,8 +31,10 @@ export function dataOverviewDefinition(schema, definition, options) {
     ...(definition.reviewedTables && { reviewedTables: definition.reviewedTables.map(tableReference) }),
     ...(definition.rings && { rings: definition.rings.map((ring) => ring.map(tableReference)) }),
     ...(definition.mainRelationships && { mainRelationships: definition.mainRelationships.map(reference) }),
-    ...(definition.positions && { positions: Object.fromEntries(Object.entries(definition.positions)
-      .map(([table, position]) => [table === "other-tables" ? table : tableReference(table), position])) })
+    ...(definition.positions && {
+      positions: Object.fromEntries(Object.entries(definition.positions)
+        .map(([table, position]) => [table === "other-tables" ? table : tableReference(table), position]))
+    })
   };
 }
 
@@ -45,7 +47,9 @@ export async function readDataOverview(session, schema) {
     handle = await open(path.join(root, DATA_OVERVIEW_PATH), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     result.present = true;
     const stats = await handle.stat();
-    if (!stats.isFile() || stats.size > DATA_OVERVIEW_MAX_BYTES) throw new Error("Data overview must be a regular JSON file smaller than 256 KiB.");
+    if (!stats.isFile() || stats.size > DATA_OVERVIEW_MAX_BYTES) {
+      throw new Error("Data overview must be a regular JSON file smaller than 256 KiB.");
+    }
     const buffer = Buffer.alloc(DATA_OVERVIEW_MAX_BYTES + 1);
     let length = 0;
     while (length < buffer.length) {

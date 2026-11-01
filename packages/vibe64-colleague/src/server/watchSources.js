@@ -52,8 +52,16 @@ function createWatchSources() {
     if (scope === "project" && !fields.projectSlug) throw new TypeError("A project watch source takes projectSlug.");
     const named = descriptions(conditions, "condition");
     if (!Object.keys(named).length) throw new TypeError("A watch source offers at least one condition.");
-    add(id, { kind: "state", label: label.trim(), description: description.trim(), scope, input: fields,
-      conditions: named, read, ...(entity ? { entity } : {}) });
+    add(id, {
+      kind: "state",
+      label: label.trim(),
+      description: description.trim(),
+      scope,
+      input: fields,
+      conditions: named,
+      read,
+      ...(entity ? { entity } : {})
+    });
   }
 
   const get = id => sources.get(id) || null;
@@ -64,10 +72,22 @@ function createWatchSources() {
    * What the assistant may watch through watch.source.create.
    */
   const list = () => [...sources.values()].filter(source => source.kind === "state")
-    .map(({ id, label, description, scope, input, conditions }) => ({ source: id, label, description, scope,
-      input: { ...input }, conditions: { ...conditions } }));
+    .map(({ id, label, description, scope, input, conditions }) => ({
+      source: id,
+      label,
+      description,
+      scope,
+      input: { ...input },
+      conditions: { ...conditions }
+    }));
 
-  return Object.freeze({ registerConversation, register, get, readsEntity, list });
+  return Object.freeze({
+    registerConversation,
+    register,
+    get,
+    readsEntity,
+    list
+  });
 }
 
 /**
@@ -89,12 +109,17 @@ function stateWatchInput(source, input) {
 }
 
 function stateObservation(source, value) {
-  if (value?.ok === false) throw failure(String(value.error || `The ${source.label} could not be read.`).slice(0, 512), value.statusCode || 409);
+  if (value?.ok === false) {
+    throw failure(String(value.error || `The ${source.label} could not be read.`).slice(0, 512), value.statusCode || 409);
+  }
   const fingerprint = typeof value?.fingerprint === "string" ? value.fingerprint : "";
   if (!fingerprint || fingerprint.length > 4096) throw failure(`The ${source.label} reader gave no usable answer.`, 502);
   const met = Array.isArray(value.conditionsMet) ? value.conditionsMet : [];
-  return { fingerprint, summary: String(value.summary || "").slice(0, 1000),
-    conditionsMet: Object.keys(source.conditions).filter(name => met.includes(name)) };
+  return {
+    fingerprint,
+    summary: String(value.summary || "").slice(0, 1000),
+    conditionsMet: Object.keys(source.conditions).filter(name => met.includes(name))
+  };
 }
 
 /**

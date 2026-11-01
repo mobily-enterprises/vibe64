@@ -99,14 +99,21 @@ async function recentChatContext(store, sessionId) {
     ["user", "assistant", "commentary"].includes(message.role) && message.text?.trim() &&
     !assistantGoalManagementMessage(message, turn) && !(message.role === "user" && turn.metadata?.projectMessage)
   ).map((message, index) => ({
-    id: `main-context/${turn.turnId}/${index}`, role: message.role, text: visibleContextText(message), at: message.at,
-    attachments: [], receipt: false
+    id: `main-context/${turn.turnId}/${index}`,
+    role: message.role,
+    text: visibleContextText(message),
+    at: message.at,
+    attachments: [],
+    receipt: false
   }))).filter(message => message.text.trim()).sort((left, right) => Date.parse(left.at) - Date.parse(right.at)).slice(-40);
   let remaining = 64 * 1024;
   let truncated = false;
   const messages = [];
   for (const message of selected.reverse()) {
-    if (!remaining) { truncated = true; continue; }
+    if (!remaining) {
+      truncated = true;
+      continue;
+    }
     const bytes = Buffer.from(message.text, "utf8");
     let text = message.text;
     if (bytes.length > remaining) {
@@ -138,7 +145,9 @@ function requireSuccess(result) {
   return result;
 }
 
-const teamTemporaryModesRefusal = () => Object.assign(new Error("Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom."),
+const teamTemporaryModesRefusal = () => Object.assign(new Error(
+  "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom."
+),
   { code: "vibe64_assistant_owner_required", statusCode: 403 });
 
 export {

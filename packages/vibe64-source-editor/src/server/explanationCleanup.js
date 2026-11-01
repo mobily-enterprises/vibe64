@@ -3,8 +3,24 @@ import { rm } from "node:fs/promises";
 import { normalizeText } from "@local/vibe64-core/server/core";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
-import { sourceEditorAgentOperationOptions, sourceEditorExecutionProfileRequest, sourceEditorExecutionProfileSnapshot } from "./explanationProfile.js";
-import { deleteSourceEditorExplanationAgentThread, mutateSourceEditorExplanationCleanupRecords, normalizeSourceEditorExplanation, readSourceEditorExplanationCleanupRecord, readSourceEditorExplanationRecord, removeSourceEditorExplanationCleanupRecord, shouldCleanupSourceEditorExplanationRecord, sourceEditorCleanupActiveIds, sourceEditorExplanationMemoryKey, sourceEditorHelperRoot, writeSourceEditorExplanation } from "./explanationRecords.js";
+import {
+  sourceEditorAgentOperationOptions,
+  sourceEditorExecutionProfileRequest,
+  sourceEditorExecutionProfileSnapshot
+} from "./explanationProfile.js";
+import {
+  deleteSourceEditorExplanationAgentThread,
+  mutateSourceEditorExplanationCleanupRecords,
+  normalizeSourceEditorExplanation,
+  readSourceEditorExplanationCleanupRecord,
+  readSourceEditorExplanationRecord,
+  removeSourceEditorExplanationCleanupRecord,
+  shouldCleanupSourceEditorExplanationRecord,
+  sourceEditorCleanupActiveIds,
+  sourceEditorExplanationMemoryKey,
+  sourceEditorHelperRoot,
+  writeSourceEditorExplanation
+} from "./explanationRecords.js";
 import { sourceEditorExplanationWithMessage, withSourceEditorExplanationFreshness } from "./explanationStream.js";
 import { isPlainObject, sourceEditorError } from "./sourceFiles.js";
 
@@ -48,7 +64,9 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
     const helper = cleanupRecord.helper;
     sourceEditorHelperRoot(context, helper);
     const stopped = await terminalService.stopEphemeralAgentConversation(helper.scope, {
-      conversationId: helper.conversationId, runId: helper.runId, cleanupExecutionId: helper.executionId,
+      conversationId: helper.conversationId,
+      runId: helper.runId,
+      cleanupExecutionId: helper.executionId,
       executionProfile: helper.executionProfile
     }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
     if (stopped?.ok !== true) throw sourceEditorError(stopped?.error || "The source explanation could not be stopped.",
@@ -119,7 +137,11 @@ async function cleanupSourceEditorExplanations(context = {}, input = {}, {
   const nowMs = Date.now();
 
   const tasks = [...explanationTurns.values()].filter((task) => task.sessionId === context.sessionId &&
-    task.projectScope === currentProjectScopeKey() && (all || shouldCleanupSourceEditorExplanationRecord(task, { activeIds, nowMs, originId })));
+    task.projectScope === currentProjectScopeKey() && (all || shouldCleanupSourceEditorExplanationRecord(task, {
+      activeIds,
+      nowMs,
+      originId
+    })));
   for (const task of tasks) task.controller.abort();
   await Promise.allSettled(tasks.map((task) => task.promise));
 

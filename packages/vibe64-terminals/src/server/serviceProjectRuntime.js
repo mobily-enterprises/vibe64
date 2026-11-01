@@ -141,8 +141,10 @@ function createServiceProjectRuntime({
     // open rather than closing on a guess; the other sessions are still read.
     const unreadable = [];
     const sessionStateFailure = (session, error) => {
-      unreadable.push({ error: error instanceof Error ? error.message : String(error || "Session state is unreadable."),
-        sessionId: sessionRecordId(session) });
+      unreadable.push({
+        error: error instanceof Error ? error.message : String(error || "Session state is unreadable."),
+        sessionId: sessionRecordId(session)
+      });
     };
     if (sessions.some((session) => {
       try {
@@ -152,8 +154,15 @@ function createServiceProjectRuntime({
         return false;
       }
     })) {
-      return { dormant: false, ok: true, skipped: true, reason: "active-goal-intent", runtime,
-        projectSlug: context.projectSlug, projectContextRoot: context.projectContextRoot };
+      return {
+        dormant: false,
+        ok: true,
+        skipped: true,
+        reason: "active-goal-intent",
+        runtime,
+        projectSlug: context.projectSlug,
+        projectContextRoot: context.projectContextRoot
+      };
     }
     if (sessions.some((session) => session.pinnedSessionId)) {
       return {
@@ -225,7 +234,7 @@ function createServiceProjectRuntime({
       idleMs: dormancy.idleMs,
       lastActivityAt: dormancy.lastActivityAt,
       projectContextRoot: context.projectContextRoot,
-      projectSlug: context.projectSlug,
+      projectSlug: context.projectSlug
     });
     const closeResult = await closeProjectRuntime({
       reason: PROJECT_RUNTIME_IDLE_TIMEOUT_REASON
@@ -484,7 +493,8 @@ function createServiceProjectRuntime({
           result.runtime = runtime;
         }
         await publishProjectRuntimeChanged(result, {
-          action: "runtime-closed", dormant
+          action: "runtime-closed",
+          dormant
         });
         vibe64SessionDebugLog("server.terminals.closeProjectRuntime.done", {
           ...result,
@@ -531,17 +541,25 @@ function createServiceProjectRuntime({
     if (closedRuntime) {
       return closedProjectOutputTargetStatus(closedRuntime);
     }
-    const result = { ...await outputTarget.launchStatus(sessionId, options), testApproval: agentPreviewCommand.testApprovalStatus(sessionId) };
+    const result = {
+      ...await outputTarget.launchStatus(sessionId, options),
+      testApproval: agentPreviewCommand.testApprovalStatus(sessionId)
+    };
     if (result.ok !== true) return result;
     if (options.outputTargetId != null || options.targetOffset != null || options.runOffset != null) {
       const targets = (result.outputTargets || []).filter(target => !options.outputTargetId || target.id === options.outputTargetId);
       const targetOffset = options.targetOffset ?? 0;
       const runs = result.outputRuns || [];
       const runOffset = options.runOffset ?? 0;
-      return { ...result,
+      return {
+        ...result,
         requestedOutputTargetId: options.outputTargetId || "",
-        outputTargets: targets.slice(targetOffset, targetOffset + 10), outputTargetCount: targets.length, targetOffset,
-        outputRuns: runs.slice(runOffset, runOffset + 5), outputRunCount: runs.length, runOffset
+        outputTargets: targets.slice(targetOffset, targetOffset + 10),
+        outputTargetCount: targets.length,
+        targetOffset,
+        outputRuns: runs.slice(runOffset, runOffset + 5),
+        outputRunCount: runs.length,
+        runOffset
       };
     }
     return result;

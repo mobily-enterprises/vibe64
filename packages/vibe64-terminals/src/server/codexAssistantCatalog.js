@@ -65,8 +65,14 @@ async function withCodexAppServerModelCatalogDeadline(operation, {
  * Native catalogue caching, provider reuse and cleanup stay in the existing owner.
  */
 function createCodexAssistantCatalog({
-  accountPreparation, runtimeHost, sessionRuntimeHost, conversationPreparation, helperPreparation,
-  providerOwner, runOwner, providerFactory
+  accountPreparation,
+  runtimeHost,
+  sessionRuntimeHost,
+  conversationPreparation,
+  helperPreparation,
+  providerOwner,
+  runOwner,
+  providerFactory
 }) {
   const { codexToolHomeResult } = accountPreparation;
   const { codexAppServerRuntimeOptions } = runtimeHost;

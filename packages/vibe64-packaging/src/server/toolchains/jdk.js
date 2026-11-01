@@ -49,7 +49,13 @@ async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, { r
   const major = Number(match[1]);
   const version = /version "([^"]+)"/u.exec(`${result.stderr}${result.stdout}`)[1];
   if (major < REQUIRED_JAVA) {
-    return { ok: false, javaHome, version, major, message: `Java ${version} is too old; Android builds need Java ${REQUIRED_JAVA} or newer.` };
+    return {
+      ok: false,
+      javaHome,
+      version,
+      major,
+      message: `Java ${version} is too old; Android builds need Java ${REQUIRED_JAVA} or newer.`
+    };
   }
   return { ok: true, javaHome, version, major, message: `Java ${version}.` };
 }
@@ -84,7 +90,12 @@ async function findJdk({ directory = null, baseEnvironment = process.env, platfo
     if (description.ok) return description;
     tried.push(description.message);
   }
-  return { ok: false, javaHome: null, message: tried.length ? tried.join(" ") : `No Java ${REQUIRED_JAVA} found.`, installable: Boolean(pinned) };
+  return {
+    ok: false,
+    javaHome: null,
+    message: tried.length ? tried.join(" ") : `No Java ${REQUIRED_JAVA} found.`,
+    installable: Boolean(pinned)
+  };
 }
 
 /**

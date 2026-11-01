@@ -130,8 +130,19 @@ function createWorkspaceSetupStart({
     }
 
     const run = {
-      migrationStartedAt, migrationTranscript, projectContext, renewal, rerunFailed, retry,
-      runKey, runtime, session, sessionId, setup, sourcePath, stateBase
+      migrationStartedAt,
+      migrationTranscript,
+      projectContext,
+      renewal,
+      rerunFailed,
+      retry,
+      runKey,
+      runtime,
+      session,
+      sessionId,
+      setup,
+      sourcePath,
+      stateBase
     };
     if (runtime.learningScope || !setup?.connectedDevelopment || retry !== true) return startRecipe(run);
     // A requested run prepares connected projects in the background: they
@@ -139,24 +150,53 @@ function createWorkspaceSetupStart({
     const startedAt = migrationStartedAt || new Date().toISOString();
     const currentLabel = CONNECTED_PREPARATION_LABEL;
     const state = await persist(runtime, sessionId, {
-      ...stateBase, currentLabel, diagnostic: "", finishedAt: "", startedAt, status: "running"
+      ...stateBase,
+      currentLabel,
+      diagnostic: "",
+      finishedAt: "",
+      startedAt,
+      status: "running"
     }, renewal);
     const begin = () => startRecipe({
       ...run,
       onProgress: label => persist(runtime, sessionId, {
-        ...stateBase, currentLabel: safeSetupLabel(label), diagnostic: "", finishedAt: "", startedAt, status: "running"
+        ...stateBase,
+        currentLabel: safeSetupLabel(label),
+        diagnostic: "",
+        finishedAt: "",
+        startedAt,
+        status: "running"
       }, renewal)
     }).then(next => next.completion || next.state);
     const completion = setupExecution.observe(sessionId, inProjectContext(projectContext, begin), {
-      currentLabel, recipeHash: "", redactionSecrets: [], renewal, projectContext,
-      runtime, runKey, startedAt, transcript: stateBase.transcript
+      currentLabel,
+      recipeHash: "",
+      redactionSecrets: [],
+      renewal,
+      projectContext,
+      runtime,
+      runKey,
+      startedAt,
+      transcript: stateBase.transcript
     });
     return { completion, state };
   }
 
   async function startRecipe({
-    migrationStartedAt, migrationTranscript, onProgress = null, projectContext, renewal, rerunFailed = false, retry,
-    runKey, runtime, session, sessionId, setup, sourcePath, stateBase
+    migrationStartedAt,
+    migrationTranscript,
+    onProgress = null,
+    projectContext,
+    renewal,
+    rerunFailed = false,
+    retry,
+    runKey,
+    runtime,
+    session,
+    sessionId,
+    setup,
+    sourcePath,
+    stateBase
   }) {
     let connectedUpdates = [];
     if (!runtime.learningScope && setup?.connectedDevelopment) {
@@ -170,7 +210,9 @@ function createWorkspaceSetupStart({
         await setupExecution.connectedSourceRoots(setup, runtime, session);
       } catch (error) {
         const state = await failed(runtime, sessionId, {
-          currentLabel: "Prepare connected sources", diagnostic: normalizeText(error?.message), renewal
+          currentLabel: "Prepare connected sources",
+          diagnostic: normalizeText(error?.message),
+          renewal
         });
         return { completion: null, state };
       }
@@ -236,29 +278,43 @@ function createWorkspaceSetupStart({
         // is reusable only when its exact resources existed before provisioning.
         try {
           preparedEnvironment = await loadProjectExecutionEnvRecords({
-            prepare: true, reusePrepared: true, includeResourceConfiguration: true,
-            projectService, session, target: "workspace-setup"
+            prepare: true,
+            reusePrepared: true,
+            includeResourceConfiguration: true,
+            projectService,
+            session,
+            target: "workspace-setup"
           });
           const restoredSetup = await runnerState.inspect({
-            session, projectRoot: sourcePath, environment: await runtime.resolvePromptEnvironment()
+            session,
+            projectRoot: sourcePath,
+            environment: await runtime.resolvePromptEnvironment()
           });
           if (restoredSetup?.status !== "ready" || restoredSetup.recipeHash !== recipe.recipeHash) {
             throw new Error("Workspace setup changed while preparing its environment. Retry preparation to run the current steps.");
           }
           const restored = await projectService.projectEnvironmentStatus({ sessionId, session });
-          if (restored.status !== "ready") throw new Error("Project environment is not ready. Correct its configuration and retry preparation.");
+          if (restored.status !== "ready") {
+            throw new Error("Project environment is not ready. Correct its configuration and retry preparation.");
+          }
           if (preparedEnvironment.resourcePreparation?.preserved === true &&
               preparedEnvironment.resourcePreparation.identity === stateBase.resourceIdentity &&
               restored.resourcePreparation?.identity === stateBase.resourceIdentity) {
             return { completion: null, state: stateBase };
           }
         } catch (error) {
-          return { completion: null, state: await failed(runtime, sessionId, {
-            currentLabel: "Prepare project environment", diagnostic: normalizeText(error?.message),
-            recipeHash: recipe.recipeHash, renewal, transcript: stateBase.transcript,
-            redactionSecrets: operationRedactionSecrets(projectExecutionEnvFromRecords(preparedEnvironment || {})),
-            resourceAdmissionId: error?.details?.admission?.id
-          }) };
+          return {
+            completion: null,
+            state: await failed(runtime, sessionId, {
+              currentLabel: "Prepare project environment",
+              diagnostic: normalizeText(error?.message),
+              recipeHash: recipe.recipeHash,
+              renewal,
+              transcript: stateBase.transcript,
+              redactionSecrets: operationRedactionSecrets(projectExecutionEnvFromRecords(preparedEnvironment || {})),
+              resourceAdmissionId: error?.details?.admission?.id
+            })
+          };
         }
       }
     }

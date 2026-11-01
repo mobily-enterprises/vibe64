@@ -15,7 +15,12 @@ import { findVibe64AgentProvider } from "@local/vibe64-runtime/shared";
  * @param {CodexSessionRegistration} dependencies.codex
  * @param {CodexProviderConnectionStore} dependencies.codexProviderConnections
  */
-function createServiceProviderAccess({ state, claudeProvider, codex, codexProviderConnections }) {
+function createServiceProviderAccess({
+  state,
+  claudeProvider,
+  codex,
+  codexProviderConnections
+}) {
   async function readAssistantAccess(context) {
     if (context.engineId === "claude") {
       return claudeProvider.assistantAccess(context);

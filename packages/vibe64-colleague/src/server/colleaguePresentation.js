@@ -47,27 +47,36 @@ function colleagueBrowserState(current) {
     if (!messages.length) return [];
     const runtime = turn.metadata?.runtime;
     const system = messages.find(message => message.role === "system");
-    return [{ turnId: turn.turnId, messages,
+    return [{
+      turnId: turn.turnId,
+      messages,
       ...(system ? { system } : {}),
       user: messages.find(message => message.role === "user") || null,
       assistant: messages.find(message => message.role === "assistant") || null,
       thinking: messages.filter(message => message.role === "thinking"),
       commentary: messages.filter(message => message.role === "commentary"),
-      ...(runtime ? { metadata: { runtime: { status: runtime.status, origin: runtime.origin } } } : {}) }];
+      ...(runtime ? { metadata: { runtime: { status: runtime.status, origin: runtime.origin } } } : {})
+    }];
   });
   const { configuration, ...state } = current;
-  return { ...state, conversationLog,
+  return {
+    ...state,
+    conversationLog,
     pendingRequest: current.pendingRequest?.origin === "application" ? null : current.pendingRequest,
-    streaming: colleagueBrowserStream(current.streaming) };
+    streaming: colleagueBrowserStream(current.streaming)
+  };
 }
 /**
  * A streamed partial may end halfway through a surrogate pair.
  */
 const trimIncompleteSurrogate = text => text.replace(/[\uD800-\uDBFF]$/, "");
 function colleagueBrowserStream(streaming) {
-  return streaming ? { ...streaming, messages: streaming.messages.filter(message =>
-    message.completedEnvelope !== true && (message.origin !== "application" || message.role !== "commentary")).map(message =>
-    message.status === "inProgress" ? { ...message, text: trimIncompleteSurrogate(message.text) } : message) } : streaming;
+  return streaming ? {
+    ...streaming,
+    messages: streaming.messages.filter(message =>
+      message.completedEnvelope !== true && (message.origin !== "application" || message.role !== "commentary")).map(message =>
+      message.status === "inProgress" ? { ...message, text: trimIncompleteSurrogate(message.text) } : message)
+  } : streaming;
 }
 
 export {

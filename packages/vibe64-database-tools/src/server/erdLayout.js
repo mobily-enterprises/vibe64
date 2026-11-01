@@ -24,15 +24,20 @@ export function inspectErdLayout(schema, layout) {
       Math.abs(point.x - route.points[index].x) + Math.abs(point.y - route.points[index].y), 0);
     const directDistance = Math.abs(route.start.x - route.end.x) + Math.abs(route.start.y - route.end.y);
     return {
-      id: route.id, relationshipId: route.relationshipId,
+      id: route.id,
+      relationshipId: route.relationshipId,
       parent: { table: route.source, column: route.relationship.referencedColumns[route.pairIndex] },
       child: { table: route.target, column: route.relationship.columns[route.pairIndex] },
-      points: route.points, length, bends: Math.max(0, route.points.length - 2),
-      detourRatio: directDistance ? length / directDistance : null, obstructed: route.obstructed
+      points: route.points,
+      length,
+      bends: Math.max(0, route.points.length - 2),
+      detourRatio: directDistance ? length / directDistance : null,
+      obstructed: route.obstructed
     };
   });
   const inspection = {
-    revision: layout.revision, instructions: ERD_AGENT_INSTRUCTIONS,
+    revision: layout.revision,
+    instructions: ERD_AGENT_INSTRUCTIONS,
     scope: { focusTable: layout.focusTable, activeGroup: layout.activeGroup },
     viewport: layout.viewport,
     nodes: nodes.map((node) => ({
@@ -76,7 +81,10 @@ export function moveErdLayoutTables(schema, layout, input = {}) {
       Math.abs(move.x) > 10_000_000 || Math.abs(move.y) > 10_000_000 ||
       (move.pinned !== undefined && typeof move.pinned !== "boolean")
     ) {
-      throw vibe64Error("Each move needs a distinct, positioned table from the current schema and finite x/y coordinates. Open the ERD first if it has no saved positions.", "vibe64_database_erd_moves_invalid");
+      throw vibe64Error(
+        "Each move needs a distinct, positioned table from the current schema and finite x/y coordinates. Open the ERD first if it has no saved positions.",
+        "vibe64_database_erd_moves_invalid"
+      );
     }
     if (current.pinned && move.pinned !== false && (current.x !== move.x || current.y !== move.y)) {
       throw vibe64Error(`Unpin ${move.table} explicitly before moving it.`, "vibe64_database_erd_table_pinned");

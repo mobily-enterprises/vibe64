@@ -27,7 +27,9 @@ export async function prepareCopiedScopedClaudeConversations(root) {
       } else if (receiptDepth === 2 && entry.name.endsWith(".json")) {
         if (!entry.isFile()) throw new Error("Copied Claude receipts must be regular files.");
         const serialized = await readFile(file, "utf8");
-        if (JSON.parse(serialized).schemaVersion !== 1) throw new Error("Upgrade the parent's retained Claude conversation before copying it.");
+        if (JSON.parse(serialized).schemaVersion !== 1) {
+          throw new Error("Upgrade the parent's retained Claude conversation before copying it.");
+        }
         await writeFile(file, prepareCopiedClaudeConversationState(serialized), { mode: 0o600 });
         count += 1;
       }
@@ -69,10 +71,17 @@ function createClaudeConversationStorage({ createError: error }) {
   async function save(entry) {
     const state = {
       executionId: entry.process?.executionId || entry.executionId || "",
-      accountIdentity: entry.accountIdentity, accountIdentities: entry.accountIdentities, sent: entry.sent, state: entry.turn?.state || "ready", turnId: entry.turn?.id || "",
+      accountIdentity: entry.accountIdentity,
+      accountIdentities: entry.accountIdentities,
+      sent: entry.sent,
+      state: entry.turn?.state || "ready",
+      turnId: entry.turn?.id || "",
       pausedGoal: entry.pausedGoal || null,
       blockedGoal: entry.blockedGoal || null,
-      lastMessageId: entry.lastMessageId || "", main: entry.main, persistent: entry.persistent === true, nativeWorkdir: entry.nativeWorkdir || entry.context.workdir
+      lastMessageId: entry.lastMessageId || "",
+      main: entry.main,
+      persistent: entry.persistent === true,
+      nativeWorkdir: entry.nativeWorkdir || entry.context.workdir
     };
     if (!entry.context.assistantScope) {
       return metadata(entry.context, { [`claude_conversation_${entry.id}`]: JSON.stringify(state) });
@@ -118,10 +127,16 @@ function createClaudeConversationStorage({ createError: error }) {
   function select(ctx, id) {
     // Restoring a retained entry is not a main-chat changeover. Only a main
     // operation selects Claude, including when restoration already cached it.
-    const identity = { claude_conversation_id: id, agent_identity_conversation_id: id,
-      agent_identity_provider: ENGINE, agent_identity_resume_strategy: "provider-native",
-      agent_identity_status: "ready", agent_identity_workdir: ctx.workdir,
-      agent_transport_id: TRANSPORT, agent_transport_kind: "stream-json" };
+    const identity = {
+      claude_conversation_id: id,
+      agent_identity_conversation_id: id,
+      agent_identity_provider: ENGINE,
+      agent_identity_resume_strategy: "provider-native",
+      agent_identity_status: "ready",
+      agent_identity_workdir: ctx.workdir,
+      agent_transport_id: TRANSPORT,
+      agent_transport_kind: "stream-json"
+    };
     if (Object.entries(identity).some(([name, value]) => ctx.session?.metadata?.[name] !== value)) {
       return metadata(ctx, identity);
     }

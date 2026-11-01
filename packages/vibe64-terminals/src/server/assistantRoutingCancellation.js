@@ -60,13 +60,16 @@ function createAssistantRoutingCancellation({
         const { goal, pinned } = await records.currentGoal(sessionId, context);
         const workflow = assistantGoalIsActive(goal) && pinned?.workflowEngineId;
         if (workflow && workflow !== state.workflowEngineId ||
-            !sameVibe64AssistantSelection(selection, state.observedSelection) && !sameVibe64AssistantSelection(selection, state.deliverySelection)) return null;
+            !sameVibe64AssistantSelection(selection, state.observedSelection) &&
+              !sameVibe64AssistantSelection(selection, state.deliverySelection)) return null;
         await decisions.validateDecision(context, state);
         const native = await agent.sessionState(sessionId, context);
         if (!native || native.ok === false || native.status === "working" || native.turn?.active || native.turn?.waitingForInput ||
             native.pendingRequests?.length || native.terminal?.status === "running" ||
             context.session.agentRuns?.some(run => run.active || vibe64AgentRunStateIsActive(run.state) ||
-              run.providerGoalStatus === "active" && run.providerGoalThreadId && run.providerGoalThreadId === run.providerThreadId)) return null;
+              run.providerGoalStatus === "active" &&
+                run.providerGoalThreadId &&
+                run.providerGoalThreadId === run.providerThreadId)) return null;
         return { status: "not-sent", messageId, error: state.error || "This request was not sent." };
       }
       if (!state || activeMessage(state).messageId !== messageId && state.messageId !== messageId ||
@@ -81,13 +84,20 @@ function createAssistantRoutingCancellation({
       let finished;
       const result = await exclusive(sessionId, options, async context => {
         const state = await read(context.runtime.store, sessionId);
-        if (expectedMessageId !== undefined && state?.messageId !== expectedMessageId) throw failure("The routing request changed. Retry the assistant selection.");
+        if (expectedMessageId !== undefined && state?.messageId !== expectedMessageId) {
+          throw failure("The routing request changed. Retry the assistant selection.");
+        }
         const task = routingState.running.get(records.keyFor(sessionId, context));
         routingState.liveFollowupRequests.delete(records.keyFor(sessionId, context));
-        if (task) { task.cancelled = true; stop = task.stop; finished = task.finished.promise; }
+        if (task) {
+          task.cancelled = true;
+          stop = task.stop;
+          finished = task.finished.promise;
+        }
         if (!state) return false;
         const pending = ["routing", "pending", "failed"].includes(state.delivery) && !state.attemptedMessageId;
-        state.stopped = true; state.status = "waiting";
+        state.stopped = true;
+        state.status = "waiting";
         delete state.outcome;
         if (pending) delete state.error;
         await records.save(context, state);
@@ -99,7 +109,9 @@ function createAssistantRoutingCancellation({
       await stop?.();
       if (waitForCleanup) await finished;
       if (waitForCleanup) await exclusive(sessionId, options, async context => {
-        if ((await read(context.runtime.store, sessionId))?.helper) throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+        if ((await read(context.runtime.store, sessionId))?.helper) {
+          throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
+        }
       });
       return result;
     }
@@ -142,7 +154,9 @@ function createAssistantRoutingCancellation({
       route = state;
       const unsent = ["routing", "pending", "failed"].includes(route.delivery) && !route.attemptedMessageId;
       // Cancelled, unlike Stop, never returns the message to the draft.
-      route.stopped = true; route.cancelled = true; route.status = "waiting";
+      route.stopped = true;
+      route.cancelled = true;
+      route.status = "waiting";
       delete route.outcome;
       if (unsent) delete route.error;
       await store.writeMetadataValue(sessionId, STATE_KEY, JSON.stringify(route));
@@ -178,7 +192,9 @@ function createAssistantRoutingCancellation({
     if (!unsettled.length) return;
     const state = await read(store, sessionId).catch(() => null);
     for (const { messageId } of unsettled) {
-      if (state?.helper && assistantWorkflowMessageIds(state).includes(messageId) && routingState.running.get(key)?.messageId !== messageId) {
+      if (state?.helper &&
+          assistantWorkflowMessageIds(state).includes(messageId) &&
+          routingState.running.get(key)?.messageId !== messageId) {
         await records.releaseHelper(context, state);
       }
       await discardPending(sessionId, messageId, context);

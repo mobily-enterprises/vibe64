@@ -6,29 +6,44 @@ import { assistantWorkflowUpgradeChanges } from "@local/vibe64-runtime/shared/as
 import { planProgressUpgradeChanges } from "./assistantWorkPlan.js";
 
 async function upgradePlanProgress(context) {
-  return publishStateUpgradeFiles({ ...context, prepareUpdates: async temporaryRoot => {
-    const updates = [];
-    for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
-      const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-      const staged = await store.prepareAssistantRoutingStateUpgrade({ temporaryRoot,
-        transform: () => ({}), transformPlanProgress: planProgressUpgradeChanges });
-      context.report("info", `${path.basename(projectRuntimeRoot)}: ${staged.length} paired plan/progress file change(s); existing text and archive IDs are preserved.`);
-      updates.push(...staged);
+  return publishStateUpgradeFiles({
+    ...context,
+    prepareUpdates: async temporaryRoot => {
+      const updates = [];
+      for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
+        const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
+        const staged = await store.prepareAssistantRoutingStateUpgrade({
+          temporaryRoot,
+          transform: () => ({}),
+          transformPlanProgress: planProgressUpgradeChanges
+        });
+        context.report(
+          "info",
+          `${path.basename(projectRuntimeRoot)}: ${staged.length} paired plan/progress file change(s); existing text and archive IDs are preserved.`
+        );
+        updates.push(...staged);
+      }
+      return updates;
     }
-    return updates;
-  } });
+  });
 }
 
 async function upgradeAssistantWorkflow(context) {
-  return publishStateUpgradeFiles({ ...context, prepareUpdates: async temporaryRoot => {
-    const updates = [];
-    for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
-      const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-      const staged = await store.prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform: assistantWorkflowUpgradeChanges });
-      context.report("info", `${path.basename(projectRuntimeRoot)}: ${staged.length} workflow file change(s). Retained stages and delivery identities require explicit continuation; nothing is replayed.`);
-      updates.push(...staged);
+  return publishStateUpgradeFiles({
+    ...context,
+    prepareUpdates: async temporaryRoot => {
+      const updates = [];
+      for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
+        const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
+        const staged = await store.prepareAssistantRoutingStateUpgrade({ temporaryRoot, transform: assistantWorkflowUpgradeChanges });
+        context.report(
+          "info",
+          `${path.basename(projectRuntimeRoot)}: ${staged.length} workflow file change(s). Retained stages and delivery identities require explicit continuation; nothing is replayed.`
+        );
+        updates.push(...staged);
+      }
+      return updates;
     }
-    return updates;
-  } });
+  });
 }
 export { upgradePlanProgress, upgradeAssistantWorkflow };

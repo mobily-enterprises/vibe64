@@ -33,8 +33,16 @@ const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;
  * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
  */
 function createOpenCodeConversationAccounts({
-  command, createServerProcess, env, listConnections, readCatalogCommand,
-  readZenModelsCommand, sharedRoots, verifyConnectionCommand, mainMessagePreparation, resolveConnection
+  command,
+  createServerProcess,
+  env,
+  listConnections,
+  readCatalogCommand,
+  readZenModelsCommand,
+  sharedRoots,
+  verifyConnectionCommand,
+  mainMessagePreparation,
+  resolveConnection
 }) {
   const { contextFor } = mainMessagePreparation;
   let catalogRead = null;
@@ -159,7 +167,11 @@ function createOpenCodeConversationAccounts({
     };
   }
 
-  return Object.freeze({ capabilities, describeProvider, verifyConnection });
+  return Object.freeze({
+    capabilities,
+    describeProvider,
+    verifyConnection
+  });
 }
 
 export { createOpenCodeConversationAccounts, OPENCODE_CATALOG_CACHE_MS };

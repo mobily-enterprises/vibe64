@@ -23,7 +23,12 @@ import {
  * @param {ProjectSelection} dependencies.selection
  * @param {ProjectSessionWork} dependencies.sessionWork
  */
-function createProjectDevelopmentDatabase({ projectContext, resourceEnvironmentProvider, selection, sessionWork }) {
+function createProjectDevelopmentDatabase({
+  projectContext,
+  resourceEnvironmentProvider,
+  selection,
+  sessionWork
+}) {
   async function currentDevelopmentDatabaseScope() {
     return (await selection.currentDevelopmentDatabaseConfiguration()).developmentDatabaseScope;
   }

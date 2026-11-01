@@ -10,7 +10,10 @@ import { isPlainObject } from "./upgradeValues.js";
 const providers = ["deepseek", "zai", "zai-coding-plan"];
 const nativeHomePattern = /^(?:private-[A-Za-z0-9-]+|verify-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/u;
 function parse(source, label) {
-  try { const value = JSON.parse(source); if (isPlainObject(value)) return value; } catch { /* Never expose saved credentials. */ }
+  try {
+    const value = JSON.parse(source);
+    if (isPlainObject(value)) return value;
+  } catch { /* Never expose saved credentials. */ }
   throw new Error(`${label} is invalid. Inspect or restore it before clearing saved provider credentials.`);
 }
 
@@ -18,8 +21,14 @@ function parse(source, label) {
  * Accounts owns this explicit offline policy. The existing publisher owns private
  * before/after copies and exact-byte retry; no normal reader invokes this code.
  */
-export async function upgradeIndependentProviderCredentials({ systemRoot, apply, backupRoot, report,
-  env = process.env, home = os.homedir() }) {
+export async function upgradeIndependentProviderCredentials({
+  systemRoot,
+  apply,
+  backupRoot,
+  report,
+  env = process.env,
+  home = os.homedir()
+}) {
   const storePath = path.join(systemRoot, "ai-connections", "connections.json");
   const exactPaths = new Set([storePath]);
   for (const engineId of ["codex", "claude"]) for (const providerId of providers) {
@@ -58,8 +67,14 @@ export async function upgradeIndependentProviderCredentials({ systemRoot, apply,
       throw new Error("Provider credential backup manifest contains an unowned path. Inspect it before retrying.");
     }
   }
-  report("warning", "Applying this upgrade clears ALL saved DeepSeek, regular GLM API and GLM Coding Plan connections for Codex, Claude Code and OpenCode, including managed native credentials. Stop services and every native writer first. Routing stays selected but unavailable until each orchestrator is independently reconnected. Local clearing does not revoke keys at the provider. Conversations, history, source, subscription logins and unrelated providers remain.");
-  report("warning", `Managed native credential inventory includes external runtime locations: ${runtimeBases.join(", ")}. Stop every service and native terminal writing these paths before apply.`);
+  report(
+    "warning",
+    "Applying this upgrade clears ALL saved DeepSeek, regular GLM API and GLM Coding Plan connections for Codex, Claude Code and OpenCode, including managed native credentials. Stop services and every native writer first. Routing stays selected but unavailable until each orchestrator is independently reconnected. Local clearing does not revoke keys at the provider. Conversations, history, source, subscription logins and unrelated providers remain."
+  );
+  report(
+    "warning",
+    `Managed native credential inventory includes external runtime locations: ${runtimeBases.join(", ")}. Stop every service and native terminal writing these paths before apply.`
+  );
   await publishStateUpgradeFiles({ systemRoot: publicationRoot, apply, backupRoot, report,
     async prepareUpdates() {
       const updates = [];
@@ -80,7 +95,9 @@ export async function upgradeIndependentProviderCredentials({ systemRoot, apply,
         } else {
           if (filePath.endsWith("connection.json")) {
             const connection = parse(original, "Curated provider connection");
-            if (typeof connection.apiKey !== "string" || !connection.apiKey) throw new Error("Curated provider connection has an unsupported shape. Inspect it before clearing credentials.");
+            if (typeof connection.apiKey !== "string" || !connection.apiKey) {
+              throw new Error("Curated provider connection has an unsupported shape. Inspect it before clearing credentials.");
+            }
           }
           updates.push({ filePath, original, contents: null });
         }
@@ -89,10 +106,15 @@ export async function upgradeIndependentProviderCredentials({ systemRoot, apply,
         await verifyUpgradeParents(publicationRoot, path.join(root, ".inventory"));
         let entries;
         try { entries = await readdir(root, { withFileTypes: true }); }
-        catch (error) { if (error.code === "ENOENT") continue; throw error; }
+        catch (error) {
+          if (error.code === "ENOENT") continue;
+          throw error;
+        }
         for (const entry of entries) {
           if (!nativeHomePattern.test(entry.name)) continue;
-          if (!entry.isDirectory()) throw new Error("Managed OpenCode credential home must be a regular directory. Inspect it before clearing credentials.");
+          if (!entry.isDirectory()) {
+            throw new Error("Managed OpenCode credential home must be a regular directory. Inspect it before clearing credentials.");
+          }
           const filePath = path.join(root, entry.name, "data", "opencode", "auth.json");
           await verifyUpgradeParents(publicationRoot, filePath);
           const original = await readUpgradeFile(filePath);
@@ -108,10 +130,15 @@ export async function upgradeIndependentProviderCredentials({ systemRoot, apply,
         await verifyUpgradeParents(publicationRoot, path.join(root, ".inventory"));
         let entries;
         try { entries = await readdir(root, { withFileTypes: true }); }
-        catch (error) { if (error.code === "ENOENT") continue; throw error; }
+        catch (error) {
+          if (error.code === "ENOENT") continue;
+          throw error;
+        }
         for (const entry of entries) {
           if (!/^codex-app-server(?:-[a-f0-9]{12}|-[a-f0-9]{16})?$/u.test(entry.name)) continue;
-          if (!entry.isDirectory()) throw new Error("Managed Codex runtime must be a regular directory. Inspect it before clearing credentials.");
+          if (!entry.isDirectory()) {
+            throw new Error("Managed Codex runtime must be a regular directory. Inspect it before clearing credentials.");
+          }
           const filePath = path.join(root, entry.name, "codex-home", "config.toml");
           await verifyUpgradeParents(publicationRoot, filePath);
           const original = await readUpgradeFile(filePath);
@@ -131,14 +158,18 @@ export async function upgradeIndependentProviderCredentials({ systemRoot, apply,
               if (!/^\s*experimental_bearer_token\s*=\s*"(?:[^"\\]|\\.)*"\s*(?:#.*)?$/u.test(line.trimEnd())) {
                 throw new Error("Managed Codex provider credentials have an unsupported TOML shape. Inspect them before clearing.");
               }
-              removed = true; return false;
+              removed = true;
+              return false;
             }
             return true;
           }).join("");
           if (removed) updates.push({ filePath, original, contents });
         }
       }
-      report("info", `${updates.length} credential-bearing or connection-state file(s) inventoried; no provider requests or credential copying.`);
+      report(
+        "info",
+        `${updates.length} credential-bearing or connection-state file(s) inventoried; no provider requests or credential copying.`
+      );
       return updates;
     }
   });

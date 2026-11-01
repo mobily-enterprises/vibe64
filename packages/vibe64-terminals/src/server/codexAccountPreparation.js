@@ -157,13 +157,17 @@ function createCodexAccountPreparation({
   }
 
   async function codexAppServerAssistantAccess() {
-    return readCodexSelectedAccountAccess({ toolHomeSource: codexToolHomeSource,
-      systemRoot: codexAppServerProviderOptions.systemRoot });
+    return readCodexSelectedAccountAccess({
+      toolHomeSource: codexToolHomeSource,
+      systemRoot: codexAppServerProviderOptions.systemRoot
+    });
   }
 
   return Object.freeze({
     assistantAccess: codexAppServerAssistantAccess,
-    codexToolHomeResult, codexReconnectTerminalFailureForError, codexAuthPreflightFailure
+    codexToolHomeResult,
+    codexReconnectTerminalFailureForError,
+    codexAuthPreflightFailure
   });
 }
 

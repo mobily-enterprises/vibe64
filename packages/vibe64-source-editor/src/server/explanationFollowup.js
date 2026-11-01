@@ -2,8 +2,22 @@ import { normalizeText } from "@local/vibe64-core/server/core";
 
 import { SOURCE_EDITOR_EXPLANATION_EXECUTION_PROFILE, sourceEditorExecutionProfileSnapshot } from "./explanationProfile.js";
 import { writeSourceEditorExplanation } from "./explanationRecords.js";
-import { createSourceEditorExplanationStreamState, readSourceEditorExplanation, runTrackedSourceEditorAgentTurn, sourceEditorClientMessageId, sourceEditorExplanationMessage, sourceEditorExplanationMessagesForAppend, streamSourceEditorAgentTurn } from "./explanationStream.js";
-import { SOURCE_EDITOR_FOLLOWUP_ANSWER_MAX_CHARS, sourceEditorExplanationFollowupMessage, sourceEditorExplanationFollowupPrompt, sourceEditorExplanationMessageId, sourceEditorExplanationSummary } from "./explanationText.js";
+import {
+  createSourceEditorExplanationStreamState,
+  readSourceEditorExplanation,
+  runTrackedSourceEditorAgentTurn,
+  sourceEditorClientMessageId,
+  sourceEditorExplanationMessage,
+  sourceEditorExplanationMessagesForAppend,
+  streamSourceEditorAgentTurn
+} from "./explanationStream.js";
+import {
+  SOURCE_EDITOR_FOLLOWUP_ANSWER_MAX_CHARS,
+  sourceEditorExplanationFollowupMessage,
+  sourceEditorExplanationFollowupPrompt,
+  sourceEditorExplanationMessageId,
+  sourceEditorExplanationSummary
+} from "./explanationText.js";
 import { sourceEditorError } from "./sourceFiles.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */

@@ -2,7 +2,9 @@ import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { readOpenCodeEnvironments, openCodeEnvironmentForDirectory, openCodeEnvironmentForSession,
-  createOpenCodeConversationPlugin, assertOpenCodeModelProvider, limitOpenCodeModelOutput } from "@jskit-ai/assistant-core/server/opencode-process";
+  createOpenCodeConversationPlugin,
+  assertOpenCodeModelProvider,
+    limitOpenCodeModelOutput } from "@jskit-ai/assistant-core/server/opencode-process";
 import { vibe64Driver } from "@local/vibe64-genesis/server/promptContext";
 
 function text(value = "") {
@@ -86,11 +88,14 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => {
       if (!selected?.promptContext) return { conversation: selected?.conversation, instructions: null };
       const { workdir, promptContext } = selected;
       if (promptContext.scope === "ephemeral") {
-        return { conversation: selected.conversation, instructions: {
-          identity: JSON.stringify(promptContext),
-          placement: "replace",
-          read: () => vibe64Driver(promptContext)
-        } };
+        return {
+          conversation: selected.conversation,
+          instructions: {
+            identity: JSON.stringify(promptContext),
+            placement: "replace",
+            read: () => vibe64Driver(promptContext)
+          }
+        };
       }
       return { conversation: selected.conversation, instructions: {
         // Project guidance can change independently of the registry: read it
@@ -103,7 +108,10 @@ export const Vibe64SessionEnvironment = async ({ client } = {}) => {
             import.meta.resolve("@local/vibe64-genesis/server/promptContext")));
           return new Promise((resolve, reject) => {
             const child = execFile(executable, ["--instructions"], {
-              cwd: workdir, timeout: 30_000, maxBuffer: 256 * 1024, encoding: "utf8"
+              cwd: workdir,
+              timeout: 30_000,
+              maxBuffer: 256 * 1024,
+              encoding: "utf8"
             }, (error, stdout) => {
               if (error) reject(new Error("Project instructions could not be loaded. Retry the conversation.", { cause: error }));
               else resolve(stdout);

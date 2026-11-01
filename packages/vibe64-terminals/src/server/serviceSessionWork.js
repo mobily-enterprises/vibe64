@@ -114,7 +114,9 @@ function createServiceSessionWork({
     let commitTitle;
     try {
       commitTitle = await generateSessionSaveCommitMessage({
-        agent: sessionAgent, agentContext, changes: saveMessageInput.changes
+        agent: sessionAgent,
+        agentContext,
+        changes: saveMessageInput.changes
       });
     } catch (error) {
       // Naming is optional. Leave failed thread ownership intact and let the
@@ -378,12 +380,15 @@ function createServiceSessionWork({
     }, async (context) => {
       if (state.lifecycle.closing || context.session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(context.session)) {
         throw Object.assign(new Error("Committed source reads require an open session that is not closing or renewing."), {
-          code: "vibe64_session_source_read_unavailable", statusCode: 409
+          code: "vibe64_session_source_read_unavailable",
+          statusCode: 409
         });
       }
       if (workspaceSetup.isRunning(id) || context.session.workspaceSetup?.status === "running") {
         throw Object.assign(new Error("Workspace setup must finish before reading this session's committed source snapshot."), {
-          code: "vibe64_session_source_read_setup_running", statusCode: 409, retryable: true
+          code: "vibe64_session_source_read_setup_running",
+          statusCode: 409,
+          retryable: true
         });
       }
       requireCompletedConversationRewind(context.session);
@@ -395,7 +400,8 @@ function createServiceSessionWork({
         const sourceRoot = sessionSourcePath(session);
         if (session.sessionId !== id || !sourceRoot) {
           throw Object.assign(new Error("This exact session has no available managed source."), {
-            code: "vibe64_session_source_root_missing", statusCode: 409
+            code: "vibe64_session_source_root_missing",
+            statusCode: 409
           });
         }
         return operation({ runtime: context.runtime, session, sourceRoot });
@@ -557,21 +563,32 @@ function createServiceSessionWork({
   async function changeIncomingContribution(sessionId, input = {}) {
     return runSessionRepositoryWrite(sessionId, input, { operation: "incoming-contribution" }, context =>
       projectService.runProjectSourceExclusive(async () => {
-        const { project } = await projectService.incomingRepository({ ...input,
-          action: input.action === "review-repair" ? "merge" : input.action });
+        const { project } = await projectService.incomingRepository({
+          ...input,
+          action: input.action === "review-repair" ? "merge" : input.action
+        });
         // A receiving action belongs to its current actor, not the person
         // whose previous coding turn recorded this session's Git identity.
         const recorded = await recordSessionGitCommandActor(sessionId, {
-          ...context, vibe64User: input.vibe64User, reason: "incoming-contribution"
+          ...context,
+          vibe64User: input.vibe64User,
+          reason: "incoming-contribution"
         });
         if (recorded?.ok === false) throw Object.assign(new Error(recorded.error), { code: recorded.code });
         const session = await context.runtime.getSession(sessionId, { inspectSource: false });
         const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution",
           { createsCommits: input.action !== "discard" });
-        return changeManagedIncomingContribution({ project, session, action: input.action,
+        return changeManagedIncomingContribution({
+          project,
+          session,
+          action: input.action,
           derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-          id: input.id, review: input.review, repairReview: input.repairReview,
-          commandOptions: execution.commandOptions, runCommand: execution.runCommand });
+          id: input.id,
+          review: input.review,
+          repairReview: input.repairReview,
+          commandOptions: execution.commandOptions,
+          runCommand: execution.runCommand
+        });
       }, { operation: `incoming-${input.action}` }));
   }
 

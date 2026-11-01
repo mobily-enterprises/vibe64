@@ -81,8 +81,11 @@ function createSessionAgentBindings({ state }) {
    * Reading or stopping a goal uses the session's current provider without rebinding it.
    */
   function goalProvider(sessionId, options) {
-    return providerFor({ ...options, providerId: sessionAgentProviderId(options,
-      bindings.get(bindingKey(sessionId, options)) || state.defaultProviderId) });
+    return providerFor({
+      ...options,
+      providerId: sessionAgentProviderId(options,
+        bindings.get(bindingKey(sessionId, options)) || state.defaultProviderId)
+    });
   }
 
   function binding(sessionId = "", options = {}) {

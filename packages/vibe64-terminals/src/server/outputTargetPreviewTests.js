@@ -41,7 +41,12 @@ function createOutputTargetPreviewTests({
   projectService,
   stopExecution
 }) {
-  async function withPreviewTarget(sessionId, outputTargetId, operation, { waitUntilReady, startTarget = startTargetNow, signal, onState = ignoreTestRunState }) {
+  async function withPreviewTarget(sessionId, outputTargetId, operation, {
+    waitUntilReady,
+    startTarget = startTargetNow,
+    signal,
+    onState = ignoreTestRunState
+  }) {
     const testRun = { targetId: outputTargetId, token: crypto.randomUUID(), closing: false };
     function changeState(nextState) {
       testRun.state = nextState;
@@ -62,8 +67,11 @@ function createOutputTargetPreviewTests({
       const targets = await listOutputTargets(context);
       const status = await launchCoordination.resolvePreviewStatus(sessionId, context, targets);
       if (!outputTargetId) {
-        const plan = managedPreviewLaunchPlan({ outputTargets: targets, previewStatus: status,
-          savedOutputTarget: outputTargetFromMetadata(context.session.metadata) });
+        const plan = managedPreviewLaunchPlan({
+          outputTargets: targets,
+          previewStatus: status,
+          savedOutputTarget: outputTargetFromMetadata(context.session.metadata)
+        });
         if (plan.error) throw Object.assign(new Error(plan.error), { code: plan.code });
         outputTargetId = plan.outputTargetId || plan.terminal?.metadata?.outputTargetId;
         testRun.targetId = outputTargetId;
@@ -106,9 +114,14 @@ function createOutputTargetPreviewTests({
       changeState("running");
       result = await operation(testRun.token);
     } catch (error) {
-      result = { ok: false, exitCode: 1, error: error.message, code: error.code,
+      result = {
+        ok: false,
+        exitCode: 1,
+        error: error.message,
+        code: error.code,
         ...(error.execution ? { execution: error.execution } : {}),
-        ...(error.details ? { details: error.details } : {}) };
+        ...(error.details ? { details: error.details } : {})
+      };
     }
     let cleanupRequired = browserTestNeedsCleanup(result);
     const cleanupExecutionIds = new Set(cleanupRequired ? result.cleanupExecutionIds || [result.execution?.id] : []);
@@ -139,7 +152,11 @@ function createOutputTargetPreviewTests({
               await previous.store.mutateSession(sessionId, async () => {
                 await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.id, previous.savedTarget.id);
                 await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.label, previous.savedTarget.label);
-                await previous.store.writeMetadataValue(sessionId, OUTPUT_METADATA.parameters, JSON.stringify(previous.savedTarget.outputParameters));
+                await previous.store.writeMetadataValue(
+                  sessionId,
+                  OUTPUT_METADATA.parameters,
+                  JSON.stringify(previous.savedTarget.outputParameters)
+                );
               });
             }
           });
@@ -149,7 +166,9 @@ function createOutputTargetPreviewTests({
       } catch (error) {
         changeState("restore_failed");
         return {
-          ...result, ok: false, exitCode: result?.exitCode || 1,
+          ...result,
+          ok: false,
+          exitCode: result?.exitCode || 1,
           code: "vibe64_preview_restore_failed",
           error: [result?.error, `Could not restore Preview: ${error.message}`].filter(Boolean).join("\n"),
           previewRecoveryRequired: true
@@ -170,7 +189,11 @@ function createOutputTargetPreviewTests({
   function previewTestRunAdmission(sessionId, token = "") {
     const testRun = state.previewTestRuns.get(sessionId);
     if ((!testRun && token) || (testRun && (testRun.closing || testRun.token !== token))) {
-      return { ok: false, code: "vibe64_preview_test_busy", error: "Another browser test owns this Preview, or this test run has ended. Wait for it to finish, then retry." };
+      return {
+        ok: false,
+        code: "vibe64_preview_test_busy",
+        error: "Another browser test owns this Preview, or this test run has ended. Wait for it to finish, then retry."
+      };
     }
     return null;
   }

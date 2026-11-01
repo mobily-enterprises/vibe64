@@ -30,7 +30,11 @@ const StudioHealthProvider = defineFeature({
    * @param {RuntimeHttp} capabilities.http
    * @param {ProjectService} capabilities.project
    */
-  setup({ connections, http, project }) {
+  setup({
+    connections,
+    http,
+    project
+  }) {
     const studioHealth = createService({
       connectionsService: connections,
       projectService: project,

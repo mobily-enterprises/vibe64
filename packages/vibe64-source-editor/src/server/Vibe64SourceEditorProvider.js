@@ -28,7 +28,10 @@ const Vibe64SourceEditorProvider = defineFeature({
   provides: {
     sourceEditor: "vibe64.source-editor"
   },
-  actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
+  actionDefaults: {
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"]
+  },
   /**
    * @param {object} capabilities
    * @param {RuntimeEvents} capabilities.events
@@ -37,7 +40,13 @@ const Vibe64SourceEditorProvider = defineFeature({
    * @param {ProjectService} capabilities.project
    * @param {TerminalsService} capabilities.terminals
    */
-  setup({ events, http, logger, project, terminals }) {
+  setup({
+    events,
+    http,
+    logger,
+    project,
+    terminals
+  }) {
     const sourceEditor = createService({
       logger,
       projectService: project,

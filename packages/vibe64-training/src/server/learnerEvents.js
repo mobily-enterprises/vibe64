@@ -25,13 +25,24 @@ function createTrainingLearnerChangedPublisher(events) {
     const learnerId = learnerIdentity(actor).id;
     try {
       await events.publish(Object.freeze({
-        type: "entity.changed", source: "vibe64", entity: "training-learner", operation: "updated",
-        entityId: attemptId || (reason === "notes" ? "teacher-notes" : reason || "learner"), scope: Object.freeze({ kind: "global", id: null }),
+        type: "entity.changed",
+        source: "vibe64",
+        entity: "training-learner",
+        operation: "updated",
+        entityId: attemptId || (reason === "notes" ? "teacher-notes" : reason || "learner"),
+        scope: Object.freeze({
+          kind: "global",
+          id: null
+        }),
         occurredAt: new Date().toISOString(),
         realtime: Object.freeze({
           audience: "all_clients",
           event: VIBE64_TRAINING_LEARNER_CHANGED_EVENT,
-          payload: Object.freeze({ learnerId, ...(attemptId ? { attemptId } : {}), ...(reason ? { reason } : {}) })
+          payload: Object.freeze({
+            learnerId,
+            ...(attemptId ? { attemptId } : {}),
+            ...(reason ? { reason } : {})
+          })
         })
       }));
     } catch { /* The saved change stands; readers reconcile on their next read. */ }

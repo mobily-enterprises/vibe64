@@ -44,12 +44,20 @@ function createProjectSettings({
   async function connectedProjectsState(input = {}) {
     const source = await selection.genesisSettingsSourceForInput(input);
     const scope = { rootKind: source.rootKind, sessionId: source.sessionId };
-    if (!source.sourceRoot) return { available: false, canEdit: false, source: scope,
-      unavailableReason: "Create or select a session to configure connected projects." };
+    if (!source.sourceRoot) return {
+      available: false,
+      canEdit: false,
+      source: scope,
+      unavailableReason: "Create or select a session to configure connected projects."
+    };
     await assertProjectDirectoryUsable(source.sourceRoot);
     try {
-      return { ...(await readConnectedProjects(source.sourceRoot)), available: true,
-        canEdit: canEditProjectSettings(input), source: scope };
+      return {
+        ...(await readConnectedProjects(source.sourceRoot)),
+        available: true,
+        canEdit: canEditProjectSettings(input),
+        source: scope
+      };
     } catch (error) {
       if (error.code !== "vibe64_connections_invalid") throw error;
       return { available: false, canEdit: false, source: scope, unavailableReason: error.message };
@@ -62,7 +70,9 @@ function createProjectSettings({
     const sourceInput = { ...input, sessionId: selected.sessionId };
     const write = async () => {
       const source = await selection.genesisSettingsSourceForInput(sourceInput);
-      if (!source.sourceRoot) throw vibe64Error("Create or select a session before configuring connected projects.", "vibe64_connections_source_required");
+      if (!source.sourceRoot) {
+        throw vibe64Error("Create or select a session before configuring connected projects.", "vibe64_connections_source_required");
+      }
       await assertProjectDirectoryUsable(source.sourceRoot);
       return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(), async () => {
         const normalized = normalizeConnectedProjects({ projects: input.projects });
@@ -72,7 +82,10 @@ function createProjectSettings({
             const fullName = githubRepositoryFullName(entry.repository);
             const repository = await inspectConnectedRepository(fullName, input);
             if (!repository.permissions?.push || repository.archived || repository.disabled) {
-              throw vibe64Error(`Write access to ${fullName} is required to connect it. Check your GitHub account and repository permissions.`, "vibe64_connections_access_required");
+              throw vibe64Error(
+                `Write access to ${fullName} is required to connect it. Check your GitHub account and repository permissions.`,
+                "vibe64_connections_access_required"
+              );
             }
           }
         }

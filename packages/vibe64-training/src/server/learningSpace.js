@@ -43,8 +43,15 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a
  * @param {number} [dependencies.keptArchivedProjects]
  * @param {typeof rm} [dependencies.removePath]
  */
-function createTrainingLearningSpace({ learners, content, projectContext, projectArchive, systemRoot = projectContext.systemRoot,
-  keptArchivedProjects = KEPT_ARCHIVED_PROJECTS, removePath = rm }) {
+function createTrainingLearningSpace({
+  learners,
+  content,
+  projectContext,
+  projectArchive,
+  systemRoot = projectContext.systemRoot,
+  keptArchivedProjects = KEPT_ARCHIVED_PROJECTS,
+  removePath = rm
+}) {
   if (!systemRoot) throw new TypeError("The learning space requires its system root.");
   if (!Number.isSafeInteger(keptArchivedProjects) || keptArchivedProjects < 0) {
     throw new TypeError("The learning space keeps a whole, non-negative number of archived practice projects.");
@@ -68,7 +75,10 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
   async function readBundle(directory, attemptId) {
     let record;
     try { record = JSON.parse(await readFile(path.join(directory, "attempt.json"), "utf8")); }
-    catch (error) { if (error.code === "ENOENT" || error instanceof SyntaxError) return null; throw error; }
+    catch (error) {
+      if (error.code === "ENOENT" || error instanceof SyntaxError) return null;
+      throw error;
+    }
     const valid = record?.schemaVersion === 1 && record.attemptId === attemptId && ARCHIVE_REASONS.includes(record.reason) &&
       typeof record.archivedAt === "string" && Number.isFinite(Date.parse(record.archivedAt)) &&
       typeof record.pin?.lesson?.code === "string" && typeof record.lessonTitle === "string";
@@ -85,12 +95,20 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     let current = null;
     if (active && active.pin.course.courseId !== AUTHOR_PREVIEW_COURSE) {
       const record = active.projectSlug ? await findRecord(actor, active.attemptId) : null;
-      current = { attemptId: active.attemptId, lesson: { code: active.pin.lesson.code, title: await lessonTitle(content, active.pin) },
-        ...(record ? { slug: record.slug } : {}), status: record?.deleting ? "deleting" : "in-progress" };
+      current = {
+        attemptId: active.attemptId,
+        lesson: { code: active.pin.lesson.code, title: await lessonTitle(content, active.pin) },
+        ...(record ? { slug: record.slug } : {}),
+        status: record?.deleting ? "deleting" : "in-progress"
+      };
     }
-    const archived = (await readArchives(actor, active?.attemptId)).map(({ record, hasProject }) => ({ attemptId: record.attemptId,
-      lesson: { code: record.pin.lesson.code, title: record.lessonTitle }, reason: record.reason, archivedAt: record.archivedAt,
-      hasProject }));
+    const archived = (await readArchives(actor, active?.attemptId)).map(({ record, hasProject }) => ({
+      attemptId: record.attemptId,
+      lesson: { code: record.pin.lesson.code, title: record.lessonTitle },
+      reason: record.reason,
+      archivedAt: record.archivedAt,
+      hasProject
+    }));
     return { current, archived };
   }
 
@@ -149,8 +167,15 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     if (await readBundle(directory, attemptId)) return;
     const { attempt, stepProgress, lessonTitle: title } = await learners.readAttemptRecord({ actor, attemptId });
     await writeJsonFileAtomic(path.join(directory, "attempt.json"), {
-      schemaVersion: 1, attemptId, learnerKey: learnerIdentity(actor).key, pin: attempt.pin, lessonTitle: title,
-      reason, createdAt: attempt.createdAt, archivedAt: new Date().toISOString(), stepProgress
+      schemaVersion: 1,
+      attemptId,
+      learnerKey: learnerIdentity(actor).key,
+      pin: attempt.pin,
+      lessonTitle: title,
+      reason,
+      createdAt: attempt.createdAt,
+      archivedAt: new Date().toISOString(),
+      stepProgress
     }, PRIVATE);
   }
 
@@ -205,15 +230,22 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     const attempt = await readAttempt(actor, attemptId);
     if (!attempt) {
       throw Object.assign(new Error("This is not one of your lessons. Nothing was changed."), {
-        code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 404 });
+        code: "VIBE64_TRAINING_ATTEMPT_MISSING",
+        statusCode: 404
+      });
     }
     let closed = false;
     if (!attempt.ended) {
       const directory = bundleRoot(actor, attemptId);
       // A resumed archive already holds its (partial) bundle and its slot.
       if (archive && !await isDirectory(directory) && await archiveCount(actor) >= MAX_ARCHIVES) {
-        throw Object.assign(new Error(`You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`), {
-          code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT", statusCode: 409 });
+        throw Object.assign(new Error(
+          `You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`
+        ),
+          {
+          code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT",
+          statusCode: 409
+        });
       }
       try {
         await learners.runPreparationExclusive({ actor, attemptId, closing: true }, async () => {
@@ -221,8 +253,12 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
           if (record) {
             await projectContext.runWithPracticeProjectScope({ actor, training: record.training, access: "write", allowDeleting: true },
               () => archive
-                ? projectArchive.archiveProject({ slug: record.slug, archiveRoot: path.join(directory, "project"), checkHeadroom: true,
-                  beforeRemove: () => writeAttemptRecord(actor, attemptId, reason) })
+                ? projectArchive.archiveProject({
+                  slug: record.slug,
+                  archiveRoot: path.join(directory, "project"),
+                  checkHeadroom: true,
+                  beforeRemove: () => writeAttemptRecord(actor, attemptId, reason)
+                })
                 : projectArchive.removeProject({ slug: record.slug }));
           } else if (archive) {
             await writeAttemptRecord(actor, attemptId, reason);
@@ -256,13 +292,20 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
       await isDirectory(bundleRoot(actor, attemptId));
     if (!archived) {
       throw Object.assign(new Error("This archived lesson is not in your archive."), {
-        code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_MISSING", statusCode: 404 });
+        code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_MISSING",
+        statusCode: 404
+      });
     }
     await removePath(bundleRoot(actor, attemptId), { recursive: true, force: true });
     return { ok: true, attemptId, removed: true };
   }
 
-  return Object.freeze({ list, exists, closeAttempt, deleteArchive });
+  return Object.freeze({
+    list,
+    exists,
+    closeAttempt,
+    deleteArchive
+  });
 }
 
 /**

@@ -53,8 +53,12 @@ function createAssistantRoutingAdmission({
       const timing = owned && routingState.timings.get(input.messageId);
       if (timing) {
         routingState.timings.delete(input.messageId);
-        onTiming({ sessionId, messageId: input.messageId, stages: timing.stages,
-          elapsedMs: Math.round(performance.now() - timing.started) });
+        onTiming({
+          sessionId,
+          messageId: input.messageId,
+          stages: timing.stages,
+          elapsedMs: Math.round(performance.now() - timing.started)
+        });
       }
     }
   }
@@ -75,7 +79,8 @@ function createAssistantRoutingAdmission({
     await exclusive(sessionId, options, async (current) => {
       records.mark(input.messageId, "lock-acquired");
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
-      context = current; key = records.keyFor(sessionId, context);
+      context = current;
+      key = records.keyFor(sessionId, context);
       // Finish earlier cancels' cleanup first; it never blocks this admission.
       await cancellation.settle(sessionId, context).catch(() => {});
       if ((await readCancelled(context.runtime.store, sessionId)).some(entry => entry.messageId === input.messageId)) {
@@ -84,13 +89,19 @@ function createAssistantRoutingAdmission({
       }
       const preferences = assistantRoutingFromMetadata(context.session.metadata) ||
         (options.purpose || explicitDeslop ? { mode: options.purpose || "senior", review: false } : null);
-      if (!routingState.allowAuto && preferences?.mode === "auto") throw failure("Auto is available in Main chat only. Choose Senior or Junior.");
+      if (!routingState.allowAuto && preferences?.mode === "auto") {
+        throw failure("Auto is available in Main chat only. Choose Senior or Junior.");
+      }
       if (input.reviewAction === "retry") {
         if (routingState.running.has(key)) throw failure("Wait for request preparation to finish, or stop it.");
         state = await read(context.runtime.store, sessionId);
-        if (!routingState.allowAuto && state?.mode === "auto") throw failure("Auto is available in Main chat only. Choose Senior or Junior and send a fresh request.");
+        if (!routingState.allowAuto && state?.mode === "auto") {
+          throw failure("Auto is available in Main chat only. Choose Senior or Junior and send a fresh request.");
+        }
         if (state?.messageId !== input.messageId || state.status !== "waiting" ||
-            !state.followup && state.delivery !== "uncertain" && !(state.delivery === "accepted" && (state.workflow || state.stage === "planning"))) {
+            !state.followup &&
+              state.delivery !== "uncertain" &&
+              !(state.delivery === "accepted" && (state.workflow || state.stage === "planning"))) {
           throw failure("There is no pending workflow to resume.");
         }
         if (state.awaitingAnswer) throw failure("Answer the question in chat. Your reply starts the next step.");
@@ -113,11 +124,17 @@ function createAssistantRoutingAdmission({
           direct = await delivery.deliver(sessionId, context, state, Boolean(state.followup));
         } catch (error) {
           state.delivery = state.attemptedMessageId ? "uncertain" : "pending";
-          state.status = "waiting"; state.error = error.message; await records.save(context, state); throw error;
+          state.status = "waiting";
+          state.error = error.message;
+          await records.save(context, state);
+          throw error;
         }
         return;
       }
-      if (!preferences) { direct = true; return; }
+      if (!preferences) {
+        direct = true;
+        return;
+      }
       const store = context.runtime.store;
       state = await read(store, sessionId);
       if (state?.messageId === input.messageId) refusedBeforeAdmission = false;
@@ -125,15 +142,25 @@ function createAssistantRoutingAdmission({
       records.mark(input.messageId, "duplicate-checked");
       if (duplicate) {
         if (state?.messageId === input.messageId && ["uncertain", "sending"].includes(state.delivery)) {
-          state.status = "working"; state.delivery = "accepted"; delete state.error;
+          state.status = "working";
+          state.delivery = "accepted";
+          delete state.error;
           await records.save(context, state);
         }
-        direct = { ok: true, delivered: true, duplicate: true, messageId: input.messageId }; return;
+        direct = { ok: true, delivered: true, duplicate: true, messageId: input.messageId };
+        return;
       }
-      if (state?.messageId === input.messageId && (state.delivery === "uncertain" || state.delivery === "sending" && state.attemptedMessageId === input.messageId)) {
-        if (state.input.message !== input.message) throw failure("A retry must keep the original message. Cancel it to send an edited request.");
+      if (state?.messageId === input.messageId &&
+          (state.delivery === "uncertain" || state.delivery === "sending" && state.attemptedMessageId === input.messageId)) {
+        if (state.input.message !== input.message) {
+          throw failure("A retry must keep the original message. Cancel it to send an edited request.");
+        }
         try { direct = await delivery.deliver(sessionId, context, state); }
-        catch (error) { state.error = error.message; await records.save(context, state); throw error; }
+        catch (error) {
+          state.error = error.message;
+          await records.save(context, state);
+          throw error;
+        }
         return;
       }
       const native = await agent.sessionState(sessionId, context);
@@ -141,19 +168,24 @@ function createAssistantRoutingAdmission({
       // Steering keeps the running model and its instructions. It never goes
       // through the classifier, including while a review turn is running.
       if (native?.turn?.active) {
-        if (explicitDeslop) throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.");
+        if (explicitDeslop) {
+          throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.");
+        }
         if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.");
         // A steered message joins the running turn on that turn's mode and model,
         // even after the saved Chat mode (or Custom model) changed.
         if (state?.workflow === true) task.steeringRequestId = state.messageId;
-        direct = true; return;
+        direct = true;
+        return;
       }
       if (input.submissionKind === "steer") {
         const completed = ["complete", "completed"].includes(native?.turn?.runState || native?.turn?.state || native?.turn?.status);
         throw Object.assign(failure("That turn has finished. Send this as a new request.",
           completed ? "conversation_steer_turn_finished" : "conversation_not_steerable"), { delivery: "not-sent" });
       }
-      if (routingState.running.has(key)) throw failure("This conversation is preparing a request. Cancel it or wait before sending another.");
+      if (routingState.running.has(key)) {
+        throw failure("This conversation is preparing a request. Cancel it or wait before sending another.");
+      }
       if (state?.messageId !== input.messageId && assistantRoutingRequestCanBeReplaced(state)) {
         state.stopped = true;
         state.review = false;
@@ -165,17 +197,24 @@ function createAssistantRoutingAdmission({
           !assistantRoutingRequestCanBeReplaced(state, vibe64AssistantSelectionFromMetadata(context.session.metadata))) {
         throw failure("Resolve or cancel the pending request before sending another.");
       }
-      if (state?.helper && state.messageId !== input.messageId) throw failure("Retry cleanup of the previous routing helper before sending another request.");
+      if (state?.helper && state.messageId !== input.messageId) {
+        throw failure("Retry cleanup of the previous routing helper before sending another request.");
+      }
       if (state?.messageId !== input.messageId && state?.status === "working" && state.delivery === "accepted" && state.workflow === true) {
         throw failure("The coding turn is preparing its Senior review. Wait for it to finish before sending another request.");
       }
       if (state?.messageId === input.messageId) {
-        if (!routingState.allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and send a new one to Senior or Junior.");
-        if (state.input.message !== input.message) throw failure("A retry must keep the original message. Cancel it to send an edited request.");
+        if (!routingState.allowAuto && state.mode === "auto") {
+          throw failure("Auto is available in Main chat only. Cancel this request and send a new one to Senior or Junior.");
+        }
+        if (state.input.message !== input.message) {
+          throw failure("A retry must keep the original message. Cancel it to send an edited request.");
+        }
         if (state.stopped) throw failure("This request was cancelled. Send your draft as a new request.");
         await decisions.admitMigratedRequest(context, state);
         if (!state.attemptedMessageId) {
-          state.status = "working"; state.delivery = state.resolvedMode ? "sending" : "routing";
+          state.status = "working";
+          state.delivery = state.resolvedMode ? "sending" : "routing";
           delete state.error;
           await records.save(context, state);
         }
@@ -184,9 +223,13 @@ function createAssistantRoutingAdmission({
         const { goal, pinned: savedGoal } = await records.currentGoal(sessionId, context);
         records.mark(input.messageId, "goal-read");
         if (explicitDeslop && assistantGoalIsActive(goal)) {
-          throw failure("Deslop can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send Deslop again.");
+          throw failure(
+            "Deslop can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send Deslop again."
+          );
         }
-        if (!options.purpose && preferences.mode === "auto" && assistantGoalIsActive(goal) && !savedGoal) throw failure("Choose Senior or Junior before working on a goal.");
+        if (!options.purpose && preferences.mode === "auto" && assistantGoalIsActive(goal) && !savedGoal) {
+          throw failure("Choose Senior or Junior before working on a goal.");
+        }
         const saved = await records.readRoutingSettings();
         const pinnedGoal = assistantGoalIsActive(goal) && savedGoal;
         if (options.purpose && assistantGoalIsActive(goal) && pinnedGoal?.mode !== options.purpose) {
@@ -205,12 +248,17 @@ function createAssistantRoutingAdmission({
         const review = mode === "auto" && !explicitDeslop && !options.purpose && !assistantGoalIsActive(goal);
         state = {
           messageId: input.messageId,
-          input: { ...Object.fromEntries(Object.entries(input).filter(([name]) => [
-            "message", "displayMessage", "attachmentIds", "displayAttachments", "genesisTask",
-            "originId", "presentation", "promptLabel", "outputSchema", "planRevision"
-          ].includes(name))),
-            ...(input.turnMetadata?.projectMessage || input.turnMetadata?.source || input.turnMetadata?.sender ? { turnMetadata: Object.fromEntries(
-              ["projectMessage", "source", "sender"].filter(name => input.turnMetadata[name]).map(name => [name, input.turnMetadata[name]])) } : {}) },
+          input: {
+            ...Object.fromEntries(Object.entries(input).filter(([name]) => [
+              "message", "displayMessage", "attachmentIds", "displayAttachments", "genesisTask",
+              "originId", "presentation", "promptLabel", "outputSchema", "planRevision"
+            ].includes(name))),
+            ...(input.turnMetadata?.projectMessage || input.turnMetadata?.source || input.turnMetadata?.sender ? {
+              turnMetadata: Object.fromEntries(
+                ["projectMessage", "source", "sender"].filter(name => input.turnMetadata[name])
+                  .map(name => [name, input.turnMetadata[name]]))
+            } : {})
+          },
           mode,
           resolvedMode,
           ...(explicitDeslop ? { task: "deslop" } : {}),
@@ -219,13 +267,22 @@ function createAssistantRoutingAdmission({
           schemaVersion: 5,
           observedSelection: selection,
           configuration: pinnedGoal?.configuration || { revision: saved.revision, owner: saved.owner, nonOwner: saved.nonOwner },
-          override: pinnedGoal ? pinnedGoal.override || (!pinnedGoal.configuration ? { role: mode, selection: pinnedGoal.selection } : undefined)
+          override: pinnedGoal ? pinnedGoal.override || (!pinnedGoal.configuration ? {
+            role: mode,
+            selection: pinnedGoal.selection
+          } : undefined)
             : !options.purpose && preferences.override ? { role: mode, selection: preferences.override } : undefined,
           settingsRevision: pinnedGoal?.settingsRevision ?? saved.revision,
-          status: "working", delivery: resolvedMode ? "sending" : "routing",
+          status: "working",
+          delivery: resolvedMode ? "sending" : "routing",
           createdAt: new Date().toISOString(),
           review,
-          workflow: false, stage: null, steps: 0, stalledTurns: 0, steering: [], deslop: preferences.review === true,
+          workflow: false,
+          stage: null,
+          steps: 0,
+          stalledTurns: 0,
+          steering: [],
+          deslop: preferences.review === true,
           planInvolved: hasPlanRevision,
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
@@ -244,15 +301,20 @@ function createAssistantRoutingAdmission({
         // The tool at admission; main chat's is the owner's Senior and Junior tool.
         state.workflowEngineId = pinnedGoal?.workflowEngineId || state.decision.engineId;
         records.mark(input.messageId, "resolved");
-        if (assistantGoalIsActive(goal) && !pinnedGoal && !sameVibe64AssistantSelection(decisions.destinations(state.decision)[mode]?.effectiveSelection, selection)) {
+        if (assistantGoalIsActive(goal) &&
+            !pinnedGoal &&
+            !sameVibe64AssistantSelection(decisions.destinations(state.decision)[mode]?.effectiveSelection, selection)) {
           throw failure("Finish or cancel the current goal before changing its AI.");
         }
         // A goal pins its model, not a login that may have been replaced. This
         // new request captures current access; validateDecision still fences delivery.
-        if (pinnedGoal?.selection && !sameVibe64AssistantSelection(decisions.destinations(state.decision)[mode]?.effectiveSelection, pinnedGoal.selection)) {
+        if (pinnedGoal?.selection &&
+            !sameVibe64AssistantSelection(decisions.destinations(state.decision)[mode]?.effectiveSelection, pinnedGoal.selection)) {
           throw failure("The goal's pinned AI is no longer available. Choose its destination before resuming.");
         }
-        state.assignments = Object.fromEntries(Object.entries(decisions.destinations(state.decision)).map(([role, destination]) => [role, destination.effectiveSelection]));
+        state.assignments = Object.fromEntries(
+          Object.entries(decisions.destinations(state.decision)).map(([role, destination]) => [role, destination.effectiveSelection])
+        );
         await records.save(context, state);
         records.mark(input.messageId, "route-saved");
       }
@@ -273,12 +335,17 @@ function createAssistantRoutingAdmission({
     if (direct === true) return exclusive(sessionId, options, async (current) => {
       records.mark(input.messageId, "dispatch-called");
       if (records.isCancelling(sessionId, current, input.messageId)) {
-        throw Object.assign(failure("Routing cancelled. Your message was not sent.", "vibe64_assistant_routing_cancelled"), { delivery: "not-sent" });
+        throw Object.assign(
+          failure("Routing cancelled. Your message was not sent.", "vibe64_assistant_routing_cancelled"),
+          { delivery: "not-sent" }
+        );
       }
       const result = await dispatch(sessionId, input, current);
       records.mark(input.messageId, "dispatched");
       // A Cancel that arrived during dispatch stops the turn this message started.
-      if (result?.delivered === true && records.isCancelling(sessionId, current, input.messageId)) await interrupt(sessionId, current).catch(() => {});
+      if (result?.delivered === true && records.isCancelling(sessionId, current, input.messageId)) {
+        await interrupt(sessionId, current).catch(() => {});
+      }
       if (result?.delivered === true && task.steeringRequestId) {
         const persisted = await read(current.runtime.store, sessionId);
         if (persisted?.messageId === task.steeringRequestId &&
@@ -325,10 +392,14 @@ function createAssistantRoutingAdmission({
         const latest = await read(current.runtime.store, sessionId);
         if (latest?.messageId !== state.messageId) return;
         if (latest.stopped) {
-          if (latest.helper) { latest.error = error.message; await records.save(current, latest); }
+          if (latest.helper) {
+            latest.error = error.message;
+            await records.save(current, latest);
+          }
           return !latest.helper && !latest.attemptedMessageId;
         }
-        state.delivery = state.attemptedMessageId ? "uncertain" : "failed"; state.status = "waiting";
+        state.delivery = state.attemptedMessageId ? "uncertain" : "failed";
+        state.status = "waiting";
         state.error = error.message;
         await records.save(current, state);
       });

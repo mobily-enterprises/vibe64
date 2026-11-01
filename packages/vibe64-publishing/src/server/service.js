@@ -77,12 +77,24 @@ async function publishingResult(operation) {
 async function installTool(toolchainsRoot, command, args, timeout, runCommand) {
   await mkdir(toolchainsRoot, { recursive: true });
   const result = await runCommand({
-    actor: "daemon", allowedRoots: [toolchainsRoot], command, args, cwd: toolchainsRoot,
-    envPolicy: "project", inheritProcessEnv: true, mode: "capture", purpose: "workspace-cache",
-    runtimes: ["python"], timeout, maxBuffer: 4 * 1024 * 1024
+    actor: "daemon",
+    allowedRoots: [toolchainsRoot],
+    command,
+    args,
+    cwd: toolchainsRoot,
+    envPolicy: "project",
+    inheritProcessEnv: true,
+    mode: "capture",
+    purpose: "workspace-cache",
+    runtimes: ["python"],
+    timeout,
+    maxBuffer: 4 * 1024 * 1024
   });
   if (result?.ok !== true) {
-    throw Object.assign(new Error(`Installing the Python publishing tools failed: ${String(result?.stderr || result?.error || "").trim().slice(-600)}`), { code: "vibe64_publishing_toolchain_failed" });
+    throw Object.assign(
+      new Error(`Installing the Python publishing tools failed: ${String(result?.stderr || result?.error || "").trim().slice(-600)}`),
+      { code: "vibe64_publishing_toolchain_failed" }
+    );
   }
 }
 
@@ -95,7 +107,10 @@ async function installTool(toolchainsRoot, command, args, timeout, runCommand) {
  */
 function createPublishingToolchains({ baseToolchains, pythonTools }) {
   async function status() {
-    return { ...await baseToolchains.status(), python: { ready: Boolean(await stat(path.join(pythonTools, "bin", "python")).catch(() => null)), folder: pythonTools } };
+    return {
+      ...await baseToolchains.status(),
+      python: { ready: Boolean(await stat(path.join(pythonTools, "bin", "python")).catch(() => null)), folder: pythonTools }
+    };
   }
 
   async function registryTools() {
@@ -142,14 +157,29 @@ function createPublishingPackaging() {
  * @param {() => string} [dependencies.now]
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
-function createPublishingService({ project, sourceEditor, env = process.env, roots = null, now = () => new Date().toISOString(), runCommand = runVibe64Command }) {
+function createPublishingService({
+  project,
+  sourceEditor,
+  env = process.env,
+  roots = null,
+  now = () => new Date().toISOString(),
+  runCommand = runVibe64Command
+}) {
   const { personalRoot, toolchainsRoot, cacheRoot } = roots || publishingRoots(env);
   const keys = createAgeStore({ directory: path.join(personalRoot, "keys") });
   const pythonTools = path.join(toolchainsRoot, "python-publish");
-  const baseToolchains = createToolchainManager({ personalRoot, toolchainsRoot, now });
+  const baseToolchains = createToolchainManager({
+    personalRoot,
+    toolchainsRoot,
+    now
+  });
   const toolchains = createPublishingToolchains({ baseToolchains, pythonTools });
   const packaging = createPublishingPackaging();
-  const broker = createCredentialBroker({ keys, packaging, now });
+  const broker = createCredentialBroker({
+    keys,
+    packaging,
+    now
+  });
   const lanShare = createLanShare();
   const repository = createProjectRepository({ readProject: () => project.readCurrentProject() });
   const writer = createSessionReleaseWriter({ project, sourceEditor });
@@ -163,7 +193,11 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
       const publishingRoot = path.join(runtimeRoot, "publishing");
       const targets = createTargetsStore({ runtimeRoot: publishingRoot, now });
       const history = createReleaseHistoryStore({ runtimeRoot: publishingRoot, now });
-      const verification = createVerificationRunner({ runtimeRoot: publishingRoot, repository, now });
+      const verification = createVerificationRunner({
+        runtimeRoot: publishingRoot,
+        repository,
+        now
+      });
       const confirmations = createConfirmationService({ runtimeRoot: publishingRoot });
       const orchestrator = createReleaseOrchestrator({
         projectRuntimeRoot: runtimeRoot,
@@ -193,7 +227,9 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     if (destination === "pypi") return pypiSettingsForAddress(chosen?.address || "");
     if (destination === "github-releases") {
       const baseline = await repository.baseline();
-      if (!baseline.remote?.githubRepository) throw publishingError("GitHub Releases needs this project's remote on GitHub.", "vibe64_publishing_github_remote_missing");
+      if (!baseline.remote?.githubRepository) {
+        throw publishingError("GitHub Releases needs this project's remote on GitHub.", "vibe64_publishing_github_remote_missing");
+      }
       return { repository: baseline.remote.githubRepository };
     }
     return {};
@@ -203,11 +239,17 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     const kind = Object.values(PUBLISH_ACCOUNT_KINDS).find((entry) => entry.destination === destination);
     if (!kind) return null;
     const chosen = accounts.find((entry) => entry.id === account);
-    if (!chosen || chosen.kind !== kind.id) throw publishingError(`Choose a ${kind.label} account for this target.`, "vibe64_publishing_account_missing");
+    if (!chosen || chosen.kind !== kind.id) {
+      throw publishingError(`Choose a ${kind.label} account for this target.`, "vibe64_publishing_account_missing");
+    }
     return chosen;
   }
 
-  const restoreFromRecoveryKit = (input) => publishingResult(async () => restoreRecoveryKit({ store: keys, bytes: Buffer.from(String(input.data || ""), "base64"), passphrase: input.passphrase }));
+  const restoreFromRecoveryKit = (input) => publishingResult(async () => restoreRecoveryKit({
+    store: keys,
+    bytes: Buffer.from(String(input.data || ""), "base64"),
+    passphrase: input.passphrase
+  }));
 
   const readState = () => publishingResult(async () => {
     const { orchestrator } = projectRuntime();
@@ -217,7 +259,28 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
       destinations: PUBLISH_DESTINATION_CATALOG.map((entry) => ({ ...entry, packers: vibe64Destination(entry.id).packers })),
       accountKinds: Object.values(PUBLISH_ACCOUNT_KINDS),
       accounts: await broker.accounts(),
-      keys: { ...state.keys, entries: state.keys.entries.map(({ id, kind, label, createdAt, certificateSha256, accountKind, address, coveredByRecoveryKit }) => ({ id, kind, label, createdAt, certificateSha256, accountKind, address, coveredByRecoveryKit })) },
+      keys: {
+        ...state.keys,
+        entries: state.keys.entries.map(({
+          id,
+          kind,
+          label,
+          createdAt,
+          certificateSha256,
+          accountKind,
+          address,
+          coveredByRecoveryKit
+        }) => ({
+          id,
+          kind,
+          label,
+          createdAt,
+          certificateSha256,
+          accountKind,
+          address,
+          coveredByRecoveryKit
+        }))
+      },
       share: lanShare.status()
     };
   });
@@ -225,7 +288,10 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
   const suggestRelease = () => publishingResult(() => projectRuntime().orchestrator.suggestRelease());
 
   const prepareRelease = (input) => publishingResult(() => projectRuntime().orchestrator.prepareRelease({
-    sessionId: input.sessionId, versions: input.versions || {}, notes: input.notes, user: input.vibe64User || null
+    sessionId: input.sessionId,
+    versions: input.versions || {},
+    notes: input.notes,
+    user: input.vibe64User || null
   }));
 
   const addTarget = (input) => publishingResult(async () => {
@@ -233,14 +299,25 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     const state = await orchestrator.readState();
     const entry = state.packaging.packages.find((candidate) => candidate.id === input.package);
     if (!entry) {
-      throw publishingError("Packaging does not declare that package. Ask a coding conversation to add it, then Save.", "vibe64_publishing_package_missing");
+      throw publishingError(
+        "Packaging does not declare that package. Ask a coding conversation to add it, then Save.",
+        "vibe64_publishing_package_missing"
+      );
     }
     const destination = vibe64Destination(input.destination);
-    if (!destination.packers.includes(entry.packer)) throw publishingError(`${destination.label} cannot publish a ${entry.packer} package.`, "vibe64_publishing_target_invalid");
+    if (!destination.packers.includes(entry.packer)) {
+      throw publishingError(`${destination.label} cannot publish a ${entry.packer} package.`, "vibe64_publishing_target_invalid");
+    }
     const accounts = await broker.accounts();
     requireAccountKind(destination.id, input.account, accounts);
     const settings = { ...await defaultSettings({ destination: destination.id, account: input.account }), ...(input.settings || {}) };
-    const target = await targets.add({ destination: destination.id, package: entry.id, channel: input.channel || null, account: input.account || null, settings });
+    const target = await targets.add({
+      destination: destination.id,
+      package: entry.id,
+      channel: input.channel || null,
+      account: input.account || null,
+      settings
+    });
     return { target };
   });
 
@@ -252,7 +329,12 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     if (input.account !== undefined) {
       requireAccountKind(existing.destination, input.account, await broker.accounts());
       changes.account = input.account;
-      Object.assign(changes, { settings: { ...existing.settings, ...await defaultSettings({ destination: existing.destination, account: input.account }) } });
+      Object.assign(changes, {
+        settings: {
+          ...existing.settings,
+          ...await defaultSettings({ destination: existing.destination, account: input.account })
+        }
+      });
     }
     if (input.channel !== undefined) changes.channel = input.channel || null;
     return { target: await targets.update(existing.id, changes) };
@@ -260,7 +342,12 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
 
   const removeTarget = (input) => publishingResult(() => projectRuntime().targets.remove(input.targetId));
 
-  const plan = (input) => publishingResult(async () => ({ plan: await projectRuntime().orchestrator.plan({ targetIds: input.targetIds || [], acknowledged: input.acknowledged || [] }) }));
+  const plan = (input) => publishingResult(async () => ({
+    plan: await projectRuntime().orchestrator.plan({
+      targetIds: input.targetIds || [],
+      acknowledged: input.acknowledged || []
+    })
+  }));
 
   const runChecks = () => publishingResult(async () => {
     const baseline = await repository.baseline();
@@ -283,14 +370,19 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
   });
 
   const dryRun = (input) => publishingResult(() => projectRuntime().orchestrator.dryRun({
-    planHash: input.planHash, targetIds: input.targetIds || [], acknowledged: input.acknowledged || []
+    planHash: input.planHash,
+    targetIds: input.targetIds || [],
+    acknowledged: input.acknowledged || []
   }));
 
   const requestPublish = (input) => publishingResult(() => projectRuntime().orchestrator.requestPublish({
-    planHash: input.planHash, targetIds: input.targetIds || [], requestedBy: "assistant"
+    planHash: input.planHash,
+    targetIds: input.targetIds || [],
+    requestedBy: "assistant"
   }));
 
-  const dismissRequest = () => publishingResult(async () => ({ pendingConfirmation: await projectRuntime().confirmations.dismissRequest() }));
+  const dismissRequest = () =>
+    publishingResult(async () => ({ pendingConfirmation: await projectRuntime().confirmations.dismissRequest() }));
 
   const openConfirmation = (input, context) => publishingResult(() => projectRuntime().orchestrator.openConfirmation({
     planHash: input.planHash,
@@ -307,15 +399,27 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     actor: confirmingActor({ channel: context.channel, assistant: Boolean(context.colleague), user: input.vibe64User })
   }));
 
-  const listHistory = (input) => publishingResult(async () => ({ releases: await projectRuntime().orchestrator.listHistory({ limit: input.limit || 30 }) }));
+  const listHistory = (input) =>
+    publishingResult(async () => ({ releases: await projectRuntime().orchestrator.listHistory({ limit: input.limit || 30 }) }));
 
-  const readRelease = (input) => publishingResult(async () => ({ release: await projectRuntime().orchestrator.readRelease(input.releaseId) }));
+  const readRelease = (input) =>
+    publishingResult(async () => ({ release: await projectRuntime().orchestrator.readRelease(input.releaseId) }));
 
   const readLogs = (input) => publishingResult(() => projectRuntime().orchestrator.readLogs(input.releaseId));
 
-  const createKeys = (input) => publishingResult(async () => ({ keys: await keys.create({ passphrase: input.passphrase, windowMs: minutes(input.windowMinutes) }) }));
+  const createKeys = (input) => publishingResult(async () => ({
+    keys: await keys.create({
+      passphrase: input.passphrase,
+      windowMs: minutes(input.windowMinutes)
+    })
+  }));
 
-  const unlockKeys = (input) => publishingResult(async () => ({ keys: await keys.unlock({ passphrase: input.passphrase, windowMs: minutes(input.windowMinutes) }) }));
+  const unlockKeys = (input) => publishingResult(async () => ({
+    keys: await keys.unlock({
+      passphrase: input.passphrase,
+      windowMs: minutes(input.windowMinutes)
+    })
+  }));
 
   const lockKeys = () => publishingResult(async () => ({ keys: await keys.lock() }));
 
@@ -324,19 +428,31 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
   const removeAccount = (input) => publishingResult(() => broker.removeAccount(input.accountId));
 
   const recoveryKit = (input) => publishingResult(async () => {
-    const kit = await createRecoveryKit({ store: keys, passphrase: input.passphrase, now });
+    const kit = await createRecoveryKit({
+      store: keys,
+      passphrase: input.passphrase,
+      now
+    });
     return { fileName: kit.fileName, data: kit.bytes.toString("base64"), record: kit.record };
   });
 
   const createInstallKey = (input) => publishingResult(async () => {
     const { targets, orchestrator } = projectRuntime();
     const target = await targets.get(input.targetId);
-    if (target?.destination !== "android-sideload") throw publishingError("Install keys belong to an Install on my phone target.", "vibe64_publishing_target_invalid");
+    if (target?.destination !== "android-sideload") {
+      throw publishingError("Install keys belong to an Install on my phone target.", "vibe64_publishing_target_invalid");
+    }
     const status = await toolchains.status();
-    if (!status.java.ready) throw publishingError("Set up the Android build tools first: the key is made with Java.", "vibe64_publishing_toolchain_missing");
+    if (!status.java.ready) {
+      throw publishingError("Set up the Android build tools first: the key is made with Java.", "vibe64_publishing_toolchain_missing");
+    }
     const state = await orchestrator.readState();
     const entry = state.packaging.packages.find((candidate) => candidate.id === target.package);
-    const key = await broker.createSideloadKey({ target, appName: entry?.applicationName || target.package, javaHome: status.java.javaHome });
+    const key = await broker.createSideloadKey({
+      target,
+      appName: entry?.applicationName || target.package,
+      javaHome: status.java.javaHome
+    });
     await targets.update(target.id, { settings: { ...target.settings, certificateSha256: key.certificateSha256 } });
     return { key: { certificateSha256: key.certificateSha256, algorithm: key.algorithm } };
   });
@@ -344,14 +460,24 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
   const toolchainLicence = () => publishingResult(async () => ({ licence: await toolchains.licence() }));
 
   const acceptToolchainLicence = (input) => publishingResult(async () => ({
-    acceptance: await toolchains.accept({ id: input.id, hash: input.hash, acceptedBy: input.vibe64User?.username || input.vibe64User?.id || os.userInfo().username })
+    acceptance: await toolchains.accept({
+      id: input.id,
+      hash: input.hash,
+      acceptedBy: input.vibe64User?.username || input.vibe64User?.id || os.userInfo().username
+    })
   }));
 
   const installAndroidToolchain = () => publishingResult(async () => ({ install: await toolchains.installAndroid() }));
 
   const installPythonTools = () => publishingResult(async () => {
     await installTool(toolchainsRoot, "python3", ["-m", "venv", pythonTools], 120_000, runCommand);
-    await installTool(toolchainsRoot, path.join(pythonTools, "bin", "python"), ["-m", "pip", "install", "--quiet", "--disable-pip-version-check", `twine==${TWINE_VERSION}`], 300_000, runCommand);
+    await installTool(
+      toolchainsRoot,
+      path.join(pythonTools, "bin", "python"),
+      ["-m", "pip", "install", "--quiet", "--disable-pip-version-check", `twine==${TWINE_VERSION}`],
+      300_000,
+      runCommand
+    );
     return { python: { ready: true, folder: pythonTools } };
   });
 
@@ -401,10 +527,16 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     const { history } = projectRuntime();
     const record = await history.read(releaseId);
     const outcome = record.targets?.[targetId];
-    if (outcome?.status !== "proven" || !outcome.localFile || record.plan?.targets?.find((target) => target.id === targetId)?.destination !== "android-sideload") {
+    if (outcome?.status !== "proven" ||
+        !outcome.localFile ||
+        record.plan?.targets?.find((target) => target.id === targetId)?.destination !== "android-sideload") {
       throw publishingError("That release has no signed phone app to download.", "vibe64_publishing_download_missing");
     }
-    return { key: `${releaseId}/${targetId}`, file: outcome.localFile, fileName: outcome.proof?.fileName || path.basename(outcome.localFile) };
+    return {
+      key: `${releaseId}/${targetId}`,
+      file: outcome.localFile,
+      fileName: outcome.proof?.fileName || path.basename(outcome.localFile)
+    };
   }
 }
 

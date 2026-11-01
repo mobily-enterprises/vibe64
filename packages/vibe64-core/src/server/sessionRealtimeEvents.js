@@ -31,7 +31,11 @@ function vibe64SessionViewersRoom(projectSlug, sessionId) {
 // turn-activity changes carry their own presentation in the payload, so their
 // reasons narrow the reads here; an emitter's explicit flags take precedence.
 const CLIENT_REFRESH_READS = Object.freeze(["includeAccess", "includeDetail", "includeList", "includeOutputs"]);
-const PRESENTATION_ONLY = Object.freeze({ includeAccess: false, includeDetail: false, includeList: false });
+const PRESENTATION_ONLY = Object.freeze({
+  includeAccess: false,
+  includeDetail: false,
+  includeList: false
+});
 const ACCESS_ONLY = Object.freeze({ includeDetail: false, includeList: false });
 const NOT_LIST = Object.freeze({ includeList: false });
 const NOT_ACCESS = Object.freeze({ includeAccess: false });

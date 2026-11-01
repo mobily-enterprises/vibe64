@@ -41,11 +41,19 @@ function subscribeUnixCommandControlChanges(listener) {
  * @param {string} [receivedGeneration]
  */
 function reportUnixCommandControlChange(entry, reason, receivedGeneration = "") {
-  const event = { socketPath: entry.socketPath, sessionId: entry.sessionId,
-    generationId: entry.generationId, reason };
+  const event = {
+    socketPath: entry.socketPath,
+    sessionId: entry.sessionId,
+    generationId: entry.generationId,
+    reason
+  };
   logOperationalEvent(entry.commandService.logger, reason === "rejected" ? "warn" : "info", {
-    component: "vibe64.agent_controls", event: `vibe64.agent_controls.${reason}`,
-    ...event, receivedGeneration: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(receivedGeneration) ? receivedGeneration : ""
+    component: "vibe64.agent_controls",
+    event: `vibe64.agent_controls.${reason}`,
+    ...event,
+    receivedGeneration: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(receivedGeneration)
+      ? receivedGeneration
+      : ""
   }, "Managed assistant control lifecycle changed.");
   for (const listener of controlListeners) listener(event);
 }
@@ -138,11 +146,20 @@ async function unixJsonCommandServerIsHealthy(entry, {
     // An uncertain probe must not retire a live listener and invalidate every
     // assistant that inherited its controls. Only a proven dead socket is replaceable.
     logOperationalEvent(entry.commandService.logger, "warn", {
-      component: "vibe64.agent_controls", event: "vibe64.agent_controls.health_unavailable",
-      sessionId, socketPath, generationId: entry.generationId, code: cause?.code || ""
+      component: "vibe64.agent_controls",
+      event: "vibe64.agent_controls.health_unavailable",
+      sessionId,
+      socketPath,
+      generationId: entry.generationId,
+      code: cause?.code || ""
     }, "Managed assistant control health could not be verified; existing listener retained.");
-    throw Object.assign(new Error("Managed assistant control health could not be verified. Retry the connection; existing command credentials and work have been retained.", { cause }), {
-      code: "vibe64_agent_control_unavailable", retryable: true
+    throw Object.assign(new Error(
+      "Managed assistant control health could not be verified. Retry the connection; existing command credentials and work have been retained.",
+      { cause }
+    ),
+      {
+      code: "vibe64_agent_control_unavailable",
+      retryable: true
     });
   }
 }
@@ -262,7 +279,11 @@ function createSessionCommandServers({
         return;
       }
       const result = await route.handle({
-        commandService: entry.commandService, input, request, response, sessionId: entry.sessionId
+        commandService: entry.commandService,
+        input,
+        request,
+        response,
+        sessionId: entry.sessionId
       });
       if (result !== undefined && !response.destroyed) {
         sendJsonCommandResponse(response, route.status ? route.status(result) : 200, result);
@@ -352,7 +373,11 @@ function createSessionCommandServers({
     return closed;
   }
 
-  return Object.freeze({ close, closeForSession, ensure });
+  return Object.freeze({
+    close,
+    closeForSession,
+    ensure
+  });
 }
 
 function requestUnixJsonCommand({

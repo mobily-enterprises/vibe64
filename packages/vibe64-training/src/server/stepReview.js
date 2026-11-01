@@ -20,14 +20,32 @@ const STABLE_CONTEXT = [
   "points lists up to six short rubric points with whether the evidence meets each.",
   "Return only the JSON."
 ].join(" ");
-const LIMITS = Object.freeze({ comment: 600, hint: 300, points: 6, point: 120 });
-const OUTPUT_SCHEMA = Object.freeze({ type: "object", additionalProperties: false, required: ["verdict", "comment", "hint", "points"], properties: {
-  verdict: { type: "string", enum: ["passed", "not-yet"] },
-  comment: { type: "string", maxLength: LIMITS.comment },
-  hint: { type: "string", maxLength: LIMITS.hint },
-  points: { type: "array", maxItems: LIMITS.points, items: { type: "object", additionalProperties: false, required: ["text", "met"],
-    properties: { text: { type: "string", maxLength: LIMITS.point }, met: { type: "boolean" } } } }
-} });
+const LIMITS = Object.freeze({
+  comment: 600,
+  hint: 300,
+  points: 6,
+  point: 120
+});
+const OUTPUT_SCHEMA = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["verdict", "comment", "hint", "points"],
+  properties: {
+    verdict: { type: "string", enum: ["passed", "not-yet"] },
+    comment: { type: "string", maxLength: LIMITS.comment },
+    hint: { type: "string", maxLength: LIMITS.hint },
+    points: {
+      type: "array",
+      maxItems: LIMITS.points,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["text", "met"],
+        properties: { text: { type: "string", maxLength: LIMITS.point }, met: { type: "boolean" } }
+      }
+    }
+  }
+});
 
 function reviewFailure(message, code = "VIBE64_TRAINING_REVIEW_FAILED") {
   return trainingFailure(code, message, { statusCode: 409 });
@@ -55,8 +73,12 @@ function parseVerdict(text) {
       typeof point.met === "boolean" && textOf(point.text, LIMITS.point, true));
   if (!valid) throw reviewFailure("Your AI returned a review in an unexpected form. Nothing was recorded; check your work again.");
   const hint = oneLine(value.hint);
-  return { passed: value.verdict === "passed", comment: oneLine(value.comment), ...(hint ? { hint } : {}),
-    ...(value.points.length ? { points: value.points.map(point => ({ text: oneLine(point.text), met: point.met })) } : {}) };
+  return {
+    passed: value.verdict === "passed",
+    comment: oneLine(value.comment),
+    ...(hint ? { hint } : {}),
+    ...(value.points.length ? { points: value.points.map(point => ({ text: oneLine(point.text), met: point.met })) } : {})
+  };
 }
 
 /**
@@ -77,12 +99,19 @@ function createTrainingStepReviewer({ learners, terminals }) {
       throw reviewFailure("Reviews need an AI Helper, which this installation does not provide.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
     return learners.runReviewExclusive({ actor }, async ({ root, receipt }) => {
-      const helper = createRetainedConversationHelper({ terminals, root, receipt, scopePrefix: "review" });
+      const helper = createRetainedConversationHelper({
+        terminals,
+        root,
+        receipt,
+        scopePrefix: "review"
+      });
       let text;
       try {
         // The Helper runs as the admitted learner, on their own AI accounts.
         text = await helper.runHelper({ ...context, vibe64Action: { user: actor } }, {
-          workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.LESSON_REVIEW, stableContext: STABLE_CONTEXT, outputSchema: OUTPUT_SCHEMA,
+          workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.LESSON_REVIEW,
+          stableContext: STABLE_CONTEXT,
+          outputSchema: OUTPUT_SCHEMA,
           promptLabel: "Review a learner's lesson work",
           data: { LESSON: lesson.lesson.title, STEP: step.title, RUBRIC: step.check.rubric, EVIDENCE: evidence },
           signal: context.signal || new AbortController().signal
@@ -91,7 +120,10 @@ function createTrainingStepReviewer({ learners, terminals }) {
         // No Helper route keeps its own AI Accounts → Model routing recovery.
         if (cause?.code === "vibe64_colleague_helper_unavailable") throw cause;
         const detail = String(cause?.message || "").slice(0, 300).replace(/[.\s]+$/u, "");
-        throw Object.assign(reviewFailure(`Your AI could not finish the review${detail ? `: ${detail}` : ""}. Nothing was recorded; check your work again.`), { cause });
+        throw Object.assign(
+          reviewFailure(`Your AI could not finish the review${detail ? `: ${detail}` : ""}. Nothing was recorded; check your work again.`),
+          { cause }
+        );
       }
       return parseVerdict(text);
     });

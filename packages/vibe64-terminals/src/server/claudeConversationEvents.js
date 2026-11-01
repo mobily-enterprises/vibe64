@@ -27,38 +27,73 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {RuntimeLogger} dependencies.logger
  */
-function createClaudeConversationEvents({ projectService, storage, messagePolicy, owner, accountQueries, publishSessionChanged, logger }) {
+function createClaudeConversationEvents({
+  projectService,
+  storage,
+  messagePolicy,
+  owner,
+  accountQueries,
+  publishSessionChanged,
+  logger
+}) {
   const { save } = storage;
   const { snapshot } = owner;
 
   async function publishRun(entry, { state, active, message }) {
     if (!entry.main || entry.renewal) {
       if (!active && entry.persistent && !entry.profile && !entry.context.assistantScope && !entry.renewal) {
-        await publishSessionChanged(entry.context.sessionId, { reason: "temporary-agent-turn-idle", payload: {
-          conversationId: entry.id, temporaryRun: { active: false, state, providerTurnId: entry.turn.id }
-        } });
+        await publishSessionChanged(entry.context.sessionId, {
+          reason: "temporary-agent-turn-idle",
+          payload: {
+            conversationId: entry.id,
+            temporaryRun: { active: false, state, providerTurnId: entry.turn.id }
+          }
+        });
       }
       return;
     }
     const { runtime, sessionId, selection } = entry.context;
     // The client applies a turn overlay only with the session revision this
     // write produced; without it the working state waits for a later refresh.
-    const { run, revision } = await runtime.store.mutateSession(sessionId, async () => ({ sessionId,
+    const { run, revision } = await runtime.store.mutateSession(sessionId, async () => ({
+      sessionId,
       run: await runtime.store.writeAgentRunEvent(sessionId, TRANSPORT, {
         event: { kind: `claude-${state}`, state, message },
-        patch: { engineId: ENGINE, state, error: message, phase: entry.turn.phase, observationError: entry.observationError || "",
-          model: selection.modelId, modelProviderId: selection.modelProviderId, threadId: entry.id,
-          turnId: entry.turn.id, startedAt: entry.turn.startedAt, finishedAt: active ? "" : isoNow(), updatedAt: isoNow() }
-      }) }));
+        patch: {
+          engineId: ENGINE,
+          state,
+          error: message,
+          phase: entry.turn.phase,
+          observationError: entry.observationError || "",
+          model: selection.modelId,
+          modelProviderId: selection.modelProviderId,
+          threadId: entry.id,
+          turnId: entry.turn.id,
+          startedAt: entry.turn.startedAt,
+          finishedAt: active ? "" : isoNow(),
+          updatedAt: isoNow()
+        }
+      })
+    }));
     await publishSessionChanged(sessionId, {
       session: { sessionId, revision },
       reason: active ? "claude-stream-turn-active" : "claude-stream-turn-idle",
       payload: {
         ...(!active ? { conversationStream: runtime.store.clearConversationStream(sessionId) } : {}),
-        agentRun: { ...run, active, provider: ENGINE, providerInterface: TRANSPORT,
-          providerThreadId: entry.id, providerTurnId: entry.turn.id },
-        agentSession: { providerId: ENGINE, transportId: TRANSPORT, thread: { id: entry.id },
-          turn: { ...snapshot(entry), runState: state, state: active ? "active" : "idle" } }
+        agentRun: {
+          ...run,
+          active,
+          provider: ENGINE,
+          providerInterface: TRANSPORT,
+          providerThreadId: entry.id,
+          providerTurnId: entry.turn.id
+        },
+        agentSession: {
+          providerId: ENGINE,
+          transportId: TRANSPORT,
+          thread: { id: entry.id },
+          turn: { ...snapshot(entry), runState: state, state: active ? "active" : "idle" }
+        }
       }
     });
   }
@@ -70,7 +105,10 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
     if (!message.complete) {
       if (message.role !== "assistant") return;
       const conversationStream = runtime.store.updateConversationStream(sessionId, {
-        turnId: entry.turn?.id, messageId: message.id, outputId, text: message.text
+        turnId: entry.turn?.id,
+        messageId: message.id,
+        outputId,
+        text: message.text
       });
       await publishSessionChanged(sessionId, { reason: "assistant-stream", payload: { conversationStream } });
       return;
@@ -78,13 +116,20 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
     if (!normalizeText(message.text)) return;
     const writer = message.role === "thinking" ? "writeConversationThinkingMessage"
       : message.role === "commentary" ? "writeConversationCommentaryMessage" : "writeConversationAssistantMessage";
-    const turn = await runtime.store[writer](sessionId, { messageId: message.id, outputId, text: message.text,
-      ...(message.data === undefined ? {} : { data: message.data }) });
+    const turn = await runtime.store[writer](sessionId, {
+      messageId: message.id,
+      outputId,
+      text: message.text,
+      ...(message.data === undefined ? {} : { data: message.data })
+    });
     runtime.store.completeConversationStreamMessage(sessionId, outputId);
-    await publishSessionChanged(sessionId, { reason: "claude-stream-message", payload: {
-      conversationLogPatch: { type: "upsert-turn", turn },
-      conversationStream: runtime.store.readConversationStream(sessionId)
-    } });
+    await publishSessionChanged(sessionId, {
+      reason: "claude-stream-message",
+      payload: {
+        conversationLogPatch: { type: "upsert-turn", turn },
+        conversationStream: runtime.store.readConversationStream(sessionId)
+      }
+    });
     return turn;
   }
 
@@ -94,11 +139,21 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
       // contain prompts, replies, tool arguments and account data.
       try {
         logOperationalEvent(logger, event.type === "stop-unconfirmed" || event.stage === "steering_failed" ? "warn" : "info", {
-          component: "vibe64.claude", event: "vibe64.claude.lifecycle", stage: event.stage || event.type,
-          sessionId: entry.context.sessionId, conversationId: entry.id, turnId: entry.turn?.id,
-          executionId: event.executionId || entry.executionId, state: event.state, active: event.active,
-          source: event.source, nativeEvent: event.nativeEvent, status: event.status, terminalReason: event.terminalReason,
-          pendingCommands: event.pendingCommands, backgroundTasks: event.backgroundTasks
+          component: "vibe64.claude",
+          event: "vibe64.claude.lifecycle",
+          stage: event.stage || event.type,
+          sessionId: entry.context.sessionId,
+          conversationId: entry.id,
+          turnId: entry.turn?.id,
+          executionId: event.executionId || entry.executionId,
+          state: event.state,
+          active: event.active,
+          source: event.source,
+          nativeEvent: event.nativeEvent,
+          status: event.status,
+          terminalReason: event.terminalReason,
+          pendingCommands: event.pendingCommands,
+          backgroundTasks: event.backgroundTasks
         }, "Claude conversation lifecycle.");
       } catch { /* Diagnostic sinks cannot interrupt native work. */ }
     }
@@ -136,7 +191,9 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
       }
       return publishMessage(entry, event.message);
     } else if (event.type === "message-complete") {
-      if (entry.main && !entry.renewal) entry.context.runtime.store.completeConversationStreamMessage(entry.context.sessionId, event.messageId);
+      if (entry.main && !entry.renewal) {
+        entry.context.runtime.store.completeConversationStreamMessage(entry.context.sessionId, event.messageId);
+      }
     } else if (event.type === "text" || event.type === "thinking") {
       // readable-check: allow optional-call - input validation: a caller's optional event stream
       await entry.onEvent?.({ ...event, threadId: entry.id });
@@ -149,8 +206,11 @@ function createClaudeConversationEvents({ projectService, storage, messagePolicy
     if (!event.active && entry.turn.active && !entry.context.assistantScope && !entry.profile && !entry.renewal) {
       const runtime = entry.context.runtime;
       return checkpointSessionTurn({
-        projectService, runtime, session: entry.context.session,
-        sessionId: entry.context.sessionId, outerTurnId: `claude:${entry.id}:${entry.turn.id}`,
+        projectService,
+        runtime,
+        session: entry.context.session,
+        sessionId: entry.context.sessionId,
+        outerTurnId: `claude:${entry.id}:${entry.turn.id}`,
         outcome: [RUN.COMPLETED, RUN.INTERRUPTED, RUN.CANCELLED].includes(event.state) ? event.state : "failed",
         publishSessionChanged
       });

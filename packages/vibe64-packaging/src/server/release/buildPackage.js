@@ -79,20 +79,44 @@ async function buildPackage({
   const key = planHash || buildOnlyKey({ commit, packagingHash: packaging.packagingHash, packageId, version, versionCode, template });
   const stored = await storedArtifacts({ resultStore, planHash: key, packageId });
   if (stored) {
-    return { planHash: key, package: packageId, packer: entry.packer, artifacts: stored, check: await packer.checkArtifacts({ artifacts: stored, version }) };
+    return {
+      planHash: key,
+      package: packageId,
+      packer: entry.packer,
+      artifacts: stored,
+      check: await packer.checkArtifacts({ artifacts: stored, version })
+    };
   }
   // An app package's Content (a web-bundle) builds first, once, into the same store.
   const content = entry.content ? packaging.packages.find((candidate) => candidate.id === entry.content) : null;
-  if (entry.content && !content) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Package ${entry.id} names Content ${entry.content}, which Packaging does not declare.`);
+  if (entry.content && !content) {
+    throw publishError(
+      "VIBE64_PUBLISH_BUILD_INVALID",
+      `Package ${entry.id} names Content ${entry.content}, which Packaging does not declare.`
+    );
+  }
   const builtContent = content && !contentArtifacts
     ? (await buildPackage({
-      projectRoot, commit, packaging, packageId: content.id, planHash, resultStore, workRoot, baseEnvironment, cacheDirectory, projectSlug, signal
+      projectRoot,
+      commit,
+      packaging,
+      packageId: content.id,
+      planHash,
+      resultStore,
+      workRoot,
+      baseEnvironment,
+      cacheDirectory,
+      projectSlug,
+      signal
     }, dependencies)).artifacts
     : contentArtifacts;
   const source = await mkdtemp(path.join(workRoot, "vibe64-release-source-"));
   try {
     const { commitTime } = await exportSavedCommit({
-      projectRoot, commit, directory: path.join(source, "project"), exclude: VIBE64_PACKAGING_SOURCE_EXCLUSIONS
+      projectRoot,
+      commit,
+      directory: path.join(source, "project"),
+      exclude: VIBE64_PACKAGING_SOURCE_EXCLUSIONS
     });
     const sourceRoot = path.join(source, "project");
     const recipe = await packer.buildRecipe({

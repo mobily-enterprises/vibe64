@@ -31,12 +31,19 @@ function registerRoutes(http, { projectContext } = {}) {
       projectContext
     })
   });
-  const ids = (request) => ({ sessionId: request.params.sessionId, ...(request.params.recordingId ? { recordingId: request.params.recordingId } : {}) });
+  const ids = (request) => ({
+    sessionId: request.params.sessionId,
+    ...(request.params.recordingId ? { recordingId: request.params.recordingId } : {})
+  });
   const body = (request) => requestBody(request);
   for (const [method, suffix, operation, summary, buildInput = ids] of [
     ["GET", "/targets", "targets.read", "List the session's Output targets and whether each can be recorded."],
     ["POST", "", "start", "Start recording which project functions run in an Output target.",
-      (request) => ({ ...ids(request), targetId: body(request).targetId, ...(body(request).parameters !== undefined ? { parameters: body(request).parameters } : {}) })],
+      (request) => ({
+        ...ids(request),
+        targetId: body(request).targetId,
+        ...(body(request).parameters !== undefined ? { parameters: body(request).parameters } : {})
+      })],
     ["GET", "/current", "current.read", "Read the session's running or just finished recording."],
     ["GET", "", "list", "List the session's recent recordings."],
     ["POST", "/:recordingId/stop", "stop", "Stop a recording; always agrees."],
@@ -45,7 +52,8 @@ function registerRoutes(http, { projectContext } = {}) {
       (request) => {
         const query = requestQuery(request);
         return {
-          ...ids(request), ...pageQuery(query),
+          ...ids(request),
+          ...pageQuery(query),
           ...(query.q !== undefined ? { q: String(query.q) } : {}),
           ...(query.includeEmpty !== undefined ? { includeEmpty: ["1", "true"].includes(String(query.includeEmpty)) } : {}),
           ...(query.order !== undefined ? { order: String(query.order) } : {}),
@@ -57,7 +65,14 @@ function registerRoutes(http, { projectContext } = {}) {
     ["POST", "/:recordingId/interactions", "interaction.record", "Record a Preview interaction during a recording.",
       (request) => {
         const { id, at, label, kind, componentFile } = body(request);
-        return { ...ids(request), id, at, label, ...(kind !== undefined ? { kind } : {}), ...(componentFile !== undefined ? { componentFile } : {}) };
+        return {
+          ...ids(request),
+          id,
+          at,
+          label,
+          ...(kind !== undefined ? { kind } : {}),
+          ...(componentFile !== undefined ? { componentFile } : {})
+        };
       }],
     ["DELETE", "/:recordingId", "delete", "Delete a recording, stopping it first."]
   ]) routes.actionRoute(method, `${sessionRoute}${suffix}`, {

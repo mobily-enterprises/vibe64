@@ -12,7 +12,10 @@ function createProjectRuntimeChangedPublisher(events) {
     if (source.ok === false || !projectSlug || !source.runtime) {
       return null;
     }
-    return publishProjectChanged({ action, projectSlug, runtime: source.runtime,
+    return publishProjectChanged({
+      action,
+      projectSlug,
+      runtime: source.runtime,
       ...(action === "runtime-closed" && source.runtime.open === false ? {
         runtimeCloseReason: String(source.reason || "").trim().slice(0, 100),
         ...(dormant === true ? { runtimeDormantClose: true } : {})

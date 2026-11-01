@@ -31,7 +31,12 @@ import { GENESIS_DERIVED_ARTIFACT_PATHS } from "@local/vibe64-genesis/server";
  * @param {CodexGitCommandService} dependencies.codexGitCommand
  * @param {ProjectService} dependencies.projectService
  */
-function createServiceSessionWorkInspection({ sessionAccess, sessionWork, codexGitCommand, projectService }) {
+function createServiceSessionWorkInspection({
+  sessionAccess,
+  sessionWork,
+  codexGitCommand,
+  projectService
+}) {
   async function checkSessionUpdates(sessionId, input = {}) {
     // This refreshes canonical authority under the project source lock but
     // never changes the session worktree. Periodic checks must not occupy
@@ -72,8 +77,12 @@ function createServiceSessionWorkInspection({ sessionAccess, sessionWork, codexG
       : null;
     const work = await inspectManagedSessionWork({
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-      ...(execution ? { commandOptions: execution.commandOptions, runCommand: execution.runCommand,
-        inspectContributionPublication: true, knownSubmittedCommit: input.knownSubmittedCommit || "" } : {}),
+      ...(execution ? {
+        commandOptions: execution.commandOptions,
+        runCommand: execution.runCommand,
+        inspectContributionPublication: true,
+        knownSubmittedCommit: input.knownSubmittedCommit || ""
+      } : {}),
       project: await projectService.readCurrentProject(),
       session
     });
@@ -100,10 +109,20 @@ function createServiceSessionWorkInspection({ sessionAccess, sessionWork, codexG
   async function inspectIncomingContributions(sessionId, input = {}) {
     const { project, actions } = await projectService.incomingRepository(input);
     const { execution, session } = await sessionWork.sessionWorkExecution(sessionId, input, "incoming-inspection");
-    return { ...await inspectManagedIncomingContributions({ project, session,
-      id: input.id, state: input.state, offset: input.offset, limit: input.limit,
-      includeDiff: input.includeDiff === true,
-      commandOptions: execution.commandOptions, runCommand: execution.runCommand }), actions };
+    return {
+      ...await inspectManagedIncomingContributions({
+        project,
+        session,
+        id: input.id,
+        state: input.state,
+        offset: input.offset,
+        limit: input.limit,
+        includeDiff: input.includeDiff === true,
+        commandOptions: execution.commandOptions,
+        runCommand: execution.runCommand
+      }),
+      actions
+    };
   }
 
   async function inspectSessionChanges(sessionId, input = {}) {

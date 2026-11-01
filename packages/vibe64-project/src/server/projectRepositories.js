@@ -97,7 +97,8 @@ function createProjectRepositories({
 
   async function inspectSessionConnectedInputs({ session, projects, environment = env } = {}) {
     const inspection = await inspectVibe64ConnectedDevelopment({
-      projectRoot: sessionSourcePath(session), environment
+      projectRoot: sessionSourcePath(session),
+      environment
     });
     if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
     return inspectConnectedDevelopmentInputs({ session, projects, inspection, env: environment });
@@ -105,7 +106,8 @@ function createProjectRepositories({
 
   async function prepareConnectedDevelopmentInputs({ session, projects, environment = env } = {}) {
     const inspection = await inspectVibe64ConnectedDevelopment({
-      projectRoot: sessionSourcePath(session), environment
+      projectRoot: sessionSourcePath(session),
+      environment
     });
     if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
     return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
@@ -139,7 +141,10 @@ function createProjectRepositories({
       const workflow = await runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
         () => saveProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot(), input.requirePullRequest),
         { operation: "repository-workflow-settings" });
-      await publishProjectChanged({ projectSlug: (await selection.currentProjectState()).slug, repositoryWorkflow: workflow }, { reason: "repository-workflow-settings" });
+      await publishProjectChanged({
+        projectSlug: (await selection.currentProjectState()).slug,
+        repositoryWorkflow: workflow
+      }, { reason: "repository-workflow-settings" });
       return { ok: true, workflow };
     });
   }

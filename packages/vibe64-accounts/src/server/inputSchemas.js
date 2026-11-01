@@ -72,7 +72,9 @@ const routingIdentifier = { type: "string", noTrim: true, minLength: 1, maxLengt
 const modelRoutingSelectionSchema = createSchema({
   schema: { type: "string", enum: ["vibe64.assistant-selection.v1"], required: true },
   engineId: { ...routingEngine, required: true },
-  agentId: routingIdentifier, modelProviderId: routingIdentifier, modelId: routingIdentifier,
+  agentId: routingIdentifier,
+  modelProviderId: routingIdentifier,
+  modelId: routingIdentifier,
   variantId: { ...routingIdentifier, minLength: 0 },
   catalogRevision: { type: "string", pattern: VIBE64_ASSISTANT_CATALOG_REVISION_PATTERN, required: true },
   selectionSource: { type: "string", enum: ["recommended", "explicit"], required: true }
@@ -80,8 +82,12 @@ const modelRoutingSelectionSchema = createSchema({
 /**
  * A role value is a selection, null (off) or { follows }; the routing store validates which.
  */
-const setupValues = setup => ({ type: "object", required: false, schema: createSchema(Object.fromEntries(ASSISTANT_SETUP_ROLES[setup].map(role =>
-  [role, { type: "object", additionalProperties: true, nullable: true, required: false }]))) });
+const setupValues = setup => ({
+  type: "object",
+  required: false,
+  schema: createSchema(Object.fromEntries(ASSISTANT_SETUP_ROLES[setup].map(role =>
+    [role, { type: "object", additionalProperties: true, nullable: true, required: false }])))
+});
 const routingSetup = { type: "string", enum: Object.keys(ASSISTANT_SETUP_ROLES), required: false };
 
 const modelRoutingReadInputValidator = deepFreeze({
@@ -91,7 +97,8 @@ const modelRoutingReadInputValidator = deepFreeze({
     choiceSearch: { type: "string", noTrim: false, maxLength: 200, required: false },
     choiceOffset: { type: "integer", min: 0, required: false },
     view: { type: "string", enum: ["main"], required: false }
-  }), mode: "create"
+  }),
+  mode: "create"
 });
 
 const modelRoutingInputValidator = deepFreeze({
@@ -100,9 +107,15 @@ const modelRoutingInputValidator = deepFreeze({
     owner: setupValues("owner"),
     nonOwner: setupValues("nonOwner"),
     // Recommendations restricted to one provider and tool, for "Use as main AI" and the team card.
-    preferProvider: { type: "object", required: false, schema: createSchema({
-      setup: { ...routingSetup, required: true }, modelProviderId: routingIdentifier, engineId: { ...routingEngine, required: true }
-    }) }
+    preferProvider: {
+      type: "object",
+      required: false,
+      schema: createSchema({
+        setup: { ...routingSetup, required: true },
+        modelProviderId: routingIdentifier,
+        engineId: { ...routingEngine, required: true }
+      })
+    }
   }), mode: "create"
 });
 
@@ -159,7 +172,8 @@ const codexProviderInputValidator = deepFreeze({
     engineId: { type: "string", enum: ["codex", "claude"], required: true },
     useSavedKey: { type: "boolean", required: false },
     apiKey: { type: "string", maxLength: 16384, required: false }
-  }), mode: "create"
+  }),
+  mode: "create"
 });
 
 const connectionProvider = { type: "string", pattern: AI_CONNECTION_PROVIDER_PATTERN, required: true };

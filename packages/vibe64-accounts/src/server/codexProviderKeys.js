@@ -14,9 +14,14 @@ import { accountsResult } from "./accountRecords.js";
  * @param {ModelRouting} dependencies.modelRouting
  * @param {AccountNotifications} dependencies.notifications
  */
-function createCodexProviderKeys({ access, modelRouting, notifications }) {
+function createCodexProviderKeys({
+  access,
+  modelRouting,
+  notifications
+}) {
   const codexProviders = createCodexProviderConnectionStore({
-    systemRoot: access.systemRoot, invalidateRuntimes: notifications.invalidateAgentRuntimes
+    systemRoot: access.systemRoot,
+    invalidateRuntimes: notifications.invalidateAgentRuntimes
   });
 
   function readCodexProviders(input) {
@@ -28,7 +33,10 @@ function createCodexProviderKeys({ access, modelRouting, notifications }) {
   }
 
   function saveCodexProvider(input) {
-    return access.accountChange("save-provider-key", input, { engineId: input.engineId, modelProviderId: input.modelProviderId }, async () => {
+    return access.accountChange("save-provider-key", input, {
+      engineId: input.engineId,
+      modelProviderId: input.modelProviderId
+    }, async () => {
       const failure = access.aiManagementError(input);
       if (failure) return failure;
       const providers = await codexProviders.change(input.modelProviderId, input);
@@ -39,7 +47,10 @@ function createCodexProviderKeys({ access, modelRouting, notifications }) {
   }
 
   function removeCodexProvider(input) {
-    return access.accountChange("remove-provider-key", input, { engineId: input.engineId, modelProviderId: input.modelProviderId }, async () => {
+    return access.accountChange("remove-provider-key", input, {
+      engineId: input.engineId,
+      modelProviderId: input.modelProviderId
+    }, async () => {
       const failure = access.aiManagementError(input);
       if (failure) return failure;
       const providers = await codexProviders.change(input.modelProviderId, { remove: true, engineId: input.engineId });

@@ -9,7 +9,15 @@ const SEMVER = new RegExp(`^${RELEASE_CORE}(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]
 const RELEASE_VERSION = new RegExp(`^${RELEASE_CORE}$`, "u");
 // `v1.5.0`, or `<package>@1.5.0` when packages version independently.
 const RELEASE_TAG = new RegExp(`^(?:v|[a-z0-9]+(?:-[a-z0-9]+)*@)${RELEASE_CORE}$`, "u");
-const PEP440_PRE = Object.freeze({ alpha: "a", a: "a", beta: "b", b: "b", rc: "rc", dev: ".dev", post: ".post" });
+const PEP440_PRE = Object.freeze({
+  alpha: "a",
+  a: "a",
+  beta: "b",
+  b: "b",
+  rc: "rc",
+  dev: ".dev",
+  post: ".post"
+});
 
 function parseSemver(version) {
   const match = SEMVER.exec(version || "");

@@ -3,7 +3,8 @@ const TEMPORARY_CONVERSATION_PREFIX = "vibe64-temporary:";
 
 function invalidConversation(kind) {
   return Object.assign(new TypeError(`Invalid ${kind} conversation identity.`), {
-    code: "conversation_input_invalid", statusCode: 400
+    code: "conversation_input_invalid",
+    statusCode: 400
   });
 }
 

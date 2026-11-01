@@ -42,7 +42,13 @@ function createVibe64SessionStore(options = {}) {
   const locks = createSessionStoreLocks({ state, storePaths });
   const recordFiles = createSessionRecordFiles({ state, storePaths });
   const archiveRecords = createSessionArchiveRecords({ state, storePaths });
-  const archiveAccess = createSessionArchiveAccess({ state, storePaths, locks, recordFiles, archiveRecords });
+  const archiveAccess = createSessionArchiveAccess({
+    state,
+    storePaths,
+    locks,
+    recordFiles,
+    archiveRecords
+  });
   const sessionRecords = createSessionRecords({
     state,
     storePaths,
@@ -90,7 +96,13 @@ function createVibe64SessionStore(options = {}) {
     archivePublishing,
     currentSession
   });
-  const creation = createSessionCreation({ state, storePaths, locks, sessionRecords, listing });
+  const creation = createSessionCreation({
+    state,
+    storePaths,
+    locks,
+    sessionRecords,
+    listing
+  });
   const renewalTransitions = createSessionRenewalTransitions({
     state,
     storePaths,

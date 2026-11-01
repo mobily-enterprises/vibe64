@@ -36,7 +36,13 @@ import { enqueueSessionMutation } from "./sessionStoreLocks.js";
  * @param {SessionRecordFiles} dependencies.recordFiles
  * @param {SessionArchiveRecords} dependencies.archiveRecords
  */
-function createSessionArchivePublishing({ state, storePaths, locks, recordFiles, archiveRecords }) {
+function createSessionArchivePublishing({
+  state,
+  storePaths,
+  locks,
+  recordFiles,
+  archiveRecords
+}) {
   async function moveActiveSessionToClosing(activePaths, closingPaths) {
     const moveSessionRoot = async () => {
       await mkdir(activePaths.closingSessionsRoot, {

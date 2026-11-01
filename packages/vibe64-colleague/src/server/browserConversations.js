@@ -18,16 +18,27 @@ import { colleagueBrowserState, releaseObserver } from "./colleaguePresentation.
  * @param {ColleagueThreads} dependencies.threads
  * @param {ColleagueConversations} dependencies.conversations
  */
-function createColleagueBrowserConversations({ actions, serviceState, records, threads, conversations }) {
+function createColleagueBrowserConversations({
+  actions,
+  serviceState,
+  records,
+  threads,
+  conversations
+}) {
   async function open({ id, context } = {}) {
     // Action contributors own authority; never retain their cached result
     // when a subscription or subsequent model operation checks the request.
     if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.");
     const request = context?.requestMeta?.request;
-    const requestContext = { surface: "app", channel: "internal", requestMeta: request ? {
-      ...context.requestMeta, request: { ...request, headers: request.headers, vibe64User: authenticatedVibe64User(context) }
-    } : context?.requestMeta,
-      colleague: { userKey: threads.userKey(context), clientId: "", focus: null } };
+    const requestContext = {
+      surface: "app",
+      channel: "internal",
+      requestMeta: request ? {
+        ...context.requestMeta,
+        request: { ...request, headers: request.headers, vibe64User: authenticatedVibe64User(context) }
+      } : context?.requestMeta,
+      colleague: { userKey: threads.userKey(context), clientId: "", focus: null }
+    };
     await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
     const state = await threads.stateFor(context);
     if (state.record.previousConversations.some(old => old.scopeId === id)) threads.assertCurrentConversation(state, id);
@@ -51,11 +62,18 @@ function createColleagueBrowserConversations({ actions, serviceState, records, t
         const conversation = await preparedConversation();
         // Reading an empty Colleague must not require AI Accounts setup or
         // choose a native engine. Its original transcript remains readable.
-        if (!conversation) return colleagueBrowserState({ id, status: "ready", phase: "", error: state.record.error || "", interimReply: state.interimReply,
-          capabilities: { steering: false, goals: false, attachments: false }, pendingRequest: null,
+        if (!conversation) return colleagueBrowserState({
+          id,
+          status: "ready",
+          phase: "",
+          error: state.record.error || "",
+          interimReply: state.interimReply,
+          capabilities: { steering: false, goals: false, attachments: false },
+          pendingRequest: null,
           ...(paged ? await records.transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true })
             : { conversationLog: await records.transcript.readConversationLog(state.record.runtimeId, { presentation: true }) }),
-          streaming: { revision: 0, messages: [] } });
+          streaming: { revision: 0, messages: [] }
+        });
         const owner = state.runtimeOwner;
         let current = paged ? await conversation.read(pageOptions) : await conversation.read();
         if (paged && owner === conversations.runtime) {
@@ -65,21 +83,37 @@ function createColleagueBrowserConversations({ actions, serviceState, records, t
           threads.assertCurrentConversation(state, id);
           current = { ...current, ...page };
         }
-        return colleagueBrowserState({ ...current, id,
+        return colleagueBrowserState({
+          ...current,
+          id,
           ...(state.runtimeOwner === conversations.nativeRuntime && state.running ? { status: "working" } : {}),
           interimReply: state.interimReply,
-          capabilities: { ...current.capabilities, steering: false, goals: false, attachments: false } });
+          capabilities: { ...current.capabilities, steering: false, goals: false, attachments: false }
+        });
       },
       async send(input) {
         if (input.attachmentIds?.length) throw failure("Colleague does not accept attachments.", "conversation_unsupported");
-        return actions.execute({ actionId: "vibe64.colleague.message.send", context: requestContext,
-          input: { ...input.data, expectedConversationId: id, messageId: input.messageId, message: input.text }, deps: { receiptOnly: true } });
+        return actions.execute({
+          actionId: "vibe64.colleague.message.send",
+          context: requestContext,
+          input: {
+            ...input.data,
+            expectedConversationId: id,
+            messageId: input.messageId,
+            message: input.text
+          },
+          deps: { receiptOnly: true }
+        });
       },
       async cancel() {
         return actions.execute({ actionId: "vibe64.colleague.turn.stop", input: { expectedConversationId: id }, context: requestContext });
       },
       async select(input) {
-        return actions.execute({ actionId: "vibe64.colleague.model.select", input: { ...input, expectedConversationId: id }, context: requestContext });
+        return actions.execute({
+          actionId: "vibe64.colleague.model.select",
+          input: { ...input, expectedConversationId: id },
+          context: requestContext
+        });
       },
       async inspectDelivery(input) {
         threads.assertCurrentConversation(state, id);
@@ -111,9 +145,19 @@ function createColleagueBrowserConversations({ actions, serviceState, records, t
         if (typeof listener !== "function") throw new TypeError("A conversation listener is required.");
         const observer = { context: requestContext, listener, release: null };
         state.browserObservers.add(observer);
-        try { await preparedConversation(); await conversations.attachBrowserObserver(state, observer); }
-        catch (error) { state.browserObservers.delete(observer); releaseObserver(observer); throw error; }
-        return () => { state.browserObservers.delete(observer); releaseObserver(observer); };
+        try {
+          await preparedConversation();
+          await conversations.attachBrowserObserver(state, observer);
+        }
+        catch (error) {
+          state.browserObservers.delete(observer);
+          releaseObserver(observer);
+          throw error;
+        }
+        return () => {
+          state.browserObservers.delete(observer);
+          releaseObserver(observer);
+        };
       }
     };
   }

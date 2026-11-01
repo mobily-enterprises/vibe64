@@ -110,7 +110,15 @@ function createUsageRecordingActions({ usageRecording }) {
       id: "vibe64.usage-recording.request-functions.read",
       version: 1,
       kind: "query",
-      input: { schema: createSchema({ sessionId, recordingId, requestId: text(64), ...page }), mode: "create" },
+      input: {
+        schema: createSchema({
+          sessionId,
+          recordingId,
+          requestId: text(64),
+          ...page
+        }),
+        mode: "create"
+      },
       output: null,
       idempotency: "none",
       extensions: { ...NOT_A_TOOL, vibe64: PROJECT_OPERATION },

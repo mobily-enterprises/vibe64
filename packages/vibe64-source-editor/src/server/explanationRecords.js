@@ -5,7 +5,11 @@ import path from "node:path";
 import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 
-import { sourceEditorAgentOperationOptions, sourceEditorExecutionProfileRequest, sourceEditorExecutionProfileSnapshot } from "./explanationProfile.js";
+import {
+  sourceEditorAgentOperationOptions,
+  sourceEditorExecutionProfileRequest,
+  sourceEditorExecutionProfileSnapshot
+} from "./explanationProfile.js";
 import { positiveInteger, SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION, sourceEditorExplanationMessageId } from "./explanationText.js";
 import { isPlainObject, normalizeSourceEditorRelativePath, sourceEditorError, sourceEditorLanguageForPath } from "./sourceFiles.js";
 
@@ -216,7 +220,8 @@ async function deleteSourceEditorExplanationAgentThread(context = {}, record = {
     const helper = record.helper;
     sourceEditorHelperRoot(context, helper);
     const deleted = await terminalService.deleteEphemeralAgentConversation(helper.scope, {
-      conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
+      conversationId: helper.conversationId,
+      cleanupExecutionId: helper.executionId,
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
     }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
     if (deleted?.ok !== true) {

@@ -27,11 +27,14 @@ const pinSchema = createSchema({
  */
 function withoutAnswers(lesson) {
   if (!lessonHasSteps(lesson)) return lesson;
-  return { ...lesson, steps: lesson.steps.map(step => {
-    if (step.check.kind !== "choice") return step;
-    const { answer, ...check } = step.check;
-    return { ...step, check };
-  }) };
+  return {
+    ...lesson,
+    steps: lesson.steps.map(step => {
+      if (step.check.kind !== "choice") return step;
+      const { answer, ...check } = step.check;
+      return { ...step, check };
+    })
+  };
 }
 
 /**
@@ -113,7 +116,9 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
    * An installed lesson this Vibe64 cannot teach (see validateTopic installed).
    */
   function unusableLesson(bundle) {
-    return Object.assign(new Error(`Lesson ${bundle.lesson.code} ("${bundle.lesson.title}") cannot be taught by this version of Vibe64: ${bundle.problem} Update the course in Courses, or ask its authors for a fixed release.`),
+    return Object.assign(new Error(
+      `Lesson ${bundle.lesson.code} ("${bundle.lesson.title}") cannot be taught by this version of Vibe64: ${bundle.problem} Update the course in Courses, or ask its authors for a fixed release.`
+    ),
       { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 });
   }
 
@@ -149,7 +154,11 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       for (const directory of [root, trainingRoot, contentRoot, topicRoot, snapshotRoot]) {
         await requirePath(directory, true);
       }
-      const pin = validateInstalledTopicPin(JSON.parse((await boundedFile(path.join(snapshotRoot, "pin.json"), 4096)).toString("utf8")), { topicId, commit, topicHash });
+      const pin = validateInstalledTopicPin(JSON.parse((await boundedFile(path.join(snapshotRoot, "pin.json"), 4096)).toString("utf8")), {
+        topicId,
+        commit,
+        topicHash
+      });
       const bundle = JSON.parse((await boundedFile(path.join(snapshotRoot, "bundle.json"), 32 * 1024 * 1024)).toString("utf8"));
       const filesRoot = path.join(snapshotRoot, "files");
       const installedPaths = await inventory(filesRoot);
@@ -160,7 +169,19 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
         release: result.release,
         topicHash: result.topicHash,
         topicManifest: result.topicManifest,
-        lessons: result.bundles.map(({ lesson, hash, status, required, manifest }) => ({ code: lesson.code, hash, status, required, manifest }))
+        lessons: result.bundles.map(({
+          lesson,
+          hash,
+          status,
+          required,
+          manifest
+        }) => ({
+          code: lesson.code,
+          hash,
+          status,
+          required,
+          manifest
+        }))
       };
       if (canonicalJson(bundle) !== canonicalJson(expectedBundle)) {
         throw new Error("Installed bundle is incomplete, reordered, unsupported or changed from its source files.");
@@ -186,7 +207,8 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       const missing = ["ENOENT", "ENOTDIR"].includes(cause.code);
       const error = new Error(missing
         ? `Pinned teaching content ${topicId}@${commit} is missing. Ask the owner to install that exact revision.`
-        : `Pinned teaching content ${topicId}@${commit} is invalid: ${cause.message} Ask the owner to reinstall the verified snapshot.`, { cause });
+        : `Pinned teaching content ${topicId}@${commit} is invalid: ${cause.message} Ask the owner to reinstall the verified snapshot.`,
+        { cause });
       error.code = missing ? "VIBE64_TRAINING_CONTENT_MISSING" : "VIBE64_TRAINING_CONTENT_INVALID";
       throw error;
     }
@@ -236,14 +258,19 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
           sha256Hex(canonicalJson(selected.manifest)) !== lessonHash) {
         throw new Error("Installed lesson manifest differs from the trusted content hash.");
       }
-      if (entry.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
+      if (entry.status !== "published" && !allowDraftLessons) {
+        throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
+      }
       const identity = { pin, manifest: selected.manifest, hash: lessonHash, descriptorPath: descriptor.descriptor };
       const file = await lessonFile(identity, ".", descriptor.descriptor);
       const lesson = validateLesson(JSON.parse(file.bytes.toString("utf8")), lessonCode);
       if (lesson.code !== lessonCode) throw new Error("Installed lesson descriptor identity changed.");
       return { ...identity, lesson: withoutAnswers(lesson) };
     } catch (cause) {
-      const error = new Error(`Pinned teaching identity ${topicId}@${commit} is invalid: ${cause.message} Ask the owner to restore the exact snapshot.`, { cause });
+      const error = new Error(
+        `Pinned teaching identity ${topicId}@${commit} is invalid: ${cause.message} Ask the owner to restore the exact snapshot.`,
+        { cause }
+      );
       error.code = ["ENOENT", "ENOTDIR"].includes(cause.code)
         ? "VIBE64_TRAINING_CONTENT_MISSING" : "VIBE64_TRAINING_CONTENT_INVALID";
       throw error;
@@ -262,13 +289,23 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     const topic = await readVerifiedTopic({ topicId, commit, topicHash });
     const bundle = topic.bundles.find(item => item.lesson.code === lessonCode);
     if (!bundle) throw new Error(`Lesson ${lessonCode} is not declared in this pinned topic.`);
-    if (bundle.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
-    if (bundle.hash !== lessonHash) throw new Error(`Lesson ${lessonCode} content hash changed. Resume its exact pinned revision or explicitly start a new attempt.`);
+    if (bundle.status !== "published" && !allowDraftLessons) {
+      throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
+    }
+    if (bundle.hash !== lessonHash) {
+      throw new Error(`Lesson ${lessonCode} content hash changed. Resume its exact pinned revision or explicitly start a new attempt.`);
+    }
     if (bundle.problem) throw unusableLesson(bundle);
     // The topic's declared vocabulary: its beats name host places by these names.
     const declarations = Object.fromEntries(["places", "activities", "facts"].map(key => [key, [...topic.topic[key] || []]]));
-    return { pin: topic.pin, lesson: bundle.lesson, manifest: bundle.manifest,
-      hash: bundle.hash, descriptorPath: bundle.descriptorPath, declarations };
+    return {
+      pin: topic.pin,
+      lesson: bundle.lesson,
+      manifest: bundle.manifest,
+      hash: bundle.hash,
+      descriptorPath: bundle.descriptorPath,
+      declarations
+    };
   }
 
   async function readLesson(input = {}) {
@@ -292,7 +329,12 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
         const { body, beats } = splitStepBeats((await lessonText(step.body)).text, vocabulary);
         steps.push({ ...step, bodyText: body, ...(beats ? { beats } : {}) });
       }
-      return { ...bundle, steps, ...bundle.lesson.notes === undefined ? {} : { notesText: (await lessonText(bundle.lesson.notes)).text }, visuals };
+      return {
+        ...bundle,
+        steps,
+        ...bundle.lesson.notes === undefined ? {} : { notesText: (await lessonText(bundle.lesson.notes)).text },
+        visuals
+      };
     }
     if (bundle.lesson.schemaVersion !== 1) throw new Error(`Lesson ${bundle.lesson.code} uses an unsupported format.`);
     // Retired v1: read only for already-installed snapshots and the published
@@ -389,8 +431,13 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       code: "VIBE64_TRAINING_EXERCISE_MISSING"
     });
     const sourcePath = path.posix.join(path.posix.dirname(lesson.descriptorPath), exercise.source);
-    const identity = { pin: lesson.pin, lessonCode: lesson.lesson.code,
-      lessonHash: lesson.hash, exercise, sourcePath };
+    const identity = {
+      pin: lesson.pin,
+      lessonCode: lesson.lesson.code,
+      lessonHash: lesson.hash,
+      exercise,
+      sourcePath
+    };
     if (metadataOnly === true) return identity;
     const prefix = sourcePath === "." ? "" : `${sourcePath}/`;
     const files = [];
@@ -403,7 +450,15 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     return { ...identity, files };
   }
 
-  return Object.freeze({ readTopic, readLesson, readAdmissionIdentity, readVisual, readCheck, readExercise, readChoiceAnswer });
+  return Object.freeze({
+    readTopic,
+    readLesson,
+    readAdmissionIdentity,
+    readVisual,
+    readCheck,
+    readExercise,
+    readChoiceAnswer
+  });
 }
 
 /**

@@ -2,8 +2,16 @@ export const DATA_OVERVIEW_PATH = "data-overview.json";
 export const DATA_OVERVIEW_MAX_BYTES = 256 * 1024;
 export const DATA_OVERVIEW_ABSTRACTIONS = [
   { value: "none", title: "Not abstract", description: "Make every physical table its own actor; do not combine tables." },
-  { value: "balanced", title: "Balanced", description: "Aim for 5–10 business concepts, with supporting tables inside them and only the main business connections shown." },
-  { value: "high", title: "Very abstract", description: "Aim for 3–5 broad business domains, including their supporting concepts across multiple relationships." }
+  {
+    value: "balanced",
+    title: "Balanced",
+    description: "Aim for 5–10 business concepts, with supporting tables inside them and only the main business connections shown."
+  },
+  {
+    value: "high",
+    title: "Very abstract",
+    description: "Aim for 3–5 broad business domains, including their supporting concepts across multiple relationships."
+  }
 ];
 
 export const DATA_OVERVIEW_INSTRUCTIONS = [
@@ -28,16 +36,22 @@ export function validateDataOverview(value) {
     if (Object.keys(item).some((key) => !fields.includes(key))) fail(`${label} contains unknown fields.`);
   };
   const text = (item, label, limit) => {
-    if (typeof item !== "string" || !item.trim() || item.length > limit) fail(`${label} must be non-empty text of at most ${limit} characters.`);
+    if (typeof item !== "string" || !item.trim() || item.length > limit) {
+      fail(`${label} must be non-empty text of at most ${limit} characters.`);
+    }
     return item.trim();
   };
   record(value, ["version", "actors", "abstraction", "reviewedTables", "rings", "mainRelationships", "positions"], "document");
   if (value.version !== 1) fail("version must be 1.");
   if (!Array.isArray(value.actors) || value.actors.length > 2000) fail("actors must be an array of at most 2000 items.");
-  if (value.abstraction !== undefined && !DATA_OVERVIEW_ABSTRACTIONS.some((item) => item.value === value.abstraction)) fail("abstraction must be none, balanced or high.");
+  if (value.abstraction !== undefined && !DATA_OVERVIEW_ABSTRACTIONS.some((item) => item.value === value.abstraction)) {
+    fail("abstraction must be none, balanced or high.");
+  }
   let reviewedTables;
   if (value.reviewedTables !== undefined) {
-    if (!Array.isArray(value.reviewedTables) || value.reviewedTables.length > 2000) fail("reviewedTables must be an array of at most 2000 table names.");
+    if (!Array.isArray(value.reviewedTables) || value.reviewedTables.length > 2000) {
+      fail("reviewedTables must be an array of at most 2000 table names.");
+    }
     reviewedTables = value.reviewedTables.map((entry) => text(entry, "reviewed table name", 512));
     if (new Set(reviewedTables).size !== reviewedTables.length) fail("reviewedTables must not repeat a table.");
   }
@@ -46,8 +60,12 @@ export function validateDataOverview(value) {
     record(actor, ["table", "name", "description", "tables"], "actor");
     const table = text(actor.table, "actor table", 512);
     const name = text(actor.name, "actor name", 120);
-    if (typeof actor.description !== "string" || actor.description.length > 600) fail("description must be text of at most 600 characters.");
-    if (!Array.isArray(actor.tables) || !actor.tables.length || actor.tables.length > 2000) fail(`${name} must include between 1 and 2000 tables.`);
+    if (typeof actor.description !== "string" || actor.description.length > 600) {
+      fail("description must be text of at most 600 characters.");
+    }
+    if (!Array.isArray(actor.tables) || !actor.tables.length || actor.tables.length > 2000) {
+      fail(`${name} must include between 1 and 2000 tables.`);
+    }
     const tables = actor.tables.map((entry) => {
       const id = text(entry, "table name", 512);
       if (assigned.has(id)) fail(`${id} belongs to more than one group or is repeated.`);
@@ -76,7 +94,9 @@ export function validateDataOverview(value) {
   }
   let mainRelationships;
   if (value.mainRelationships !== undefined) {
-    if (!Array.isArray(value.mainRelationships) || value.mainRelationships.length > 2000) fail("mainRelationships must be an array of at most 2000 relationship IDs.");
+    if (!Array.isArray(value.mainRelationships) || value.mainRelationships.length > 2000) {
+      fail("mainRelationships must be an array of at most 2000 relationship IDs.");
+    }
     mainRelationships = value.mainRelationships.map((entry) => text(entry, "main relationship ID", 1024));
     if (new Set(mainRelationships).size !== mainRelationships.length) fail("mainRelationships must not repeat an ID.");
   }
@@ -86,7 +106,9 @@ export function validateDataOverview(value) {
     record(value.positions, [...allowed], "positions");
     positions = Object.fromEntries(Object.entries(value.positions).map(([table, position]) => {
       record(position, ["x", "y"], "actor position");
-      if (![position.x, position.y].every(n => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 1000000)) fail("actor coordinates must be finite numbers between -1000000 and 1000000.");
+      if (![position.x, position.y].every(n => typeof n === "number" && Number.isFinite(n) && Math.abs(n) <= 1000000)) {
+        fail("actor coordinates must be finite numbers between -1000000 and 1000000.");
+      }
       return [table, { x: position.x, y: position.y }];
     }));
   }

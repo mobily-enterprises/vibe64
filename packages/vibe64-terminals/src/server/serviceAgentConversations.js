@@ -58,12 +58,19 @@ function createServiceAgentConversations({
       const request = assistantRoutingRequestFromMetadata(context.session.metadata);
       if (sessionHasActiveAgentRun(context.session) || assistantRoutingStatusIsPending(request) ||
           request?.status === "working" && request.workflow) {
-        return { ok: false, error: "Wait for the assistant and its review to finish before " +
-          (restoring ? "making a plan current." : "archiving the plan.") };
+        return {
+          ok: false,
+          error: "Wait for the assistant and its review to finish before " +
+            (restoring ? "making a plan current." : "archiving the plan.")
+        };
       }
       const result = await manageWorkPlan(context, restoring
         ? { operation: "reopen", archiveId: input.archiveId }
-        : { operation: "archive", expectedRevision: input.expectedRevision, expectedProgressRevision: input.expectedProgressRevision }, "user");
+        : {
+          operation: "archive",
+          expectedRevision: input.expectedRevision,
+          expectedProgressRevision: input.expectedProgressRevision
+        }, "user");
       if (restoring) result.notice = "The archived plan is now current and active. Ask in chat to continue its work.";
       await publishAgentSessionChanged(sessionId, { reason: "work-plan-changed", payload: { planNotice: result.notice } });
       return { ok: true, sessionId, ...result };
@@ -129,7 +136,9 @@ function createServiceAgentConversations({
       const currentBindings = archived ? [] : nativeConversationBindings(session).filter((entry) => !entry.retired);
       const currentIds = new Set(currentBindings.map((entry) => entry.conversationId));
       const result = await sessionAgent.retireConversationHistory(sessionId, binding, {
-        ...options, runtime, session,
+        ...options,
+        runtime,
+        session,
         beforeDelete: async (inventory) => {
           if (inventory.conversations.some((entry) => currentIds.has(entry.conversationId))) {
             throw new Error("Native deletion would include a current Vibe64 conversation.");
@@ -169,7 +178,8 @@ function createServiceAgentConversations({
   function replaceAgentConversation(sessionId, input = {}, options = {}) {
     return sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
       const fail = (message) => { throw Object.assign(new Error(message), {
-        code: "vibe64_conversation_replacement_unavailable", statusCode: 409
+        code: "vibe64_conversation_replacement_unavailable",
+        statusCode: 409
       }); };
       if (context.session.status !== VIBE64_SESSION_STATUS.ACTIVE || sessionIsClosing(context.session) ||
           sessionHasActiveAgentRun(context.session) || workspaceSetup.isRunning(sessionId)) {
@@ -301,7 +311,8 @@ function createServiceAgentConversations({
 
   function readSessionWorkPlan(sessionId, input = {}) {
     return vibe64Result(async () => ({
-      ok: true, sessionId,
+      ok: true,
+      sessionId,
       ...await readWorkPlanPage(await assistantContext.assistantSessionOptions(sessionId), input)
     }));
   }
@@ -320,7 +331,10 @@ function createServiceAgentConversations({
     const requests = [session.metadata, ...records.map((record) => record.routingMetadata || {})]
       .map(assistantRoutingRequestFromMetadata);
     if (requests.some((request) => assistantRoutingStatusIsPending(request) || request?.helper)) {
-      throw Object.assign(new Error("Finish or cancel pending chat routing and reviews before renewing this session."), { code: "vibe64_assistant_routing_pending", retryable: true });
+      throw Object.assign(new Error("Finish or cancel pending chat routing and reviews before renewing this session."), {
+        code: "vibe64_assistant_routing_pending",
+        retryable: true
+      });
     }
     const conversation = await sessionAgent.hasActiveTemporaryConversation(
       sessionId,

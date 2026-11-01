@@ -95,7 +95,8 @@ const pinSchema = createSchema({
 });
 
 const endedSchema = createSchema({
-  requestId: { ...text, maxLength: 64 }, revision,
+  requestId: { ...text, maxLength: 64 },
+  revision,
   reason: { ...text, enum: END_REASONS }
 });
 
@@ -111,27 +112,50 @@ const attemptSchema = createSchema({
 });
 
 const progressSchema = createSchema({
-  schemaVersion: { type: "integer", required: true, enum: [2] }, learnerId: { ...text, maxLength: 128 }, revision,
+  schemaVersion: { type: "integer", required: true, enum: [2] },
+  learnerId: { ...text, maxLength: 128 },
+  revision,
   activeAttemptId: { ...text, maxLength: 36, nullable: true },
-  completedLessons: list(createSchema({ code: { ...text, maxLength: 64 }, hash: { ...text, maxLength: 64 },
-    completedAt: { ...text, maxLength: 24 } }), MAX_COMPLETED_LESSONS),
+  completedLessons: list(createSchema({
+    code: { ...text, maxLength: 64 },
+    hash: { ...text, maxLength: 64 },
+    completedAt: { ...text, maxLength: 24 }
+  }), MAX_COMPLETED_LESSONS),
   attempts: list(attemptSchema, MAX_ATTEMPTS)
 });
 
 const activeSchema = createSchema({
-  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, progressRevision: revision,
-  attemptId: { ...text, maxLength: 36 }, pin: { type: "object", required: true, schema: pinSchema },
-  projectSlug: { ...text, required: false, maxLength: 48 }, preparation: { type: "object", required: false, schema: preparationSchema }
+  schemaVersion: version,
+  learnerId: { ...text, maxLength: 128 },
+  progressRevision: revision,
+  attemptId: { ...text, maxLength: 36 },
+  pin: { type: "object", required: true, schema: pinSchema },
+  projectSlug: { ...text, required: false, maxLength: 48 },
+  preparation: { type: "object", required: false, schema: preparationSchema }
 });
 
 const emptyActiveSchema = createSchema({
-  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, progressRevision: revision,
+  schemaVersion: version,
+  learnerId: { ...text, maxLength: 128 },
+  progressRevision: revision,
   attemptId: { ...text, nullable: true, maxLength: 36 }
 });
 
 // Version 2: an earlier release wrote a different version 1 shape here.
 const modeSchema = createSchema({
-  schemaVersion: { type: "integer", required: true, enum: [2] }, learnerId: { ...text, maxLength: 128 }, on: { type: "boolean", required: true }
+  schemaVersion: {
+    type: "integer",
+    required: true,
+    enum: [2]
+  },
+  learnerId: {
+    ...text,
+    maxLength: 128
+  },
+  on: {
+    type: "boolean",
+    required: true
+  }
 });
 
 const MAX_CODE_LEDGER_ENTRIES = 256;
@@ -147,14 +171,37 @@ const codeFileSchema = createSchema({ path: { ...text, maxLength: 512 }, sha256:
 // revision at which the learner first entered it, and the index of the first
 // save made after that entry; all saves share one log.
 const codeLedgerSchema = createSchema({
-  schemaVersion: { type: "integer", required: true, enum: [2] }, learnerId: { ...text, maxLength: 128 }, attemptId: { ...text, maxLength: 36 },
-  steps: { ...list(createSchema({ stepId: { ...text, maxLength: 64 }, enteredRevision: revision,
-    entryStart: { type: "integer", required: true, min: 0, max: MAX_CODE_LEDGER_ENTRIES },
-    baseline: list(codeFileSchema, 8) }), MAX_CODE_LEDGER_STEPS), minLength: 1 },
-  entries: list(createSchema({ path: { ...text, maxLength: 512 }, baseHash: { ...text, maxLength: 64 },
-    savedHash: { ...text, maxLength: 64 }, intendedHash: { ...text, maxLength: 64 },
-    actorId: { ...text, maxLength: 128 }, at: { ...text, maxLength: 24 },
-    saves: { type: "integer", required: true, min: 1, max: Number.MAX_SAFE_INTEGER } }), MAX_CODE_LEDGER_ENTRIES)
+  schemaVersion: {
+    type: "integer",
+    required: true,
+    enum: [2]
+  },
+  learnerId: {
+    ...text,
+    maxLength: 128
+  },
+  attemptId: {
+    ...text,
+    maxLength: 36
+  },
+  steps: {
+    ...list(createSchema({
+      stepId: { ...text, maxLength: 64 },
+      enteredRevision: revision,
+      entryStart: { type: "integer", required: true, min: 0, max: MAX_CODE_LEDGER_ENTRIES },
+      baseline: list(codeFileSchema, 8)
+    }), MAX_CODE_LEDGER_STEPS),
+    minLength: 1
+  },
+  entries: list(createSchema({
+    path: { ...text, maxLength: 512 },
+    baseHash: { ...text, maxLength: 64 },
+    savedHash: { ...text, maxLength: 64 },
+    intendedHash: { ...text, maxLength: 64 },
+    actorId: { ...text, maxLength: 128 },
+    at: { ...text, maxLength: 24 },
+    saves: { type: "integer", required: true, min: 1, max: Number.MAX_SAFE_INTEGER }
+  }), MAX_CODE_LEDGER_ENTRIES)
 });
 
 function validateCodeLedger(value) {
@@ -165,7 +212,8 @@ function validateCodeLedger(value) {
     ...ledger.entries.flatMap(entry => [entry.baseHash, entry.savedHash, entry.intendedHash])];
   if (!uuidPattern.test(ledger.attemptId) || new Set(ledger.steps.map(step => step.stepId)).size !== ledger.steps.length ||
       ledger.steps.some(step => !idPattern.test(step.stepId) || step.entryStart > ledger.entries.length) ||
-      hashes.some(hash => !sha256Pattern.test(hash)) || baselines.some(files => new Set(files.map(file => file.path)).size !== files.length) ||
+      hashes.some(hash => !sha256Pattern.test(hash)) || baselines.some(files =>
+        new Set(files.map(file => file.path)).size !== files.length) ||
       ledger.entries.some(entry => !tracked.has(entry.path) || !isoTime(entry.at))) {
     throw new Error("The code authorship ledger has an invalid identity, hash, file or record time.");
   }
@@ -177,44 +225,69 @@ function validateCodeLedger(value) {
 // A new attempt's first result replaces it; ending the attempt removes it.
 // A review result also keeps the reviewer's feedback for the learner.
 const reviewFeedbackSchema = createSchema({
-  comment: { ...text, maxLength: 600 }, hint: { ...text, required: false, maxLength: 300 },
+  comment: { ...text, maxLength: 600 },
+  hint: { ...text, required: false, maxLength: 300 },
   points: { ...list(createSchema({ text: { ...text, maxLength: 120 }, met: { type: "boolean", required: true } }), 6), required: false }
 });
 
 const stepResultSchema = createSchema({
-  stepId: { ...text, maxLength: 64 }, kind: { ...text, enum: ["auto", "choice", "review", "self", "read", "fact"] },
-  outcome: { ...text, enum: ["passed", "not-yet-passed"] }, evidence: { type: "object", required: true },
-  origin: { ...text, enum: ["learner", "check"] }, requestId: { ...text, maxLength: 64 },
-  recordedAt: { ...text, maxLength: 24 }, reason: { ...text, required: false },
+  stepId: { ...text, maxLength: 64 },
+  kind: { ...text, enum: ["auto", "choice", "review", "self", "read", "fact"] },
+  outcome: { ...text, enum: ["passed", "not-yet-passed"] },
+  evidence: { type: "object", required: true },
+  origin: { ...text, enum: ["learner", "check"] },
+  requestId: { ...text, maxLength: 64 },
+  recordedAt: { ...text, maxLength: 24 },
+  reason: { ...text, required: false },
   review: { type: "object", required: false, schema: reviewFeedbackSchema }
 });
 
 // The latest learner-origin exercise interaction captured by the browser for a
 // step; a later check run re-verifies it against the same App run identities.
 const stepReceiptSchema = createSchema({
-  stepId: { ...text, maxLength: 64 }, checkId: { ...text, maxLength: 64 }, observationId: { ...text, maxLength: 128 },
-  instanceId: { ...text, maxLength: 36 }, interactionId: { ...text, maxLength: 36 }, requestId: { ...text, maxLength: 36 },
-  sessionId: { ...text, maxLength: 128 }, observedAt: { ...text, maxLength: 24 }
+  stepId: { ...text, maxLength: 64 },
+  checkId: { ...text, maxLength: 64 },
+  observationId: { ...text, maxLength: 128 },
+  instanceId: { ...text, maxLength: 36 },
+  interactionId: { ...text, maxLength: 36 },
+  requestId: { ...text, maxLength: 36 },
+  sessionId: { ...text, maxLength: 128 },
+  observedAt: { ...text, maxLength: 24 }
 });
 
 const stepProgressSchema = createSchema({
-  schemaVersion: { type: "integer", required: true, enum: [3] }, learnerId: { ...text, maxLength: 128 }, revision,
-  attemptId: { ...text, maxLength: 36 }, lesson: { type: "object", required: true, schema: lessonKeySchema },
-  results: list(stepResultSchema, MAX_STEP_RESULTS), receipts: list(stepReceiptSchema, MAX_STEP_RECEIPTS)
+  schemaVersion: { type: "integer", required: true, enum: [3] },
+  learnerId: { ...text, maxLength: 128 },
+  revision,
+  attemptId: { ...text, maxLength: 36 },
+  lesson: { type: "object", required: true, schema: lessonKeySchema },
+  results: list(stepResultSchema, MAX_STEP_RESULTS),
+  receipts: list(stepReceiptSchema, MAX_STEP_RECEIPTS)
 });
 
 const readerSchema = createSchema({
-  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, attemptId: { ...text, maxLength: 36 },
-  stepId: { ...text, maxLength: 64 }, scroll: { type: "number", required: true, min: 0, max: 10_000_000 }
+  schemaVersion: version,
+  learnerId: { ...text, maxLength: 128 },
+  attemptId: { ...text, maxLength: 36 },
+  stepId: { ...text, maxLength: 64 },
+  scroll: { type: "number", required: true, min: 0, max: 10_000_000 }
 });
 
 const notesText = { type: "string", required: true, noTrim: true, minLength: 0, maxLength: MAX_NOTES_CHARS };
 
 const notesSchema = createSchema({
-  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, revision, text: notesText,
-  updatedAt: { ...text, maxLength: 24 }, updatedBy: { ...text, enum: ["colleague", "learner"] },
+  schemaVersion: version,
+  learnerId: { ...text, maxLength: 128 },
+  revision,
+  text: notesText,
+  updatedAt: { ...text, maxLength: 24 },
+  updatedBy: { ...text, enum: ["colleague", "learner"] },
   // Recent writes for request-ID replay; the oldest identity leaves this window.
-  requests: list(createSchema({ requestId: { ...text, maxLength: 64 }, textHash: { ...text, maxLength: 64 }, revision }), MAX_NOTES_REQUESTS)
+  requests: list(createSchema({
+    requestId: { ...text, maxLength: 64 },
+    textHash: { ...text, maxLength: 64 },
+    revision
+  }), MAX_NOTES_REQUESTS)
 });
 
 const byteSize = value => Buffer.byteLength(`${JSON.stringify(value, null, 2)}\n`);
@@ -225,7 +298,9 @@ function validateStepEvidence(result) {
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false;
   if (kind === "self" || kind === "read") return keys.length === 0 && result.origin === "learner";
   // A fact check's answer, read by its registered reader when the learner asked.
-  if (kind === "fact") return result.origin === "check" && canonicalJson(keys) === canonicalJson(["fact"]) && idPattern.test(evidence.fact || "");
+  if (kind === "fact") {
+    return result.origin === "check" && canonicalJson(keys) === canonicalJson(["fact"]) && idPattern.test(evidence.fact || "");
+  }
   if (kind === "review") {
     return result.origin === "check" && canonicalJson(keys) === canonicalJson(["evidenceHash", "reviewId"]) &&
       uuidAnyPattern.test(evidence.reviewId || "") && sha256Pattern.test(evidence.evidenceHash || "");
@@ -262,7 +337,11 @@ function validateStepEntry(entry) {
   const receiptSteps = new Set();
   for (const receipt of entry.receipts || []) {
     if (!idPattern.test(receipt.stepId) || receiptSteps.has(receipt.stepId) || !idPattern.test(receipt.checkId) ||
-        !requestPattern.test(receipt.observationId) || ![receipt.instanceId, receipt.interactionId, receipt.requestId].every(id => uuidAnyPattern.test(id)) ||
+        !requestPattern.test(receipt.observationId) || ![
+          receipt.instanceId,
+          receipt.interactionId,
+          receipt.requestId
+        ].every(id => uuidAnyPattern.test(id)) ||
         !validSessionId(receipt.sessionId) || !isoTime(receipt.observedAt)) {
       throw new Error("Step receipts have an invalid step, interaction identity, session or time.");
     }
@@ -392,7 +471,8 @@ function validateAttempt(attempt) {
   // An attempt without preparation (its lesson has no exercise) names no practice project.
   const projectSlug = attempt.preparation ? practiceSlug(attempt.attemptId) : undefined;
   if (attempt.projectSlug !== projectSlug || !isoTime(attempt.createdAt) ||
-      !attempt.requestIds.length || attempt.requestIds.some(id => !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
+      !attempt.requestIds.length || attempt.requestIds.some(id =>
+        !requestPattern.test(id)) || new Set(attempt.requestIds).size !== attempt.requestIds.length) {
     throw new Error("Learning state has an invalid attempt identity, reservation time or retry inventory.");
   }
 }
@@ -469,7 +549,10 @@ async function inspectPath(filename, directory) {
     if (error.code === "ENOENT") return null;
     throw error;
   }
-  if (stat.isSymbolicLink() || await realpath(filename) !== filename || (directory ? !stat.isDirectory() : !stat.isFile()) || (!directory && stat.nlink !== 1)) {
+  if (stat.isSymbolicLink() ||
+      await realpath(filename) !== filename ||
+      (directory ? !stat.isDirectory() : !stat.isFile()) ||
+      (!directory && stat.nlink !== 1)) {
     throw new Error("Learning state requires canonical regular paths without symlink or file aliases.");
   }
   return stat;
@@ -489,7 +572,9 @@ async function readRecord(filename, limit = MAX_RECORD_BYTES) {
   const bytes = await readFile(filename);
   if (bytes.length > limit) throw new Error(exceeded);
   const value = JSON.parse(bytes.toString("utf8"));
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Learning state must contain a versioned record object.");
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Learning state must contain a versioned record object.");
+  }
   return value;
 }
 
@@ -520,8 +605,13 @@ function lessonCompletion(lesson, entry, available) {
   if (!steps) throw new Error(`Lesson ${lesson.lesson.code} uses an unsupported format.`);
   const required = steps.filter(value => value.required && available.has(value.id)).map(value => value.id);
   const passed = required.filter(id => entry.results.some(result => result.stepId === id && result.outcome === "passed"));
-  return { lessonCode: lesson.lesson.code, lessonHash: lesson.hash, required: required.length, passed: passed.length,
-    completed: passed.length === required.length };
+  return {
+    lessonCode: lesson.lesson.code,
+    lessonHash: lesson.hash,
+    required: required.length,
+    passed: passed.length,
+    completed: passed.length === required.length
+  };
 }
 
 export {

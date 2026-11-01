@@ -21,14 +21,23 @@ for (const key of ["authentication", "assistantPolicy"]) {
 // Removing one policy choice must not replace the other action permissions.
 integration.assistantPolicy.schema = createSchema({
   ...integration.assistantPolicy.schema.getFieldDefinitions(),
-  actions: { ...integration.assistantPolicy.schema.getFieldDefinition("actions"),
-    values: { ...integration.assistantPolicy.schema.getFieldDefinition("actions").values, nullable: true } }
+  actions: {
+    ...integration.assistantPolicy.schema.getFieldDefinition("actions"),
+    values: { ...integration.assistantPolicy.schema.getFieldDefinition("actions").values, nullable: true }
+  }
 });
 
 const integrationConfigurationChangesSchema = createSchema({
   integrations: { type: "object", values: { type: "object", nullable: true, schema: createSchema(integration) }, required: false },
-  registrations: { type: "object", values: { type: "object", nullable: true,
-    schema: createSchema(changeFields(fields.registrations.values)) }, required: false }
+  registrations: {
+    type: "object",
+    values: {
+      type: "object",
+      nullable: true,
+      schema: createSchema(changeFields(fields.registrations.values))
+    },
+    required: false
+  }
 });
 
 export { integrationConfigurationChangesSchema };

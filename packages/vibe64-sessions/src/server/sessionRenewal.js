@@ -67,17 +67,53 @@ function createSessionRenewalController({
   terminals,
   workflowLockRetryMs = SESSION_RENEWAL_WORKFLOW_LOCK_RETRY_MS
 }) {
-  const renewalAccess = createRenewalSessionAccess({ project, publishSessionChanged, terminals });
-  const predecessorSession = createRenewalPredecessorSession({ renewalAccess, setupRunner, terminals });
-  const successorSession = createRenewalSuccessorSession({ project, renewalAccess, terminals });
-  const restoration = createRenewalRestoration({ predecessorSession, renewalAccess, successorSession });
-  const completion = createRenewalCompletion({ predecessorSession, prepareArchive, project, renewalAccess, terminals });
+  const renewalAccess = createRenewalSessionAccess({
+    project,
+    publishSessionChanged,
+    terminals
+  });
+  const predecessorSession = createRenewalPredecessorSession({
+    renewalAccess,
+    setupRunner,
+    terminals
+  });
+  const successorSession = createRenewalSuccessorSession({
+    project,
+    renewalAccess,
+    terminals
+  });
+  const restoration = createRenewalRestoration({
+    predecessorSession,
+    renewalAccess,
+    successorSession
+  });
+  const completion = createRenewalCompletion({
+    predecessorSession,
+    prepareArchive,
+    project,
+    renewalAccess,
+    terminals
+  });
   const admission = createRenewalAdmission();
   const workflow = createRenewalWorkflow({
-    admission, completion, predecessorSession, renewalAccess, restoration, setupRunner, successorSession, terminals
+    admission,
+    completion,
+    predecessorSession,
+    renewalAccess,
+    restoration,
+    setupRunner,
+    successorSession,
+    terminals
   });
   const scheduler = createRenewalScheduler({
-    admission, clearTimeoutFn, renewalAccess, restoration, restoreRenewalActor, setTimeoutFn, workflow, workflowLockRetryMs
+    admission,
+    clearTimeoutFn,
+    renewalAccess,
+    restoration,
+    restoreRenewalActor,
+    setTimeoutFn,
+    workflow,
+    workflowLockRetryMs
   });
 
   const controller = {

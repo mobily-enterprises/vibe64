@@ -23,7 +23,13 @@ import { readGithubStoredStatus, recordGithubAuthInvalidState, writeGithubAuthSt
  * @param {AccountNotifications} dependencies.notifications
  * @param {AccountStatusReads} dependencies.statusReads
  */
-function createAccountCredentials({ access, authSessionViews, env, notifications, statusReads }) {
+function createAccountCredentials({
+  access,
+  authSessionViews,
+  env,
+  notifications,
+  statusReads
+}) {
   async function recordGithubAuthInvalid(input = {}) {
     return accountsResult(async () => {
       const githubContext = access.githubContextForInput(input);

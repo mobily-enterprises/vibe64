@@ -15,7 +15,12 @@ import { accountsResult } from "./accountRecords.js";
  * @param {AccountNotifications} dependencies.notifications
  * @param {typeof import("./accountHostCommands.js").runDefaultHostCommand} dependencies.runHostToolCommand
  */
-function createAccountAccess({ accountRuntime, logger, notifications, runHostToolCommand }) {
+function createAccountAccess({
+  accountRuntime,
+  logger,
+  notifications,
+  runHostToolCommand
+}) {
   const resolvedSystemRoot = accountRuntime.systemRoot;
 
   // readable-check: allow method-probe - cross-repository slot vibe64.accounts.runtime: a host's account runtime may run host tool commands itself; the service's runner applies otherwise
@@ -42,8 +47,10 @@ function createAccountAccess({ accountRuntime, logger, notifications, runHostToo
     // every request. This drops only the account's cached reads, at once.
     const invalidated = await notifications.invalidateAgentRuntimes({ provider: "claude", reason: "claude-auth-change" });
     if (invalidated?.ok !== false) return null;
-    return { ...invalidated,
-      error: invalidated.error || invalidated.failed?.[0]?.error || "Claude Code could not apply the account change." };
+    return {
+      ...invalidated,
+      error: invalidated.error || invalidated.failed?.[0]?.error || "Claude Code could not apply the account change."
+    };
   }
 
   function authCredentialContext(accountId, githubContext) {

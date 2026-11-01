@@ -133,7 +133,16 @@ async function captureReviewConversation(runtime, sessionId = "") {
  * @param {RenewalSuccessorSession} dependencies.successorSession
  * @param {TerminalsService} dependencies.terminals
  */
-function createRenewalWorkflow({ admission, completion, predecessorSession, renewalAccess, restoration, setupRunner, successorSession, terminals }) {
+function createRenewalWorkflow({
+  admission,
+  completion,
+  predecessorSession,
+  renewalAccess,
+  restoration,
+  setupRunner,
+  successorSession,
+  terminals
+}) {
   async function generateDraft(sessionId = "", input = {}) {
     admission.assertWorkflowAdmissionOpen();
     const runtime = await renewalAccess.runtimeForRenewal();

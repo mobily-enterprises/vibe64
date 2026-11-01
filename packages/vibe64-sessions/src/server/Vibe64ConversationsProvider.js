@@ -11,17 +11,28 @@ import { conversationTransportSchema } from "./conversationTransportSchema.js";
 // The original browser hosting owner is shared by Main and optional Colleague.
 // AssistantFeature still owns all routes, subscriptions and client contracts.
 const Vibe64ConversationsProvider = defineFeature({
-  id: "vibe64.conversations", domain: "vibe64-conversations",
-  requires: { sessions: "vibe64.sessions", http: "runtime.http" },
+  id: "vibe64.conversations",
+  domain: "vibe64-conversations",
+  requires: {
+    sessions: "vibe64.sessions",
+    http: "runtime.http"
+  },
   optional: { colleague: "vibe64.colleague" },
-  provides: { conversations: "assistant.conversations", access: "assistant.conversation.access" },
+  provides: {
+    conversations: "assistant.conversations",
+    access: "assistant.conversation.access"
+  },
   /**
    * @param {object} capabilities
    * @param {SessionsService} capabilities.sessions
    * @param {ColleagueService | null} capabilities.colleague
    * @param {RuntimeHttp} capabilities.http
    */
-  setup({ sessions, colleague, http }) {
+  setup({
+    sessions,
+    colleague,
+    http
+  }) {
     const main = sessions.browserConversations;
     const product = colleague?.browserConversations;
     const subscribeActionId = "vibe64.conversation.subscribe";
@@ -37,7 +48,8 @@ const Vibe64ConversationsProvider = defineFeature({
           product?.conversationSelectionSchema])
       },
       access: {
-        subscribeActionId, requestPolicy: "host",
+        subscribeActionId,
+        requestPolicy: "host",
         router: {
           register(method, route, options, handler) {
             return http.router.register(method, route, { ...options, auth: "public" }, async (request, reply) => {
@@ -48,12 +60,17 @@ const Vibe64ConversationsProvider = defineFeature({
         },
         wrapAction(definition) {
           const { permission, execute, ...action } = definition;
-          return Object.freeze({ ...action,
+          return Object.freeze({
+            ...action,
             extensions: { ...action.extensions, vibe64: WORKSPACE_OPERATION },
             execute(input, context, deps) {
               if (definition.id === subscribeActionId) {
                 const request = context.requestMeta?.request;
-                if (!isTrustedStudioWebSocketRequest({ ...request, headers: request?.headers, vibe64User: authenticatedVibe64User(context) })) {
+                if (!isTrustedStudioWebSocketRequest({
+                  ...request,
+                  headers: request?.headers,
+                  vibe64User: authenticatedVibe64User(context)
+                })) {
                   throw Object.assign(new Error("Open this conversation from this Studio's own origin."), { statusCode: 403 });
                 }
               }

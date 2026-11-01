@@ -90,7 +90,10 @@ const commandServers = createSessionCommandServers({
   notFound: responseError("Unknown Vibe64 preview command route.", "vibe64_agent_preview_command_route_not_found"),
   rejection: {
     statusCode: 409,
-    payload: responseError("Managed preview control generation is no longer current. Reconnect the assistant.", "vibe64_agent_control_unavailable")
+    payload: responseError(
+      "Managed preview control generation is no longer current. Reconnect the assistant.",
+      "vibe64_agent_control_unavailable"
+    )
   },
   requestFailure: {
     fallbackCode: "vibe64_agent_preview_command_request_failed",

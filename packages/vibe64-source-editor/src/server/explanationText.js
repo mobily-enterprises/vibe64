@@ -129,7 +129,7 @@ function sourceEditorExplanationPromptCode({
   const text = String(selectedText || "");
   const lines = sourceEditorLines(text);
   if (
-    (range.scope !== "file" || range.presentation === 'description' || lines.length <= SOURCE_EDITOR_EXPLANATION_MAX_LINES) &&
+    (range.scope !== "file" || range.presentation === "description" || lines.length <= SOURCE_EDITOR_EXPLANATION_MAX_LINES) &&
     text.length <= SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS
   ) {
     return {

@@ -305,9 +305,11 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
 function connectedWorkSnapshots(value = []) {
   if (!Array.isArray(value)) throw saveError("Connected source snapshots are unavailable.", "vibe64_connected_source_unavailable");
   return value.map(snapshot => {
-    const contribution = sessionConnectedContribution({ metadata: {
-      connected_contribution: JSON.stringify(snapshot?.contribution)
-    } });
+    const contribution = sessionConnectedContribution({
+      metadata: {
+        connected_contribution: JSON.stringify(snapshot?.contribution)
+      }
+    });
     if (!contribution || typeof snapshot.sessionId !== "string" || !trimmedText(snapshot.sessionId) ||
         !path.isAbsolute(trimmedText(snapshot.worktreePath)) ||
         [snapshot.baseCommit, snapshot.canonicalCommit, snapshot.sessionHead, snapshot.worktreeTree]
@@ -315,25 +317,41 @@ function connectedWorkSnapshots(value = []) {
       throw saveError("The connected source could not be captured. Inspect connected work before saving.",
         "vibe64_connected_source_unavailable");
     }
-    return { contribution, sessionId: snapshot.sessionId, worktreePath: trimmedText(snapshot.worktreePath),
-      baseCommit: snapshot.baseCommit, canonicalCommit: snapshot.canonicalCommit,
-      sessionHead: snapshot.sessionHead, worktreeTree: snapshot.worktreeTree };
+    return {
+      contribution,
+      sessionId: snapshot.sessionId,
+      worktreePath: trimmedText(snapshot.worktreePath),
+      baseCommit: snapshot.baseCommit,
+      canonicalCommit: snapshot.canonicalCommit,
+      sessionHead: snapshot.sessionHead,
+      worktreeTree: snapshot.worktreeTree
+    };
   });
 }
 
 async function assertConnectedWorkSnapshotsUnchanged(runCommand, snapshots, options) {
   for (const snapshot of snapshots) {
     const { contribution } = snapshot;
-    const context = repositoryContext({ sessionId: snapshot.sessionId, sourcePath: snapshot.worktreePath, metadata: {
-      base_commit: snapshot.baseCommit, canonical_commit: snapshot.canonicalCommit,
-      connected_contribution: JSON.stringify(contribution)
-    } }, { repositoryMode: PROJECT_REPOSITORY_MODE_GITHUB,
+    const context = repositoryContext({
+      sessionId: snapshot.sessionId,
+      sourcePath: snapshot.worktreePath,
+      metadata: {
+        base_commit: snapshot.baseCommit,
+        canonical_commit: snapshot.canonicalCommit,
+        connected_contribution: JSON.stringify(contribution)
+      }
+    }, {
+      repositoryMode: PROJECT_REPOSITORY_MODE_GITHUB,
       repository: { defaultBranch: contribution.integrationBranch },
       githubRepository: { fullName: contribution.repository, cloneUrl: `https://github.com/${contribution.repository}.git` }
     });
     try {
-      const tree = await writeGitWorktreeTree({ baseCommit: "HEAD", project: commandProject(context, options.project),
-        runCommand, worktreePath: context.worktreePath });
+      const tree = await writeGitWorktreeTree({
+        baseCommit: "HEAD",
+        project: commandProject(context, options.project),
+        runCommand,
+        worktreePath: context.worktreePath
+      });
       const [head, canonical] = await Promise.all([
         gitOutput(runCommand, context, ["rev-parse", "--verify", "HEAD^{commit}"], options),
         observedCanonicalCommit(runCommand, context, options)

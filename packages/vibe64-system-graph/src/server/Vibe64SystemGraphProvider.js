@@ -21,7 +21,11 @@ import { createUsageService } from "./usageService.js";
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  */
-function createSystemGraph({ events, logger, project }) {
+function createSystemGraph({
+  events,
+  logger,
+  project
+}) {
   const { readStatus, readArchitecture, readRefreshStatus, cancelRefresh, refresh } = createService({
     projectService: project,
     logger,
@@ -53,7 +57,10 @@ const Vibe64SystemGraphProvider = defineFeature({
   provides: {
     systemGraph: "vibe64.system-graph"
   },
-  actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
+  actionDefaults: {
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"]
+  },
   /**
    * @param {object} capabilities
    * @param {RuntimeEvents} capabilities.events
@@ -61,8 +68,17 @@ const Vibe64SystemGraphProvider = defineFeature({
    * @param {RuntimeHttp} capabilities.http
    * @param {ProjectService} capabilities.project
    */
-  setup({ events, logger, http, project }) {
-    const systemGraph = createSystemGraph({ events, logger, project });
+  setup({
+    events,
+    logger,
+    http,
+    project
+  }) {
+    const systemGraph = createSystemGraph({
+      events,
+      logger,
+      project
+    });
     registerRoutes(http);
     registerUsageRoutes(http);
     return { systemGraph };

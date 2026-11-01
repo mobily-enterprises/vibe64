@@ -257,7 +257,10 @@ async function inspectSessionWorkDirect({
     }
     if (published.discarded || (publishedCommit && published.remoteAbsent)) {
       const target = `refs/heads/${context.contribution.integrationBranch}`;
-      const observed = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, target], { commandOptions, project });
+      const observed = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, target], {
+        commandOptions,
+        project
+      });
       const [accepted, ref, extra] = observed.split(/\s+/u);
       if (ref !== target || extra || !isGitObjectId(accepted) ||
           !await commitIsAncestor(runCommand, context, publishedCommit, accepted, { commandOptions, project })) {

@@ -52,8 +52,17 @@ function createProjectRepository({ readProject }) {
       const dirty = Boolean(await git(root, ["status", "--porcelain", "--untracked-files=normal"], { optional: true }));
       if (!upstreamRef || !upstreamRef.startsWith("refs/remotes/")) {
         return {
-          supported: true, mode, repositoryRoot: root, branch, baselineRef, upstreamRef: baselineRef, commit, dirty,
-          saved: !dirty, pushed: true, remote: null,
+          supported: true,
+          mode,
+          repositoryRoot: root,
+          branch,
+          baselineRef,
+          upstreamRef: baselineRef,
+          commit,
+          dirty,
+          saved: !dirty,
+          pushed: true,
+          remote: null,
           message: "This project has no remote; release tags stay in its folder."
         };
       }
@@ -61,7 +70,16 @@ function createProjectRepository({ readProject }) {
       const url = await git(root, ["remote", "get-url", remoteName], { optional: true }) || "";
       const pushed = await git(root, ["merge-base", "--is-ancestor", commit, upstreamRef], { optional: true }) !== null;
       return {
-        supported: true, mode, repositoryRoot: root, branch, baselineRef, upstreamRef, commit, dirty, saved: !dirty, pushed,
+        supported: true,
+        mode,
+        repositoryRoot: root,
+        branch,
+        baselineRef,
+        upstreamRef,
+        commit,
+        dirty,
+        saved: !dirty,
+        pushed,
         remote: { name: remoteName, url: url.replace(/(https?:\/\/)[^\s/@]+@/gu, "$1"), githubRepository: githubRepositoryOf(url) },
         message: pushed ? `Saved and pushed to ${remoteName}.` : `Saved, but not pushed to ${remoteName} yet.`
       };
@@ -73,11 +91,24 @@ function createProjectRepository({ readProject }) {
       const commit = await git(root, ["rev-parse", "--verify", "--quiet", `${baselineRef}^{commit}`], { optional: true });
       if (!commit) return { supported: false, message: `The project has no saved work on ${branch} yet.` };
       return {
-        supported: true, mode, repositoryRoot: root, branch, baselineRef, upstreamRef: baselineRef, commit, dirty: false,
-        saved: true, pushed: true, remote: null, message: "Saved in Vibe64's repository for this project."
+        supported: true,
+        mode,
+        repositoryRoot: root,
+        branch,
+        baselineRef,
+        upstreamRef: baselineRef,
+        commit,
+        dirty: false,
+        saved: true,
+        pushed: true,
+        remote: null,
+        message: "Saved in Vibe64's repository for this project."
       };
     }
-    return { supported: false, message: "Releasing from this computer works for projects saved in a folder or in Vibe64's own repository." };
+    return {
+      supported: false,
+      message: "Releasing from this computer works for projects saved in a folder or in Vibe64's own repository."
+    };
   }
 
   async function existingTags(repositoryRoot, tags = []) {
@@ -153,7 +184,11 @@ function createProjectRepository({ readProject }) {
    */
   async function pushTags(facts, tags) {
     if (!facts.remote || !tags.length) return { pushed: [] };
-    await git(facts.repositoryRoot, ["push", "--quiet", facts.remote.name, ...tags.map((tag) => `refs/tags/${tag}:refs/tags/${tag}`)], { timeout: 120_000 });
+    await git(
+      facts.repositoryRoot,
+      ["push", "--quiet", facts.remote.name, ...tags.map((tag) => `refs/tags/${tag}:refs/tags/${tag}`)],
+      { timeout: 120_000 }
+    );
     return { pushed: tags };
   }
 
@@ -164,7 +199,11 @@ function createProjectRepository({ readProject }) {
   async function pushSaved(facts) {
     if (!facts.remote || facts.pushed) return { pushed: false };
     const upstreamBranch = facts.upstreamRef.split("/").slice(3).join("/");
-    await git(facts.repositoryRoot, ["push", "--quiet", facts.remote.name, `${facts.commit}:refs/heads/${upstreamBranch}`], { timeout: 120_000 });
+    await git(
+      facts.repositoryRoot,
+      ["push", "--quiet", facts.remote.name, `${facts.commit}:refs/heads/${upstreamBranch}`],
+      { timeout: 120_000 }
+    );
     // Keep the remote-tracking branch current, so "pushed" reads true at once.
     await git(facts.repositoryRoot, ["update-ref", facts.upstreamRef, facts.commit]);
     return { pushed: true, remote: facts.remote.name, branch: upstreamBranch };
@@ -174,7 +213,17 @@ function createProjectRepository({ readProject }) {
     return git(repositoryRoot, ["show", `${commit}:${file}`], { optional: true });
   }
 
-  return Object.freeze({ baseline, createTags, existingTags, fileAtCommit, pushSaved, pushTags, readRelease, subjectsSince, withCheckout });
+  return Object.freeze({
+    baseline,
+    createTags,
+    existingTags,
+    fileAtCommit,
+    pushSaved,
+    pushTags,
+    readRelease,
+    subjectsSince,
+    withCheckout
+  });
 }
 
 export { createProjectRepository, githubRepositoryOf };

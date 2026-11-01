@@ -60,7 +60,14 @@ import {
  * @param {SessionArchiveRecords} dependencies.archiveRecords
  * @param {SessionArchiveAccess} dependencies.archiveAccess
  */
-function createSessionRecords({ state, storePaths, locks, recordFiles, archiveRecords, archiveAccess }) {
+function createSessionRecords({
+  state,
+  storePaths,
+  locks,
+  recordFiles,
+  archiveRecords,
+  archiveAccess
+}) {
   async function bumpSessionRevision(sessionPaths) {
     const manifest = await recordFiles.readManifestFromPaths(sessionPaths);
     const nextManifest = {
@@ -295,9 +302,15 @@ function createSessionRecords({ state, storePaths, locks, recordFiles, archiveRe
       const learning = learningSessionBinding(metadata, state.admittedLearningScope, sessionPaths.sessionId);
       const status = await recordFiles.readStatusFromPaths(sessionPaths);
       const source = await recordFiles.readSessionSourceDescriptorFromPaths(sessionPaths);
-      return { ...source, sessionRoot: archiveRecord ? "" : source.sessionRoot,
-        purpose: "learning", learning, status, archived: Boolean(archiveRecord) || status === VIBE64_SESSION_STATUS.ARCHIVED,
-        nativeExecutionRoot: sessionSourcePath(source) };
+      return {
+        ...source,
+        sessionRoot: archiveRecord ? "" : source.sessionRoot,
+        purpose: "learning",
+        learning,
+        status,
+        archived: Boolean(archiveRecord) || status === VIBE64_SESSION_STATUS.ARCHIVED,
+        nativeExecutionRoot: sessionSourcePath(source)
+      };
     });
   }
 
@@ -370,7 +383,10 @@ function createSessionRecords({ state, storePaths, locks, recordFiles, archiveRe
   }
 
   async function readBackgroundTask(sessionId, taskId) {
-    return archiveAccess.withReadableSessionPaths(sessionId, (sessionPaths) => recordFiles.readBackgroundTaskFromPath(sessionPaths, taskId));
+    return archiveAccess.withReadableSessionPaths(
+      sessionId,
+      (sessionPaths) => recordFiles.readBackgroundTaskFromPath(sessionPaths, taskId)
+    );
   }
 
   async function readBackgroundTasks(sessionId) {

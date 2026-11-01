@@ -66,7 +66,8 @@ function exactFields(value, fields, label) {
 
 function normalizedSessionInput(input) {
   exactFields(input, ["conversationKind", "scope", "session", "hostGuidance"], "Vibe64 session context");
-  if (input.hostGuidance !== undefined && (typeof input.hostGuidance !== "string" || Buffer.byteLength(input.hostGuidance, "utf8") > 1024)) {
+  if (input.hostGuidance !== undefined &&
+      (typeof input.hostGuidance !== "string" || Buffer.byteLength(input.hostGuidance, "utf8") > 1024)) {
     throw new TypeError("Vibe64 host guidance must be bounded text supplied by the host.");
   }
   if (!VIBE64_CONVERSATION_KINDS.includes(input.conversationKind)) {

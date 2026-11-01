@@ -69,7 +69,9 @@ const sideloadKeyReady = definePreflightCheck({
       if (!key.exists) {
         problems.push(`${target.id} has no install key yet. Create it on its card.`);
       } else if (!key.coveredByRecoveryKit) {
-        problems.push(`Download a recovery kit that includes ${target.id}'s install key: without it, losing this computer means phones can never update the app.`);
+        problems.push(
+          `Download a recovery kit that includes ${target.id}'s install key: without it, losing this computer means phones can never update the app.`
+        );
       }
     }
     return problems.length ? { ok: false, message: problems.join(" ") } : { ok: true, message: "Install key saved, with a recovery kit." };
@@ -84,8 +86,14 @@ const githubRepositoryMatches = definePreflightCheck({
   run: ({ plan, baseline }) => {
     const remote = baseline?.remote?.githubRepository || null;
     const wrong = plan.targets.filter((target) => target.destination === "github-releases" && target.settings?.repository !== remote);
-    if (!remote) return { ok: false, message: "GitHub Releases needs this project's remote on GitHub, so the release tag can be pushed there." };
-    if (wrong.length) return { ok: false, message: `${wrong.map(({ id }) => id).join(", ")} publishes to another repository than this project's remote (${remote}).` };
+    if (!remote) return {
+      ok: false,
+      message: "GitHub Releases needs this project's remote on GitHub, so the release tag can be pushed there."
+    };
+    if (wrong.length) return {
+      ok: false,
+      message: `${wrong.map(({ id }) => id).join(", ")} publishes to another repository than this project's remote (${remote}).`
+    };
     return { ok: true, message: `The tag goes to ${remote} with the release.` };
   }
 });
@@ -123,7 +131,8 @@ function failureLog(targetId, error, at) {
 function changelogSection(text, version) {
   if (!text) return null;
   const lines = text.split("\n");
-  const start = lines.findIndex((line) => new RegExp(`^##\\s+\\[?${version.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\]?(?:\\s|$)`, "u").test(line));
+  const start = lines.findIndex((line) =>
+    new RegExp(`^##\\s+\\[?${version.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\]?(?:\\s|$)`, "u").test(line));
   if (start === -1) return null;
   const end = lines.findIndex((line, index) => index > start && /^##\s/u.test(line));
   return lines.slice(start + 1, end === -1 ? undefined : end).join("\n").trim() || null;
@@ -269,8 +278,15 @@ function createReleaseOrchestrator({
         diagnostics: (release?.packaging?.diagnostics || []).map(({ message }) => message).slice(0, 20),
         problem: releaseProblem
       },
-      targets: targetList.map((target) => ({ ...target, latest: latest[target.id] || null, ...(target.destination === "android-sideload" ? { installKey: installKey(target, keyStatus) } : {}) })),
-      keys: { ...keyStatus, entries: (keyStatus.entries || []).map((entry) => ({ ...entry, coveredByRecoveryKit: recoveryKitCovers(keyStatus, entry.id) })) },
+      targets: targetList.map((target) => ({
+        ...target,
+        latest: latest[target.id] || null,
+        ...(target.destination === "android-sideload" ? { installKey: installKey(target, keyStatus) } : {})
+      })),
+      keys: {
+        ...keyStatus,
+        entries: (keyStatus.entries || []).map((entry) => ({ ...entry, coveredByRecoveryKit: recoveryKitCovers(keyStatus, entry.id) }))
+      },
       toolchains: toolchainStatus,
       checks,
       pendingConfirmation: pending,
@@ -310,7 +326,9 @@ function createReleaseOrchestrator({
   async function prepareRelease({ sessionId, versions = {}, notes, user = null }) {
     const baseline = await repository.baseline();
     const release = await savedRelease(baseline);
-    if (!release || release.packaging.status !== "ready") throw releaseError("Packaging is not ready on the saved project.", "vibe64_publishing_packaging_missing");
+    if (!release || release.packaging.status !== "ready") {
+      throw releaseError("Packaging is not ready on the saved project.", "vibe64_publishing_packaging_missing");
+    }
     const entries = Object.entries(versions);
     if (!entries.length) throw releaseError("Choose at least one package version.", "vibe64_publishing_prepare_invalid");
     const prepared = [];
@@ -322,7 +340,17 @@ function createReleaseOrchestrator({
     }
     return {
       sessionId,
-      packages: prepared.map(({ package: id, previousVersion, version, files }) => ({ id, previousVersion, version, files: files.map(({ path: file }) => file) })),
+      packages: prepared.map(({
+        package: id,
+        previousVersion,
+        version,
+        files
+      }) => ({
+        id,
+        previousVersion,
+        version,
+        files: files.map(({ path: file }) => file)
+      })),
       next: "Review the change and Save it. The release uses the saved commit."
     };
   }
@@ -351,7 +379,9 @@ function createReleaseOrchestrator({
     const baseline = await repository.baseline();
     if (!baseline.supported) throw releaseError(baseline.message, "vibe64_publishing_repository_unavailable");
     const release = await savedRelease(baseline);
-    if (release.packaging.status !== "ready") throw releaseError("Add a Packaging section and Save it before releasing.", "vibe64_publishing_packaging_missing");
+    if (release.packaging.status !== "ready") {
+      throw releaseError("Add a Packaging section and Save it before releasing.", "vibe64_publishing_packaging_missing");
+    }
     const all = await targets.list();
     const chosen = targetIds?.length ? all.filter((target) => targetIds.includes(target.id)) : all;
     if (!chosen.length) throw releaseError("Add a target first.", "vibe64_publishing_no_targets");
@@ -373,19 +403,41 @@ function createReleaseOrchestrator({
       packaging: release.packaging,
       versions,
       buildNumbers: await buildNumbersFor(built.map((entry) => ({ ...entry, version: versions[entry.id] ?? null })), baseline.commit),
-      targets: chosen.map(({ id, destination, package: packageId, channel, settings, account }) => ({ id, destination, package: packageId, channel, settings, account })),
+      targets: chosen.map(({
+        id,
+        destination,
+        package: packageId,
+        channel,
+        settings,
+        account
+      }) => ({
+        id,
+        destination,
+        package: packageId,
+        channel,
+        settings,
+        account
+      })),
       toolchain: {
         node: process.versions.node,
-        ...(hasAndroid ? { java: String(toolStatus?.java?.version || "missing").replace(/[^0-9A-Za-z.+_-]/gu, "") || "missing", "android-build-tools": packaging.androidTemplate.buildTools } : {})
+        ...(hasAndroid ? {
+          java: String(toolStatus?.java?.version || "missing").replace(/[^0-9A-Za-z.+_-]/gu, "") || "missing",
+          "android-build-tools": packaging.androidTemplate.buildTools
+        } : {})
       },
       templates: hasAndroid ? { [packaging.androidTemplate.id]: packaging.androidTemplate.capacitor } : {}
     });
     const keyStatus = await keys.status();
-    const previousRelease = (await history.list({ limit: 50 })).find((record) => record.kind === "release" && record.status === "succeeded") || null;
+    const previousRelease = (await history.list({ limit: 50 })).find((record) =>
+      record.kind === "release" && record.status === "succeeded") ||
+      null;
     const runtimeTargets = await Promise.all(publishPlan.targets.map((target) => runtimeTarget(target)));
     const credentialFacts = keyStatus.unlocked
       ? await credentials.facts({ targets: runtimeTargets, toolchains: androidTools || {} })
-      : Object.fromEntries(publishPlan.targets.map((target) => [target.id, { ok: false, message: "Unlock your publishing keys to check sign-ins." }]));
+      : Object.fromEntries(publishPlan.targets.map((target) => [target.id, {
+        ok: false,
+        message: "Unlock your publishing keys to check sign-ins."
+      }]));
     const android = hasAndroid
       ? await repository.withCheckout(baseline.repositoryRoot, baseline.commit, (root) => packaging.gatherAndroidFacts({
         sourceRoot: root,
@@ -411,7 +463,11 @@ function createReleaseOrchestrator({
       plan: publishPlan,
       planHash,
       planId: publishPlanDisplayId(planHash),
-      preflight: { ...preflight, acknowledged: accepted, ready: !preflight.blocked && preflight.acknowledgementsNeeded.every((id) => accepted.includes(id)) },
+      preflight: {
+        ...preflight,
+        acknowledged: accepted,
+        ready: !preflight.blocked && preflight.acknowledgementsNeeded.every((id) => accepted.includes(id))
+      },
       baseline,
       release,
       targets: chosen,
@@ -430,7 +486,14 @@ function createReleaseOrchestrator({
       savedCommit: publishPlan.savedCommit,
       tags: publishPlan.tags,
       packages: publishPlan.packages,
-      targets: publishPlan.targets.map((target) => ({ id: target.id, destination: target.destination, package: target.package, channel: target.channel, settings: target.settings, account: target.account || null })),
+      targets: publishPlan.targets.map((target) => ({
+        id: target.id,
+        destination: target.destination,
+        package: target.package,
+        channel: target.channel,
+        settings: target.settings,
+        account: target.account || null
+      })),
       toolchain: publishPlan.toolchain,
       templates: publishPlan.templates,
       steps: publishPlan.steps
@@ -439,13 +502,21 @@ function createReleaseOrchestrator({
 
   async function planForTargets({ targetIds = [], acknowledged = [] } = {}) {
     const current = await plan({ targetIds, acknowledged });
-    return { ...planSummary(current), preflight: current.preflight, baseline: { commit: current.baseline.commit, branch: current.baseline.branch, remote: current.baseline.remote } };
+    return {
+      ...planSummary(current),
+      preflight: current.preflight,
+      baseline: { commit: current.baseline.commit, branch: current.baseline.branch, remote: current.baseline.remote }
+    };
   }
 
   async function requireCurrentPlan({ planHash, targetIds = [], acknowledged = [] }) {
     const current = await plan({ targetIds, acknowledged });
     if (current.planHash !== planHash) {
-      throw releaseError("The plan changed since you reviewed it (new saved work, targets or tools). Review the new plan.", "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED", { planHash: current.planHash });
+      throw releaseError(
+        "The plan changed since you reviewed it (new saved work, targets or tools). Review the new plan.",
+        "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED",
+        { planHash: current.planHash }
+      );
     }
     return current;
   }
@@ -472,10 +543,18 @@ function createReleaseOrchestrator({
       });
       built[entry.id] = result.artifacts;
       await history.update(recordId, (record) => {
-        record.packages = { ...(record.packages || {}), [entry.id]: { files: result.artifacts.manifest.files, digest: result.artifacts.digest, reused: Boolean(result.artifacts.reused) } };
+        record.packages = {
+          ...(record.packages || {}),
+          [entry.id]: { files: result.artifacts.manifest.files, digest: result.artifacts.digest, reused: Boolean(result.artifacts.reused) }
+        };
         return record;
       });
-      await step(recordId, `build:${entry.id}`, "done", `${result.artifacts.manifest.files.length} file${result.artifacts.manifest.files.length === 1 ? "" : "s"}${result.artifacts.reused ? " (already built)" : ""}`);
+      await step(
+        recordId,
+        `build:${entry.id}`,
+        "done",
+        `${result.artifacts.manifest.files.length} file${result.artifacts.manifest.files.length === 1 ? "" : "s"}${result.artifacts.reused ? " (already built)" : ""}`
+      );
     }
     return built;
   }
@@ -539,7 +618,11 @@ function createReleaseOrchestrator({
     const entry = current.release.packaging.packages.find((candidate) => candidate.id === packageId);
     const version = versionOf(current, packageId);
     if (!entry || !version) return null;
-    const changelog = await repository.fileAtCommit(current.baseline.repositoryRoot, current.plan.savedCommit, path.posix.join(entry.workdir || ".", "CHANGELOG.md").replace(/^\.\//u, ""));
+    const changelog = await repository.fileAtCommit(
+      current.baseline.repositoryRoot,
+      current.plan.savedCommit,
+      path.posix.join(entry.workdir || ".", "CHANGELOG.md").replace(/^\.\//u, "")
+    );
     return changelogSection(changelog, version);
   }
 
@@ -570,17 +653,33 @@ function createReleaseOrchestrator({
       for (const planTarget of current.plan.targets) {
         await step(record.id, `dry-run:${planTarget.id}`, "running");
         try {
-          const target = await runtimeTarget(planTarget, { tag: tagFor(current, planTarget.package), notes: await notesFor(current, planTarget.package) });
-          const report = await credentials.dryRun({ target, version: versionOf(current, planTarget.package), artifacts: built[planTarget.package], toolchains: current.androidTools || {} });
+          const target = await runtimeTarget(planTarget, {
+            tag: tagFor(current, planTarget.package),
+            notes: await notesFor(current, planTarget.package)
+          });
+          const report = await credentials.dryRun({
+            target,
+            version: versionOf(current, planTarget.package),
+            artifacts: built[planTarget.package],
+            toolchains: current.androidTools || {}
+          });
           await history.update(record.id, (entry) => {
             entry.targets[planTarget.id] = { status: "checked", report: credentials.safeReport(report) };
             return entry;
           });
-          await step(record.id, `dry-run:${planTarget.id}`, "done", report?.alreadyPublished ? "Already published with these bytes." : "Would publish.");
+          await step(
+            record.id,
+            `dry-run:${planTarget.id}`,
+            "done",
+            report?.alreadyPublished ? "Already published with these bytes." : "Would publish."
+          );
         } catch (error) {
           failures += 1;
           await history.update(record.id, (entry) => {
-            entry.targets[planTarget.id] = { status: "failed", error: { code: error?.code || "", message: String(error?.message || error).slice(0, 1000) } };
+            entry.targets[planTarget.id] = {
+              status: "failed",
+              error: { code: error?.code || "", message: String(error?.message || error).slice(0, 1000) }
+            };
             entry.log.push(...failureLog(planTarget.id, error, now()));
             return entry;
           });
@@ -601,8 +700,16 @@ function createReleaseOrchestrator({
    */
   async function requestPublish({ planHash, targetIds = [], requestedBy = "assistant" }) {
     const current = await requireCurrentPlan({ planHash, targetIds });
-    const request = await confirmations.request({ planHash: current.planHash, targetIds: current.plan.targets.map(({ id }) => id), requestedBy });
-    return { pendingConfirmation: request, planId: current.planId, message: "The person confirms this plan on the Publish page. Nothing is published until they do." };
+    const request = await confirmations.request({
+      planHash: current.planHash,
+      targetIds: current.plan.targets.map(({ id }) => id),
+      requestedBy
+    });
+    return {
+      pendingConfirmation: request,
+      planId: current.planId,
+      message: "The person confirms this plan on the Publish page. Nothing is published until they do."
+    };
   }
 
   /**
@@ -626,7 +733,8 @@ function createReleaseOrchestrator({
     assertPreflightAllowsRelease(current.preflight, acknowledged);
     const redeemed = await confirmations.redeem({ planHash: current.planHash, token, actor });
     const unfinished = (await history.list({ limit: Infinity })).map(interruptedOr)
-      .find((record) => record.kind === "release" && record.planHash === current.planHash && UNFINISHED_RELEASE_STATUSES.includes(record.status));
+      .find((record) =>
+        record.kind === "release" && record.planHash === current.planHash && UNFINISHED_RELEASE_STATUSES.includes(record.status));
     const record = unfinished
       ? await history.update(unfinished.id, (entry) => {
         entry.status = "running";
@@ -645,7 +753,9 @@ function createReleaseOrchestrator({
         savedCommit: current.plan.savedCommit,
         tags: current.plan.tags,
         versions: Object.fromEntries(current.plan.packages.filter((entry) => entry.version).map((entry) => [entry.id, entry.version])),
-        buildNumbers: Object.fromEntries(current.plan.packages.filter((entry) => entry.buildNumber).map((entry) => [entry.id, entry.buildNumber])),
+        buildNumbers: Object.fromEntries(
+          current.plan.packages.filter((entry) => entry.buildNumber).map((entry) => [entry.id, entry.buildNumber])
+        ),
         toolchain: current.plan.toolchain,
         templates: current.plan.templates,
         confirmedBy: redeemed.actorId,
@@ -664,10 +774,18 @@ function createReleaseOrchestrator({
     if (current.plan.tags.length) {
       for (const tag of current.plan.tags) await step(recordId, `tag:${tag}`, "running");
       const tagged = await repository.createTags(facts, { commit: current.plan.savedCommit, tags: current.plan.tags });
-      await history.appendLog(recordId, `Tagged ${current.plan.savedCommit.slice(0, 7)}: ${[...tagged.created, ...tagged.existing].join(", ")}.`);
+      await history.appendLog(
+        recordId,
+        `Tagged ${current.plan.savedCommit.slice(0, 7)}: ${[...tagged.created, ...tagged.existing].join(", ")}.`
+      );
       const pushed = await repository.pushTags(facts, current.plan.tags);
       if (pushed.pushed.length) await history.appendLog(recordId, `Pushed ${pushed.pushed.join(", ")} to ${facts.remote.name}.`);
-      for (const tag of current.plan.tags) await step(recordId, `tag:${tag}`, "done", pushed.pushed.includes(tag) ? `Pushed to ${facts.remote.name}` : "In the project");
+      for (const tag of current.plan.tags) await step(
+        recordId,
+        `tag:${tag}`,
+        "done",
+        pushed.pushed.includes(tag) ? `Pushed to ${facts.remote.name}` : "In the project"
+      );
     }
     const record = await history.read(recordId);
     let proven = 0;
@@ -676,7 +794,10 @@ function createReleaseOrchestrator({
       const previous = record.targets?.[planTarget.id] || null;
       await step(recordId, stepId, "running");
       try {
-        const target = await runtimeTarget(planTarget, { tag: tagFor(current, planTarget.package), notes: await notesFor(current, planTarget.package) });
+        const target = await runtimeTarget(planTarget, {
+          tag: tagFor(current, planTarget.package),
+          notes: await notesFor(current, planTarget.package)
+        });
         const outcome = await credentials.publish({
           target,
           version: versionOf(current, planTarget.package) || current.plan.savedCommit.slice(0, 12),
@@ -686,11 +807,18 @@ function createReleaseOrchestrator({
         });
         proven += 1;
         await history.update(recordId, (entry) => {
-          entry.targets[planTarget.id] = { ...credentials.safeOutcome(outcome), destination: planTarget.destination, package: planTarget.package };
+          entry.targets[planTarget.id] = {
+            ...credentials.safeOutcome(outcome),
+            destination: planTarget.destination,
+            package: planTarget.package
+          };
           return entry;
         });
         await step(recordId, stepId, "done", outcome.alreadyPublished ? "Already published with these bytes" : "Published and read back");
-        await history.appendLog(recordId, `${planTarget.id}: ${outcome.alreadyPublished ? "already published" : "published"} and read back.`);
+        await history.appendLog(
+          recordId,
+          `${planTarget.id}: ${outcome.alreadyPublished ? "already published" : "published"} and read back.`
+        );
       } catch (error) {
         await history.update(recordId, (entry) => {
           entry.targets[planTarget.id] = {

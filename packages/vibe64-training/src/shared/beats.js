@@ -18,7 +18,12 @@ const TEXT_MAX = 160;
 const PROMPT_MAX = 500;
 const SEND_TEXT_MAX = 600;
 // A check beat names the step's check kind.
-const TRAINING_BEAT_CHECKS = Object.freeze({ auto: "auto", review: "review", done: "self", fact: "fact" });
+const TRAINING_BEAT_CHECKS = Object.freeze({
+  auto: "auto",
+  review: "review",
+  done: "self",
+  fact: "fact"
+});
 const fence = /^```beats[ \t]*$/mu;
 const line = /^(show|do|check)[ \t]+([a-z][a-z-]*)(?:[ \t]+([^:]+?))?[ \t]*(?::[ \t]*(.*))?$/u;
 const quoted = /["“]([^"“”]+)["”]/gu;
@@ -47,7 +52,9 @@ function parseBeat(source, number, vocabulary) {
   }
   if (!text.trim()) throw beatFailure(`${label} needs its text after the colon.`);
   const beat = { kind, target, text: text.trim() };
-  if (arg !== undefined && !(kind === "do" && target === "file-opened")) throw beatFailure(`${label} takes no argument; only do file-opened names a path.`);
+  if (arg !== undefined && !(kind === "do" && target === "file-opened")) {
+    throw beatFailure(`${label} takes no argument; only do file-opened names a path.`);
+  }
   if (kind === "show" && !knownPlace(target, vocabulary)) throw beatFailure(`${label} names an unknown place.`);
   if (kind === "do" && !doable(target, vocabulary)) throw beatFailure(`${label} names nothing the learner can do or be at.`);
   if (kind === "check" && !TRAINING_BEAT_CHECKS[target]) throw beatFailure(`${label} must be check auto, review, done or fact.`);
@@ -83,7 +90,9 @@ function splitStepBeats(markdown, vocabulary = learningVocabulary) {
   if (!lines.length || lines.length > BEATS_MAX) throw beatFailure(`a beats block holds 1 to ${BEATS_MAX} beats.`);
   const beats = lines.map((value, index) => parseBeat(value, index + 1, vocabulary));
   const checks = beats.filter(beat => beat.kind === "check");
-  if (checks.length > 1 || (checks.length && beats.at(-1).kind !== "check")) throw beatFailure("a step has at most one check beat, and it is the last.");
+  if (checks.length > 1 || (checks.length && beats.at(-1).kind !== "check")) {
+    throw beatFailure("a step has at most one check beat, and it is the last.");
+  }
   return { body: source.slice(0, start.index).replace(/\s+$/u, "\n"), beats };
 }
 

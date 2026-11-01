@@ -10,7 +10,10 @@ const actionRequestMetaKey = Symbol("Vibe64 original action request metadata");
 function currentProjectRequestContext() {
   const context = projectContextStorage.getStore() || null;
   if (context?.[practiceScopeKey] && !context[practiceScopeKey].active()) {
-    throw Object.assign(new Error("Practice access ended with its owning callback. Read the saved lesson again."), { code: "vibe64_practice_scope_expired" });
+    throw Object.assign(
+      new Error("Practice access ended with its owning callback. Read the saved lesson again."),
+      { code: "vibe64_practice_scope_expired" }
+    );
   }
   return context;
 }
@@ -19,7 +22,10 @@ function currentPracticeProjectScope(owner) {
   const grant = currentProjectRequestContext()?.[practiceScopeKey];
   if (!grant) return null;
   if (grant.owner !== owner) {
-    throw Object.assign(new Error("Practice access belongs to its original Project context."), { code: "vibe64_practice_context_mismatch" });
+    throw Object.assign(
+      new Error("Practice access belongs to its original Project context."),
+      { code: "vibe64_practice_context_mismatch" }
+    );
   }
   return grant.scope;
 }
@@ -31,8 +37,13 @@ function currentPracticeProjectScope(owner) {
 async function runWithPracticeProjectContext(owner, scope, operation) {
   if (typeof operation !== "function") throw new TypeError("Practice access requires an owning callback.");
   let active = true;
-  const context = Object.freeze({ ...scope,
-    [practiceScopeKey]: Object.freeze({ owner, scope, active: () => active })
+  const context = Object.freeze({
+    ...scope,
+    [practiceScopeKey]: Object.freeze({
+      owner,
+      scope,
+      active: () => active
+    })
   });
   try {
     return await projectContextStorage.run(context, () => operation());
@@ -61,10 +72,19 @@ function retainPracticeContext(access) {
   const context = currentProjectRequestContext();
   const grant = context?.[practiceScopeKey];
   if (!grant) return context;
-  const scope = Object.freeze({ ...grant.scope, access,
-    vibe64User: Object.freeze({ ...grant.scope.vibe64User }) });
-  return Object.freeze({ ...scope,
-    [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true, ...(access === "write" ? { ordinary: true } : {}) })
+  const scope = Object.freeze({
+    ...grant.scope,
+    access,
+    vibe64User: Object.freeze({ ...grant.scope.vibe64User })
+  });
+  return Object.freeze({
+    ...scope,
+    [practiceScopeKey]: Object.freeze({
+      owner: grant.owner,
+      scope,
+      active: () => true,
+      ...(access === "write" ? { ordinary: true } : {})
+    })
   });
 }
 
@@ -72,7 +92,8 @@ function assertProjectEffectAdmission() {
   const scope = currentProjectRequestContext()?.[practiceScopeKey]?.scope;
   if (scope && !["create", "write"].includes(scope.access)) {
     throw Object.assign(new Error("Read this saved lesson's current authority before starting new practice work."), {
-      code: "vibe64_practice_effect_admission_required", statusCode: 409
+      code: "vibe64_practice_effect_admission_required",
+      statusCode: 409
     });
   }
 }

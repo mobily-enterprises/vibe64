@@ -139,7 +139,11 @@ function createOutputTargetLaunchStart({
       const testRun = state.previewTestRuns.get(sessionId);
       if (testRun && input.previewTestRun !== testRun) {
         if (input.ensurePreview !== true || (input.outputTargetId && input.outputTargetId !== testRun.targetId)) {
-          return { ok: false, code: "vibe64_preview_test_busy", error: "Browser tests own this Preview. Wait for them to finish before changing or restarting its target." };
+          return {
+            ok: false,
+            code: "vibe64_preview_test_busy",
+            error: "Browser tests own this Preview. Wait for them to finish before changing or restarting its target."
+          };
         }
         input = { ...input, outputTargetId: testRun.targetId };
       }
@@ -167,7 +171,11 @@ function createOutputTargetLaunchStart({
             return previewStoppedRefusal();
           }
           if (stopState.error || launchTerminalIsRunning(latestLaunchTerminal(sessionId) || {})) {
-            return { ok: false, code: "vibe64_preview_stop_incomplete", error: stopState.error || "Preview cleanup is still running. Retry Stop before starting it." };
+            return {
+              ok: false,
+              code: "vibe64_preview_stop_incomplete",
+              error: stopState.error || "Preview cleanup is still running. Retry Stop before starting it."
+            };
           }
         }
         const cwd = context.sessionSourceRoot;
@@ -192,7 +200,11 @@ function createOutputTargetLaunchStart({
             return launchPlan.terminal;
           }
           if (testRun && input.previewTestRun !== testRun) {
-            return { ok: false, code: "vibe64_preview_test_not_ready", error: "The browser-test Preview stopped. Tests cannot restart it while using its fixtures." };
+            return {
+              ok: false,
+              code: "vibe64_preview_test_not_ready",
+              error: "The browser-test Preview stopped. Tests cannot restart it while using its fixtures."
+            };
           }
           if (launchPlan.error) {
             return {
@@ -363,13 +375,17 @@ function createOutputTargetLaunchStart({
                 ...spec.resourceWorkflow?.configuration,
                 environmentFingerprint: terminalEnvRecords.resourceConfigurationFingerprint
               },
-              session: context.session, sourceRoot: context.sessionSourceRoot,
+              session: context.session,
+              sourceRoot: context.sessionSourceRoot,
               environment: testRun && !testRun.restoring && outputTarget.id === testRun.targetId ? "test" : "development",
-              kind: execution.kind, label: execution.label, env
+              kind: execution.kind,
+              label: execution.label,
+              env
             });
             if (resourceWorkflow?.ok === false) {
               throw Object.assign(new Error(resourceWorkflow.error || "This output could not be admitted."), {
-                code: resourceWorkflow.code, details: { admission: resourceWorkflow.admission }
+                code: resourceWorkflow.code,
+                details: { admission: resourceWorkflow.admission }
               });
             }
             const admittedOutputs = await inspectVibe64OutputsForContext(context);

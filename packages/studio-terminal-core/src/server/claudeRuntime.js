@@ -9,13 +9,22 @@ const CLAUDE_START_FAILED_ERROR = "Claude Code didn't start.";
 // The account-wide sign-in read belongs to no project or session.
 const CLAUDE_STATUS_EXECUTION = Object.freeze({ label: "Checking the Claude sign-in", operationId: "claude-auth-status" });
 
-async function readClaudeCodeAuthStatus({ env = process.env, credentialHome = appCredentialContext(), commandRunner = runVibe64Command } = {}) {
+async function readClaudeCodeAuthStatus({
+  env = process.env,
+  credentialHome = appCredentialContext(),
+  commandRunner = runVibe64Command
+} = {}) {
   let capture = runners.get(commandRunner);
   if (!capture) {
     capture = async (input) => {
       const result = await commandRunner({
-        ...input, actor: "app", inheritProcessEnv: false, allowedRoots: [input.cwd],
-        purpose: "account", envPolicy: "auth", runtimes: ["operator-clis", "node26"],
+        ...input,
+        actor: "app",
+        inheritProcessEnv: false,
+        allowedRoots: [input.cwd],
+        purpose: "account",
+        envPolicy: "auth",
+        runtimes: ["operator-clis", "node26"],
         execution: CLAUDE_STATUS_EXECUTION
       });
       return operatorCliStartFailed(result)
@@ -24,8 +33,12 @@ async function readClaudeCodeAuthStatus({ env = process.env, credentialHome = ap
     };
     runners.set(commandRunner, capture);
   }
-  return readNativeStatus({ env, credentialHome, commandRunner: capture,
-    command: operatorCliCommand("claude", { env }) });
+  return readNativeStatus({
+    env,
+    credentialHome,
+    commandRunner: capture,
+    command: operatorCliCommand("claude", { env })
+  });
 }
 
 /** True when the status read could not execute Claude Code at all. */

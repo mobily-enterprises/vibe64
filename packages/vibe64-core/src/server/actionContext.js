@@ -46,13 +46,29 @@ function authenticatedVibe64User(context = {}) {
  */
 
 /** A project's operation, open to every member who can open the project. */
-const PROJECT_OPERATION = Object.freeze({ projectScoped: true, ownerRequired: false, allowDeleting: false });
+const PROJECT_OPERATION = Object.freeze({
+  projectScoped: true,
+  ownerRequired: false,
+  allowDeleting: false
+});
 /** A project's operation that only the workspace owner may run. */
-const PROJECT_OWNER_OPERATION = Object.freeze({ projectScoped: true, ownerRequired: true, allowDeleting: false });
+const PROJECT_OWNER_OPERATION = Object.freeze({
+  projectScoped: true,
+  ownerRequired: true,
+  allowDeleting: false
+});
 /** An operation of the workspace rather than of one project. */
-const WORKSPACE_OPERATION = Object.freeze({ projectScoped: false, ownerRequired: false, allowDeleting: false });
+const WORKSPACE_OPERATION = Object.freeze({
+  projectScoped: false,
+  ownerRequired: false,
+  allowDeleting: false
+});
 /** An operation of the workspace that only its owner may run. */
-const WORKSPACE_OWNER_OPERATION = Object.freeze({ projectScoped: false, ownerRequired: true, allowDeleting: false });
+const WORKSPACE_OWNER_OPERATION = Object.freeze({
+  projectScoped: false,
+  ownerRequired: true,
+  allowDeleting: false
+});
 
 /** The extensions of an action that is never offered to an assistant as a tool. */
 const NOT_A_TOOL = Object.freeze({ assistant: Object.freeze({ exclude: true }) });
@@ -151,8 +167,14 @@ const vibe64ActionPolicy = Object.freeze({
  * @param {RuntimeEnv} [options.env]
  * @param {RuntimeLogger} options.logger
  */
-function registerVibe64ActionContext(actions, { projectContext, resolveUser, authorizeProject,
-  admissionScope = "all", env = {}, logger } = {}) {
+function registerVibe64ActionContext(actions, {
+  projectContext,
+  resolveUser,
+  authorizeProject,
+  admissionScope = "all",
+  env = {},
+  logger
+} = {}) {
   if (!["all", "learning-only"].includes(admissionScope)) {
     throw new TypeError("Vibe64 action context admissionScope must be all or learning-only.");
   }
@@ -209,8 +231,14 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
       } finally {
         const durationMs = diagnostic ? performance.now() - started : 0;
         if (diagnostic && (!completed || durationMs >= 100)) {
-          logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
-            phase: "authorization-detail", sessionId: input.sessionId, completed, durationMs, timings },
+          logOperationalEvent(logger, "warn", {
+            event: "vibe64.conversation.browser_timing",
+            phase: "authorization-detail",
+            sessionId: input.sessionId,
+            completed,
+            durationMs,
+            timings
+          },
           "Browser conversation authorization stages.");
         }
       }

@@ -132,7 +132,10 @@ async function httpRequest(url, { method = "GET", headers = {}, body, accept = "
       signal: AbortSignal.timeout(timeoutMs)
     });
   } catch (error) {
-    throw publishError("VIBE64_PUBLISH_REGISTRY_UNREACHABLE", `Could not reach ${new URL(url).host}: ${error?.cause?.code || error?.name || "network error"}.`);
+    throw publishError(
+      "VIBE64_PUBLISH_REGISTRY_UNREACHABLE",
+      `Could not reach ${new URL(url).host}: ${error?.cause?.code || error?.name || "network error"}.`
+    );
   }
   return response;
 }

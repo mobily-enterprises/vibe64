@@ -57,7 +57,9 @@ async function ensureDirectory(directory) {
 
 function requireMatchingPin(actual, expected) {
   if (canonicalJson(actual) !== canonicalJson(expected)) {
-    throw new Error("Topic source or installed snapshot conflicts with the approved owner pin. Keep existing content and check the exact source revision.");
+    throw new Error(
+      "Topic source or installed snapshot conflicts with the approved owner pin. Keep existing content and check the exact source revision."
+    );
   }
 }
 

@@ -37,7 +37,12 @@ async function tagSavedCommit({
     refuse("VIBE64_PUBLISH_TAG_INVALID", "Release tags look like v1.5.0 or package@1.5.0.");
   }
 
-  const git = (args, options = {}) => releaseGit(root, args, { code: "VIBE64_PUBLISH_TAG_FAILED", maxBuffer: 2 * 1024 * 1024, runCommand, ...options });
+  const git = (args, options = {}) => releaseGit(root, args, {
+    code: "VIBE64_PUBLISH_TAG_FAILED",
+    maxBuffer: 2 * 1024 * 1024,
+    runCommand,
+    ...options
+  });
 
   return runExclusive(projectRuntimeRoot, async () => {
     const baseline = await git(["rev-parse", "--verify", "--end-of-options", `${baselineRef}^{commit}`], { optional: true });
@@ -63,7 +68,10 @@ async function tagSavedCommit({
       const current = await git(["rev-parse", "--verify", "--quiet", "--end-of-options", `refs/tags/${tag}^{commit}`], { optional: true });
       if (!current) created.push(tag);
       else if (current === expectedCommit) existing.push(tag);
-      else refuse("VIBE64_PUBLISH_TAG_CONFLICT", `Tag ${tag} already points at another commit. Choose a new version.`, { tag, commit: current });
+      else refuse("VIBE64_PUBLISH_TAG_CONFLICT", `Tag ${tag} already points at another commit. Choose a new version.`, {
+        tag,
+        commit: current
+      });
     }
     if (created.length) {
       // One transaction: the baseline must still be the expected commit and no tag may exist.

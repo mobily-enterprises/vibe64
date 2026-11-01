@@ -90,7 +90,12 @@ function createProviderUsage({ resolveConnection, fetchImpl = fetch }) {
     } catch { /* Usage is informational; failures never affect a turn. */ }
     if (accounts.get(key) !== account) return;
     account.apiKey = apiKey;
-    account.usage = { ...usage, checkedAt: Date.now(), providerLabel: curatedCodexProvider(selection.modelProviderId)?.shortLabel, managementUrl: provider.managementUrl };
+    account.usage = {
+      ...usage,
+      checkedAt: Date.now(),
+      providerLabel: curatedCodexProvider(selection.modelProviderId)?.shortLabel,
+      managementUrl: provider.managementUrl
+    };
   }
 
   async function read(selection) {
@@ -128,7 +133,11 @@ function createProviderUsage({ resolveConnection, fetchImpl = fetch }) {
     turns.delete(`${scope}:${sessionId}`);
   }
 
-  return Object.freeze({ read, observe, forget });
+  return Object.freeze({
+    read,
+    observe,
+    forget
+  });
 }
 
 export { createProviderUsage };

@@ -1,8 +1,34 @@
 import { normalizeText } from "@local/vibe64-core/server/core";
 
-import { requiredSourceEditorExecutionProfile, resolvedSourceEditorExecutionProfile, runSourceEditorHelperTurn, sourceEditorAgentOperationOptions, sourceEditorExecutionProfileFromFailure, sourceEditorExecutionProfileRequest, sourceEditorExecutionProfileSnapshot } from "./explanationProfile.js";
-import { deleteSourceEditorExplanationAgentThread, normalizeSourceEditorExplanation, normalizeSourceEditorExplanationId, normalizeSourceEditorFollowups, normalizeSourceEditorMessages, readSourceEditorExplanationRecord, readStoppedSourceEditorExplanation, removeSourceEditorExplanationCleanupRecord, sourceEditorExplanationMemoryKey, writeSourceEditorExplanation } from "./explanationRecords.js";
-import { normalizeSourceEditorLineRange, SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS, sourceEditorExplanationMessageId, sourceEditorLines, sourceEditorSelectionForRange, sourceEditorTextHash } from "./explanationText.js";
+import {
+  requiredSourceEditorExecutionProfile,
+  resolvedSourceEditorExecutionProfile,
+  runSourceEditorHelperTurn,
+  sourceEditorAgentOperationOptions,
+  sourceEditorExecutionProfileFromFailure,
+  sourceEditorExecutionProfileRequest,
+  sourceEditorExecutionProfileSnapshot
+} from "./explanationProfile.js";
+import {
+  deleteSourceEditorExplanationAgentThread,
+  normalizeSourceEditorExplanation,
+  normalizeSourceEditorExplanationId,
+  normalizeSourceEditorFollowups,
+  normalizeSourceEditorMessages,
+  readSourceEditorExplanationRecord,
+  readStoppedSourceEditorExplanation,
+  removeSourceEditorExplanationCleanupRecord,
+  sourceEditorExplanationMemoryKey,
+  writeSourceEditorExplanation
+} from "./explanationRecords.js";
+import {
+  normalizeSourceEditorLineRange,
+  SOURCE_EDITOR_EXPLANATION_ANSWER_MAX_CHARS,
+  sourceEditorExplanationMessageId,
+  sourceEditorLines,
+  sourceEditorSelectionForRange,
+  sourceEditorTextHash
+} from "./explanationText.js";
 import { isPlainObject, readSourceEditorFile, sourceEditorError, sourceEditorErrorResponse } from "./sourceFiles.js";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
@@ -299,8 +325,8 @@ async function streamSourceEditorAgentTurn(context = {}, {
           return;
         }
         latestText = String(classification.text || "");
-        if (classification.kind === 'live_progress') {
-          await onText?.({ kind: 'live_progress', text: latestText, threadId: latestThreadId, turnId: latestTurnId });
+        if (classification.kind === "live_progress") {
+          await onText?.({ kind: "live_progress", text: latestText, threadId: latestThreadId, turnId: latestTurnId });
         }
       }
     }));
@@ -543,13 +569,16 @@ async function runTrackedSourceEditorAgentTurn(context = {}, {
     const profile = sourceEditorExecutionProfileSnapshot(executionProfile) || stopped.executionProfile;
     const message = stopped.messages.findLast((entry) => entry.role === "assistant");
     if (message) stopped = sourceEditorExplanationWithMessage(stopped, message.id, {
-      status: "stopped", text: message.text || "Stopped."
+      status: "stopped",
+      text: message.text || "Stopped."
     });
-    stopped = await writeSourceEditorExplanation(context, { ...stopped,
+    stopped = await writeSourceEditorExplanation(context, {
+      ...stopped,
       ...(profile ? { executionProfile: profile, model: profile.model } : {}),
       agentThreadId: context.assistantHelper?.conversationId || stopped.agentThreadId,
       agentTurnId: context.assistantHelper?.runId || stopped.agentTurnId,
-      error: "", status: "stopped"
+      error: "",
+      status: "stopped"
     }, { explanationChats });
     const explanation = await withSourceEditorExplanationFreshness(context, stopped);
     emitEvent("source-explanation.finished", {

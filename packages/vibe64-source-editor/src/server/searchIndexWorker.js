@@ -121,7 +121,9 @@ async function refresh({ sourceRoot, directory, policy }) {
     }
     const removeChunks = db.prepare("DELETE FROM chunks WHERE file_id = ?");
     const removeFile = db.prepare("DELETE FROM files WHERE id = ?");
-    const putFile = db.prepare("INSERT INTO files(path, stamp) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET stamp=excluded.stamp RETURNING id");
+    const putFile = db.prepare(
+      "INSERT INTO files(path, stamp) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET stamp=excluded.stamp RETURNING id"
+    );
     const putChunk = db.prepare("INSERT INTO chunks(file_id, line, column, text) VALUES (?, ?, ?, ?)");
     for (const relative of paths) {
       const previous = existing.get(relative);

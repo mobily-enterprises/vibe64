@@ -132,10 +132,14 @@ function inspectorRuntime(inspector, runtimeReader) {
  * The inspector's workdir and each ancestor must be a real project directory.
  */
 async function assertInspectorWorkdir(sourceRoot, inspector) {
-  const ancestors = inspector.workdir === "." ? [] : inspector.workdir.split("/").map((_, index, parts) => parts.slice(0, index + 1).join("/"));
+  const ancestors = inspector.workdir === "."
+    ? []
+    : inspector.workdir.split("/").map((_, index, parts) => parts.slice(0, index + 1).join("/"));
   for (const directory of ["", ...ancestors]) {
     const info = await lstat(path.join(sourceRoot, directory));
-    if (!info.isDirectory() || info.isSymbolicLink()) throw systemError("An architecture inspector directory must be a real project directory.", "vibe64_architecture_directory_invalid");
+    if (!info.isDirectory() || info.isSymbolicLink()) {
+      throw systemError("An architecture inspector directory must be a real project directory.", "vibe64_architecture_directory_invalid");
+    }
   }
 }
 
@@ -149,9 +153,14 @@ async function assertInspectorPrerequisites(sourceRoot, realSourceRoot, inspecto
     try {
       const resolved = await realpath(path.join(sourceRoot, file));
       const relative = path.relative(realSourceRoot, resolved);
-      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !(await stat(resolved)).isFile()) throw new Error("Invalid required file");
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !(await stat(resolved)).isFile()) {
+        throw new Error("Invalid required file");
+      }
     } catch {
-      throw systemError(`${inspector.title} needs ${file}. Prepare this project's dependencies, then retry.`, "vibe64_architecture_prerequisite_missing");
+      throw systemError(
+        `${inspector.title} needs ${file}. Prepare this project's dependencies, then retry.`,
+        "vibe64_architecture_prerequisite_missing"
+      );
     }
   }
 }
@@ -178,7 +187,12 @@ function architectureInspectionRequest(architecture, inspection, cacheDirectory 
     schema: "jskit.architecture-inspection-input.v1",
     files: architecture.files.map(file => ({ path: file.path, hash: file.hash })),
     packages: (architecture.packages || []).map(({ id, name, manifest, declarations, root, opaque, entryPoints }) => ({
-      id, name, manifest, declarations, root, opaque,
+      id,
+      name,
+      manifest,
+      declarations,
+      root,
+      opaque,
       entryPoints: entryPoints.map(({ importPath, file }) => ({ importPath, file }))
     })),
     packageIdentity: architecture.packageIdentity,
@@ -186,7 +200,9 @@ function architectureInspectionRequest(architecture, inspection, cacheDirectory 
     stackHash: inspection.stackHash,
     ...(cacheDirectory ? { cacheDirectory } : {})
   })}\n`;
-  if (Buffer.byteLength(request) > ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES) throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
+  if (Buffer.byteLength(request) > ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES) {
+    throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
+  }
   return request;
 }
 
@@ -218,9 +234,21 @@ async function runArchitectureInspector({ inspector, request, current, signal, p
     signal
   });
   if (signal.aborted) throw architectureCancelled();
-  if (!execution?.ok) throw systemError(execution?.timedOut ? `${inspector.title} timed out.` : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ''}.`, "vibe64_architecture_inspector_failed", { inspectorId: inspector.id, commandOutput: String(execution?.stderr || execution?.error || '').slice(-2000) });
-  if (typeof execution.stdout !== "string" || Buffer.byteLength(execution.stdout) > inspector.maxBuffer) throw systemError(`${inspector.title} returned oversized output.`, "vibe64_architecture_output_too_large");
-  try { return JSON.parse(execution.stdout); } catch { throw systemError(`${inspector.title} must return one JSON observation document.`, "vibe64_architecture_output_invalid"); }
+  if (!execution?.ok) throw systemError(execution?.timedOut
+    ? `${inspector.title} timed out.`
+    : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ""}.`,
+    "vibe64_architecture_inspector_failed",
+    {
+    inspectorId: inspector.id,
+    commandOutput: String(execution?.stderr || execution?.error || "").slice(-2000)
+  });
+  if (typeof execution.stdout !== "string" || Buffer.byteLength(execution.stdout) > inspector.maxBuffer) {
+    throw systemError(`${inspector.title} returned oversized output.`, "vibe64_architecture_output_too_large");
+  }
+  try { return JSON.parse(execution.stdout); } catch { throw systemError(
+    `${inspector.title} must return one JSON observation document.`,
+    "vibe64_architecture_output_invalid"
+  ); }
 }
 
 /**
@@ -368,13 +396,13 @@ function createService({
       const record = await cityReader(context.sourceRoot, "machine");
       const machine = requireGenesisCity(record, "machine");
       const native = machine.architecture;
-      const sourceMetrics = new Map((machine.buildings || []).filter(file => file.role === 'source').map(file => [file.id, file]));
+      const sourceMetrics = new Map((machine.buildings || []).filter(file => file.role === "source").map(file => [file.id, file]));
       // Stack supplies application entry identity; the renderer never guesses
       // server/main filenames. Reading declarations executes no inspector.
       let inspection = null;
       let layout = null;
-      let layoutDiagnostic = '';
-      let entryPointDiagnostic = '';
+      let layoutDiagnostic = "";
+      let entryPointDiagnostic = "";
       if (native) {
         try { inspection = await inspectorReader({ projectRoot: context.sourceRoot }); }
         catch (error) { entryPointDiagnostic = `Entry point declarations need attention: ${error.message}`; }
@@ -384,18 +412,23 @@ function createService({
       const entryPaths = [...new Set((inspection?.inspectors || []).flatMap(inspector => inspector.entryFiles || []))];
       const entryPoints = entryPaths.map(file => {
         const source = native.files.find(candidate => candidate.path === file);
-        return { file, fileId: source?.id || null, subsystemId: source?.subsystemId || null, resolution: source ? 'resolved' : 'unresolved' };
+        return {
+          file,
+          fileId: source?.id || null,
+          subsystemId: source?.subsystemId || null,
+          resolution: source ? "resolved" : "unresolved"
+        };
       });
       const architecture = native ? {
         ...native,
         layout,
         layoutDiagnostic,
         entryPoints,
-        entryPointStatus: inspection?.status || 'unconfigured',
+        entryPointStatus: inspection?.status || "unconfigured",
         entryPointDiagnostic,
         files: native.files.map(file => fileView(file, sourceMetrics)),
-        symbols: native.symbols.filter(symbol => symbol.visibility === 'public').map(publicSymbolView),
-        relations: native.relations.map(relationView),
+        symbols: native.symbols.filter(symbol => symbol.visibility === "public").map(publicSymbolView),
+        relations: native.relations.map(relationView)
       } : null;
       return { ok: true, architecture };
     });
@@ -428,7 +461,18 @@ function createService({
       if (existing?.progress.status === "running") return { ok: true, alreadyRunning: true, refresh: refreshSnapshot(existing) };
       const controller = new AbortController();
       let complete;
-      const pending = { controller, cancelled: false, progress: { id: randomUUID(), status: "running", startedAt: Date.now(), updatedAt: Date.now(), message: "Checking analysis prerequisites…" }, done: new Promise(resolve => { complete = resolve; }) };
+      const pending = {
+        controller,
+        cancelled: false,
+        progress: {
+          id: randomUUID(),
+          status: "running",
+          startedAt: Date.now(),
+          updatedAt: Date.now(),
+          message: "Checking analysis prerequisites…"
+        },
+        done: new Promise(resolve => { complete = resolve; })
+      };
       const progress = async message => {
         pending.progress = { ...pending.progress, message, updatedAt: Date.now() };
         await publishRefresh(context);
@@ -442,7 +486,13 @@ function createService({
           releaseGenesisCities(current.sourceRoot);
           releaseCallWeb(current.sourceRoot);
           const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
-          if (inspection.status === "blocked") throw systemError("Architecture inspection declarations need attention.", "vibe64_architecture_inspection_blocked", { diagnostics: inspection.diagnostics });
+          if (inspection.status === "blocked") {
+            throw systemError(
+              "Architecture inspection declarations need attention.",
+              "vibe64_architecture_inspection_blocked",
+              { diagnostics: inspection.diagnostics }
+            );
+          }
           const realSourceRoot = await realpath(current.sourceRoot);
           for (const inspector of inspection.inspectors || []) {
             await assertInspectorPrerequisites(current.sourceRoot, realSourceRoot, inspector, runtimeReader);
@@ -451,21 +501,47 @@ function createService({
           const observations = inspection.inspectors?.length ? async architecture => {
             const documents = [];
             for (const inspector of inspection.inspectors) {
-              const request = architectureInspectionRequest(architecture, inspection, await inspectorCacheDirectory(current, realSourceRoot, inspector));
-              documents.push(await runArchitectureInspector({ inspector, request, current, signal: controller.signal, progress, runCommand, projectService, runtimeReader }));
+              const request = architectureInspectionRequest(
+                architecture,
+                inspection,
+                await inspectorCacheDirectory(current, realSourceRoot, inspector)
+              );
+              documents.push(await runArchitectureInspector({
+                inspector,
+                request,
+                current,
+                signal: controller.signal,
+                progress,
+                runCommand,
+                projectService,
+                runtimeReader
+              }));
             }
             await progress("Validating UI observations…");
             const merged = mergeArchitectureObservations(documents, { files: architecture.files, packages: architecture.packages || [] });
             const finalInspection = await inspectorReader({ projectRoot: current.sourceRoot });
-            if (finalInspection.stackHash !== inspection.stackHash) throw systemError("Stack changed during architecture inspection. Retry after changes settle.", "vibe64_architecture_stack_changed");
+            if (finalInspection.stackHash !== inspection.stackHash) {
+              throw systemError(
+                "Stack changed during architecture inspection. Retry after changes settle.",
+                "vibe64_architecture_stack_changed"
+              );
+            }
             await progress("Updating the browsing index…");
             return merged;
           } : null;
           if (controller.signal.aborted) throw architectureCancelled();
           await excludeCallWeb(current.sourceRoot);
-          return refresher({ projectRoot: current.sourceRoot, write: true, callWeb: true, ...(observations ? { observations } : {}), signal: controller.signal });
+          return refresher({
+            projectRoot: current.sourceRoot,
+            write: true,
+            callWeb: true,
+            ...(observations ? { observations } : {}),
+            signal: controller.signal
+          });
         }, { operation: "architecture-refresh" });
-        if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
+        if (!exclusive.acquired) {
+          throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
+        }
         const result = exclusive.value;
         const machine = validateGenesisCity(result?.machine, "machine");
         const program = validateGenesisCity(result?.program, "program");
@@ -486,7 +562,13 @@ function createService({
       } catch (error) {
         pending.cancelled = controller.signal.aborted;
         const failure = pending.cancelled ? architectureCancelled() : error;
-        pending.progress = { ...pending.progress, status: pending.cancelled ? "cancelled" : "failed", message: String(failure.message), code: String(failure.code || "vibe64_system_graph_failed"), commandOutput: String(failure.details?.commandOutput || "") };
+        pending.progress = {
+          ...pending.progress,
+          status: pending.cancelled ? "cancelled" : "failed",
+          message: String(failure.message),
+          code: String(failure.code || "vibe64_system_graph_failed"),
+          commandOutput: String(failure.details?.commandOutput || "")
+        };
         throw failure;
       } finally {
         pending.progress = { ...pending.progress, finishedAt: Date.now(), updatedAt: Date.now() };
@@ -499,7 +581,13 @@ function createService({
     });
   }
 
-  return Object.freeze({ readStatus, readArchitecture, readRefreshStatus, cancelRefresh, refresh });
+  return Object.freeze({
+    readStatus,
+    readArchitecture,
+    readRefreshStatus,
+    cancelRefresh,
+    refresh
+  });
 }
 
 export {

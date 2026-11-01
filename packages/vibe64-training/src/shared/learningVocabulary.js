@@ -34,28 +34,97 @@ const BUILT_IN_PLACES = [
   { id: "preview", label: "Preview", scope: "project", open: { pane: "preview" }, steps: [PREVIEW] },
   // Dashboard has no single view to open: open one of its sections instead.
   { id: "dashboard", label: "Dashboard", scope: "project", open: null, steps: [DASHBOARD] },
-  { id: "database-erd", label: "ERD", scope: "project", open: { pane: "database", databaseView: "erd" },
-    steps: [DASHBOARD, DATABASE, pathStep("database-erd", "ERD")] },
-  { id: "database-data", label: "Data", scope: "project", open: { pane: "database", databaseView: "data" },
-    steps: [DASHBOARD, DATABASE, pathStep("database-data", "Data")] },
+  {
+    id: "database-erd",
+    label: "ERD",
+    scope: "project",
+    open: { pane: "database", databaseView: "erd" },
+    steps: [DASHBOARD, DATABASE, pathStep("database-erd", "ERD")]
+  },
+  {
+    id: "database-data",
+    label: "Data",
+    scope: "project",
+    open: { pane: "database", databaseView: "data" },
+    steps: [DASHBOARD, DATABASE, pathStep("database-data", "Data")]
+  },
   { id: "files", label: "Files", scope: "project", open: { pane: "files" }, steps: [DASHBOARD, pathStep("files", "Files")] },
-  { id: "changes", label: "Current changes", scope: "project", open: { pane: "changes" }, steps: [DASHBOARD, pathStep("changes", "Current changes")] },
+  {
+    id: "changes",
+    label: "Current changes",
+    scope: "project",
+    open: { pane: "changes" },
+    steps: [DASHBOARD, pathStep("changes", "Current changes")]
+  },
   { id: "git-log", label: "Git log", scope: "project", open: { pane: "repository" }, steps: [DASHBOARD, pathStep("git-log", "Git log")] },
-  { id: "session-info", label: "Session info", scope: "project", open: { pane: "session" }, steps: [DASHBOARD, pathStep("session-info", "Session info")] },
-  { id: "architecture", label: "Architecture", scope: "project", open: { pane: "system" }, steps: [DASHBOARD, pathStep("architecture", "Architecture")] },
+  {
+    id: "session-info",
+    label: "Session info",
+    scope: "project",
+    open: { pane: "session" },
+    steps: [DASHBOARD, pathStep("session-info", "Session info")]
+  },
+  {
+    id: "architecture",
+    label: "Architecture",
+    scope: "project",
+    open: { pane: "system" },
+    steps: [DASHBOARD, pathStep("architecture", "Architecture")]
+  },
   { id: "publish", label: "Publish", scope: "project", open: { pane: "publish" }, steps: [DASHBOARD, pathStep("publish", "Publish")] },
-  { id: "chat", label: "Coding chat", scope: "project", open: null, shown: [{ pane: "chat" }, { chatVisible: true }], steps: [pathStep("chat", "Coding chat")] },
+  {
+    id: "chat",
+    label: "Coding chat",
+    scope: "project",
+    open: null,
+    shown: [{ pane: "chat" }, { chatVisible: true }],
+    steps: [pathStep("chat", "Coding chat")]
+  },
   { id: "save", label: "Save", scope: "project", open: null, event: "saved", steps: [pathStep("save", "Save")] },
-  { id: "reload-preview", label: "Reload preview", scope: "project", open: null, event: "preview-reloaded",
-    steps: [PREVIEW, pathStep("reload-preview", "Reload preview")] },
+  {
+    id: "reload-preview",
+    label: "Reload preview",
+    scope: "project",
+    open: null,
+    event: "preview-reloaded",
+    steps: [PREVIEW, pathStep("reload-preview", "Reload preview")]
+  },
   // The L button that switches between Develop and Learn (opening it opens Courses).
-  { id: "learning", label: "Learning", scope: "studio", open: { learning: true }, shown: [], event: "learn-toggled", steps: [pathStep("learning", "Learning")] },
+  {
+    id: "learning",
+    label: "Learning",
+    scope: "studio",
+    open: { learning: true },
+    shown: [],
+    event: "learn-toggled",
+    steps: [pathStep("learning", "Learning")]
+  },
   { id: "lesson", label: "Lesson", scope: "studio", open: null, shown: [{ pane: "lesson" }], steps: [pathStep("lesson", "Lesson")] },
   { id: "lesson-bar", label: "Lesson step bar", scope: "studio", open: null, steps: [pathStep("lesson-bar", "Lesson step bar")] },
-  { id: "courses", label: "Courses", scope: "studio", open: null, shown: [{ learningOpen: true }], steps: [pathStep("courses", "Courses")] },
-  { id: "colleague", label: "Colleague", scope: "studio", open: null, event: "colleague-opened", steps: [pathStep("colleague", "Colleague")] },
+  {
+    id: "courses",
+    label: "Courses",
+    scope: "studio",
+    open: null,
+    shown: [{ learningOpen: true }],
+    steps: [pathStep("courses", "Courses")]
+  },
+  {
+    id: "colleague",
+    label: "Colleague",
+    scope: "studio",
+    open: null,
+    event: "colleague-opened",
+    steps: [pathStep("colleague", "Colleague")]
+  },
   { id: "account-menu", label: "Account menu", scope: "studio", open: null, steps: [ACCOUNT_MENU] },
-  { id: "account-settings", label: "Account settings", scope: "studio", open: null, steps: [ACCOUNT_MENU, pathStep("account-settings", "Account settings")] },
+  {
+    id: "account-settings",
+    label: "Account settings",
+    scope: "studio",
+    open: null,
+    steps: [ACCOUNT_MENU, pathStep("account-settings", "Account settings")]
+  },
   { id: "ai-setup", label: "AI setup", scope: "studio", open: null, steps: [ACCOUNT_MENU, pathStep("ai-setup", "AI setup")] }
 ];
 const BUILT_IN_ACTIVITIES = [
@@ -100,16 +169,27 @@ function definePlace(value) {
     throw vocabularyFailure(`${name} shown is a list of page focus matchers.`);
   }
   if (value.event !== undefined && !ID.test(value.event)) throw vocabularyFailure(`${name} event is a lowercase activity name.`);
-  return Object.freeze({ id: value.id, label: value.label, scope: value.scope, who, open: open && Object.freeze({ ...open }),
-    steps: Object.freeze(value.steps.map(item => pathStep(item.id, item.label))), shown: Object.freeze(shown.map(item => Object.freeze({ ...item }))),
-    ...(value.event ? { event: value.event } : {}) });
+  return Object.freeze({
+    id: value.id,
+    label: value.label,
+    scope: value.scope,
+    who,
+    open: open && Object.freeze({ ...open }),
+    steps: Object.freeze(value.steps.map(item => pathStep(item.id, item.label))),
+    shown: Object.freeze(shown.map(item => Object.freeze({ ...item }))),
+    ...(value.event ? { event: value.event } : {})
+  });
 }
 
 function defineActivity(value) {
   if (!plainObject(value) || !ID.test(value.id || "")) throw vocabularyFailure("An activity needs a lowercase id.");
   if (!ID.test(value.event || "")) throw vocabularyFailure(`Activity ${value.id} needs its page activity event.`);
   if (value.place !== undefined && !ID.test(value.place)) throw vocabularyFailure(`Activity ${value.id} place is a place id.`);
-  return Object.freeze({ id: value.id, event: value.event, ...(value.place ? { place: value.place } : {}) });
+  return Object.freeze({
+    id: value.id,
+    event: value.event,
+    ...(value.place ? { place: value.place } : {})
+  });
 }
 
 /**
@@ -140,7 +220,8 @@ function createLearningVocabulary({
     const placed = newPlaces.map(definePlace);
     const acted = newActivities.map(defineActivity);
     for (const value of [...placed, ...acted]) {
-      if (placeMap.has(value.id) && !same(placeMap.get(value.id), value) || activityMap.has(value.id) && !same(activityMap.get(value.id), value) ||
+      if (placeMap.has(value.id) && !same(placeMap.get(value.id), value) ||
+          activityMap.has(value.id) && !same(activityMap.get(value.id), value) ||
           placed.includes(value) && activityMap.has(value.id) || acted.includes(value) && placeMap.has(value.id)) {
         throw vocabularyFailure(`${value.id} is already registered with another meaning.`);
       }
@@ -202,7 +283,9 @@ const registerLearningVocabulary = value => learningVocabulary.register(value);
 function declaredLearningVocabulary({ places = [], activities = [], facts = [] } = {}) {
   const vocabulary = createLearningVocabulary();
   const known = new Set(vocabulary.places().map(value => value.id));
-  for (const id of [...places, ...activities, ...facts]) if (!ID.test(id || "")) throw vocabularyFailure(`Declared name ${id} is not a lowercase id.`);
+  for (const id of [...places, ...activities, ...facts]) if (!ID.test(id || "")) {
+    throw vocabularyFailure(`Declared name ${id} is not a lowercase id.`);
+  }
   const declaredPlaces = new Set(places.filter(id => !known.has(id)));
   const declaredActivities = new Set(activities.filter(id => !vocabulary.activity(id)));
 
@@ -305,8 +388,16 @@ function trainingGuideCommand(request, { id, projectSlug = "", sessionId = "" },
   const highlighted = request.highlight ? { guide } : {};
   if (place.open.learning) return { id, learning: { open: true }, ...highlighted, status: "pending" };
   if (place.open.route) return { id, route: place.open.route, ...highlighted, status: "pending" };
-  return { id, projectSlug, sessionId, conversationId: "", pane: place.open.pane,
-    ...(place.open.databaseView ? { databaseView: place.open.databaseView } : {}), ...highlighted, status: "pending" };
+  return {
+    id,
+    projectSlug,
+    sessionId,
+    conversationId: "",
+    pane: place.open.pane,
+    ...(place.open.databaseView ? { databaseView: place.open.databaseView } : {}),
+    ...highlighted,
+    status: "pending"
+  };
 }
 
 /**

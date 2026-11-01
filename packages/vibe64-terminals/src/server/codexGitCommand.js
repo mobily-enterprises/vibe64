@@ -458,7 +458,10 @@ function createCodexGitCommandService({
       return finish(actor);
     }
     if (actor.sessionId !== sessionId) {
-      return finish(responseError("Codex git command actor belongs to a different session.", "vibe64_codex_git_actor_session_mismatch"), actor);
+      return finish(
+        responseError("Codex git command actor belongs to a different session.", "vibe64_codex_git_actor_session_mismatch"),
+        actor
+      );
     }
     const cwd = validateCommandCwd(input.cwd, actor);
     if (cwd.ok === false) {

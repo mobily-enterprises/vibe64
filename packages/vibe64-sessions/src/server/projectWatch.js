@@ -74,9 +74,12 @@ function registerProjectWatch({ actions, realtime }) {
       } catch (error) {
         if (watches.get(watchId) === binding) release(watchId);
         if (!closed && socket.connected) {
-          reply({ ok: false, error: Number(error?.statusCode || error?.status || 500) < 500
-            ? error.message
-            : "Vibe64 could not watch this project." });
+          reply({
+            ok: false,
+            error: Number(error?.statusCode || error?.status || 500) < 500
+              ? error.message
+              : "Vibe64 could not watch this project."
+          });
         }
       }
     }
@@ -106,7 +109,8 @@ function watchProject(probe, input, binding) {
   // readable-check: allow method-probe - input validation: the binding comes from the caller that executes the action
   if (typeof binding?.current !== "function" || typeof binding.hold !== "function" || typeof binding.join !== "function") {
     throw Object.assign(new Error("Watching a project requires a realtime connection."), {
-      code: "vibe64_project_watch_connection_required", statusCode: 400
+      code: "vibe64_project_watch_connection_required",
+      statusCode: 400
     });
   }
   if (!binding.current()) return { ok: true };

@@ -60,7 +60,8 @@ export async function githubPullRequests(project, input = {}, options = {}) {
   const result = await api("graphql", {
     query: `query($owner:String!, $name:String!, $number:Int!) {
       repository(owner:$owner, name:$name) { pullRequest(number:$number) { ${FIELDS} } }
-    }`, variables: { owner, name, number }
+    }`,
+    variables: { owner, name, number }
   });
   const pullRequest = result.data?.repository?.pullRequest;
   if (!pullRequest) {
@@ -149,17 +150,29 @@ export async function githubPullRequests(project, input = {}, options = {}) {
     }
   }
   const review = {
-    repository: fullName, number,
+    repository: fullName,
+    number,
     headRepository: pullRequest.headRepository?.nameWithOwner || "",
-    headBranch: pullRequest.headRefName, headCommit: headCommit || "",
-    baseBranch: pullRequest.baseRefName, baseCommit: baseCommit || ""
+    headBranch: pullRequest.headRefName,
+    headCommit: headCommit || "",
+    baseBranch: pullRequest.baseRefName,
+    baseCommit: baseCommit || ""
   };
   if (operation === "read") {
-    return { ok: true, repository: fullName, pullRequest: {
-      ...pullRequest, unavailableReason, actions, mergeMethods, review, behindBase,
-      headRefOid: headCommit || pullRequest.headRefOid,
-      checksState: pullRequest.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state || null
-    } };
+    return {
+      ok: true,
+      repository: fullName,
+      pullRequest: {
+        ...pullRequest,
+        unavailableReason,
+        actions,
+        mergeMethods,
+        review,
+        behindBase,
+        headRefOid: headCommit || pullRequest.headRefOid,
+        checksState: pullRequest.commits?.nodes?.[0]?.commit?.statusCheckRollup?.state || null
+      }
+    };
   }
   if (actions[operation]) {
     throw vibe64Error(actions[operation], "vibe64_pull_request_action_unavailable");
@@ -169,14 +182,16 @@ export async function githubPullRequests(project, input = {}, options = {}) {
       "vibe64_pull_request_review_changed");
   }
   // Read immediately before writing, then let GitHub enforce the reviewed head and repository rules.
-  const write = githubApi(input, { ...options,
+  const write = githubApi(input, {
+    ...options,
     uncertainWriteMessage: "The result could not be confirmed. Refresh this pull request or view it on GitHub before trying again."
   });
   if (operation === "ready") {
     const marked = await write("graphql", {
       query: `mutation($id:ID!) {
         markPullRequestReadyForReview(input:{pullRequestId:$id}) { pullRequest { id isDraft } }
-      }`, variables: { id: pullRequest.id }
+      }`,
+      variables: { id: pullRequest.id }
     });
     const ready = marked.data?.markPullRequestReadyForReview?.pullRequest;
     if (ready?.id !== pullRequest.id || ready.isDraft !== false) {
@@ -192,14 +207,18 @@ export async function githubPullRequests(project, input = {}, options = {}) {
         "vibe64_pull_request_result_unconfirmed");
     }
     // GitHub accepts this asynchronously; do not report the branch as already updated.
-    return { ok: true, pending: true,
-      message: "GitHub accepted the branch update. Refresh to check its progress, then update your session to load the changes." };
+    return {
+      ok: true,
+      pending: true,
+      message: "GitHub accepted the branch update. Refresh to check its progress, then update your session to load the changes."
+    };
   }
   if (!mergeMethods.includes(input.mergeMethod)) {
     throw vibe64Error("Choose a merge method allowed by this repository.", "vibe64_pull_request_input_invalid");
   }
   const merged = await write(`repos/${fullName}/pulls/${number}/merge`, {
-    sha: review.headCommit, merge_method: input.mergeMethod
+    sha: review.headCommit,
+    merge_method: input.mergeMethod
   }, "PUT");
   if (merged.merged !== true) {
     throw vibe64Error("GitHub did not confirm the merge. Refresh the pull request or view it on GitHub.",
@@ -239,7 +258,10 @@ export async function preparePullRequestSource(project, session, input, options 
     throw vibe64Error("This session needs a valid Git baseline before creating a pull request.", "vibe64_pull_request_source_missing");
   }
   return {
-    number: null, title: input.title, body: input.body || "", url: "",
+    number: null,
+    title: input.title,
+    body: input.body || "",
+    url: "",
     baseRepository: fullName,
     baseBranch: project.repository?.defaultBranch,
     headRepository: fullName,
@@ -256,11 +278,17 @@ export async function publishSessionPullRequest(source, input, options = {}) {
   const query = new URLSearchParams({ state: "open", head, base: source.baseBranch, per_page: "1" });
   const existing = await api(`repos/${source.baseRepository}/pulls?${query}`, undefined, "GET");
   if (!Array.isArray(existing)) {
-    throw vibe64Error("Existing pull requests could not be checked. Try again before creating another.", "vibe64_github_pull_requests_failed");
+    throw vibe64Error(
+      "Existing pull requests could not be checked. Try again before creating another.",
+      "vibe64_github_pull_requests_failed"
+    );
   }
   const pr = existing[0] || await api(`repos/${source.baseRepository}/pulls`, {
-    title: input.title, body: input.body || "", draft: input.draft !== false,
-    base: source.baseBranch, head
+    title: input.title,
+    body: input.body || "",
+    draft: input.draft !== false,
+    base: source.baseBranch,
+    head
   });
   return { ...source, number: pr.number, url: pr.html_url, title: pr.title, body: pr.body || "" };
 }

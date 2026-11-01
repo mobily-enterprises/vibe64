@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
-import { closeTerminalSessionsForNamespace, listTerminalSessions, terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/server/terminalSessions";
+import {
+  closeTerminalSessionsForNamespace,
+  listTerminalSessions,
+  terminalNamespaceAdmissionFailure
+} from "@local/vibe64-execution/server/terminalSessions";
 import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
 import { upstreamMessageId } from "./openCodeConversationStorage.js";
 import { OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
@@ -31,12 +35,23 @@ import { openCodeError, throwVibe64OpenCodeError as runtimeFailure,
  * @param {(selection: object) => Promise<object | null>} dependencies.resolveConnection
  */
 function createOpenCodeLifecyclePreparation({
-  projectService, getAssistantManager, sharedRuntime, hostPreparation,
-  mainMessagePreparation, events, presentation, resolveConnection
+  projectService,
+  getAssistantManager,
+  sharedRuntime,
+  hostPreparation,
+  mainMessagePreparation,
+  events,
+  presentation,
+  resolveConnection
 }) {
   const { temporaryConversations } = sharedRuntime;
-  const { prepareProcess, storedUpstreamSessionId, upstreamSessionOptions,
-    sessionEnvironments, writeSessionEnvironmentRegistry } = hostPreparation;
+  const {
+    prepareProcess,
+    storedUpstreamSessionId,
+    upstreamSessionOptions,
+    sessionEnvironments,
+    writeSessionEnvironmentRegistry
+  } = hostPreparation;
   const { contextFor } = mainMessagePreparation;
   const { writeRun, messageMonitorProjection } = events;
   const { cleanupReasoningSummary, disposeReasoningSummary } = presentation;
@@ -79,8 +94,13 @@ function createOpenCodeLifecyclePreparation({
         async afterRelease() {
           if (getAssistantManager() && !options.assistantScope) {
             const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
-            await cleanupReasoningSummary({ sessionId: id, runtime, session: options.session,
-              renewalCleanup: options.renewalCleanup, vibe64User: options.vibe64User || null });
+            await cleanupReasoningSummary({
+              sessionId: id,
+              runtime,
+              session: options.session,
+              renewalCleanup: options.renewalCleanup,
+              vibe64User: options.vibe64User || null
+            });
           }
         }
       }
@@ -89,7 +109,8 @@ function createOpenCodeLifecyclePreparation({
 
   async function prepareInterruption(sessionId, options = {}) {
     const context = await contextFor(sessionId, { ...options, allowClosing: true });
-    return { key: context.key,
+    return {
+      key: context.key,
       get threadId() { return storedUpstreamSessionId(context); },
       writeRun: (turn, state, error) => writeRun(context, turn, state, error),
       failure: runtimeFailure
@@ -132,8 +153,10 @@ function createOpenCodeLifecyclePreparation({
             get key() { return context.key; },
             configuration() {
               const current = context;
-              return { process: () => prepareProcess(current, options),
-                get session() { return upstreamSessionOptions(current); } };
+              return {
+                process: () => prepareProcess(current, options),
+                get session() { return upstreamSessionOptions(current); }
+              };
             }
           }).catch(runtimeFailure);
         }, { operation: "prepare-agent-session", waitMs: 10_000 });
@@ -176,7 +199,13 @@ function createOpenCodeLifecyclePreparation({
     };
   }
 
-  return Object.freeze({ processRelease, prepareSessionCleanup, prepareInterruption, prepareSessionReadiness, prepareSessionReconciliation });
+  return Object.freeze({
+    processRelease,
+    prepareSessionCleanup,
+    prepareInterruption,
+    prepareSessionReadiness,
+    prepareSessionReconciliation
+  });
 }
 
 export { createOpenCodeLifecyclePreparation };

@@ -117,7 +117,9 @@ async function extractZip(archiveFile, directory) {
     await mkdir(path.dirname(target), { recursive: true });
     if ((mode & 0o170000) === 0o120000) {
       const link = bytes.toString("utf8");
-      if (path.isAbsolute(link) || !inside(path.resolve(path.dirname(target), link))) throw toolchainError(`${name} has a link outside its folder: ${entryName}`);
+      if (path.isAbsolute(link) || !inside(path.resolve(path.dirname(target), link))) {
+        throw toolchainError(`${name} has a link outside its folder: ${entryName}`);
+      }
       await symlink(link, target);
       continue;
     }
@@ -139,7 +141,12 @@ async function unpackInto(archiveFile, destination, { inner, kind, baseEnvironme
       await extractZip(archiveFile, staging);
     } else {
       const env = toolchainEnvironment(baseEnvironment, { HOME: staging });
-      await runOrFail(["tar", "-xzf", archiveFile, "-C", staging, "--no-same-owner"], { cwd: staging, env, label: `Unpacking ${path.basename(archiveFile)}`, runCommand });
+      await runOrFail(["tar", "-xzf", archiveFile, "-C", staging, "--no-same-owner"], {
+        cwd: staging,
+        env,
+        label: `Unpacking ${path.basename(archiveFile)}`,
+        runCommand
+      });
     }
     const source = path.join(staging, inner);
     if (!await exists(source)) throw toolchainError(`${path.basename(archiveFile)} has no ${inner} folder.`);

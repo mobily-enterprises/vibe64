@@ -20,10 +20,14 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
       file = await open(path.join(directory, `${topicId}.md`), constants.O_RDONLY | constants.O_NOFOLLOW);
       const stat = await file.stat();
       measured.bytes = stat.size;
-      if (!stat.isFile() || stat.size > maxGuideBytes) throw new Error("This usage guide is too large or is not a regular file. Ask for another topic.");
+      if (!stat.isFile() || stat.size > maxGuideBytes) {
+        throw new Error("This usage guide is too large or is not a regular file. Ask for another topic.");
+      }
       const text = await file.readFile("utf8");
       measured.characters = Array.from(text).length;
-      if (measured.characters > maxGuideCharacters) throw new Error(`The ${topicId} usage guide needs to be split into smaller topics in the application release.`);
+      if (measured.characters > maxGuideCharacters) {
+        throw new Error(`The ${topicId} usage guide needs to be split into smaller topics in the application release.`);
+      }
       const title = text.match(/^# ([^\n]+)$/mu)?.[1]?.trim();
       if (!title) throw new Error("This usage guide has no title. Its release documentation needs correction.");
       const summary = text.replace(/^# [^\n]+\n/u, "").trim().split(/\n\s*\n/u)[0].replace(/\s+/gu, " ").slice(0, 400);
@@ -37,7 +41,12 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
     let entries;
     try { entries = await readdir(directory, { withFileTypes: true }); }
     catch (error) {
-      if (error.code === "ENOENT") return { ok: false, error: "Usage guides are unavailable in this application release.", topics: [], hasMore: false };
+      if (error.code === "ENOENT") return {
+        ok: false,
+        error: "Usage guides are unavailable in this application release.",
+        topics: [],
+        hasMore: false
+      };
       throw error;
     }
     const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
@@ -58,7 +67,10 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
         const size = measured.bytes === undefined ? "size unknown"
           : `${measured.bytes} bytes${measured.characters === undefined ? "" : `, ${measured.characters} characters`}`;
         const warning = `Colleague usage guide ${path.join(directory, entry.name)} (${size}) is unavailable: ${error.message}`;
-        if (!warned.has(warning)) { warned.add(warning); console.warn(warning); }
+        if (!warned.has(warning)) {
+          warned.add(warning);
+          console.warn(warning);
+        }
       }
       if (terms.some(term => !searchable.includes(term))) continue;
       topics.push(topic);
@@ -71,7 +83,11 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
   async function readTopicGuide({ topicId }) {
     try { return { ok: true, ...await readGuide(topicId) }; }
     catch (error) {
-      if (["ENOENT", "ELOOP"].includes(error.code)) return { ok: false, topicId, error: "That usage topic is unavailable in this application release. Search the topic list for an available guide." };
+      if (["ENOENT", "ELOOP"].includes(error.code)) return {
+        ok: false,
+        topicId,
+        error: "That usage topic is unavailable in this application release. Search the topic list for an available guide."
+      };
       throw error;
     }
   }

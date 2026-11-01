@@ -130,7 +130,13 @@ async function upgradeSessionCheckout({ apply, backupPath, checkout, label, proj
     return gitFailed("read the configuration of", error);
   }
   await backUpClonedBranch(backupPath, label, {
-    schemaVersion: 1, project, sessionId, sourcePath, branch: clonedBranch, objectId: proof.objectId, config
+    schemaVersion: 1,
+    project,
+    sessionId,
+    sourcePath,
+    branch: clonedBranch,
+    objectId: proof.objectId,
+    config
   });
   try {
     await deleteClonedDefaultBranch(git, clonedBranch);
@@ -184,8 +190,15 @@ async function removeSessionClonedDefaultBranches({
         continue;
       }
       const outcome = await upgradeSessionCheckout({
-        apply, backupPath: path.join(backupRoot, project, `${sessionId}.json`), checkout, label, project, report,
-        runCommand, sessionId, store
+        apply,
+        backupPath: path.join(backupRoot, project, `${sessionId}.json`),
+        checkout,
+        label,
+        project,
+        report,
+        runCommand,
+        sessionId,
+        store
       });
       outcomes.set(outcome, (outcomes.get(outcome) || 0) + 1);
     }

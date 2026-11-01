@@ -173,8 +173,12 @@ export function createCodexStartupHealth(publishSessionChanged) {
     return result;
   }
 
-  return Object.freeze({ running: writeCodexAppServerRunning, ready: writeCodexAppServerReady,
-    failure: writeCodexAppServerFailure, blocked: writeCodexAppServerBlocked });
+  return Object.freeze({
+    running: writeCodexAppServerRunning,
+    ready: writeCodexAppServerReady,
+    failure: writeCodexAppServerFailure,
+    blocked: writeCodexAppServerBlocked
+  });
 }
 
 /**
@@ -185,7 +189,11 @@ export function createCodexStartupHealth(publishSessionChanged) {
  * @param {CodexSessionRuntimeHost} dependencies.sessionRuntimeHost
  * @param {CodexStartupHealth} dependencies.health
  */
-export function createCodexUnavailableWorktreeHandler({ runOwner, sessionRuntimeHost, health }) {
+export function createCodexUnavailableWorktreeHandler({
+  runOwner,
+  sessionRuntimeHost,
+  health
+}) {
   const { codexAppServerRuntimeOptionsForSession } = sessionRuntimeHost;
   const { blocked: writeCodexAppServerBlocked } = health;
 

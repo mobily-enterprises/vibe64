@@ -153,9 +153,12 @@ function sessionWorkOperationSession(context) {
   return {
     metadata: {
       ...(context.contribution ? { connected_contribution: JSON.stringify(context.contribution) } : {}),
-      ...(context.connectedSubmissions.length ? { connected_submissions: JSON.stringify({
-        schemaVersion: 1, submissions: context.connectedSubmissions
-      }) } : {}),
+      ...(context.connectedSubmissions.length ? {
+        connected_submissions: JSON.stringify({
+          schemaVersion: 1,
+          submissions: context.connectedSubmissions
+        })
+      } : {}),
       base_branch: context.branch,
       base_commit: context.baseCommit,
       canonical_commit: context.lastCanonicalCommit,

@@ -18,7 +18,14 @@ import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
  * @param {ProjectSelection} dependencies.selection
  * @param {ProjectSessionWork} dependencies.sessionWork
  */
-function createProjectOnboarding({ applyTemplate, environment, inspectProject, listTemplates, selection, sessionWork }) {
+function createProjectOnboarding({
+  applyTemplate,
+  environment,
+  inspectProject,
+  listTemplates,
+  selection,
+  sessionWork
+}) {
   async function projectOnboardingState(input = {}) {
     const source = await selection.genesisSettingsSourceForInput(input);
     if (!source.sourceRoot) {

@@ -25,12 +25,27 @@ import { colleagueBrowserStream, releaseObserver, trimIncompleteSurrogate } from
  * @param {ColleagueRecords} dependencies.records
  * @param {ColleagueThreads} dependencies.threads
  */
-function createColleagueConversations({ actions, accounts, terminals, serviceState, records, threads }) {
+function createColleagueConversations({
+  actions,
+  accounts,
+  terminals,
+  serviceState,
+  records,
+  threads
+}) {
   const runtimeOptions = { storage: records.storage, toolCatalog: records.catalog, persistCommentary: false,
-    limits: { ...COLLEAGUE_TOOL_LIMITS, maxToolCalls: 24, maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
-      maxFinalReplyCharacters: 16_000, maxApiToolProgressCharacters: 280,
-      maxInitialNativeHistoryMessages: 24, maxInitialNativeHistoryMessageCharacters: 2_000,
-      codexFinalizingGraceMs: 500, codexFinalizingGraceAfterHistoryRead: true, codexFailureDetailGraceMs: 500 },
+    limits: {
+      ...COLLEAGUE_TOOL_LIMITS,
+      maxToolCalls: 24,
+      maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
+      maxFinalReplyCharacters: 16_000,
+      maxApiToolProgressCharacters: 280,
+      maxInitialNativeHistoryMessages: 24,
+      maxInitialNativeHistoryMessageCharacters: 2_000,
+      codexFinalizingGraceMs: 500,
+      codexFinalizingGraceAfterHistoryRead: true,
+      codexFailureDetailGraceMs: 500
+    },
     async authorize({ context, conversationId, operation }) {
       // Stopping and releasing a handle need neither a live login nor a live
       // thread: only this service holds a handle, and it stops or releases one
@@ -52,9 +67,12 @@ function createColleagueConversations({ actions, accounts, terminals, serviceSta
       }
       return true;
     },
-    connections: { resolve: ({ integrationId, context }) => terminals.resolveConversationConnection({
-      integrationId, assistantSelection: context.assistantSelection
-    }, { vibe64User: authenticatedVibe64User(context) }) }
+    connections: {
+      resolve: ({ integrationId, context }) => terminals.resolveConversationConnection({
+        integrationId,
+        assistantSelection: context.assistantSelection
+      }, { vibe64User: authenticatedVibe64User(context) })
+    }
   };
   const runtime = createConversationRuntime(runtimeOptions);
   // The same backend/catalogue has two server-owned policies, but each product
@@ -63,8 +81,11 @@ function createColleagueConversations({ actions, accounts, terminals, serviceSta
     // Native wake admission measures the serialized frame in UTF-16 units:
     // existing L context/framing + 2L raw arguments + L result object + 2L
     // result copied into feedback. Argument/result byte gates remain 256 KiB.
-    limits: { ...runtimeOptions.limits, maxInputCharacters: 6 * COLLEAGUE_TOOL_PAYLOAD_LIMIT,
-      maxOutputCharacters: 1_670_455 } });
+    limits: {
+      ...runtimeOptions.limits,
+      maxInputCharacters: 6 * COLLEAGUE_TOOL_PAYLOAD_LIMIT,
+      maxOutputCharacters: 1_670_455
+    } });
 
   async function attachBrowserObserver(state, observer, transferring = false) {
     if (state.transfer && !transferring) await state.transfer;
@@ -99,14 +120,22 @@ function createColleagueConversations({ actions, accounts, terminals, serviceSta
         if (event.origin === "application" && event.role === "commentary") {
           // API text can precede its tool classification. Retire that earlier
           // partial when the completed message is identified as commentary.
-          if (event.streaming) observer.listener({ type: "message-complete", turnId: event.turnId,
-            messageId: event.messageId, streaming: colleagueBrowserStream(event.streaming), interimReply });
+          if (event.streaming) observer.listener({
+            type: "message-complete",
+            turnId: event.turnId,
+            messageId: event.messageId,
+            streaming: colleagueBrowserStream(event.streaming),
+            interimReply
+          });
           return;
         }
-        observer.listener({ ...event, interimReply,
+        observer.listener({
+          ...event,
+          interimReply,
           ...(event.type === "message" && event.status === "inProgress"
             ? { text: trimIncompleteSurrogate(event.text) } : {}),
-          ...(event.streaming ? { streaming: colleagueBrowserStream(event.streaming) } : {}) });
+          ...(event.streaming ? { streaming: colleagueBrowserStream(event.streaming) } : {})
+        });
       });
       if (!state.browserObservers.has(observer)) release();
       else observer.release = release;
@@ -168,7 +197,12 @@ function createColleagueConversations({ actions, accounts, terminals, serviceSta
       const workdir = path.join(state.root, scopeId);
       await mkdir(workdir, { recursive: true, mode: 0o700 });
       threads.assertCurrentConversation(state, scopeId);
-      host = state.host || terminals.createConversationHost({ id: scopeId, runtimeRoot: workdir, workdir, allowAccountChange: true });
+      host = state.host || terminals.createConversationHost({
+        id: scopeId,
+        runtimeRoot: workdir,
+        workdir,
+        allowAccountChange: true
+      });
       state.host = host;
     }
     state.opening += 1;
@@ -206,7 +240,10 @@ function createColleagueConversations({ actions, accounts, terminals, serviceSta
       return await openConversation(state, context, {}, true);
     } finally {
       try { await Promise.all([...state.browserObservers].map(observer => attachBrowserObserver(state, observer, true))); }
-      finally { state.transfer = null; gate.resolve(); }
+      finally {
+        state.transfer = null;
+        gate.resolve();
+      }
     }
   }
 
@@ -220,15 +257,24 @@ function createColleagueConversations({ actions, accounts, terminals, serviceSta
     const conversation = await openConversation(state, context, !state.record.conversationMetadata?.runtime ? settings : {});
     await conversation.retrySave();
     const current = await conversation.read();
-    if (current.replacement) throw failure("A model change is unfinished. Select that model again to finish it before sending another message.");
+    if (current.replacement) {
+      throw failure("A model change is unfinished. Select that model again to finish it before sending another message.");
+    }
     if (current.configuration.systemPrompt !== systemPrompt) await conversation.configure({ systemPrompt });
     state.conversation = conversation;
     return conversation;
   }
 
   return Object.freeze({
-    runtime, nativeRuntime, attachBrowserObserver, openConversation, transferConversation,
-    promptFor, prepare, chooseSelection, selectionAvailable
+    runtime,
+    nativeRuntime,
+    attachBrowserObserver,
+    openConversation,
+    transferConversation,
+    promptFor,
+    prepare,
+    chooseSelection,
+    selectionAvailable
   });
 }
 

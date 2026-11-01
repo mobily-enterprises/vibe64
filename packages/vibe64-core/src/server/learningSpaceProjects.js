@@ -3,7 +3,15 @@ import path from "node:path";
 import process from "node:process";
 
 import { isPlainObject, pathExists } from "./core.js";
-import { PRACTICE_SLUG_PATTERN, normalizeProjectTraining, practiceIdFromSlug, practiceLearnerKey, practiceNamespace, practiceProjectDeletedError, practiceSlug } from "./learningSpace.js";
+import {
+  PRACTICE_SLUG_PATTERN,
+  normalizeProjectTraining,
+  practiceIdFromSlug,
+  practiceLearnerKey,
+  practiceNamespace,
+  practiceProjectDeletedError,
+  practiceSlug
+} from "./learningSpace.js";
 import { runWithPracticeProjectContext } from "./practiceContext.js";
 import { readProjectRecordMetadata } from "./projectRecordMetadata.js";
 import { PROJECT_REPOSITORY_MODE_MANAGED_GIT } from "./projectRepository.js";
@@ -19,10 +27,17 @@ import { practiceOwnershipDiffers, readProjectMetadata, resolveCatalogProjectRun
  * @param {object} dependencies.practiceOwner
  * @param {string} dependencies.systemRoot
  */
-function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed, practiceOwner, systemRoot }) {
+function createLearningSpaceProjects({
+  learningSpaceRoot,
+  learningSpaceRootNamed,
+  practiceOwner,
+  systemRoot
+}) {
   function learningSpaceStorageRoot() {
     if (!learningSpaceRootNamed && process.env.NODE_TEST_CONTEXT) {
-      throw new Error("A test must pass explicitManagedSourceRoot or learningSpace.root; the default learning space is in the real home folder.");
+      throw new Error(
+        "A test must pass explicitManagedSourceRoot or learningSpace.root; the default learning space is in the real home folder."
+      );
     }
     return learningSpaceRoot;
   }
@@ -33,9 +48,15 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
       current = path.join(current, part);
       let info;
       try { info = await lstat(current); }
-      catch (error) { if (error.code === "ENOENT") return false; throw error; }
+      catch (error) {
+        if (error.code === "ENOENT") return false;
+        throw error;
+      }
       if (!info.isDirectory() || info.isSymbolicLink()) {
-        throw Object.assign(new Error("Practice storage must contain only real directories; inspect it before retrying."), { code: "vibe64_practice_path_unsafe" });
+        throw Object.assign(
+          new Error("Practice storage must contain only real directories; inspect it before retrying."),
+          { code: "vibe64_practice_path_unsafe" }
+        );
       }
     }
     return true;
@@ -86,7 +107,13 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
       if (error.code === "vibe64_practice_path_unsafe") return skipLearningSpaceEntry(slug, error.message);
       throw error;
     }
-    return Object.freeze({ slug, learnerKey: training.learnerKey, practiceId, training, deleting: Boolean(metadata.deletion) });
+    return Object.freeze({
+      slug,
+      learnerKey: training.learnerKey,
+      practiceId,
+      training,
+      deleting: Boolean(metadata.deletion)
+    });
   }
 
   async function readDirectoryEntries(directory) {
@@ -135,7 +162,10 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
     if (!PRACTICE_SLUG_PATTERN.test(slug)) return false;
     let metadata;
     try { metadata = await readProjectRecordMetadata(resolveProjectRecordPath({ projectRuntimeRoot })); }
-    catch (error) { if (error instanceof SyntaxError) return false; throw error; }
+    catch (error) {
+      if (error instanceof SyntaxError) return false;
+      throw error;
+    }
     if (!metadata?.training) return false;
     if (!await readLearningSpaceProject(slug)) skipLearningSpaceEntry(slug, "practice runtime without its learning-space project");
     return true;
@@ -148,8 +178,13 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
    * admission: a project without its record, or one being deleted, is a
    * deleted practice project (not found).
    */
-  async function runWithPracticeProjectScope({ actor, training: inputTraining, access: practiceAccess = "observe",
-    allowDeleting = false, requireProject = false } = {}, operation) {
+  async function runWithPracticeProjectScope({
+    actor,
+    training: inputTraining,
+    access: practiceAccess = "observe",
+    allowDeleting = false,
+    requireProject = false
+  } = {}, operation) {
     if (typeof operation !== "function") {
       throw new TypeError("Practice access requires an owning callback.");
     }
@@ -177,16 +212,38 @@ function createLearningSpaceProjects({ learningSpaceRoot, learningSpaceRootNamed
     }
     if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot) || Object.keys(metadata).length) {
       if (practiceOwnershipDiffers(metadata, training, allowDeleting)) {
-        throw Object.assign(new Error("Practice project has missing or different ownership. Keep it intact and ask the owner to inspect it."), { code: "vibe64_practice_scope_mismatch" });
+        throw Object.assign(
+          new Error("Practice project has missing or different ownership. Keep it intact and ask the owner to inspect it."),
+          { code: "vibe64_practice_scope_mismatch" }
+        );
       }
     }
-    const scope = Object.freeze({ training, access: practiceAccess, slug, projectsRoot: practiceProjectsRoot, systemRoot,
-      targetRoot: projectContextRoot, projectRecordPath, projectRuntimeRoot, projectSessionSourceRoot: projectContextRoot,
-      sourceRoot: "", sourceConfigRoot: "", vibe64User: actor, ...(allowDeleting ? { allowDeleting: true } : {}) });
+    const scope = Object.freeze({
+      training,
+      access: practiceAccess,
+      slug,
+      projectsRoot: practiceProjectsRoot,
+      systemRoot,
+      targetRoot: projectContextRoot,
+      projectRecordPath,
+      projectRuntimeRoot,
+      projectSessionSourceRoot: projectContextRoot,
+      sourceRoot: "",
+      sourceConfigRoot: "",
+      vibe64User: actor,
+      ...(allowDeleting ? { allowDeleting: true } : {})
+    });
     return runWithPracticeProjectContext(practiceOwner, scope, operation);
   }
 
-  return Object.freeze({ readLearningSpaceProject, listLearningSpaceProjects, runWithPracticeProjectScope, skipLearningSpaceEntry, isLearningSpaceRuntime, practiceDirectoryExists });
+  return Object.freeze({
+    readLearningSpaceProject,
+    listLearningSpaceProjects,
+    runWithPracticeProjectScope,
+    skipLearningSpaceEntry,
+    isLearningSpaceRuntime,
+    practiceDirectoryExists
+  });
 }
 
 export { createLearningSpaceProjects };

@@ -33,7 +33,9 @@ function describeGitFailure(result = {}, options = {}) {
       message: "This Git is too old for Vibe64. Update Git to version 2.28 or newer, then try again."
     };
   }
-  if (/gpg failed to sign|failed to sign the data|signing failed|couldn't (?:load|find) (?:public )?key|incorrect passphrase/iu.test(text)) {
+  if (/gpg failed to sign|failed to sign the data|signing failed|couldn't (?:load|find) (?:public )?key|incorrect passphrase/iu.test(
+    text
+  )) {
     return {
       code: "vibe64_git_signing_failed",
       installCommand: "",

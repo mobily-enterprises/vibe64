@@ -25,40 +25,104 @@ const SETUP_GUIDES = Object.freeze({
 });
 
 const LOCAL_TOOLS = Object.freeze({
-  claude: { name: "Claude Code", run: [["claude"]], guideUrl: "https://code.claude.com/docs/en/setup",
-    any: "curl -fsSL https://claude.ai/install.sh | bash" },
-  codex: { name: "Codex", run: [["codex"]], guideUrl: "https://github.com/openai/codex",
-    any: "curl -fsSL https://chatgpt.com/codex/install.sh | sh" },
-  opencode: { name: "opencode", run: [["opencode"]], guideUrl: "https://opencode.ai/docs/",
-    any: "curl -fsSL https://opencode.ai/install | bash" },
+  claude: {
+    name: "Claude Code",
+    run: [["claude"]],
+    guideUrl: "https://code.claude.com/docs/en/setup",
+    any: "curl -fsSL https://claude.ai/install.sh | bash"
+  },
+  codex: {
+    name: "Codex",
+    run: [["codex"]],
+    guideUrl: "https://github.com/openai/codex",
+    any: "curl -fsSL https://chatgpt.com/codex/install.sh | sh"
+  },
+  opencode: {
+    name: "opencode",
+    run: [["opencode"]],
+    guideUrl: "https://opencode.ai/docs/",
+    any: "curl -fsSL https://opencode.ai/install | bash"
+  },
   node: { name: "Node.js", setup: "nodejs-and-mise", run: [["node"]], guideUrl: "https://nodejs.org/en/download", mise: "node@26" },
-  git: { name: "Git", setup: "git", run: [["git"]], guideUrl: "https://git-scm.com/downloads",
-    apt: "sudo apt install git", brew: "xcode-select --install" },
-  gh: { name: "GitHub CLI", setup: "extras", run: [["gh"]], guideUrl: "https://github.com/cli/cli#installation",
-    mise: "gh", brew: "brew install gh" },
-  ripgrep: { name: "ripgrep", setup: "extras", run: [["rg"]], guideUrl: "https://github.com/BurntSushi/ripgrep#installation",
-    apt: "sudo apt install ripgrep", brew: "brew install ripgrep" },
-  playwright: { name: "Playwright browser", guideUrl: "https://playwright.dev/docs/browsers",
-    apt: "npx playwright install --with-deps chromium", brew: "npx playwright install chromium" },
-  python: { name: "Python", setup: "project-languages", run: [["python3", "python"]], guideUrl: "https://mise.jdx.dev/lang/python.html",
-    mise: "python@3.13" },
+  git: {
+    name: "Git",
+    setup: "git",
+    run: [["git"]],
+    guideUrl: "https://git-scm.com/downloads",
+    apt: "sudo apt install git",
+    brew: "xcode-select --install"
+  },
+  gh: {
+    name: "GitHub CLI",
+    setup: "extras",
+    run: [["gh"]],
+    guideUrl: "https://github.com/cli/cli#installation",
+    mise: "gh",
+    brew: "brew install gh"
+  },
+  ripgrep: {
+    name: "ripgrep",
+    setup: "extras",
+    run: [["rg"]],
+    guideUrl: "https://github.com/BurntSushi/ripgrep#installation",
+    apt: "sudo apt install ripgrep",
+    brew: "brew install ripgrep"
+  },
+  playwright: {
+    name: "Playwright browser",
+    guideUrl: "https://playwright.dev/docs/browsers",
+    apt: "npx playwright install --with-deps chromium",
+    brew: "npx playwright install chromium"
+  },
+  python: {
+    name: "Python",
+    setup: "project-languages",
+    run: [["python3", "python"]],
+    guideUrl: "https://mise.jdx.dev/lang/python.html",
+    mise: "python@3.13"
+  },
   ruby: { name: "Ruby", setup: "project-languages", run: [["ruby"]], guideUrl: "https://mise.jdx.dev/lang/ruby.html", mise: "ruby@3.4" },
-  java: { name: "Java", setup: "project-languages", run: [["java"]], guideUrl: "https://mise.jdx.dev/lang/java.html", mise: "java@temurin-25",
-    version: "-version" },
+  java: {
+    name: "Java",
+    setup: "project-languages",
+    run: [["java"]],
+    guideUrl: "https://mise.jdx.dev/lang/java.html",
+    mise: "java@temurin-25",
+    version: "-version"
+  },
   go: { name: "Go", setup: "project-languages", run: [["go"]], guideUrl: "https://go.dev/doc/install", mise: "go", version: "version" },
-  kotlin: { name: "Kotlin", run: [["kotlin"]], guideUrl: "https://kotlinlang.org/docs/command-line.html", mise: "kotlin",
-    version: "-version" },
-  rust: { name: "Rust", run: [["rustc"], ["cargo"]], guideUrl: "https://rustup.rs/",
-    any: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" },
+  kotlin: {
+    name: "Kotlin",
+    run: [["kotlin"]],
+    guideUrl: "https://kotlinlang.org/docs/command-line.html",
+    mise: "kotlin",
+    version: "-version"
+  },
+  rust: {
+    name: "Rust",
+    run: [["rustc"], ["cargo"]],
+    guideUrl: "https://rustup.rs/",
+    any: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+  },
   bun: { name: "Bun", run: [["bun"]], guideUrl: "https://bun.sh/docs/installation", any: "curl -fsSL https://bun.sh/install | bash" },
   csharp: { name: ".NET", run: [["dotnet"]], guideUrl: "https://dotnet.microsoft.com/download" },
-  php: { name: "PHP", setup: "project-languages", run: [["php"], ["composer"]], guideUrl: "https://php.new/",
+  php: {
+    name: "PHP",
+    setup: "project-languages",
+    run: [["php"], ["composer"]],
+    guideUrl: "https://php.new/",
     apt: "/bin/bash -c \"$(curl -fsSL https://php.new/install/linux)\"",
-    brew: "/bin/bash -c \"$(curl -fsSL https://php.new/install/mac)\"" },
-  cpp: { name: "Build tools", setup: "build-tools", run: [["cc", "gcc", "clang"], ["make"]], guideUrl: "https://guides.rubyonrails.org/install_ruby_on_rails.html",
+    brew: "/bin/bash -c \"$(curl -fsSL https://php.new/install/mac)\""
+  },
+  cpp: {
+    name: "Build tools",
+    setup: "build-tools",
+    run: [["cc", "gcc", "clang"], ["make"]],
+    guideUrl: "https://guides.rubyonrails.org/install_ruby_on_rails.html",
     detail: "Some packages compile native code, so they need a compiler and a few libraries.",
     apt: "sudo apt install build-essential pkg-config libyaml-dev libssl-dev zlib1g-dev libpq-dev default-libmysqlclient-dev libgmp-dev",
-    brew: "brew install pkg-config libyaml openssl@3 gmp" }
+    brew: "brew install pkg-config libyaml openssl@3 gmp"
+  }
 });
 
 // Runtime ids that share another tool's line, and ids Vibe64 itself satisfies.

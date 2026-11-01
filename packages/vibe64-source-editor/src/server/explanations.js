@@ -109,9 +109,17 @@ function createExplanationOperations({
     }
     const explanationId = sourceEditorClientExplanationId(input.explanationId) || sourceEditorExplanationId();
     const key = sourceEditorExplanationMemoryKey({ sessionId }, explanationId);
-    if (explanationTurns.has(key)) throw sourceEditorError("This explanation is already answering a question.", "vibe64_source_explanation_busy", {}, 409);
-    const task = { sessionId, projectScope: currentProjectScopeKey(), id: explanationId, originId: input.originId,
-      updatedAt: new Date().toISOString(), controller: new AbortController() };
+    if (explanationTurns.has(key)) {
+      throw sourceEditorError("This explanation is already answering a question.", "vibe64_source_explanation_busy", {}, 409);
+    }
+    const task = {
+      sessionId,
+      projectScope: currentProjectScopeKey(),
+      id: explanationId,
+      originId: input.originId,
+      updatedAt: new Date().toISOString(),
+      controller: new AbortController()
+    };
     explanationTurns.set(key, task);
     let runtime;
     const run = async () => {
@@ -122,7 +130,8 @@ function createExplanationOperations({
       const retained = await readSourceEditorExplanationCleanupRecord(context, context.explanationId);
       if (retained?.helper && input.message) {
         const helper = retained.helper;
-        if (helper.actorIdentity !== context.agentAccountIdentity || helper.connectionIdentity !== context.agentRoutingDecision.connectionIdentity ||
+        if (helper.actorIdentity !== context.agentAccountIdentity ||
+            helper.connectionIdentity !== context.agentRoutingDecision.connectionIdentity ||
             JSON.stringify(helper.selection) !== JSON.stringify(context.agentRoutingDecision.effectiveSelection)) {
           throw sourceEditorError("This explanation uses a different AI or account. Start a new explanation to continue.",
             "vibe64_source_explanation_destination_changed", {}, 409);
@@ -135,15 +144,32 @@ function createExplanationOperations({
         }
         const id = `source_${crypto.randomUUID()}`;
         const root = path.join(runtime.stateRoot, "assistant-helpers", id);
-        context.assistantHelper = { scope: { id, runtimeRoot: path.join(root, "runtime"), workdir: path.join(root, "workdir"),
-          environment: {}, stableContext: "Explain only the supplied source and conversation. You have no tools or project access." },
-          selection: context.agentRoutingDecision.effectiveSelection, connectionIdentity: context.agentRoutingDecision.connectionIdentity,
-          actorIdentity: context.agentAccountIdentity, conversationId: "", runId: "", executionId: "" };
+        context.assistantHelper = {
+          scope: {
+            id,
+            runtimeRoot: path.join(root, "runtime"),
+            workdir: path.join(root, "workdir"),
+            environment: {},
+            stableContext: "Explain only the supplied source and conversation. You have no tools or project access."
+          },
+          selection: context.agentRoutingDecision.effectiveSelection,
+          connectionIdentity: context.agentRoutingDecision.connectionIdentity,
+          actorIdentity: context.agentAccountIdentity,
+          conversationId: "",
+          runId: "",
+          executionId: ""
+        };
       }
-      const retain = () => upsertSourceEditorExplanationCleanupRecord(context, { id: context.explanationId,
-        sourceRange: { path: input.path || retained?.sourcePath || "" }, ownerOriginId: input.originId || retained?.originId,
-        agentThreadId: context.assistantHelper.conversationId, agentTurnId: context.assistantHelper.runId,
-        status: "running", createdAt: retained?.createdAt || task.updatedAt, updatedAt: new Date().toISOString() });
+      const retain = () => upsertSourceEditorExplanationCleanupRecord(context, {
+        id: context.explanationId,
+        sourceRange: { path: input.path || retained?.sourcePath || "" },
+        ownerOriginId: input.originId || retained?.originId,
+        agentThreadId: context.assistantHelper.conversationId,
+        agentTurnId: context.assistantHelper.runId,
+        status: "running",
+        createdAt: retained?.createdAt || task.updatedAt,
+        updatedAt: new Date().toISOString()
+      });
       context.retainAssistantHelper = retain;
       await retain();
       try {
@@ -158,7 +184,10 @@ function createExplanationOperations({
         return result;
       } finally {
         if (context.assistantHelper && !context.assistantHelper.conversationId) {
-          await deleteSourceEditorExplanationAgentThread(context, { id: context.explanationId, helper: context.assistantHelper }, { terminalService });
+          await deleteSourceEditorExplanationAgentThread(context, {
+            id: context.explanationId,
+            helper: context.assistantHelper
+          }, { terminalService });
           await removeSourceEditorExplanationCleanupRecord(context, context.explanationId);
         }
       }
@@ -305,19 +334,31 @@ function createExplanationOperations({
    */
   async function closeExplanationsForSession(sessionId) {
     const runtime = await projectService.createRuntime({ sessionId });
-    const result = await cleanupSourceEditorExplanations({ runtime, sessionId,
+    const result = await cleanupSourceEditorExplanations({
+      runtime,
+      sessionId,
       sourceEditorTempRoot: sourceEditorTempRoot(temporaryRoot, sessionId)
     }, {}, { all: true, explanationChats, explanationTurns, terminalService });
     for (const failure of result.failures) {
-      logOperationalEvent(logger, "warn", { component: "vibe64-source-editor", event: "vibe64.source_explanation.cleanup_failed",
-        code: failure.code || "", error: failure.error, explanationId: failure.id, sessionId
+      logOperationalEvent(logger, "warn", {
+        component: "vibe64-source-editor",
+        event: "vibe64.source_explanation.cleanup_failed",
+        code: failure.code || "",
+        error: failure.error,
+        explanationId: failure.id,
+        sessionId
       }, "A source explanation helper could not be closed; its record was kept.");
     }
     const reasons = [...new Set(result.failures.map((failure) => failure.error))];
-    return { ...result, ok: result.failureCount === 0,
-      ...(result.failureCount ? { code: "vibe64_source_explanation_cleanup_failed",
+    return {
+      ...result,
+      ok: result.failureCount === 0,
+      ...(result.failureCount ? {
+        code: "vibe64_source_explanation_cleanup_failed",
         error: result.failureCount === 1 ? reasons[0]
-          : `${result.failureCount} source explanation helpers could not be closed. ${reasons.join(" ")}` } : {}) };
+          : `${result.failureCount} source explanation helpers could not be closed. ${reasons.join(" ")}`
+      } : {})
+    };
   }
 
   return Object.freeze({
@@ -333,9 +374,18 @@ function createExplanationOperations({
 
 async function sourceEditorExplanationInput(context = {}, input = {}) {
   const file = await readSourceEditorFile(context, input.path);
-  if (input.expectedHash && input.expectedHash !== file.hash) throw sourceEditorError("The saved file changed. Reopen it before requesting an explanation.", "vibe64_source_explanation_source_changed", {}, 409);
+  if (input.expectedHash && input.expectedHash !== file.hash) {
+    throw sourceEditorError(
+      "The saved file changed. Reopen it before requesting an explanation.",
+      "vibe64_source_explanation_source_changed",
+      {},
+      409
+    );
+  }
   const presentation = input.presentation;
-  if (presentation !== undefined && !["description", "steps"].includes(presentation)) throw sourceEditorError("Choose Description or Steps.", "vibe64_source_explanation_presentation_invalid");
+  if (presentation !== undefined && !["description", "steps"].includes(presentation)) {
+    throw sourceEditorError("Choose Description or Steps.", "vibe64_source_explanation_presentation_invalid");
+  }
   const lines = sourceEditorLines(file.text);
   const symbolId = input.symbolId;
   let selection = input;
@@ -350,13 +400,27 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
       const { fileHandle } = await downloadSessionFile(context, GENESIS_MACHINE_CITY_PATH);
       try {
         if ((await fileHandle.stat()).size > SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES) {
-          throw sourceEditorError("Symbol analysis exceeds the supported size. Use Code or explain a selection.", "vibe64_source_explanation_index_too_large", {}, 413);
+          throw sourceEditorError(
+            "Symbol analysis exceeds the supported size. Use Code or explain a selection.",
+            "vibe64_source_explanation_index_too_large",
+            {},
+            413
+          );
         }
         const chunks = [];
-        for await (const chunk of fileHandle.createReadStream({ start: 0, end: SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES, autoClose: false })) chunks.push(chunk);
+        for await (const chunk of fileHandle.createReadStream({
+          start: 0,
+          end: SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES,
+          autoClose: false
+        })) chunks.push(chunk);
         const buffer = Buffer.concat(chunks);
         if (buffer.length > SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES) {
-          throw sourceEditorError("Symbol analysis exceeds the supported size. Use Code or explain a selection.", "vibe64_source_explanation_index_too_large", {}, 413);
+          throw sourceEditorError(
+            "Symbol analysis exceeds the supported size. Use Code or explain a selection.",
+            "vibe64_source_explanation_index_too_large",
+            {},
+            413
+          );
         }
         architecture = validateArchitectureFacts(JSON.parse(buffer.toString("utf8")).architecture);
       } finally {
@@ -364,23 +428,46 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
       }
     } catch (error) {
       if (error.statusCode === 403 || error.statusCode === 413) throw error;
-      throw sourceEditorError("Symbol analysis is unavailable or invalid. Refresh analysis before describing the symbol.", "vibe64_source_explanation_index_unavailable", {}, 409);
+      throw sourceEditorError(
+        "Symbol analysis is unavailable or invalid. Refresh analysis before describing the symbol.",
+        "vibe64_source_explanation_index_unavailable",
+        {},
+        409
+      );
     }
     const symbol = architecture.symbols.find(entry => entry.id === symbolId);
     const indexedFile = architecture.files.find(entry => entry.id === symbol?.fileId);
-    if (!symbol?.rangeAvailable || symbol.path !== file.path || indexedFile?.path !== file.path || indexedFile.hash !== `sha256:${file.hash}`) {
-      throw sourceEditorError("This symbol changed after analysis. Refresh analysis before describing it.", "vibe64_source_explanation_symbol_changed", {}, 409);
+    if (!symbol?.rangeAvailable ||
+        symbol.path !== file.path ||
+        indexedFile?.path !== file.path ||
+        indexedFile.hash !== `sha256:${file.hash}`) {
+      throw sourceEditorError(
+        "This symbol changed after analysis. Refresh analysis before describing it.",
+        "vibe64_source_explanation_symbol_changed",
+        {},
+        409
+      );
     }
     for (const point of [symbol.start, symbol.end]) {
       if (point.line > lines.length || point.column > lines[point.line - 1].length + 1) {
-        throw sourceEditorError("The indexed symbol range is invalid for this file. Refresh analysis.", "vibe64_source_explanation_symbol_changed", {}, 409);
+        throw sourceEditorError(
+          "The indexed symbol range is invalid for this file. Refresh analysis.",
+          "vibe64_source_explanation_symbol_changed",
+          {},
+          409
+        );
       }
     }
-    if (presentation === 'steps' && !Array.isArray(symbol.parameters)) throw sourceEditorError("Explain function is available for callable declarations. Use Explain file or Code for other declarations.", "vibe64_source_explanation_not_callable");
+    if (presentation === "steps" && !Array.isArray(symbol.parameters)) {
+      throw sourceEditorError(
+        "Explain function is available for callable declarations. Use Explain file or Code for other declarations.",
+        "vibe64_source_explanation_not_callable"
+      );
+    }
     selection = { startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column };
   }
   const scope = symbolId !== undefined ? "selection" : normalizeText(input.scope) === "file" ? "file" : "selection";
-  if (scope === 'file' && presentation === 'description') {
+  if (scope === "file" && presentation === "description") {
     selection = { startLine: 1, startColumn: 1, endLine: lines.length, endColumn: lines.at(-1).length + 1 };
   }
   const range = sourceEditorRangeWithSelectionColumns(
@@ -394,13 +481,17 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
   }
   const selectedLineCount = range.endLine - range.startLine + 1;
   if (scope !== "file" && symbolId === undefined && selectedLineCount > SOURCE_EDITOR_EXPLANATION_MAX_LINES) {
-    throw sourceEditorError("Select a smaller code range before asking for an explanation.", "vibe64_source_explanation_selection_too_large", {
+    throw sourceEditorError("Select a smaller code range before asking for an explanation.",
+      "vibe64_source_explanation_selection_too_large",
+      {
       maxLines: SOURCE_EDITOR_EXPLANATION_MAX_LINES,
       selectedLineCount
     }, 413);
   }
   if (scope !== "file" && selectedText.length > SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS) {
-    throw sourceEditorError("Select a smaller code range before asking for an explanation.", "vibe64_source_explanation_selection_too_large", {
+    throw sourceEditorError("Select a smaller code range before asking for an explanation.",
+      "vibe64_source_explanation_selection_too_large",
+      {
       maxChars: SOURCE_EDITOR_EXPLANATION_CODE_MAX_CHARS,
       selectedChars: selectedText.length
     }, 413);

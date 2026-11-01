@@ -3,7 +3,12 @@ import path from "node:path";
 import { claudeModelConfiguration } from "@jskit-ai/assistant-core/server/claude-process";
 import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
-import { vibe64ConversationInstructions, vibe64HostContextEnvironment, vibe64HostContextRegistry, withGenesisCommandShim } from "@local/vibe64-genesis/server";
+import {
+  vibe64ConversationInstructions,
+  vibe64HostContextEnvironment,
+  vibe64HostContextRegistry,
+  withGenesisCommandShim
+} from "@local/vibe64-genesis/server";
 import { claudeFlagSettings } from "./claudeCodeProcess.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { claudeConversationError as error, claudeTerminalNamespace } from "./terminalShared.js";
@@ -74,9 +79,19 @@ async function markClaudeTerminalReady(env, credentialHome, workdir) {
  * @param {AgentSessionCommandService} dependencies.agentSessionCommand
  */
 function createClaudeConversationEnvironment({
-  env, projectService, command, credentialHome, commandRunner, stopExecution,
-  providerConnections, prepareCommandEnvironment, codexGitCommand, agentDatabaseCommand,
-  agentEnvCommand, agentPreviewCommand, agentSessionCommand
+  env,
+  projectService,
+  command,
+  credentialHome,
+  commandRunner,
+  stopExecution,
+  providerConnections,
+  prepareCommandEnvironment,
+  codexGitCommand,
+  agentDatabaseCommand,
+  agentEnvCommand,
+  agentPreviewCommand,
+  agentSessionCommand
 }) {
   function sessionGuidance(entry) {
     return {
@@ -105,10 +120,16 @@ function createClaudeConversationEnvironment({
       return { env: {}, shimDirs: [] };
     }
     const prepared = await prepareCommandEnvironment({
-      env, gitCommand: codexGitCommand,
-      agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
-      project, runtime: context.runtime,
-      sessionId: context.sessionId, worktreePath: context.workdir
+      env,
+      gitCommand: codexGitCommand,
+      agentDatabaseCommand,
+      agentEnvCommand,
+      agentPreviewCommand,
+      agentSessionCommand,
+      project,
+      runtime: context.runtime,
+      sessionId: context.sessionId,
+      worktreePath: context.workdir
     });
     if (prepared.ok !== true) throw error("Claude's session command environment could not be prepared.");
     return {
@@ -124,9 +145,15 @@ function createClaudeConversationEnvironment({
     const selection = entry.context.selection;
     const profile = input.executionProfile ? vibe64AgentExecutionProfileAuditSnapshot(input.executionProfile) : null;
     const external = await providerConnections.claudeProviderSettings(selection.modelProviderId);
-    const configuration = claudeModelConfiguration({ providerId: selection.modelProviderId, model: profile?.model || selection.modelId }, external);
-    const flagSettings = claudeFlagSettings({ toolFree: Boolean(profile || entry.context.assistantScope),
-      effort: profile ? profile.thinking : selection.variantId, providerEnv: configuration.env });
+    const configuration = claudeModelConfiguration({
+      providerId: selection.modelProviderId,
+      model: profile?.model || selection.modelId
+    }, external);
+    const flagSettings = claudeFlagSettings({
+      toolFree: Boolean(profile || entry.context.assistantScope),
+      effort: profile ? profile.thinking : selection.variantId,
+      providerEnv: configuration.env
+    });
     // Goal Set/Resume can prepare the native process before an authored turn.
     // Retain the same discovery protocol; execution still requires that turn's
     // admitted native tool identity and freshly authorized action catalogue.
@@ -148,11 +175,18 @@ function createClaudeConversationEnvironment({
       systemPrompt += "\n\nWhen the human explicitly asks to pause the goal, finish any requested checkpoint and drain delegated work, then use the application action vibe64.terminals.main-goal.pause through the application tools. Saying paused does not pause the goal. Do not invoke Pause merely because work is unfinished, delegated work is running, or prerequisites are missing. When a concrete external prerequisite prevents all useful work, use vibe64.terminals.main-goal.block with a short reason explaining what must change before Resume. Do not mark a goal blocked while delegated/background agents or checks are still working; wait for their results. Do not repeatedly answer that you are waiting for missing human input.";
     }
     return {
-      systemPrompt, contextIdentity: identity, settings: flagSettings, model: configuration.model,
+      systemPrompt,
+      contextIdentity: identity,
+      settings: flagSettings,
+      model: configuration.model,
       instructionMode: entry.context.assistantScope || profile ? "replace" : "append",
       liveUpdateIdentity: profile ? undefined : JSON.stringify(applicationTools
         ? [input.outputSchema ?? null, entry.toolSchemas] : input.outputSchema ?? null),
-      profile, external, outputSchema: input.outputSchema, selection, ...(applicationTools ? { applicationTools: true } : {})
+      profile,
+      external,
+      outputSchema: input.outputSchema,
+      selection,
+      ...(applicationTools ? { applicationTools: true } : {})
     };
   }
 
@@ -163,18 +197,40 @@ function createClaudeConversationEnvironment({
     if (!ctx.assistantScope && !profile && codexGitCommand) {
       prepared = await prepareSessionEnvironment(ctx, project);
     }
-    return { ...prepared, projectSlug: project?.slug || "",
-      workdir: profile || ctx.assistantScope ? credentialHome.home : ctx.workdir };
+    return {
+      ...prepared,
+      projectSlug: project?.slug || "",
+      workdir: profile || ctx.assistantScope ? credentialHome.home : ctx.workdir
+    };
   }
 
-  async function configureProcess(entry, { instructionArguments, model, profile, external, outputSchema, selection, applicationTools }, { context: ctx, prepared }) {
+  async function configureProcess(entry, {
+    instructionArguments,
+    model,
+    profile,
+    external,
+    outputSchema,
+    selection,
+    applicationTools
+  }, {
+    context: ctx,
+    prepared
+  }) {
     const guidanceEnvironment = !profile && !ctx.assistantScope ? await sessionGuidanceEnvironment(entry) : {};
-    return { command: command(), commandRunner, stopExecution, credentialHome,
+    return {
+      command: command(),
+      commandRunner,
+      stopExecution,
+      credentialHome,
       env: { ...env, ...prepared.env, ...guidanceEnvironment },
-      shimDirs: !profile && !ctx.assistantScope && ctx.runtime?.learningScope?.noExercise !== true ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
+      shimDirs: !profile && !ctx.assistantScope && ctx.runtime?.learningScope?.noExercise !== true
+        ? withGenesisCommandShim(prepared.shimDirs)
+        : prepared.shimDirs,
       model: external ? "" : model,
       effort: profile ? profile.thinking : selection.variantId,
-      toolFree: Boolean(profile || ctx.assistantScope), outputSchema, ...(applicationTools ? { applicationTools: true } : {}),
+      toolFree: Boolean(profile || ctx.assistantScope),
+      outputSchema,
+      ...(applicationTools ? { applicationTools: true } : {}),
       instructionArguments,
       execution: { ownerId: entry.id, sessionId: ctx.sessionId, projectSlug: prepared.projectSlug }
     };
@@ -208,29 +264,74 @@ function createClaudeConversationEnvironment({
       if (codexGitCommand) {
         prepared = await prepareSessionEnvironment(ctx);
       }
-      const actor = await recordGitActor({ env, overwrite: true, reason: "agent-terminal", runtime: ctx.runtime,
-        session: ctx.session, sourceRoot: ctx.workdir, threadId: entry.id, vibe64User: ctx.vibe64User, workdir: ctx.workdir });
+      const actor = await recordGitActor({
+        env,
+        overwrite: true,
+        reason: "agent-terminal",
+        runtime: ctx.runtime,
+        session: ctx.session,
+        sourceRoot: ctx.workdir,
+        threadId: entry.id,
+        vibe64User: ctx.vibe64User,
+        workdir: ctx.workdir
+      });
       if (actor?.ok === false) throw error(actor.error, actor.code);
       const terminal = await conversations.prepareTerminal(entry, ctx);
       await markClaudeTerminalReady(env, credentialHome, ctx.workdir);
-      return commandRunner({ actor: "app", command: command(),
+      return commandRunner({
+        actor: "app",
+        command: command(),
         args: terminal.args,
-        baseEnv: { ...env, ...prepared.env, ...terminal.env }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
-        allowedRoots: [ctx.workdir], envPolicy: "auth", purpose: "assistant", mode: "pty",
-        shimDirs: withGenesisCommandShim(prepared.shimDirs), runtimes: ["operator-clis", "node26"], session: ctx.session,
-        terminal: { namespace: claudeTerminalNamespace(ctx.sessionId), maxRunning: 1, reuseRunning: true,
-          commandPreview: "claude", metadata: { engineId: ENGINE, sessionId: ctx.sessionId }, ...input.size } });
+        baseEnv: { ...env, ...prepared.env, ...terminal.env },
+        credentialHome,
+        inheritProcessEnv: false,
+        cwd: ctx.workdir,
+        allowedRoots: [ctx.workdir],
+        envPolicy: "auth",
+        purpose: "assistant",
+        mode: "pty",
+        shimDirs: withGenesisCommandShim(prepared.shimDirs),
+        runtimes: ["operator-clis", "node26"],
+        session: ctx.session,
+        terminal: {
+          namespace: claudeTerminalNamespace(ctx.sessionId),
+          maxRunning: 1,
+          reuseRunning: true,
+          commandPreview: "claude",
+          metadata: { engineId: ENGINE, sessionId: ctx.sessionId },
+          ...input.size
+        }
+      });
     }
 
-    function readTerminal(context, input) { return readTerminalSession(input.terminalSessionId, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+    function readTerminal(
+      context,
+      input
+    ) { return readTerminalSession(input.terminalSessionId, { namespace: claudeTerminalNamespace(context.sessionId) }); }
 
-    function closeTerminal(context, input) { return closeTerminalSession(input.terminalSessionId, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+    function closeTerminal(
+      context,
+      input
+    ) { return closeTerminalSession(input.terminalSessionId, { namespace: claudeTerminalNamespace(context.sessionId) }); }
 
-    function resizeTerminal(context, input) { return resizeTerminalSession(input.terminalSessionId, input.size, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+    function resizeTerminal(
+      context,
+      input
+    ) { return resizeTerminalSession(input.terminalSessionId, input.size, { namespace: claudeTerminalNamespace(context.sessionId) }); }
 
-    function subscribeTerminal(context, input) { return subscribeTerminalSession(input.terminalSessionId, input.subscriber, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+    function subscribeTerminal(
+      context,
+      input
+    ) { return subscribeTerminalSession(
+      input.terminalSessionId,
+      input.subscriber,
+      { namespace: claudeTerminalNamespace(context.sessionId) }
+    ); }
 
-    function writeTerminal(context, input) { return writeTerminalSessionText(input.terminalSessionId, input.data, { namespace: claudeTerminalNamespace(context.sessionId) }); }
+    function writeTerminal(
+      context,
+      input
+    ) { return writeTerminalSessionText(input.terminalSessionId, input.data, { namespace: claudeTerminalNamespace(context.sessionId) }); }
 
     return Object.freeze({
       startTerminal,
@@ -242,7 +343,13 @@ function createClaudeConversationEnvironment({
     });
   }
 
-  return Object.freeze({ prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess });
+  return Object.freeze({
+    prepareConfiguration,
+    prepareProcess,
+    configureProcess,
+    configureTerminal,
+    createTerminalAccess
+  });
 }
 
 export { createClaudeConversationEnvironment };

@@ -37,7 +37,10 @@ const aiRequired = cause => Object.assign(trainingError(TRAINING_PRACTICE_AI_REQ
 
 function requireSuccess(result) {
   if (result?.ok === false) {
-    throw trainingError(result.code || "VIBE64_TRAINING_PREPARATION_FAILED", result.error || "Exercise preparation failed. Resume the same attempt.");
+    throw trainingError(
+      result.code || "VIBE64_TRAINING_PREPARATION_FAILED",
+      result.error || "Exercise preparation failed. Resume the same attempt."
+    );
   }
   return result;
 }
@@ -57,7 +60,17 @@ function requireSuccess(result) {
  * @param {SessionsService} dependencies.sessions
  * @param {TerminalsService} dependencies.terminals
  */
-function createTrainingService({ catalogue, content, learners, learningSpace, projectContext, projectRepositoryService, project, sessions, terminals }) {
+function createTrainingService({
+  catalogue,
+  content,
+  learners,
+  learningSpace,
+  projectContext,
+  projectRepositoryService,
+  project,
+  sessions,
+  terminals
+}) {
   /**
    * A lesson starts only in the current lesson format and when this learner
    * can take every required step here (its places exist and are open to them).
@@ -65,7 +78,10 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
   async function requireStartable(actor, pin) {
     const taught = await content.readLesson(pinnedLessonKey(pin));
     if (taught.lesson.schemaVersion !== 3) {
-      throw trainingError("VIBE64_TRAINING_LESSON_RETIRED", "This lesson's course needs an update before it can start. Update the course in Courses, then start the lesson again.");
+      throw trainingError(
+        "VIBE64_TRAINING_LESSON_RETIRED",
+        "This lesson's course needs an update before it can start. Update the course in Courses, then start the lesson again."
+      );
     }
     if (!lessonAvailableTo(taught, actor)) {
       throw Object.assign(trainingError("VIBE64_TRAINING_LESSON_UNAVAILABLE_HERE",
@@ -81,20 +97,32 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
   async function startLesson({ actor, courseId, release, lessonCode, requestId, expectedRevision, archiveCurrent = false } = {}) {
     const approved = await catalogue.readCatalogue();
     const entry = approved.courses.find(value => value.course.courseId === courseId && value.course.release === release);
-    if (!entry?.enabled) throw trainingError("VIBE64_TRAINING_COURSE_UNAVAILABLE", "This exact course release is not enabled on this server. Read the courses again and start from a listed release, or resume your saved lesson.");
+    if (!entry?.enabled) {
+      throw trainingError(
+        "VIBE64_TRAINING_COURSE_UNAVAILABLE",
+        "This exact course release is not enabled on this server. Read the courses again and start from a listed release, or resume your saved lesson."
+      );
+    }
     // A preview course is for the workspace owner to review before release;
     // its admitted attempt is otherwise an ordinary saved lesson.
     if (entry.course.status !== "released" && actor?.role !== "owner") {
       throw Object.assign(trainingError("VIBE64_TRAINING_COURSE_PREVIEW",
         "This preview course can be tried only by the workspace owner until it is released."), { statusCode: 403 });
     }
-    const topic = entry.lock.topics.find(value => value.lessons.some(lesson => lesson.code === lessonCode && lesson.status === "published"));
+    const topic = entry.lock.topics.find(value =>
+      value.lessons.some(lesson => lesson.code === lessonCode && lesson.status === "published"));
     if (!topic) throw trainingError("VIBE64_TRAINING_LESSON_UNAVAILABLE", "Choose a published lesson in the approved course release.");
     const lesson = topic.lessons.find(value => value.code === lessonCode);
     const pin = {
       course: { courseId, release },
-      topic: { schemaVersion: 1, topicId: topic.topicId, release: topic.release, repository: topic.repository,
-        commit: topic.commit, topicHash: topic.manifestHash },
+      topic: {
+        schemaVersion: 1,
+        topicId: topic.topicId,
+        release: topic.release,
+        repository: topic.repository,
+        commit: topic.commit,
+        topicHash: topic.manifestHash
+      },
       lesson: { code: lesson.code, hash: lesson.hash }
     };
     let revision = expectedRevision;
@@ -136,7 +164,8 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
     if (!attempt) throw missingAttempt();
     if (!attempt.ended && expectedRevision !== saved.revision) throw revisionConflict();
     if (attempt.ended && (attempt.ended.reason !== "archived" || saved.progress.activeAttemptId &&
-        !saved.progress.attempts.some(value => value.attemptId === saved.progress.activeAttemptId && value.requestIds?.includes(requestId)))) {
+        !saved.progress.attempts.some(value =>
+          value.attemptId === saved.progress.activeAttemptId && value.requestIds?.includes(requestId)))) {
       throw missingAttempt();
     }
     if (!attempt.ended) await requireStartable(actor, attempt.pin);
@@ -156,7 +185,10 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
     if (!attempt.ended) {
       if (expectedRevision !== saved.revision) throw revisionConflict();
       if (!(saved.completion && saved.completion.passed >= saved.completion.required)) {
-        throw trainingError("VIBE64_TRAINING_LESSON_INCOMPLETE", "Pass every required step before finishing this lesson. Nothing was changed.");
+        throw trainingError(
+          "VIBE64_TRAINING_LESSON_INCOMPLETE",
+          "Pass every required step before finishing this lesson. Nothing was changed."
+        );
       }
     }
     return requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "finished" });
@@ -172,7 +204,10 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
   function requireCloser() {
     // readable-check: allow method-probe - optional operation: without a learning space closing a lesson answers that it is unavailable
     if (typeof learningSpace?.closeAttempt !== "function") {
-      throw trainingError("VIBE64_TRAINING_PRACTICE_UNAVAILABLE", "Closing lessons is unavailable in this installation. Nothing was changed.");
+      throw trainingError(
+        "VIBE64_TRAINING_PRACTICE_UNAVAILABLE",
+        "Closing lessons is unavailable in this installation. Nothing was changed."
+      );
     }
     return learningSpace;
   }
@@ -205,7 +240,10 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
       if (!lesson.lesson.exercise) return { ...saved, previewReady: false };
       // readable-check: allow method-probe - optional operation: an installation without exercise preparation answers EXERCISE_UNAVAILABLE
       if (typeof projectRepositoryService?.createManagedGitProject !== "function" || typeof projectRepositoryService?.verifyTrainingProjectSource !== "function") {
-        throw trainingError("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installation cannot prepare the lesson's practice project. Keep the saved attempt and ask the owner to provide exercise preparation.");
+        throw trainingError(
+          "VIBE64_TRAINING_EXERCISE_UNAVAILABLE",
+          "This installation cannot prepare the lesson's practice project. Keep the saved attempt and ask the owner to provide exercise preparation."
+        );
       }
       saved = await learners.beginPreparation({ actor, attemptId, expectedRevision: saved.revision });
       const { attempt } = saved;
@@ -215,29 +253,54 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
         const exercise = await content.readExercise(pinnedLessonKey(attempt.pin));
         // The marker keeps its field name practiceId; its value is the attemptId.
         const training = {
-          schemaVersion: 2, learnerKey: practiceLearnerKey(actor), practiceId: attemptId,
-          pin: attempt.pin, exercise: { kind: "bundled", sourcePath: exercise.sourcePath }
+          schemaVersion: 2,
+          learnerKey: practiceLearnerKey(actor),
+          practiceId: attemptId,
+          pin: attempt.pin,
+          exercise: { kind: "bundled", sourcePath: exercise.sourcePath }
         };
         const prepareExercise = async () => {
           const existing = await projectContext.readWorkspaceProjectState({ slug: attempt.projectSlug });
           let exists = false;
-          try { await lstat(existing.projectContextRoot); exists = true; }
+          try {
+            await lstat(existing.projectContextRoot);
+            exists = true;
+          }
           catch (error) { if (error.code !== "ENOENT") throw error; }
           if (exists || Object.keys(existing.metadata).length) {
-            if (!isDeepStrictEqual(existing.metadata.training, training) || existing.metadata.deletion || existing.metadata.repository?.mode !== "managed_git") {
-              throw trainingError("VIBE64_TRAINING_PROJECT_CONFLICT", "The reserved exercise project has different or missing ownership. Keep it intact and ask the owner to inspect it; no replacement was created.");
+            if (!isDeepStrictEqual(existing.metadata.training, training) ||
+                existing.metadata.deletion ||
+                existing.metadata.repository?.mode !== "managed_git") {
+              throw trainingError(
+                "VIBE64_TRAINING_PROJECT_CONFLICT",
+                "The reserved exercise project has different or missing ownership. Keep it intact and ask the owner to inspect it; no replacement was created."
+              );
             }
           } else {
-            if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_PROJECT_MISSING", "Your prepared exercise project is missing. Keep your progress and ask the owner to restore it; this attempt cannot silently adopt a replacement.");
+            if (attempt.preparation.phase === "ready") {
+              throw trainingError(
+                "VIBE64_TRAINING_PROJECT_MISSING",
+                "Your prepared exercise project is missing. Keep your progress and ask the owner to restore it; this attempt cannot silently adopt a replacement."
+              );
+            }
             requireSuccess(await projectRepositoryService.createManagedGitProject({
-              slug: attempt.projectSlug, name: `Practice: ${attempt.pin.lesson.code}`, training, vibe64User: actor
+              slug: attempt.projectSlug,
+              name: `Practice: ${attempt.pin.lesson.code}`,
+              training,
+              vibe64User: actor
             }, { initializeProject: async ({ projectRoot }) => {
               // readExercise already verifies every byte against the installed pin.
               // Retain the original managed initializer's Git commit and rollback.
               for (const file of exercise.files) {
                 const relative = file.path;
-                if (!relative || relative.includes("\\") || path.posix.isAbsolute(relative) || relative.split("/").some(part => !part || part === "." || part === ".." || part === ".git")) {
-                  throw trainingError("VIBE64_TRAINING_EXERCISE_PATH_INVALID", "The verified exercise contains an invalid source path. Ask the owner to inspect its content release.");
+                if (!relative ||
+                    relative.includes("\\") ||
+                    path.posix.isAbsolute(relative) ||
+                    relative.split("/").some(part => !part || part === "." || part === ".." || part === ".git")) {
+                  throw trainingError(
+                    "VIBE64_TRAINING_EXERCISE_PATH_INVALID",
+                    "The verified exercise contains an invalid source path. Ask the owner to inspect its content release."
+                  );
                 }
                 const destination = path.join(projectRoot, relative);
                 await mkdir(path.dirname(destination), { recursive: true });
@@ -254,19 +317,41 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
             try { current = await runtime.getSession(initialSessionId, { inspectSource: false }); }
             catch (error) {
               if (error.code !== "vibe64_session_not_found") throw error;
-              if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_SESSION_MISSING", "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement.");
+              if (attempt.preparation.phase === "ready") {
+                throw trainingError(
+                  "VIBE64_TRAINING_SESSION_MISSING",
+                  "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement."
+                );
+              }
               // Prove the original exercise before the first session exists.
-              const expectedCommit = (await projectRepositoryService.verifyTrainingProjectSource({ slug: attempt.projectSlug, training }, { files: exercise.files })).commit;
+              const expectedCommit = (await projectRepositoryService.verifyTrainingProjectSource({
+                slug: attempt.projectSlug,
+                training
+              }, { files: exercise.files })).commit;
               // The start commit an AI review reads the learner's changes against.
-              await learners.recordPreparationStart({ actor, attemptId, initialSessionId, startCommit: expectedCommit,
-                expectedRevision: (await learners.resumeAttempt({ actor, attemptId })).revision });
-              current = requireSuccess(await sessions.createSession({ vibe64User: actor }, { sessionId: initialSessionId, expectedCommit }));
+              await learners.recordPreparationStart({
+                actor,
+                attemptId,
+                initialSessionId,
+                startCommit: expectedCommit,
+                expectedRevision: (await learners.resumeAttempt({ actor, attemptId })).revision
+              });
+              current = requireSuccess(await sessions.createSession({ vibe64User: actor }, {
+                sessionId: initialSessionId,
+                expectedCommit
+              }));
             }
             if (current.sessionId !== initialSessionId || current.status === "archived" || current.closing) {
-              throw trainingError("VIBE64_TRAINING_SESSION_CONFLICT", "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected.");
+              throw trainingError(
+                "VIBE64_TRAINING_SESSION_CONFLICT",
+                "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected."
+              );
             }
             if (current.workspaceSetup?.status === "succeeded" && !await terminals.workspaceSetupIsPrepared(initialSessionId)) {
-              throw trainingError("VIBE64_TRAINING_SETUP_CHANGED", "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created.");
+              throw trainingError(
+                "VIBE64_TRAINING_SETUP_CHANGED",
+                "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created."
+              );
             }
             // The setup runner is keyed in this Project context.
             // readable-check: allow optional-call - optional operation: a terminal service without workspace setup has nothing to wait for
@@ -281,13 +366,26 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
             if (["failed", "ambiguous", "required", "unconfigured"].includes(session.workspaceSetup?.status)) {
               setupRun = null;
               if (attempt.preparation.phase === "ready") return { ...current, setup: session.workspaceSetup, previewReady: false };
-              return { ...await learners.recordPreparationFailure({ actor, attemptId, expectedRevision: current.revision, initialSessionId,
-                stage, code: "VIBE64_TRAINING_SETUP_INCOMPLETE", message: "Exercise Workspace setup is incomplete. Use the existing setup recovery, then resume this same lesson." }), previewReady: false };
+              return {
+                ...await learners.recordPreparationFailure({
+                  actor,
+                  attemptId,
+                  expectedRevision: current.revision,
+                  initialSessionId,
+                  stage,
+                  code: "VIBE64_TRAINING_SETUP_INCOMPLETE",
+                  message: "Exercise Workspace setup is incomplete. Use the existing setup recovery, then resume this same lesson."
+                }),
+                previewReady: false
+              };
             }
             return { ...current, setup: session.workspaceSetup || null, previewReady: false };
           }
           const current = await learners.resumeAttempt({ actor, attemptId });
-          return { ...await learners.recordPreparationReady({ actor, attemptId, expectedRevision: current.revision, initialSessionId }), previewReady: false };
+          return {
+            ...await learners.recordPreparationReady({ actor, attemptId, expectedRevision: current.revision, initialSessionId }),
+            previewReady: false
+          };
         };
         return await projectContext.runWithPracticeProjectScope({ actor, training, access: "create" }, prepareExercise);
       } catch (cause) {
@@ -296,9 +394,17 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
         // fails. Retrying reads the same saved identities before any effect.
         try {
           const current = await learners.resumeAttempt({ actor, attemptId });
-          if (attempt.preparation.phase !== "ready") await learners.recordPreparationFailure({ actor, attemptId, expectedRevision: current.revision, initialSessionId,
-            stage, code: String(error.code || "VIBE64_TRAINING_PREPARATION_FAILED").slice(0, 64),
-            message: error === cause ? "Exercise preparation could not finish. Resume the same lesson; if it still fails, ask the owner to inspect the project, session and setup diagnostics." : error.message });
+          if (attempt.preparation.phase !== "ready") await learners.recordPreparationFailure({
+            actor,
+            attemptId,
+            expectedRevision: current.revision,
+            initialSessionId,
+            stage,
+            code: String(error.code || "VIBE64_TRAINING_PREPARATION_FAILED").slice(0, 64),
+            message: error === cause
+              ? "Exercise preparation could not finish. Resume the same lesson; if it still fails, ask the owner to inspect the project, session and setup diagnostics."
+              : error.message
+          });
         } catch { /* Original failure remains authoritative. */ }
         setupRun = null;
         throw error;
@@ -308,7 +414,13 @@ function createTrainingService({ catalogue, content, learners, learningSpace, pr
     return prepared;
   }
 
-  return Object.freeze({ startLesson, prepareLesson, restartLesson, finishLesson, deleteLesson });
+  return Object.freeze({
+    startLesson,
+    prepareLesson,
+    restartLesson,
+    finishLesson,
+    deleteLesson
+  });
 }
 
 export { createTrainingService };

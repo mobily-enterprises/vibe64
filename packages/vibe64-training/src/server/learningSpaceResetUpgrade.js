@@ -23,12 +23,18 @@ async function kind(target) {
   try {
     const info = await lstat(target);
     return info.isSymbolicLink() ? "symlink" : info.isDirectory() ? "directory" : info.isFile() ? "file" : "other";
-  } catch (error) { if (error.code === "ENOENT") return "missing"; throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") return "missing";
+    throw error;
+  }
 }
 
 async function names(directory) {
   try { return (await readdir(directory)).sort(); }
-  catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 function validLearnerKey(key) {
@@ -104,7 +110,10 @@ async function finishCopy({ source, destination }, { verifiedRoot, removeTree })
 async function moveEntry(move, { renamePath, ...copy }) {
   const { source, destination } = move;
   await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
-  try { await renamePath(source, destination); return; }
+  try {
+    await renamePath(source, destination);
+    return;
+  }
   catch (error) { if (error.code !== "EXDEV") throw error; }
   const partial = `${destination}.partial`;
   await rm(partial, { recursive: true, force: true });
@@ -179,14 +188,22 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
     }
     // An interrupted deletion or archive removes the namespace before the
     // runtime root; Learning data is disposable, so the remainder retires.
-    if (!namespaces.length) report("warning", `Practice project ${slug} has no namespace (an interrupted deletion); only its runtime state will be retired.`);
-    report("info", `Practice project ${slug} (learner ${training.learnerKey}, lesson ${training.pin.lesson?.code ?? "unknown"}) will be retired.`);
+    if (!namespaces.length) {
+      report("warning", `Practice project ${slug} has no namespace (an interrupted deletion); only its runtime state will be retired.`);
+    }
+    report(
+      "info",
+      `Practice project ${slug} (learner ${training.learnerKey}, lesson ${training.pin.lesson?.code ?? "unknown"}) will be retired.`
+    );
     // Namespaces first: the runtime root holds the marker that identifies them.
     moves.push(...namespaces, retire(runtimeRoot));
     selected++;
   }
   if (projectsRoot && selected) {
-    report("warning", `${selected} hosted practice project(s) may have managed databases or resource profiles keyed by their slugs. This upgrade cannot remove them; they become unreachable and never collide with new practice projects.`);
+    report(
+      "warning",
+      `${selected} hosted practice project(s) may have managed databases or resource profiles keyed by their slugs. This upgrade cannot remove them; they become unreachable and never collide with new practice projects.`
+    );
   }
 
   // Learner attempt state, code ledgers and the source-less teacher's stores.
@@ -212,7 +229,10 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
   // never listed or opened.
   const archives = (await names(path.join(systemRoot, "project-archives"))).filter(name => SLUG_PATTERN.test(name));
   if (archives.length) {
-    report("info", `${archives.length} archived project bundle(s) named like v1 practice projects stay in project-archives and are not part of Learning: ${archives.join(", ")}.`);
+    report(
+      "info",
+      `${archives.length} archived project bundle(s) named like v1 practice projects stay in project-archives and are not part of Learning: ${archives.join(", ")}.`
+    );
   }
   return { moves, errors };
 }
@@ -231,8 +251,16 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
  * removes. The manifest is written before the first move; a retry finishes the
  * same plan. Offline, with every writer stopped.
  */
-export async function resetLearningForLearningSpace({ systemRoot, projectsRoot, managedSourceRoot, apply, backupRoot, report,
-  renamePath = rename, removeTree = rm }) {
+export async function resetLearningForLearningSpace({
+  systemRoot,
+  projectsRoot,
+  managedSourceRoot,
+  apply,
+  backupRoot,
+  report,
+  renamePath = rename,
+  removeTree = rm
+}) {
   for (const root of [systemRoot, backupRoot, projectsRoot, managedSourceRoot]) {
     if (root !== undefined && (!path.isAbsolute(root || "") || path.resolve(root) !== root || root === path.parse(root).root)) {
       throw new Error("Learning reset requires exact absolute installation, projects, managed source and backup directories.");
@@ -255,7 +283,10 @@ export async function resetLearningForLearningSpace({ systemRoot, projectsRoot, 
     else pending.push(move);
   }
   if (errors.length) throw new Error(`${errors.join(" ")} Inspect before upgrading.`);
-  report("info", `${pending.length + copied.length} Learning item(s) to retire; ${moves.length - pending.length - copied.length} already retired.`);
+  report(
+    "info",
+    `${pending.length + copied.length} Learning item(s) to retire; ${moves.length - pending.length - copied.length} already retired.`
+  );
   if (!apply || !(pending.length + copied.length)) return;
   if (moves.length > saved.length) {
     await mkdir(backupRoot, { recursive: true, mode: 0o700 });

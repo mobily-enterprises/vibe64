@@ -15,7 +15,12 @@ import {
  * @param {(terminalSessionId: string) => Promise<object>} dependencies.readGlobalScreen
  * @param {(terminalSessionId: string, data: string, options: object) => Promise<object>} dependencies.writeGlobalInput
  */
-function createTerminalControls({ readAgentScreen, writeAgentInput, readGlobalScreen, writeGlobalInput }) {
+function createTerminalControls({
+  readAgentScreen,
+  writeAgentInput,
+  readGlobalScreen,
+  writeGlobalInput
+}) {
   async function readAgentTerminalControl(sessionId, terminalSessionId, input) {
     return terminalSessionControlSnapshot(await readAgentScreen(sessionId, terminalSessionId, input));
   }

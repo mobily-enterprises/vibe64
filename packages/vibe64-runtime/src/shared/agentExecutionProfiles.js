@@ -23,7 +23,9 @@ const VIBE64_AGENT_HELPER_WORKLOAD_LIMITS = Object.freeze({
     timeoutMs: 120_000
   }),
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.VOICE_TURN]: Object.freeze({
-    maxInputCharacters: 12000, maxOutputCharacters: 512, timeoutMs: 10000
+    maxInputCharacters: 12000,
+    maxOutputCharacters: 512,
+    timeoutMs: 10000
   }),
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.CONVERSATION_SUMMARY]: Object.freeze({
     maxInputCharacters: 200_000,
@@ -358,7 +360,14 @@ function vibe64HelperExecutionProfileRequest(request, providerLabel) {
 }
 
 /** Resolves a helper on the provider's chosen model with tools, writes and fallback disabled. */
-function defineVibe64HelperExecutionProfileResolution({ executionProfile, limits, model, providerId, revision, thinking }) {
+function defineVibe64HelperExecutionProfileResolution({
+  executionProfile,
+  limits,
+  model,
+  providerId,
+  revision,
+  thinking
+}) {
   return defineVibe64AgentExecutionProfileResolution({
     ...executionProfile,
     limits,

@@ -43,7 +43,15 @@ import { readGithubAccountStatus, readGithubStatus } from "./githubAccountStatus
  * @param {PersonalAiProfileStore | null} dependencies.personalProfileStore
  * @param {TerminalsReadClaudeAccountStatus | null} dependencies.readClaudeAccountStatus
  */
-function createAccountStatusReads({ access, accountRuntime, codexStatus, env, logger, personalProfileStore, readClaudeAccountStatus }) {
+function createAccountStatusReads({
+  access,
+  accountRuntime,
+  codexStatus,
+  env,
+  logger,
+  personalProfileStore,
+  readClaudeAccountStatus
+}) {
   async function readClaudeStatus() {
     if (!resolveOperatorCli("claude", { env }).installed) return operatorCliAccount("claude");
     const credentialHome = accountRuntime.claudeContext();
@@ -53,10 +61,15 @@ function createAccountStatusReads({ access, accountRuntime, codexStatus, env, lo
     if (claudeStatusStartFailed(status)) {
       return operatorCliAccount("claude", { installed: true, observed: status.error });
     }
-    return { ...ACCOUNT_DEFINITIONS.claude, connected: status.loggedIn,
-      username: status.email || "", authMethod: status.authMethod || "", subscriptionType: status.subscriptionType || "",
+    return {
+      ...ACCOUNT_DEFINITIONS.claude,
+      connected: status.loggedIn,
+      username: status.email || "",
+      authMethod: status.authMethod || "",
+      subscriptionType: status.subscriptionType || "",
       status: status.loggedIn ? "connected" : "not_connected",
-      message: status.loggedIn ? "Connected through Claude Code." : status.error || "Sign in to Claude Code with your Claude plan." };
+      message: status.loggedIn ? "Connected through Claude Code." : status.error || "Sign in to Claude Code with your Claude plan."
+    };
   }
 
   async function accountStatus(accountId, {
@@ -166,8 +179,13 @@ function createAccountStatusReads({ access, accountRuntime, codexStatus, env, lo
      * the reason it is still unfinished.
      */
     async function failedAccountRow(accountId, error) {
-      logOperationalEvent(logger, "warn", { component: "vibe64-accounts", event: "vibe64.accounts.status_failed",
-        accountId, code: String(error?.code || ""), error: String(error?.message || error || "") },
+      logOperationalEvent(logger, "warn", {
+        component: "vibe64-accounts",
+        event: "vibe64.accounts.status_failed",
+        accountId,
+        code: String(error?.code || ""),
+        error: String(error?.message || error || "")
+      },
       "Vibe64 account status could not be read");
       const local = accountId === "codex"
         ? await readCodexLocalStatus({ codexContext: access.codexContextForInput(), systemRoot: access.systemRoot }).catch(() => null)

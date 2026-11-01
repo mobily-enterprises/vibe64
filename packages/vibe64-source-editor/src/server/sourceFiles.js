@@ -6,7 +6,11 @@ import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/cor
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { normalizePolicyPath, sourceEditorPathExcluded } from "./filePolicy.js";
-import { VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT, VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT, VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
+import {
+  VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
+  VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT,
+  VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT
+} from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
 import { sourceEditorLanguageForPath } from "./sourceEditorLanguage.js";
 import {
   normalizeSourceEditorQuery,
@@ -405,7 +409,10 @@ function normalizeNewSourceEditorFilePath(value = "") {
     throw sourceEditorError("Choose a file path, not a directory path.", "vibe64_invalid_source_editor_path");
   }
   if (raw.split("/").some((segment) => segment === "." || segment === "..")) {
-    throw sourceEditorError("New source file paths cannot include current- or parent-directory segments.", "vibe64_invalid_source_editor_path");
+    throw sourceEditorError(
+      "New source file paths cannot include current- or parent-directory segments.",
+      "vibe64_invalid_source_editor_path"
+    );
   }
   const relativePath = normalizeSourceEditorRelativePath(raw);
   if (!relativePath || relativePath.endsWith("/")) {

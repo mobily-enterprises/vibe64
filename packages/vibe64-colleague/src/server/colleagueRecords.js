@@ -55,8 +55,12 @@ function publicOperation(call, activeRunId) {
     : failed ? receiptText(call.result?.error?.message, 512) || "The operation failed." : "";
   const errorStatus = Number(call.result?.error?.status);
   return {
-    id: call.id, actionId, label: receipt?.label || (legacyUnfinished ? "Unfinished application operation" : operationLabel(actionId)), status,
-    at: call.at || "", ...(receipt?.target ? { target: { ...receipt.target } } : {}),
+    id: call.id,
+    actionId,
+    label: receipt?.label || (legacyUnfinished ? "Unfinished application operation" : operationLabel(actionId)),
+    status,
+    at: call.at || "",
+    ...(receipt?.target ? { target: { ...receipt.target } } : {}),
     ...(error ? { error } : {}),
     canPrepareRetry: call.status === "not-executed" || call.status === "complete" && call.result?.ok === false &&
       Number.isInteger(errorStatus) && errorStatus < 500
@@ -74,33 +78,52 @@ function publicOperation(call, activeRunId) {
  * @param {RuntimeEvents} dependencies.events
  * @param {ColleagueServiceState} dependencies.serviceState
  */
-function createColleagueRecords({ actions, terminals, events, serviceState }) {
+function createColleagueRecords({
+  actions,
+  terminals,
+  events,
+  serviceState
+}) {
   const storage = createConversationStorage({
     async readRecord(key) {
       const state = serviceState.conversationOwners.get(key);
       if (!state) throw failure("This Colleague history is unavailable.", "conversation_forbidden", 403);
       const record = state.record.runtimeId === key ? state.record :
         state.record.previousConversations.find(old => old.runtimeId === key);
-      return { metadata: record.conversationMetadata || {},
-        turns: new Map(record.conversationLog.map(turn => [turn.turnId, turn])) };
+      return {
+        metadata: record.conversationMetadata || {},
+        turns: new Map(record.conversationLog.map(turn => [turn.turnId, turn]))
+      };
     },
     async writeRecord(key, { turns, metadata }, transaction) {
       const state = serviceState.conversationOwners.get(key);
-      if (!state || state.record.runtimeId !== key) throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
+      if (!state || state.record.runtimeId !== key) {
+        throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
+      }
       const conversationLog = await Promise.all([...turns.keys()].map(id => transaction.readTurn(id)));
       decorateOperationReceipts(state, conversationLog);
       const selected = state.selecting;
       const selectedConfiguration = selected?.configuration;
       const committedSelection = selected && !metadata.runtime?.replacement && metadata.runtime?.engine === selected.engine &&
         JSON.stringify(metadata.runtime.configuration) === JSON.stringify(selectedConfiguration);
-      await persist(state, { conversationLog,
+      await persist(state, {
+        conversationLog,
         ...(committedSelection ? { assistantSelection: selected.assistantSelection } : {}),
-        ...(Object.keys(metadata).length || state.record.conversationMetadata ? { conversationMetadata: metadata } : {}) }, key);
+        ...(Object.keys(metadata).length || state.record.conversationMetadata ? { conversationMetadata: metadata } : {})
+      }, key);
     }
   });
   const transcript = createConversationTranscript({ storage });
-  const assignments = createAssignmentOperations({ actions, persist, transcript });
-  const summaries = createConversationSummary({ actions, terminals, persist });
+  const assignments = createAssignmentOperations({
+    actions,
+    persist,
+    transcript
+  });
+  const summaries = createConversationSummary({
+    actions,
+    terminals,
+    persist
+  });
   const toolPolicy = ({ actionId, kind, context }) => !MAIN_ONLY_ACTIONS.has(actionId) &&
     (context.colleague.thread === "learn" ? !DEVELOP_ONLY_ACTIONS.has(actionId) : !LEARN_ONLY_ACTION.test(actionId)) &&
     (!context.colleague.autonomous || kind === "query" ||
@@ -114,13 +137,18 @@ function createColleagueRecords({ actions, terminals, events, serviceState }) {
     for (const turn of conversationLog) {
       for (const call of turn.metadata?.applicationTools || []) {
         const retained = call.productReceipt || previous.get(`${turn.turnId}\u0000${call.id}`);
-        if (retained) { call.productReceipt = retained; continue; }
+        if (retained) {
+          call.productReceipt = retained;
+          continue;
+        }
         const context = state.operationContext;
         if (!context) continue;
         const payload = readToolArguments(call.arguments);
         const discovered = call.name === "assistant_action_execute";
         const descriptor = discovered ? null : catalog.resolveToolSet(context).byName.get(call.name);
-        const fallbackAction = discovered || descriptor ? null : actions.listDefinitions().find(action => directToolName(action.id) === call.name);
+        const fallbackAction = discovered || descriptor
+          ? null
+          : actions.listDefinitions().find(action => directToolName(action.id) === call.name);
         const actionId = receiptText(discovered ? payload.actionId : descriptor?.actionId || fallbackAction?.id, 300);
         if (!actionId) continue;
         const input = discovered && payload.input && typeof payload.input === "object" && !Array.isArray(payload.input)
@@ -131,8 +159,13 @@ function createColleagueRecords({ actions, terminals, events, serviceState }) {
           ["sessionId", receiptText(input.sessionId || focus.sessionId, 200)],
           ["conversationId", receiptText(input.conversationId || focus.conversationId, 200)]
         ].filter(([, value]) => value));
-        call.productReceipt = { version: 1, runId: state.operationRunId, actionId, label: operationLabel(actionId),
-          ...(target.projectSlug ? { target } : {}) };
+        call.productReceipt = {
+          version: 1,
+          runId: state.operationRunId,
+          actionId,
+          label: operationLabel(actionId),
+          ...(target.projectSlug ? { target } : {})
+        };
       }
     }
   }
@@ -141,7 +174,9 @@ function createColleagueRecords({ actions, terminals, events, serviceState }) {
     const operation = state.saving.then(async () => {
       // A released Learn thread's file belongs to Training now.
       if (state.released) return;
-      if (expectedRuntimeId && state.record.runtimeId !== expectedRuntimeId) throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
+      if (expectedRuntimeId && state.record.runtimeId !== expectedRuntimeId) {
+        throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
+      }
       assignments.suspendDependencies(state);
       const directory = path.dirname(state.file);
       await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -196,14 +231,25 @@ function createColleagueRecords({ actions, terminals, events, serviceState }) {
       clearTimeout(state.replyTimer);
       state.replyTimer = null;
       void events.publish({
-        type: "entity.changed", source: "vibe64", entity: "colleague", operation: "updated",
-        entityId: state.record.scopeId, actorId, scope: { kind: "user", id: actorId },
-        realtime: { audience: "actor_user", event: "vibe64.colleague.reply.changed", payload: {
-          actorId, conversationId: state.record.scopeId,
-          streamEpoch: state.streamEpoch, streamRevision: state.streamRevision,
-          streamingReply: state.streamingReply?.text ? { ...state.streamingReply } : null,
-          completedMessage
-        } }
+        type: "entity.changed",
+        source: "vibe64",
+        entity: "colleague",
+        operation: "updated",
+        entityId: state.record.scopeId,
+        actorId,
+        scope: { kind: "user", id: actorId },
+        realtime: {
+          audience: "actor_user",
+          event: "vibe64.colleague.reply.changed",
+          payload: {
+            actorId,
+            conversationId: state.record.scopeId,
+            streamEpoch: state.streamEpoch,
+            streamRevision: state.streamRevision,
+            streamingReply: state.streamingReply?.text ? { ...state.streamingReply } : null,
+            completedMessage
+          }
+        }
       }).catch(() => {}); // A notification failure cannot fail or repeat a model turn.
     };
     if (state.streamingReply?.text && !completedMessage) {
@@ -217,14 +263,24 @@ function createColleagueRecords({ actions, terminals, events, serviceState }) {
     const operations = record.conversationLog.flatMap(turn => turn.metadata?.applicationTools || [])
       .map(call => publicOperation(call, state.running ? state.operationRunId : "")).filter(Boolean).slice(-8).reverse();
     return {
-      ok: true, conversationId: record.scopeId, thread: { ...state.thread }, status: record.status, error: record.error,
+      ok: true,
+      conversationId: record.scopeId,
+      thread: { ...state.thread },
+      status: record.status,
+      error: record.error,
       ...(!record.assistantSelection && record.error === COLLEAGUE_MODEL_UNAVAILABLE ? { modelSetupRequired: true } : {}),
-      assistantSelection: record.assistantSelection, operation: operations[0] || null, operations,
+      assistantSelection: record.assistantSelection,
+      operation: operations[0] || null,
+      operations,
       messages: page.conversationLog.flatMap((turn) => colleagueHistoryMessages(turn).map((message) => ({
-        id: message.outputId || message.messageId || `${turn.turnId}:${message.role}`, role: message.role, text: message.text, at: message.at
+        id: message.outputId || message.messageId || `${turn.turnId}:${message.role}`,
+        role: message.role,
+        text: message.text,
+        at: message.at
       }))),
       streamingReply: state.streamingReply?.text ? { ...state.streamingReply } : null,
-      streamEpoch: state.streamEpoch, streamRevision: state.streamRevision,
+      streamEpoch: state.streamEpoch,
+      streamRevision: state.streamRevision,
       pagination: page.pagination,
       watches: record.watches.map(publicWatch),
       assignments: (record.assignments || []).map((item) => assignmentSummary(item)),
@@ -233,8 +289,15 @@ function createColleagueRecords({ actions, terminals, events, serviceState }) {
   }
 
   return Object.freeze({
-    storage, transcript, assignments, summaries, catalog,
-    persist, publishBrowserChange, publishReply, snapshot
+    storage,
+    transcript,
+    assignments,
+    summaries,
+    catalog,
+    persist,
+    publishBrowserChange,
+    publishReply,
+    snapshot
   });
 }
 

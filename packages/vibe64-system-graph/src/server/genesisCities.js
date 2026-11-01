@@ -83,7 +83,7 @@ function validateGenesisCity(city, kind) {
 async function readGenesisCity(projectRoot, kind) {
   const definition = cityDefinition(kind);
   const filePath = path.resolve(projectRoot, definition.path);
-  const identity = info => [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].join(':');
+  const identity = info => [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].join(":");
   let revision;
   let revisionStat;
   try {

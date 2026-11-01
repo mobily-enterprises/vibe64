@@ -136,7 +136,8 @@ function registerRoutes(http, {
     actionId: "vibe64.sessions.pull-request.create",
     bodyLimit: 300_000,
     buildInput: (request) => withoutVibe64User({
-      ...requestBody(request), sessionId: request.params.sessionId
+      ...requestBody(request),
+      sessionId: request.params.sessionId
     }),
     summary: "Push session work to a new branch and create a GitHub pull request."
   });
@@ -259,8 +260,10 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "/sessions/:sessionId/connected/replacement", {
     actionId: "vibe64.sessions.connected.replacement.inspect",
-    buildInput: request => ({ sessionId: request.params.sessionId,
-      repository: firstValue(requestQuery(request).repository) }),
+    buildInput: request => ({
+      sessionId: request.params.sessionId,
+      repository: firstValue(requestQuery(request).repository)
+    }),
     summary: "Review a discarded contribution before creating its replacement."
   });
   routes.actionRoute("POST", "/sessions/:sessionId/connected/replacement", {

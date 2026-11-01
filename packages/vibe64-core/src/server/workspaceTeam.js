@@ -11,8 +11,11 @@ function registerWorkspaceTeamReader(reader) {
 
 async function readWorkspaceTeam() {
   const team = teamReader ? await teamReader() : null;
-  return { available: team?.available === true, ownerName: String(team?.ownerName || ""),
-    memberCount: Number.isSafeInteger(team?.memberCount) && team.memberCount > 0 ? team.memberCount : 0 };
+  return {
+    available: team?.available === true,
+    ownerName: String(team?.ownerName || ""),
+    memberCount: Number.isSafeInteger(team?.memberCount) && team.memberCount > 0 ? team.memberCount : 0
+  };
 }
 
 export { readWorkspaceTeam, registerWorkspaceTeamReader };

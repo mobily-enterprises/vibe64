@@ -21,29 +21,58 @@ const descriptions = {
 
 const outputs = {
   "state.read": {
-    savedCommit: text(80), branch: text(200), pushed: flag, remote: text(300), packagingStatus: text(40),
+    savedCommit: text(80),
+    branch: text(200),
+    pushed: flag,
+    remote: text(300),
+    packagingStatus: text(40),
     packages: list({ id: text(64), label: text(200), packer: text(40), version: text(80), versionFrom: text(40) }),
-    targets: list({ id: text(64), destination: text(40), package: text(64), channel: text(64), latestVersion: text(80), latestAt: text(40) }),
-    keysExist: flag, keysUnlocked: flag, recoveryKitAt: text(40),
-    checks: text(40), pendingConfirmationPlanHash: text(80), activeRelease: text(40),
+    targets: list({
+      id: text(64),
+      destination: text(40),
+      package: text(64),
+      channel: text(64),
+      latestVersion: text(80),
+      latestAt: text(40)
+    }),
+    keysExist: flag,
+    keysUnlocked: flag,
+    recoveryKitAt: text(40),
+    checks: text(40),
+    pendingConfirmationPlanHash: text(80),
+    activeRelease: text(40),
     releases: list({ id: text(40), kind: text(20), status: text(20), planId: text(10), versions: text(300), createdAt: text(40) }, 10)
   },
   "release.prepare": {
-    packages: list({ id: text(64), previousVersion: text(80), version: text(80), files: text(1000) }), next: text(300)
+    packages: list({ id: text(64), previousVersion: text(80), version: text(80), files: text(1000) }),
+    next: text(300)
   },
   "plan.read": {
-    planId: text(10), planHash: text(80), savedCommit: text(80), tags: text(500),
+    planId: text(10),
+    planHash: text(80),
+    savedCommit: text(80),
+    tags: text(500),
     packages: list({ id: text(64), version: text(80), buildNumber: { type: "integer", required: false } }),
     targets: list({ id: text(64), destination: text(40), package: text(64), channel: text(64), where: text(300) }),
-    toolchain: text(500), ready: flag, blocked: flag,
+    toolchain: text(500),
+    ready: flag,
+    blocked: flag,
     preflight: list({ id: text(64), severity: text(10), ok: flag, message: text(1000) }, 40)
   },
   "dryrun.run": { releaseId: text(40), kind: text(20) },
   "publish.run": { planId: text(10), message: text(300), requestedAt: text(40) },
   "history.list": {
     releases: list({
-      id: text(40), kind: text(20), status: text(20), planId: text(10), savedCommit: text(80), tags: text(300), versions: text(300),
-      createdAt: text(40), finishedAt: text(40), outcomes: text(2000)
+      id: text(40),
+      kind: text(20),
+      status: text(20),
+      planId: text(10),
+      savedCommit: text(80),
+      tags: text(300),
+      versions: text(300),
+      createdAt: text(40),
+      finishedAt: text(40),
+      outcomes: text(2000)
     }, 30)
   },
   "logs.read": { id: text(40), status: text(20), log: list({ at: text(40), level: text(10), message: text(2000) }, 400) }
@@ -56,7 +85,10 @@ function joined(value) {
 }
 
 function where(settings = {}) {
-  return String(settings.registry || settings.repository || settings.instance || (settings.certificateSha256 ? "this computer" : "")).slice(0, 300);
+  return String(settings.registry || settings.repository || settings.instance || (settings.certificateSha256 ? "this computer" : "")).slice(
+    0,
+    300
+  );
 }
 
 function outcomes(targets = {}) {
@@ -69,38 +101,100 @@ function outcomes(targets = {}) {
 
 const transforms = {
   "state.read": (state) => ({
-    savedCommit: state.baseline?.commit || "", branch: state.baseline?.branch || "", pushed: Boolean(state.baseline?.pushed),
+    savedCommit: state.baseline?.commit || "",
+    branch: state.baseline?.branch || "",
+    pushed: Boolean(state.baseline?.pushed),
     remote: state.baseline?.remote?.githubRepository || state.baseline?.remote?.name || "",
     packagingStatus: state.packaging?.status || "",
-    packages: (state.packaging?.packages || []).slice(0, 50).map(({ id, label, packer, version, versionFrom }) => ({ id, label, packer, version: version || "", versionFrom: versionFrom || "" })),
-    targets: (state.targets || []).slice(0, 50).map((target) => ({
-      id: target.id, destination: target.destination, package: target.package, channel: target.channel || "",
-      latestVersion: target.latest?.version || "", latestAt: target.latest?.at || ""
+    packages: (state.packaging?.packages || []).slice(0, 50).map(({
+      id,
+      label,
+      packer,
+      version,
+      versionFrom
+    }) => ({
+      id,
+      label,
+      packer,
+      version: version || "",
+      versionFrom: versionFrom || ""
     })),
-    keysExist: Boolean(state.keys?.exists), keysUnlocked: Boolean(state.keys?.unlocked), recoveryKitAt: state.keys?.recoveryKit?.createdAt || "",
-    checks: state.checks?.status || "not run", pendingConfirmationPlanHash: state.pendingConfirmation?.planHash || "",
+    targets: (state.targets || []).slice(0, 50).map((target) => ({
+      id: target.id,
+      destination: target.destination,
+      package: target.package,
+      channel: target.channel || "",
+      latestVersion: target.latest?.version || "",
+      latestAt: target.latest?.at || ""
+    })),
+    keysExist: Boolean(state.keys?.exists),
+    keysUnlocked: Boolean(state.keys?.unlocked),
+    recoveryKitAt: state.keys?.recoveryKit?.createdAt || "",
+    checks: state.checks?.status || "not run",
+    pendingConfirmationPlanHash: state.pendingConfirmation?.planHash || "",
     activeRelease: state.activeRelease || "",
     releases: (state.releases || []).slice(0, 10).map((release) => ({
-      id: release.id, kind: release.kind, status: release.status, planId: release.planId || "", versions: joined(release.versions), createdAt: release.createdAt
+      id: release.id,
+      kind: release.kind,
+      status: release.status,
+      planId: release.planId || "",
+      versions: joined(release.versions),
+      createdAt: release.createdAt
     }))
   }),
   "release.prepare": (value) => ({
-    packages: (value.packages || []).map(({ id, previousVersion, version, files }) => ({ id, previousVersion, version, files: joined(files) })),
+    packages: (value.packages || []).map(({
+      id,
+      previousVersion,
+      version,
+      files
+    }) => ({
+      id,
+      previousVersion,
+      version,
+      files: joined(files)
+    })),
     next: value.next
   }),
   "plan.read": ({ plan }) => ({
-    planId: plan.planId, planHash: plan.planHash, savedCommit: plan.savedCommit, tags: joined(plan.tags),
-    packages: plan.packages.map(({ id, version, buildNumber }) => ({ id, version: version || "", ...(buildNumber ? { buildNumber } : {}) })),
-    targets: plan.targets.map((target) => ({ id: target.id, destination: target.destination, package: target.package, channel: target.channel || "", where: where(target.settings) })),
-    toolchain: joined(plan.toolchain), ready: Boolean(plan.preflight?.ready), blocked: Boolean(plan.preflight?.blocked),
+    planId: plan.planId,
+    planHash: plan.planHash,
+    savedCommit: plan.savedCommit,
+    tags: joined(plan.tags),
+    packages: plan.packages.map(({
+      id,
+      version,
+      buildNumber
+    }) => ({
+      id,
+      version: version || "",
+      ...(buildNumber ? { buildNumber } : {})
+    })),
+    targets: plan.targets.map((target) => ({
+      id: target.id,
+      destination: target.destination,
+      package: target.package,
+      channel: target.channel || "",
+      where: where(target.settings)
+    })),
+    toolchain: joined(plan.toolchain),
+    ready: Boolean(plan.preflight?.ready),
+    blocked: Boolean(plan.preflight?.blocked),
     preflight: (plan.preflight?.checks || []).map(({ id, severity, ok, message }) => ({ id, severity, ok, message }))
   }),
   "dryrun.run": ({ releaseId, kind }) => ({ releaseId, kind }),
   "publish.run": ({ planId, message, pendingConfirmation }) => ({ planId, message, requestedAt: pendingConfirmation?.requestedAt || "" }),
   "history.list": ({ releases = [] }) => ({
     releases: releases.map((release) => ({
-      id: release.id, kind: release.kind, status: release.status, planId: release.planId || "", savedCommit: release.savedCommit || "",
-      tags: joined(release.tags), versions: joined(release.versions), createdAt: release.createdAt, finishedAt: release.finishedAt || "",
+      id: release.id,
+      kind: release.kind,
+      status: release.status,
+      planId: release.planId || "",
+      savedCommit: release.savedCommit || "",
+      tags: joined(release.tags),
+      versions: joined(release.versions),
+      createdAt: release.createdAt,
+      finishedAt: release.finishedAt || "",
       outcomes: outcomes(release.targets)
     }))
   }),
@@ -111,10 +205,22 @@ function publishingTool(operation) {
   if (!descriptions[operation]) throw new TypeError(`No publishing assistant contract for ${operation}.`);
   return {
     description: descriptions[operation],
-    output: { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true }, error: text(1000), code: text(120), ...outputs[operation] }) },
+    output: {
+      mode: "replace",
+      schema: createSchema({
+        ok: { type: "boolean", required: true },
+        error: text(1000),
+        code: text(120),
+        ...outputs[operation]
+      })
+    },
     transformResult(value) {
       if (value?.ok !== true) {
-        return { ok: false, code: String(value?.code || "").slice(0, 120), error: String(value?.error || "Publishing failed. Open the Publish page for details.").slice(0, 1000) };
+        return {
+          ok: false,
+          code: String(value?.code || "").slice(0, 120),
+          error: String(value?.error || "Publishing failed. Open the Publish page for details.").slice(0, 1000)
+        };
       }
       return { ok: true, ...transforms[operation](value) };
     }

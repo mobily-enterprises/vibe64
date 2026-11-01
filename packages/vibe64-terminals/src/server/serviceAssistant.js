@@ -130,8 +130,16 @@ function createServiceAssistant({
     const steering = sessionHasActiveAgentRun(context.session);
     const available = currentMode && !steering ? purposes[currentMode]?.available === true : native.available;
     const canUse = currentMode && !steering ? purposes[currentMode]?.available === true : native.canUse;
-    return { ...native, available, canUse, nativeCanUse: native.canUse, steering, canUseAny: Object.values(purposes).some(purpose => purpose.available),
-      currentMode, purposes };
+    return {
+      ...native,
+      available,
+      canUse,
+      nativeCanUse: native.canUse,
+      steering,
+      canUseAny: Object.values(purposes).some(purpose => purpose.available),
+      currentMode,
+      purposes
+    };
   }
 
   async function requireAssistantAccess(sessionId, options = {}) {
@@ -156,24 +164,41 @@ function createServiceAssistant({
     async function prepareCodexHost({ providerId }) {
       // Same account/runtime scope as main chat. The conversation's workdir
       // and command environment belong to its thread, not this service.
-      const options = { ...codexProviderOptions,
+      const options = {
+        ...codexProviderOptions,
         ...(providerId === "openai" ? {} : await codexProviderConnections.runtimeOptions(providerId)),
-        executionMode: "", executionRoot: "", workdir: "", project: {}, session: {},
-        terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env })), userKey: "" };
+        executionMode: "",
+        executionRoot: "",
+        workdir: "",
+        project: {},
+        session: {},
+        terminalEnv: await vibe64HostContextEnvironment(codexAppServerRuntimeBaseDir({ env })),
+        userKey: ""
+      };
       options.runtimeDir ||= codexAppServerRuntimeDir(options);
       return { ...codexAppServerRuntimeHost(options), log: codexAppServerControlsLog(logger), options };
     }
 
     return Object.freeze({
-      workdir: scope.workdir, stateDirectory: path.join(scope.runtimeRoot, "native"),
+      workdir: scope.workdir,
+      stateDirectory: path.join(scope.runtimeRoot, "native"),
       allowAccountChange: scope.allowAccountChange === true,
-      env: { ...homeEnvForUser(credentialHome, env),
-        CODEX_HOME: path.join(codexProviderOptions.toolHomeSource, ".codex") },
-      commands: { codex: codexProviderOptions.codexCommand || operatorCliCommand("codex", { env }),
+      env: {
+        ...homeEnvForUser(credentialHome, env),
+        CODEX_HOME: path.join(codexProviderOptions.toolHomeSource, ".codex")
+      },
+      commands: {
+        codex: codexProviderOptions.codexCommand || operatorCliCommand("codex", { env }),
         claude: operatorCliCommand("claude", { env }),
-        opencode: opencodeTerminalController.command || operatorCliCommand("opencode", { env }) },
-      execution: createVibe64ConversationExecution({ credentialHome, capturePurpose: "account",
-        execution: { ownerId: scope.id }, operationId: "conversation", label: "Assistant conversation" }),
+        opencode: opencodeTerminalController.command || operatorCliCommand("opencode", { env })
+      },
+      execution: createVibe64ConversationExecution({
+        credentialHome,
+        capturePurpose: "account",
+        execution: { ownerId: scope.id },
+        operationId: "conversation",
+        label: "Assistant conversation"
+      }),
       opencode: prepareOpenCodeHost,
       codex: prepareCodexHost
     });
@@ -186,7 +211,9 @@ function createServiceAssistant({
 
   async function resolveConversationConnection({ integrationId, assistantSelection }, options = {}) {
     await sessionAgent.requireAssistantAccessForSelection(assistantSelection, options);
-    if (integrationId !== assistantSelection.modelProviderId) throw new Error("The requested connection differs from the authorized assistant selection.");
+    if (integrationId !== assistantSelection.modelProviderId) {
+      throw new Error("The requested connection differs from the authorized assistant selection.");
+    }
     let connection;
     if (assistantSelection.engineId === "opencode") connection = await state.assistantRuntime.resolveConnection(assistantSelection);
     else if (assistantSelection.engineId === "claude") connection = await codexProviderConnections.claudeProviderSettings(integrationId);
@@ -195,8 +222,12 @@ function createServiceAssistant({
       connection = await codexProviderConnections.read(integrationId, "codex");
     }
     if (!connection?.apiKey) throw new Error("Reconnect the selected AI account before continuing.");
-    return { providerId: integrationId, model: assistantSelection.modelId, apiKey: connection.apiKey,
-      ...(connection.canonicalUrl ? { baseURL: connection.canonicalUrl } : {}) };
+    return {
+      providerId: integrationId,
+      model: assistantSelection.modelId,
+      apiKey: connection.apiKey,
+      ...(connection.canonicalUrl ? { baseURL: connection.canonicalUrl } : {})
+    };
   }
 
   function listAssistantCapabilities(input = {}, options = {}) {
@@ -271,29 +302,42 @@ function createServiceAssistant({
     const inspectConfiguration = async (saved) => {
       // readable-check: allow method-probe - test asserts error: a goal without an integration configuration reader is refused
       if (typeof options.readIntegrationConfiguration !== "function") {
-        return { ok: false, code: "vibe64_integration_configuration_unavailable",
-          error: "Integration configuration cannot be checked before continuing.", integrationSetup: saved };
+        return {
+          ok: false,
+          code: "vibe64_integration_configuration_unavailable",
+          error: "Integration configuration cannot be checked before continuing.",
+          integrationSetup: saved
+        };
       }
       const current = await options.readIntegrationConfiguration();
       if (current?.ok === false) return current;
       if (current?.baseHash !== saved.configurationHash ||
           !Object.hasOwn(current?.configuration?.integrations || {}, saved.integrationId)) {
-        return { ok: false, code: "vibe64_integration_configuration_changed",
+        return {
+          ok: false,
+          code: "vibe64_integration_configuration_changed",
           error: "Integration configuration changed after verification. Return to chat and request setup for the updated configuration.",
-          integrationSetup: saved };
+          integrationSetup: saved
+        };
       }
       return null;
     };
-    const unconfirmed = (saved) => ({ ok: false, code: "vibe64_integration_continuation_unconfirmed",
+    const unconfirmed = (saved) => ({
+      ok: false,
+      code: "vibe64_integration_continuation_unconfirmed",
       error: "Assistant delivery could not be confirmed. Check again to inspect delivery; this will not send a duplicate message.",
-      integrationSetup: saved });
+      integrationSetup: saved
+    });
     const prepared = await sessionAccess.runMainAgentWrite(sessionId, options, async (context) => {
       requireCompletedConversationRewind(context.session);
       const store = context.runtime.store;
       const saved = await store.readIntegrationSetupRequest(sessionId, input.turnId);
       if (!saved || saved.requestId !== input.requestId || saved.outcome !== "completed") {
-        return { ok: false, code: "vibe64_integration_setup_not_completed",
-          error: "This integration request has not been completed." };
+        return {
+          ok: false,
+          code: "vibe64_integration_setup_not_completed",
+          error: "This integration request has not been completed."
+        };
       }
       if (saved.continuation.status === "accepted") {
         return { ok: true, integrationSetup: saved };
@@ -306,7 +350,8 @@ function createServiceAssistant({
         if (!delivered && vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId === saved.continuation.engineId) {
           try {
             const admission = await sessionAgent.inspectMessageAdmission(sessionId, {
-              messageId: saved.continuationMessageId, threadId: saved.continuation.threadId
+              messageId: saved.continuationMessageId,
+              threadId: saved.continuation.threadId
             }, context);
             delivered = admission.ok !== false && admission.admission === "accepted";
           } catch {
@@ -315,7 +360,9 @@ function createServiceAssistant({
         }
         if (!delivered) return unconfirmed(saved);
         const accepted = await store.acceptIntegrationContinuation(sessionId, {
-          ...input, continuationMessageId: saved.continuationMessageId, ...saved.continuation
+          ...input,
+          continuationMessageId: saved.continuationMessageId,
+          ...saved.continuation
         });
         return { ok: true, integrationSetup: accepted.integrationSetup };
       }
@@ -331,14 +378,21 @@ function createServiceAssistant({
     let failure;
     try {
       const result = await assistantRouting.send(sessionId, {
-        messageId: saved.continuationMessageId, submissionKind: "send",
+        messageId: saved.continuationMessageId,
+        submissionKind: "send",
         message: `Integration setup completed for slot ${JSON.stringify(saved.integrationId)}. Continue the implementation from your integration setup request. Read the project's saved integration configuration; do not request or expose credentials in chat.`
-      }, { ...options, runtime, purpose: "junior",
+      }, {
+        ...options,
+        runtime,
+        purpose: "junior",
         onPromptSending: async ({ threadId, assistantSelection }) => {
           const changed = await inspectConfiguration(saved);
           if (changed) throw Object.assign(new Error(changed.error), { code: changed.code });
           await runtime.store.claimIntegrationContinuation(sessionId, {
-            ...input, continuationMessageId: saved.continuationMessageId, engineId: assistantSelection.engineId, threadId
+            ...input,
+            continuationMessageId: saved.continuationMessageId,
+            engineId: assistantSelection.engineId,
+            threadId
           });
         }
       });
@@ -346,8 +400,11 @@ function createServiceAssistant({
     } catch (error) {
       failure = { ok: false, code: error.code, error: error.message };
       logOperationalEvent(logger, "warn", {
-        code: error.code, component: "vibe64.integration_continuation",
-        event: "vibe64.integration_continuation.delivery_failed", sessionId, messageId: saved.continuationMessageId
+        code: error.code,
+        component: "vibe64.integration_continuation",
+        event: "vibe64.integration_continuation.delivery_failed",
+        sessionId,
+        messageId: saved.continuationMessageId
       }, "Integration continuation delivery failed; its request remains available for recovery.");
     }
     return sessionAccess.runMainAgentWrite(sessionId, { ...options, runtime }, async () => {
@@ -357,7 +414,9 @@ function createServiceAssistant({
       if (current.continuation.status === "pending") return failure || unconfirmed(current);
       if (!delivered) return unconfirmed(current);
       const accepted = await runtime.store.acceptIntegrationContinuation(sessionId, {
-        ...input, continuationMessageId: current.continuationMessageId, ...current.continuation
+        ...input,
+        continuationMessageId: current.continuationMessageId,
+        ...current.continuation
       });
       return { ok: true, integrationSetup: accepted.integrationSetup };
     }, { operation: "complete-integration-continuation", waitMs: AGENT_WRITE_WAIT_MS });
@@ -369,8 +428,10 @@ function createServiceAssistant({
     const deliveryStartedAt = performance.now();
     const username = (currentProjectRequestContext()?.vibe64User || options.vibe64User)?.username || null;
     logOperationalEvent(logger, "info", {
-      event: "vibe64.agent_message.received", component: "vibe64.agent_message",
-      sessionId, messageId: input.messageId
+      event: "vibe64.agent_message.received",
+      component: "vibe64.agent_message",
+      sessionId,
+      messageId: input.messageId
     }, "Assistant message received.");
     void sessionPromptHints.cancelSessionPromptHintsForSession(sessionId).catch((error) => {
       logOperationalEvent(logger, "warn", { event: "vibe64.prompt_hints.cleanup_failed", error: error.message, sessionId },
@@ -380,9 +441,13 @@ function createServiceAssistant({
       const result = await assistantRouting.send(sessionId, input, { ...options, deliveryMessageId: input.messageId });
       const deliveryDurationMs = performance.now() - deliveryStartedAt;
       logOperationalEvent(logger, deliveryDurationMs >= 1000 ? "warn" : "info", {
-        event: "vibe64.agent_message.delivery_finished", component: "vibe64.agent_message",
-        sessionId, messageId: input.messageId, durationMs: deliveryDurationMs,
-        delivered: result?.delivered === true, duplicate: result?.duplicate === true
+        event: "vibe64.agent_message.delivery_finished",
+        component: "vibe64.agent_message",
+        sessionId,
+        messageId: input.messageId,
+        durationMs: deliveryDurationMs,
+        delivered: result?.delivered === true,
+        duplicate: result?.duplicate === true
       }, "Assistant message delivery finished.");
       if (result?.ok === true && !result.duplicate && !options.purpose && !input.reviewAction && !state.lifecycle.closing) {
         try {
@@ -453,7 +518,10 @@ function createServiceAssistant({
           !context.session.metadata.agent_identity_conversation_id)) {
         await sessionAgent.prepareSelection(sessionId, selection, context);
       }
-      const result = await sessionAgent.ensureSession(sessionId, ["codex", "opencode"].includes(selection.engineId) ? assistantContext.applicationToolManifest(context) : context);
+      const result = await sessionAgent.ensureSession(
+        sessionId,
+        ["codex", "opencode"].includes(selection.engineId) ? assistantContext.applicationToolManifest(context) : context
+      );
       if (result?.ok !== false) await assistantRouting.reconcile(sessionId, context);
       if (result?.ok === false) {
         logFailure({
@@ -472,7 +540,8 @@ function createServiceAssistant({
   async function openBrowserConversation(sessionId, options = {}) {
     if (!options.browserAuthority || options.browserAuthority.sessionId !== sessionId) {
       throw Object.assign(new Error("Main browser conversations require current project access."), {
-        code: "conversation_forbidden", statusCode: 403
+        code: "conversation_forbidden",
+        statusCode: 403
       });
     }
     const diagnostics = realtimeDebugEnabled(env);
@@ -481,35 +550,60 @@ function createServiceAssistant({
     let completed = false;
     try {
       const saved = await sessionAccess.readAssistantSession(sessionId, options);
-      if (diagnostics) logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
-        sessionId, phase, completed: true, durationMs: performance.now() - started }, "Browser conversation opening timing.");
+      if (diagnostics) logOperationalEvent(logger, "warn", {
+        event: "vibe64.conversation.browser_timing",
+        sessionId,
+        phase,
+        completed: true,
+        durationMs: performance.now() - started
+      }, "Browser conversation opening timing.");
       phase = "native-open";
       started = performance.now();
       // The tool manifest resolves the saved selection, so it belongs to opening.
       const context = assistantContext.applicationToolManifest(saved);
       const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
-      const current = { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId,
-        browserProjectContext: captureProjectRequestContext() };
+      const current = {
+        ...context,
+        sessionId,
+        assistantSelection: selection,
+        providerId: selection.engineId,
+        browserProjectContext: captureProjectRequestContext()
+      };
       const conversation = await mainConversations.open({ id: sessionId, context: current });
       completed = true;
       /**
        * A cancelled message is never offered for recovery and has no other receipt.
        */
-      return Object.freeze({ ...conversation, async read(...args) {
-        const conversationState = await conversation.read(...args);
-        if (!conversationState?.pendingRequest || !await assistantRouting.isCancelled(sessionId, conversationState.pendingRequest.messageId, current)) return conversationState;
-        return { ...conversationState, pendingRequest: null, ...(conversationState.status === "unconfirmed" ? { status: "ready" } : {}) };
-      }, async inspectDelivery(input) {
-        if (await assistantRouting.isCancelled(sessionId, input.messageId, current)) return { status: "cancelled", messageId: input.messageId };
-        const receipt = await conversation.inspectDelivery(input);
-        if (receipt?.status !== "unknown") return receipt;
-        const routed = await assistantRouting.inspectDelivery(sessionId, input, current);
-        if (routed?.delivered === true) return conversation.inspectDelivery(input);
-        return routed?.status === "not-sent" ? routed : receipt;
-      } });
+      return Object.freeze({
+        ...conversation,
+        async read(...args) {
+          const conversationState = await conversation.read(...args);
+          if (!conversationState?.pendingRequest ||
+              !await assistantRouting.isCancelled(sessionId, conversationState.pendingRequest.messageId, current)) {
+            return conversationState;
+          }
+          return { ...conversationState, pendingRequest: null, ...(conversationState.status === "unconfirmed" ? { status: "ready" } : {}) };
+        },
+        async inspectDelivery(input) {
+          if (await assistantRouting.isCancelled(sessionId, input.messageId, current)) return {
+            status: "cancelled",
+            messageId: input.messageId
+          };
+          const receipt = await conversation.inspectDelivery(input);
+          if (receipt?.status !== "unknown") return receipt;
+          const routed = await assistantRouting.inspectDelivery(sessionId, input, current);
+          if (routed?.delivered === true) return conversation.inspectDelivery(input);
+          return routed?.status === "not-sent" ? routed : receipt;
+        }
+      });
     } finally {
-      if (diagnostics) logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
-        sessionId, phase, completed, durationMs: performance.now() - started }, "Browser conversation opening timing.");
+      if (diagnostics) logOperationalEvent(logger, "warn", {
+        event: "vibe64.conversation.browser_timing",
+        sessionId,
+        phase,
+        completed,
+        durationMs: performance.now() - started
+      }, "Browser conversation opening timing.");
     }
   }
 
@@ -517,12 +611,20 @@ function createServiceAssistant({
     const authority = options.browserAuthority;
     if (!authority || authority.sessionId !== sessionId || authority.conversationId !== conversationId) {
       throw Object.assign(new Error("Temporary browser conversations require current project access."), {
-        code: "conversation_forbidden", statusCode: 403
+        code: "conversation_forbidden",
+        statusCode: 403
       });
     }
     const context = await assistantContext.assistantSessionOptions(sessionId, options);
-    return mainConversations.open({ id: sessionId, context: { ...context, sessionId, temporaryConversationId: conversationId,
-      browserProjectContext: captureProjectRequestContext() } });
+    return mainConversations.open({
+      id: sessionId,
+      context: {
+        ...context,
+        sessionId,
+        temporaryConversationId: conversationId,
+        browserProjectContext: captureProjectRequestContext()
+      }
+    });
   }
 
   function agentSessionState(sessionId, options = {}) {

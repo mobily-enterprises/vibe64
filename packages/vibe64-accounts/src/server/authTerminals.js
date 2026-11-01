@@ -56,7 +56,18 @@ import {
  * @param {AuthSessionState} dependencies.state
  * @param {AccountStatusReads} dependencies.statusReads
  */
-function createAuthTerminals({ access, accountRuntime, authSessionViews, env, logger, modelRouting, notifications, runAuthTerminalCommand, state, statusReads }) {
+function createAuthTerminals({
+  access,
+  accountRuntime,
+  authSessionViews,
+  env,
+  logger,
+  modelRouting,
+  notifications,
+  runAuthTerminalCommand,
+  state,
+  statusReads
+}) {
   function createAuthTerminalCloseHandler({
     accountId,
     githubContext,
@@ -210,11 +221,14 @@ function createAuthTerminals({ access, accountRuntime, authSessionViews, env, lo
         command,
         credentialHome,
         cwd: authCwd,
-        env: { ...authSecrets, ...(browserFile ? {
-          BROWSER: fileURLToPath(import.meta.resolve("@local/vibe64-accounts/bin/claude-auth-browser")),
-          VIBE64_CLAUDE_AUTH_HANDOFF: browserFile,
-          DISABLE_AUTOUPDATER: "1"
-        } : {}) },
+        env: {
+          ...authSecrets,
+          ...(browserFile ? {
+            BROWSER: fileURLToPath(import.meta.resolve("@local/vibe64-accounts/bin/claude-auth-browser")),
+            VIBE64_CLAUDE_AUTH_HANDOFF: browserFile,
+            DISABLE_AUTOUPDATER: "1"
+          } : {})
+        },
         envPolicy: "auth",
         mode: "pty",
         purpose: authTerminalPurpose(accountId),
@@ -227,8 +241,12 @@ function createAuthTerminals({ access, accountRuntime, authSessionViews, env, lo
           namespace: ACCOUNT_AUTH_NAMESPACE,
           onClose: async (event) => {
             try {
-              await createAuthTerminalCloseHandler({ accountId, githubContext,
-                previousGithub: options.previousGithub, vibe64User: options.vibe64User })(event);
+              await createAuthTerminalCloseHandler({
+                accountId,
+                githubContext,
+                previousGithub: options.previousGithub,
+                vibe64User: options.vibe64User
+              })(event);
             } finally {
               state.claudeBrowserFiles.delete(event.id);
               await cleanupBrowser();
@@ -290,7 +308,10 @@ function createAuthTerminals({ access, accountRuntime, authSessionViews, env, lo
   }
 
   async function startAuth(input) {
-    return access.accountChange("start-sign-in", input, { accountId: String(input.accountId || ""), mode: String(input.mode || "") }, async () => {
+    return access.accountChange("start-sign-in", input, {
+      accountId: String(input.accountId || ""),
+      mode: String(input.mode || "")
+    }, async () => {
       const accountId = normalizedAccountId(input.accountId);
       authDebug("server.auth.start.request", {
         accountId: accountId || String(input.accountId || ""),

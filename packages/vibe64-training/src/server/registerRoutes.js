@@ -13,7 +13,9 @@ const BODY_LIMITS = Object.freeze({ "learner-notes.update": 32 * 1024 });
  */
 function registerTrainingRoutes(http) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-training"] }), {
-    relativePath: "vibe64/training", surface: "app", wrapHandler: vibe64RouteHandler({ projectScoped: false })
+    relativePath: "vibe64/training",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({ projectScoped: false })
   });
   for (const [method, suffix, operation] of [
     ["GET", "/courses", "courses.list"],

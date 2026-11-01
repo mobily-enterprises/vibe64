@@ -12,9 +12,24 @@ import { pathInsideOrEqual } from "./core.js";
 import { PRACTICE_SLUG_PATTERN, normalizeProjectTraining } from "./learningSpace.js";
 import { normalizeProjectDeletion } from "./projectDeletion.js";
 import { readProjectRecordMetadata, updateProjectRecordMetadata } from "./projectRecordMetadata.js";
-import { PROJECT_REPOSITORY_MODE_GITHUB, PROJECT_REPOSITORY_MODE_LOCAL_SOURCE, PROJECT_REPOSITORY_MODE_MANAGED_GIT, normalizeProjectGithubRepository, projectRepositoryMetadataFromInput, projectRepositoryStorageRole, projectRepositoryView } from "./projectRepository.js";
+import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+  normalizeProjectGithubRepository,
+  projectRepositoryMetadataFromInput,
+  projectRepositoryStorageRole,
+  projectRepositoryView
+} from "./projectRepository.js";
 import { publicProjectRuntimeOpenState, readProjectRuntimeOpenState } from "./projectRuntimeOpenState.js";
-import { normalizeProjectSlug, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR, resolveProjectSessionsRoot, resolveProjectDeploymentsRoot, resolveProjectRuntimeFilesRoot, resolveProjectRuntimeConfigRoot } from "./projectState.js";
+import {
+  normalizeProjectSlug,
+  EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
+  resolveProjectSessionsRoot,
+  resolveProjectDeploymentsRoot,
+  resolveProjectRuntimeFilesRoot,
+  resolveProjectRuntimeConfigRoot
+} from "./projectState.js";
 import { VIBE64_PROJECTS_ROOT_ENV, resolveDefaultProjectsRoot } from "./studioRoots.js";
 
 // Project records and their saved metadata: slugs, context and runtime
@@ -54,8 +69,10 @@ function projectSlugExistsError() {
  */
 function assertCatalogueSlugAllowed(slug = "") {
   if (PRACTICE_SLUG_PATTERN.test(slug)) {
-    throw Object.assign(new Error("Project names like training-<id> are reserved for practice projects. Choose a different project name."), {
-      code: "vibe64_project_slug_reserved", statusCode: 409
+    throw Object.assign(new Error("Project names like training-<id> are reserved for practice projects. Choose a different project name."),
+      {
+      code: "vibe64_project_slug_reserved",
+      statusCode: 409
     });
   }
 }

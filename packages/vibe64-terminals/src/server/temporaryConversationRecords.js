@@ -22,7 +22,9 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
   async function recordFor(ctx, conversationId) {
     const record = await ctx.runtime.store.readSessionConversation(ctx.session.sessionId, conversationId);
     if (!record) throw Object.assign(new Error("This conversation has been closed."), {
-      code: "vibe64_conversation_closed", statusCode: 404, conversationExpired: true
+      code: "vibe64_conversation_closed",
+      statusCode: 404,
+      conversationExpired: true
     });
     return record;
   }
@@ -45,7 +47,8 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
     const saved = await ctx.runtime.store.mutateSession(ctx.session.sessionId, async () => {
       const current = await recordFor(ctx, record.conversationId);
       if (requireOpen && current.state === "closing") throw Object.assign(new Error("This conversation is closing."), {
-        code: "vibe64_conversation_closing", statusCode: 409
+        code: "vibe64_conversation_closing",
+        statusCode: 409
       });
       patch = patchFor(current);
       const next = { ...patch };
@@ -65,8 +68,10 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
       return ctx.runtime.store.writeSessionConversation(ctx.session.sessionId, record.conversationId, next);
     });
     if (Object.keys(patch).some(key => !isDeepStrictEqual(record[key], saved[key]))) {
-      await publish(ctx, saved.conversationId, { type: "phase",
-        phase: ["starting", "inProgress"].includes(saved.status) ? "working" : "" });
+      await publish(ctx, saved.conversationId, {
+        type: "phase",
+        phase: ["starting", "inProgress"].includes(saved.status) ? "working" : ""
+      });
     }
     return saved;
   }
@@ -83,7 +88,13 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
   function selectedContext(ctx, record) {
     const selection = record.assistantSelection || vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
     const metadata = { ...ctx.session.metadata };
-    for (const key of ["assistant_routing", "assistant_routing_request", "assistant_routing_goal", "codex_routing_home_provider", "assistant_changeover"]) delete metadata[key];
+    for (const key of [
+      "assistant_routing",
+      "assistant_routing_request",
+      "assistant_routing_goal",
+      "codex_routing_home_provider",
+      "assistant_changeover"
+    ]) delete metadata[key];
     // Native history belongs to this chat, never to the parent session.
     for (const key of Object.keys(metadata)) {
       if (isNativeConversationBindingKey(key)) delete metadata[key];
@@ -98,13 +109,22 @@ function createTemporaryConversationRecords({ sessionAgent, publishConversation 
       // Enforce repair policy for future turns without rewriting saved requests or history.
       metadata.assistant_routing = JSON.stringify(assistantRoutingPreferences({ mode: "fix" }));
     }
-    return { ...ctx, routingConversationId: record.conversationId, assistantSelection: selection,
-      session: { ...ctx.session, metadata } };
+    return {
+      ...ctx,
+      routingConversationId: record.conversationId,
+      assistantSelection: selection,
+      session: { ...ctx.session, metadata }
+    };
   }
 
   function nativeBinding(record) {
-    return { conversationId: record.providerConversationId, assistantSelection: record.assistantSelection,
-      agentSettings: record.agentSettings || {}, runId: record.runId || "", messageId: record.messageId || "" };
+    return {
+      conversationId: record.providerConversationId,
+      assistantSelection: record.assistantSelection,
+      agentSettings: record.agentSettings || {},
+      runId: record.runId || "",
+      messageId: record.messageId || ""
+    };
   }
 
   function bindingKey(ctx, record) {

@@ -12,8 +12,11 @@ export function isNativeConversationBindingKey(name) {
 export function nativeConversationBindings(session, { retiredOnly = false } = {}) {
   const metadata = session.metadata || {};
   const state = JSON.parse(metadata.assistant_changeover || "null");
-  const bindings = (state?.retiredConversations || []).map((binding) => ({ ...binding,
-    engineId: binding.assistantSelection.engineId, retired: true }));
+  const bindings = (state?.retiredConversations || []).map((binding) => ({
+    ...binding,
+    engineId: binding.assistantSelection.engineId,
+    retired: true
+  }));
   if (retiredOnly) return bindings;
 
   for (const [key, conversationId] of Object.entries(metadata)) {
@@ -41,8 +44,12 @@ export async function prepareCodexModelRouting(sessionId, _selection, { runtime,
       ? session.metadata.agent_identity_model_provider : "");
   if (boundProvider && boundProvider !== "openai" || nativeConversationBindings(session).some((binding) =>
     binding.engineId === "codex" && !binding.retired && binding.modelProviderId !== "openai")) {
-    throw Object.assign(new Error("This Codex conversation is stored in a separate provider home. Renew the session to use the models chosen in Models; its existing history and storage location have not been changed."), {
-      code: "vibe64_codex_history_unsupported", statusCode: 409
+    throw Object.assign(new Error(
+      "This Codex conversation is stored in a separate provider home. Renew the session to use the models chosen in Models; its existing history and storage location have not been changed."
+    ),
+      {
+      code: "vibe64_codex_history_unsupported",
+      statusCode: 409
     });
   }
   await runtime.store.writeMetadataValue(sessionId, "codex_routing_home_provider", "openai");

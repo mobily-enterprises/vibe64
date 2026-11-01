@@ -13,7 +13,11 @@ function createRecordingTargets({ terminals }) {
   async function targetsFor(context) {
     const result = await terminals.usageRecordingTargets(context.sessionId);
     if (result?.ok === false) {
-      throw recordingError(422, result.error || "This session's Output targets cannot be read.", result.code || "vibe64_usage_recording_targets_unavailable");
+      throw recordingError(
+        422,
+        result.error || "This session's Output targets cannot be read.",
+        result.code || "vibe64_usage_recording_targets_unavailable"
+      );
     }
     const describe = (outputTarget, { id, kind, label }) => {
       const runtimes = [...outputTarget.runtimes];
@@ -35,7 +39,9 @@ function createRecordingTargets({ terminals }) {
         available: !reason,
         reason,
         parameters: kind === "web" ? [] : outputTarget.parameters.map(({ id: parameterId, label: parameterLabel, required }) => ({
-          id: parameterId, label: parameterLabel, required: required === true
+          id: parameterId,
+          label: parameterLabel,
+          required: required === true
         })),
         outputTarget
       };

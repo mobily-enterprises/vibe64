@@ -29,7 +29,11 @@ const CurrentAppProvider = defineFeature({
    * @param {RuntimeHttp} capabilities.http
    * @param {ProjectService} capabilities.project
    */
-  setup({ env, http, project }) {
+  setup({
+    env,
+    http,
+    project
+  }) {
     const currentApp = createService({
       env,
       projectService: project

@@ -1,6 +1,11 @@
 import { CODEX_SESSION_APPROVAL_POLICY, codexAppServerThreadSettings, isPlainRecord, normalizeWorkdir } from "./codexAppServerSettings.js";
 import { MINIMUM_CODEX_VERSION } from "./minimumCodexVersion.js";
-import { VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES, VIBE64_AGENT_EXECUTION_PROFILE_IDS, Vibe64AgentExecutionProfileError, defineVibe64AgentExecutionProfileResolution } from "../shared/agentExecutionProfiles.js";
+import {
+  VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
+  VIBE64_AGENT_EXECUTION_PROFILE_IDS,
+  Vibe64AgentExecutionProfileError,
+  defineVibe64AgentExecutionProfileResolution
+} from "../shared/agentExecutionProfiles.js";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "../shared/assistantSelection.js";
 import { createCodexAppServerIsolation } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { normalizeAgentText } from "./agentProviders.js";
@@ -223,12 +228,15 @@ function codexAppServerHelperThreadStartPreparation({
       return Object.freeze({
         enforcement,
         executionProfile: profile,
-        settings: { ...codexAppServerHelperThreadStartSettings({
-          config: enforcement.config,
-          cwd: enforcement.executionCwd,
-          systemPrompt,
-          executionProfile: profile
-        }), ...(ephemeral ? { ephemeral: true } : {}) }
+        settings: {
+          ...codexAppServerHelperThreadStartSettings({
+            config: enforcement.config,
+            cwd: enforcement.executionCwd,
+            systemPrompt,
+            executionProfile: profile
+          }),
+          ...(ephemeral ? { ephemeral: true } : {})
+        }
       });
     }
   };

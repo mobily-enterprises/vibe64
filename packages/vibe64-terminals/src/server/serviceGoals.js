@@ -132,16 +132,23 @@ function createServiceGoals({
       if (!latest?.active || latest.id !== intent.id) return null;
       if (latest.pending?.messageId && latest.selection?.engineId === "claude" &&
           result.goalCommandId !== claudeNativeMessageId(latest.pending.messageId)) {
-        throw new Error("The accepted goal command is still waiting for its own native goal attachment. Check its original receipt before retrying.");
+        throw new Error(
+          "The accepted goal command is still waiting for its own native goal attachment. Check its original receipt before retrying."
+        );
       }
       const segment = latest.pending?.expectedSegmentId;
       const prefix = `${latest.selection?.engineId}:`;
       const threadId = result.threadId || result.goal.threadId || latest.native?.threadId ||
         (typeof segment === "string" && segment.startsWith(prefix) ? segment.slice(prefix.length) : null);
       if (!threadId) throw new Error("The accepted goal's native conversation identity is unavailable.");
-      return { ...latest, daemonId: goalRuntimeId, pending: null, error: null,
+      return {
+        ...latest,
+        daemonId: goalRuntimeId,
+        pending: null,
+        error: null,
         native: { threadId, createdAt: result.goal.createdAt, objective: result.goal.objective },
-        active: !goalStatusIsComplete(result.goal.status) };
+        active: !goalStatusIsComplete(result.goal.status)
+      };
     });
   }
 
@@ -159,13 +166,22 @@ function createServiceGoals({
     if (!assistantMainAiChanged(pinned.configuration?.owner, (await readRoutingConfiguration()).owner)) return false;
     const observed = await readAgentGoal(sessionId, context);
     if (observed?.status !== "available" || !observed.goal || goalStatusIsComplete(observed.goal.status)) return false;
-    const result = await updateAgentGoal(sessionId, { vibe64User, action: "cancel",
-      threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
+    const result = await updateAgentGoal(sessionId, {
+      vibe64User,
+      action: "cancel",
+      threadId: observed.threadId,
+      createdAt: observed.goal.createdAt,
+      objective: observed.goal.objective
+    });
     if (result?.ok === false) throw Object.assign(new Error(result.error || "The goal could not be cancelled."), result);
     const turn = await context.runtime.store.writeConversationSystemMessage(sessionId, {
-      messageId: `main-ai-changed-goal-cancelled:${randomUUID()}`, text: MAIN_AI_CHANGED_GOAL_NOTICE });
-    await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed",
-      ...(turn ? { payload: { conversationLogPatch: { type: "upsert-turn", turn } } } : {}) });
+      messageId: `main-ai-changed-goal-cancelled:${randomUUID()}`,
+      text: MAIN_AI_CHANGED_GOAL_NOTICE
+    });
+    await publishAgentSessionChanged(sessionId, {
+      reason: "assistant-routing-changed",
+      ...(turn ? { payload: { conversationLogPatch: { type: "upsert-turn", turn } } } : {})
+    });
     return true;
   }
 
@@ -181,8 +197,12 @@ function createServiceGoals({
     }
     const actor = await state.assistantRuntime.authorizeProjectMessage(intent.actor, sessionAccess.projectRuntimeContext().projectSlug);
     const pin = assistantRoutingGoalFromMetadata(context.session.metadata);
-    context = { ...context, vibe64User: actor, assistantSelection: pin?.selection || intent.selection,
-      expectedConnectionIdentity: intent.connectionIdentity };
+    context = {
+      ...context,
+      vibe64User: actor,
+      assistantSelection: pin?.selection || intent.selection,
+      expectedConnectionIdentity: intent.connectionIdentity
+    };
     await sessionAgent.requireAssistantAccess(sessionId, context);
     // Native reconciliation retains custody until the previous execution is
     // verified stopped. It never starts inference or resumes a goal itself.
@@ -203,7 +223,9 @@ function createServiceGoals({
       // command. Its condition text alone is never sufficient for adoption.
       if (intent.selection?.engineId === "claude") {
         if (!native.goal || native.goalCommandId !== claudeNativeMessageId(messageId)) {
-          throw new Error("The accepted goal command is still waiting for its own native goal attachment. Check its original receipt before retrying.");
+          throw new Error(
+            "The accepted goal command is still waiting for its own native goal attachment. Check its original receipt before retrying."
+          );
         }
         await completeGoalIntent(sessionId, context, intent, native);
         const latest = readGoalIntent(await context.runtime.getSession(sessionId, { inspectSource: false }));
@@ -234,9 +256,13 @@ function createServiceGoals({
     }
     const observed = await readAgentGoal(sessionId, { vibe64User: actor }, { canonical: true });
     if (!observed.goal || goalStatusIsComplete(observed.goal.status)) return { sessionId, completed: true };
-    const result = await updateAgentGoal(sessionId, { action: "resume", vibe64User: actor,
-      expectedSegmentId: observed.target.segmentId, expectedGoalId: observed.goal.id,
-      messageId: `goal-restart-${randomUUID()}` }, { canonical: true, restartIntentId: intent.id });
+    const result = await updateAgentGoal(sessionId, {
+      action: "resume",
+      vibe64User: actor,
+      expectedSegmentId: observed.target.segmentId,
+      expectedGoalId: observed.goal.id,
+      messageId: `goal-restart-${randomUUID()}`
+    }, { canonical: true, restartIntentId: intent.id });
     if (result?.code === "vibe64_goal_main_ai_changed") return { sessionId, cancelled: true };
     if (result?.ok === false) throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
     return { sessionId, resumed: true };
@@ -260,9 +286,14 @@ function createServiceGoals({
         await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({ ...pinned, status }));
         await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
       }
-      if (result.goal) return { ...result, goal: { ...result.goal,
-        objective: assistantGoalObjective(result.goal.objective, pinned) },
-        routing: { mode: pinned.mode, selection: pinned.selection } };
+      if (result.goal) return {
+        ...result,
+        goal: {
+          ...result.goal,
+          objective: assistantGoalObjective(result.goal.objective, pinned)
+        },
+        routing: { mode: pinned.mode, selection: pinned.selection }
+      };
     }
     return result;
   }
@@ -271,14 +302,24 @@ function createServiceGoals({
     const context = await assistantContext.assistantSessionOptions(sessionId, options);
     let view;
     let target;
-    const result = await sessionAgent.readGoal(sessionId, { ...context, canonicalGoal: canonical,
-      ...(canonical ? { async onGoalResult(nativeResult, readTarget) {
-        view = await applyAgentGoalReadResult(sessionId, context, nativeResult);
-        target = readTarget;
-      } } : {}) });
+    const result = await sessionAgent.readGoal(sessionId, {
+      ...context,
+      canonicalGoal: canonical,
+      ...(canonical ? {
+        async onGoalResult(nativeResult, readTarget) {
+          view = await applyAgentGoalReadResult(sessionId, context, nativeResult);
+          target = readTarget;
+        }
+      } : {})
+    });
     if (!canonical) return applyAgentGoalReadResult(sessionId, context, result);
-    return { status: view.status, goal: result ? { ...result, objective: view.goal.objective } : null,
-      target, ...(view.routing ? { routing: view.routing } : {}), ...(view.error ? { error: view.error } : {}) };
+    return {
+      status: view.status,
+      goal: result ? { ...result, objective: view.goal.objective } : null,
+      target,
+      ...(view.routing ? { routing: view.routing } : {}),
+      ...(view.error ? { error: view.error } : {})
+    };
   }
 
   async function updateAgentGoal(sessionId, input = {}, { canonical = false, restartIntentId = null } = {}) {
@@ -294,7 +335,11 @@ function createServiceGoals({
           throw new Error("Goal continuation was stopped before recovery.");
         }
         if (input.action === "set" && assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
-          return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior or Junior before starting or resuming a goal." };
+          return {
+            ok: false,
+            code: "vibe64_goal_explicit_mode_required",
+            error: "Choose Senior or Junior before starting or resuming a goal."
+          };
         }
         const pendingRoute = assistantRoutingRequestFromMetadata(context.session.metadata);
         if (assistantRoutingStatusIsPending(pendingRoute) || pendingRoute?.helper) {
@@ -303,8 +348,11 @@ function createServiceGoals({
         const changeover = JSON.parse(context.session.metadata?.assistant_changeover || "null");
         const engineId = vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
         if (changeover && changeover.lastEngine !== engineId) {
-          return { ok: false, code: "vibe64_changeover_message_required",
-            error: "Send a message to catch this AI up before starting or resuming its goal." };
+          return {
+            ok: false,
+            code: "vibe64_changeover_message_required",
+            error: "Send a message to catch this AI up before starting or resuming its goal."
+          };
         }
         const duplicate = canonical && input.messageId &&
           await context.runtime.store.conversationMessageIdExists(sessionId, input.messageId);
@@ -314,13 +362,22 @@ function createServiceGoals({
         try {
           if (!duplicate) {
             const actor = context.vibe64User || currentProjectRequestContext()?.vibe64User;
-            intent = { version: 1, id: randomUUID(), active: true, daemonId: goalRuntimeId,
+            intent = {
+              version: 1,
+              id: randomUUID(),
+              active: true,
+              daemonId: goalRuntimeId,
               restartOf: restartIntentId,
               actor: actor ? { username: actor.username, role: actor.role } : null,
-              pending: canonical ? { action: input.action, messageId: input.messageId || null,
-                expectedSegmentId: input.expectedSegmentId, expectedGoalId: input.expectedGoalId || null,
-                objective: input.objective || previousIntent?.native?.objective } : null,
-              native: input.action === "resume" ? previousIntent?.native || null : null };
+              pending: canonical ? {
+                action: input.action,
+                messageId: input.messageId || null,
+                expectedSegmentId: input.expectedSegmentId,
+                expectedGoalId: input.expectedGoalId || null,
+                objective: input.objective || previousIntent?.native?.objective
+              } : null,
+              native: input.action === "resume" ? previousIntent?.native || null : null
+            };
             admission = new AbortController();
             goalAdmissions.set(intent.id, admission);
             await changeGoalIntent(sessionId, context, latest => {
@@ -340,7 +397,9 @@ function createServiceGoals({
           }
           if (state.lifecycle.closing) throw new Error("The server is stopping. The goal will be available after restart.");
           if (intent) {
-            const actor = await state.assistantRuntime.resolveAssistantUser(context.vibe64User || currentProjectRequestContext()?.vibe64User);
+            const actor = await state.assistantRuntime.resolveAssistantUser(
+              context.vibe64User || currentProjectRequestContext()?.vibe64User
+            );
             // Set/Resume are admitted user requests too. Retain only CONTROL
             // identity, so each later goal tool rechecks current project access.
             const requestMeta = currentProjectActionRequestMeta();
@@ -348,16 +407,27 @@ function createServiceGoals({
               const projectSlug = sessionAccess.projectRuntimeContext().projectSlug;
               const requestContext = requestMeta ? { surface: "app", channel: "internal", requestMeta }
                 : await state.assistantRuntime.createActionContext(actor);
-              const grant = await actions.execute({ actionId: "vibe64.sessions.conversation.context.read",
-                input: { projectSlug, sessionId }, context: requestContext });
-              prepared.context.browserAuthority = { sessionId, projectSlug,
-                actorId: grant.actor.id, requestContext };
+              const grant = await actions.execute({
+                actionId: "vibe64.sessions.conversation.context.read",
+                input: { projectSlug, sessionId },
+                context: requestContext
+              });
+              prepared.context.browserAuthority = {
+                sessionId,
+                projectSlug,
+                actorId: grant.actor.id,
+                requestContext
+              };
             }
             await changeGoalIntent(sessionId, context, latest => {
               if (!latest?.active || latest.id !== intent.id) throw new Error("Goal continuation was stopped during preparation.");
-              return { ...latest, actor: actor ? { username: actor.username, role: actor.role } : null,
-                connectionIdentity: connectionIdentity ?? null, selection: goalSelection,
-                pending: latest.pending ? { ...latest.pending, objective: prepared.input.objective || prepared.pinned?.objective } : null };
+              return {
+                ...latest,
+                actor: actor ? { username: actor.username, role: actor.role } : null,
+                connectionIdentity: connectionIdentity ?? null,
+                selection: goalSelection,
+                pending: latest.pending ? { ...latest.pending, objective: prepared.input.objective || prepared.pinned?.objective } : null
+              };
             });
           }
           const completeResult = async result => {
@@ -380,14 +450,20 @@ function createServiceGoals({
               };
               const committed = await context.runtime.store.runSessionExclusive(sessionId, "assistant-settings", commit,
                 { operation: "apply-started-goal-settings", waitMs: 10_000 });
-              if (!committed.acquired) throw new Error("The goal started, but its settings are still being saved. Pause it before retrying the settings change.");
+              if (!committed.acquired) {
+                throw new Error("The goal started, but its settings are still being saved. Pause it before retrying the settings change.");
+              }
             }
             await completeGoalIntent(sessionId, context, intent, result);
             return result;
           };
           dispatched = true;
-          const result = await sessionAgent.updateGoal(sessionId, prepared.input, { ...assistantContext.applicationToolManifest(prepared.context), canonicalGoal: canonical,
-            signal: admission?.signal, ...(canonical ? { onGoalResult: completeResult } : {}) });
+          const result = await sessionAgent.updateGoal(sessionId, prepared.input, {
+            ...assistantContext.applicationToolManifest(prepared.context),
+            canonicalGoal: canonical,
+            signal: admission?.signal,
+            ...(canonical ? { onGoalResult: completeResult } : {})
+          });
           return canonical ? result : await completeResult(result);
         } catch (error) {
           if (intent && (!dispatched || error.delivery === "not-sent")) {
@@ -398,8 +474,10 @@ function createServiceGoals({
         } finally {
           if (intent) goalAdmissions.delete(intent.id);
         }
-      }, { operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal",
-        ...(restartIntentId ? { waitMs: AGENT_WRITE_WAIT_MS } : {}) });
+      }, {
+        operation: input.action === "set" ? "set-agent-goal" : "resume-agent-goal",
+        ...(restartIntentId ? { waitMs: AGENT_WRITE_WAIT_MS } : {})
+      });
     }
     const context = await assistantContext.assistantSessionOptions(sessionId, input);
     const pinned = assistantRoutingGoalFromMetadata(context.session.metadata);
@@ -416,7 +494,8 @@ function createServiceGoals({
     const completeResult = async result => {
       if (result?.ok !== false && result.status === "available" && pinned) {
         await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({
-          ...pinned, status: result.goal?.status || "complete"
+          ...pinned,
+          status: result.goal?.status || "complete"
         }));
         await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed" });
       }
@@ -448,15 +527,25 @@ function createServiceGoals({
       const actor = await state.assistantRuntime.authorizeProjectMessage(intent.actor, sessionAccess.projectRuntimeContext().projectSlug);
       const observed = await readAgentGoal(sessionId, { vibe64User: actor }, { canonical: true });
       if (observed.goal?.status !== "paused") return { sessionId, skipped: true };
-      const result = await updateAgentGoal(sessionId, { action: "resume", vibe64User: actor,
-        expectedSegmentId: observed.target.segmentId, expectedGoalId: observed.goal.id,
-        messageId: `goal-account-change-${randomUUID()}` }, { canonical: true });
+      const result = await updateAgentGoal(sessionId, {
+        action: "resume",
+        vibe64User: actor,
+        expectedSegmentId: observed.target.segmentId,
+        expectedGoalId: observed.goal.id,
+        messageId: `goal-account-change-${randomUUID()}`
+      }, { canonical: true });
       if (result?.ok === false) throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
       return { sessionId, resumed: true };
     } catch (error) {
-      logOperationalEvent(logger, "warn", { event: "vibe64.agent_goal.account_change_continue_failed",
-        component: "vibe64.agent_goal", projectSlug: sessionAccess.projectRuntimeContext().projectSlug, sessionId,
-        actor: String(intent.actor?.username || ""), code: error.code, error: error.message },
+      logOperationalEvent(logger, "warn", {
+        event: "vibe64.agent_goal.account_change_continue_failed",
+        component: "vibe64.agent_goal",
+        projectSlug: sessionAccess.projectRuntimeContext().projectSlug,
+        sessionId,
+        actor: String(intent.actor?.username || ""),
+        code: error.code,
+        error: error.message
+      },
       "A goal paused by an account change could not resume; it stays paused.");
       return { sessionId, ok: false, code: error.code, error: error.message };
     }
@@ -473,8 +562,11 @@ function createServiceGoals({
       const reportFailure = (error, target) => {
         const result = { ...target, ok: false, code: error.code, error: error.message };
         results.push(result);
-        logOperationalEvent(logger, "warn", { ...result, event: "vibe64.agent_goal.recovery_failed",
-          component: "vibe64.agent_goal" }, "An active goal needs attention after server restart.");
+        logOperationalEvent(logger, "warn", {
+          ...result,
+          event: "vibe64.agent_goal.recovery_failed",
+          component: "vibe64.agent_goal"
+        }, "An active goal needs attention after server restart.");
       };
       /**
        * A failure names its project and the person who set the goal: session
@@ -490,8 +582,11 @@ function createServiceGoals({
             try {
               const context = await assistantContext.assistantSessionOptions(session.sessionId);
               const expected = readGoalIntent(session);
-              await changeGoalIntent(session.sessionId, context, latest => latest?.active && (latest.id === expected?.id || latest.restartOf === expected?.id) ? {
-                ...latest, error: `Goal continuation after restart failed: ${String(error.message || "Recovery could not be verified.").slice(0, 500)}`
+              await changeGoalIntent(session.sessionId,
+                context,
+                latest => latest?.active && (latest.id === expected?.id || latest.restartOf === expected?.id) ? {
+                ...latest,
+                error: `Goal continuation after restart failed: ${String(error.message || "Recovery could not be verified.").slice(0, 500)}`
               } : null);
             } catch { /* The original recovery failure remains visible in the operational log. */ }
             reportFailure(error, { projectSlug, sessionId: session.sessionId, ...(actor ? { actor } : {}) });
@@ -516,8 +611,12 @@ function createServiceGoals({
   async function applyGoalSelection(sessionId, selection, preferences, context) {
     const result = await assistantRouting.applyGoalSelection(sessionId, selection, preferences, context);
     logOperationalEvent(logger, "info", {
-      event: "vibe64.assistant_settings.updated", component: "vibe64.agent_settings", sessionId,
-      engineId: selection.engineId, modelId: selection.modelId, mode: preferences.mode,
+      event: "vibe64.assistant_settings.updated",
+      component: "vibe64.agent_settings",
+      sessionId,
+      engineId: selection.engineId,
+      modelId: selection.modelId,
+      mode: preferences.mode,
       goalSettings: result
     }, "Assistant settings prepared for subsequent turns.");
     return result;

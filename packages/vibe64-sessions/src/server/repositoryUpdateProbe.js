@@ -47,7 +47,13 @@ function createRepositoryUpdateProbe({
     let entry = projects.get(slug);
     if (!entry) {
       entry = {
-        failed: false, memory: new Map(), lastStartedAt: -Infinity, running: false, timer: null, viewers: 0, woken: false
+        failed: false,
+        memory: new Map(),
+        lastStartedAt: -Infinity,
+        running: false,
+        timer: null,
+        viewers: 0,
+        woken: false
       };
       projects.set(slug, entry);
     }
@@ -125,7 +131,11 @@ function createRepositoryUpdateProbe({
     projects.clear();
   }
 
-  return Object.freeze({ watch, wake, close });
+  return Object.freeze({
+    watch,
+    wake,
+    close
+  });
 }
 
 export {

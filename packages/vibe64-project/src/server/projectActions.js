@@ -67,7 +67,8 @@ function projectChangedEvent({ operation = "updated" } = {}) {
       audience: "all_clients",
       event: VIBE64_PROJECT_CHANGED_EVENT,
       payload: ({ input, result }) => projectRealtimePayload({
-        ...input, ...result,
+        ...input,
+        ...result,
         projectSlug: projectSlug(result) || projectSlug(input)
       })
     }
@@ -172,8 +173,20 @@ function createVibe64ProjectChangedPublisher({ events }) {
 }
 
 // A project operation: a query reads, a command changes the project.
-const PROJECT_QUERY = Object.freeze({ version: 1, kind: "query", output: null, idempotency: "none", events: [] });
-const PROJECT_COMMAND = Object.freeze({ version: 1, kind: "command", output: null, idempotency: "optional", events: [] });
+const PROJECT_QUERY = Object.freeze({
+  version: 1,
+  kind: "query",
+  output: null,
+  idempotency: "none",
+  events: []
+});
+const PROJECT_COMMAND = Object.freeze({
+  version: 1,
+  kind: "command",
+  output: null,
+  idempotency: "optional",
+  events: []
+});
 
 /**
  * Learn mode has only the learner's practice projects; new projects belong to Develop.
@@ -216,27 +229,47 @@ function createProjectActions({ project }) {
       ...PROJECT_QUERY,
       id: "vibe64.project.repository.branches.read",
       input: projectRepositoryBranchesInputValidator,
-      extensions: { assistant: {
-        description: "Read current saved branch names and exact commits for a GitHub or Vibe64 Git project. Returns at most ten branches: use nextOffset to continue, or name for an exact branch lookup. These are saved repository branches, not another session's unsaved files or conversation. Pass a freshly read commit unchanged as repositoryBranch.expectedCommit when creating a session. Opening an existing branch uses name; creating a new branch also supplies fromBranch. Local-source projects use their existing local Git controls through a coding conversation.",
-        output: { mode: "replace", schema: createSchema({
-          ok: { type: "boolean", required: true }, error: { type: "string", maxLength: 512, required: false },
-          branches: { type: "array", required: true, items: createSchema({
-            name: { type: "string", maxLength: 4096, noTrim: true, required: true },
-            commit: { type: "string", maxLength: 64, required: true }
-          }) },
-          defaultBranch: { type: "string", maxLength: 4096, noTrim: true, required: false },
-          total: { type: "integer", required: true }, offset: { type: "integer", required: true },
-          nextOffset: { type: "integer", nullable: true, required: true }
-        }) },
-        transformResult(result) {
-          const branches = (result.branches || []).slice(0, 10).map(({ name, commit }) => ({ name, commit }));
-          const offset = result.offset || 0;
-          const total = result.total ?? (result.branches || []).length;
-          return { ok: result.ok === true, branches, total, offset, nextOffset: offset + branches.length < total ? offset + branches.length : null,
-            ...(result.defaultBranch ? { defaultBranch: result.defaultBranch } : {}),
-            ...(result.error || result.errors?.[0]?.message ? { error: String(result.error || result.errors[0].message).slice(0, 512) } : {}) };
-        }
-      }, vibe64: PROJECT_OPERATION },
+      extensions: {
+        assistant: {
+          description: "Read current saved branch names and exact commits for a GitHub or Vibe64 Git project. Returns at most ten branches: use nextOffset to continue, or name for an exact branch lookup. These are saved repository branches, not another session's unsaved files or conversation. Pass a freshly read commit unchanged as repositoryBranch.expectedCommit when creating a session. Opening an existing branch uses name; creating a new branch also supplies fromBranch. Local-source projects use their existing local Git controls through a coding conversation.",
+          output: {
+            mode: "replace",
+            schema: createSchema({
+              ok: { type: "boolean", required: true },
+              error: { type: "string", maxLength: 512, required: false },
+              branches: {
+                type: "array",
+                required: true,
+                items: createSchema({
+                  name: { type: "string", maxLength: 4096, noTrim: true, required: true },
+                  commit: { type: "string", maxLength: 64, required: true }
+                })
+              },
+              defaultBranch: { type: "string", maxLength: 4096, noTrim: true, required: false },
+              total: { type: "integer", required: true },
+              offset: { type: "integer", required: true },
+              nextOffset: { type: "integer", nullable: true, required: true }
+            })
+          },
+          transformResult(result) {
+            const branches = (result.branches || []).slice(0, 10).map(({ name, commit }) => ({ name, commit }));
+            const offset = result.offset || 0;
+            const total = result.total ?? (result.branches || []).length;
+            return {
+              ok: result.ok === true,
+              branches,
+              total,
+              offset,
+              nextOffset: offset + branches.length < total ? offset + branches.length : null,
+              ...(result.defaultBranch ? { defaultBranch: result.defaultBranch } : {}),
+              ...(result.error || result.errors?.[0]?.message
+                ? { error: String(result.error || result.errors[0].message).slice(0, 512) }
+                : {})
+            };
+          }
+        },
+        vibe64: PROJECT_OPERATION
+      },
       execute: (input) => project.repositoryBranches(input)
     }),
     Object.freeze({

@@ -64,7 +64,12 @@ function createSessionPromptHintsService({
     publishSessionChanged,
     state
   });
-  const hintRequests = createPromptHintRequests({ hintContext, hintJobs, projectService, state });
+  const hintRequests = createPromptHintRequests({
+    hintContext,
+    hintJobs,
+    projectService,
+    state
+  });
 
   return Object.freeze({
     cancelSessionPromptHints: hintRequests.cancelSessionPromptHints,

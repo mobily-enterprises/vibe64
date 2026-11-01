@@ -40,7 +40,12 @@ function createSessionWorkOperations() {
     return running.save.has(sessionId) || running.update.has(sessionId);
   }
 
-  return Object.freeze({ operationId: runningOperationId, start, finish, isRunning });
+  return Object.freeze({
+    operationId: runningOperationId,
+    start,
+    finish,
+    isRunning
+  });
 }
 
 export { createSessionWorkOperations };

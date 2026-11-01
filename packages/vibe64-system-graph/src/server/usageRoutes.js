@@ -14,7 +14,13 @@ import {
 // ignored rather than passed to the action.
 const USAGE_ROUTES = Object.freeze([
   ["GET", "entries", "usage.entries.read", ["kind", "q", "cursor", "limit"], "List the entry points a usage map can start from."],
-  ["GET", "web", "usage.web.read", ["entryId", "mode", "certainty", "subsystemId", "maxNodes"], "Read the subsystems, files or functions one entry point reaches."],
+  [
+    "GET",
+    "web",
+    "usage.web.read",
+    ["entryId", "mode", "certainty", "subsystemId", "maxNodes"],
+    "Read the subsystems, files or functions one entry point reaches."
+  ],
   ["GET", "function", "usage.function.read", ["functionId"], "Read one function's calls and callers."],
   ["POST", "join", "usage.join", ["functions"], "Join recorded functions to the current call web."]
 ]);

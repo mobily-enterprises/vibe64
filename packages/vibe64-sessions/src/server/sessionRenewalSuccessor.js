@@ -236,7 +236,11 @@ function assertSuccessorSource(state, successor = {}) {
  * @param {RenewalSessionAccess} dependencies.renewalAccess
  * @param {TerminalsService} dependencies.terminals
  */
-function createRenewalSuccessorSession({ project, renewalAccess, terminals }) {
+function createRenewalSuccessorSession({
+  project,
+  renewalAccess,
+  terminals
+}) {
   async function releaseSuccessorProcessExitProof(runtime, state, successor, authorization) {
     return terminals.releaseRenewalSuccessorProcessExitProof(successor, {
       authorization,

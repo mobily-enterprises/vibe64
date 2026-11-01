@@ -91,7 +91,36 @@ const RUNTIME_PACKS = Object.freeze({
   "java": {
     binDirs: ["java/bin"],
     dependencyFiles: ["pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "gradle.properties"],
-    managedCommands: ["java", "javac", "jar", "javap", "javadoc", "jshell", "jlink", "jmod", "jdeps", "jpackage", "jcmd", "jconsole", "jdb", "jfr", "jhsdb", "jinfo", "jmap", "jps", "jrunscript", "jstack", "jstat", "jstatd", "keytool", "rmiregistry", "serialver", "mvn", "mvnDebug", "gradle"]
+    managedCommands: [
+      "java",
+      "javac",
+      "jar",
+      "javap",
+      "javadoc",
+      "jshell",
+      "jlink",
+      "jmod",
+      "jdeps",
+      "jpackage",
+      "jcmd",
+      "jconsole",
+      "jdb",
+      "jfr",
+      "jhsdb",
+      "jinfo",
+      "jmap",
+      "jps",
+      "jrunscript",
+      "jstack",
+      "jstat",
+      "jstatd",
+      "keytool",
+      "rmiregistry",
+      "serialver",
+      "mvn",
+      "mvnDebug",
+      "gradle"
+    ]
   },
   "kotlin": {
     binDirs: ["kotlin/bin"],

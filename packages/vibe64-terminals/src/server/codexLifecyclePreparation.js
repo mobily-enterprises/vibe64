@@ -50,34 +50,57 @@ async function terminalSessionSourceRootForSession(projectService, sessionId) {
  * @param {CodexStartupHealth} dependencies.health
  */
 function createCodexLifecyclePreparation({
-  projectService, runtimeHost, sessionRuntimeHost, sessionEnvironment, providerHost,
-  conversationPreparation, helperPreparation, health
+  projectService,
+  runtimeHost,
+  sessionRuntimeHost,
+  sessionEnvironment,
+  providerHost,
+  conversationPreparation,
+  helperPreparation,
+  health
 }) {
   const { codexAppServerRuntimeOptionsFromSessionMetadata, codexAppServerPersistedRuntimeHost } = runtimeHost;
-  const { createRuntimeForSession, codexAppServerRuntimeOptionsForSession, codexAppServerStorageRuntimeOptionsForSession,
-    codexAppServerManagedThreadIdentity, sessionHasCodexAppServerRuntime } = sessionRuntimeHost;
+  const {
+    createRuntimeForSession,
+    codexAppServerRuntimeOptionsForSession,
+    codexAppServerStorageRuntimeOptionsForSession,
+    codexAppServerManagedThreadIdentity,
+    sessionHasCodexAppServerRuntime
+  } = sessionRuntimeHost;
   const { codexAttachmentEnv } = sessionEnvironment;
   const { codexAppServerSessionProviderContext } = providerHost;
   const codexConversationPreparation = conversationPreparation;
-  const { restoration: prepareCodexAppServerHelperRestoration,
-    inventory: prepareCodexAppServerHelperInventory } = helperPreparation;
+  const {
+    restoration: prepareCodexAppServerHelperRestoration,
+    inventory: prepareCodexAppServerHelperInventory
+  } = helperPreparation;
   const { ready: writeCodexAppServerReady } = health;
 
   async function prepareNativeStorageProvider(sessionId, binding, { runtime, session }) {
     if (binding.modelProviderId !== "openai" && !curatedCodexProvider(binding.modelProviderId)) {
       throw new Error("The saved Codex storage provider is unknown.");
     }
-    const selectedSession = { ...session, metadata: { ...session.metadata,
-      codex_routing_home_provider: binding.modelProviderId } };
+    const selectedSession = {
+      ...session,
+      metadata: {
+        ...session.metadata,
+        codex_routing_home_provider: binding.modelProviderId
+      }
+    };
     // Control requests neither resume native work nor require archived source.
     const providerOptions = await codexAppServerStorageRuntimeOptionsForSession(selectedSession, {
-      runtime, terminalEnv: {}, ...(!runtime.learningScope ? {
-        workdir: runtime.projectContextRoot, executionRoot: runtime.projectContextRoot
+      runtime,
+      terminalEnv: {},
+      ...(!runtime.learningScope ? {
+        workdir: runtime.projectContextRoot,
+        executionRoot: runtime.projectContextRoot
       } : {})
     });
     providerOptions.routingModelProviderId = binding.modelProviderId;
-    return { providerContext: codexAppServerSessionProviderContext(trimmedText(sessionId), providerOptions),
-      get toolHomeSource() { return providerOptions.toolHomeSource; } };
+    return {
+      providerContext: codexAppServerSessionProviderContext(trimmedText(sessionId), providerOptions),
+      get toolHomeSource() { return providerOptions.toolHomeSource; }
+    };
   }
 
   async function prepareCodexAppServerThreadUnsubscription(normalizedSessionId, {

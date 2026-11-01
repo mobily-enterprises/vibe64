@@ -38,8 +38,13 @@ export function learningPanelFocus(controller) {
   return {
     learningOpen,
     ...(learningOpen && ["courses", "progress", "archived"].includes(surface) ? { learningSurface: surface } : {}),
-    ...(attemptId ? { learningAttemptId: attemptId, ...(stepId ? { learningStepId: stepId,
-      ...(Number.isSafeInteger(beat) ? { learningBeat: beat } : {}) } : {}) } : {})
+    ...(attemptId ? {
+      learningAttemptId: attemptId,
+      ...(stepId ? {
+        learningStepId: stepId,
+        ...(Number.isSafeInteger(beat) ? { learningBeat: beat } : {})
+      } : {})
+    } : {})
   };
 }
 

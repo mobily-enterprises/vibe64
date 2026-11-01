@@ -27,7 +27,10 @@ function createColleagueNavigationCoordination({ changed }) {
         command.status = "failed";
         connection.acknowledge = null;
         changed();
-        resolve({ ok: false, error: "The browser did not acknowledge navigation. Keep the initiating conversation open and check its current status before trying again." });
+        resolve({
+          ok: false,
+          error: "The browser did not acknowledge navigation. Keep the initiating conversation open and check its current status before trying again."
+        });
       }, 15000);
       connection.acknowledge = (result) => {
         clearTimeout(timer);
@@ -51,14 +54,21 @@ function createColleagueNavigationCoordination({ changed }) {
     }
     // A guide receipt reports only what the overlay actually drew.
     const guide = connection.navigation.guide;
-    const guideReceipt = guide && input.guide ? { shown: input.guide.shown === true,
-      ...(input.guide.reason ? { reason: input.guide.reason } : {}), ...(input.guide.step ? { step: input.guide.step } : {}) } : null;
+    const guideReceipt = guide && input.guide ? {
+      shown: input.guide.shown === true,
+      ...(input.guide.reason ? { reason: input.guide.reason } : {}),
+      ...(input.guide.step ? { step: input.guide.step } : {})
+    } : null;
     if (input.ok && guide && (typeof input.guide?.shown !== "boolean" || guideReceipt.shown && (!guide.highlight || !guideReceipt.step) ||
         !guideReceipt.shown && !guideReceipt.reason)) {
       return { ok: false, error: "The browser has not confirmed whether this guide highlight was drawn." };
     }
-    connection.acknowledge({ ok: input.ok, ...(input.error ? { error: input.error } : {}), ...(input.focus ? { focus: input.focus } : {}),
-      ...(guideReceipt ? { guide: guideReceipt } : {}) });
+    connection.acknowledge({
+      ok: input.ok,
+      ...(input.error ? { error: input.error } : {}),
+      ...(input.focus ? { focus: input.focus } : {}),
+      ...(guideReceipt ? { guide: guideReceipt } : {})
+    });
     return { ok: true };
   }
   return Object.freeze({ begin, acknowledge });

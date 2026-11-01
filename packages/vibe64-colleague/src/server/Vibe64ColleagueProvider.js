@@ -20,20 +20,52 @@ import { registerColleagueFocus } from "./registerColleagueFocus.js";
 /** @param {RuntimeHttp} http */
 function registerColleagueRoutes(http) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["vibe64-colleague"] }), {
-    relativePath: "vibe64/colleague", surface: "app", wrapHandler: vibe64RouteHandler({ projectScoped: false })
+    relativePath: "vibe64/colleague",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({ projectScoped: false })
   });
-  routes.actionRoute("GET", "", { actionId: "vibe64.colleague.state.read", buildInput: requestQuery, summary: "Read your Colleague conversation." });
-  routes.actionRoute("POST", "/conversations/fresh", { actionId: "vibe64.colleague.conversation.start-fresh", buildInput: requestBody, summary: "Retain this conversation and start fresh without retrying its requests." });
-  routes.actionRoute("GET", "/conversations/history", { actionId: "vibe64.colleague.conversation.history.read", buildInput: requestQuery, summary: "List your previous Colleague conversations." });
-  routes.actionRoute("GET", "/conversations/history/page", { actionId: "vibe64.colleague.conversation.history-page.read", buildInput: requestQuery, summary: "Read a page of your retained Colleague history without opening an assistant." });
-  routes.actionRoute("GET", "/models", { actionId: "vibe64.assistants.capabilities.list", buildInput: requestQuery, summary: "Read the existing actor-aware model catalogue for Colleague." });
-  routes.actionRoute("GET", "/usage/topics", { actionId: "vibe64.colleague.usage.topics.read", buildInput: requestQuery, summary: "Find Vibe64 usage topics shipped in this release." });
-  routes.actionRoute("GET", "/usage/guide", { actionId: "vibe64.colleague.usage.guide.read", buildInput: requestQuery, summary: "Read a shipped Vibe64 usage guide." });
+  routes.actionRoute("GET", "", {
+    actionId: "vibe64.colleague.state.read",
+    buildInput: requestQuery,
+    summary: "Read your Colleague conversation."
+  });
+  routes.actionRoute("POST", "/conversations/fresh", {
+    actionId: "vibe64.colleague.conversation.start-fresh",
+    buildInput: requestBody,
+    summary: "Retain this conversation and start fresh without retrying its requests."
+  });
+  routes.actionRoute("GET", "/conversations/history", {
+    actionId: "vibe64.colleague.conversation.history.read",
+    buildInput: requestQuery,
+    summary: "List your previous Colleague conversations."
+  });
+  routes.actionRoute("GET", "/conversations/history/page", {
+    actionId: "vibe64.colleague.conversation.history-page.read",
+    buildInput: requestQuery,
+    summary: "Read a page of your retained Colleague history without opening an assistant."
+  });
+  routes.actionRoute("GET", "/models", {
+    actionId: "vibe64.assistants.capabilities.list",
+    buildInput: requestQuery,
+    summary: "Read the existing actor-aware model catalogue for Colleague."
+  });
+  routes.actionRoute("GET", "/usage/topics", {
+    actionId: "vibe64.colleague.usage.topics.read",
+    buildInput: requestQuery,
+    summary: "Find Vibe64 usage topics shipped in this release."
+  });
+  routes.actionRoute("GET", "/usage/guide", {
+    actionId: "vibe64.colleague.usage.guide.read",
+    buildInput: requestQuery,
+    summary: "Read a shipped Vibe64 usage guide."
+  });
   for (const [route, operation] of [["/messages", "message.send"], ["/focus", "focus.update"], ["/stop", "turn.stop"],
     ["/watches/cancel", "watch.cancel"], ["/watches/pause", "watch.pause"], ["/watches/resume", "watch.resume"],
     ["/navigation/ack", "navigation.acknowledge"]]) {
     routes.actionRoute("POST", route, {
-      actionId: `vibe64.colleague.${operation}`, buildInput: requestBody, summary: `Colleague ${operation}.`
+      actionId: `vibe64.colleague.${operation}`,
+      buildInput: requestBody,
+      summary: `Colleague ${operation}.`
     });
   }
 }
@@ -49,12 +81,29 @@ function registerColleagueRoutes(http) {
  * @param {ColleagueNameResolver} dependencies.resolveName
  * @param {string} dependencies.systemRoot
  */
-function createColleague({ actions, accounts, terminals, events, resolveName, systemRoot }) {
-  const colleague = createColleagueService({ actions, accounts, terminals, events, resolveName, systemRoot });
-  return { ...colleague,
-    browserConversations: { ...colleague.browserConversations,
+function createColleague({
+  actions,
+  accounts,
+  terminals,
+  events,
+  resolveName,
+  systemRoot
+}) {
+  const colleague = createColleagueService({
+    actions,
+    accounts,
+    terminals,
+    events,
+    resolveName,
+    systemRoot
+  });
+  return {
+    ...colleague,
+    browserConversations: {
+      ...colleague.browserConversations,
       conversationDataSchema: colleagueConversationDataSchema,
-      conversationSelectionSchema: colleagueConversationSelectionSchema }
+      conversationSelectionSchema: colleagueConversationSelectionSchema
+    }
   };
 }
 
@@ -69,13 +118,25 @@ function createColleagueBrowserFocus({ realtime, actions }) {
 }
 
 const Vibe64ColleagueProvider = defineFeature({
-  id: "vibe64.colleague", domain: "vibe64-colleague",
-  requires: { accounts: "vibe64.accounts", http: "runtime.http", terminals: "vibe64.terminals", events: "runtime.events" },
+  id: "vibe64.colleague",
+  domain: "vibe64-colleague",
+  requires: {
+    accounts: "vibe64.accounts",
+    http: "runtime.http",
+    terminals: "vibe64.terminals",
+    events: "runtime.events"
+  },
   // A composed host's own project views for navigation.open: [{ pane, meaning }],
   // and the name it gives Colleague.
-  optional: { navigationPanes: "vibe64.colleague.navigation-panes", resolveName: COLLEAGUE_NAME_RESOLVER_TOKEN },
+  optional: {
+    navigationPanes: "vibe64.colleague.navigation-panes",
+    resolveName: COLLEAGUE_NAME_RESOLVER_TOKEN
+  },
   provides: { colleague: "vibe64.colleague" },
-  actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
+  actionDefaults: {
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"]
+  },
   /**
    * @param {object} capabilities
    * @param {AccountsService} capabilities.accounts
@@ -85,10 +146,22 @@ const Vibe64ColleagueProvider = defineFeature({
    * @param {ColleagueNameResolver | null} capabilities.resolveName
    * @param {{ actionCatalogue: ActionCatalogue }} context
    */
-  setup({ accounts, http, terminals, events, resolveName }, { actionCatalogue }) {
+  setup({
+    accounts,
+    http,
+    terminals,
+    events,
+    resolveName
+  }, { actionCatalogue }) {
     if (resolveName && typeof resolveName !== "function") throw new TypeError("Colleague name resolver must be a function.");
-    const colleague = createColleague({ actions: actionCatalogue, accounts, terminals, events, resolveName: resolveName ?? nameColleague,
-      systemRoot: getStudioProjectContext().systemRoot });
+    const colleague = createColleague({
+      actions: actionCatalogue,
+      accounts,
+      terminals,
+      events,
+      resolveName: resolveName ?? nameColleague,
+      systemRoot: getStudioProjectContext().systemRoot
+    });
     registerColleagueRoutes(http);
     return { colleague };
   },
@@ -105,7 +178,10 @@ const Vibe64ColleagueProvider = defineFeature({
 // both owners exist.
 const Vibe64ColleagueFocusProvider = defineFeature({
   id: "vibe64.colleague.browser-focus",
-  requires: { colleague: "vibe64.colleague", realtime: "runtime.realtime" },
+  requires: {
+    colleague: "vibe64.colleague",
+    realtime: "runtime.realtime"
+  },
   provides: { browserFocus: "vibe64.colleague.browser-focus" },
   /**
    * @param {object} capabilities

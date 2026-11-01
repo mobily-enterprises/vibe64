@@ -5,7 +5,9 @@ import { githubApi, requireGithubRepository } from "./githubApi.js";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
 async function repositoryBranches(project, input = {}, {
-  runCommand = runVibe64Command, env = process.env, runExclusive = runProjectSourceExclusive
+  runCommand = runVibe64Command,
+  env = process.env,
+  runExclusive = runProjectSourceExclusive
 } = {}) {
   const mode = project.repositoryMode || project.repository?.mode;
   if (!["github", "managed_git"].includes(mode)) {
@@ -17,9 +19,17 @@ async function repositoryBranches(project, input = {}, {
   async function git(args) {
     if (!path.isAbsolute(root || "")) throw new Error("The Vibe64 repository is unavailable.");
     const result = await runCommand({
-      actor: "daemon", allowedRoots: [root], command: "git", args: ["--git-dir", root, ...args],
-      cwd: root, envPolicy: "project", mode: "capture", purpose: "source", runtimes: ["git"],
-      timeout: 60_000, maxBuffer: 4 * 1024 * 1024
+      actor: "daemon",
+      allowedRoots: [root],
+      command: "git",
+      args: ["--git-dir", root, ...args],
+      cwd: root,
+      envPolicy: "project",
+      mode: "capture",
+      purpose: "source",
+      runtimes: ["git"],
+      timeout: 60_000,
+      maxBuffer: 4 * 1024 * 1024
     });
     if (!result.ok) throw new Error(result.stderr || result.error || "The repository branch operation failed.");
     return String(result.stdout || "").trim();
@@ -48,8 +58,14 @@ async function repositoryBranches(project, input = {}, {
       const matched = input.name === undefined ? branches : branches.filter((branch) => branch.name === input.name);
       const offset = input.offset || 0;
       const page = matched.slice(offset, offset + (input.limit || 10));
-      return { ok: true, branches: page, defaultBranch: project.repository.defaultBranch,
-        total: matched.length, offset, nextOffset: offset + page.length < matched.length ? offset + page.length : null };
+      return {
+        ok: true,
+        branches: page,
+        defaultBranch: project.repository.defaultBranch,
+        total: matched.length,
+        offset,
+        nextOffset: offset + page.length < matched.length ? offset + page.length : null
+      };
     }
     const { name, fromBranch, expectedCommit } = input.selection;
     if (!validRepositoryBranch(name) || (fromBranch && !validRepositoryBranch(fromBranch))) {

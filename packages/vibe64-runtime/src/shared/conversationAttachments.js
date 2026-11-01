@@ -2,8 +2,13 @@ const VIBE64_CONVERSATION_ATTACHMENT_MAX_ITEMS = 10;
 const VIBE64_CONVERSATION_ATTACHMENT_FILE_NAME_MAX_CHARACTERS = 160;
 const ATTACHMENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const IMAGE_TYPES = Object.freeze({
-  avif: "image/avif", bmp: "image/bmp", gif: "image/gif",
-  jpeg: "image/jpeg", jpg: "image/jpeg", png: "image/png", webp: "image/webp"
+  avif: "image/avif",
+  bmp: "image/bmp",
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp"
 });
 
 function conversationAttachmentContentType(fileName = "") {

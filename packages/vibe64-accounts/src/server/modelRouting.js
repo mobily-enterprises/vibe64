@@ -20,7 +20,11 @@ import { accountsResult } from "./accountRecords.js";
  * @param {TerminalsInspectAssistantRoutingConfiguration | null} dependencies.inspectRoutingConfiguration
  * @param {AccountNotifications} dependencies.notifications
  */
-function createModelRouting({ access, inspectRoutingConfiguration, notifications }) {
+function createModelRouting({
+  access,
+  inspectRoutingConfiguration,
+  notifications
+}) {
   const routingStore = () => createAssistantRoutingStore({ systemRoot: access.systemRoot });
 
   async function readModelRouting(input) {
@@ -35,8 +39,13 @@ function createModelRouting({ access, inspectRoutingConfiguration, notifications
       // manages AI may also start one new session on another model.
       if (input.view === "main") {
         const { value } = assistantSetupRoleValue(saved.owner, "senior");
-        return { ok: true, revision: saved.revision, canConfigure: !access.aiManagementError(input), mainSelection: value?.schema ? value
-          : (await routingView(saved, input)).setups.owner.roles.senior.recommendation ?? null };
+        return {
+          ok: true,
+          revision: saved.revision,
+          canConfigure: !access.aiManagementError(input),
+          mainSelection: value?.schema ? value
+            : (await routingView(saved, input)).setups.owner.roles.senior.recommendation ?? null
+        };
       }
       const view = await routingView(saved, input);
       if (!input.choiceRole) return view;
@@ -45,17 +54,26 @@ function createModelRouting({ access, inspectRoutingConfiguration, notifications
         [choice.engineId, choice.agentId, choice.modelProviderId, choice.modelId, choice.label, choice.providerLabel]
           .some(value => String(value || "").toLowerCase().includes(search)));
       const offset = input.choiceOffset || 0;
-      return { ok: true, revision: saved.revision, canConfigure: view.canConfigure,
-        setup: input.setup, choiceRole: input.choiceRole, choiceCount: choices.length,
-        choices: choices.slice(offset, offset + 20), nextOffset: offset + 20 < choices.length ? offset + 20 : null };
+      return {
+        ok: true,
+        revision: saved.revision,
+        canConfigure: view.canConfigure,
+        setup: input.setup,
+        choiceRole: input.choiceRole,
+        choiceCount: choices.length,
+        choices: choices.slice(offset, offset + 20),
+        nextOffset: offset + 20 < choices.length ? offset + 20 : null
+      };
     });
   }
 
   async function routingView(configuration, input) {
     if (!inspectRoutingConfiguration) throw new Error("Model routing is unavailable on this host.");
     const [result, team] = await Promise.all([
-      inspectRoutingConfiguration(configuration, { vibe64User: input.vibe64User || null,
-        ...(input.preferProvider ? { preferProvider: input.preferProvider } : {}) }), readWorkspaceTeam()]);
+      inspectRoutingConfiguration(configuration, {
+        vibe64User: input.vibe64User || null,
+        ...(input.preferProvider ? { preferProvider: input.preferProvider } : {})
+      }), readWorkspaceTeam()]);
     return { ok: true, revision: configuration.revision, canConfigure: !access.aiManagementError(input), team, ...result };
   }
 
@@ -101,8 +119,12 @@ function createModelRouting({ access, inspectRoutingConfiguration, notifications
    */
   async function routingDraft(input) {
     const saved = await routingStore().read();
-    if (input.revision !== saved.revision) throw Object.assign(new Error("Models changed in another tab. Reload and review the current choices."), {
-      code: "vibe64_assistant_routing_stale", statusCode: 409
+    if (input.revision !== saved.revision) throw Object.assign(new Error(
+      "Models changed in another tab. Reload and review the current choices."
+    ),
+      {
+      code: "vibe64_assistant_routing_stale",
+      statusCode: 409
     });
     const configuration = { schemaVersion: 5, revision: saved.revision, owner: { ...saved.owner }, nonOwner: { ...saved.nonOwner } };
     for (const setup of Object.keys(ASSISTANT_SETUP_ROLES)) {
@@ -114,8 +136,13 @@ function createModelRouting({ access, inspectRoutingConfiguration, notifications
     }
     // A Senior/Junior tool mismatch is reported on the Junior field, not as a shape error.
     const { senior, junior } = configuration.owner;
-    const pairError = senior?.schema && junior?.schema && senior.engineId !== junior.engineId ? "Senior and Junior must run in the same tool." : "";
-    validateAssistantRoutingConfiguration(pairError ? { ...configuration, owner: { ...configuration.owner, junior: null } } : configuration);
+    const pairError = senior?.schema && junior?.schema && senior.engineId !== junior.engineId
+      ? "Senior and Junior must run in the same tool."
+      : "";
+    validateAssistantRoutingConfiguration(pairError ? {
+      ...configuration,
+      owner: { ...configuration.owner, junior: null }
+    } : configuration);
     return { saved, configuration, pairError };
   }
 

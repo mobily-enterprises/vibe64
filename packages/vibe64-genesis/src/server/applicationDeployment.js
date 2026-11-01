@@ -174,7 +174,10 @@ function parseVibe64DeploymentLines(lines, {
   }
   for (let index = 1; index < result.steps.length; index += 1) {
     if (STEP_ROLE_ORDER[result.steps[index].role] < STEP_ROLE_ORDER[result.steps[index - 1].role]) {
-      invalid(deploymentPath, `Deployment steps must be ordered ${DEPLOYMENT_STEP_ROLES.slice(0, -1).join(", ")}, then ${DEPLOYMENT_STEP_ROLES.at(-1)}.`);
+      invalid(
+        deploymentPath,
+        `Deployment steps must be ordered ${DEPLOYMENT_STEP_ROLES.slice(0, -1).join(", ")}, then ${DEPLOYMENT_STEP_ROLES.at(-1)}.`
+      );
     }
   }
   if (!result.readiness) invalid(deploymentPath, "Deployment needs one Ready when entry.");

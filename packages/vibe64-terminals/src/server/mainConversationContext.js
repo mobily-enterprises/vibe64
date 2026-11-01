@@ -1,7 +1,11 @@
 // Reads the context a session's conversation runs in: its runtime, session, execution root and engine scope.
 
 import path from "node:path";
-import { VIBE64_ASSISTANT_ENGINE_IDS, defineVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
+import {
+  VIBE64_ASSISTANT_ENGINE_IDS,
+  defineVibe64AssistantSelection,
+  vibe64AssistantSelectionFromMetadata
+} from "@local/vibe64-runtime/shared";
 import { sessionClosingReason, sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/server/terminalSessions";
 import {
@@ -31,7 +35,9 @@ function requireCompletedNativeConversationReplacement(session, { requireBriefin
       { code: "vibe64_conversation_replacement_pending", statusCode: 409 });
   }
   if (requireBriefing && state?.replacement?.status === "ready") {
-    throw Object.assign(new Error("Send a chat message to deliver the saved continuity briefing before starting a native terminal or goal."),
+    throw Object.assign(new Error(
+      "Send a chat message to deliver the saved continuity briefing before starting a native terminal or goal."
+    ),
       { code: "vibe64_conversation_replacement_briefing_pending", statusCode: 409 });
   }
 }
@@ -96,7 +102,8 @@ async function readSessionConversationContext(engine, projectService, sessionId,
     if (!session) {
       throw openCodeError("vibe64_session_not_found", "Vibe64 session is not available.", { sessionId: id }, 404);
     }
-    const workdir = await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || sessionSourcePath(session);
+    const workdir = await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) ||
+      sessionSourcePath(session);
     if (!workdir || !String(session.sessionRoot ?? "").trim() || !String(runtime.stateRoot ?? "").trim()) {
       throw openCodeError(
         "vibe64_opencode_session_roots_missing",
@@ -104,16 +111,32 @@ async function readSessionConversationContext(engine, projectService, sessionId,
         { sessionId: id }
       );
     }
-    return { key: `${path.resolve(runtime.stateRoot)}\0${id}`, runtime, session, sessionId: id,
-      selection: openCodeSelection(session), workdir: path.resolve(workdir) };
+    return {
+      key: `${path.resolve(runtime.stateRoot)}\0${id}`,
+      runtime,
+      session,
+      sessionId: id,
+      selection: openCodeSelection(session),
+      workdir: path.resolve(workdir)
+    };
   }
   if (!scope && !session) throw claudeConversationError("This session is unavailable.");
   const selection = options.assistantSelection || vibe64AssistantSelectionFromMetadata(session?.metadata);
   if (selection?.engineId !== "claude") throw claudeConversationError("This session does not have a Claude Code selection.");
-  const workdir = scope?.workdir || await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || sessionSourcePath(session);
+  const workdir = scope?.workdir ||
+    await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) ||
+    sessionSourcePath(session);
   if (!path.isAbsolute(workdir || "") || !runtime.stateRoot) throw claudeConversationError("Claude requires a prepared session workspace.");
-  return { ...options, runtime, session, assistantSelection: selection, selection, sessionId: id, workdir,
-    key: claudeConversationKey(runtime, id) };
+  return {
+    ...options,
+    runtime,
+    session,
+    assistantSelection: selection,
+    selection,
+    sessionId: id,
+    workdir,
+    key: claudeConversationKey(runtime, id)
+  };
 }
 
 /**
@@ -163,9 +186,15 @@ function scopedOpenCodeContext(id, assistantScope, options) {
       "The ephemeral conversation does not have an OpenCode selection."
     );
   }
-  return { assistantScope, key: `ephemeral\0${id}`,
+  return {
+    assistantScope,
+    key: `ephemeral\0${id}`,
     runtime: { projectContextRoot: assistantScope.workdir, stateRoot: assistantScope.runtimeRoot },
-    session: null, sessionId: id, selection, workdir: path.resolve(assistantScope.workdir) };
+    session: null,
+    sessionId: id,
+    selection,
+    workdir: path.resolve(assistantScope.workdir)
+  };
 }
 
 /**
@@ -192,7 +221,8 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
     if (error?.code !== "vibe64_session_source_required" || runtime.learningScope?.noExercise !== false ||
         !codexSessionWorktreeWasRemoved(session)) throw error;
     return codexHost.unavailableWorktree(runtime, sessionId, codexSessionWorktreeUnavailableFailure({
-      session, workdir: sessionSourcePath(session)
+      session,
+      workdir: sessionSourcePath(session)
     }));
   }
   const executionRoot = learningRoot || sessionSourcePath(session);

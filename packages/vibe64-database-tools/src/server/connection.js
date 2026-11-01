@@ -74,7 +74,10 @@ function resolveDatabaseConnection(endpoint = {}) {
     if (!path.isAbsolute(normalizeText(endpoint.database)) || normalizeText(endpoint.database).includes("\0") ||
         typeof endpoint.readOnly !== "boolean" ||
         Object.keys(endpoint).some((name) => !["kind", "database", "readOnly"].includes(name))) {
-      throw vibe64Error("SQLite requires an absolute filename and explicit access mode.", "vibe64_session_database_configuration_incomplete");
+      throw vibe64Error(
+        "SQLite requires an absolute filename and explicit access mode.",
+        "vibe64_session_database_configuration_incomplete"
+      );
     }
     return Object.freeze({
       client: dialect.client,

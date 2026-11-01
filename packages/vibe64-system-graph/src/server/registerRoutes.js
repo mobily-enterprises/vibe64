@@ -39,7 +39,8 @@ function registerRoutes(
   ]) routes.actionRoute(method, `${sessionRoute}/${suffix}`, {
     actionId: `vibe64.system-graph.${operation}`,
     buildInput: (request) => ({ sessionId: request.params.sessionId }),
-    ...(method === "POST" ? { bodyLimit: 16 * 1024 } : {}), summary
+    ...(method === "POST" ? { bodyLimit: 16 * 1024 } : {}),
+    summary
   });
 }
 

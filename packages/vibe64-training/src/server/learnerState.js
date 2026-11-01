@@ -61,8 +61,15 @@ import { createLearnerSteps } from "./learnerSteps.js";
  * @param {string} [dependencies.contentSystemRoot]
  * @param {InstalledTrainingContent} dependencies.content
  */
-function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot, content }) {
-  if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) !== systemRoot || systemRoot === path.parse(systemRoot).root) {
+function createTrainingLearnerState({
+  systemRoot,
+  contentSystemRoot = systemRoot,
+  content
+}) {
+  if (typeof systemRoot !== "string" ||
+      !path.isAbsolute(systemRoot) ||
+      path.resolve(systemRoot) !== systemRoot ||
+      systemRoot === path.parse(systemRoot).root) {
     throw new Error("Learning state needs a canonical absolute, non-root server-owned system root.");
   }
   // Offline restore reads staged state against the live exact-pin installation.
@@ -73,11 +80,32 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     throw new TypeError("Learning state requires the configured installed-content reader.");
   }
 
-  const notes = createLearnerNotes({ acquireRecordLock, createNamespace, systemRoot, userPaths });
-  const learningMode = createLearnerMode({ createNamespace, loadState, userPaths, verifyInstalled });
-  const codeLedgers = createLearnerCodeLedgers({ activeAttemptForProject, createNamespace, loadState, userPaths });
+  const notes = createLearnerNotes({
+    acquireRecordLock,
+    createNamespace,
+    systemRoot,
+    userPaths
+  });
+  const learningMode = createLearnerMode({
+    createNamespace,
+    loadState,
+    userPaths,
+    verifyInstalled
+  });
+  const codeLedgers = createLearnerCodeLedgers({
+    activeAttemptForProject,
+    createNamespace,
+    loadState,
+    userPaths
+  });
   const reviews = createLearnerReviews({ createNamespace, userPaths });
-  const steps = createLearnerSteps({ acquireRecordLock, loadState, userPaths, verifyActiveLesson, verifyInstalled });
+  const steps = createLearnerSteps({
+    acquireRecordLock,
+    loadState,
+    userPaths,
+    verifyActiveLesson,
+    verifyInstalled
+  });
 
   function userPaths(actor) {
     const learner = learnerIdentity(actor);
@@ -109,7 +137,14 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
 
   async function readProgress(paths) {
     const value = await readRecord(paths.progress);
-    if (!value) return { schemaVersion: 2, learnerId: paths.learner.id, revision: 0, activeAttemptId: null, completedLessons: [], attempts: [] };
+    if (!value) return {
+      schemaVersion: 2,
+      learnerId: paths.learner.id,
+      revision: 0,
+      activeAttemptId: null,
+      completedLessons: [],
+      attempts: []
+    };
     return validateProgress(value, paths.learner.id);
   }
 
@@ -142,7 +177,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
           const previousEndRevision = progress.attempts[attemptIndex - 1]?.ended?.revision || 0;
           const expectedRevision = retained?.ended ? retained.ended.revision - 1 : progress.revision;
           const expected = retained && deriveActive({ ...progress, activeAttemptId: retained.attemptId, revision: expectedRevision });
-          if (previousEndRevision && active.progressRevision <= previousEndRevision) throw new Error("Active summary predates this attempt's reservation.");
+          if (previousEndRevision && active.progressRevision <= previousEndRevision) {
+            throw new Error("Active summary predates this attempt's reservation.");
+          }
           let preparation = active.preparation;
           if (preparation && expected?.preparation && active.progressRevision < expectedRevision) {
             const previous = active.preparation;
@@ -183,7 +220,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         progress,
         active,
         activeSummaryCurrent: canonicalJson(savedActive) === canonicalJson(active || (progress.revision ? {
-          schemaVersion: 1, learnerId: progress.learnerId, progressRevision: progress.revision, attemptId: null
+          schemaVersion: 1,
+          learnerId: progress.learnerId,
+          progressRevision: progress.revision,
+          attemptId: null
         } : null))
       };
     } catch (cause) {
@@ -219,7 +259,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     await createNamespace(paths);
     const release = await tryAcquireExclusiveFileLock(paths.lock);
     if (!release) {
-      throw failure("VIBE64_TRAINING_STATE_BUSY", "Learning state is being updated. Retry the same request after that operation finishes.", 409);
+      throw failure(
+        "VIBE64_TRAINING_STATE_BUSY",
+        "Learning state is being updated. Retry the same request after that operation finishes.",
+        409
+      );
     }
     return release;
   }
@@ -262,7 +306,12 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         active ? "The reservation is saved, but its active summary save was not confirmed. Retry the same request or resume before provisioning."
           : "The attempt end is saved, but its empty active summary save was not confirmed. Read or retry the same end request; no project disposal was claimed.",
         null,
-        { reservationSaved: Boolean(active), ...(active ? {} : { attemptEndSaved: true }), revision: progress.revision, attemptId: progress.activeAttemptId }
+        {
+          reservationSaved: Boolean(active),
+          ...(active ? {} : { attemptEndSaved: true }),
+          revision: progress.revision,
+          attemptId: progress.activeAttemptId
+        }
       );
       error.cause = cause;
       throw error;
@@ -293,8 +342,14 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const completion = attempt
       ? lessonCompletion(lesson, await steps.readAttemptSteps(paths, attempt, lesson), availableStepIds(lesson, actor)) : null;
     const completed = new Set(state.progress.completedLessons.map(done => canonicalJson({ code: done.code, hash: done.hash })));
-    const lessonCompletions = state.progress.completedLessons.map(done => ({ lessonCode: done.code, lessonHash: done.hash,
-      required: 0, passed: 0, completed: true, open: false }));
+    const lessonCompletions = state.progress.completedLessons.map(done => ({
+      lessonCode: done.code,
+      lessonHash: done.hash,
+      required: 0,
+      passed: 0,
+      completed: true,
+      open: false
+    }));
     if (completion) {
       const open = { ...completion, completed: completion.completed || completed.has(canonicalJson(attempt.pin.lesson)), open: true };
       const index = lessonCompletions.findIndex(value => value.lessonCode === open.lessonCode && value.lessonHash === open.lessonHash);
@@ -325,7 +380,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
    */
   async function reserveAttempt({ actor, requestId, expectedRevision, pin: inputPin } = {}) {
     const paths = userPaths(actor);
-    if (typeof requestId !== "string" || !requestPattern.test(requestId) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+    if (typeof requestId !== "string" ||
+        !requestPattern.test(requestId) ||
+        !Number.isSafeInteger(expectedRevision) ||
+        expectedRevision < 0) {
       throw new Error("Reserve with a bounded stable request ID and the revision returned by readState.");
     }
     const pin = validatePin(inputPin);
@@ -343,7 +401,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       const replay = state.progress.attempts.find(attempt => attempt.requestIds.includes(requestId));
       if (replay) {
         if (canonicalJson(replay.pin) !== canonicalJson(pin)) {
-          throw failure("VIBE64_TRAINING_REQUEST_CONFLICT", "This request ID already reserved another exact lesson pin. Resume its saved attempt.", 409);
+          throw failure(
+            "VIBE64_TRAINING_REQUEST_CONFLICT",
+            "This request ID already reserved another exact lesson pin. Resume its saved attempt.",
+            409
+          );
         }
         await verifyInstalled(replay.pin);
         const active = state.activeSummaryCurrent ? state.active : await saveActive(paths, state.progress);
@@ -353,10 +415,20 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       if (attempt && canonicalJson(attempt.pin) !== canonicalJson(pin)) {
         const current = await verifyInstalled(attempt.pin).catch(() => null);
         throw failure(TRAINING_LESSON_IN_PROGRESS_CODE, "Another lesson is in progress. Archive it before starting this one.", 409,
-          { details: { attemptId: attempt.attemptId, lessonCode: attempt.pin.lesson.code, lessonTitle: current?.lesson?.title || attempt.pin.lesson.code } });
+          {
+            details: {
+              attemptId: attempt.attemptId,
+              lessonCode: attempt.pin.lesson.code,
+              lessonTitle: current?.lesson?.title || attempt.pin.lesson.code
+            }
+          });
       }
       if (expectedRevision !== state.revision) {
-        throw failure("VIBE64_TRAINING_STATE_REVISION_CONFLICT", "Learning state changed. Read the current revision and resume or retry the same request.", 409);
+        throw failure(
+          "VIBE64_TRAINING_STATE_REVISION_CONFLICT",
+          "Learning state changed. Read the current revision and resume or retry the same request.",
+          409
+        );
       }
       if (state.revision === Number.MAX_SAFE_INTEGER) {
         throw new Error("Learning state reached its revision limit. Resume the saved attempt; no new reservation was written.");
@@ -364,14 +436,21 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       let attempts = state.progress.attempts;
       if (attempt) {
         if (attempt.requestIds.length >= MAX_REQUEST_IDS) {
-          throw new Error("This attempt reached its 64 distinct reservation-request limit. Resume the saved attempt; no retry identity was removed.");
+          throw new Error(
+            "This attempt reached its 64 distinct reservation-request limit. Resume the saved attempt; no retry identity was removed."
+          );
         }
         attempt = { ...attempt, requestIds: [...attempt.requestIds, requestId] };
         attempts = attempts.map(value => value.attemptId === attempt.attemptId ? attempt : value);
       } else {
         const attemptId = randomUUID();
-        attempt = { attemptId, requestIds: [requestId], createdAt: new Date().toISOString(), pin,
-          ...(lesson.lesson.exercise ? { projectSlug: practiceSlug(attemptId), preparation: { phase: "reserved" } } : {}) };
+        attempt = {
+          attemptId,
+          requestIds: [requestId],
+          createdAt: new Date().toISOString(),
+          pin,
+          ...(lesson.lesson.exercise ? { projectSlug: practiceSlug(attemptId), preparation: { phase: "reserved" } } : {})
+        };
         attempts = [...attempts, attempt];
       }
       let progress = { ...state.progress, revision: state.revision + 1, activeAttemptId: attempt.attemptId, attempts };
@@ -380,7 +459,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         progress = { ...progress, attempts: progress.attempts.slice(1) };
       }
       await verifyInstalled(pin);
-      await writeProgress(paths, progress, "Reservation save was not confirmed. Retry the same request ID before provisioning; the atomic rename may already have saved it.");
+      await writeProgress(
+        paths,
+        progress,
+        "Reservation save was not confirmed. Retry the same request ID before provisioning; the atomic rename may already have saved it."
+      );
       const active = await saveActive(paths, progress);
       return { revision: progress.revision, attempt, active, replayed: false };
     } finally {
@@ -400,7 +483,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "") || !requestPattern.test(requestId || "") ||
         !Number.isSafeInteger(expectedRevision) || expectedRevision < 0 || !END_REASONS.includes(reason)) {
-      throw new Error("End the exact saved attempt with a stable request ID, current revision and an explicit finished, archived or deleted reason.");
+      throw new Error(
+        "End the exact saved attempt with a stable request ID, current revision and an explicit finished, archived or deleted reason."
+      );
     }
     await loadState(paths);
     const release = await acquire(paths);
@@ -416,10 +501,18 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         ended = { revision: state.revision, attempt: replay, active, replayed: true };
       } else {
         if (state.progress.attempts.some(value => value.requestIds.includes(requestId))) {
-          throw failure("VIBE64_TRAINING_REQUEST_CONFLICT", "This request ID already reserved an attempt; use a distinct stable end request.", 409);
+          throw failure(
+            "VIBE64_TRAINING_REQUEST_CONFLICT",
+            "This request ID already reserved an attempt; use a distinct stable end request.",
+            409
+          );
         }
         if (state.progress.activeAttemptId !== attemptId) {
-          throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "Only this learner's exact lesson in progress can be ended; retained history is not reactivated.", 404);
+          throw failure(
+            "VIBE64_TRAINING_ATTEMPT_MISSING",
+            "Only this learner's exact lesson in progress can be ended; retained history is not reactivated.",
+            404
+          );
         }
         if (expectedRevision !== state.revision) {
           throw failure("VIBE64_TRAINING_STATE_REVISION_CONFLICT", "Learning state changed. Read it before ending the same attempt.", 409);
@@ -435,13 +528,25 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
           const key = canonicalJson(previous.pin.lesson);
           if (!completedLessons.some(value => canonicalJson({ code: value.code, hash: value.hash }) === key)) {
             // The bound keeps the record small; the oldest completion leaves first.
-            completedLessons = [...completedLessons, { ...previous.pin.lesson, completedAt: new Date().toISOString() }].slice(-MAX_COMPLETED_LESSONS);
+            completedLessons = [...completedLessons, {
+              ...previous.pin.lesson,
+              completedAt: new Date().toISOString()
+            }].slice(-MAX_COMPLETED_LESSONS);
           }
         }
         const attempt = { ...previous, ended: { requestId, revision: state.revision + 1, reason } };
-        const progress = { ...state.progress, revision: state.revision + 1, activeAttemptId: null, completedLessons,
-          attempts: state.progress.attempts.map(value => value.attemptId === attemptId ? attempt : value) };
-        await writeProgress(paths, progress, "Attempt end save was not confirmed; atomic rename may have succeeded. Read or retry this exact end request before a new reservation.");
+        const progress = {
+          ...state.progress,
+          revision: state.revision + 1,
+          activeAttemptId: null,
+          completedLessons,
+          attempts: state.progress.attempts.map(value => value.attemptId === attemptId ? attempt : value)
+        };
+        await writeProgress(
+          paths,
+          progress,
+          "Attempt end save was not confirmed; atomic rename may have succeeded. Read or retry this exact end request before a new reservation."
+        );
         const active = await saveActive(paths, progress);
         ended = { revision: progress.revision, attempt, active, replayed: false };
       }
@@ -474,13 +579,21 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
     const before = await loadState(paths);
     if (before.progress.activeAttemptId !== attemptId) {
-      throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching active reservation. Read the current learning state before resuming.", 404);
+      throw failure(
+        "VIBE64_TRAINING_ATTEMPT_MISSING",
+        "This learner has no matching active reservation. Read the current learning state before resuming.",
+        404
+      );
     }
     const release = await acquire(paths);
     try {
       const state = await loadState(paths);
       if (state.progress.activeAttemptId !== attemptId) {
-        throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "The active attempt changed. Read the current learning state before resuming.", 404);
+        throw failure(
+          "VIBE64_TRAINING_ATTEMPT_MISSING",
+          "The active attempt changed. Read the current learning state before resuming.",
+          404
+        );
       }
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       const lesson = await verifyActiveLesson(state.progress);
@@ -506,7 +619,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     }
     const before = await loadState(paths);
     if (before.progress.activeAttemptId !== attemptId) {
-      throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching active reservation. Read the current learning state before preparing.", 404);
+      throw failure(
+        "VIBE64_TRAINING_ATTEMPT_MISSING",
+        "This learner has no matching active reservation. Read the current learning state before preparing.",
+        404
+      );
     }
     await verifyActiveLesson(before.progress, { admissionOnly: closing === true });
     let release = await tryAcquireExclusiveFileLock(paths.preparationLock);
@@ -515,12 +632,20 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       release = await tryAcquireExclusiveFileLock(paths.preparationLock);
     }
     if (!release) {
-      throw failure("VIBE64_TRAINING_PREPARATION_BUSY", "This learner's exercise is being prepared. Retry the same attempt after that operation finishes.", 409);
+      throw failure(
+        "VIBE64_TRAINING_PREPARATION_BUSY",
+        "This learner's exercise is being prepared. Retry the same attempt after that operation finishes.",
+        409
+      );
     }
     try {
       const state = await loadState(paths);
       if (state.progress.activeAttemptId !== attemptId) {
-        throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "The active attempt changed. Read the current learning state before preparing.", 404);
+        throw failure(
+          "VIBE64_TRAINING_ATTEMPT_MISSING",
+          "The active attempt changed. Read the current learning state before preparing.",
+          404
+        );
       }
       await verifyActiveLesson(state.progress, { admissionOnly: closing === true });
       return await operation();
@@ -547,13 +672,21 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       ? structuredClone(validateContent(preparationFailureSchema, failureInput, "Preparation failure")) : null;
     const before = await loadState(paths);
     if (before.progress.activeAttemptId !== attemptId) {
-      throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching active reservation. Read the current learning state before preparing.", 404);
+      throw failure(
+        "VIBE64_TRAINING_ATTEMPT_MISSING",
+        "This learner has no matching active reservation. Read the current learning state before preparing.",
+        404
+      );
     }
     const release = await acquire(paths);
     try {
       const state = await loadState(paths);
       if (state.progress.activeAttemptId !== attemptId) {
-        throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "The active attempt changed. Read the current learning state before preparing.", 404);
+        throw failure(
+          "VIBE64_TRAINING_ATTEMPT_MISSING",
+          "The active attempt changed. Read the current learning state before preparing.",
+          404
+        );
       }
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       await verifyActiveLesson(state.progress);
@@ -569,7 +702,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       if (operation === "begin") {
         next = current.phase === "reserved" ? { phase: "preparing", initialSessionId: sessionId } : current;
       } else if (current.phase === "reserved") {
-        throw failure("VIBE64_TRAINING_PREPARATION_CONFLICT", "Begin and save this attempt's exact session identity before project or session effects.", 409);
+        throw failure(
+          "VIBE64_TRAINING_PREPARATION_CONFLICT",
+          "Begin and save this attempt's exact session identity before project or session effects.",
+          409
+        );
       } else if (operation === "start") {
         // Recorded before the practice session exists; a retry before it
         // exists re-verifies the same exercise and may record again.
@@ -578,7 +715,12 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         }
         next = { ...current, startCommit: input.startCommit };
       } else if (operation === "ready") {
-        next = current.phase === "ready" ? current : { phase: "ready", initialSessionId: sessionId, observedAt: new Date().toISOString(), ...start };
+        next = current.phase === "ready" ? current : {
+          phase: "ready",
+          initialSessionId: sessionId,
+          observedAt: new Date().toISOString(),
+          ...start
+        };
       } else {
         next = { phase: "preparing", initialSessionId: sessionId, failure: observedFailure, ...start };
       }
@@ -587,7 +729,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         return { revision: state.revision, attempt, active, replayed: true };
       }
       if (expectedRevision !== state.revision) {
-        throw failure("VIBE64_TRAINING_STATE_REVISION_CONFLICT", "Learning preparation changed. Read the current revision before reporting another observation.", 409);
+        throw failure(
+          "VIBE64_TRAINING_STATE_REVISION_CONFLICT",
+          "Learning preparation changed. Read the current revision before reporting another observation.",
+          409
+        );
       }
       if (state.revision === Number.MAX_SAFE_INTEGER) {
         throw new Error("Learning state reached its revision limit. No preparation change was written.");
@@ -598,9 +744,18 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         revision: state.revision + 1,
         attempts: state.progress.attempts.map(value => value.attemptId === attemptId ? { ...attempt, preparation: next } : value)
       };
-      await writeProgress(paths, progress, "Preparation save was not confirmed; atomic rename may already have succeeded. Read or retry this same preparation operation before external effects.");
+      await writeProgress(
+        paths,
+        progress,
+        "Preparation save was not confirmed; atomic rename may already have succeeded. Read or retry this same preparation operation before external effects."
+      );
       const active = await saveActive(paths, progress);
-      return { revision: progress.revision, attempt: progress.attempts.find(value => value.attemptId === attemptId), active, replayed: false };
+      return {
+        revision: progress.revision,
+        attempt: progress.attempts.find(value => value.attemptId === attemptId),
+        active,
+        replayed: false
+      };
     } finally {
       await release();
     }
@@ -635,8 +790,11 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
     const lesson = await verifyInstalled(attempt.pin, { admissionOnly: true });
     const { revision: _revision, ...stepProgress } = await steps.readAttemptSteps(paths, attempt, lesson);
-    return { attempt: structuredClone(attempt), stepProgress: structuredClone(stepProgress),
-      lessonTitle: String(lesson.lesson?.title || "") || attempt.pin.lesson.code };
+    return {
+      attempt: structuredClone(attempt),
+      stepProgress: structuredClone(stepProgress),
+      lessonTitle: String(lesson.lesson?.title || "") || attempt.pin.lesson.code
+    };
   }
 
   async function beginPreparation({ actor, attemptId, expectedRevision, initialSessionId } = {}) {
@@ -662,9 +820,24 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision, startCommit }, "start");
   }
 
-  return Object.freeze({ readState, activeAttemptForProject, readAttemptRecord, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive,
-    beginPreparation, recordPreparationReady, recordPreparationFailure, recordPreparationStart, runReviewExclusive: reviews.runReviewExclusive,
-    readCodeLedger: codeLedgers.readCodeLedger, updateCodeLedger: codeLedgers.updateCodeLedger, readStepProgress: steps.readStepProgress, updateStepProgress: steps.updateStepProgress, readReader: steps.readReader, saveReader: steps.saveReader,
+  return Object.freeze({ readState,
+    activeAttemptForProject,
+    readAttemptRecord,
+    reserveAttempt,
+    endAttempt,
+    resumeAttempt,
+    runPreparationExclusive,
+    beginPreparation,
+    recordPreparationReady,
+      recordPreparationFailure,
+      recordPreparationStart,
+      runReviewExclusive: reviews.runReviewExclusive,
+    readCodeLedger: codeLedgers.readCodeLedger,
+    updateCodeLedger: codeLedgers.updateCodeLedger,
+      readStepProgress: steps.readStepProgress,
+      updateStepProgress: steps.updateStepProgress,
+      readReader: steps.readReader,
+      saveReader: steps.saveReader,
     // readable-check: allow setter-seam - not a slot: setLearningMode saves one learner's Learn mode
     readTeacherNotes: notes.readTeacherNotes, saveTeacherNotes: notes.saveTeacherNotes, readLearningMode: learningMode.readLearningMode, setLearningMode: learningMode.setLearningMode });
 }

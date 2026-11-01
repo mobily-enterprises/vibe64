@@ -16,15 +16,23 @@ import { verifyZaiConnection } from "./zaiConnectionVerifier.js";
  * @param {TerminalsService} dependencies.terminals
  * @param {PublishConnectionChanged} dependencies.publishConnectionChanged
  */
-function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionChanged }) {
+function createAiConnectionRuntime({
+  systemRoot,
+  terminals,
+  publishConnectionChanged
+}) {
   return createAiConnectionStore({
     filePath: path.join(systemRoot, "ai-connections", "connections.json"),
     async withConnectionChange(change, publish) {
       let published = false;
-      const result = await terminals.invalidateAgentRuntimes({ ...change, provider: "opencode", async publish() {
-        await publish();
-        published = true;
-      } });
+      const result = await terminals.invalidateAgentRuntimes({
+        ...change,
+        provider: "opencode",
+        async publish() {
+          await publish();
+          published = true;
+        }
+      });
       if (result?.ok === false || !published) {
         throw new Error(result?.failed?.[0]?.error || "Close OpenCode native terminals, then retry this connection change.");
       }

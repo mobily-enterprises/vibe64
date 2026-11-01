@@ -42,7 +42,11 @@ function createWorkspaceSetupRunner({
     runnerState,
     startWorkflow
   });
-  const setupMigration = createWorkspaceSetupMigration({ projectService, runCommand, runnerState });
+  const setupMigration = createWorkspaceSetupMigration({
+    projectService,
+    runCommand,
+    runnerState
+  });
   const setupStart = createWorkspaceSetupStart({
     connectedPreparation,
     inspectProjectFormat,
@@ -51,7 +55,11 @@ function createWorkspaceSetupRunner({
     setupExecution,
     setupMigration
   });
-  const setupStatus = createWorkspaceSetupStatus({ projectService, runnerState, setupExecution });
+  const setupStatus = createWorkspaceSetupStatus({
+    projectService,
+    runnerState,
+    setupExecution
+  });
 
   return Object.freeze({
     invalidate: setupStatus.invalidate,

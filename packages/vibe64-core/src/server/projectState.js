@@ -14,7 +14,9 @@ import {
 function normalizeProjectSlug(value = "") {
   const slug = String(value || "").trim();
   if (!PROJECT_SLUG_PATTERN.test(slug)) {
-    const error = new Error("Project slug must start with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes.");
+    const error = new Error(
+      "Project slug must start with a lowercase letter or number and contain only lowercase letters, numbers, underscores, or dashes."
+    );
     error.code = "vibe64_invalid_project_slug";
     throw error;
   }
@@ -42,7 +44,10 @@ async function listProjectRuntimeRoots(systemRoot) {
     if (!(await lstat(root)).isDirectory()) throw new Error("Project state inventory requires a regular projects directory.");
     entries = await readdir(root, { withFileTypes: true });
   }
-  catch (error) { if (error.code === "ENOENT") return []; throw error; }
+  catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
   if (entries.some((entry) => entry.isSymbolicLink())) {
     throw new Error("Project state inventory contains a symbolic link. Inspect it before upgrading.");
   }

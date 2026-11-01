@@ -63,7 +63,56 @@ import workspaceAssistantNameOnly from "./stateUpgrades/20261025-workspace-assis
 import codexUnusedCaches from "./stateUpgrades/20261029-codex-unused-caches.js";
 import clonedDefaultBranch from "./stateUpgrades/20261030-cloned-default-branch.js";
 
-const upgrades = [codexLoginId, routingV2, nativeConversationLifecycle, assistantRoleNames, assistantHelper, nativeProviderReadiness, completedDiscussionPlan, planHistory, autoImplementationContinuation, colleagueConversation, sessionConversations, conversationNativeJournal, conversationUndoRetirement, trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches, clonedDefaultBranch];
+const upgrades = [
+  codexLoginId,
+  routingV2,
+  nativeConversationLifecycle,
+  assistantRoleNames,
+  assistantHelper,
+  nativeProviderReadiness,
+  completedDiscussionPlan,
+  planHistory,
+  autoImplementationContinuation,
+  colleagueConversation,
+  sessionConversations,
+  conversationNativeJournal,
+  conversationUndoRetirement,
+  trainingPreparation,
+  personalAssistantPreferences,
+  routingFormatCompatibility,
+  colleagueConversationHistory,
+  trainingAssessments,
+  trainingAttemptHistory,
+  trainingQuestionAdmission,
+  personalVoicePolicy,
+  learningPracticeSessions,
+  learningPracticeHistory,
+  planProgress,
+  colleagueCodexCompletedPolicy,
+  colleagueNativeContinuity,
+  colleagueNativeInstructions,
+  assistantWorkflow,
+  independentProviderCredentials,
+  colleagueRetiredOperation,
+  colleagueInteractiveContinuity,
+  colleagueContinuityScope,
+  conversationDraftIdentity,
+  connectedProjectBindings,
+  claudeRejectedInput,
+  workspaceResourceIdentity,
+  goalContinuationIntent,
+  claudeCommandMessages,
+  claudePausedGoal,
+  claudeBlockedGoal,
+  learningSpaceReset,
+  freeModelRetirement,
+  ownerTeamAiSetups,
+  retiredTourPreference,
+  retiredProjectBootstrap,
+  workspaceAssistantNameOnly,
+  codexUnusedCaches,
+  clonedDefaultBranch
+];
 
 async function readLedger(ledgerPath) {
   let source;
@@ -185,9 +234,16 @@ async function recordStateUpgradeBaseline({ systemRoot, report = (level, message
  * options; each upgrade reads the ones it needs. Core must not depend back on
  * Accounts or Runtime.
  */
-async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, apply = false,
-  repairRetiredOperation = false, repairInteractiveContinuity = false,
-  report = (level, message) => console.log(`[${level}] ${message}`), ...operations }) {
+async function runStateUpgrades({
+  systemRoot,
+  projectsRoot,
+  managedSourceRoot,
+  apply = false,
+  repairRetiredOperation = false,
+  repairInteractiveContinuity = false,
+  report = (level, message) => console.log(`[${level}] ${message}`),
+  ...operations
+}) {
   requireSystemRoot(systemRoot);
   const upgradeRoot = path.join(systemRoot, "upgrades");
   const ledgerPath = path.join(upgradeRoot, "applied.json");
@@ -215,8 +271,15 @@ async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, a
     });
     if (repairRetiredOperation || repairInteractiveContinuity) {
       if (repairRetiredOperation && repairInteractiveContinuity) throw new Error("Choose one explicit Colleague repair at a time.");
-      report("warning", "Explicit Colleague repair only; the ordered upgrade ledger is unchanged. Stop all writers before apply, then run ordinary candidate check/apply.");
-      await run(repairInteractiveContinuity ? colleagueInteractiveContinuity : colleagueRetiredOperation, apply, "before-continuity-bootstrap");
+      report(
+        "warning",
+        "Explicit Colleague repair only; the ordered upgrade ledger is unchanged. Stop all writers before apply, then run ordinary candidate check/apply."
+      );
+      await run(
+        repairInteractiveContinuity ? colleagueInteractiveContinuity : colleagueRetiredOperation,
+        apply,
+        "before-continuity-bootstrap"
+      );
       return { pending: pending.map(upgrade => upgrade.id), applied: [] };
     }
     // Check all pending work before the first mutation. Apply re-reads each input.
@@ -253,7 +316,10 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
     if (!(await lstat(root)).isDirectory() || await realpath(root) !== root) {
       return { ...result, status: "partial", issues: [{ code: "upgrade_backup_path_unverified" }] };
     }
-  } catch (error) { if (error.code === "ENOENT") return result; throw error; }
+  } catch (error) {
+    if (error.code === "ENOENT") return result;
+    throw error;
+  }
   const busy = () => ({ ...result, status: "busy", issues: [{ code: "upgrade_backup_busy" }] });
   const maintain = async () => {
     const ledger = await readLedger(path.join(upgradeRoot, "applied.json"));
@@ -284,7 +350,10 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
       }
       try {
         await inspect(target);
-        if (newest > cutoff) { result.retainedBytes += bytes; continue; }
+        if (newest > cutoff) {
+          result.retainedBytes += bytes;
+          continue;
+        }
         for (const [file, original] of identities) {
           signal?.throwIfAborted();
           const current = await lstat(file);
@@ -293,7 +362,10 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
         }
         result.eligibleBytes += bytes;
         if (dryRun) result.retainedBytes += bytes;
-        else { await rm(target, { recursive: true }); result.reclaimedBytes += bytes; }
+        else {
+          await rm(target, { recursive: true });
+          result.reclaimedBytes += bytes;
+        }
       } catch (error) {
         signal?.throwIfAborted();
         result.retainedBytes += bytes;
@@ -305,7 +377,10 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
   };
   if (!dryRun) return withUpgradeLock(upgradeRoot, maintain, { busy });
   // A dry run only reports: it never takes the lock, but respects one held.
-  try { await lstat(path.join(upgradeRoot, "apply.lock")); return busy(); }
+  try {
+    await lstat(path.join(upgradeRoot, "apply.lock"));
+    return busy();
+  }
   catch (error) { if (error.code !== "ENOENT") throw error; }
   return maintain();
 }

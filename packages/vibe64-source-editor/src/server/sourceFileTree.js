@@ -3,7 +3,12 @@ import path from "node:path";
 
 import { sourceEditorPathExcluded } from "./filePolicy.js";
 import { sourceEditorLanguageForPath } from "./sourceEditorLanguage.js";
-import { absoluteSourceEditorPath, normalizeSourceEditorRelativePath, sourceEditorError, sourceEditorPathStats } from "./sourceEditorPaths.js";
+import {
+  absoluteSourceEditorPath,
+  normalizeSourceEditorRelativePath,
+  sourceEditorError,
+  sourceEditorPathStats
+} from "./sourceEditorPaths.js";
 import { sourceEditorResultLimit, sourceEditorResultOffset } from "./sourceFileMatches.js";
 
 // The source tree the editor shows: one folder's page of entries and the
