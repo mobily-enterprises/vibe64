@@ -4,9 +4,9 @@ import {
   normalizeDevelopmentDatabaseName,
   normalizeDevelopmentDatabaseScope
 } from "@local/vibe64-core/server/studioProjectContext";
-import { developmentDatabasePolicy as resolveDevelopmentDatabasePolicy } from "./developmentDatabasePolicy.js";
+import { developmentDatabasePolicy } from "./developmentDatabasePolicy.js";
 import {
-  runProjectSessionPolicyExclusive as runProjectSessionPolicyMutationExclusive
+  runProjectSessionPolicyExclusive
 } from "./projectSourceMutationLock.js";
 
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
@@ -84,7 +84,7 @@ function createProjectDevelopmentDatabase({ projectContext, selection, sessionWo
         })).listSessionSummaries({
           statusGroup: "open"
         });
-    return resolveDevelopmentDatabasePolicy({
+    return developmentDatabasePolicy({
       managed: managedDevelopmentDatabaseAvailable(),
       openSessions,
       scope: await currentDevelopmentDatabaseScope(),
@@ -103,7 +103,7 @@ function createProjectDevelopmentDatabase({ projectContext, selection, sessionWo
         "vibe64_managed_development_database_unavailable"
       );
     }
-    return runProjectSessionPolicyMutationExclusive(
+    return runProjectSessionPolicyExclusive(
       selection.selectedProjectRuntimeRoot(),
       async () => {
         const policy = await currentDevelopmentDatabasePolicy();

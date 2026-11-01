@@ -6,12 +6,11 @@ import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { validateAssistantRoutingUpgradeRecord } from "@local/vibe64-runtime/server/assistantRoutingStateUpgrade";
+import { isPlainObject, upgradeFileText } from "./upgradeValues.js";
 
-const object = value => value && typeof value === "object" && !Array.isArray(value);
-const json = value => `${JSON.stringify(value, null, 2)}\n`;
 
 function helperAssignments(value) {
-  if (!object(value)) throw new Error("Saved model assignments must be an object.");
+  if (!isPlainObject(value)) throw new Error("Saved model assignments must be an object.");
   const next = { ...value };
   if (Object.hasOwn(next, "intern")) {
     if (Object.hasOwn(next, "helper")) throw new Error("Both previous and current Helper assignments exist. Resolve the conflict before upgrading.");
@@ -22,7 +21,7 @@ function helperAssignments(value) {
 }
 
 function helperConfiguration(value) {
-  if (!object(value) || !object(value.orchestrators) || value.schemaVersion !== undefined && ![3, 4].includes(value.schemaVersion)) {
+  if (!isPlainObject(value) || !isPlainObject(value.orchestrators) || value.schemaVersion !== undefined && ![3, 4].includes(value.schemaVersion)) {
     throw new Error("Run the preceding model-routing upgrades before upgrading Helper settings.");
   }
   const next = {
@@ -36,11 +35,11 @@ function helperConfiguration(value) {
 // Only visit owned profile fields; authored messages, prompts and model IDs are opaque.
 function upgradeHelperProfiles(value) {
   if (Array.isArray(value)) return value.map(upgradeHelperProfiles);
-  if (!object(value)) return value;
+  if (!isPlainObject(value)) return value;
   const next = { ...value };
   for (const key of ["executionProfile", "executionProfileRequest", "commitTitleExecutionProfile"]) {
     const profile = next[key];
-    if (object(profile) && ["economy", "intern"].includes(profile.profileId)) {
+    if (isPlainObject(profile) && ["economy", "intern"].includes(profile.profileId)) {
       next[key] = { ...profile, profileId: "helper" };
     }
   }
@@ -51,7 +50,7 @@ function upgradeHelperProfiles(value) {
 }
 
 function routingRecord(value, { preferences = false, history = false } = {}) {
-  if (!object(value)) throw new Error("Saved routing must be an object.");
+  if (!isPlainObject(value)) throw new Error("Saved routing must be an object.");
   const previousConfiguration = value.configuration?.schemaVersion === 3 ||
     Object.values(value.configuration?.orchestrators || {}).some(roles => Object.hasOwn(roles, "intern"));
   const currentRole = ["custom", "helper"].some(role =>
@@ -181,14 +180,14 @@ async function upgradeAssistantHelpers(context) {
         return updates;
       }
       const next = validateAssistantRoutingConfiguration(helperConfiguration(parsed));
-      if (JSON.stringify(next) !== JSON.stringify(parsed)) updates.push({ filePath, original, contents: json(next) });
+      if (JSON.stringify(next) !== JSON.stringify(parsed)) updates.push({ filePath, original, contents: upgradeFileText(next) });
     }
     const connectionsPath = path.join(systemRoot, "ai-connections/connections.json");
     const connectionsSource = await readOptional(connectionsPath);
     if (connectionsSource !== null) {
       const connections = JSON.parse(connectionsSource);
-      if (!object(connections) || !object(connections.connections) ||
-          Object.values(connections.connections).some(entry => !object(entry))) throw new Error("AI connections have an unsupported shape.");
+      if (!isPlainObject(connections) || !isPlainObject(connections.connections) ||
+          Object.values(connections.connections).some(entry => !isPlainObject(entry))) throw new Error("AI connections have an unsupported shape.");
       let changed = false;
       for (const entry of Object.values(connections.connections)) {
         if (!Object.hasOwn(entry, "economyModelId")) continue;
@@ -197,7 +196,7 @@ async function upgradeAssistantHelpers(context) {
         delete entry.economyModelId;
         changed = true;
       }
-      if (changed) updates.push({ filePath: connectionsPath, original: connectionsSource, contents: json(connections) });
+      if (changed) updates.push({ filePath: connectionsPath, original: connectionsSource, contents: upgradeFileText(connections) });
     }
     for (const projectRuntimeRoot of await listProjectRuntimeRoots(systemRoot)) {
       const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
@@ -221,12 +220,12 @@ async function upgradeAssistantHelpers(context) {
         const source = await readOptional(from);
         const target = path.join(projectRuntimeRoot, "codex-helper-thread-ownership", entry.name);
         const record = upgradeHelperProfiles(JSON.parse(source));
-        if (!object(record) || !record.threadId || !record.ownershipId || !record.executionProfile) throw new Error("Helper ownership is incomplete. Inspect it before upgrading.");
+        if (!isPlainObject(record) || !record.threadId || !record.ownershipId || !record.executionProfile) throw new Error("Helper ownership is incomplete. Inspect it before upgrading.");
         vibe64AgentExecutionProfileAuditSnapshot(record.executionProfile);
         if (["economy", "intern"].includes(record.identity?.runtime?.executionMode)) {
           record.identity = { ...record.identity, runtime: { ...record.identity.runtime, executionMode: "helper" } };
         }
-        const contents = json(record);
+        const contents = upgradeFileText(record);
         const existing = await readOptional(target);
         if (existing !== null && existing !== contents) throw new Error("Conflicting Helper ownership records require inspection before upgrading.");
         updates.push({ filePath: target, original: existing, contents }, { filePath: from, original: source, contents: null });

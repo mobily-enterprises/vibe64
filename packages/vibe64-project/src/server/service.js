@@ -16,12 +16,12 @@ import {
   setGenesisEngineeringProfile
 } from "@local/vibe64-genesis/server";
 import {
-  savePreviewApplicationIdentities as saveStoredPreviewApplicationIdentities
+  savePreviewApplicationIdentities
 } from "./previewApplicationIdentities.js";
 import { assertSavedEnvValueProvider } from "./savedEnvValues.js";
 import {
-  runProjectSessionPolicyExclusive as runProjectSessionPolicyMutationExclusive,
-  runProjectSourceExclusive as runProjectSourceMutationExclusive
+  runProjectSessionPolicyExclusive,
+  runProjectSourceExclusive
 } from "./projectSourceMutationLock.js";
 import { announceNoProjectChange } from "./projectActions.js";
 import { createProjectDevelopmentDatabase } from "./projectDevelopmentDatabase.js";
@@ -303,7 +303,7 @@ function createService({
     runInProjectContext: selection.runInProjectContext,
 
     runProjectSourceExclusive(operation, options = {}) {
-      return runProjectSourceMutationExclusive(
+      return runProjectSourceExclusive(
         selection.selectedProjectRuntimeRoot(),
         operation,
         options
@@ -311,7 +311,7 @@ function createService({
     },
 
     runProjectSessionPolicyExclusive(operation, options = {}) {
-      return runProjectSessionPolicyMutationExclusive(
+      return runProjectSessionPolicyExclusive(
         selection.selectedProjectRuntimeRoot(),
         operation,
         options
@@ -372,10 +372,10 @@ function createService({
     async savePreviewApplicationIdentities(input = {}) {
       return projectResult(() => sessionWork.runSessionSourceWorkExclusive(input, async () => {
         const source = await projectSettings.previewApplicationIdentitySource(input);
-        return runProjectSourceMutationExclusive(
+        return runProjectSourceExclusive(
           selection.selectedProjectRuntimeRoot(),
           async () => {
-            const { identities } = await saveStoredPreviewApplicationIdentities({
+            const { identities } = await savePreviewApplicationIdentities({
               identities: input.identities,
               sourceRoot: source.sourceRoot
             });

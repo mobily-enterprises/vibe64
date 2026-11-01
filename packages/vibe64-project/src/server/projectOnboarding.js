@@ -1,7 +1,7 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectDirectoryUsable } from "@local/vibe64-core/server/studioProjectContext";
 import { bindingValuePresent, requiredAlternative } from "./resourceEnvironment.js";
-import { runProjectSourceExclusive as runProjectSourceMutationExclusive } from "./projectSourceMutationLock.js";
+import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 /** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
@@ -76,7 +76,7 @@ function createProjectOnboarding({ applyTemplate, environment, inspectProject, l
         throw vibe64Error("This session has no available source.", "vibe64_template_source_required");
       }
       await assertProjectDirectoryUsable(source.sourceRoot);
-      return runProjectSourceMutationExclusive(selection.selectedProjectRuntimeRoot(), async () => {
+      return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(), async () => {
         // The browser selects a configured identity; it cannot supply a repository or ref.
         const application = await applyTemplate({ projectRoot: source.sourceRoot, templateId });
         return {

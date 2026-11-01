@@ -21,7 +21,7 @@ import {
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { inspectVibe64ConnectedDevelopment, inspectVibe64WorkspaceSetup } from "@local/vibe64-genesis/server";
-import { runProjectSourceExclusive as runProjectSourceMutationExclusive } from "./projectSourceMutationLock.js";
+import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 import { projectResult } from "./projectResult.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -109,7 +109,7 @@ function createProjectRepositories({
         projectRoot: sessionSourcePath(session), environment
       });
       if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
-      return runProjectSourceMutationExclusive(selection.selectedProjectRuntimeRoot(),
+      return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
         () => materializeConnectedDevelopmentInputs({ session, projects, inspection, env: environment }),
         { operation: "prepare-connected-development-inputs" });
     },
@@ -137,7 +137,7 @@ function createProjectRepositories({
     async saveRepositoryWorkflow(input) {
       return projectResult(async () => {
         requireGithubRepository(await selection.currentProjectState(), "Pull request workflow");
-        const workflow = await runProjectSourceMutationExclusive(selection.selectedProjectRuntimeRoot(),
+        const workflow = await runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
           () => saveProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot(), input.requirePullRequest),
           { operation: "repository-workflow-settings" });
         await publishProjectChanged({ projectSlug: (await selection.currentProjectState()).slug, repositoryWorkflow: workflow }, { reason: "repository-workflow-settings" });

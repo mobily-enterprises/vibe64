@@ -5,12 +5,12 @@ import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server/agent
 import { codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
 import { codexAuthMarkerPath, codexAuthStatusPath } from "@local/vibe64-core/server/codexAuthState";
 import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
+import { isPlainObject } from "./upgradeValues.js";
 
 const providers = ["deepseek", "zai", "zai-coding-plan"];
 const nativeHomePattern = /^(?:private-[A-Za-z0-9-]+|verify-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/u;
-const object = value => value && typeof value === "object" && !Array.isArray(value);
 function parse(source, label) {
-  try { const value = JSON.parse(source); if (object(value)) return value; } catch { /* Never expose saved credentials. */ }
+  try { const value = JSON.parse(source); if (isPlainObject(value)) return value; } catch { /* Never expose saved credentials. */ }
   throw new Error(`${label} is invalid. Inspect or restore it before clearing saved provider credentials.`);
 }
 
@@ -67,7 +67,7 @@ export async function upgradeIndependentProviderCredentials({ systemRoot, apply,
         if (original === null) continue;
         if (filePath === storePath) {
           const state = parse(original, "OpenCode connection store");
-          if (![1, 2, 3, 4, 5].includes(state.version) || !object(state.connections)) {
+          if (![1, 2, 3, 4, 5].includes(state.version) || !isPlainObject(state.connections)) {
             throw new Error("OpenCode connection store has an unsupported shape. Inspect it before clearing credentials.");
           }
           const next = structuredClone(state);

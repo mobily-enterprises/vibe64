@@ -1,5 +1,5 @@
 import { aiConnectionError } from "./aiConnectionError.js";
-import { trimmedText as text } from "./trimmedText.js";
+import { trimmedText } from "./trimmedText.js";
 
 const OPENCODE_NATIVE_ENDPOINT_CODE = "opencode-native";
 // The Z.AI model Vibe64 starts on: free, and verified directly against Z.AI.
@@ -60,7 +60,7 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
 });
 
 function assistantProviderPolicy(provider = {}) {
-  const modelProviderId = text(provider.id || provider.modelProviderId);
+  const modelProviderId = trimmedText(provider.id || provider.modelProviderId);
   if (!modelProviderId) {
     throw aiConnectionError(
       "vibe64_ai_provider_unknown",
@@ -68,7 +68,7 @@ function assistantProviderPolicy(provider = {}) {
     );
   }
   const configured = ASSISTANT_PROVIDER_POLICIES[modelProviderId] || {};
-  const defaultModelId = text(configured.defaultModelId || provider.defaultModelId);
+  const defaultModelId = trimmedText(configured.defaultModelId || provider.defaultModelId);
   if (!defaultModelId) {
     throw aiConnectionError(
       "vibe64_ai_provider_default_model_missing",
@@ -79,26 +79,26 @@ function assistantProviderPolicy(provider = {}) {
   const ownerOnly = configured.ownerOnly !== false;
   return {
     accessLabel: ownerOnly ? "Personal use" : "Workspace use",
-    billingLabel: text(configured.billingLabel) || "Provider API key",
+    billingLabel: trimmedText(configured.billingLabel) || "Provider API key",
     canonicalUrl: "",
     defaultModelId,
     endpointCode: OPENCODE_NATIVE_ENDPOINT_CODE,
-    managementUrl: text(configured.managementUrl),
+    managementUrl: trimmedText(configured.managementUrl),
     modelAccess: configured.modelAccess
       ? { ...configured.modelAccess }
       : null,
     modelProviderId,
     ownerOnly,
-    productLabel: text(configured.productLabel || provider.label) || modelProviderId,
-    routeLabel: text(configured.routeLabel || configured.productLabel || provider.label) || modelProviderId,
-    routeNote: text(configured.routeNote)
+    productLabel: trimmedText(configured.productLabel || provider.label) || modelProviderId,
+    routeLabel: trimmedText(configured.routeLabel || configured.productLabel || provider.label) || modelProviderId,
+    routeNote: trimmedText(configured.routeNote)
   };
 }
 
 // The AI Accounts name of a recognised provider's connection, known even after
 // the connection is removed; "" for other catalogue providers.
 function assistantProviderProductLabel(modelProviderId = "") {
-  return text(ASSISTANT_PROVIDER_POLICIES[text(modelProviderId)]?.productLabel);
+  return trimmedText(ASSISTANT_PROVIDER_POLICIES[trimmedText(modelProviderId)]?.productLabel);
 }
 
 export {

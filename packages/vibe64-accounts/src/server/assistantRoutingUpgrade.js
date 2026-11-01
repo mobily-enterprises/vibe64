@@ -1,4 +1,4 @@
-import { publishStateUpgradeFiles, readUpgradeFile as readOptional, verifyUpgradeParents as verifyParents } from "@local/vibe64-core/server/stateUpgradeFiles";
+import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
@@ -13,15 +13,14 @@ import { upgradeAssistantRoutingSession } from "@local/vibe64-runtime/server/ass
 import routingScores from "./routingV2Scores.json" with { type: "json" };
 import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createAiConnectionStore } from "./aiConnectionStore.js";
+import { isPlainObject, upgradeFileText } from "./upgradeValues.js";
 
 // Historical defaults belong to this offline upgrade, never to live routing.
 const CODEX_RECOMMENDED_HELPER_MODEL = "gpt-5.6-luna";
 const CLAUDE_RECOMMENDED_HELPER_MODEL = "haiku";
 const roles = ["plan", "code", "economy", "router", "sharedBackup"];
-const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 const routeKey = (value) => JSON.stringify([value.engineId, value.modelProviderId, value.modelId]);
 const digest = (value) => createHash("sha256").update(value).digest("hex");
-const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
 // Keep this published migration's ranking independent of live role names.
 function routingModelScore(selection, role) {
@@ -143,19 +142,19 @@ function upgradeAssistantRoutingConfiguration({ configuration, nativeHelpers = {
 
 function parse(source, label) {
   if (source === null) return null;
-  try { const value = JSON.parse(source); if (object(value)) return value; } catch { /* Do not log saved content. */ }
+  try { const value = JSON.parse(source); if (isPlainObject(value)) return value; } catch { /* Do not log saved content. */ }
   throw new Error(`${label} is invalid. Inspect it before upgrading routing.`);
 }
 
 async function prepareConfiguration(systemRoot, projects, historicalSelections) {
   const routingPath = path.join(systemRoot, "ai-connections/routing.json");
   const connectionsPath = path.join(systemRoot, "ai-connections/connections.json");
-  await verifyParents(systemRoot, routingPath);
-  const original = await readOptional(routingPath);
-  const connectionsSource = await readOptional(connectionsPath);
+  await verifyUpgradeParents(systemRoot, routingPath);
+  const original = await readUpgradeFile(routingPath);
+  const connectionsSource = await readUpgradeFile(connectionsPath);
   const connectionState = parse(connectionsSource, "AI connections");
   if (connectionState && (!Number.isInteger(connectionState.version) || connectionState.version < 1 || connectionState.version > 5 ||
-      !object(connectionState.connections) || Object.values(connectionState.connections).some((value) => !object(value) || typeof value.apiKey !== "string" || !value.apiKey ||
+      !isPlainObject(connectionState.connections) || Object.values(connectionState.connections).some((value) => !isPlainObject(value) || typeof value.apiKey !== "string" || !value.apiKey ||
         value.helperModelId !== undefined && (typeof value.helperModelId !== "string" || value.helperModelId.length > 512 ||
           [...value.helperModelId].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))))) {
     throw new Error("AI connections have an unsupported shape. Inspect them before upgrading routing.");
@@ -164,7 +163,7 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
   const retired = [];
   for (const engineId of ["codex", "claude"]) {
     const filePath = path.join(systemRoot, `ai-connections/${engineId}-helper-model.json`);
-    const source = await readOptional(filePath);
+    const source = await readUpgradeFile(filePath);
     if (source === null) continue;
     const helper = parse(source, `${engineId} helper settings`);
     if (typeof helper.modelId !== "string" || helper.modelId.length > 200 || /\s/u.test(helper.modelId) ||
@@ -179,7 +178,7 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
   // choices must still be interpreted from their original saved flags.
   const curatedConnections = await Promise.all(CURATED_CODEX_PROVIDERS.map(async provider => {
     const locations = codexProviderPaths(systemRoot, provider.id, "codex");
-    const source = await readOptional(locations.connectionPath);
+    const source = await readUpgradeFile(locations.connectionPath);
     const saved = source === null ? null : parse(source, "Historical curated provider connection");
     const configured = saved && typeof saved.apiKey === "string" && saved.apiKey;
     const status = configured ? await readCodexAuthStatus(locations.systemRoot) : null;
@@ -187,7 +186,7 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
       claudeReady: Boolean(configured && saved.claudeReady && !status) };
   }));
   const existing = original !== null || connectionState || projects.length || retired.length || curatedConnections.some((item) => item.connected) ||
-    await readOptional(codexAuthMarkerPath(systemRoot)) !== null;
+    await readUpgradeFile(codexAuthMarkerPath(systemRoot)) !== null;
   if (!existing) return [];
   const connections = await createAiConnectionStore({ filePath: connectionsPath,
     verifyConnection: () => { throw new Error("Offline routing upgrade cannot call a provider."); } }).listConnections()
@@ -197,11 +196,11 @@ async function prepareConfiguration(systemRoot, projects, historicalSelections) 
       helperModelId: connectionState?.connections[connection.id]?.helperModelId || "" })));
   const previous = parse(original, "Model routing");
   const configuration = upgradeAssistantRoutingConfiguration({ configuration: previous, nativeHelpers, connections, curatedConnections, historicalSelections });
-  const updates = [{ filePath: routingPath, original, contents: configuration === previous ? original : json(configuration) }];
+  const updates = [{ filePath: routingPath, original, contents: configuration === previous ? original : upgradeFileText(configuration) }];
   if (connectionState) {
     const next = structuredClone(connectionState);
     for (const connection of Object.values(next.connections)) delete connection.helperModelId;
-    if (JSON.stringify(next) !== JSON.stringify(connectionState)) retired.unshift({ filePath: connectionsPath, original: connectionsSource, contents: json(next) });
+    if (JSON.stringify(next) !== JSON.stringify(connectionState)) retired.unshift({ filePath: connectionsPath, original: connectionsSource, contents: upgradeFileText(next) });
   }
   return { updates, retired, configuration };
 }

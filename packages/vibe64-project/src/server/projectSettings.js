@@ -8,9 +8,9 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { assertProjectDirectoryUsable } from "@local/vibe64-core/server/studioProjectContext";
 import { saveProjectPromptHints } from "@local/vibe64-core/server/projectPromptHints";
 import {
-  readPreviewApplicationIdentities as readStoredPreviewApplicationIdentities
+  readPreviewApplicationIdentities
 } from "./previewApplicationIdentities.js";
-import { runProjectSourceExclusive as runProjectSourceMutationExclusive } from "./projectSourceMutationLock.js";
+import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 /** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
@@ -64,7 +64,7 @@ function createProjectSettings({
       const source = await selection.genesisSettingsSourceForInput(sourceInput);
       if (!source.sourceRoot) throw vibe64Error("Create or select a session before configuring connected projects.", "vibe64_connections_source_required");
       await assertProjectDirectoryUsable(source.sourceRoot);
-      return runProjectSourceMutationExclusive(selection.selectedProjectRuntimeRoot(), async () => {
+      return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(), async () => {
         const normalized = normalizeConnectedProjects({ projects: input.projects });
         // Configuration declares intent; actual write access comes from the actor's account.
         if (normalized.projects.length) {
@@ -142,7 +142,7 @@ function createProjectSettings({
         );
       }
       await assertProjectDirectoryUsable(source.sourceRoot);
-      return runProjectSourceMutationExclusive(
+      return runProjectSourceExclusive(
         selection.selectedProjectRuntimeRoot(),
         async () => {
           await setCollaboration({
@@ -230,7 +230,7 @@ function createProjectSettings({
         );
       }
       await assertProjectDirectoryUsable(source.sourceRoot);
-      return runProjectSourceMutationExclusive(
+      return runProjectSourceExclusive(
         selection.selectedProjectRuntimeRoot(),
         async () => {
           await setEngineeringProfile({
@@ -264,7 +264,7 @@ function createProjectSettings({
 
   async function previewApplicationIdentitiesState(input = {}) {
     const source = await previewApplicationIdentitySource(input);
-    const { identities } = await readStoredPreviewApplicationIdentities({
+    const { identities } = await readPreviewApplicationIdentities({
       sourceRoot: source.sourceRoot
     });
     return {
