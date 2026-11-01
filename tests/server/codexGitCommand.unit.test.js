@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -111,7 +112,7 @@ function githubSession(root = "", sessionId = "github-session") {
 function serviceForSession(session = {}, {
   authorizeActorAccess = null,
   env = process.env,
-  logger = null,
+  logger = silentLogger,
   metadataReads = null,
   now,
   currentProjectSlug = () => "",

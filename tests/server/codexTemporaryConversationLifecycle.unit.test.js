@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createSessionConversationBinding, prepareSessionConversationDisposal } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -690,6 +691,7 @@ test("source explanations preserve one pre-resolved profile through the terminal
       }
     };
     const terminalService = createTerminalService({
+      logger: silentLogger,
       codexTerminalController: {
             codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
         codexAppServerProviderFactory(providerOptions) {
@@ -850,6 +852,7 @@ for (const startFails of [false, true]) {
       const followupDispatch = createDeterministicHold();
       const stopInputRead = createDeterministicHold();
       const terminalService = createTerminalService({
+        logger: silentLogger,
         codexTerminalController: {
                 codexAppServerProviderOptions: { systemRoot: path.join(temporaryRoot, "system") },
           codexAppServerProviderFactory(providerOptions) {
@@ -1129,6 +1132,7 @@ test("terminal renewal callbacks run inside the agent-write lock and hidden seed
       }
     };
     const terminalService = createTerminalService({
+      logger: silentLogger,
       codexTerminalController: {
         codexAppServerProviderFactory() {
           assert.fail("Renewal callback controls must not start an assistant provider.");
@@ -3416,7 +3420,7 @@ test("Codex integration continuation recovers native acceptance with a fresh ser
       }], status: "completed" }];
       await terminalService.close();
       store.writeConversationUserMessage = writeUser;
-      restarted = createTerminalService({ codexTerminalController: controllerOptions,
+      restarted = createTerminalService({ logger: silentLogger, codexTerminalController: controllerOptions,
         env: controllerOptions.env, projectService });
       const result = await restarted.resumeIntegrationContinuation(sessionId, input);
       assert.equal(result.ok, true, JSON.stringify(result));
@@ -13074,7 +13078,7 @@ test("Codex real provider cold resume composes retained Public hook preparation 
 test("Codex real provider refreshes Public commands and current instructions without authored work", async () => {
   const threadId = randomUUID();
   const protocol = [];
-  const commandService = createCodexGitCommandService({ projectService: {} });
+  const commandService = createCodexGitCommandService({ logger: silentLogger, projectService: {} });
   let provider;
   let options;
   let nativeEnvironment;
@@ -13108,7 +13112,7 @@ test("Codex real provider refreshes Public commands and current instructions wit
     const registry = await vibe64HostContextRegistry(projectService.agentRuntimeRoot);
     await registry.register(threadId, { ...hostContext, conversationKind: "main" }, session.metadata.source_path);
     const replacement = await prepareCodexGitCommand({
-      commandService: createCodexGitCommandService({ projectService: {} }),
+      commandService: createCodexGitCommandService({ logger: silentLogger, projectService: {} }),
       env: { VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(temporaryRoot, "attachments") },
       sessionId: session.sessionId,
       stateRoot: projectRuntimeRoot

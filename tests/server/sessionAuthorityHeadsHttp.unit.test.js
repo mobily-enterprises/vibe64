@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { mkdir } from "node:fs/promises";
@@ -114,7 +115,7 @@ const directEnv = Object.fromEntries(Object.entries(process.env)
   .filter(([name]) => !PROXY_VARIABLES.includes(name)));
 
 function service({ env = directEnv, fetch, runGatewayCommand }) {
-  return createCodexGitCommandService({ env, fetch, projectService: {}, runGatewayCommand });
+  return createCodexGitCommandService({ env, fetch, logger: silentLogger, projectService: {}, runGatewayCommand });
 }
 
 async function githubFixture(t, root, { env } = {}) {

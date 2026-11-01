@@ -37,7 +37,7 @@ function claudeCodeArguments(options = {}) {
  * @param {object} dependencies.execution
  * @param {string[]} dependencies.shimDirs
  * @param {(executionId: string) => unknown} dependencies.onStarted
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {string} dependencies.accountQuery the account query this process answers, if it runs one
  */
 async function createClaudeCodeProcess({
@@ -61,7 +61,7 @@ async function createClaudeCodeProcess({
       logOperationalEvent(logger, failure || slow ? "warn" : "info", {
         component: "vibe64.claude", event: "vibe64.claude.startup", stage,
         conversationId: options.sessionId, executionId, durationMs,
-        ...(accountQuery && isVibe64DebugLoggingEnabled({ env: options.env, level: logger?.level })
+        ...(accountQuery && isVibe64DebugLoggingEnabled({ env: options.env, level: logger.level })
           ? { accountQuery } : {}),
         ...(streamReadyMs !== undefined ? { streamReadyMs,
           ...(stage === "initialized" ? { initializationMs: durationMs - streamReadyMs } : {}) } : {}),

@@ -204,7 +204,7 @@ function localGitCommandToolHome() {
  * @param {((actor: object, request: object) => Promise<unknown>) | null} [dependencies.authorizeActorAccess]
  * @param {RuntimeEnv} [dependencies.env]
  * @param {typeof fetch} [dependencies.fetch]
- * @param {RuntimeLogger | null} [dependencies.logger]
+ * @param {RuntimeLogger} dependencies.logger
  * @param {() => number} [dependencies.now]
  * @param {ProjectService} dependencies.projectService
  * @param {typeof runVibe64Command} [dependencies.runGatewayCommand]
@@ -213,12 +213,11 @@ function createCodexGitCommandService({
   authorizeActorAccess = null,
   env = process.env,
   fetch: fetchRemote = globalThis.fetch,
-  logger = null,
+  logger,
   now = Date.now,
   projectService,
-  runGatewayCommand = runVibe64Command
+  runGatewayCommand: gatewayCommandRunner = runVibe64Command
 }) {
-  const gatewayCommandRunner = typeof runGatewayCommand === "function" ? runGatewayCommand : runVibe64Command;
   const actorCredentials = createActorCredentialCache({ now });
   // Each person's last answered Git identity read, used only when a read fails.
   // It lives in this process's memory, one entry per person and tool home.
@@ -384,7 +383,7 @@ function createCodexGitCommandService({
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const startedAt = performance.now();
-    const phaseElapsedMs = isVibe64DebugLoggingEnabled({ env, level: logger?.level }) ? {} : null;
+    const phaseElapsedMs = isVibe64DebugLoggingEnabled({ env, level: logger.level }) ? {} : null;
     let stage = "session";
     let commandSubmitted = false;
     const command = normalizeText(input.command);

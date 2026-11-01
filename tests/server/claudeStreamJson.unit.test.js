@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { assistantGoalManagementMessage } from "@local/vibe64-runtime/shared/assistantRouting";
 import { prepareSessionDetachedConversationRun, prepareSessionDetachedConversationCleanup, createSessionConversationBinding, prepareSessionConversationActivity, prepareSessionConversationRenewal, prepareSessionConversationCreation, prepareSessionConversationReadiness, prepareSessionConversationSettings, prepareSessionConversationDisposal, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation, prepareSessionConversationRenewalProof } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import { closeAssistantForChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
@@ -107,7 +108,7 @@ function createClaudeSessionAgentProvider(options) {
       ...context, prepareInput: (input, current) => current.prepareInput ? current.prepareInput(input) : input
     }) }
   });
-  provider = createNativeClaudeSessionAgentProvider({ ...nativeOptions, conversationRuntime: conversations,
+  provider = createNativeClaudeSessionAgentProvider({ logger: silentLogger, ...nativeOptions, conversationRuntime: conversations,
     runNativeDetachedConversation: request => conversations.runNativeDetachedConversation(request),
     publishConversation: options.publishConversation || (event => conversations.publishNative(event)) });
   const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, conversationRuntime: conversations, defaultProviderId: "claude",
@@ -821,7 +822,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
 });
 `, { mode: 0o700 });
   const observed = Promise.withResolvers();
-  const native = await createClaudeCodeProcess({ command, workdir: root, credentialHome: { home: root },
+  const native = await createClaudeCodeProcess({ logger: silentLogger, command, workdir: root, credentialHome: { home: root },
     onEvent: (event) => observed.resolve(event) });
   t.after(() => native.stop());
   assert.equal(native.initialization.models[0].value, "fixture");
@@ -3306,7 +3307,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
     await starting?.catch(() => {});
     await rm(root, { recursive: true, force: true });
   });
-  starting = createClaudeCodeProcess({ command, workdir: root, credentialHome: { home: root },
+  starting = createClaudeCodeProcess({ logger: silentLogger, command, workdir: root, credentialHome: { home: root },
     async stopExecution(id, options) {
       stops.push(id);
       return stopVibe64Execution(id, options);

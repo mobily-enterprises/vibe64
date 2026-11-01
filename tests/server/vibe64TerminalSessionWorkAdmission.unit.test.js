@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { execFile } from "node:child_process";
@@ -126,7 +127,7 @@ async function terminalServiceFixture(t, lock, {
   codexAppServerProviderFactory,
   env = {},
   inspectAgentSkills,
-  logger = null,
+  logger = silentLogger,
   opencodeTerminalController = {},
   publishSessionChanged = {},
   runCodexGitGatewayCommand
@@ -1161,6 +1162,7 @@ test("workspace setup reuses an already-held session agent-write lock", async (t
     }
   };
   const service = createTerminalService({
+    logger: silentLogger,
     codexTerminalController: { codexToolHomeRequired: false },
     env: {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: path.join(root, "attachments"),
@@ -1331,6 +1333,7 @@ test("renewal workspace setup privately resumes a pending successor while public
     }
   };
   const service = createTerminalService({
+    logger: silentLogger,
     codexTerminalController: { codexToolHomeRequired: false },
     env: {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: path.join(root, "attachments"),

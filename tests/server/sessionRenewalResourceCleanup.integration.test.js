@@ -1,3 +1,4 @@
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -430,6 +431,7 @@ async function renewalHarness(targetRoot, {
     "utf8"
   );
   const terminalService = createTerminalService({
+    logger: silentLogger,
     codexTerminalController: {
       codexToolHomeRequired: false,
       codexToolHomeSource

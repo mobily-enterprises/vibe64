@@ -53,7 +53,7 @@ const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
  * @param {object} dependencies
  * @param {RuntimeEnv} [dependencies.env]
  * @param {ProjectService} dependencies.projectService
- * @param {RuntimeLogger | null} dependencies.logger
+ * @param {RuntimeLogger} dependencies.logger
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {(event: object) => unknown} dependencies.publishConversation
  * @param {(request: object) => Promise<unknown>} dependencies.runNativeDetachedConversation

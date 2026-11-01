@@ -295,7 +295,7 @@ async function commitAuthorOptions({
   actor = {},
   answeredAuthors,
   gatewayCommandRunner,
-  logger = null,
+  logger,
   session = {},
   toolHome = {}
 } = {}) {
