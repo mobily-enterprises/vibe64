@@ -54,15 +54,5 @@ export default [
     "packages/vibe64-training/src/server/**",
     "packages/vibe64-usage-recording/src/server/**",
     "packages/vibe64-voice/src/server/**"
-  ]),
-  {
-    // Over 750 lines, with a factory over 600 whose concerns share mutable state.
-    files: [
-      "packages/vibe64-runtime/src/server/sessionStore.js"
-    ],
-    rules: {
-      "max-lines": "off",
-      "max-lines-per-function": "off"
-    }
-  }
+  ])
 ];
