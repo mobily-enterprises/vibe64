@@ -1,8 +1,8 @@
-// A retired Learning watch delivered its observation to the Main teacher as an
-// application wake, saved as that turn's authored message. The teacher model
-// is gone (Learning v2), but saved conversations keep those wakes: presentation
-// still shows the learner a short status line instead of the internal prompt,
-// in the same way as other application-origin messages.
+// A Learning watch delivered its observation to the Main teacher as an
+// application wake, saved as that turn's authored message. Saved
+// conversations keep those wakes: presentation shows the learner a short
+// status line instead of the internal prompt, in the same way as other
+// application-origin messages.
 const LEARNING_GUIDANCE_MESSAGE_PREFIX = "learning-guidance-";
 const GUIDANCE_HEADING = "A supervised Learning observation is available for this exact pinned lesson.";
 const FACT_PREFIX = "Observed application fact: ";

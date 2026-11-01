@@ -15,7 +15,7 @@ import { validateInstalledTopicPin } from "./installedContent.js";
 // A learner's saved records: their schemas and limits, validation of
 // progress, attempts, pins and step results, the learner's identity and the
 // file checks every read and write of them repeats.
-// One learner's Learning state (Rev 4 contract C1). An attempt is one run of a
+// One learner's Learning state. An attempt is one run of a
 // lesson; at most one is in progress (the last one, named by activeAttemptId).
 // Its step results, code ledger and practice project belong to it alone.
 // Completion outlives attempts in completedLessons, so pruning ended attempts

@@ -33,7 +33,7 @@ function createLearnerNotes({
   userPaths
 }) {
   /**
-   * Learner notes (contract C7): the teacher's private summary of this one
+   * Learner notes: the teacher's private summary of this one
    * learner, in that learner's own Learning state with its own lock. The
    * authenticated actor alone selects the file, so no caller can name another
    * learner. Notes never take part in admission, step results or completion.

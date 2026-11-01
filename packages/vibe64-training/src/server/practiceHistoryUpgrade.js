@@ -10,7 +10,7 @@ import { createInstalledTrainingContent } from "./installedContent.js";
 import { createPracticeHistoryReader } from "./practiceHistoryReader.js";
 
 /**
- * Candidate CLI only, with original writers stopped. Durable preparation owns
+ * Candidate CLI only, with the writers stopped. Durable preparation owns
  * this narrow historical adoption; project names and browser context do not.
  */
 export async function upgradeLearningPracticeHistory({ systemRoot, backupRoot, apply, report }) {
@@ -163,8 +163,8 @@ export async function upgradeLearningPracticeHistory({ systemRoot, backupRoot, a
         "Practice history backup has a replacement no longer authorized by a saved preparation. Inspect its owner before retrying."
       );
     }
-    // This revalidation also runs on frozen-manifest retries. The original
-    // publisher then verifies all hashes and resumes its SAME prepared bytes.
+    // This revalidation also runs on frozen-manifest retries.
+    // publishStateUpgradeFiles then verifies all hashes and resumes its SAME prepared bytes.
     return await publishStateUpgradeFiles({
       systemRoot,
       backupRoot,

@@ -14,7 +14,7 @@ const MAX_COURSES = 16;
 const MAX_BYTES = 1024 * 1024;
 const entrySchema = createSchema({
   course: { type: "object", required: true, schema: courseSchema },
-  // The original course-lock owner checks the complete identity below.
+  // The course-lock owner checks the complete identity below.
   lock: { type: "object", required: true },
   enabled: { type: "boolean", required: true }
 });
@@ -165,7 +165,7 @@ function createInstalledTrainingCatalogue({ systemRoot }) {
         // snapshot fails catalogue admission closed, never triggers a repair.
         const { lessonTitles, topicTitles } = await verifyEntry(entry);
         // Read-only display metadata is never part of the saved course/lock.
-        // All writers retain the original default read result unchanged.
+        // Writers read the default result, without them.
         if (includeLessonTitles) Object.assign(entry, { lessonTitles, topicTitles });
       }
       return catalogue;
@@ -321,7 +321,7 @@ function createInstalledTrainingCatalogue({ systemRoot }) {
   /**
    * A custom course is an ordinary released catalogue entry: the owner names it
    * and orders whole topics already pinned by enabled released courses. The
-   * original lock and enablement owners validate and save it; lessons, their
+   * lock and enablement owners validate and save it; lessons, their
    * content and saved progress are shared with every course containing them.
    * @param {object} [course]
    * @param {string} [course.title]
@@ -383,7 +383,7 @@ function createInstalledTrainingCatalogue({ systemRoot }) {
       topics: topics.map(topic => ({ topicId: topic.topicId, release: topic.release }))
     };
     const existing = catalogue.courses.find(entry => entry.course.courseId === course.courseId);
-    // An identical retry reaches the original no-change/re-enable result.
+    // An identical retry reaches the usual no-change/re-enable result.
     if (existing && canonicalJson(existing.course) !== canonicalJson(course)) {
       throw causedFailure("VIBE64_TRAINING_COURSE_EXISTS", "A course with this name already exists. Choose another name.", 409);
     }

@@ -225,13 +225,13 @@ function createPracticeHistoryReader({ systemRoot, content }) {
   }
 
   /**
-   * The exact bundled exercise of a saved attempt, with the original refusal
+   * The exact bundled exercise of a saved attempt, with this refusal
    * precedence: installed pin, no exercise, inactive work, unavailable reader.
    */
   async function readAttemptExercise(state, attempt, access) {
     const active = state.progress.activeAttemptId === attempt.attemptId && !attempt.ended;
     const workInactive = (access === "write" || access === "create") && (!active || !state.activeSummaryCurrent);
-    // Refusals retain the original installed-pin/no-exercise precedence. Admitted
+    // Refusals keep the installed-pin/no-exercise precedence. Admitted
     // reads use readExercise's existing lesson validation instead of repeating it.
     // readable-check: allow method-probe - optional operation: content without exercise reads is verified by its whole lesson read
     if (workInactive || typeof installed.readExercise !== "function") {

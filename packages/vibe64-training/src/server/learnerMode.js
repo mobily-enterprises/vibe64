@@ -19,7 +19,7 @@ function createLearnerMode({
   verifyInstalled
 }) {
   /**
-   * Learn mode (Rev 4 H1): a saved per-learner flag, independent of any
+   * Learn mode: a saved per-learner flag, independent of any
    * lesson; absent means Develop. The current lesson is the attempt in
    * progress, which may stay paused while Learn mode is off. practiceSlug
    * names its practice project once preparation began. includeTitle adds the

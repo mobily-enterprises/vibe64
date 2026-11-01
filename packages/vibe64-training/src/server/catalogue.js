@@ -50,7 +50,7 @@ async function readPinnedTopic(directory) {
     } while (last < files.length && bytes + files[last].bytes + Buffer.byteLength(files[last].path) + 128 <= 1024 * 1024);
     const batch = files.slice(first, last);
     // NUL framing preserves valid newline paths and arbitrary binary blobs.
-    // Each file retains the original 1 MiB limit; batches bound capture memory.
+    // Each file is limited to 1 MiB; batches bound capture memory.
     const stdout = await git(["cat-file", "--batch", "-Z"], "base64", {
       input: batch.map(file => `${commit}:${file.path}\0`).join(""),
       maxBuffer: 2 * 1024 * 1024

@@ -1,4 +1,4 @@
-// Learner-scoped realtime notice for Learning v2. The payload is
+// Learner-scoped realtime notice. The payload is
 // { learnerId, attemptId?, reason }, with reason "learning-mode" (Learn or
 // Develop), "lesson" (the lesson in progress started, restarted, resumed,
 // finished or was deleted), "steps" (a step result or reader position),

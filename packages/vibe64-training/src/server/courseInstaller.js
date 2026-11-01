@@ -103,7 +103,7 @@ function validateLock(course, lock) {
 
 /**
  * Reads the official catalogue and installs one exact course release through
- * the original owners: readPinnedTopic/installTopic verify and publish each
+ * their owners: readPinnedTopic/installTopic verify and publish each
  * topic snapshot, and the installed catalogue's enableCourse verifies the lock
  * against the installed inventory under its own lock and revision check.
  * @param {object} dependencies
@@ -413,7 +413,7 @@ function createTrainingCourseInstaller({
               502
             );
           }
-          // The original owner re-verifies the clean commit, canonical source,
+          // installTopic re-verifies the clean commit, canonical source,
           // byte hashes and manifest hash against this exact pin.
           await installer.installTopic({ sourceRoot, pin });
         });
