@@ -1,21 +1,21 @@
-import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { open, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
-import * as genesisServer from "@local/vibe64-genesis/server";
 import {
   GENESIS_CALL_WEB_PATH,
   GENESIS_MACHINE_CITY_PATH,
   GENESIS_PROGRAM_CITY_PATH,
   MACHINE_CITY_SCHEMA,
   PROGRAM_CITY_SCHEMA,
+  validateCallWeb,
   validateCityDocument
 } from "@local/vibe64-genesis/server";
 import {
   isMissingPathError,
   vibe64Error
 } from "@local/vibe64-core/server/core";
+import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 import { createSnapshotCache } from "./snapshotCache.js";
 
@@ -148,10 +148,6 @@ function callWebError(message, code = "vibe64_invalid_genesis_call_web") {
 }
 
 function validateGenesisCallWeb(document, files) {
-  const { validateCallWeb } = genesisServer;
-  if (typeof validateCallWeb !== "function") {
-    throw callWebError("cannot be read by this Genesis version.", "vibe64_genesis_call_web_unsupported");
-  }
   try {
     return validateCallWeb(document, { files });
   } catch (error) {
@@ -188,7 +184,7 @@ async function readGenesisCallWeb(projectRoot, architecture, { validate = valida
   } finally {
     await handle.close();
   }
-  if (`sha256:${createHash("sha256").update(source).digest("hex")}` !== summary.identity) {
+  if (`sha256:${sha256Hex(source)}` !== summary.identity) {
     throw callWebError("changed since this scan. Reload Architecture.", "vibe64_genesis_call_web_changed");
   }
   let document;
