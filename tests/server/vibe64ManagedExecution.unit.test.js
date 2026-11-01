@@ -263,7 +263,7 @@ test("execution descriptors carry intent without accepting controller policy", (
       slug: "dogandgroom"
     },
     session: {
-      id: "2026-08-17_13-05-55"
+      sessionId: "2026-08-17_13-05-55"
     }
   });
 

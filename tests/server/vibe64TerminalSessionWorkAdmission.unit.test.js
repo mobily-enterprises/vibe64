@@ -553,7 +553,7 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
   const warnings = [];
   const events = [];
   const { service, session, projectService } = await terminalServiceFixture(t, lock, {
-    logger: { warn(event) { warnings.push(event); } },
+    logger: { ...silentLogger, warn(event) { warnings.push(event); } },
     publishSessionChanged: { agentTerminal: async (_sessionId, event) => events.push(event) }
   });
   const projectRoot = session.metadata.source_path;
@@ -579,7 +579,7 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
 test("a pending Stack section proposal neither defers skill refresh nor changes source", async (t) => {
   const warnings = [];
   const { service, session, projectService } = await terminalServiceFixture(t, agentWriteLockHarness(), {
-    logger: { warn(event) { warnings.push(event); } }
+    logger: { ...silentLogger, warn(event) { warnings.push(event); } }
   });
   const projectRoot = session.metadata.source_path;
   await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
@@ -609,7 +609,7 @@ test("an undecided competing Stack section defers skill refresh without blocking
   });
   const { service, session, projectService } = await terminalServiceFixture(t, agentWriteLockHarness(), {
     inspectAgentSkills: async () => { throw ambiguous; },
-    logger: { warn(event) { warnings.push(event); } }
+    logger: { ...silentLogger, warn(event) { warnings.push(event); } }
   });
   const projectRoot = session.metadata.source_path;
   await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
@@ -906,7 +906,7 @@ test("assistant reconciliation retains structured failure diagnostics", async (t
   const lock = agentWriteLockHarness();
   const { service, runtime, session } = await terminalServiceFixture(t, lock, {
     assistantSelection: CODEX_SELECTION,
-    logger: { warn(fields) { warnings.push(fields); } }
+    logger: { ...silentLogger, warn(fields) { warnings.push(fields); } }
   });
   runtime.store.runSessionExclusive = async () => ({ acquired: false });
   const busy = await service.ensureAgentSession(session.sessionId, {
@@ -940,7 +940,7 @@ test("assistant reconciliation identifies the member rejected by an owner-only c
   const warnings = [];
   const { service, session } = await terminalServiceFixture(t, agentWriteLockHarness(), {
     assistantSelection: { ...CODEX_SELECTION, engineId: "opencode", agentId: "build", modelProviderId: "personal" },
-    logger: { warn(fields) { warnings.push(fields); } }
+    logger: { ...silentLogger, warn(fields) { warnings.push(fields); } }
   });
   service.configureAssistantRuntime({ readAssistantAccess: async () => ({ ownerOnly: true }) });
   await assert.rejects(service.ensureAgentSession(session.sessionId, {
@@ -954,7 +954,7 @@ test("assistant reconciliation identifies the member rejected by an owner-only c
 test("message failure logs identify the authenticated actor without copying message input", async (t) => {
   const warnings = [];
   const { service, runtime, session } = await terminalServiceFixture(t, agentWriteLockHarness(), {
-    logger: { warn(fields) { warnings.push(fields); } }
+    logger: { ...silentLogger, warn(fields) { warnings.push(fields); } }
   });
   runtime.store.runSessionExclusive = async () => ({ acquired: false });
   await assert.rejects(runWithProjectRequestContext({ vibe64User: { username: "matt", role: "member" } }, () => (
@@ -1047,7 +1047,7 @@ test("Save rechecks active assistant work after waiting for preparation", { time
         }
       };
     },
-    logger: { info() {}, warn(event) { if (event.event.endsWith(".contended")) contended.resolve(); } }
+    logger: { ...silentLogger, warn(event) { if (event.event.endsWith(".contended")) contended.resolve(); } }
   });
   const entered = deferred();
   const release = deferred();
@@ -2209,7 +2209,7 @@ test("source read rechecks original active work after waiting for preparation", 
     assistantSelection: CODEX_SELECTION,
     codexAppServerProviderFactory: () => ({ close() {}, async ensureAvailable() { throw new Error("Controlled connection failure"); },
       async stopRuntime() { return { stopped: true, processExitVerified: true }; } }),
-    logger: { info() {}, warn(event) { if (event.event === "vibe64.session_lock.contended") contended.resolve(event); } }
+    logger: { ...silentLogger, warn(event) { if (event.event === "vibe64.session_lock.contended") contended.resolve(event); } }
   });
   const entered = deferred();
   const release = deferred();
