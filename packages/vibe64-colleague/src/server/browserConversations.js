@@ -57,116 +57,134 @@ function createColleagueBrowserConversations({
       if (!state.record.conversationMetadata?.runtime) return null;
       return conversations.openConversation(state, requestContext);
     }
-    return {
-      async read(options = {}) {
-        threads.assertCurrentConversation(state, id);
-        await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
-        const pageOptions = {};
-        for (const key of ["beforeTurnId", "limit"]) {
-          if (Object.hasOwn(options, key)) pageOptions[key] = options[key];
-        }
-        const paged = Object.keys(pageOptions).length > 0;
-        const conversation = await preparedConversation();
-        // Reading an empty Colleague must not require AI Accounts setup or
-        // choose a native engine. Its original transcript remains readable.
-        if (!conversation) return colleagueBrowserState({
-          id,
-          status: "ready",
-          phase: "",
-          error: state.record.error || "",
-          interimReply: state.interimReply,
-          capabilities: { steering: false, goals: false, attachments: false },
-          pendingRequest: null,
-          ...(paged ? await records.transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true })
-            : { conversationLog: await records.transcript.readConversationLog(state.record.runtimeId, { presentation: true }) }),
-          streaming: { revision: 0, messages: [] }
-        });
-        const owner = state.runtimeOwner;
-        let current = paged ? await conversation.read(pageOptions) : await conversation.read();
-        if (paged && owner === conversations.runtime) {
-          // Ordinary API work may follow private native envelopes. Project
-          // before counting/cursor selection through the existing store.
-          const page = await records.transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true });
-          threads.assertCurrentConversation(state, id);
-          current = { ...current, ...page };
-        }
-        return colleagueBrowserState({
-          ...current,
-          id,
-          ...(state.runtimeOwner === conversations.nativeRuntime && state.running ? { status: "working" } : {}),
-          interimReply: state.interimReply,
-          capabilities: { ...current.capabilities, steering: false, goals: false, attachments: false }
-        });
-      },
-      async send(input) {
-        if (input.attachmentIds?.length) throw failure("Colleague does not accept attachments.", "conversation_unsupported");
-        return actions.execute({
-          actionId: ACTION_COLLEAGUE_MESSAGE_SEND,
-          // The browser reads the delivery receipt, not the whole conversation.
-          context: { ...requestContext, colleagueReceiptOnly: true },
-          input: {
-            ...input.data,
-            expectedConversationId: id,
-            messageId: input.messageId,
-            message: input.text
-          }
-        });
-      },
-      async cancel() {
-        return actions.execute({ actionId: ACTION_COLLEAGUE_TURN_STOP, input: { expectedConversationId: id }, context: requestContext });
-      },
-      async select(input) {
-        return actions.execute({
-          actionId: ACTION_COLLEAGUE_MODEL_SELECT,
-          input: { ...input, expectedConversationId: id },
-          context: requestContext
-        });
-      },
-      async inspectDelivery(input) {
-        threads.assertCurrentConversation(state, id);
-        await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
-        const turn = state.record.conversationLog.find(item => !item.metadata?.runtime?.engine &&
-          item.user?.messageId === input.messageId);
-        if (turn) return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user", duplicate: true };
-        const conversation = await preparedConversation();
-        return conversation ? conversation.inspectDelivery(input) : { status: "unknown", messageId: input.messageId };
-      },
-      /**
-       * Cancel always succeeds: an accepted message stays history, and an
-       * unsent or unconfirmed one is discarded by its native conversation.
-       */
-      async cancelDelivery(input) {
-        threads.assertCurrentConversation(state, id);
-        await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
-        if (state.record.conversationLog.some(item => !item.metadata?.runtime?.engine && item.user?.messageId === input.messageId)) {
-          return { ok: true, cancelled: false, messageId: input.messageId, status: "accepted" };
-        }
-        const conversation = await preparedConversation();
-        return conversation ? conversation.cancelDelivery(input) : { ok: true, cancelled: true, messageId: input.messageId };
-      },
-      async readGoal() { return null; },
-      async updateGoal() {
-        throw failure("Colleague does not support native goals.", "conversation_unsupported", 400);
-      },
-      async subscribe(listener) {
-        if (typeof listener !== "function") throw new TypeError("A conversation listener is required.");
-        const observer = { context: requestContext, listener, release: null };
-        state.browserObservers.add(observer);
-        try {
-          await preparedConversation();
-          await conversations.attachBrowserObserver(state, observer);
-        }
-        catch (error) {
-          state.browserObservers.delete(observer);
-          releaseObserver(observer);
-          throw error;
-        }
-        return () => {
-          state.browserObservers.delete(observer);
-          releaseObserver(observer);
-        };
+    async function read(options = {}) {
+      threads.assertCurrentConversation(state, id);
+      await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
+      const pageOptions = {};
+      for (const key of ["beforeTurnId", "limit"]) {
+        if (Object.hasOwn(options, key)) pageOptions[key] = options[key];
       }
-    };
+      const paged = Object.keys(pageOptions).length > 0;
+      const conversation = await preparedConversation();
+      // Reading an empty Colleague must not require AI Accounts setup or
+      // choose a native engine. Its original transcript remains readable.
+      if (!conversation) return colleagueBrowserState({
+        id,
+        status: "ready",
+        phase: "",
+        error: state.record.error || "",
+        interimReply: state.interimReply,
+        capabilities: { steering: false, goals: false, attachments: false },
+        pendingRequest: null,
+        ...(paged ? await records.transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true })
+          : { conversationLog: await records.transcript.readConversationLog(state.record.runtimeId, { presentation: true }) }),
+        streaming: { revision: 0, messages: [] }
+      });
+      const owner = state.runtimeOwner;
+      let current = paged ? await conversation.read(pageOptions) : await conversation.read();
+      if (paged && owner === conversations.runtime) {
+        // Ordinary API work may follow private native envelopes. Project
+        // before counting/cursor selection through the existing store.
+        const page = await records.transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true });
+        threads.assertCurrentConversation(state, id);
+        current = { ...current, ...page };
+      }
+      return colleagueBrowserState({
+        ...current,
+        id,
+        ...(state.runtimeOwner === conversations.nativeRuntime && state.running ? { status: "working" } : {}),
+        interimReply: state.interimReply,
+        capabilities: { ...current.capabilities, steering: false, goals: false, attachments: false }
+      });
+    }
+
+    async function send(input) {
+      if (input.attachmentIds?.length) throw failure("Colleague does not accept attachments.", "conversation_unsupported");
+      return actions.execute({
+        actionId: ACTION_COLLEAGUE_MESSAGE_SEND,
+        // The browser reads the delivery receipt, not the whole conversation.
+        context: { ...requestContext, colleagueReceiptOnly: true },
+        input: {
+          ...input.data,
+          expectedConversationId: id,
+          messageId: input.messageId,
+          message: input.text
+        }
+      });
+    }
+
+    async function cancel() {
+      return actions.execute({ actionId: ACTION_COLLEAGUE_TURN_STOP, input: { expectedConversationId: id }, context: requestContext });
+    }
+
+    async function select(input) {
+      return actions.execute({
+        actionId: ACTION_COLLEAGUE_MODEL_SELECT,
+        input: { ...input, expectedConversationId: id },
+        context: requestContext
+      });
+    }
+
+    async function inspectDelivery(input) {
+      threads.assertCurrentConversation(state, id);
+      await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
+      const turn = state.record.conversationLog.find(item => !item.metadata?.runtime?.engine &&
+        item.user?.messageId === input.messageId);
+      if (turn) return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user", duplicate: true };
+      const conversation = await preparedConversation();
+      return conversation ? conversation.inspectDelivery(input) : { status: "unknown", messageId: input.messageId };
+    }
+
+    /**
+     * Cancel always succeeds: an accepted message stays history, and an
+     * unsent or unconfirmed one is discarded by its native conversation.
+     */
+    async function cancelDelivery(input) {
+      threads.assertCurrentConversation(state, id);
+      await actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context: requestContext });
+      if (state.record.conversationLog.some(item => !item.metadata?.runtime?.engine && item.user?.messageId === input.messageId)) {
+        return { ok: true, cancelled: false, messageId: input.messageId, status: "accepted" };
+      }
+      const conversation = await preparedConversation();
+      return conversation ? conversation.cancelDelivery(input) : { ok: true, cancelled: true, messageId: input.messageId };
+    }
+
+    async function readGoal() { return null; }
+
+    async function updateGoal() {
+      throw failure("Colleague does not support native goals.", "conversation_unsupported", 400);
+    }
+
+    async function subscribe(listener) {
+      if (typeof listener !== "function") throw new TypeError("A conversation listener is required.");
+      const observer = { context: requestContext, listener, release: null };
+      state.browserObservers.add(observer);
+      try {
+        await preparedConversation();
+        await conversations.attachBrowserObserver(state, observer);
+      }
+      catch (error) {
+        state.browserObservers.delete(observer);
+        releaseObserver(observer);
+        throw error;
+      }
+      return () => {
+        state.browserObservers.delete(observer);
+        releaseObserver(observer);
+      };
+    }
+
+    return Object.freeze({
+      read,
+      send,
+      cancel,
+      select,
+      inspectDelivery,
+      cancelDelivery,
+      readGoal,
+      updateGoal,
+      subscribe
+    });
   }
 
   return Object.freeze({
