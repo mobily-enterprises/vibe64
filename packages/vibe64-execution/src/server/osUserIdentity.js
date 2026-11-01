@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { normalizeText as normalizeOsUsername } from "@jskit-ai/kernel/shared/support/normalize";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const execFile = promisify(execFileCallback);
 
@@ -18,7 +18,7 @@ const OBVIOUS_SERVICE_ACCOUNT_PATTERN =
   /^(?:_|adm|bin|daemon|games|lp|mail|man|messagebus|news|nobody|proxy|sync|sys|systemd-|uucp|www-data$|_apt$|backup$|list$|irc$|gnats$)/u;
 
 function assertSafeOsUsername(username = "") {
-  const normalized = normalizeOsUsername(username);
+  const normalized = normalizeText(username);
   if (!normalized || normalized.includes("/") || normalized.includes("\\") || normalized.includes(":")) {
     const error = new Error("A valid OS username is required.");
     error.code = "vibe64_invalid_os_username";
@@ -84,7 +84,7 @@ function currentOsUser({
   userInfo = os.userInfo
 } = {}) {
   const info = typeof userInfo === "function" ? userInfo() : {};
-  const username = normalizeOsUsername(info?.username || process.env.USER || process.env.LOGNAME);
+  const username = normalizeText(info?.username || process.env.USER || process.env.LOGNAME);
   const home = path.resolve(String(info?.homedir || homedir() || ""));
   return {
     displayName: String(info?.username || username),
@@ -148,7 +148,7 @@ function osUserEligibility(user = {}, {
   extraServiceNames = []
 } = {}) {
   const reasons = [];
-  const username = normalizeOsUsername(user.username);
+  const username = normalizeText(user.username);
   const shell = String(user.shell || "").trim();
   const home = String(user.home || "").trim();
 
@@ -164,7 +164,7 @@ function osUserEligibility(user = {}, {
   if (OBVIOUS_SERVICE_ACCOUNT_PATTERN.test(username)) {
     reasons.push("obvious_service_account");
   }
-  if (extraServiceNames.map(normalizeOsUsername).includes(username)) {
+  if (extraServiceNames.map(normalizeText).includes(username)) {
     reasons.push("configured_service_account");
   }
 
@@ -179,7 +179,7 @@ export {
   assertSafeOsUsername,
   currentOsUser,
   listOsUsers,
-  normalizeOsUsername,
+  normalizeText as normalizeOsUsername,
   osUserEligibility,
   parsePasswdLine,
   resolveOsUser

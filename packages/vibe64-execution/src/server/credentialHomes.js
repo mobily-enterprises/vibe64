@@ -3,7 +3,6 @@ import path from "node:path";
 
 import {
   currentOsUser,
-  normalizeOsUsername,
   resolveOsUser
 } from "./osUserIdentity.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -52,7 +51,7 @@ function credentialHomeRequiredError(label = "credential") {
 }
 
 function actingUsernameFromUser(user) {
-  return normalizeOsUsername(user?.username || user?.osUsername || user?.name);
+  return normalizeText(user?.username || user?.osUsername || user?.name);
 }
 
 function actingHomeFromUser(user) {
@@ -91,7 +90,7 @@ function appCredentialContext({
   username = ""
 } = {}) {
   const resolvedHome = normalizeHome(home);
-  const resolvedUsername = normalizeOsUsername(username || currentOsUser().username);
+  const resolvedUsername = normalizeText(username || currentOsUser().username);
   if (!resolvedHome) {
     return credentialHomeRequiredError("application");
   }
@@ -233,7 +232,7 @@ async function resolveGithubHomeForStoredActor({
     });
   }
 
-  const username = normalizeOsUsername(ownerUserKey);
+  const username = normalizeText(ownerUserKey);
   if (!username) {
     return {
       accountMode: resolvedAccountMode,
