@@ -18,13 +18,11 @@
  * @property {(input: object) => Promise<object> | object} [removeSessionResources]
  */
 /**
- * A host's saved values (vibe64.saved-env-values.v1), shown by its own label.
- * @typedef {object} SavedEnvValueProvider
+ * A host's saved values for the Development Env (vibe64.project.saved-env-values,
+ * contract vibe64.saved-env-values.v1), shown by its own label.
+ * @typedef {object} SavedEnvValues
  * @property {string} label
  * @property {(input: { projectContextRoot: string, projectRuntimeRoot: string, projectSlug: string }) => Promise<object>} valuesForProject
- * @property {(request: object) => Promise<object>} list
- * @property {(request: object) => Promise<object>} link
- * @property {(request: object) => Promise<object>} unlink
  */
 
 export {};

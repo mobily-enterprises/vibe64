@@ -40,7 +40,7 @@ import { createProjectSettings } from "./projectSettings.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 /** @typedef {import("./types.js").PublishProjectChanged} PublishProjectChanged */
-/** @typedef {import("./types.js").SavedEnvValueProvider} SavedEnvValueProvider */
+/** @typedef {import("./types.js").SavedEnvValues} SavedEnvValues */
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 
 function catalogUnavailable() {
@@ -68,7 +68,7 @@ function catalogUnavailable() {
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
  * @param {ProjectResourceEnvironment} [dependencies.resourceEnvironmentProvider] a host's managed resources
- * @param {SavedEnvValueProvider} [dependencies.savedEnvValueProvider] a host's saved values
+ * @param {SavedEnvValues} [dependencies.savedEnvValues] a host's saved values
  * @param {typeof setGenesisCollaboration} [dependencies.setCollaboration]
  * @param {typeof setGenesisEngineeringProfile} [dependencies.setEngineeringProfile]
  */
@@ -90,13 +90,13 @@ function createService({
   projectContext,
   publishProjectChanged = announceNoProjectChange,
   resourceEnvironmentProvider = LOCAL_PROJECT_RESOURCES,
-  savedEnvValueProvider = NO_SAVED_ENV_VALUES,
+  savedEnvValues = NO_SAVED_ENV_VALUES,
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile
 }) {
   const slots = createProjectServiceSlots();
   const selection = createProjectSelection({ logger, projectContext });
-  const environment = createProjectEnvironment({ env, inspectEnvironment, resourceEnvironmentProvider, savedEnvValueProvider, selection });
+  const environment = createProjectEnvironment({ env, inspectEnvironment, resourceEnvironmentProvider, savedEnvValues, selection });
   const sessionWork = createProjectSessionWork({ environment, selection });
   const developmentDatabase = createProjectDevelopmentDatabase({ projectContext, resourceEnvironmentProvider, selection, sessionWork });
   const projectSettings = createProjectSettings({

@@ -1335,8 +1335,7 @@ test("the owner downloads every Env record with its real value as one .env file"
     const service = projectService(targetRoot, {
       inspectEnvironment: () => ({ components: [], environmentDefaults: [{ name: "APP_MODE", value: "demo" }],
         files: [], resources: [resource], status: "ready" }),
-      savedEnvValueProvider: { label: "Test vault", async list() { return { entries: [] }; },
-        async link() { return { ok: true }; }, async unlink() { return { ok: true }; },
+      savedEnvValues: { label: "Test vault",
         async valuesForProject() {
           return { contract: "vibe64.saved-env-values.v1", values: [{ key: "PAYMENTS_KEY", value: "sk_test_linked", secret: true }] };
         } },

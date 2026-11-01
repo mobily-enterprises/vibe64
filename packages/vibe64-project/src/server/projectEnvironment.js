@@ -23,7 +23,7 @@ import { SAVED_ENV_VALUE_SOURCE, offersSavedValues, savedEnvValueRecords } from 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
-/** @typedef {import("./types.js").SavedEnvValueProvider} SavedEnvValueProvider */
+/** @typedef {import("./types.js").SavedEnvValues} SavedEnvValues */
 
 function envScope(input = {}) {
   return input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
@@ -106,9 +106,9 @@ function genesisEnvironmentIsUnconfigured(error) {
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisEnvironment} dependencies.inspectEnvironment
  * @param {ProjectSelection} dependencies.selection
  * @param {ProjectResourceEnvironment} dependencies.resourceEnvironmentProvider
- * @param {SavedEnvValueProvider} dependencies.savedEnvValueProvider
+ * @param {SavedEnvValues} dependencies.savedEnvValues
  */
-function createProjectEnvironment({ env, inspectEnvironment, resourceEnvironmentProvider, savedEnvValueProvider, selection }) {
+function createProjectEnvironment({ env, inspectEnvironment, resourceEnvironmentProvider, savedEnvValues, selection }) {
   async function userEnvRecords() {
     return (await readEnvUserValues({
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot()
@@ -120,8 +120,8 @@ function createProjectEnvironment({ env, inspectEnvironment, resourceEnvironment
   // silently dropping values.
   async function savedEnvRecords(input = {}) {
     const scope = envScope(input);
-    if (!offersSavedValues(savedEnvValueProvider) || scope !== RUNTIME_CONFIG_SCOPES.DEV) return [];
-    return savedEnvValueRecords(savedEnvValueProvider, {
+    if (!offersSavedValues(savedEnvValues) || scope !== RUNTIME_CONFIG_SCOPES.DEV) return [];
+    return savedEnvValueRecords(savedEnvValues, {
       projectContextRoot: selection.selectedTargetRoot(),
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
       projectSlug: selection.currentProjectSlug()

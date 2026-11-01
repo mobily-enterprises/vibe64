@@ -21,6 +21,15 @@
  * @property {(input: { key: string, projectSlug: string }) => Promise<object>} removeVariable
  * @property {(input: { key: string, projectSlug: string, secret: boolean, value: string }) => Promise<object>} setVariable
  */
+/**
+ * A host's saved values the agent Env command lists, links and unlinks
+ * (vibe64.terminals.saved-env-value-links), shown by its own label.
+ * @typedef {object} SavedEnvValueLinks
+ * @property {string} label
+ * @property {(request: { actor: object | null, projectSlug: string, sessionId: string }) => Promise<object>} list
+ * @property {(request: { actor: object | null, entryId: string, environment: string, fieldId: string, key: string, projectSlug: string, sessionId: string }) => Promise<object>} link
+ * @property {(request: { actor: object | null, environment: string, key: string, projectSlug: string, sessionId: string }) => Promise<object>} unlink
+ */
 /** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
 /** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */

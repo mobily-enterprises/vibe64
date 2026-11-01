@@ -22,7 +22,7 @@ import {
   TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
   assertProductionEnvironmentProvider
 } from "./productionEnvironment.js";
-import { NO_SAVED_ENV_VALUES, SAVED_ENV_VALUES_TOKEN, assertSavedEnvValueProvider } from "@local/vibe64-project/server/savedEnvValues";
+import { NO_SAVED_ENV_VALUE_LINKS, TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN, assertSavedEnvValueLinks } from "./savedEnvValueLinks.js";
 import {
   createService,
   startProjectRuntimeDormancyCleanupSchedule
@@ -38,7 +38,7 @@ import {
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
-/** @typedef {import("@local/vibe64-project/server/types").SavedEnvValueProvider} SavedEnvValueProvider */
+/** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
 
 const LIVE_HOST_ENV_KEYS = Object.freeze([
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
@@ -95,7 +95,7 @@ function createVibe64TerminalsFeature({
     // A composed host's production Env and saved values for the agent Env command.
     optional: {
       productionEnvironmentProvider: TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
-      savedEnvValueProvider: SAVED_ENV_VALUES_TOKEN
+      savedEnvValueLinks: TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN
     },
     provides: {
       terminals: "vibe64.terminals"
@@ -113,12 +113,12 @@ function createVibe64TerminalsFeature({
      * @param {RuntimeLogger} capabilities.logger
      * @param {ProductionEnvironmentProvider | null} capabilities.productionEnvironmentProvider
      * @param {ProjectService} capabilities.project
-     * @param {SavedEnvValueProvider | null} capabilities.savedEnvValueProvider
+     * @param {SavedEnvValueLinks | null} capabilities.savedEnvValueLinks
      * @param {{ actionCatalogue: ActionCatalogue }} context
      */
-    setup({ env, events, fastify, http, logger, productionEnvironmentProvider, project, savedEnvValueProvider }, { actionCatalogue }) {
+    setup({ env, events, fastify, http, logger, productionEnvironmentProvider, project, savedEnvValueLinks }, { actionCatalogue }) {
       assertProductionEnvironmentProvider(productionEnvironmentProvider);
-      assertSavedEnvValueProvider(savedEnvValueProvider);
+      assertSavedEnvValueLinks(savedEnvValueLinks);
       const terminals = createService({
         actions: actionCatalogue,
         codexTerminalController,
@@ -130,7 +130,7 @@ function createVibe64TerminalsFeature({
         projectService: project,
         publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),
         publishSessionChanged: createTerminalSessionChangedPublishers(events),
-        savedEnvValueProvider: savedEnvValueProvider ?? NO_SAVED_ENV_VALUES
+        savedEnvValueLinks: savedEnvValueLinks ?? NO_SAVED_ENV_VALUE_LINKS
       });
       registerRoutes(http, {
         fastify,

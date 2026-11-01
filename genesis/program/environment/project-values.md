@@ -13,6 +13,7 @@ host provide managed system values separately.
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-project/src/server/resourceEnvironment.js`
+- `packages/vibe64-project/src/server/savedEnvValues.js`
 - Main: `packages/vibe64-project/src/server/projectEnvironmentFiles.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
@@ -25,6 +26,7 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommandText.js`
 - `packages/vibe64-terminals/src/server/productionEnvironment.js`
+- `packages/vibe64-terminals/src/server/savedEnvValueLinks.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
 - `packages/vibe64-core/src/server/envUserValues.js`
@@ -167,7 +169,12 @@ Project agents receive the managed `vibe64-helper env` command. It reads configu
 metadata without exposing values and delegates explicit development mutations
 to the project Env service. A host may provide a production Env provider as the
 optional `vibe64.terminals.production-environment` capability; public/local
-Vibe64 otherwise reports production as unavailable. Mutations require an explicit scope, accept values only on
+Vibe64 otherwise reports production as unavailable. A host that keeps saved
+values provides the values linked into the Development Env as the optional
+`vibe64.project.saved-env-values` capability, and the helper's `saved`, `link`
+and `unlink` as the optional `vibe64.terminals.saved-env-value-links`
+capability; without them Env has no linked rows and the helper reports that
+the workspace offers no saved values. Mutations require an explicit scope, accept values only on
 stdin, never copy values between scopes, and never reveal stored values.
 Successful development Env mutations publish the shared project refresh hint,
 so other tabs reread the protected project state without receiving values or

@@ -64,7 +64,7 @@
           },
           {
             "subpath": "./server/savedEnvValues",
-            "summary": "Validates a host's saved Env value provider (vibe64.saved-env-values.v1) and turns the values the person linked into non-editable Development Env records."
+            "summary": "Declares the optional vibe64.project.saved-env-values capability, validates a host's saved Env values (vibe64.saved-env-values.v1) and turns the values the person linked into non-editable Development Env records."
           },
           {
             "subpath": "./server/managedRepository",

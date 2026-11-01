@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { createAgentEnvCommandService } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
 import { NO_PRODUCTION_ENVIRONMENT } from "../../packages/vibe64-terminals/src/server/productionEnvironment.js";
-import { NO_SAVED_ENV_VALUES } from "../../packages/vibe64-project/src/server/savedEnvValues.js";
+import { NO_SAVED_ENV_VALUE_LINKS, assertSavedEnvValueLinks } from "../../packages/vibe64-terminals/src/server/savedEnvValueLinks.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
@@ -26,7 +26,6 @@ function testVault() {
   return {
     calls,
     label: "Test vault",
-    async valuesForProject() { return { contract: "vibe64.saved-env-values.v1", values: [] }; },
     async list(input) {
       calls.push(["list", input]);
       return { entries: [
@@ -44,9 +43,9 @@ function testVault() {
   };
 }
 
-async function boundCommand(records = [], actor = { username: "teammate", role: "member" }, savedEnvValueProvider = NO_SAVED_ENV_VALUES) {
+async function boundCommand(records = [], actor = { username: "teammate", role: "member" }, savedEnvValueLinks = NO_SAVED_ENV_VALUE_LINKS) {
   const command = createAgentEnvCommandService({ logger: silentLogger, productionEnvironmentProvider: NO_PRODUCTION_ENVIRONMENT,
-    projectService: projectService(records), savedEnvValueProvider });
+    projectService: projectService(records), savedEnvValueLinks });
   await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("saved-session"));
   return command;
 }
@@ -61,6 +60,13 @@ test("without a saved-value host the helper says so and exits cleanly", async ()
   const linked = await run(command, ["link", "development", "PAYMENTS_KEY", "saved_1", "apiKey"]);
   assert.equal(linked.ok, false);
   assert.equal(linked.code, "vibe64_saved_env_values_unavailable");
+});
+
+test("saved value links must have a label and list, link and unlink", () => {
+  assert.throws(() => assertSavedEnvValueLinks({ label: "Test vault", async list() { return { entries: [] }; } }), TypeError);
+  assert.throws(() => assertSavedEnvValueLinks({ ...testVault(), label: "" }), TypeError);
+  assertSavedEnvValueLinks(testVault());
+  assertSavedEnvValueLinks(null);
 });
 
 test("saved lists names, descriptions and fields, never values, for the bound person", async () => {

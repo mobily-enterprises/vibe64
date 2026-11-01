@@ -18,6 +18,7 @@
     "./server/openedFileWithin": "./src/server/openedFileWithin.js",
     "./server/projectExecutionEnv": "./src/server/projectExecutionEnv.js",
     "./server/productionEnvironment": "./src/server/productionEnvironment.js",
+    "./server/savedEnvValueLinks": "./src/server/savedEnvValueLinks.js",
     "./server/nativeConversationBindings": "./src/server/nativeConversationRetirement.js",
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",
     "./shared/assistantWorkPlan": "./src/shared/assistantWorkPlan.js",
