@@ -1,3 +1,4 @@
+import pino from "pino";
 import {
   DEFAULT_VIBE64_LOG_LEVEL,
   resolveVibe64LogLevel
@@ -63,6 +64,11 @@ function createVibe64FastifyLoggerOptions({
         redact: {
           censor: "[redacted]",
           paths: [...VIBE64_LOG_REDACT_PATHS]
+        },
+        // Fastify's logger serializes only the `err` key, so the same serializer under `error` keeps the message and
+        // stack of `logger.warn({ error }, "...")`.
+        serializers: {
+          error: pino.stdSerializers.err
         }
       };
 

@@ -57,6 +57,9 @@ test("Vibe64 Fastify logger options disable noisy request logs by default", () =
   assert.deepEqual(defaults.warnings, []);
   assert.equal(isVibe64LogLevelEnabled("info", defaults.level), false);
   assert.equal(isVibe64LogLevelEnabled("warn", defaults.level), true);
+  const serialized = defaults.logger.serializers.error(new Error("Disk is full."));
+  assert.equal(serialized.message, "Disk is full.");
+  assert.match(serialized.stack, /Disk is full\./u);
 
   const silent = createVibe64FastifyLoggerOptions({
     env: {
