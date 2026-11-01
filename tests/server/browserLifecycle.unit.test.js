@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 import {
   createBrowserLifecycleMonitor,
@@ -13,9 +14,6 @@ test("browser lifecycle monitor shuts down after the last client disconnects", a
   const messages = [];
   const monitor = createBrowserLifecycleMonitor({
     clearTimeoutFn: timer.clearTimeout,
-    closeServer: async (reason) => {
-      shutdowns.push(reason);
-    },
     logger: {
       info(message) {
         messages.push(message);
@@ -23,7 +21,9 @@ test("browser lifecycle monitor shuts down after the last client disconnects", a
     },
     setTimeoutFn: timer.setTimeout
   });
-  monitor.enableShutdown();
+  monitor.enableShutdown(async (reason) => {
+    shutdowns.push(reason);
+  });
 
   const socket = new EventEmitter();
   monitor.registerClient(socket);
@@ -49,12 +49,12 @@ test("browser lifecycle monitor cancels shutdown when a client reconnects", asyn
   const shutdowns = [];
   const monitor = createBrowserLifecycleMonitor({
     clearTimeoutFn: timer.clearTimeout,
-    closeServer: async (reason) => {
-      shutdowns.push(reason);
-    },
+    logger: silentLogger,
     setTimeoutFn: timer.setTimeout
   });
-  monitor.enableShutdown();
+  monitor.enableShutdown(async (reason) => {
+    shutdowns.push(reason);
+  });
 
   const firstSocket = new EventEmitter();
   monitor.registerClient(firstSocket);
@@ -73,9 +73,10 @@ test("browser lifecycle monitor closes registered sockets when stopped", () => {
   const timer = fakeTimer();
   const closeCalls = [];
   const monitor = createBrowserLifecycleMonitor({
+    logger: silentLogger,
     setTimeoutFn: timer.setTimeout
   });
-  monitor.enableShutdown();
+  monitor.enableShutdown(async () => {});
 
   const socket = new EventEmitter();
   socket.close = (code, reason) => {
@@ -105,6 +106,7 @@ test("browser lifecycle monitor is passive until shutdown is enabled", async () 
   const timer = fakeTimer();
   const monitor = createBrowserLifecycleMonitor({
     clearTimeoutFn: timer.clearTimeout,
+    logger: silentLogger,
     setTimeoutFn: timer.setTimeout
   });
 
@@ -117,7 +119,7 @@ test("browser lifecycle monitor is passive until shutdown is enabled", async () 
 
 test("browser lifecycle state tells the client whether server disconnect should close the browser", () => {
   const sentMessages = [];
-  const monitor = createBrowserLifecycleMonitor();
+  const monitor = createBrowserLifecycleMonitor({ logger: silentLogger });
   const socket = {
     send(message) {
       sentMessages.push(JSON.parse(message));
@@ -125,7 +127,7 @@ test("browser lifecycle state tells the client whether server disconnect should 
   };
 
   sendBrowserLifecycleState(socket, monitor);
-  monitor.enableShutdown();
+  monitor.enableShutdown(async () => {});
   sendBrowserLifecycleState(socket, monitor);
 
   assert.deepEqual(sentMessages, [

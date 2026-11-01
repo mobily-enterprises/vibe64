@@ -5,6 +5,12 @@ import {
 const BROWSER_LIFECYCLE_WEBSOCKET_PATH = "/api/studio/browser-lifecycle/ws";
 const DEFAULT_BROWSER_LIFECYCLE_SHUTDOWN_DELAY_MS = 1000;
 
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
+
+// Shutdown is enabled only with the server's close function, so until then
+// there is no server to close.
+function closeNoServer() {}
+
 function shutdownDelayLabel(delayMs = DEFAULT_BROWSER_LIFECYCLE_SHUTDOWN_DELAY_MS) {
   const seconds = Math.max(1, Math.round(Number(delayMs || 0) / 1000));
   return `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
@@ -17,14 +23,25 @@ function sendBrowserLifecycleState(socket, monitor) {
   }));
 }
 
+/**
+ * Tracks the browser windows connected to this server. Once shutdown is
+ * enabled with the server's close function, the last window's disconnect
+ * closes the server after the shutdown delay.
+ * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
+ * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
+ * @param {typeof setTimeout} [dependencies.setTimeoutFn]
+ * @param {number} [dependencies.shutdownDelayMs]
+ */
 function createBrowserLifecycleMonitor({
   clearTimeoutFn = clearTimeout,
-  closeServer = async () => {},
-  logger = null,
+  logger,
   setTimeoutFn = setTimeout,
   shutdownDelayMs = DEFAULT_BROWSER_LIFECYCLE_SHUTDOWN_DELAY_MS
-} = {}) {
+}) {
   const clients = new Map();
+  /** @type {(reason: string) => unknown} */
+  let closeServer = closeNoServer;
   let shutdownEnabled = false;
   let shutdownTimer = null;
   let nextClientId = 1;
@@ -43,7 +60,7 @@ function createBrowserLifecycleMonitor({
       return;
     }
 
-    logger?.info?.(`Browser window disconnected. Terminating in ${shutdownDelayLabel(shutdownDelayMs)}...`);
+    logger.info(`Browser window disconnected. Terminating in ${shutdownDelayLabel(shutdownDelayMs)}...`);
     shutdownTimer = setTimeoutFn(async () => {
       shutdownTimer = null;
       if (!shutdownEnabled || serverClosing || clients.size > 0) {
@@ -51,11 +68,11 @@ function createBrowserLifecycleMonitor({
       }
 
       serverClosing = true;
-      logger?.info?.("Closing Vibe64 because the browser window disconnected.");
+      logger.info("Closing Vibe64 because the browser window disconnected.");
       try {
         await closeServer("browser-lifecycle-disconnected");
       } catch (error) {
-        logger?.error?.({ err: error }, "Browser lifecycle shutdown failed.");
+        logger.error({ err: error }, "Browser lifecycle shutdown failed.");
       }
     }, shutdownDelayMs);
   }
@@ -84,10 +101,12 @@ function createBrowserLifecycleMonitor({
     };
   }
 
-  function enableShutdown(nextCloseServer = closeServer) {
-    if (typeof nextCloseServer === "function") {
-      closeServer = nextCloseServer;
-    }
+  /**
+   * @param {(reason: string) => unknown} closeServerOnDisconnect
+   */
+  function enableShutdown(closeServerOnDisconnect) {
+    // readable-check: allow setter-seam - cycle: the signal shutdown handler requires this monitor
+    closeServer = closeServerOnDisconnect;
     shutdownEnabled = true;
   }
 
@@ -99,24 +118,28 @@ function createBrowserLifecycleMonitor({
     clients.clear();
     for (const socket of sockets) {
       try {
-        socket?.close?.(1001, "Vibe64 server is stopping.");
+        socket.close(1001, "Vibe64 server is stopping.");
       } catch {
         // Shutdown is already in progress; continue closing the remaining clients.
       }
     }
   }
 
-  return {
-    activeClientCount() {
-      return clients.size;
-    },
+  function activeClientCount() {
+    return clients.size;
+  }
+
+  function isShutdownEnabled() {
+    return shutdownEnabled;
+  }
+
+  return Object.freeze({
+    activeClientCount,
     enableShutdown,
-    isShutdownEnabled() {
-      return shutdownEnabled;
-    },
+    isShutdownEnabled,
     registerClient,
     stop
-  };
+  });
 }
 
 function registerBrowserLifecycleWebSocketRoute(app, monitor) {
