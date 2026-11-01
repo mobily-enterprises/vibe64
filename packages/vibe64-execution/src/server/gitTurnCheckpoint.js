@@ -71,7 +71,7 @@ async function createGitTurnCheckpoint({
 
 /**
  * The daemon's checkpoint: the same git sequence run as one command (one
- * managed job on a hosted workspace) instead of one job per git step. The
+ * managed job under managed execution) instead of one job per git step. The
  * daemon still serializes snapshots per worktree, resolves the disk settings
  * and, through the command's own env, the commit identity.
  * @param {object} checkpoint
