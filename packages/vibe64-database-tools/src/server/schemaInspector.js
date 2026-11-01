@@ -655,12 +655,14 @@ async function inspectSqliteSchema(knex, connection = {}) {
         ordinal: Number(column.cid) + 1
       };
     });
-    if (primary.length) table.constraints.push({
-      name: `${record.name}_primary`,
-      type: "primary-key",
-      columns: primary.map((column) => column.name),
-      definition: ""
-    });
+    if (primary.length) {
+      table.constraints.push({
+        name: `${record.name}_primary`,
+        type: "primary-key",
+        columns: primary.map((column) => column.name),
+        definition: ""
+      });
+    }
     for (const index of indexes) {
       const entries = await rows("SELECT * FROM pragma_index_xinfo(?) WHERE key = 1 ORDER BY seqno", [index.name]);
       const definition = (await rows("SELECT sql FROM main.sqlite_schema WHERE type = 'index' AND name = ?", [index.name]))[0]?.sql || "";

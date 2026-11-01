@@ -37,7 +37,9 @@ process.on("message", async ({ id, operation, filename, readOnly, sql, bindings 
         } else if (readOnly && ![
           constants.SQLITE_SELECT, constants.SQLITE_READ, constants.SQLITE_FUNCTION,
           constants.SQLITE_TRANSACTION, constants.SQLITE_SAVEPOINT, constants.SQLITE_RECURSIVE
-        ].includes(action)) return constants.SQLITE_DENY;
+        ].includes(action)) {
+          return constants.SQLITE_DENY;
+        }
         return constants.SQLITE_OK;
       });
       result = { ok: true };
@@ -63,7 +65,9 @@ process.on("message", async ({ id, operation, filename, readOnly, sql, bindings 
       } else {
         result = { ...statement.run(...bindings), fields: [], rows: [] };
       }
-    } else throw new Error("Unknown SQLite connection operation.");
+    } else {
+      throw new Error("Unknown SQLite connection operation.");
+    }
     process.send({ id, result });
   } catch (error) {
     process.send({ id, error: { message: error.message, code: error.code } });

@@ -48,11 +48,13 @@ export function databaseControlTool(operation) {
       })
     },
     transformResult(result) {
-      if (result.ok !== true) return {
-        ok: false,
-        code: String(result.code || "").slice(0, 512),
-        error: "The database operation failed. Open Database for details, or ask a coding agent to investigate."
-      };
+      if (result.ok !== true) {
+        return {
+          ok: false,
+          code: String(result.code || "").slice(0, 512),
+          error: "The database operation failed. Open Database for details, or ask a coding agent to investigate."
+        };
+      }
       if (operation === "query.cancel") return { ok: true, queryId: result.queryId, cancelled: result.cancelled };
       const summary = databaseSchemaSummary(result.schema);
       const output = {

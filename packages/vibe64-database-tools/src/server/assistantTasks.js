@@ -170,20 +170,22 @@ function createDatabaseAssistantTasks({
       }
     });
     const failures = [];
-    for (const file of files) if (/^[a-f0-9]{20}\.json$/u.test(file)) {
-      const artifact = `database/assistant-tasks/${file}`;
-      try {
-        await cleanupAssistant(runtime, sessionId, artifact, null, storage);
-      } catch (error) {
-        failures.push(error);
-        logOperationalEvent(logger, "warn", {
-          component: "vibe64-database-tools",
-          event: "vibe64.database.assistant_cleanup_failed",
-          sessionId,
-          artifact,
-          code: error.code || "",
-          error: error.message
-        }, "A database copilot helper could not be closed; its receipt was kept.");
+    for (const file of files) {
+      if (/^[a-f0-9]{20}\.json$/u.test(file)) {
+        const artifact = `database/assistant-tasks/${file}`;
+        try {
+          await cleanupAssistant(runtime, sessionId, artifact, null, storage);
+        } catch (error) {
+          failures.push(error);
+          logOperationalEvent(logger, "warn", {
+            component: "vibe64-database-tools",
+            event: "vibe64.database.assistant_cleanup_failed",
+            sessionId,
+            artifact,
+            code: error.code || "",
+            error: error.message
+          }, "A database copilot helper could not be closed; its receipt was kept.");
+        }
       }
     }
     if (failures.length === 1) throw failures[0];
@@ -307,10 +309,12 @@ function createDatabaseAssistantTasks({
         if (failure) throw failure;
         return result;
       });
-      if (!admitted.acquired) throw databaseError(
-        admitted.value?.error || "The session is unavailable for a database question.",
-        admitted.value?.code || "vibe64_database_assistant_busy"
-      );
+      if (!admitted.acquired) {
+        throw databaseError(
+          admitted.value?.error || "The session is unavailable for a database question.",
+          admitted.value?.code || "vibe64_database_assistant_busy"
+        );
+      }
       return admitted.value;
     }).finally(() => activeAssistants.delete(task));
     activeAssistants.add(task);
