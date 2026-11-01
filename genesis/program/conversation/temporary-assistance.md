@@ -204,6 +204,11 @@ Changing the composer selection never rewrites historical attribution.
 - `packages/vibe64-terminals/src/server/codexScopedConversationPreparation.js`
 - `packages/vibe64-terminals/src/server/codexHelperPreparation.js`
 - Main: `packages/vibe64-terminals/src/server/sessionConversations.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationRecords.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationTurns.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationLifecycle.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationInteraction.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationRules.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
 - `packages/vibe64-runtime/src/server/sessionConversationStore.js`

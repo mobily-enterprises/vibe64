@@ -60,7 +60,6 @@ export default [
     // Over 750 lines, with a factory over 600 whose concerns share mutable state.
     files: [
       "packages/vibe64-terminals/src/server/agent/sessionAgentManager.js",
-      "packages/vibe64-terminals/src/server/sessionConversations.js",
       "packages/vibe64-terminals/src/server/sessionPromptHints.js",
       "packages/vibe64-terminals/src/server/workspaceSetup.js"
     ],

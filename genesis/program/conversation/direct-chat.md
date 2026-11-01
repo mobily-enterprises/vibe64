@@ -1368,7 +1368,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/mainConversationMessages.js`
 - `packages/vibe64-terminals/src/server/nativeConversationRetirement.js`
 - Main: `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
-- `packages/vibe64-terminals/src/server/sessionConversations.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationRecords.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationTurns.js`
 - `packages/vibe64-terminals/src/server/projectExecutionEnv.js`
 - `packages/vibe64-sessions/src/server/mainBrowserConversations.js`
 - `packages/vibe64-sessions/src/server/mainConversationAuthority.js`
@@ -3433,9 +3434,10 @@ application binding. The shared constructor assembles admission, identity,
 transcript, selection and delivery reads, preserving passive/native read behavior.
 The lower `createMainConversationBinding` storage facet, `openMainConversation`,
 `readMainConversationHistory`, lazy `readStream` and scoped authority guard remain
-in that same module. `sessionConversations.js` owns Temporary's
-`selectedContext`, `providerInput`, `persistentConversationOptions` and
-`routingContext`: its logical identity and history remain distinct from Main.
+in that same module. `temporaryConversationRecords.js` owns Temporary's
+`selectedContext` and `providerInput`, and `temporaryConversationTurns.js` its
+`persistentConversationOptions` and `routingContext`: its logical identity and
+history remain distinct from Main.
 Before a native ID exists, manager `createConversation` completes its original
 access/profile checks and invokes the runtime's `createNativeConversation`.
 The configured host uses `prepareSessionConversationCreation` to select the
