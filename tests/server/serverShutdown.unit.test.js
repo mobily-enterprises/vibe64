@@ -27,6 +27,7 @@ test("signal shutdown exits cleanly after Fastify closes", async () => {
       },
       log: testLogger(events)
     },
+    capabilityRuntime: idleCapabilityRuntime(),
     clearTimeoutFn() {
       timeoutCleared = true;
     },
@@ -82,6 +83,8 @@ test("signal shutdown forces exit when Fastify close stalls", async () => {
         }
       }
     },
+    capabilityRuntime: idleCapabilityRuntime(),
+    beforeClose() {},
     exitProcess(code) {
       events.push(`exit:${code}`);
     },
@@ -129,6 +132,8 @@ test("signal shutdown begins Fastify feature shutdown without waiting for termin
       },
       log: testLogger(events)
     },
+    capabilityRuntime: idleCapabilityRuntime(),
+    beforeClose() {},
     closeRuntimeTerminals() {
       events.push("close-terminals");
       return terminalCloseHeld;
@@ -173,14 +178,16 @@ test("signal shutdown settles capability runtime before Fastify while terminal c
       async close() {
         events.push("fastify");
       },
-      log: testLogger(events),
-      vibe64CapabilityRuntime: {
-        shutdown() {
-          events.push("capability-runtime");
-          return capabilityRuntimeHeld;
-        }
-      }
+      log: testLogger(events)
     },
+    capabilityRuntime: {
+      shutdown() {
+        events.push("capability-runtime");
+        return capabilityRuntimeHeld;
+      },
+      diagnostics: () => ({ providerShutdowns: [] })
+    },
+    beforeClose() {},
     closeRuntimeTerminals() {
       events.push("runtime-terminals");
       return terminalCloseHeld;
@@ -251,18 +258,20 @@ test("signal shutdown closes a real upgraded Socket.IO connection through capabi
     assert.equal(typeof capabilityRuntime?.shutdown, "function");
     const shutdownCapabilityRuntime = capabilityRuntime.shutdown.bind(capabilityRuntime);
     const fastifyClose = app.close.bind(app);
-    app.vibe64CapabilityRuntime = {
-      async shutdown() {
-        events.push("capability-runtime");
-        await shutdownCapabilityRuntime();
-      }
-    };
     app.close = async () => {
       events.push("fastify");
       await fastifyClose();
     };
     const handler = createSignalShutdownHandler({
       app,
+      capabilityRuntime: {
+        async shutdown() {
+          events.push("capability-runtime");
+          await shutdownCapabilityRuntime();
+        },
+        diagnostics: () => capabilityRuntime.diagnostics()
+      },
+      beforeClose() {},
       closeRuntimeTerminals() {
         events.push("runtime-terminals");
       },
@@ -315,12 +324,13 @@ test("a shutdown timeout names the operations still running and the provider sti
     app: {
       async close() {},
       log: fieldLogger(logged),
-      server: {},
-      vibe64CapabilityRuntime: {
-        shutdown: () => new Promise(() => {}),
-        diagnostics: () => ({ providerShutdowns })
-      }
+      server: idleHttpServer()
     },
+    capabilityRuntime: {
+      shutdown: () => new Promise(() => {}),
+      diagnostics: () => ({ providerShutdowns })
+    },
+    beforeClose() {},
     closeRuntimeTerminals() {},
     exitProcess(code) {
       exits.push(code);
@@ -354,14 +364,15 @@ test("a failed shutdown logs each failed operation with its provider and cause",
       async close() {
         throw new Error("fastify close failed");
       },
-      log: fieldLogger(logged),
-      vibe64CapabilityRuntime: {
-        async shutdown() {
-          throw new AggregateError([providerFailure], "Capability runtime shutdown failed: vibe64.terminals.");
-        },
-        diagnostics: () => ({ providerShutdowns: [{ id: "vibe64.terminals", status: "failed", durationMs: 12 }] })
-      }
+      log: fieldLogger(logged)
     },
+    capabilityRuntime: {
+      async shutdown() {
+        throw new AggregateError([providerFailure], "Capability runtime shutdown failed: vibe64.terminals.");
+      },
+      diagnostics: () => ({ providerShutdowns: [{ id: "vibe64.terminals", status: "failed", durationMs: 12 }] })
+    },
+    beforeClose() {},
     closeRuntimeTerminals() {},
     exitProcess() {},
     setTimeoutFn() {
@@ -416,6 +427,8 @@ test("signal shutdown is not held by another route's open WebSocket", async () =
     const log = app.log;
     const handler = createSignalShutdownHandler({
       app: Object.assign(Object.create(app), { log: fieldLogger(logged, log) }),
+      capabilityRuntime: app.vibe64CapabilityRuntime,
+      beforeClose() {},
       closeRuntimeTerminals() {},
       exitProcess(code) {
         exits.push(code);
@@ -452,6 +465,7 @@ test("signal shutdown reaches Fastify feature shutdown when pre-close cleanup fa
       },
       log: testLogger(events)
     },
+    capabilityRuntime: idleCapabilityRuntime(),
     beforeClose() {
       events.push("before-close");
       throw new Error("pre-close failed");
@@ -487,14 +501,16 @@ test("signal shutdown reaches Fastify close when capability shutdown fails", asy
       async close() {
         events.push("close");
       },
-      log: testLogger(events),
-      vibe64CapabilityRuntime: {
-        async shutdown() {
-          events.push("capability-runtime");
-          throw new Error("capability shutdown failed");
-        }
-      }
+      log: testLogger(events)
     },
+    capabilityRuntime: {
+      async shutdown() {
+        events.push("capability-runtime");
+        throw new Error("capability shutdown failed");
+      },
+      diagnostics: () => ({ providerShutdowns: [] })
+    },
+    beforeClose() {},
     closeRuntimeTerminals() {
       events.push("close-terminals");
     },
@@ -554,8 +570,11 @@ test("signal shutdown kills a terminal child and forces exit while stop cleanup 
       async close() {
         events.push("fastify");
       },
-      log: testLogger(events)
+      log: testLogger(events),
+      server: idleHttpServer()
     },
+    capabilityRuntime: idleCapabilityRuntime(),
+    beforeClose() {},
     closeRuntimeTerminals() {
       return closeTerminalSession(session.id, {
         namespace
@@ -622,8 +641,10 @@ test("signal shutdown stops runtime terminals before a stalled Fastify close", a
         return new Promise(() => {});
       },
       log: testLogger([]),
-      server: {}
+      server: idleHttpServer()
     },
+    capabilityRuntime: idleCapabilityRuntime(),
+    beforeClose() {},
     exitProcess(code) {
       exits.push(code);
     },
@@ -657,6 +678,20 @@ function fieldLogger(logged, fallback = null) {
     logged.push({ level, fields, message });
   };
   return { ...fallback, error: record("error"), info: record("info"), warn: record("warn") };
+}
+
+function idleCapabilityRuntime() {
+  return {
+    async shutdown() {},
+    diagnostics: () => ({ providerShutdowns: [] })
+  };
+}
+
+function idleHttpServer() {
+  return {
+    closeAllConnections() {},
+    closeIdleConnections() {}
+  };
 }
 
 function testLogger(events) {

@@ -1,13 +1,11 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
-import getPort, { portNumbers } from "get-port";
+import getPort from "get-port";
 import {
   resolveRuntimeEnv
 } from "./server/lib/runtimeEnv.js";
-import { existsSync, readFileSync } from "node:fs";
-import { chmod, lstat, mkdir, rm } from "node:fs/promises";
-import os from "node:os";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -16,7 +14,6 @@ import {
   resolveRuntimeProfileFromSurface
 } from "@jskit-ai/kernel/server/platform";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
-import { matchesPathPrefix, normalizePathname } from "@jskit-ai/kernel/shared/surface/paths";
 import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
   resolveStudioAppRoot,
@@ -26,8 +23,7 @@ import {
 } from "@local/vibe64-core/server/studioRoots";
 import {
   assertProjectDirectoryUsable,
-  configureStudioProjectContext,
-  normalizeProjectSlug
+  configureStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
   closeTerminalSessionsForNamespacePrefix
@@ -35,8 +31,7 @@ import {
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
-  normalizeGithubAccountMode,
-  vibe64SharedModes
+  normalizeGithubAccountMode
 } from "@local/vibe64-execution/server";
 import {
   isLocalhostCheckBypassEnabled
@@ -63,143 +58,30 @@ import {
   assertSafeLocalModeListenTarget,
   createVibe64RuntimeProfile
 } from "./server/lib/runtimeProfile.js";
+import {
+  defaultListenSocketPath,
+  hasExplicitPortOption,
+  preferredPortRange,
+  prepareListenSocket,
+  publishListenSocket,
+  resolveListenTarget
+} from "./server/lib/listenTarget.js";
+import {
+  SPA_INDEX_FILE,
+  registerSpaNotFoundHandler,
+  resolveGlobalUiPaths
+} from "./server/lib/spaFallback.js";
+import {
+  browserUrlForListenAddress,
+  browserUrlForPublicOrigin,
+  startupBrowserPath,
+  startupRedirectPathForRequest
+} from "./server/lib/startupUrls.js";
 
-const SPA_INDEX_FILE = "index.html";
-const API_BASE_PATH = "/api";
+/** @typedef {ReturnType<typeof import("@jskit-ai/kernel/shared/capabilities").createCapabilityRuntime>} CapabilityRuntime */
+
 const MODULE_APP_ROOT = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_PORT_SEARCH_LIMIT = 50;
-const DEFAULT_SOCKET_FILE_NAME = "server.sock";
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 8000;
-const STATIC_GLOBAL_UI_PATHS = Object.freeze([
-  "/assets",
-  "/favicon.svg",
-  "/favicon.ico",
-  "/robots.txt",
-  "/manifest.webmanifest"
-]);
-
-function toRequestPathname(urlValue) {
-  const rawUrl = String(urlValue || "").trim() || "/";
-  try {
-    return normalizePathname(new URL(rawUrl, "http://localhost").pathname || "/");
-  } catch {
-    return normalizePathname(rawUrl.split("?")[0] || "/");
-  }
-}
-
-function isApiPath(pathname) {
-  return matchesPathPrefix(pathname, API_BASE_PATH);
-}
-
-function hasFileExtension(pathname) {
-  return path.extname(normalizePathname(pathname)) !== "";
-}
-
-function resolveGlobalUiPaths(runtimeGlobalUiPaths = []) {
-  const paths = new Set(Array.isArray(runtimeGlobalUiPaths) ? runtimeGlobalUiPaths : []);
-  for (const staticPath of STATIC_GLOBAL_UI_PATHS) {
-    paths.add(staticPath);
-  }
-  return [...paths];
-}
-
-function resolveStaticFilePath(pathname) {
-  const normalizedPathname = normalizePathname(pathname);
-
-  const relativePath = normalizedPathname.replace(/^\/+/, "");
-  if (!relativePath || relativePath.endsWith("/")) {
-    return "";
-  }
-
-  const normalizedRelativePath = path.posix.normalize(relativePath);
-  if (
-    !normalizedRelativePath ||
-    normalizedRelativePath === "." ||
-    normalizedRelativePath === ".." ||
-    normalizedRelativePath.startsWith("../") ||
-    normalizedRelativePath.includes("/../")
-  ) {
-    return "";
-  }
-
-  return normalizedRelativePath;
-}
-
-function canServeStaticFile(distRoot, relativePath) {
-  if (!distRoot || !relativePath) {
-    return false;
-  }
-
-  const normalizedDistRoot = path.resolve(distRoot);
-  const resolvedPath = path.resolve(normalizedDistRoot, relativePath);
-  if (!(resolvedPath === normalizedDistRoot || resolvedPath.startsWith(`${normalizedDistRoot}${path.sep}`))) {
-    return false;
-  }
-
-  return existsSync(resolvedPath);
-}
-
-function readSpaDocument(distRoot) {
-  return readFileSync(path.resolve(distRoot, SPA_INDEX_FILE), "utf8");
-}
-
-function preferredPortRange(port) {
-  const requestedPort = Number(port) || 0;
-  if (requestedPort < 1024 || requestedPort >= 65535) {
-    return requestedPort;
-  }
-  return portNumbers(requestedPort, Math.min(65535, requestedPort + DEFAULT_PORT_SEARCH_LIMIT - 1));
-}
-
-function hasOwnOption(options = {}, name = "") {
-  return Object.prototype.hasOwnProperty.call(options, name);
-}
-
-function explicitOptionValue(options = {}, name = "") {
-  return hasOwnOption(options, name) ? options[name] : undefined;
-}
-
-function hasExplicitPortOption(options = {}) {
-  if (!hasOwnOption(options, "port")) {
-    return false;
-  }
-  return String(options.port ?? "").trim() !== "";
-}
-
-function defaultListenSocketPath({
-  env = process.env
-} = {}) {
-  const runtimeDir = String(env.XDG_RUNTIME_DIR || "").trim();
-  if (runtimeDir) {
-    return path.join(runtimeDir, "vibe64", DEFAULT_SOCKET_FILE_NAME);
-  }
-  const uid = typeof process.getuid === "function" ? String(process.getuid()) : "user";
-  return path.join(os.tmpdir(), `vibe64-${uid}`, DEFAULT_SOCKET_FILE_NAME);
-}
-
-function resolveListenTarget({
-  options = {},
-  runtimeEnv = resolveRuntimeEnv()
-} = {}) {
-  const portRequested = hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true;
-  if (portRequested) {
-    const port = Number(explicitOptionValue(options, "port") ?? runtimeEnv.PORT);
-    return {
-      host: String(explicitOptionValue(options, "host") || runtimeEnv.HOST).trim() || "127.0.0.1",
-      port: Number.isFinite(port) ? port : 3000,
-      transport: "tcp"
-    };
-  }
-
-  const socketPath = String(
-    explicitOptionValue(options, "listenSocket") ||
-    defaultListenSocketPath()
-  ).trim();
-  return {
-    socketPath: path.resolve(socketPath),
-    transport: "socket"
-  };
-}
 
 function resolveShutdownTimeoutMs(value = DEFAULT_SHUTDOWN_TIMEOUT_MS) {
   const timeoutMs = Math.floor(Number(value));
@@ -209,33 +91,44 @@ function resolveShutdownTimeoutMs(value = DEFAULT_SHUTDOWN_TIMEOUT_MS) {
   return timeoutMs;
 }
 
-function forceCloseServerConnections(server = null) {
+/** @param {import("node:http").Server} server */
+function forceCloseServerConnections(server) {
   try {
-    server?.closeIdleConnections?.();
+    server.closeIdleConnections();
   } catch {
     // Shutdown is already failing; continue with the stronger close below.
   }
   try {
-    server?.closeAllConnections?.();
+    server.closeAllConnections();
   } catch {
     // The process exits immediately after this in the signal path.
   }
 }
 
+/**
+ * The SIGINT and SIGTERM handler: it stops the runtime terminals and the
+ * capability runtime together, then closes Fastify, and exits within the
+ * shutdown deadline.
+ * @param {object} dependencies
+ * @param {import("fastify").FastifyInstance} dependencies.app
+ * @param {CapabilityRuntime} dependencies.capabilityRuntime
+ * @param {(signal: string) => unknown} dependencies.beforeClose Runs with the runtime terminals and the capability runtime.
+ * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
+ * @param {() => unknown} [dependencies.closeRuntimeTerminals]
+ * @param {(code: number) => void} [dependencies.exitProcess]
+ * @param {typeof setTimeout} [dependencies.setTimeoutFn]
+ * @param {number} [dependencies.shutdownTimeoutMs]
+ */
 function createSignalShutdownHandler({
   app,
-  beforeClose = null,
+  capabilityRuntime,
+  beforeClose,
   clearTimeoutFn = clearTimeout,
   closeRuntimeTerminals = () => closeTerminalSessionsForNamespacePrefix(""),
   exitProcess = process.exit.bind(process),
   setTimeoutFn = setTimeout,
-  shutdownCapabilityRuntime = () => app.vibe64CapabilityRuntime?.shutdown?.(),
   shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS
-} = {}) {
-  if (!app || typeof app.close !== "function") {
-    throw new Error("createSignalShutdownHandler requires a Fastify app.");
-  }
-
+}) {
   const timeoutMs = resolveShutdownTimeoutMs(shutdownTimeoutMs);
   let closing = false;
   let exited = false;
@@ -264,10 +157,9 @@ function createSignalShutdownHandler({
     const startedAt = Date.now();
     const pendingOperations = new Set();
     function progressFields() {
-      const providerShutdowns = app.vibe64CapabilityRuntime?.diagnostics?.()?.providerShutdowns;
       return {
         durationMs: Date.now() - startedAt,
-        ...(Array.isArray(providerShutdowns) ? { providerShutdowns } : {})
+        providerShutdowns: capabilityRuntime.diagnostics().providerShutdowns
       };
     }
     function startOperation({ name, run }) {
@@ -287,15 +179,13 @@ function createSignalShutdownHandler({
       forceCloseServerConnections(app.server);
       exitOnce(1);
     }, timeoutMs);
-    timeout?.unref?.();
+    timeout.unref();
 
     try {
       const preCloseOperations = [
-        ...(typeof beforeClose === "function"
-          ? [{ name: "before-close", run: () => beforeClose(signal) }]
-          : []),
+        { name: "before-close", run: () => beforeClose(signal) },
         { name: "runtime-terminals", run: () => closeRuntimeTerminals() },
-        { name: "capability-runtime", run: () => shutdownCapabilityRuntime() }
+        { name: "capability-runtime", run: () => capabilityRuntime.shutdown() }
       ];
       const preClosePromises = preCloseOperations.map(startOperation);
       const capabilityRuntimeIndex = preCloseOperations.findIndex(({ name }) => (
@@ -349,78 +239,6 @@ function createSignalShutdownHandler({
   };
 }
 
-async function removeStaleSocket(socketPath = "") {
-  try {
-    const info = await lstat(socketPath);
-    if (!info.isSocket()) {
-      const error = new Error(`Refusing to remove non-socket listen path: ${socketPath}`);
-      error.code = "vibe64_listen_path_not_socket";
-      throw error;
-    }
-    await rm(socketPath, {
-      force: true
-    });
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return;
-    }
-    throw error;
-  }
-}
-
-async function prepareListenSocket(socketPath = "") {
-  if (!socketPath) {
-    const error = new Error("Vibe64 listen socket path is required.");
-    error.code = "vibe64_listen_socket_required";
-    throw error;
-  }
-  await mkdir(path.dirname(socketPath), {
-    recursive: true
-  });
-  await removeStaleSocket(socketPath);
-}
-
-async function publishListenSocket(socketPath = "") {
-  await chmod(socketPath, vibe64SharedModes().file);
-}
-
-function startupBrowserPath({
-  startupSlug = ""
-} = {}) {
-  const slug = String(startupSlug || "").trim();
-  return slug ? `/app/project/${encodeURIComponent(normalizeProjectSlug(slug))}` : "/app";
-}
-
-function startupRedirectPathForRequest(requestUrl = "", {
-  startupSlug = ""
-} = {}) {
-  const path = startupBrowserPath({
-    startupSlug
-  });
-  if (path === "/app") {
-    return "";
-  }
-  const search = new URL(String(requestUrl || "/"), "http://localhost").search;
-  return `${path}${search}`;
-}
-
-function browserUrlForListenAddress(address = "", options = {}) {
-  const url = new URL(address);
-  if (["0.0.0.0", "[::]"].includes(url.hostname)) {
-    url.hostname = "127.0.0.1";
-  }
-  return `${url.origin}${startupBrowserPath(options)}`;
-}
-
-function browserUrlForPublicOrigin(origin = "", options = {}) {
-  const normalizedOrigin = String(origin || "").trim();
-  if (!normalizedOrigin) {
-    return "";
-  }
-  const url = new URL(normalizedOrigin);
-  return `${url.origin}${startupBrowserPath(options)}`;
-}
-
 // Sets these process env values (undefined deletes) while fn runs, then
 // restores what was there before.
 async function withProcessEnv(values, fn) {
@@ -445,20 +263,20 @@ async function withProcessEnv(values, fn) {
 function resolveServerRuntimeProfile(options = {}, {
   defaultLocalTargetRoot = process.cwd()
 } = {}) {
-  if (options?.runtimeProfile && typeof options.runtimeProfile === "object") {
+  if (options.runtimeProfile && typeof options.runtimeProfile === "object") {
     return Object.freeze({
       ...options.runtimeProfile
     });
   }
-  const explicitTargetRoot = String(options?.targetRoot || "").trim();
+  const explicitTargetRoot = String(options.targetRoot || "").trim();
   return createVibe64RuntimeProfile({
-    mode: options?.runtimeMode,
+    mode: options.runtimeMode,
     targetRoot: explicitTargetRoot || String(defaultLocalTargetRoot || "").trim()
   });
 }
 
 function targetRootForRuntimeProfile(options = {}, runtimeProfile = {}) {
-  const explicitTargetRoot = String(options?.targetRoot || "").trim();
+  const explicitTargetRoot = String(options.targetRoot || "").trim();
   if (explicitTargetRoot) {
     return explicitTargetRoot;
   }
@@ -595,9 +413,7 @@ async function createServer(options = {}) {
     [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
     ...(targetRoot ? { [VIBE64_TARGET_ROOT_ENV]: targetRoot } : {})
   };
-  const createRuntime = typeof options?.createInstalledRuntime === "function"
-    ? options.createInstalledRuntime
-    : createInstalledRuntime;
+  const { createInstalledRuntime: createRuntime = createInstalledRuntime } = options;
   const runtime = await withProcessEnv({
     [VIBE64_APP_ROOT_ENV]: appRoot,
     [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
@@ -614,25 +430,25 @@ async function createServer(options = {}) {
     logger: app.log,
     fastify: app
   }));
-  app.vibe64CapabilityRuntime = runtime?.runtime || null;
+  app.vibe64CapabilityRuntime = runtime.runtime;
 
   registerSurfaceRequestConstraint({
     fastify: app,
     surfaceRuntime,
     serverSurface: runtimeEnv.SERVER_SURFACE,
-    globalUiPaths: resolveGlobalUiPaths(runtime?.globalUiPaths || [])
+    globalUiPaths: resolveGlobalUiPaths(runtime.globalUiPaths)
   });
 
   const localStartupRedirectPath = runtimeProfile.local === true &&
     runtimeProfile.singleTargetRoot
     ? startupBrowserPath({
-      startupSlug: options?.startupSlug
+      startupSlug: options.startupSlug
     })
     : "";
   if (localStartupRedirectPath && localStartupRedirectPath !== "/app") {
     const redirectLocalStartup = async (request, reply) => reply.redirect(
-      startupRedirectPathForRequest(request?.url, {
-        startupSlug: options?.startupSlug
+      startupRedirectPathForRequest(request.url, {
+        startupSlug: options.startupSlug
       }),
       302
     );
@@ -656,57 +472,23 @@ async function createServer(options = {}) {
     }, "Frontend build not found (dist/index.html). Page routes will return 404 until `npm run build`.");
   }
 
-  app.setNotFoundHandler(async (request, reply) => {
-    const pathname = toRequestPathname(request?.url);
-    const method = String(request?.method || "GET")
-      .trim()
-      .toUpperCase();
-    if (isApiPath(pathname) || (method !== "GET" && method !== "HEAD")) {
-      return reply.code(404).send({
-        message: `Route ${method}:${pathname} not found`,
-        error: "Not Found",
-        statusCode: 404
-      });
-    }
-    if (hasFileExtension(pathname)) {
-      const staticFilePath = resolveStaticFilePath(pathname);
-      if (hasWebBuild && staticFilePath && canServeStaticFile(distRoot, staticFilePath)) {
-        return reply.sendFile(staticFilePath);
-      }
-      return reply.code(404).send({
-        message: `Route ${method}:${pathname} not found`,
-        error: "Not Found",
-        statusCode: 404
-      });
-    }
-    if (!hasWebBuild) {
-      return reply.code(404).send({
-        error: "Frontend build is not available. Run `npm run build`."
-      });
-    }
-    return reply
-      .header("Cache-Control", "no-store")
-      .type("text/html; charset=utf-8")
-      .send(readSpaDocument(distRoot));
-  });
+  registerSpaNotFoundHandler(app, { distRoot, hasWebBuild });
 
-  if (runtime) {
-    logOperationalEvent(
-      app.log,
-      "info",
-      {
-        component: "jskit-runtime",
-        event: "vibe64.server.jskit_runtime_registered",
-        surface: surfaceRuntime.normalizeSurfaceMode(runtimeEnv.SERVER_SURFACE),
-        projectsRoot: projectContext.projectsRoot,
-        systemRoot,
-        targetRoot: projectContext.targetRoot || "",
-        providerPackages: runtime.providerPackageOrder,
-        packageOrder: runtime.packageOrder
-      },
-      "Registered JSKIT capability runtime."
-    );
-  }
+  logOperationalEvent(
+    app.log,
+    "info",
+    {
+      component: "jskit-runtime",
+      event: "vibe64.server.jskit_runtime_registered",
+      surface: surfaceRuntime.normalizeSurfaceMode(runtimeEnv.SERVER_SURFACE),
+      projectsRoot: projectContext.projectsRoot,
+      systemRoot,
+      targetRoot: projectContext.targetRoot || "",
+      providerPackages: runtime.providerPackageOrder,
+      packageOrder: runtime.packageOrder
+    },
+    "Registered JSKIT capability runtime."
+  );
 
   return app;
 }
@@ -722,30 +504,31 @@ async function startServer(options = {}) {
   assertSafeLocalModeListenTarget(runtimeProfile, listenTarget, {
     env: runtimeEnv
   });
-  const strictPort = options?.strictPort ?? (
+  const strictPort = options.strictPort ?? (
     listenTarget.transport === "tcp" &&
     (hasExplicitPortOption(options) || runtimeEnv.PORT_CONFIGURED === true)
   );
   const app = await createServer({
-    appRoot: options?.appRoot,
-    browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
-    createInstalledRuntime: options?.createInstalledRuntime,
-    githubAccountMode: options?.githubAccountMode,
-    logLevel: options?.logLevel,
-    managedSourceRoot: options?.managedSourceRoot,
-    projectsRoot: options?.projectsRoot,
+    appRoot: options.appRoot,
+    browserLifecycleShutdownDelayMs: options.browserLifecycleShutdownDelayMs,
+    createInstalledRuntime: options.createInstalledRuntime,
+    githubAccountMode: options.githubAccountMode,
+    logLevel: options.logLevel,
+    managedSourceRoot: options.managedSourceRoot,
+    projectsRoot: options.projectsRoot,
     runtimeProfile,
     runtimeMode: runtimeProfile.mode,
-    systemRoot: options?.systemRoot,
-    startupSlug: options?.startupSlug,
+    systemRoot: options.systemRoot,
+    startupSlug: options.startupSlug,
     targetRoot: requestedTargetRoot
   });
   const closeAndExit = createSignalShutdownHandler({
     app,
+    capabilityRuntime: app.vibe64CapabilityRuntime,
     beforeClose() {
-      app.browserLifecycleMonitor?.stop();
+      app.browserLifecycleMonitor.stop();
     },
-    shutdownTimeoutMs: options?.shutdownTimeoutMs
+    shutdownTimeoutMs: options.shutdownTimeoutMs
   });
   process.once("SIGINT", closeAndExit);
   process.once("SIGTERM", closeAndExit);
@@ -753,8 +536,8 @@ async function startServer(options = {}) {
     process.off("SIGINT", closeAndExit);
     process.off("SIGTERM", closeAndExit);
   });
-  if (options?.browserLifecycleShutdown === true) {
-    app.browserLifecycleMonitor?.enableShutdown(closeAndExit);
+  if (options.browserLifecycleShutdown === true) {
+    app.browserLifecycleMonitor.enableShutdown(closeAndExit);
   }
   let listenAddress = "";
   if (listenTarget.transport === "socket") {
@@ -788,14 +571,14 @@ async function startServer(options = {}) {
       transport: "tcp"
     };
   }
-  const publicOrigin = String(options?.publicOrigin || "").trim();
+  const publicOrigin = String(options.publicOrigin || "").trim();
   app.vibe64Url = publicOrigin
     ? browserUrlForPublicOrigin(publicOrigin, {
-      startupSlug: options?.startupSlug
+      startupSlug: options.startupSlug
     })
     : listenTarget.transport === "tcp"
       ? browserUrlForListenAddress(listenAddress, {
-        startupSlug: options?.startupSlug
+        startupSlug: options.startupSlug
       })
       : "";
   return app;
