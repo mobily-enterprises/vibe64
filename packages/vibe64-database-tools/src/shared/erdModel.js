@@ -7,7 +7,7 @@ export const ERD_LAYOUT_MAX_BYTES = 4 * 1024 * 1024;
 /**
  * The browser and agent inspection use the same table rectangles and field ports.
  */
-export function createErdNodes(schema, layout) {
+export function buildErdNodes(schema, layout) {
   const records = new Map((layout.nodes || []).map((node) => [node.table, node]));
   const nodes = (schema.tables || []).map((table) => {
     const record = records.get(table.qualifiedName) || {};

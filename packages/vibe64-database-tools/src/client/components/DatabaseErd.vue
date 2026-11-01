@@ -159,8 +159,8 @@ import { MarkerType, VueFlow } from "@vue-flow/core";
 import { MiniMap } from "@vue-flow/minimap";
 import DatabaseErdEdge from "./DatabaseErdEdge.vue";
 import DatabaseErdNode from "./DatabaseErdNode.vue";
-import { createErdRelationshipRoutes, erdRouteSnapshot } from "../../shared/erdRelationships.js";
-import { createErdNodes, visibleErdNodes, erdCardinality, erdColumns, erdLayoutGroups, erdSearch, placeErdNodes } from "../../shared/erdModel.js";
+import { buildErdRelationshipRoutes, erdRouteSnapshot } from "../../shared/erdRelationships.js";
+import { buildErdNodes, visibleErdNodes, erdCardinality, erdColumns, erdLayoutGroups, erdSearch, placeErdNodes } from "../../shared/erdModel.js";
 
 const props = defineProps({
   focusRequest: { type: Object, default: null },
@@ -263,7 +263,7 @@ function checkpoint() {
 function clearViewportSave() { clearTimeout(viewportSaveTimer); viewportSaveTimer = null; }
 function persistPositions() { clearViewportSave(); emit("save-layout", { ...snapshot(), views: views.value }); }
 function buildNodes(saved = storedNodes) {
-  return createErdNodes({ tables: tables.value, relationships: relationships.value }, {
+  return buildErdNodes({ tables: tables.value, relationships: relationships.value }, {
     nodes: saved, columnMode: columnMode.value, groups: groups.value
   }).map((node) => {
     const { table, columns } = node.data;
@@ -385,7 +385,7 @@ async function rebuild({ force = false } = {}) {
     const sourceNodes = buildNodes(saved);
     const savedTables = new Set(saved.map((node) => node.table));
     const needsSave = force || sourceNodes.some((node) => !savedTables.has(node.id));
-    const graph = createErdRelationshipRoutes(sourceNodes, relationships.value, { fixedSides: true, calculatePaths: false });
+    const graph = buildErdRelationshipRoutes(sourceNodes, relationships.value, { fixedSides: true, calculatePaths: false });
     const layout = await requestWorker({
       nodes: sourceNodes.map((node) => ({ id: node.id, ...node.dimensions, ports: graph.portsByNode.get(node.id) })),
       edges: graph.routes.map((route) => ({ id: route.id, source: route.source, target: route.target, sourceHandle: route.sourceHandle, targetHandle: route.targetHandle })),

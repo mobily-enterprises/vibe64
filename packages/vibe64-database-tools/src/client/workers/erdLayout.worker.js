@@ -1,7 +1,7 @@
 import ELK from "elkjs/lib/elk-api.js";
 import ElkWorker from "elkjs/lib/elk-worker.min.js?worker";
 
-import { createErdRelationshipRoutes } from "../../shared/erdRelationships.js";
+import { buildErdRelationshipRoutes } from "../../shared/erdRelationships.js";
 import { layoutErdGroups, layoutErdRings } from "./erdLayout.js";
 import { routeOverviewEdges } from "../dataOverviewModel.js";
 
@@ -12,7 +12,7 @@ self.addEventListener("message", async (event) => {
   try {
     const nodes = Array.isArray(request.nodes) ? request.nodes : [];
     if (request.kind === "routes") {
-      const graph = createErdRelationshipRoutes(nodes, request.relationships, request.options);
+      const graph = buildErdRelationshipRoutes(nodes, request.relationships, request.options);
       self.postMessage({
         id: request.id, ok: true, portsByNode: graph.portsByNode,
         routes: graph.routes.map((route) => ({ ...route, sourceNode: undefined, targetNode: undefined }))

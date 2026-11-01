@@ -1,6 +1,6 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { createErdNodes, visibleErdNodes } from "../shared/erdModel.js";
-import { createErdRelationshipRoutes, erdRouteSnapshot } from "../shared/erdRelationships.js";
+import { buildErdNodes, visibleErdNodes } from "../shared/erdModel.js";
+import { buildErdRelationshipRoutes, erdRouteSnapshot } from "../shared/erdRelationships.js";
 
 const ERD_AGENT_INSTRUCTIONS = [
   "This is the main ERD's saved session layout, separate from data-overview.json and the scoped Overview diagrams.",
@@ -16,9 +16,9 @@ const ERD_AGENT_INSTRUCTIONS = [
 export function inspectErdLayout(schema, layout) {
   const relationships = schema.relationships || [];
   const positioned = new Set(layout.nodes.map((node) => node.table));
-  const nodes = visibleErdNodes(createErdNodes(schema, layout), relationships, layout);
+  const nodes = visibleErdNodes(buildErdNodes(schema, layout), relationships, layout);
   const visible = nodes.filter((node) => !node.hidden && positioned.has(node.id));
-  const graph = createErdRelationshipRoutes(visible, relationships, { previousRoutes: layout.routes || [] });
+  const graph = buildErdRelationshipRoutes(visible, relationships, { previousRoutes: layout.routes || [] });
   const connections = graph.routes.map((route) => {
     const length = route.points.slice(1).reduce((sum, point, index) => sum +
       Math.abs(point.x - route.points[index].x) + Math.abs(point.y - route.points[index].y), 0);

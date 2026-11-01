@@ -18,7 +18,7 @@ export const ERD_LAYOUT_OPTIONS = Object.freeze({
   "elk.randomSeed": "1"
 });
 
-export function createErdLayoutGraph(nodes = [], edges = []) {
+export function buildErdLayoutGraph(nodes = [], edges = []) {
   const nodeIds = new Set(nodes.map((node) => node.id));
   return {
     children: nodes.map((node) => ({
@@ -56,7 +56,7 @@ export async function layoutErdGroups(elk, nodes, edges, groups = []) {
     const connections = edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
     let graph;
     try {
-      graph = await elk.layout(createErdLayoutGraph(children, connections));
+      graph = await elk.layout(buildErdLayoutGraph(children, connections));
     } catch {
       graph = { children: fallbackErdLayout(children, connections), edges: [] };
       result.fallback = true;

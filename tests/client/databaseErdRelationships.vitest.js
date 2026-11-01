@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/shared/erdRelationships.js";
+import { buildErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/shared/erdRelationships.js";
 import { routeOverviewEdges } from "../../packages/vibe64-database-tools/src/client/dataOverviewModel.js";
 import { erdObstacles, erdPathClear } from "../../packages/vibe64-database-tools/src/shared/erdRouting.js";
 import { erdCardinality, erdColumns, erdLayoutGroups, erdNeighbours, erdSearch, placeErdNodes } from "../../packages/vibe64-database-tools/src/shared/erdModel.js";
@@ -64,7 +64,7 @@ describe("Database ERD relationships", () => {
   it("routes parent keys to the matching child foreign-key columns", () => {
     const parent = tableNode("parent", 0, ["id", "name"]);
     const child = tableNode("child", 420, ["id", "parent_id", "backup_parent_id"], { y: 340 });
-    const graph = createErdRelationshipRoutes([parent, child], relationships);
+    const graph = buildErdRelationshipRoutes([parent, child], relationships);
 
     expect(graph.routes).toHaveLength(2);
     expect(graph.routes.map((route) => [
@@ -90,7 +90,7 @@ describe("Database ERD relationships", () => {
   it("uses a table-side target when its columns are collapsed", () => {
     const parent = tableNode("parent", 0, ["id"]);
     const child = tableNode("child", 420, ["parent_id"], { collapsed: true });
-    const graph = createErdRelationshipRoutes([parent, child], relationships.slice(0, 1));
+    const graph = buildErdRelationshipRoutes([parent, child], relationships.slice(0, 1));
 
     expect(graph.routes[0].targetColumn).toBeNull();
     expect(graph.portsByNode.get("child")[0]).toMatchObject({
@@ -101,7 +101,7 @@ describe("Database ERD relationships", () => {
 
   it("routes around intervening cards and keeps every segment orthogonal", () => {
     const nodes = [tableNode("parent", 0, ["id"]), tableNode("child", 800, ["id", "parent_id"]), tableNode("blocker", 380, ["id"], { y: -40 })];
-    const { routes } = createErdRelationshipRoutes(nodes, relationships.slice(0, 1));
+    const { routes } = buildErdRelationshipRoutes(nodes, relationships.slice(0, 1));
     const route = routes[0];
     expect(route.obstructed).toBe(false);
     expect(erdPathClear(route.points, erdObstacles(nodes), route.source, route.target)).toBe(true);
@@ -112,7 +112,7 @@ describe("Database ERD relationships", () => {
 
   it("reports enclosed column ports without searching for an impossible escape", () => {
     const nodes = [tableNode("parent", 0, ["id"]), tableNode("child", 800, ["parent_id"]), tableNode("blocker", 750, ["id"])];
-    const { routes } = createErdRelationshipRoutes(nodes, relationships.slice(0, 1));
+    const { routes } = buildErdRelationshipRoutes(nodes, relationships.slice(0, 1));
     expect(routes[0].obstructed).toBe(true);
     expect(routes[0].points[0]).toEqual(routes[0].start);
     expect(routes[0].points.at(-1)).toEqual(routes[0].end);
@@ -120,7 +120,7 @@ describe("Database ERD relationships", () => {
 
   it("represents every composite column pair as one selectable relationship", () => {
     const relation = { ...relationships[0], columns: ["parent_id", "tenant_id"], referencedColumns: ["id", "tenant_id"] };
-    const { routes } = createErdRelationshipRoutes([tableNode("parent", 0, ["id", "tenant_id"]), tableNode("child", 600, ["parent_id", "tenant_id"])], [relation]);
+    const { routes } = buildErdRelationshipRoutes([tableNode("parent", 0, ["id", "tenant_id"]), tableNode("child", 600, ["parent_id", "tenant_id"])], [relation]);
     expect(routes.map((route) => [route.sourceColumn, route.targetColumn])).toEqual([["id", "parent_id"], ["tenant_id", "tenant_id"]]);
     expect(new Set(routes.map((route) => route.relationshipId)).size).toBe(1);
     expect(new Set(routes.map((route) => route.id)).size).toBe(2);
@@ -128,11 +128,11 @@ describe("Database ERD relationships", () => {
 
   it("preserves unrelated routes and port sides during dragging", () => {
     const nodes = [tableNode("parent", 0, ["id"]), tableNode("child", 600, ["parent_id", "backup_parent_id"])];
-    const first = createErdRelationshipRoutes(nodes, relationships);
-    const stable = createErdRelationshipRoutes(nodes, relationships, { previousRoutes: first.routes, dragging: true });
+    const first = buildErdRelationshipRoutes(nodes, relationships);
+    const stable = buildErdRelationshipRoutes(nodes, relationships, { previousRoutes: first.routes, dragging: true });
     expect(stable.routes[0].points).toBe(first.routes[0].points);
     nodes[1].position = { x: -600, y: 400 };
-    const moved = createErdRelationshipRoutes(nodes, relationships, { previousRoutes: first.routes, dragging: true });
+    const moved = buildErdRelationshipRoutes(nodes, relationships, { previousRoutes: first.routes, dragging: true });
     expect(moved.routes[0].targetPosition).toBe(first.routes[0].targetPosition);
     expect(moved.routes[0].end.x).not.toBe(first.routes[0].end.x);
     expect(moved.routes[0].points.at(-1)).toEqual(moved.routes[0].end);
@@ -140,14 +140,14 @@ describe("Database ERD relationships", () => {
 
   it("routes self references outside the table", () => {
     const node = tableNode("parent", 0, ["id", "parent_id"]);
-    const { routes } = createErdRelationshipRoutes([node], [{ ...relationships[0], sourceTable: "parent" }]);
+    const { routes } = buildErdRelationshipRoutes([node], [{ ...relationships[0], sourceTable: "parent" }]);
     expect(routes[0].obstructed).toBe(false);
     expect(erdPathClear(routes[0].points, erdObstacles([node]), "parent", "parent")).toBe(true);
   });
 
   it("separates parallel horizontal and vertical runs for multiple foreign keys", () => {
     const nodes = [tableNode("parent", 0, ["id"]), tableNode("child", 600, ["parent_id", "backup_parent_id"], { y: 380 })];
-    const { routes } = createErdRelationshipRoutes(nodes, relationships);
+    const { routes } = buildErdRelationshipRoutes(nodes, relationships);
     const segments = (route) => route.points.slice(1).map((b, i) => [route.points[i], b]);
     for (const [a, b] of segments(routes[0])) {
       for (const [c, d] of segments(routes[1])) {
@@ -164,9 +164,9 @@ describe("Database ERD relationships", () => {
   it("keeps another relationship's route unchanged while a table moves", () => {
     const nodes = [tableNode("parent", 0, ["id"]), tableNode("child", 600, ["parent_id"]), tableNode("other-parent", 0, ["id"], { y: 700 }), tableNode("other-child", 600, ["parent_id"], { y: 700 })];
     const relations = [relationships[0], { ...relationships[0], id: "other", referencedTable: "other-parent", sourceTable: "other-child" }];
-    const before = createErdRelationshipRoutes(nodes, relations);
+    const before = buildErdRelationshipRoutes(nodes, relations);
     nodes[1].position = { x: 900, y: 100 };
-    const during = createErdRelationshipRoutes(nodes, relations, { previousRoutes: before.routes, dragging: true });
+    const during = buildErdRelationshipRoutes(nodes, relations, { previousRoutes: before.routes, dragging: true });
     expect(during.routes.find((route) => route.id === "other").points).toBe(before.routes.find((route) => route.id === "other").points);
     expect(during.routes[0].end).not.toEqual(before.routes[0].end);
   });

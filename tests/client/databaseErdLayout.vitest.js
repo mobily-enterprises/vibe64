@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { denseErdSchema } from "../fixtures/denseErdSchema.js";
-import { createErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/shared/erdRelationships.js";
+import { buildErdRelationshipRoutes } from "../../packages/vibe64-database-tools/src/shared/erdRelationships.js";
 import { erdColumns, erdNodeHeight, erdLayoutGroups, placeErdNodes } from "../../packages/vibe64-database-tools/src/shared/erdModel.js";
 
 import {
-  createErdLayoutGraph,
+  buildErdLayoutGraph,
   fallbackErdLayout,
   layoutErdGroups,
   layoutErdRings
@@ -29,10 +29,10 @@ describe("Database ERD layout", () => {
       const columns = erdColumns(table, schema.relationships);
       return { id: table.qualifiedName, data: { table, columns }, position: { x: 0, y: 0 }, dimensions: { width: 296, height: erdNodeHeight(columns) } };
     });
-    const graph = createErdRelationshipRoutes(nodes, schema.relationships, { fixedSides: true, calculatePaths: false });
+    const graph = buildErdRelationshipRoutes(nodes, schema.relationships, { fixedSides: true, calculatePaths: false });
     const layout = await layoutErdGroups(new ELK(), nodes.map((node) => ({ id: node.id, ...node.dimensions, ports: graph.portsByNode.get(node.id) })), graph.routes, erdLayoutGroups(nodes, schema.relationships));
     const placed = placeErdNodes(nodes, layout.nodes);
-    const result = createErdRelationshipRoutes(placed, schema.relationships, { fixedSides: true, layoutPaths: new Map(layout.paths.map((path) => [path.id, path.points])) });
+    const result = buildErdRelationshipRoutes(placed, schema.relationships, { fixedSides: true, layoutPaths: new Map(layout.paths.map((path) => [path.id, path.points])) });
     expect(layout.nodes).toHaveLength(130);
     expect(result.routes).toHaveLength(479);
     for (const route of result.routes) {
@@ -43,7 +43,7 @@ describe("Database ERD layout", () => {
   }, 30_000);
 
   it("builds a relationship graph along the column port direction", () => {
-    const graph = createErdLayoutGraph(nodes, [
+    const graph = buildErdLayoutGraph(nodes, [
       ...edges,
       { id: "missing", source: "parent", target: "missing" }
     ]);
