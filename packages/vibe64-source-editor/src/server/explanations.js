@@ -248,7 +248,7 @@ function createExplanationOperations({
             isClosed: stream.isClosed,
             terminals
           }),
-          reuse: (template, cacheState) => createCachedSourceEditorExplanation(
+          reuse: (template, cacheState) => streamCachedSourceEditorExplanation(
             context,
             input,
             explanationInput,
@@ -287,7 +287,7 @@ function createExplanationOperations({
     }, stream);
   }
 
-  async function stopExplanation(input = {}) {
+  async function stopExplanation(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId, {
         vibe64User: input.vibe64User
@@ -303,7 +303,7 @@ function createExplanationOperations({
     });
   }
 
-  async function deleteExplanation(input = {}) {
+  async function deleteExplanation(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId, {
         vibe64User: input.vibe64User
@@ -319,7 +319,7 @@ function createExplanationOperations({
     });
   }
 
-  async function cleanupExplanations(input = {}) {
+  async function cleanupExplanations(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId, {
         vibe64User: input.vibe64User
@@ -379,7 +379,7 @@ function createExplanationOperations({
   });
 }
 
-async function sourceEditorExplanationInput(context = {}, input = {}) {
+async function sourceEditorExplanationInput(context, input) {
   const file = await readSourceEditorFile(context, input.path);
   if (input.expectedHash && input.expectedHash !== file.hash) {
     throw sourceEditorError(
@@ -402,8 +402,8 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
     }
     let architecture;
     try {
-      // Reuse the original path, symlink and file-identity checks. The native
-      // index has its own bound; it is not subject to the editable-file limit.
+      // A download applies the path, symlink and file-identity checks. The
+      // native index has its own bound, not the editable-file limit.
       const { fileHandle } = await downloadSessionFile(context, GENESIS_MACHINE_CITY_PATH);
       try {
         if ((await fileHandle.stat()).size > SOURCE_EDITOR_ARCHITECTURE_MAX_BYTES) {
@@ -533,19 +533,20 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
 }
 
 /**
- * @param {object} [context]
- * @param {object} [input]
- * @param {object} [explanationInput]
- * @param {object} [template]
- * @param {object} [options]
+ * A cached answer streams as a finished explanation of its own.
+ * @param {object} context
+ * @param {object} input
+ * @param {object} explanationInput
+ * @param {object} template
+ * @param {object} options
  * @param {SourceEditorExplanationChats} options.explanationChats
  */
-async function createCachedSourceEditorExplanation(
-  context = {},
-  input = {},
-  explanationInput = {},
-  template = {},
-  options = {}
+async function streamCachedSourceEditorExplanation(
+  context,
+  input,
+  explanationInput,
+  template,
+  options
 ) {
   const {
     cacheState,
@@ -612,13 +613,13 @@ async function createCachedSourceEditorExplanation(
 }
 
 /**
- * @param {object} [context]
- * @param {object} [input]
- * @param {object} [options]
+ * @param {object} context
+ * @param {object} input
+ * @param {object} options
  * @param {SourceEditorExplanationChats} options.explanationChats
  * @param {TerminalsService} options.terminals
  */
-async function streamSourceEditorExplanation(context = {}, input = {}, options = {}) {
+async function streamSourceEditorExplanation(context, input, options) {
   const {
     emit,
     explanationChats,

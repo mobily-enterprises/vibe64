@@ -180,8 +180,8 @@ function sortFileMatches(matches = [], query = "") {
     .map(({ file }) => file);
 }
 
-function sourceEditorFileMatches(index, input = {}) {
-  const query = normalizeSourceEditorQuery(input.query || input.q);
+function sourceEditorFileMatches(index, input) {
+  const query = normalizeSourceEditorQuery(input.query);
   const queryTokens = sourceEditorFileQueryTokens(query);
   const limit = sourceEditorResultLimit(input.limit, SOURCE_EDITOR_FILE_MATCH_LIMIT);
   const matches = [];

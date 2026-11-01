@@ -168,10 +168,7 @@ function createService({
     };
   }
 
-  async function runSourceEditorWriteExclusive(input, operation, options = {}) {
-    const {
-      agentOperation = false
-    } = options;
+  async function runSourceEditorWriteExclusive(input, operation) {
     const sessionId = toText(input.sessionId);
     if (!sessionId) {
       throw sourceEditorError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
@@ -181,7 +178,6 @@ function createService({
       runtime,
       sessionId,
       async () => operation(await sourceEditorContext(sessionId, {
-        agentOperation,
         runtime,
         vibe64User: input.vibe64User
       })),
@@ -256,7 +252,7 @@ function createService({
     sourceEditorContext
   });
 
-  async function readTree(input = {}) {
+  async function readTree(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId);
       if (!normalizeSourceEditorRelativePath(input.path) && !sourceEditorResultOffset(input.offset)) {
@@ -270,14 +266,14 @@ function createService({
         tree: await sourceEditorDirectoryPage(context, {
           limit: input.limit,
           offset: sourceEditorResultOffset(input.offset),
-          // Preserve the tree API's two-pass path normalization, including "./ src".
+          // The page normalizes this path again, so "./ src" reaches "src".
           path: normalizeSourceEditorRelativePath(input.path)
         })
       };
     });
   }
 
-  async function readFile(input = {}) {
+  async function readFile(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId, { vibe64User: input.vibe64User });
       const file = await readSourceEditorFile(context, input.path);
@@ -290,14 +286,14 @@ function createService({
     });
   }
 
-  async function downloadFile(input = {}) {
+  async function downloadFile(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId);
       return downloadSessionFile(context, input.path);
     });
   }
 
-  async function readStarredFiles(input = {}) {
+  async function readStarredFiles(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId);
       const paths = await readStarredFilePaths(starredFilesPath(context.runtime.stateRoot, input.vibe64User));
@@ -319,7 +315,7 @@ function createService({
     });
   }
 
-  async function setStarredFile(input = {}) {
+  async function setStarredFile(input) {
     return runSourceEditorOperation(async () => {
       if (typeof input.starred !== "boolean") {
         throw sourceEditorError("Choose whether to star the file.", "vibe64_invalid_starred_file");
@@ -337,13 +333,13 @@ function createService({
     });
   }
 
-  async function streamFileChanges(input = {}, stream = {}) {
+  async function streamFileChanges(input, stream) {
     const context = await sourceEditorContext(input.sessionId);
     const file = await sourceEditorExistingFile(context, input.path);
     return streamSourceEditorFileChanges(context, file, stream, sourceFileObserver);
   }
 
-  async function saveFile(input = {}) {
+  async function saveFile(input) {
     const save = () => runSourceEditorOperation(async () => {
       return runSourceEditorWriteExclusive(input, async (context) => {
         const file = await saveSourceEditorFile(context, input);
@@ -365,7 +361,7 @@ function createService({
     fileSaveOwner = owner;
   }
 
-  async function createFile(input = {}) {
+  async function createFile(input) {
     return runSourceEditorOperation(async () => {
       return runSourceEditorWriteExclusive(input, async (context) => {
         const file = await createSourceEditorFile(context, input);
@@ -381,7 +377,7 @@ function createService({
     });
   }
 
-  async function listFiles(input = {}) {
+  async function listFiles(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId);
       return {
@@ -391,11 +387,11 @@ function createService({
     });
   }
 
-  async function search(input = {}) {
+  async function search(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId);
       const found = await searchIndex.search(context, {
-        query: normalizeSourceEditorQuery(input.query || input.q),
+        query: normalizeSourceEditorQuery(input.query),
         limit: sourceEditorResultLimit(input.limit, SOURCE_EDITOR_SEARCH_RESULT_LIMIT)
       });
       // The worker skips excluded paths; an index written before a policy
@@ -408,7 +404,7 @@ function createService({
     });
   }
 
-  async function resolvePath(input = {}) {
+  async function resolvePath(input) {
     return runSourceEditorOperation(async () => {
       const context = await sourceEditorContext(input.sessionId);
       return {
