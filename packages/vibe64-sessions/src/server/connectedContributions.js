@@ -22,6 +22,7 @@ import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
@@ -48,11 +49,13 @@ function connectedUpdateOutcome(update, branch) {
  * (receivingContributions.js answers them there).
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {TerminalsService} dependencies.terminals
  */
 function createConnectedContributions({
   actions,
+  logger,
   project,
   terminals
 }) {
@@ -253,7 +256,9 @@ function createConnectedContributions({
     let preparingRepository = "";
     let progress = Promise.resolve();
     const report = label => {
-      progress = progress.then(() => onProgress(label)).catch(() => {});
+      progress = progress.then(() => onProgress(label)).catch((error) => {
+        logger.warn({ error, sessionId, label }, "A connected-source progress report failed; preparation continues.");
+      });
     };
     const result = await sessionResult(async () => {
       assertProjectEffectAdmission();
@@ -310,6 +315,7 @@ function createConnectedContributions({
             const serialized = serializeSessionConnectedSources(sources);
             return runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
           });
+          // Queue tail: the write's own failure reaches this caller through `await write`.
           reservation = write.catch(() => {});
           await write;
         }
