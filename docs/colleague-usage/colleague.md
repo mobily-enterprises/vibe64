@@ -146,7 +146,7 @@ does not repeat the navigation or presentation command. Changing account retires
 that pending confirmation rather than sending it as the new person.
 
 Replies stream progressively; split characters wait for their remaining part,
-without changing the final text. Hosted live updates/reconnect refresh retain
+without changing the final text. Live updates and reconnect refreshes retain
 the conversation, expanded messages, completed replies and progress; interrupted
 answers stay incomplete. Voice can speak growing readable phrases. Stop/new
 steering clears unfinished output. Reopening reveals the current reply;

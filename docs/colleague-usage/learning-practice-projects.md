@@ -41,8 +41,8 @@ Preparation uses the exercise bundled with the lesson. Workspace setup may
 continue after the start request finishes; when it succeeds the lesson becomes
 ready on its own. Failed setup needs its existing recovery; then ask Colleague
 to resume the lesson's preparation. Setup success does not mean Preview is running or a step has
-passed. Standalone setup uses the installation's actual resources; it does not
-create a hosted development database by default.
+passed. Setup uses the installation's actual resources; it does not provision
+an extra development database by default.
 
 Practice projects live in your own learning space, apart from your projects.
 In Develop mode they never appear in the project lists, the project switcher or
@@ -194,4 +194,3 @@ open, make the edits to its files yourself in
 **Dashboard → Files**: your saves there are recorded for the lesson, and any
 other writer's edit in those files means the step's **Check now** asks for an
 independent attempt (see [Answering a code question in a lesson](learning-code-questions.md)).
-Hosted workspaces record these saves the same way.

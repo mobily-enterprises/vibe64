@@ -21,7 +21,7 @@ exact sources. It runs ordinary setup followed by connected preparation and
 verification, and preserves authored files and receiving work on failure.
 Access and source selection are checked again before accepting preparation.
 Initial consumption verification covers Node.js; other stacks and the full
-hosted development workflow still require end-to-end evidence.
+connected-source development workflow still require end-to-end evidence.
 
 Receiving GitHub projects show Incoming changes in Dashboard. People can review
 reserved contribution branches, merge them while preserving their history, or
@@ -704,7 +704,7 @@ steps wait for inspection and Resume workflow. Stop suppresses late automatic
 work. Recovery never replays a sent message: Retry checks its original
 receipt, and interrupted scheduling after restart requires Resume workflow.
 A failed unsent handoff can be replaced by a new request without claiming its work
-completed. Hosted continuation rechecks the original submitting user's access and
+completed. Continuation rechecks the original submitting user's access and
 captured connection. Completed work remains available when access is removed.
 Direct Senior, Junior and Custom retain their direct behavior without automatic
 continuation or review. Goals require a concrete
@@ -1097,7 +1097,7 @@ intent instead of repeating finished work or proposing unrelated generic tasks.
 Changing the draft cancels superseded suggestion work without sending a chat
 message or stopping the main assistant.
 
-Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
+Every Vibe64 editor uses the same AI Accounts screen and provider
 configuration. Account settings offers Codex with OpenAI, DeepSeek and GLM, Claude
 Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. Vibe64
 includes no AI of its own and never falls back to a free model; the free option
@@ -1117,8 +1117,8 @@ preview. Hosts supply account storage and management permissions; they do not
 maintain a separate provider setup implementation.
 
 AI onboarding makes connecting a frontier model the first thing a new person
-does. It is one shared full-screen flow, used unchanged by the local and hosted
-editors: a short "why intelligence matters" screen, then Claude (crowned,
+does. It is one shared full-screen flow, used unchanged by every
+editor: a short "why intelligence matters" screen, then Claude (crowned,
 recommended), Codex, DeepSeek and GLM, stacked in one ranked column with honest bullets, each
 plan's official name and price first and the suggested budget beneath, with
 the GLM card marking the free option (GLM-4.7 Flash with a free Z.AI account), then
@@ -1129,11 +1129,11 @@ Colleague says hello as proof it answers (or says why it could not) before
 Start building opens Colleague. Until AI is set up, a
 gold Set up AI button in the top bar reopens it. Prices, plan names and sign-up links live in one small data module
 so they are easy to correct. The flow opens by itself only for someone who can
-connect AI (the local user, or a hosted workspace owner), only after AI status
+connect AI (the local user, or the signed-in owner), only after AI status
 has loaded without error, and only while no AI is connected; the free GLM
 option counts as set up, while Redo still recommends Claude. **Set up later** snoozes it for a day in
-that browser, with no server state. **Redo onboarding**, in the local account
-menu beside Account settings, in the hosted account menu, and in AI Accounts, reruns it at any time,
+that browser, with no server state. **Redo onboarding**, in the account
+menu beside Account settings and in AI Accounts, reruns it at any time,
 showing what is connected; it can add a provider or change the main AI through
 the normal routing review, and never removes a connection.
 The main AI is the provider behind the owner's Senior, named with its tool when
@@ -1313,12 +1313,12 @@ review. Working files, recovery checkpoints, project versions, database rows,
 conversation history and application publishing have separate effects.
 
 Every project has exactly one source authority. For a GitHub-connected project,
-the configured GitHub branch is authoritative. For a hosted Vibe64-only
+the configured GitHub branch is authoritative. For a Vibe64-only catalogue
 project, Vibe64's own repository is authoritative. For a standalone local
 project, the folder the person opened is authoritative and Save records the
 session's work there as an ordinary local commit. A PR session has an explicit
 GitHub branch authority of its own; publishing its work does not change the
-project authority or notify sessions that track a different branch. Hosted
+project authority or notify sessions that track a different branch. Catalogue
 session creation offers a visible Work on choice: the project branch, Create a
 new branch, or Use an existing branch. New branches have a name and a source
 branch; an existing name is rejected before submission. The default remains
@@ -1351,8 +1351,8 @@ Pull updates a clean local baseline, with an explicit merge when histories
 have diverged. Push separately publishes saved local commits without force.
 Terminal Git remains available. If it rewrites the baseline, a person can
 review and reconcile an existing session's changes onto the new history,
-keeping its conversation and recoverable work. Hosted source authority and
-its Save and Update workflow remain unchanged.
+keeping its conversation and recoverable work. A catalogue project's source
+authority and its Save and Update workflow remain unchanged.
 
 The muted repository action remains clickable to request fresh status from
 the server. It shows “Checking…” while waiting, then reflects the latest Save
@@ -1360,13 +1360,13 @@ or Update state without invoking either action. Repeated clicks cannot start
 overlapping checks; archived sessions, suspended source access and repository
 operations still block the control.
 
-All hosted editing happens in isolated session checkouts. A hosted project's
-container is never an application checkout and is never used as a source or
+All catalogue editing happens in isolated session checkouts. A catalogue
+project's container is never an application checkout and is never used as a source or
 cache. Vibe64 may keep a disposable local mirror of GitHub history solely to
 speed transfers, but sessions still clone from GitHub, every successful Save is
 verified there before the mirror is refreshed, and a missing or stale mirror
 can never change correctness. Vibe64-only projects use their Vibe64 repository
-directly and do not retain another project-level checkout. A new hosted project
+directly and do not retain another project-level checkout. A new catalogue project
 is not ready until its authority contains its initial Genesis foundation and
 can create a session.
 
@@ -1827,8 +1827,8 @@ and test the exact distributable before publishing it; release preparation does
 not remove their installed development tools. The installed editor includes the
 database drivers required by its Database view.
 The standalone editor can use coding tools installed on its launching shell
-path when running as the same local user. Hosted and cross-user commands retain
-their prepared host environment.
+path when running as the same local user. Catalogue and cross-user commands retain
+their prepared execution environment.
 
 Auto honors an explicit request for Senior or Junior for every task, including
 plan execution. Otherwise Senior handles plan discussion and management,
@@ -1894,7 +1894,7 @@ action go straight to Senior. System-generated review and optional Deslop always
 use Senior. Direct cleanup does not schedule review or change the selected chat
 mode. Ordinary answers and planning do not start implementation themselves.
 
-Independently hosted editors sharing a Preview domain can have separate route
+Independent editors sharing a Preview domain can have separate route
 namespaces, so cloned projects and sessions do not contend for one Preview address.
 
 Projects can declare foreground development services shared across sessions.

@@ -20,7 +20,7 @@ with **Cancel**.
 
 In the standalone local editor, open a session, choose a connected assistant,
 and use **Send message** and **Set goal** in the same chat. These controls use
-the selected local project's access checks and do not require a hosted login.
+the selected local project's access checks and do not require a separate login.
 After **Start goal**, both that button and **Set goal** show **Starting…** until
 the goal shows as running, including while it waits for the current turn to end;
 the goal menu then closes. Until then **Start goal** cannot be chosen again, so
@@ -154,9 +154,8 @@ attachment is pending. Check the original receipt; do not resend it blindly.
 A Main-chat goal started or explicitly resumed after this release retains your
 request to keep working across server restarts, including an unexpected server
 exit. Vibe64 verifies the previous process has stopped, rechecks your current
-project and AI access, then resumes the same native goal. In a hosted workspace,
-that access check uses your current workspace account; recovery does
-not need a browser tab or the original browser login cookie. If workspace preparation
+project and AI access, then resumes the same native goal. Recovery does not
+need a browser tab or the original browser login cookie. If workspace preparation
 is already starting, recovery waits up to one minute for that operation's lock;
 it does not send a second goal command. A timeout stays visible on the goal control.
 **Pause goal**,

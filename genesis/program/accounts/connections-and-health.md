@@ -13,7 +13,7 @@ System). It is a per-browser convenience in `src/lib/appearance.js`, read once
 at startup as Vuetify's default theme and applied with `theme.change`; it is
 not an account operation and writes no server state.
 The five `vibe64.accounts.ai-connections.*` actions own provider list/catalogue,
-save/remove and model access. Standalone and hosted HTTP adapters dispatch the
+save/remove and model access. Standalone and catalogue HTTP adapters dispatch the
 same contracts. One AI management policy, the account runtime's
 `requireAiManagement` (default: only the workspace owner; a host may replace
 it), decides Claude and Codex sign-in, curated provider keys, saved
@@ -35,7 +35,7 @@ Registration, key entry and paid-model consent remain human UI operations.
 Regular Z.AI verification identifies temporary overload and insufficient balance
 without exposing raw provider text. Failed verification never replaces a saved
 key; overload calls for a later retry rather than credential replacement.
-The list read goes through the same AI management policy. Hosted context freshly resolves the actor and rejects missing
+The list read goes through the same AI management policy. A signed-in context freshly resolves the actor and rejects missing
 authentication before execution; standalone retains its original authorized
 loopback/no-login lane. Other account actions remain excluded.
 
@@ -160,7 +160,7 @@ Usage collection, normalization and display belong to the conversation subsystem
 
 Native terminal and browser-lifecycle WebSockets require a browser Origin that
 matches the request host, port and HTTP(S) scheme, including the host's forwarded
-protocol. Authenticated hosted sockets cannot omit Origin; local command-line
+protocol. Authenticated cookie sockets cannot omit Origin; local command-line
 clients retain the loopback-only exception. Authentication does not bypass this
 check. Native incoming WebSocket messages are limited to 1 MiB; file attachments
 use their separate upload API.
@@ -323,7 +323,7 @@ or OpenCode credential fingerprint. OpenCode retains scope and identity when a
 particular model is disabled; model availability cannot change personal/shared
 classification. Unknown or removed credentials have no usable identity.
 
-Standalone and hosted editors compose the same AI Accounts screen
+Standalone and catalogue editors compose the same AI Accounts screen
 (`AiSetup` with `inline`, the onboarding stage itself), catalogue
 validation, provider policy, connection store and runtime wiring. The local
 account button opens a menu with Account settings and, while an onboarding host

@@ -204,7 +204,7 @@ for new output, changed state or a concrete blocker, avoiding repeated reads of
 empty or unchanged logs between brief waits.
 
 The original Studio URL classifier keeps `/api/vibe64/training` and its slash
-descendants global on selected-project pages. The hosted visual-resource route
+descendants global on selected-project pages. The visual-resource route
 selects the fresh authenticated learner's exact active attempt and installed pin;
 project URL scoping does not apply to that actor-owned read. The original resolver
 and HTTP client retain their existing project routing for session/output work.
@@ -365,7 +365,7 @@ preview resource profile, finite targets use the bounded job profile, and
 interactive terminal targets use the terminal profile. Web presentation owns
 port allocation, readiness and the managed proxy. Its terminal includes the
 pinned Node runtime for Vibe64's readiness probes even when the application's
-declared runtime is PHP or another language. A hosted web target publishes
+declared runtime is PHP or another language. A proxied web target publishes
 its ingress socket as soon as readiness is confirmed, independently of client
 status polling. Later status inspection verifies the bound socket identity and
 republishes a missing or replaced socket. Finite runs snapshot only their
@@ -504,7 +504,7 @@ request; tracking and teardown listeners remain attached only once per socket.
 For a local proxy, the request's loopback Host on the proxy's own port is its
 browser-facing origin. Token bootstrap, application redirects and HTTP/WebSocket
 Origin translation retain that hostname when the local editor uses `localhost`
-instead of `127.0.0.1`. Hosted origins remain configured, and foreign hosts or
+instead of `127.0.0.1`. Proxied origins remain configured, and foreign hosts or
 different ports cannot override the proxy origin.
 
 When several independent editors share a public Preview domain, the host can

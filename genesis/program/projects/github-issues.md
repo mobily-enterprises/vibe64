@@ -112,7 +112,7 @@ changes scope the cache; comment and GitHub refresh events invalidate it.
 GitHub remains the only issue store. Each server request resolves the project's
 repository and the acting person's existing GitHub credential context, then uses
 the managed execution gateway. Browser input cannot choose a different
-repository, account or executable. Hosted project membership uses the existing
+repository, account or executable. Catalogue project membership uses the existing
 project route gate and shared action authorization. The eleven named issue actions
 own the canonical input fields; HTTP derives its accepted fields from those
 contracts and binds issue/comment IDs from the URL. GitHub checks every operation, and Close/Reopen also
@@ -136,7 +136,7 @@ After GitHub confirms a comment, the existing project-change channel carries its
 issue number, comment id, author login and originating browser tab, without its
 contents. Other tabs viewing that project receive the existing shared snackbar
 and invalidate the issue and list queries. The posting tab retains its ordinary
-success feedback. Hosted delivery uses the existing project read-access gate.
+success feedback. Catalogue delivery uses the existing project read-access gate.
 Notification failure cannot turn a successfully posted comment into a failed
 write. Notifications are transient and cover comments posted through Vibe64;
 there is no inbox, polling or webhook subscription for external GitHub activity.

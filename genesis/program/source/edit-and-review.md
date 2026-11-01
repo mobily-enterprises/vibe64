@@ -1164,10 +1164,10 @@ After the command returns, it rereads the configuration and rejects a changed
 file with a conflict response. This catches external CLI edits and command-owned
 source edits that bypass the editor lock; it never repeats the command to recover.
 It does not select a deployment, read session state or prepare development Env.
-The hosting caller owns release selection and coordination for the entire call.
+The calling application owns release selection and coordination for the entire call.
 `readApplicationIntegrations` supplies the same validated file snapshot to a
-hosted release reader and the development form. An absent file yields an empty
-configuration; malformed or unsafe source is still rejected. Production hosting
+release reader and the development form. An absent file yields an empty
+configuration; malformed or unsafe source is still rejected. A production deployment
 may expose that snapshot through its own project routes.
 
 A host-supplied production API path enables the shared panel's Development and

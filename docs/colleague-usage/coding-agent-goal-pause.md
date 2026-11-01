@@ -18,8 +18,8 @@ input or resolve the prerequisite, then choose **Goal** → **Resume goal**.
 Running background agents or checks are work in progress, not an external blocker.
 This works directly after **Start goal** or **Resume goal**, without a separate
 chat message. Goal commands retain the same current-access checks as ordinary
-chat: the signed-in session when hosted, or the selected local editor project
-when standalone. The model's structured action changes status; merely saying
+chat: the selected local editor project in the standalone editor, or the
+signed-in session where the server requires sign-in. The model's structured action changes status; merely saying
 “blocked” does not.
 
 You can also ask Claude in Main chat to pause, including after a safe checkpoint.

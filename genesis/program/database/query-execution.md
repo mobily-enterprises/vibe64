@@ -187,7 +187,7 @@ refreshes it when AI connections or routing change. Switching actors remounts
 the transient Copilot view. AI generation of the project's Data overview is a
 separate Junior task; it does not use Copilot's Explain & check availability.
 
-SQLite uses an explicitly declared persistent filename. Hosted resources provide
+SQLite uses an explicitly declared persistent filename. Managed resources provide
 an absolute filename; standalone projects may resolve a relative filename from
 their source root. Reader and writer connections target the same file, with
 native read-only mode and a SQLite authorizer enforcing reader access. Both modes

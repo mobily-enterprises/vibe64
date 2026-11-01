@@ -91,7 +91,7 @@ paths. Missing totals include records outside the first 100 entries; truncation,
 inspection warnings and unavailability prevent a claim of complete setup.
 Names longer than the presentation bound also mark the result incomplete.
 The returned source identifies the exact session inspected. The `prod` scope
-on this project action describes project-stored configuration, not the hosted
+on this project action describes project-stored configuration, not a
 deployment's production environment. Colleague opens the ordinary Env view for
 secret entry or stored-value inspection. This metadata read neither prepares
 resources nor materializes files, and an empty or complete list does not prove
@@ -161,7 +161,7 @@ No additional inspection, provisioning, file projection or persistent store is
 introduced. Ordinary environment reads retain their environment-only result.
 
 Stack declarations are inspected only from a real baseline checkout or an
-explicit session source. A hosted catalog project's metadata namespace is not
+explicit session source. A catalog project's metadata namespace is not
 source and is never passed to Genesis merely because no baseline checkout is
 available; Env values remain usable without one.
 

@@ -160,7 +160,7 @@ or restarted server interaction is incomplete, not a learner pass; `stepChecks.j
 records a step result only for the learner's own App press. This internal owner has no API/tool registration or persisted state
 upgrade. Its focused fixture preserves the original topic
 check and uses real standalone finite execution against a loopback HTTP transport
-fixture; it does not claim hosted or learner gesture acceptance.
+fixture; it does not claim managed or learner gesture acceptance.
 
 ### Code checks
 

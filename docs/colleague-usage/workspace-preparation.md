@@ -121,7 +121,7 @@ locations, such as OpenCode, remain available to assistants and Preview.
 
 If an assistant reports that its command cannot be found, check that the command
 works in that terminal, then restart the local editor after correcting the
-installation or shell path. Hosted workspaces use their host's prepared tools.
+installation or shell path.
 Colleague can explain this recovery; installing a local tool and restarting the
 local editor require the person to use their terminal.
 

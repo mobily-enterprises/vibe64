@@ -99,7 +99,7 @@ Sessions supplies the existing authorized allocation operation under the
 runner's originating agent-write lease.
 
 The shared action boundary admits owner actions for the explicitly opened local
-project only through its existing local-request checks. Hosted actions retain
+project only through its existing local-request checks. Signed-in actions retain
 fresh owner authority; a foreign request or unadmitted automation cannot claim
 the standalone owner merely by omitting a user.
 

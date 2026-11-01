@@ -25,7 +25,7 @@ also edit this tracked source file directly. Stack contains technology and gener
 placement/treatment instructions, never repository identities or initial lists.
 Opening Settings and preparing a workspace do not create or import this file.
 
-For concurrent hosted tasks, configure each receiving project's **Project settings
+For concurrent tasks, configure each receiving project's **Project settings
 → Development database → A separate database for each session** before opening
 its sessions. **One database shared by this project** permits only one open
 session unless **Allow multiple sessions with this shared database** is enabled,
@@ -91,7 +91,7 @@ account. The file is ordinary project source and follows normal project Save.
 Saving this configuration does not commit, push, merge or deploy source.
 
 In the standalone editor, the local project owner can use these controls without
-a hosted account. A connected GitHub account still supplies repository access.
+signing in. A connected GitHub account still supplies repository access.
 
 **Remove** removes an entry from the draft. Saving that removal does not delete
 existing contribution source, branches or pending work. An empty saved list

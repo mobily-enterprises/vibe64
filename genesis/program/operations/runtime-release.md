@@ -107,24 +107,24 @@ example working-copy path, `--state-dir` selects its runtime directory, and
 `--host`/`--port` select the loopback frontend listener. The backend gets its own
 OS-assigned port. Vite proxies API and realtime traffic to that backend.
 The proxy keeps Origin and protocol local for backend authorization. Its forwarded
-host retains the configured Studio hostname for hosted output routing.
-Hosted Preview routing and socket placement are retained from the host, with a
+host retains the configured Studio hostname for proxied output routing.
+Proxied Preview routing and socket placement are retained from the host, with a
 per-example routing namespace. The execution gateway preserves the trusted absolute `XDG_RUNTIME_DIR` for
 children retaining the same OS identity, so the existing Preview resolver uses
 the same host default. Cross-identity children do not inherit it, and callers
 cannot override it. The launcher needs no separate host socket resolver. Standalone Preview socket housekeeping uses
 `preview-sockets` under the example's state directory.
-The listener can be reached through an authenticated hosting preview proxy.
+The listener can be reached through an authenticated preview proxy.
 The browser connects realtime directly over WebSocket, which supplies the Origin
-header required by hosted cookie authentication. It does not begin with a
+header required by cookie authentication. It does not begin with a
 same-origin polling GET, where browsers omit that header. This uses JSKIT's
-existing client transport configuration; hosted origin validation remains strict.
+existing client transport configuration; proxied origin validation remains strict.
 
 Initial preparation copies the bundled Genesis-authored application, initializes
 current Genesis skills/hooks, and creates an independent Git baseline. An existing
 working copy is never overwritten. The child editor uses standalone execution
 inside the enclosing preview process, with its own state, source roots, attachments
-and runtime namespace. It does not inherit the hosting editor's private control
+and runtime namespace. It does not inherit the parent editor's private control
 configuration. Frontend edits use Vite updates; backend edits require a restart.
 The example preserves an explicit `VIBE64_CLAUDE_COMMAND` through its launcher
 and terminal-provider environment filter, so account discovery and native chat
@@ -137,9 +137,9 @@ Explicit persisted runtime paths retain their existing recovery and stop owner.
 
 Development may select JSKIT and Genesis source through `VIBE64_JSKIT_SOURCE_ROOT`
 and `VIBE64_GENESIS_SOURCE_ROOT`. The shared development tools resolve ordinary
-checkouts or current hosted pins, select the dependency closure, and materialize
-one disposable dependency graph. Hosted consumers reuse those same operations.
-Hosted pins validate the active-session path, package identity and Git metadata
+checkouts or current session pins, select the dependency closure, and materialize
+one disposable dependency graph. Composing applications reuse those same operations.
+Session pins validate the active-session path, package identity and Git metadata
 through file reads; selection runs no commands in another project's session.
 Ordinary laptop roots retain their Git repository-root check.
 The normal installation and release lockfile stay unchanged. Source-aware Preview
@@ -168,7 +168,7 @@ document remains useful while JavaScript downloads or is unavailable.
 Package releases verify the exact built HTML in cold browser contexts at 390,
 768 and 1280 pixels with JavaScript requests held back, then failed entry or
 dependency downloads. Loading feedback, a failure explanation after abort, and a
-48px Reload target must remain visible without horizontal overflow. Hosted
+48px Reload target must remain visible without horizontal overflow. Release
 artifact builders invoke the same public proof on their composed frontend.
 
 `npm run build` builds the frontend for local source execution. `npm run
@@ -183,7 +183,7 @@ without connecting to a database. Their dynamically loaded `mysql2` and `pg`
 drivers remain explicit runtime dependencies even when bundling cannot see the
 loads, so Database inspection works outside the development installation.
 The lazy-loaded `node-pty` terminal dependency is also explicitly included.
-The native-terminal proof is shared with hosted artifact creation: it starts a
+The native-terminal proof is shared with release artifact creation: it starts a
 real PTY from the assembled package before release, catching missing packages
 and unusable native binaries without depending on a project's dependencies.
 
@@ -217,7 +217,7 @@ using the existing optional-dependency rule. The relocated assistant proof rejec
 database loading while composing the actual file-backed runtime; the release
 proof checks that the repository entries survive relocation.
 
-Hosted consumers pass their own helper entrypoints, external packages and
+Composing applications pass their own helper entrypoints, external packages and
 minification choice to this public builder. They consume the materialized
 runtime, including installed external dependencies, without needing npm on the
 activation host. The builder accepts only an empty separate destination and

@@ -456,7 +456,7 @@ The original coordinator and its original twenty-one controlled-owner unit cases
 move together without changing bodies or assertions. Hosts retain their resource
 bindings, concrete repository composition and actual lifecycle integration
 proofs. The shared module and unit fixtures alone do not prove standalone
-provisioning, hosted native execution or browser acceptance.
+provisioning, managed native execution or browser acceptance.
 
 ## Retired format-1 learning records
 

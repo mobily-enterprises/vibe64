@@ -256,7 +256,7 @@ admission identity, model choice, delayed admission, provisional/live reply
 reconciliation and launcher gestures), tests/client/useVibe64ConversationRuntime.vitest.js
 (retained target, shared receipts, actor/access/archive fences and scoped cancel),
 and tests/server/vibe64Voice.unit.test.js (authorization and native proxy order).
-The hosted original colleagueVoiceBrowser.integration.test.js retains its
+The original colleagueVoiceBrowser.integration.test.js retains its
 one-socket, draft, target-switch, review, minimized playback and cleanup guarantees
 when its old mode navigation is adapted by the host.
 
@@ -302,6 +302,6 @@ the ongoing capture's choice and separate UUID; fresh recording reads fresh defa
 This changes no delivery queue, playback/microphone ownership, persisted schema or
 approved automatic pause-send default. The optional preparePreferences facility
 composes with the existing binding.prepareVoice in the original connectSpeech
-boundary, before the controller releases its old target. Hosted reader/account
+boundary, before the controller releases its old target. Signed-in reader/account
 failure refuses the replacement; it does not make the old microphone unavailable.
 Absent that facility, the original default connection branch remains exact.

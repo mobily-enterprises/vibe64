@@ -13,9 +13,9 @@ release. Customer application databases retain their own migration owner.
 
 The owner is `packages/vibe64-core/src/server/stateUpgrades.js`. Its ordered
 registry imports scripts from `stateUpgrades/`. The release builder includes
-the standalone `bin/upgrade-state.js` command in every runtime package. Hosting
-operators own stopping services, invoking this command, and activating the
-candidate release. This command does not start or stop services itself.
+the standalone `bin/upgrade-state.js` command in every runtime package. The
+operator of an installation stops its services, invokes this command, and
+activates the candidate release. This command does not start or stop services itself.
 The CLI supplies the routing feature's upgrade operation to the Core runner;
 Core does not import Accounts or Runtime. Call the assembled CLI for deployment,
 so every registered upgrade has its owning implementation.
@@ -82,8 +82,8 @@ nothing, when:
 
 The server records the same baseline on its first start of a fresh state root,
 before writing any state, so a new local installation has its history. It
-leaves existing state, with or without a ledger, untouched. Hosted provisioning
-records the baseline itself, as the state owner, before seeding any state.
+leaves existing state, with or without a ledger, untouched. An installer that
+seeds state records the baseline itself, as the state owner, before seeding.
 
 When `--check` or `--apply` fails on an installation without a ledger, the
 error says so. If that state was created by a release that already included
@@ -654,7 +654,7 @@ requires no historical transformation or numbered upgrade. Colleague's selected
 ## Personal assistant preference boundary
 
 `20261006-personal-assistant-preferences` records a prospective compatibility
-boundary for explicit personal avatar/voice writes. The hosted settings owner
+boundary for explicit personal avatar/voice writes. A per-person settings owner
 uses `assistant-preferences/<authenticated-UID-base64url>/colleague.json` and
 `coding.json`, each a schemaVersion1 envelope containing exactly avatar and voice.
 Legacy `assistant-settings.json`, including its shared Colleague name, is retained
@@ -1194,7 +1194,7 @@ durable cleanup lifetimes are unchanged.
 
 The registry's `maintainStateUpgradeBackups` operation provides read-only dry run
 and cleanup under the same `upgrades/apply.lock` used by upgrades and explicit
-repairs. Hosted daily maintenance may remove a known completed upgrade's backup
+repairs. Scheduled daily maintenance may remove a known completed upgrade's backup
 tree only after 14 days from both ledger completion and the latest filesystem
 change anywhere in that tree. New repair copies extend that window. Invalid
 ledgers, unknown or unfinished upgrades, symlinks and unverified ownership retain
@@ -1339,8 +1339,8 @@ without it the local managed source root is resolved as runtime resolves it.
   schema 2 marker whose `practiceId` is the slug's) is skipped silently. Any
   other look-alike gets a WARNING and is left unchanged; no other project is
   read beyond its name, so normal projects, their sessions, chats and code are
-  never touched. Its old namespace is `<projectsRoot>/<slug>` (hosted, with
-  `--projects-root`) or `training/practice/<learnerKey>/<attemptId>/<slug>`
+  never touched. Its old namespace is `<projectsRoot>/<slug>` (a project
+  catalogue, with `--projects-root`) or `training/practice/<learnerKey>/<attemptId>/<slug>`
   plus the session source `<managedSourceRoot>/<slug>` (local). An interrupted
   deletion or archive removes the namespace before the runtime root, so a
   selected project without a namespace gets a WARNING and only its runtime root
@@ -1367,7 +1367,7 @@ without it the local managed source root is resolved as runtime resolves it.
 
 Training only moves; it deletes nothing. Apply first writes
 `upgrades/backups/20261022-learning-space-reset/training/manifest.json` with
-every source and destination, then moves hosted namespaces to
+every source and destination, then moves catalogue namespaces to
 `<projectsRoot>/.learning-reset-20261022/<slug>`, local session sources to
 `<managedSourceRoot>/.learning-reset-20261022/<slug>`, and runtime roots,
 learner files and local namespaces to
@@ -1381,14 +1381,14 @@ destination exists is complete; a copy with its proof has its (possibly
 partial) source removed; a copy without it is verified first, and a copy that
 differs from its source refuses. Check (`--check`) is
 read-only; it lists every selected slug (learner key, lesson code) and every
-learner file, warns that hosted managed databases or resource profiles keyed by
+learner file, warns that managed databases or resource profiles keyed by
 those slugs are not removed (they become unreachable and never collide with new
 practice slugs, which come from new UUIDs), and reports an ERROR for a symlink,
 a non-directory, or a destination that exists without its manifest entry.
 
 Removing the retired data is a manual, owner-confirmed step after the upgraded
 installation has been verified: remove `<projectsRoot>/.learning-reset-20261022`
-(hosted) or `<managedSourceRoot>/.learning-reset-20261022` (local) and
+(catalogue) or `<managedSourceRoot>/.learning-reset-20261022` (local) and
 `training/retired/20261022-learning-space-reset`. Vibe64 never removes them;
 until then they count in "Project files". Because this upgrade is pending,
 a host's in-place update refuses until its normal upgrade path has applied it. Keep

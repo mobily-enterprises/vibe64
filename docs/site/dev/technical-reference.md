@@ -245,7 +245,7 @@ be changed by another branch: Close and reopen the project to adopt it. Archivin
 the source session does not terminate the service; its runtime assets must remain
 usable independently of that source directory. Project Close, inactivity shutdown
 and orderly editor shutdown stop the services and wait for process-exit proof.
-A hosted editor can also find and stop an exact owner from an earlier server
+The editor can also find and stop an exact owner from an earlier server
 process. Failed cleanup remains an error and the project is not reported closed.
 Reading project or Preview status never starts these services.
 

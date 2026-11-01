@@ -14,7 +14,7 @@ Colleague can inspect saved branches and open the requested branch through the
 normal session controls; another session does not share unsaved changes. GitHub
 connection, repository access and Git author identity remain the person's normal
 account steps. Opening, creating or importing a new GitHub project uses the
-existing hosted UI; Colleague must not invent an import or source-access tool.
+existing project UI; Colleague must not invent an import or source-access tool.
 
 To improve an existing lesson, revise it in its topic rather than exposing a
 duplicate lesson. Preserve its permanent lesson and step IDs, its declared checks

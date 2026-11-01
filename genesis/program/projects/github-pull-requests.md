@@ -121,7 +121,7 @@ creator without replacing an existing ref. It supports locally committed
 baselines and publishes captured session changes through the ordinary Save
 implementation. The session stays bound to its branch after a partial failure;
 an explicit retry finds an existing open PR before attempting another creation.
-An explicitly selected non-default hosted branch becomes the PR head instead
+An explicitly selected non-default session branch becomes the PR head instead
 of generating another branch. Existing session work is never silently retargeted
 to an unrelated existing branch. Project owners may require PR publication in
 Vibe64; direct commits then require a numbered PR, while the server-owned

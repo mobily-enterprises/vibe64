@@ -30,7 +30,7 @@ In the Vibe64 project's **Env → Development**, set either or both entries:
 | `VIBE64_JSKIT_SOURCE_ROOT` | Absolute path to the JSKIT checkout |
 | `VIBE64_GENESIS_SOURCE_ROOT` | Absolute path to the Genesis checkout |
 
-Hosted development uses connected sources (above) instead of these entries;
+A session with connected sources (above) uses them instead of these entries;
 remove any old `sessions/pinned/source` values from **Env → Development**.
 A connected checkout's own session still owns its tests and setup.
 For laptop development, export these variables with ordinary local checkout

@@ -98,7 +98,7 @@ The original managed repository creation and exact exercise source verification
 operations now live beside the original Public managed initializer. A host calls
 that same owner, retaining its own slug prevalidation and one configuration
 facility for its existing development database defaults. Standalone composition
-supplies no hosted database policy. The original initial commit, source exclusion,
+supplies no managed database policy. The original initial commit, source exclusion,
 identity checks and atomic rollback remain with their original owners. Private
 creation obtains its exact root through Core rather than a catalogue-path guess.
 The same initializer also creates an empty canonical repository for a runtime
@@ -179,7 +179,7 @@ project as the current context. The default creation path produces one real Git
 commit containing a technology-neutral, current-format Genesis foundation; a
 trusted technology template is materialized only when a caller selects it
 explicitly. Selection changes the active project without rewriting its
-application source. A hosted project namespace may contain repository mirrors
+application source. A catalogue project namespace may contain repository mirrors
 and session state without itself being a Git worktree; only an explicit checkout
 is treated as inspectable source.
 
@@ -245,10 +245,10 @@ source as a failed import. Pending UI state includes that separate refresh while
 Preview remains visible; an inspection failure uses the existing setup warning
 and recheck action.
 
-The hosted project namespace is the catalog authority. A catalog read never
+The catalogue project namespace is the catalog authority. A catalog read never
 deletes anything: a project whose namespace has been removed outside Vibe64 is
 simply not listed, and if it was selected, that read retires the selection; an
-explicit external source folder remains independent of the hosted catalog, and
+explicit external source folder remains independent of the catalog, and
 a listing cannot retire a different target selected while it was reading.
 Server startup runs the one explicit maintenance step,
 `sweepOrphanProjectRuntimeRoots`, which removes the stale private state of each
@@ -325,7 +325,7 @@ catalogue never lists it. `listWorkspaceProjects` never shows a practice
 project, and the startup orphan-runtime sweep leaves every `training-<hex>` runtime
 whose record has a training marker (a warning when its learning-space project
 is missing). A catalogue entry whose record carries a retired or invalid
-training marker (an old hosted practice project awaiting the 20261022 scrap
+training marker (an old practice project awaiting the 20261022 scrap
 upgrade) is left out of the listing, never failing it for the other projects,
 and opening its slug is `vibe64_practice_project_deleted` (404). Every such skip
 warns once per process, not on every listing. `createWorkspaceProjectRecord` and `assertWorkspaceProjectAvailable`
@@ -434,7 +434,7 @@ recreated by a late request is not a 500. Other practice scopes keep refusing
 unmarked leftover storage. Feature routes and a host's gate map the code to 404
 with a top-level `code`; `useProjectSelectionGate` exposes `practiceDeleted` for
 the routed project page. That page re-reads its selection without a reload on
-the project-changed event (the hosted delete publishes the catalogue change), on
+the project-changed event (the catalogue delete publishes the catalogue change), on
 Learning's own `vibe64.training.learner.changed` notice with reason `practice`
 (Learning's archive or delete on both hosts; other reasons are ignored), and whenever any
 other query of the page fails with the deleted code (a query-cache subscription

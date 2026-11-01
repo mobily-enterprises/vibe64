@@ -649,7 +649,7 @@ Push publishes the original folder's saved commits to its exact reviewed push
 branch, never force-pushes, and verifies the remote result. Save remains local;
 unsaved session changes are not pushed. Existing session checks then offer
 Update when the local baseline advances. The original-folder controls are
-unavailable to hosted projects, which choose a branch when opening a session.
+unavailable to catalogue projects, which choose a branch when opening a session.
 Remote operations use the execution gateway and existing project source lock.
 Logs identify action, project and attempt, without recording remote credentials.
 
@@ -663,7 +663,7 @@ repair check may reuse a reviewed conflict while its base, canonical version,
 HEAD and index remain unchanged. A changed baseline requires a new review.
 New local sessions remember their original project branch and refuse to retarget
 when the opened folder switches branches. Legacy sessions without this marker
-continue using verified project authority. Hosted rewritten history is
+continue using verified project authority. Catalogue rewritten history is
 rejected unless the session itself adopted it: its HEAD contains the new
 canonical commit and no longer contains its old base. Check, Update and Save then
 treat the session as current, and the base moves to the canonical commit.
@@ -673,7 +673,7 @@ and configuration, require a clean tree and no merge/rebase/sequencer in progres
 and use native non-forcing Git switch. Creation starts at the reviewed HEAD and
 does not set an upstream or push. Older sessions keep their original binding.
 
-Hosted session creation can list or create branches through the existing project
+Catalogue session creation can list or create branches through the existing project
 owner. The dialog's Work on selector offers the project branch, a new branch,
 or an existing branch without an advanced switch. Creating asks for the name
 and source branch, rejects an already listed name, and states where changes
@@ -686,7 +686,7 @@ The optional `repository_branch` metadata explicitly overrides the project branc
 for source inspection, publication, Update and renewal. Legacy sessions without
 it retain their existing project authority. Notifications only affect sessions
 sharing the same mode, repository and branch. Local sessions retain their
-existing original-folder binding instead of using this hosted override.
+existing original-folder binding instead of using this catalogue override.
 
 Codex, Claude and OpenCode observed writable session turns create private Git
 recovery checkpoints on completion, interruption or failure. Ordinary temporary
@@ -696,7 +696,7 @@ changing the index. A turn's ref and the latest pointer are published in one Git
 transaction. If another writer advances latest, publication retries up to twice
 with the same captured tree parented onto that checkpoint. Both turns remain
 recoverable; unrelated Git failures stop immediately. The daemon runs a turn's
-whole checkpoint as one command (one managed job on a hosted workspace) under
+whole checkpoint as one command (one managed job under managed execution) under
 its per-worktree lock, resolving the commit identity and disk budget before it
 starts; each Git step keeps its 30-second limit and the job stops after two
 minutes. A job the host refuses, kills or cannot drain fails the checkpoint with

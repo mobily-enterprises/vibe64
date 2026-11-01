@@ -30,7 +30,7 @@ including its child threads. For Vibe64's Preview lifecycle integration check,
 use `vibe64-helper playwright npm-run test:playwright:preview-targets`.
 Ordinary shell jobs have a smaller task budget; one test worker does not bound
 the number of Node and Chromium threads.
-Hosted test fixtures can set `VIBE64_TEST_FIXTURE_ROOT` to a permitted checkout
+Managed test fixtures can set `VIBE64_TEST_FIXTURE_ROOT` to a permitted checkout
 directory. Keep `TMPDIR` short for control sockets; fixture source placement
 and socket placement are independent.
 

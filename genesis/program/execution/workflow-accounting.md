@@ -44,7 +44,7 @@ native linker toolchain. Interactive coding and terminals use these same pack
 paths; declared operations prepend only their requested runtimes. On managed
 hosts the installed runtime guards block undeclared tool names before mutable
 host PATH entries. Standalone execution retains the developer's ordinary PATH
-and installed tools without requiring hosted runtime installation. The host
+and installed tools without requiring a managed runtime installation. The host
 owns installation, while the project owns build commands and dependency/source
 resolution. Frameworks reuse those toolchains; database CLI selection does not
 change resource lifecycle or apply migrations.
@@ -375,11 +375,11 @@ holds these checks.
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same
 installed managed-execution provider as commands. Standalone operation may
-return no workflow; a required hosted provider or installed provider without
+return no workflow; a required managed provider or installed provider without
 workflow support fails explicitly rather than bypassing accounting.
 
 Finite capture requests accept an `AbortSignal`. The installed execution provider
-owns hosted cancellation and descendant drain. Standalone capture uses its
+owns managed cancellation and descendant drain. Standalone capture uses its
 existing process-group cleanup; unsuccessful drains retain an execution stop
 handle for explicit retry through `stopVibe64Execution()`. Concurrent stops share
 the same drain, and a successful drain is not repeated. Cancellation reports

@@ -575,7 +575,7 @@ Product snapshots show user text, completed replies, commentary and the fixed
 completed watch notice; unfinished wakes remain hidden. Streaming uses JSKIT's
 normalized message
 events. Partial tool arguments and reasoning are not exposed as assistant text.
-Hosted realtime updates remain actor-private, coalesced over 25 ms, with
+Realtime updates remain actor-private, coalesced over 25 ms, with
 stream epoch/revision checks. HTTP refresh and socket reconnection reconcile the
 same conversation. The shared voice binding consumes that projection and canonical
 completion. Neither projection edits the typed draft.

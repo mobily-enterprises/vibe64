@@ -22,9 +22,9 @@ project's own declared Verify command, not Vibe64, treats that source.
 Use **Save connected projects** for the list; ordinary project Save pushes
 that source edit. See **Configure connected projects** for access and recovery.
 
-Hosted repository settings can also specify whether GitHub Save permits direct
+Repository settings can also specify whether GitHub Save permits direct
 commits/pushes or requires pull requests. GitHub still enforces your repository
-permissions and branch rules. A hosted development database scope change requires
+permissions and branch rules. A development database scope change requires
 the owner and no open sessions; it does not merge or restore database contents.
 
 With **One database shared by this project** selected, you can check **Allow

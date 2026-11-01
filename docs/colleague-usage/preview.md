@@ -138,7 +138,7 @@ Retrying the same output reuses its running application when its settings and
 environment still match. It does not start another process merely because a
 new Preview address could be allocated. Use **Restart preview** when you intend
 to replace that run.
-Stopping or restarting a hosted Preview includes processes in its child groups,
+Stopping or restarting a Preview includes processes in its child groups,
 that are owned by that output. Wait for cleanup to finish before starting
 another run. If cleanup fails, open **Resources** for the reported operation
 and retry only after its running work has been stopped.
@@ -181,7 +181,7 @@ crash or a closed terminal, its shared services stop within a few seconds and do
 not keep running into its next start. Previews end with it too, unless their
 program keeps running after its terminal hangs up. Hiding Preview, navigating
 away or closing a browser tab does not perform project Close. Ordinary inactivity shutdown also
-stops them. Shared services remain subject to hosted resource limits while idle.
+stops them.
 
 If another branch changes a running service declaration, startup asks you to Close
 and reopen the project. Save work as needed before doing so; this stops the other

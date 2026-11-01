@@ -187,7 +187,7 @@ JSKIT owns local turn detection and speech controls through the shared root host
 The supplied JSKIT browser binding owns retained drafts, delivery, transcript
 streaming and shared-socket subscriptions; Colleague retains its product toolbar,
 model selection, focus and navigation receipts.
-Conversation owns the shared hosting provider; Colleague contributes only its
+Conversation owns the shared conversation-host provider; Colleague contributes only its
 optional product facade and schemas, without changing its IDs or routes.
 The model picker uses the same shared HTTP facade and the original authorized
 product selection action; catalogue and access policy remain application-owned.
@@ -274,7 +274,7 @@ unreferenced Working sessions remain unchanged. The read-only lesson visual
 resource serves the pinned diagram bytes of any of the learner's retained attempts.
 The Training Feature supplies
 canonical Training HTTP/action composition in Public and consumes an optional
-host's exact existing services without duplicating hosted authority or writers.
+host's exact existing services without duplicating that host's authority or writers.
 Standalone learning-only admission uses the actual OS owner through the original
 trusted local transport; Working/Colleague identity stays unchanged. Original
 preparation reports missing exercise provisioning before project effects. JSKIT and
@@ -626,8 +626,8 @@ discarded commit. There is no second queue or replacement transaction store.
 Owns AI account setup, provider-key storage and validation, connection selection,
 the owner and team AI setups (Models) and their recommendations,
 and connection health. Workspace Studio health also resolves current actor access
-independently of any selected project. Standalone and hosted editors
-share these operations; hosts supply credential context and access policy.
+independently of any selected project. Every editor shares these
+operations; hosts supply credential context and access policy.
 JSKIT interprets Claude's native account status and owns its metadata-invalidated
 cache; this subsystem supplies managed execution and the actor's credential home.
 Workspace account actions resolve the actor independently of project selection.
@@ -838,7 +838,7 @@ Provides browser-side support for editor presentation and exact source navigatio
 Owns the shared compact runtime builder, npm artifact preparation, isolated
 installation proof, and the complete development preview with its bundled
 example project. It also owns development source selection and disposable dependency
-composition shared with hosted consumers; production package pins stay separate. Core owns the numbered persisted-state upgrade runner and its completion ledger. Hosted consumers supply their private runtime requirements and coordinate stopped-service upgrades before activation.
+composition shared with composing applications; production package pins stay separate. Core owns the numbered persisted-state upgrade runner and its completion ledger. Composing applications supply their own runtime requirements and coordinate stopped-service upgrades before activation.
 
 ### Source
 - Directory `tooling`

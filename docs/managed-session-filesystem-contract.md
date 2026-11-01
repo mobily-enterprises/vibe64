@@ -8,7 +8,7 @@ work and the architecture required to prevent it from recurring.
 ## Incident
 
 Vite and `vue-router` failed with `EACCES` while regenerating
-`src/typed-router.d.ts` in a hosted session.
+`src/typed-router.d.ts` in a managed session.
 
 The source file was replaced at 14:29:12. The preview watcher attempted its HMR
 write at 14:29:13 and failed. Vibe64's former post-command recursive permission

@@ -26,7 +26,7 @@ Project settings presents the tone, response-length, assumed-experience, and
 explanation-style choices supplied by the exact pinned Genesis contract, plus
 optional project requirements. Vibe64 does not duplicate those choices or
 their instruction text. Saving changes `genesis/collaboration.md` in the
-standalone source or selected hosted session source, so the result follows the
+standalone source or selected catalogue session source, so the result follows the
 same source authority and history as the project.
 The controls and their Save action stay together beside the section description,
 stacking below it in narrow panes. Project requirements spans the form width,
@@ -45,7 +45,7 @@ save releases the controls and preserves the draft for retry; a failed read
 uses the existing settings error and Retry view. Save failures use the shared
 action feedback, without also opening an unexpected-UI-error dialog.
 
-Only the project owner can change collaboration through hosted Project
+Only the project owner can change collaboration through Project
 settings. The action boundary enforces this for HTTP and direct callers, using
 the authenticated actor rather than an input field. Prompt-suggestion changes
 use the same owner check. Anyone independently authorized to edit the source can still change

@@ -11,10 +11,10 @@ assistant text or changing saved history.
 Routing retains a native send rejection's existing code, so definite input
 validation failure remains failed in the shared composer instead of becoming
 unknown delivery. Receipt inspection admits the standalone null actor through
-the same fresh purpose/access resolver; hosted identity, selected connection,
+the same fresh purpose/access resolver; signed-in identity, selected connection,
 active-work and native acceptance checks still fence the original receipt.
 Cancel removes only the rejected local attempt and preserves accepted history.
-Hosted Claude cold initialization has a 90-second bound for managed startup
+Managed Claude cold initialization has a 90-second bound for managed startup
 probes; normal controls retain their separate deadline and failed startup still
 requires verified process cleanup.
 
@@ -35,12 +35,12 @@ months for both Claude and Codex.
 
 Standalone Main and temporary browser conversations use the existing selected
 project request context and local-request admission, with a local actor and no
-hosted account. The internal Sessions context grant rechecks that boundary for
-reads and subscriptions. Hosted and Learning conversations retain their current
-action-contributor authority; a missing hosted grant cannot become local access.
+signed-in account. The internal Sessions context grant rechecks that boundary for
+reads and subscriptions. Signed-in and Learning conversations retain their current
+action-contributor authority; a missing signed-in grant cannot become local access.
 Goal Set/Resume resolves that same fresh context grant and retains its actor
 identity for subsequent native Pause/Block tools. Standalone's local actor does
-not require a hosted runtime user. The structured controls validate their exact
+not require a signed-in runtime user. The structured controls validate their exact
 selected project through the Vibe64 action policy in both modes.
 
 All three native engines use JSKIT's common delivery timing observer, separating
@@ -675,11 +675,11 @@ Goal startup installs the same discovery protocol as ordinary Main requests, so
 an admitted pause does not require changing a running process's tool settings.
 Assistant prose never changes goal intent; blocked prerequisites remain distinct.
 Goal recovery without an HTTP request obtains its action context from the
-configured assistant host. Hosted Vibe64 supplies an executable fresh-user
+configured assistant host. A composing application supplies an executable fresh-user
 resolver; standalone Vibe64 retains its ordinary local actor context. The
 original action contributor still checks project access on every tool call,
 and Main verifies the exact actor/session/native turn. Recovery never fabricates
-a browser session or treats serialized user metadata as hosted authority.
+a browser session or treats serialized user metadata as signed-in authority.
 A goal that cannot continue after restart, including when its actor can no
 longer be resolved, records `vibe64.agent_goal.recovery_failed` with its project,
 session and the username that set the goal, besides the visible goal error.
@@ -753,9 +753,9 @@ The contracts and adapters are in
 `packages/vibe64-terminals/src/server/terminalActions.js`, `inputSchemas.js` and
 `registerRoutes.js`; HTTP/direct authority and byte-stream evidence is in
 `tests/server/vibe64TerminalActionDispatch.unit.test.js`.
-Standalone local-editor sessions do not request the hosted member-message queue;
+Standalone local-editor sessions do not request the signed-in member-message queue;
 AI access still uses its existing check. This avoids an irrelevant sign-in
-warning and queue requests in a local editor with no hosted identity.
+warning and queue requests in a local editor with no signed-in identity.
 Owner settings in main and temporary chat use the Models `canConfigure`
 response (its light `view: "main"` read) independently of that queue, so they remain available in the local editor.
 The compact mode menu names each mode's effective model and Auto's Router.
@@ -1605,11 +1605,11 @@ configuration snapshot, sharing connection and catalogue reads within that
 response only. The response omits private connection identities. Dispatch still
 rechecks access. An optional host user resolver refreshes the supplied actor
 before purpose resolution and native AI admission, and providers receive that
-current user. Hosted continuations with a missing actor cannot inherit the
+current user. Signed-in continuations with a missing actor cannot inherit the
 current viewer, including unsent requests from before the routing upgrade.
 Those requests retain their evidence and require cancellation followed by a
 new Send. Recorded submitters still receive fresh admission; inspecting a prior
-delivery receipt requires no new inference. Standalone admission without hosted
+delivery receipt requires no new inference. Standalone admission without signed-in
 users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
 explanations and Database Copilot use their own resolved Explain & check destination too.
@@ -3916,8 +3916,8 @@ these account-setup operations do not create a conversation runner.
   resident OpenCode service and its credential-free catalogue service to the
   constrained OpenCode provider-workspace policy.
 - `resolveAllowedCwd()` admits only the exact Codex or OpenCode provider
-  workspace beneath either the hosted workspace runtime or the target OS
-  user's per-user runtime, covering hosted services and standalone local use
+  workspace beneath either the catalogue workspace runtime or the target OS
+  user's per-user runtime, covering catalogue services and standalone local use
   without granting general access outside managed project roots.
 - `runManagedExecutionPayload()` holds a managed service's controller lease and
   terminates the detached service process group if that lease closes. Its
@@ -4103,7 +4103,7 @@ preference; there is no Learning learner and attempt key or `learningSession`
 preference.
 
 The existing Core action contributor has a closed server-construction
-`admissionScope`: its default `all` retains the hosted global authority path.
+`admissionScope`: its default `all` retains the catalogue global authority path.
 `learning-only` contributes only to non-project Training definitions or actions
 with declared learning access and an explicit attempt selector. Ordinary Working
 and Colleague operations return an empty contribution before resolving a user,
@@ -4329,7 +4329,7 @@ every call because a restart can move the Preview. It never starts the other
 Preview and fails clearly for a closed project, inactive session or own session;
 a Preview that is not ready is polled for at most about ten seconds.
 
-Hosted admission re-reads the actor and checks destination project access. A
+Signed-in admission re-reads the actor and checks destination project access. A
 closed/closing project, absent selected session or unavailable assistant fails
 before delivery. Incoming text visibly names its origin and explicitly retains
 existing human approval requirements. A successful receipt immediately identifies the
@@ -4365,7 +4365,7 @@ session contribution limit and pass its instruction composer. Codex, Claude
 and OpenCode pass it from the daemon's host environment through the existing
 context registry and driver. The terminals provider explicitly carries this trusted
 host key through the filtered runtime environment before constructing any provider.
-Public Vibe64 does not define hosted platform update
+Public Vibe64 does not define a platform update
 policy; hosts without this guidance keep their original instructions.
 
 
@@ -4569,7 +4569,7 @@ including automatic recovery's freshly authorized actor. The manager forwards it
 to the admitted native request, allowing its later goal tools to recheck current
 project/model access without requiring a separate chat message first.
 
-Goal Set/Resume retains the original action request metadata for hosted session
+Goal Set/Resume retains the original action request metadata for signed-in session
 reauthorization and uses the host action identity (uid where present). A copied
 user record alone is not browser authentication.
 

@@ -404,7 +404,7 @@ A team member cannot choose main chat's model: outside a lesson their session
 records main chat's starting model only, and nothing runs as them. Learning
 requests Junior, and an unavailable destination fails before session creation,
 preserving an already reserved lesson attempt for its existing Resume path.
-There is no Training-specific routing fork. The optional hosted branch choice is
+There is no Training-specific routing fork. The optional catalogue branch choice is
 independent of that AI choice and both survive creation. Opening a pull request
 as a session uses the PR head, without offering a second branch destination.
 Its conversation, source location,
@@ -596,7 +596,7 @@ reserving extra room for the selected tab's Archive action. The new-session
 plus is hidden when those visible slots are full and returns when a slot opens.
 The standalone shell places that same creation button beside the project name,
 including with no open sessions. Only the selected runtime, or the empty state,
-supplies it. Hosted shells keep their existing placement. The relocation retains
+supplies it. Catalogue shells keep their existing placement. The relocation retains
 creation permissions, pending feedback, the assistant dialog and the three-session
 limit; compact Git controls leave space for the button on small screens.
 Save sits directly beside the session actions so the tabs retain that space.
@@ -702,7 +702,7 @@ preserve the original source for Retry.
 The repository authority check supplies the handover's source identity from
 project configuration and the verified Git commit. Renewal does not infer it
 from legacy predecessor metadata or default a missing authority to local source.
-An optional hosted `repository_branch` binding chooses a verified branch at
+An optional catalogue `repository_branch` binding chooses a verified branch at
 session creation. It survives renewal and archive indexing without changing
 database ownership, preparation or session admission limits. Existing sessions
 without it keep their current project authority; no cached source branch is
@@ -800,7 +800,7 @@ small owner without loading live project execution or Genesis dependencies.
 The session path contract also exposes `projectBackupsRoot` under the owning
 project's runtime directory. This folder is shared across sessions, is excluded
 from session archives by location, and is not removed by renewal or archival.
-The Files owner manages its operations; hosted maintenance schedules retention.
+The Files owner manages its operations; scheduled maintenance applies retention.
 
 ## Pinned server-selected source
 

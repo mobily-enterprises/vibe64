@@ -22,7 +22,7 @@ choice into machine-local Vibe64 metadata.
 Project settings presents the versioned profile names and descriptions supplied
 by the exact pinned Genesis contract. Vibe64 does not duplicate that catalog or
 interpret its guidance. A selection changes `genesis/engineering.md` in the
-standalone source or the chosen hosted session source, so it follows ordinary
+standalone source or the chosen catalogue session source, so it follows ordinary
 source history; Genesis preserves any project-specific requirements already in
 that document.
 
@@ -39,7 +39,7 @@ Save failures use the shared action feedback and keep the selection retryable,
 without also opening an unexpected-UI-error dialog. A failed canonical read
 uses the existing settings error and Retry view.
 
-When a hosted project has no available source, the setting stays visibly
+When a catalogue project has no available source, the setting stays visibly
 unavailable instead of treating the project metadata namespace as source. An
 active session is selected automatically when needed, then recorded in the URL
 so navigation retains the same source context. Writes share the existing agent

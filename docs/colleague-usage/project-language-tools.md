@@ -6,10 +6,10 @@ name their required runtimes: `nodejs`, `php`, `composer`, `python`, `ruby`, `go
 use `mysql`/`mariadb`, `postgresql` or `sqlite`; selecting a CLI does not create a
 database or run a migration.
 
-Managed hosts supply the selected pinned runtime packs. Standalone Vibe64 can
-use the developer's installed tools through its ordinary PATH and does not
-require a hosted Nix installation. Kotlin includes the Java toolchain on managed
-hosts; Rust includes the native linker tools. Projects needing native
+Where pinned runtime packs are installed, Vibe64 uses the selected packs.
+Otherwise standalone Vibe64 uses the developer's installed tools through its
+ordinary PATH and does not require a Nix installation. Kotlin's runtime pack
+includes the Java toolchain; Rust's includes the native linker tools. Projects needing native
 extensions or Go C integration also declare their required build toolchain.
 JSKIT, Vue, Laravel, Django, Rails, Spring Boot, Express and Next.js use the
 tools specified by their project commands rather than a separate framework

@@ -34,8 +34,8 @@ inspection metadata and does not itself run a migration.
 
 If loading fails, use the offered Retry or ask a coding agent to investigate the
 configuration. Missing resources require ordinary application preparation. Do not
-assume that another session uses the same database: hosted project policy can use
-shared project data or separate session databases.
+assume that another session uses the same database: the project's development
+database setting can use shared project data or separate session databases.
 
 “Database not prepared” means Vibe64 has not confirmed provisioning for this
 database identity. Return to the session chat, let the assistant finish and choose

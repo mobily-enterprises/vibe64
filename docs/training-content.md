@@ -341,8 +341,8 @@ saves must reach the current bytes exactly; otherwise the check is not run and
 reports "needs an independent attempt: other edits detected in `<file>`". There
 is no technical write-deny for agents: an agent edit in a declared file voids
 the attempt through this ledger. The check is learner-run code on the learner's
-own machine and has no network isolation: for hosted use, sandboxing and network
-denial of the check job are an open gap.
+own machine and has no network isolation; the check job is not sandboxed and
+its network access is not denied.
 
 An optional exercise uses `{kind:"bundled", source, reuse:"attempt"}`. Continued
 work uses `reuse:"sequence"`, `sequenceId` and `sequenceMode:"create"|"continue"`.
@@ -417,7 +417,7 @@ it does not push Git, create a remote release, install content or enable a cours
 The getting-started course starts with V64-START-00 **Introduction to Vibe64**,
 a tour of the editor on its own small practice project (the coding chat,
 Preview, Dashboard, Save and Git log, Colleague, the Lesson pane, Courses and
-**L**). It works the same way locally and on hosted Vibe64, and its coding-chat
+**L**). It works the same way on every installation, and its coding-chat
 steps are optional so it can be finished before an AI is connected. Connecting
 an AI is not a lesson: it belongs to the AI setup screen (**Account settings →
 AI Accounts**), which the introduction only points to.
@@ -644,8 +644,8 @@ The workspace owner can create a custom course from Learning → **Courses** →
 (`POST /api/vibe64/training/courses` with `{title,topics,expectedRevision}`).
 `courses.list` reports `canCreateCourses` for the signed-in person and each
 course's ordered `topics` with their installed titles. On local Vibe64 the OS user
-is the owner; on hosted Vibe64 only the workspace owner may create one, through
-the existing `ownerRequired` action check.
+is the owner; only the owner may create one, through the existing `ownerRequired`
+action check.
 
 `createCourse` adds no storage and no new record format. It accepts 1–32
 different whole topics, each an exact `topicId`/`release` already pinned by an
