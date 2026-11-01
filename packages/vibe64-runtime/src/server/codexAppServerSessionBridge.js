@@ -486,7 +486,7 @@ async function startFreshCodexAppServerThreadForSession(options = {}) {
 
 function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const metadata = session.metadata || {};
-  // Sessions without a Codex agent identity keep the legacy codex_conversation_id fallback.
+  // A session without a Codex agent identity uses the codex_conversation_id recorded for this workdir.
   if (metadata.agent_identity_provider !== CODEX_SESSION_AGENT_PROVIDER) {
     return normalizeWorkdir(workdir) && normalizeWorkdir(metadata.codex_conversation_workdir) === normalizeWorkdir(workdir)
       ? toText(metadata.codex_conversation_id) : "";

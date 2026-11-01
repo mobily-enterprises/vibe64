@@ -602,7 +602,7 @@ function createSessionStateUpgrades({
             const contents = await readRegularText(sourcePath);
             legacy.push({ filePath: sourcePath, original: contents, contents: null });
           }
-          turns.set(entry.name, await conversationStore.readLegacyConversationTurn(scope, entry.name));
+          turns.set(entry.name, await conversationStore.readConversationTurnDirectory(scope, entry.name));
         }
         let rewound = [];
         for (const name of ["rewound.json", "message-ids.json"]) {

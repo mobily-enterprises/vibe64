@@ -89,7 +89,8 @@ function createSessionConversationStore({
     };
   }
 
-  async function readLegacyConversationTurn(sessionPaths, turnId) {
+  /** One conversation turn read from its per-turn message files, the layout the transcript state upgrade reads. */
+  async function readConversationTurnDirectory(sessionPaths, turnId) {
     const fileNames = sortedFileNames(
       await readDirectoryEntries(conversationTurnRoot(sessionPaths, turnId)),
       (name) => CONVERSATION_MESSAGE_FILE_PATTERN.test(name)
@@ -394,7 +395,7 @@ function createSessionConversationStore({
         // transcript on each update costs more than the rest of the write.
         const filePath = path.join(sessionPaths.conversationLogRoot, "transcript.json");
         const identity = await writeTextFile(filePath, `${JSON.stringify(document)}\n`);
-        // JSKIT's write owns this draft and no longer changes it.
+        // The written document is final: JSKIT's write does not change it again.
         conversationRecordCache.remember(filePath, identity, next);
       }
     });
@@ -557,9 +558,19 @@ function createSessionConversationStore({
     });
   }
 
+  /** A read-only transcript transaction for JSKIT's conversation transcript. */
+  function readConversationStorage(scope, callback) {
+    return withConversationTransaction(scope, callback, false);
+  }
+
+  /** A transcript transaction that may write, serialized with the session's other transcript writes. */
+  function writeConversationStorage(scope, callback) {
+    return withConversationTransaction(scope, callback, true);
+  }
+
   const conversationStorage = Object.freeze({
-    read: (scope, callback) => withConversationTransaction(scope, callback, false),
-    write: (scope, callback) => withConversationTransaction(scope, callback, true)
+    read: readConversationStorage,
+    write: writeConversationStorage
   });
 
   const {
@@ -634,7 +645,7 @@ function createSessionConversationStore({
     readConversationTail,
     readFirstUserMessage,
     readIntegrationSetupRequest,
-    readLegacyConversationTurn,
+    readConversationTurnDirectory,
     readSessionConversation,
     skipIntegrationSetupRequest,
     updateConversationStream,

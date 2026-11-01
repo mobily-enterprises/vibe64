@@ -35,8 +35,7 @@ function createSessionStoreState({
   sessionLockProcessPlatform = process.platform
 } = {}) {
   const admittedLearningScope = validateLearningSessionScope(learningScope);
-  // No host constructs a practice scope any more. It stays accepted with its
-  // actual source root only for the published, immutable
+  // A practice scope is accepted, with its actual source root, only for the published
   // 20261008-learning-practice-history readers, which verify adoption with it.
   if (admittedLearningScope && !projectSessionSourceRoot) {
     throw vibe64Error("A practice learning runtime requires its actual project session source root.", "vibe64_learning_scope_invalid");
