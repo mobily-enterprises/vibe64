@@ -53,48 +53,47 @@ function createReleaseHistoryStore({ runtimeRoot, now = () => new Date().toISOSt
     });
   }
 
-  return Object.freeze({
-    directory,
-    read,
-    update,
-    async create(fields = {}) {
-      const createdAt = now();
-      const record = {
-        contract: RELEASE_RECORD_CONTRACT,
-        id: releaseId(createdAt),
-        createdAt,
-        finishedAt: null,
-        status: "running",
-        log: [],
-        ...fields
-      };
-      await writeJsonFile(fileOf(record.id), record);
+  async function create(fields = {}) {
+    const createdAt = now();
+    const record = {
+      contract: RELEASE_RECORD_CONTRACT,
+      id: releaseId(createdAt),
+      createdAt,
+      finishedAt: null,
+      status: "running",
+      log: [],
+      ...fields
+    };
+    await writeJsonFile(fileOf(record.id), record);
+    return record;
+  }
+
+  function appendLog(id, message, level = "info") {
+    return update(id, (record) => {
+      record.log.push({ at: now(), level, message: String(message).slice(0, LINE_LIMIT) });
       return record;
-    },
-    appendLog(id, message, level = "info") {
-      return update(id, (record) => {
-        record.log.push({ at: now(), level, message: String(message).slice(0, LINE_LIMIT) });
-        return record;
-      });
-    },
-    async list({ limit = 50 } = {}) {
-      let names = [];
-      try {
-        names = await readdir(directory);
-      } catch (error) {
-        if (error?.code !== "ENOENT") throw error;
-      }
-      const ids = names.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).filter((id) => RELEASE_ID.test(id));
-      const records = [];
-      for (const id of ids) {
-        const record = await readJsonFile(fileOf(id), null);
-        if (record?.contract === RELEASE_RECORD_CONTRACT) records.push(record);
-      }
-      // Newest activity first: a release resumed by a new confirmation moves up.
-      const activity = (record) => record.resumedAt || record.createdAt;
-      return records.sort((left, right) => activity(right).localeCompare(activity(left)) || right.id.localeCompare(left.id)).slice(0, limit);
+    });
+  }
+
+  async function list({ limit = 50 } = {}) {
+    let names = [];
+    try {
+      names = await readdir(directory);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
     }
-  });
+    const ids = names.filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).filter((id) => RELEASE_ID.test(id));
+    const records = [];
+    for (const id of ids) {
+      const record = await readJsonFile(fileOf(id), null);
+      if (record?.contract === RELEASE_RECORD_CONTRACT) records.push(record);
+    }
+    // Newest activity first: a release resumed by a new confirmation moves up.
+    const activity = (record) => record.resumedAt || record.createdAt;
+    return records.sort((left, right) => activity(right).localeCompare(activity(left)) || right.id.localeCompare(left.id)).slice(0, limit);
+  }
+
+  return Object.freeze({ directory, read, update, create, appendLog, list });
 }
 
 export { RELEASE_RECORD_CONTRACT, createReleaseHistoryStore };

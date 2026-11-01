@@ -24,7 +24,7 @@ const CONFLICT_CODES = new Set([
 ]);
 const FORBIDDEN_CODES = new Set(["VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON", "VIBE64_PUBLISH_CONFIRMATION_INVALID", "VIBE64_PUBLISH_CONFIRMATION_EXPIRED"]);
 
-function publishingStatusCode(response = {}) {
+function publishingStatusCode(response) {
   if (response?.ok !== false) return 200;
   if (CONFLICT_CODES.has(response.code)) return 409;
   if (FORBIDDEN_CODES.has(response.code)) return 403;

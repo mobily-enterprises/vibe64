@@ -58,15 +58,15 @@ function createSessionReleaseWriter({ project, sourceEditor, today = () => new D
     if (result?.ok === false) throw writerError(result.error || `Could not ${file.before === null ? "create" : "change"} ${file.path}.`);
   }
 
-  return Object.freeze({
-    async prepareAndWrite({ sessionId, entry, version, notes, user = null }) {
-      const projectRoot = await sessionRoot(sessionId);
-      const change = await prepareReleaseChange({ projectRoot, entry, version, notes, date: today() });
-      const hashes = await baseHashes({ sessionId, files: change.files, user });
-      for (const file of change.files) await write({ sessionId, file, baseHash: hashes.get(file.path), user });
-      return change;
-    }
-  });
+  async function prepareAndWrite({ sessionId, entry, version, notes, user = null }) {
+    const projectRoot = await sessionRoot(sessionId);
+    const change = await prepareReleaseChange({ projectRoot, entry, version, notes, date: today() });
+    const hashes = await baseHashes({ sessionId, files: change.files, user });
+    for (const file of change.files) await write({ sessionId, file, baseHash: hashes.get(file.path), user });
+    return change;
+  }
+
+  return Object.freeze({ prepareAndWrite });
 }
 
 export { createSessionReleaseWriter };

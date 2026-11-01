@@ -162,7 +162,7 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
   }
 
   // What a dry run reports, without local paths or anything credential-like.
-  function safeReport(report = {}) {
+  function safeReport(report) {
     const keep = ["destination", "alreadyPublished", "previousVersion", "diff", "integrity", "repository", "tag", "tagPushed", "channel", "releaseExists", "project", "version", "index", "check"];
     const result = {};
     for (const field of keep) if (report?.[field] !== undefined) result[field] = JSON.parse(JSON.stringify(report[field]));

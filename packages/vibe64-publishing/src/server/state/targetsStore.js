@@ -71,43 +71,44 @@ function createTargetsStore({ runtimeRoot, now = () => new Date().toISOString() 
     return targets;
   }
 
-  return Object.freeze({
-    file,
-    list: read,
-    async get(id) {
-      return (await read()).find((target) => target.id === id) || null;
-    },
-    add(input) {
-      return exclusive(async () => {
-        const targets = await read();
-        const target = normalizeTarget(input, { now });
-        if (targets.some((existing) => existing.id === target.id)) {
-          throw targetError(`A target called ${target.id} already exists.`, "vibe64_publishing_target_exists");
-        }
-        await write([...targets, target]);
-        return target;
-      });
-    },
-    update(id, changes = {}) {
-      return exclusive(async () => {
-        const targets = await read();
-        const index = targets.findIndex((target) => target.id === id);
-        if (index === -1) throw targetError(`There is no target ${id}.`, "vibe64_publishing_target_missing");
-        const next = normalizeTarget({ ...targets[index], ...changes, id, createdAt: targets[index].createdAt }, { now });
-        targets[index] = next;
-        await write(targets);
-        return next;
-      });
-    },
-    remove(id) {
-      return exclusive(async () => {
-        const targets = await read();
-        if (!targets.some((target) => target.id === id)) throw targetError(`There is no target ${id}.`, "vibe64_publishing_target_missing");
-        await write(targets.filter((target) => target.id !== id));
-        return { removed: id };
-      });
-    }
-  });
+  async function get(id) {
+    return (await read()).find((target) => target.id === id) || null;
+  }
+
+  function add(input) {
+    return exclusive(async () => {
+      const targets = await read();
+      const target = normalizeTarget(input, { now });
+      if (targets.some((existing) => existing.id === target.id)) {
+        throw targetError(`A target called ${target.id} already exists.`, "vibe64_publishing_target_exists");
+      }
+      await write([...targets, target]);
+      return target;
+    });
+  }
+
+  function update(id, changes = {}) {
+    return exclusive(async () => {
+      const targets = await read();
+      const index = targets.findIndex((target) => target.id === id);
+      if (index === -1) throw targetError(`There is no target ${id}.`, "vibe64_publishing_target_missing");
+      const next = normalizeTarget({ ...targets[index], ...changes, id, createdAt: targets[index].createdAt }, { now });
+      targets[index] = next;
+      await write(targets);
+      return next;
+    });
+  }
+
+  function remove(id) {
+    return exclusive(async () => {
+      const targets = await read();
+      if (!targets.some((target) => target.id === id)) throw targetError(`There is no target ${id}.`, "vibe64_publishing_target_missing");
+      await write(targets.filter((target) => target.id !== id));
+      return { removed: id };
+    });
+  }
+
+  return Object.freeze({ file, list: read, get, add, update, remove });
 }
 
 export { TARGETS_CONTRACT, createTargetsStore, normalizeTarget };

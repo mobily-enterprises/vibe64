@@ -49,69 +49,72 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
     await writeJsonFile(file, { ...value, contract: CONFIRMATIONS_CONTRACT, records: value.records.slice(-KEEP) });
   }
 
-  return Object.freeze({
-    file,
-    async pendingRequest() {
-      return (await read()).pendingRequest || null;
-    },
-    // An assistant (or the person) asks for the confirmation prompt to open for
-    // this plan and its targets. Nothing runs; the Publish page shows the request.
-    request({ planHash, targetIds, requestedBy = "assistant" } = {}) {
-      return exclusive(async () => {
-        if (!PLAN_HASH.test(planHash || "")) throw publishingError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
-        if (!Array.isArray(targetIds) || !targetIds.length || !targetIds.every((id) => typeof id === "string" && id)) {
-          throw publishingError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_invalid");
-        }
-        const value = await read();
-        value.pendingRequest = {
-          planHash,
-          planId: publishPlanDisplayId(planHash),
-          targetIds: [...targetIds],
-          requestedBy: requestedBy === "person" ? "person" : "assistant",
-          requestedAt: new Date(now()).toISOString()
-        };
-        await write(value);
-        return value.pendingRequest;
-      });
-    },
-    dismissRequest() {
-      return exclusive(async () => {
-        const value = await read();
-        value.pendingRequest = null;
-        await write(value);
-        return null;
-      });
-    },
-    // The person opens the confirmation for one plan: a one-shot token for this
-    // page only, bound to the plan hash and to them.
-    open({ planHash, actor } = {}) {
-      return exclusive(async () => {
-        const { token, record } = issuePublishConfirmation({ planHash, actor, now: now(), ...(ttlMs ? { ttlMs } : {}) });
-        const value = await read();
-        value.records.push(record);
-        await write(value);
-        return { token, expiresAt: record.expiresAt };
-      });
-    },
-    // Redeems and persists the used record before anything irreversible runs.
-    redeem({ planHash, token, actor } = {}) {
-      return exclusive(async () => {
-        if (actor?.kind !== "person") {
-          throw publishingError("Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
-        }
-        const value = await read();
-        // The token names this person's record; redeeming it says what else is
-        // wrong (already used, expired or another plan).
-        const index = value.records.findIndex((record) => record.actorId === actor.id && publishConfirmationTokenMatches(record, token));
-        if (index === -1) throw publishingError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID");
-        const redeemed = redeemPublishConfirmation({ token, planHash, actor, record: value.records[index], now: now() });
-        value.records[index] = redeemed;
-        if (value.pendingRequest?.planHash === planHash) value.pendingRequest = null;
-        await write(value);
-        return redeemed;
-      });
-    }
-  });
+  async function pendingRequest() {
+    return (await read()).pendingRequest || null;
+  }
+
+  // An assistant (or the person) asks for the confirmation prompt to open for
+  // this plan and its targets. Nothing runs; the Publish page shows the request.
+  function request({ planHash, targetIds, requestedBy = "assistant" } = {}) {
+    return exclusive(async () => {
+      if (!PLAN_HASH.test(planHash || "")) throw publishingError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
+      if (!Array.isArray(targetIds) || !targetIds.length || !targetIds.every((id) => typeof id === "string" && id)) {
+        throw publishingError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_invalid");
+      }
+      const value = await read();
+      value.pendingRequest = {
+        planHash,
+        planId: publishPlanDisplayId(planHash),
+        targetIds: [...targetIds],
+        requestedBy: requestedBy === "person" ? "person" : "assistant",
+        requestedAt: new Date(now()).toISOString()
+      };
+      await write(value);
+      return value.pendingRequest;
+    });
+  }
+
+  function dismissRequest() {
+    return exclusive(async () => {
+      const value = await read();
+      value.pendingRequest = null;
+      await write(value);
+      return null;
+    });
+  }
+
+  // The person opens the confirmation for one plan: a one-shot token for this
+  // page only, bound to the plan hash and to them.
+  function open({ planHash, actor } = {}) {
+    return exclusive(async () => {
+      const { token, record } = issuePublishConfirmation({ planHash, actor, now: now(), ...(ttlMs ? { ttlMs } : {}) });
+      const value = await read();
+      value.records.push(record);
+      await write(value);
+      return { token, expiresAt: record.expiresAt };
+    });
+  }
+
+  // Redeems and persists the used record before anything irreversible runs.
+  function redeem({ planHash, token, actor } = {}) {
+    return exclusive(async () => {
+      if (actor?.kind !== "person") {
+        throw publishingError("Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
+      }
+      const value = await read();
+      // The token names this person's record; redeeming it says what else is
+      // wrong (already used, expired or another plan).
+      const index = value.records.findIndex((record) => record.actorId === actor.id && publishConfirmationTokenMatches(record, token));
+      if (index === -1) throw publishingError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID");
+      const redeemed = redeemPublishConfirmation({ token, planHash, actor, record: value.records[index], now: now() });
+      value.records[index] = redeemed;
+      if (value.pendingRequest?.planHash === planHash) value.pendingRequest = null;
+      await write(value);
+      return redeemed;
+    });
+  }
+
+  return Object.freeze({ file, pendingRequest, request, dismissRequest, open, redeem });
 }
 
 export { createConfirmationService, confirmingActor };
