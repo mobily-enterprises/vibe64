@@ -21,9 +21,8 @@ import {
   writeSourceEditorExplanation
 } from "./explanationRecords.js";
 import { sourceEditorExplanationWithMessage, withSourceEditorExplanationFreshness } from "./explanationStream.js";
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { sourceEditorError } from "./sourceFiles.js";
-import { toText } from "@local/vibe64-core/shared/toText";
 
 // Stopping, cleaning up and deleting source explanations, with the helper
 // threads they used.

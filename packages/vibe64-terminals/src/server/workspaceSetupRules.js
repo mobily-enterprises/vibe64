@@ -7,7 +7,7 @@ import { workspaceSetupTranscript } from "@local/vibe64-runtime/server/workspace
 
 import { vibe64RuntimePacks } from "./vibe64OutputTargets.js";
 import { terminalNamespace } from "./terminalShared.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";

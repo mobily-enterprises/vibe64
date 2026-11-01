@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import { pathInsideOrEqual } from "./core.js";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SESSION_SOURCE_PATH_AUTHORITY_MANAGED = "managed_session_source";
 

@@ -10,7 +10,7 @@ import {
   SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS,
   normalizeSessionRenewalHandoverDraft
 } from "@local/vibe64-terminals/server/sessionRenewalHandover";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-runtime/server/runtime").Vibe64SessionRuntime} Vibe64SessionRuntime */
 

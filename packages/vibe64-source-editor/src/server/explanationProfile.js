@@ -7,9 +7,8 @@ import {
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { sourceEditorError } from "./sourceFiles.js";
-import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 

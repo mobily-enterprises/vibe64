@@ -2,7 +2,7 @@ import path from "node:path";
 
 
 import { sourceEditorLanguageForPath } from "./sourceEditorLanguage.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // How a session's file names match a query: tokens, fuzzy scores, ordering
 // and the ranked page of matches.

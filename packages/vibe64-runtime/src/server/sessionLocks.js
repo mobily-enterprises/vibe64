@@ -9,7 +9,7 @@ import {
   readProcessStart
 } from "@local/vibe64-execution/server";
 import { writeJsonFile } from "./sessionFiles.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */

@@ -23,7 +23,7 @@ import {
   toDate
 } from "./sessionStoreLayout.js";
 import { enqueueSessionMutation, SESSION_MUTATION_LOCK_WAIT_MS } from "./sessionStoreLocks.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */

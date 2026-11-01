@@ -32,7 +32,7 @@ import {
   renewAcceptedCodexAttachments,
   validateCodexAttachmentsBeforeDelivery
 } from "./codexAttachmentDelivery.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("../../types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-provider").createCodexAppServerProviderOwner>} CodexAppServerProviderOwner */

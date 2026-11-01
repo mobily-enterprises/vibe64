@@ -6,7 +6,7 @@ import {
   SESSION_RENEWAL_STAGE,
   publicSessionRenewalState
 } from "./sessionRenewalState.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */

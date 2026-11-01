@@ -1,5 +1,5 @@
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * One daemon-side capture of a session source command (git, tar), reporting

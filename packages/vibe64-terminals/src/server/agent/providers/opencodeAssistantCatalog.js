@@ -5,8 +5,7 @@ import {
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_TRANSPORT_IDS
 } from "@local/vibe64-runtime/shared";
-import { toText } from "@local/vibe64-core/shared/toText";
-import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const OPENCODE_CAPABILITY_PAGE_LIMIT = 25;
 const OPENCODE_CAPABILITY_PAGE_LIMIT_MAXIMUM = 100;

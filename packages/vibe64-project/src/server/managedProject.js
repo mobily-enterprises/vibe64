@@ -21,7 +21,7 @@ import {
 import {
   initializeGenesisProject
 } from "@local/vibe64-genesis/server";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function initialProjectError(result = {}, fallback = "Initial project materialization failed.") {
   return vibe64Error(

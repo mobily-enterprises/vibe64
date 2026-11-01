@@ -1,5 +1,4 @@
-import { toText } from "@local/vibe64-core/shared/toText";
-import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const VIBE64_ASSISTANT_ENGINE_IDS = Object.freeze({
   CLAUDE: "claude",

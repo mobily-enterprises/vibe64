@@ -32,7 +32,7 @@ import { createRenewalRestoration } from "./sessionRenewalRestoration.js";
 import { SESSION_RENEWAL_WORKFLOW_LOCK_RETRY_MS, createRenewalScheduler } from "./sessionRenewalScheduler.js";
 import { createRenewalSuccessorSession } from "./sessionRenewalSuccessor.js";
 import { createRenewalWorkflow } from "./sessionRenewalWorkflow.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 /** @typedef {import("./types.js").SessionArchive} SessionArchive */

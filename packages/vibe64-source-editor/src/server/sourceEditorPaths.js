@@ -2,7 +2,7 @@ import { lstat } from "node:fs/promises";
 import path from "node:path";
 
 import { pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * A session source path the editor may use: relative, inside the source and

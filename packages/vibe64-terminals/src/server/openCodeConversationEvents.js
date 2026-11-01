@@ -9,7 +9,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { openCodeError } from "./terminalShared.js";
 import { openCodeFingerprint } from "./openCodeConversationStorage.js";
 import { conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

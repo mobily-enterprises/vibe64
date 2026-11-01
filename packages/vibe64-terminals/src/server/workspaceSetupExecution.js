@@ -19,7 +19,7 @@ import {
   safeSetupLabel,
   stepStatus
 } from "./workspaceSetupRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").WorkspaceSetupRunnerState} WorkspaceSetupRunnerState */

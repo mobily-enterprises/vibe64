@@ -1,5 +1,5 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SOURCE_INSPECTION_KINDS = Object.freeze({
   MERGE_CONFLICT: "merge_conflict",

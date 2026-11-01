@@ -8,8 +8,7 @@ import {
 } from "./agent/providers/opencodeAssistantCatalog.js";
 import { openCodeError } from "./terminalShared.js";
 import { requireOpenCodeConnection } from "./openCodeHostPreparation.js";
-import { toText } from "@local/vibe64-core/shared/toText";
-import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./types.js").OpenCodeMainMessagePreparation} OpenCodeMainMessagePreparation */

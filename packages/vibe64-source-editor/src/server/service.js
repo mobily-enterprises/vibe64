@@ -51,7 +51,7 @@ import {
   sourceEditorInterfacePromptVersion,
   sourceEditorVibe64UserIdentity
 } from "./explanations.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

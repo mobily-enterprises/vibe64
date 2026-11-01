@@ -2,7 +2,7 @@ import { access } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { isPlainObject } from "./isPlainObject.js";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function plainClone(value) {
   return JSON.parse(JSON.stringify(value ?? null));

@@ -9,7 +9,7 @@ import {
   normalizeGithubAccountMode,
   runVibe64Command
 } from "@local/vibe64-execution/server";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function sourceError(message = "", code = "vibe64_session_source_failed") {
   return vibe64Error(message || "Vibe64 could not create the session source.", code);

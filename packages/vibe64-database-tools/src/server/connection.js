@@ -7,7 +7,7 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   databaseDialect
 } from "./databaseDialect.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const DATABASE_POOL_MAX = 3;
 const DATABASE_POOL_ACQUIRE_TIMEOUT_MS = 8_000;

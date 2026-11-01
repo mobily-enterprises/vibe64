@@ -3,7 +3,7 @@ import { lstat, mkdir, readlink, rename, rm, symlink } from "node:fs/promises";
 import path from "node:path";
 
 import { isMissingPathError, vibe64Error } from "@local/vibe64-core/server/core";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const VIBE64_CURRENT_SESSION_ALIAS_NAME = "selected";
 

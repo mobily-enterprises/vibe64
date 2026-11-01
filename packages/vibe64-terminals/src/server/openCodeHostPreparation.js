@@ -11,8 +11,7 @@ import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironm
 import { openCodeFingerprint, recordOpenCodeSessionIdentity } from "./openCodeConversationStorage.js";
 import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
-import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64ErrorResponse, vibe64StatusCode } from "@local/vibe64-core/server/serverResponses";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").AgentDatabaseCommandService} AgentDatabaseCommandService */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */

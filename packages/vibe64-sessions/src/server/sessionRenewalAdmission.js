@@ -1,5 +1,5 @@
 import { renewalError } from "./sessionRenewalRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * The renewal work this process admits: one run per renewal and per

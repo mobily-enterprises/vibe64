@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SESSION_RENEWAL_HANDOVER_SCHEMA_VERSION =
   "vibe64.session-renewal-handover.v1";

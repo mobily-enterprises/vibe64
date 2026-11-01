@@ -25,7 +25,7 @@ import {
   stateConnection
 } from "./aiConnectionRecords.js";
 import { assistantProviderPolicy, assistantProviderProductLabel } from "./assistantProviderPolicy.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 async function verifyOpenCodeConnection({
   apiKey: key,

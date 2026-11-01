@@ -1,7 +1,7 @@
 // Checks a Codex message's attachments before delivery and renews accepted ones, retrying a busy renewal.
 
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const CODEX_ATTACHMENT_MAX_ITEMS = 10;
 const CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000, 5_000]);

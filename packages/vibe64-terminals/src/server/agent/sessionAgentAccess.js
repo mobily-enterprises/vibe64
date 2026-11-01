@@ -6,7 +6,7 @@ import {
   findVibe64AgentProvider
 } from "@local/vibe64-runtime/shared";
 import { assistantUser, providerBindingConflictError, sessionAssistantSelection } from "./sessionAgentRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("../types.js").SessionAgentBindings} SessionAgentBindings */
 /** @typedef {import("../types.js").ReadAssistantAccess} ReadAssistantAccess */

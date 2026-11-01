@@ -2,7 +2,7 @@ import mysql from "mysql2/promise";
 import pg from "pg";
 
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // One real sign-in to the database server a project uses, with the values the
 // project's processes get. Nothing counts as working unless the server

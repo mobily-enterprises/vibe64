@@ -11,7 +11,7 @@ import {
   VIBE64_SESSION_STATUS
 } from "./sessionRecordRules.js";
 import { readDirectoryEntries, sortedDirectoryNames } from "./sessionStoreLayout.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionStoreState} SessionStoreState */
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */

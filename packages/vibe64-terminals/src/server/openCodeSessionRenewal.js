@@ -1,6 +1,5 @@
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
-import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
 import { upstreamMessageId, writeOpenCodeSessionMetadata } from "./openCodeConversationStorage.js";
 import {

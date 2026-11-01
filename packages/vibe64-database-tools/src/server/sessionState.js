@@ -5,7 +5,7 @@ import {
 
 import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */

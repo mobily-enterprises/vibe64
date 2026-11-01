@@ -21,7 +21,7 @@ import {
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 import {
   CALL_WEB_PATH,

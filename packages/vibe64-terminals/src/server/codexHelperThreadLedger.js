@@ -5,8 +5,7 @@ import {
   defineVibe64AgentExecutionProfileRequest,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
-import { toText } from "@local/vibe64-core/shared/toText";
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PROFILE_KEYS = Object.freeze([
   "limits",

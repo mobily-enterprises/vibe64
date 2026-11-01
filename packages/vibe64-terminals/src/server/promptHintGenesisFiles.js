@@ -11,7 +11,7 @@ import {
   PROMPT_HINT_SUBSYSTEMS_MAX_CHARACTERS,
   boundedText
 } from "./promptHintRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function promptHintBlueprintError(message) {
   const error = new Error(message);

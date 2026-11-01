@@ -10,7 +10,7 @@ import { conversationMessageId, upstreamMessageId } from "./openCodeConversation
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
 import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencodeServerProcess.js";
 import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 

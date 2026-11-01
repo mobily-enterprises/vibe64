@@ -1,5 +1,5 @@
 import { isPlainObject, vibe64Error } from "./core.js";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const RUNTIME_CONFIG_OWNERS = Object.freeze({
   SYSTEM: "system",

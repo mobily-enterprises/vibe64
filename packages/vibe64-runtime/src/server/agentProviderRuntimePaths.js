@@ -1,7 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * Existing runtime path policy moved without change so the offline upgrade

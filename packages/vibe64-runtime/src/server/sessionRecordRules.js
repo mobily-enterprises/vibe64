@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import { SESSION_RENEWAL_ID_PATTERN } from "./sessionRenewalIds.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // What a stored session record may hold: schema versions, statuses, session,
 // metadata, agent-run and background-task ids and states, list filters,

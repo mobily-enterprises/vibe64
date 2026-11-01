@@ -6,7 +6,7 @@ import {
   mutateSessionRenewalState
 } from "./sessionRenewalState.js";
 import { renewalError, renewalFailure, renewalTransitionActor, statePatch, timestamp } from "./sessionRenewalRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionArchive} SessionArchive */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

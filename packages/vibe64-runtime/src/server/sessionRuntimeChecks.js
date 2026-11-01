@@ -9,7 +9,7 @@ import { inspectSessionSourceMergeState } from "./sessionSourceGit.js";
 import { sourceInspectionFailure } from "./sessionSourceInspection.js";
 import { VIBE64_SESSION_STATUS, learningSessionBinding, vibe64SessionStatusIsHidden } from "./sessionStore.js";
 import { publicSessionMetadata, workspaceSetupStateFromMetadata } from "./workspaceSetupState.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./runtime.js").Vibe64SessionRuntime} Vibe64SessionRuntime */
 

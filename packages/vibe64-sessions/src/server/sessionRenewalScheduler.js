@@ -4,7 +4,7 @@ import {
   readSessionRenewalState
 } from "./sessionRenewalState.js";
 import { actorFromUser, renewalActorsMatch, renewalTransitionActor } from "./sessionRenewalRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").RenewalAdmission} RenewalAdmission */
 /** @typedef {import("./types.js").RenewalSessionAccess} RenewalSessionAccess */

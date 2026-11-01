@@ -5,7 +5,7 @@ import {
 import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
 import { vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").CodexAppServerRunOwner} CodexAppServerRunOwner */

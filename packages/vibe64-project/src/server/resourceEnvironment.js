@@ -6,7 +6,7 @@ import {
 import {
   rejectCallerEnvPolicy
 } from "@local/vibe64-execution/server";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 

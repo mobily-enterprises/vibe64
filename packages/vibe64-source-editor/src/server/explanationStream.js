@@ -28,9 +28,8 @@ import {
   sourceEditorSelectionForRange,
   sourceEditorTextHash
 } from "./explanationText.js";
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { readSourceEditorFile, sourceEditorError, sourceEditorErrorResponse } from "./sourceFiles.js";
-import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./explanationRecords.js").SourceEditorExplanationChats} SourceEditorExplanationChats */

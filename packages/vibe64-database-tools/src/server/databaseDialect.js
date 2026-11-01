@@ -5,7 +5,7 @@ import {
   inspectPostgresSchema,
   inspectSqliteSchema
 } from "./schemaInspector.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * Text from a driver value: binary values (mysql2 Buffers, worker-transferred

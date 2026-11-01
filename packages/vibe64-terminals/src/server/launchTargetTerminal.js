@@ -31,7 +31,7 @@ import {
   USAGE_RECORDING_REQUEST_HEADER
 } from "@local/vibe64-usage-recording/shared/contract";
 import { executionEnvRecord } from "./executionEnvRecord.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 const WEB_LAUNCH_READINESS_TIMEOUT_SECONDS = 300;

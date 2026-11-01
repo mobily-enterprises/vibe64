@@ -12,8 +12,7 @@ import { claudeConversationError, openCodeError, throwVibe64OpenCodeError } from
 import { codexAppServerTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { learningSessionExecutionRoot, readSessionConversationContext } from "./mainConversationContext.js";
-import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { normalizeText, toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */

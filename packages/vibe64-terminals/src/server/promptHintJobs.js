@@ -16,8 +16,7 @@ import {
   promptHintResponse,
   samePromptHintBasis
 } from "./promptHintRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */

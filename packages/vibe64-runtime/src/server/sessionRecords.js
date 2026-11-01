@@ -40,7 +40,7 @@ import {
   revisionNumber,
   withRevisionMarker
 } from "./sessionStoreLayout.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** A background task event is written unless its caller decides otherwise. */
 const writeEveryEvent = () => true;

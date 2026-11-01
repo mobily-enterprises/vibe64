@@ -16,7 +16,7 @@ import {
   searchDatabaseSchema
 } from "./schemaAccess.js";
 import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const MAX_ASSISTANT_SCHEMA_PROMPT_BYTES = 16 * 1024;
 const MAX_ASSISTANT_MESSAGES = 24;

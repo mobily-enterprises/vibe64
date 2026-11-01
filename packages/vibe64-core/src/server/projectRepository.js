@@ -9,7 +9,7 @@ import {
   resolveProjectGithubMirrorPath
 } from "./projectState.js";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PROJECT_REPOSITORY_MODE_GITHUB = "github";
 const PROJECT_REPOSITORY_MODE_MANAGED_GIT = "managed_git";

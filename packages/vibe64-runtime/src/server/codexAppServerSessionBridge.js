@@ -46,7 +46,7 @@ import {
   sendCodexAppServerHelperTurn,
   startCodexAppServerHelperThread
 } from "./codexAppServerHelperThreads.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./runtime.js").Vibe64SessionRuntime} Vibe64SessionRuntime */
 

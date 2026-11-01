@@ -9,7 +9,7 @@ import {
   codexAppServerTurnSettings as nativeCodexAppServerTurnSettings
 } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { isPlainRecord } from "../shared/isPlainRecord.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // Codex session defaults and the thread and turn settings session threads and
 // helper threads share.

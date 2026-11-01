@@ -3,9 +3,8 @@ import path from "node:path";
 
 import { SOURCE_EXPLANATION_PROMPT_VERSION, sourceExplanationGuidance } from "@local/vibe64-genesis/server";
 
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { sourceEditorError, sourceEditorHash, sourceEditorLanguageForPath } from "./sourceFiles.js";
-import { toText } from "@local/vibe64-core/shared/toText";
 
 // The text a source explanation reads and asks with: line ranges and
 // selections, bounded code and context, prompts, titles and summaries.

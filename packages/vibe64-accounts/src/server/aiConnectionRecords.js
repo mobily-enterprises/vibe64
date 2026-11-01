@@ -6,7 +6,7 @@ import {
 } from "../shared/aiConnectionIdentity.js";
 import { aiConnectionError } from "./aiConnectionError.js";
 import { OPENCODE_NATIVE_ENDPOINT_CODE, assistantProviderPolicy } from "./assistantProviderPolicy.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // What a saved AI connection is: its provider, key, label and model access,
 // the saved state's normal form and the view of a connection the person sees.

@@ -8,7 +8,7 @@ import {
 } from "@local/vibe64-runtime/shared";
 import { currentProjectVibe64User } from "@local/vibe64-core/server/projectRequestContext";
 import { hasOwn } from "../hasOwn.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE = "vibe64_agent_provider_binding_conflict";
 

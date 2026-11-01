@@ -28,7 +28,7 @@ import {
   readOpenCodeZenModelIds as readNativeOpenCodeZenModelIds,
   verifyOpenCodeApiKey as verifyNativeOpenCodeApiKey
 } from "@jskit-ai/assistant-core/server/opencode-process";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

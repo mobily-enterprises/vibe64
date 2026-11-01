@@ -3,7 +3,7 @@ import path from "node:path";
 import { writeJsonFileAtomic } from "./atomicFile.js";
 
 import { isMissingPathError, isPlainObject, vibe64Error } from "./core.js";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PERSONAL_AI_PROFILE_DIRECTORY = "profile";
 const PERSONAL_AI_PROFILE_FILE = "personal.json";

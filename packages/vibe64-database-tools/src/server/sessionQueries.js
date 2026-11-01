@@ -1,5 +1,5 @@
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { cancelDatabaseQuery, executeDatabaseQuery } from "./queryExecutor.js";
 
 /**

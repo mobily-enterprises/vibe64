@@ -51,7 +51,6 @@
     "./shared": "./src/shared/index.js",
     "./server/sha256Hex": "./src/server/sha256Hex.js",
     "./shared/doNothing": "./src/shared/doNothing.js",
-    "./shared/toText": "./src/shared/toText.js",
     "./shared/actionFields": "./src/shared/actionFields.js",
     "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",
     "./server/workspaceTeam": "./src/server/workspaceTeam.js",

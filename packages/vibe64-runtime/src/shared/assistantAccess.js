@@ -1,4 +1,4 @@
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const VIBE64_ASSISTANT_ACCESS_ERROR_CODES = Object.freeze({
   RESTRICTED: "vibe64_assistant_owner_required",

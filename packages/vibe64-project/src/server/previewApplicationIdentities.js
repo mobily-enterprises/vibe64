@@ -7,7 +7,7 @@ import {
 } from "@local/vibe64-core/server/previewAuth";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PREVIEW_APPLICATION_IDENTITIES_DIR = ".vibe64";
 const PREVIEW_APPLICATION_IDENTITIES_FILE = "preview-identities.json";

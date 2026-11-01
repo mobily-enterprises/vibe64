@@ -1,5 +1,5 @@
 import stripAnsi from "strip-ansi";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 

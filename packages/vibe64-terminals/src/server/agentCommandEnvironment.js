@@ -22,8 +22,7 @@ import {
   prepareCodexGitCommand
 } from "./codexGitCommand.js";
 import { createKeyedQueue, createSharedOperations } from "@local/vibe64-core/server/keyedOperations";
-import { toText } from "@local/vibe64-core/shared/toText";
-import { normalizeObject } from "@jskit-ai/kernel/shared/support/normalize";
+import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const preparations = createKeyedQueue();
 const closures = createSharedOperations();

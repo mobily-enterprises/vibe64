@@ -2,7 +2,7 @@ import { inspectVibe64ArchitectureLayout } from "@local/vibe64-genesis/server";
 import { pathExists } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 import {
   readGenesisCallWeb,

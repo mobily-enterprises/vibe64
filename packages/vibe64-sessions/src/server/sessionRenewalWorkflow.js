@@ -26,7 +26,7 @@ import {
   timestamp
 } from "./sessionRenewalRules.js";
 import { assertSuccessorSource, ensureSuccessorDiscarding } from "./sessionRenewalSuccessor.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").RenewalAdmission} RenewalAdmission */
 /** @typedef {ReturnType<typeof import("./sessionRenewalCompletion.js").createRenewalCompletion>} RenewalCompletion */

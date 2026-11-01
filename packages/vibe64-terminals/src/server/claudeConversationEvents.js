@@ -4,7 +4,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { isoNow } from "./isoNow.js";
 import { claudeConversationError } from "./terminalShared.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

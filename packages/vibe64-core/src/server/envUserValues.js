@@ -10,7 +10,7 @@ import {
   normalizeRuntimeConfigRecord,
   normalizeRuntimeConfigScope
 } from "./runtimeConfig.js";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const ENV_USER_VALUES_DIR = "env";
 const ENV_USER_VALUES_FILE = "user-values.json";

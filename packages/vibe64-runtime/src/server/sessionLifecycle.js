@@ -1,4 +1,4 @@
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const VIBE64_SESSION_CLOSING_AT_METADATA = "session_closing_at";
 const VIBE64_SESSION_CLOSING_REASON_METADATA = "session_closing_reason";

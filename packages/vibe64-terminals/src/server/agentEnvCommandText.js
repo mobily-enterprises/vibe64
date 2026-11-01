@@ -2,7 +2,7 @@
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/server/savedEnvValues";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandLineFailure } from "./commandFailure.js";
 
 const ENV_SCOPE_DEVELOPMENT = "development";

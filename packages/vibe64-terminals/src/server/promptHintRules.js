@@ -12,8 +12,7 @@ import {
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
-import { toText } from "@local/vibe64-core/shared/toText";
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v3";
 const PROMPT_HINT_TASK_DIRECTORY = "assistant/prompt-hint-tasks";

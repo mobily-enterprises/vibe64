@@ -11,7 +11,7 @@ import {
 import { CLAUDE_CODE_VERSION } from "./claudeCodeProcess.js";
 import { claudeConversationError } from "./terminalShared.js";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 

@@ -1,4 +1,4 @@
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * What the prompt hint parts share: the diagnostic report that never makes a

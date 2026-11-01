@@ -1,4 +1,4 @@
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const VIBE64_AGENT_TASK_STATES = Object.freeze({
   COMPLETED: "completed",

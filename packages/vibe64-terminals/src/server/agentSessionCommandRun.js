@@ -4,7 +4,7 @@
 import { open, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandLineFailure } from "./commandFailure.js";
 
 const AGENT_SESSION_COMMAND_NAME = "vibe64-session-command";

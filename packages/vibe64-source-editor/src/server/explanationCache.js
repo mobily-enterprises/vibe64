@@ -12,7 +12,7 @@ import { positiveInteger, sourceEditorExplanationSummary } from "./explanationTe
 import { readSourceEditorFile, sourceEditorError } from "./sourceFiles.js";
 import { readSourceInterpretation, writeSourceInterpretation } from "./sourceInterpretations.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */

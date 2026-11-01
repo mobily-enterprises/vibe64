@@ -4,7 +4,7 @@ import {
 } from "@local/vibe64-execution/server/terminalSessions";
 import { opencodeTerminalNamespace, vibe64Result } from "./terminalShared.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").OpenCodeSharedRuntime} OpenCodeSharedRuntime */
 /** @typedef {import("./types.js").OpenCodeHostPreparation} OpenCodeHostPreparation */

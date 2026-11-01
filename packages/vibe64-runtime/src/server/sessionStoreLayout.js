@@ -23,7 +23,7 @@ import {
   SESSION_ARCHIVE_TIMEOUT_MS,
   SESSION_LABEL_MAX_LENGTH
 } from "./sessionRecordRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // Where a session store keeps its files and the helpers that read them:
 // session and archive paths, directory listings, parsed-file caches, manifest

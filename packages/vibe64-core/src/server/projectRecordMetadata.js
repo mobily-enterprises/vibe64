@@ -4,7 +4,7 @@ import path from "node:path";
 import { serializeByKey, writeJsonFileAtomic } from "./atomicFile.js";
 
 import { isPlainObject } from "./core.js";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const projectRecordMetadataUpdates = new Map();
 

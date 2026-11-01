@@ -30,7 +30,7 @@ import {
   sourceEditorFileRevealTree
 } from "./sourceFileTree.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SourceEditorExplanationStream} SourceEditorExplanationStream */
 

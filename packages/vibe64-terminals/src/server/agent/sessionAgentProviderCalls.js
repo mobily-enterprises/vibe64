@@ -16,7 +16,7 @@ import {
   untrustedExecutionProfileResolutionError,
   verifiedExecutionProfileResolution
 } from "./sessionAgentRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("../types.js").SessionAttachments} SessionAttachments */
 /** @typedef {import("../types.js").SessionAgentManagerState} SessionAgentManagerState */

@@ -10,7 +10,7 @@ import { VIBE64_ASSISTANT_ENGINE_IDS } from "../shared/assistantSelection.js";
 import { createCodexAppServerIsolation } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { sendPreparedCodexAppServerHelperTurn } from "@jskit-ai/assistant-core/server/codex-turn";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // Codex helper threads: read-only threads a Vibe64 helper starts, resumes and
 // sends one bounded turn to, with their isolation, settings and output limits.

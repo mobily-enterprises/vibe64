@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { pathExists, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 import { runSourceCommand } from "./sourceCommand.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_REPACK_TIMEOUT_MS = 60_000;

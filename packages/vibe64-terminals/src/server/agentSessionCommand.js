@@ -71,7 +71,7 @@ import {
   VIBE64_WRAPPER_ENV,
   waitForCommandResult
 } from "./agentSessionCommandRun.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandLineFailure } from "./commandFailure.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */

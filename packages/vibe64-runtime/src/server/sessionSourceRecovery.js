@@ -21,7 +21,7 @@ import {
   SNAPSHOT_TIMEOUT_MS,
   writeMetadataValues
 } from "./sessionWorktreeGit.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 

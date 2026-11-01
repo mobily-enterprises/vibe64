@@ -6,7 +6,7 @@ import { VIBE64_UPLOAD_MAX_LABEL } from "@local/vibe64-core/shared";
 import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { BACKUP_RETENTION_MS, withProjectBackupsLock, withProjectDropZoneLock } from "@local/vibe64-runtime/server/projectBackups";

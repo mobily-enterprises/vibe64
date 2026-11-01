@@ -2,7 +2,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { isMissingPathError, isPlainObject } from "./core.js";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const PROJECT_RUNTIME_STATE_DIR = "runtime";
 const PROJECT_RUNTIME_OPEN_STATE_FILE = "open.json";

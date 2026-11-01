@@ -1,4 +1,4 @@
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 import {
   USAGE_ENTRY_KINDS,

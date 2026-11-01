@@ -1,5 +1,5 @@
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const MAX_DATABASE_SCHEMA_CATALOG_ENTRIES = 100;
 const MAX_DATABASE_SCHEMA_MATCHES = 8;

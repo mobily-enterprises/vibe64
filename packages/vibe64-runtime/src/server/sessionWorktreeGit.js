@@ -7,7 +7,7 @@ import { runVibe64Command, writeGitWorktreeTree } from "@local/vibe64-execution/
 
 import { assertRenewalId as assertSessionRenewalId } from "./sessionRenewalIds.js";
 import { runSourceCommand } from "./sourceCommand.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").Vibe64SessionStore} Vibe64SessionStore */
 

@@ -12,7 +12,7 @@ import {
   promptHintFailure,
   sessionStateForHints
 } from "./promptHintRules.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */

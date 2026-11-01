@@ -1,5 +1,5 @@
 import { aiConnectionError } from "./aiConnectionError.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const OPENCODE_NATIVE_ENDPOINT_CODE = "opencode-native";
 // The Z.AI model Vibe64 starts on: free, and verified directly against Z.AI.

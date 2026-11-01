@@ -7,7 +7,7 @@ import {
   PROJECT_SLUG_MAX_LENGTH,
   PROJECT_SLUG_PATTERN
 } from "../shared/projectSlug.js";
-import { toText } from "../shared/toText.js";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 function normalizeProjectSlug(value = "") {
   const slug = String(value || "").trim();

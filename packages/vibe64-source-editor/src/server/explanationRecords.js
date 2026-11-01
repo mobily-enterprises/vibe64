@@ -11,9 +11,8 @@ import {
   sourceEditorExecutionProfileSnapshot
 } from "./explanationProfile.js";
 import { positiveInteger, SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION, sourceEditorExplanationMessageId } from "./explanationText.js";
-import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { normalizeSourceEditorRelativePath, sourceEditorError, sourceEditorLanguageForPath } from "./sourceFiles.js";
-import { toText } from "@local/vibe64-core/shared/toText";
 
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {Map<string, object>} SourceEditorExplanationChats - each explanation in memory, by project, session and explanation id */

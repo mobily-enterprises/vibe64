@@ -7,7 +7,7 @@ import {
   jsonSafeValue
 } from "./queryExecutor.js";
 import { tableQuery } from "./tableQuery.js";
-import { toText } from "@local/vibe64-core/shared/toText";
+import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const LOOKUP_LIMIT = 25;
 const DISPLAY_COLUMN_NAMES = Object.freeze(["name", "title", "label", "code"]);
