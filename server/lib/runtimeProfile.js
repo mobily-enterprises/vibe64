@@ -1,3 +1,5 @@
+import { isTruthyEnvValue } from "./runtimeEnv.js";
+
 const VIBE64_RUNTIME_MODE_LOCAL = "local";
 const VIBE64_ALLOW_UNSAFE_LOCAL_MODE_ENV = "VIBE64_ALLOW_UNSAFE_LOCAL_MODE";
 
@@ -57,11 +59,6 @@ function isLocalhostHost(host = "") {
     "::1",
     "[::1]"
   ].includes(String(host || "").trim().toLowerCase());
-}
-
-function isTruthyEnvValue(value = "") {
-  const normalized = String(value || "").trim().toLowerCase();
-  return Boolean(normalized) && !["0", "false", "no", "off"].includes(normalized);
 }
 
 export {

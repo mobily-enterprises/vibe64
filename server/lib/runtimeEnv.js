@@ -83,6 +83,7 @@ function resolveRuntimeEnv() {
 
 export {
   APP_ENV_FILE,
+  isTruthyEnvValue,
   loadRuntimeEnvFiles,
   resolveRuntimeEnv
 };
