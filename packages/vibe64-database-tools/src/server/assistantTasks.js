@@ -41,6 +41,30 @@ function createDatabaseAssistantTasks({
 }) {
   const activeAssistants = new Set();
 
+  /**
+   * The session store reads and writes an ordinary close uses.
+   * @param {Vibe64SessionRuntime} runtime
+   */
+  function sessionStorage(runtime) {
+    return Object.freeze({
+      readArtifact: (sessionId, artifact) => runtime.store.readArtifact(sessionId, artifact),
+      mutateSession: (sessionId, mutation) => runtime.store.mutateSession(sessionId, mutation),
+      withReadableSessionPaths: (sessionId, read) => runtime.store.withReadableSessionPaths(sessionId, read)
+    });
+  }
+
+  /**
+   * The renewal-private reads and writes a renewal's helper cleanup uses.
+   * @param {Vibe64SessionRuntime} runtime
+   */
+  function renewalStorage(runtime) {
+    return Object.freeze({
+      readArtifact: (sessionId, artifact) => runtime.store.readArtifactForRenewal(sessionId, artifact),
+      mutateSession: (sessionId, mutation) => runtime.store.mutateSessionForRenewal(sessionId, mutation),
+      withReadableSessionPaths: (sessionId, read) => runtime.store.withReadableSessionPathsForRenewal(sessionId, read)
+    });
+  }
+
   async function assistantDecision(context) {
     return terminals.resolveAssistantPurpose({ purpose: "database_assistant" }, {
       session: context.session,
@@ -55,12 +79,10 @@ function createDatabaseAssistantTasks({
    * @param {string} sessionId
    * @param {string} artifact
    * @param {object | null} vibe64User
-   * @param {object | null} [renewalCleanup]
+   * @param {ReturnType<typeof sessionStorage>} storage
    */
-  async function cleanupAssistant(runtime, sessionId, artifact, vibe64User, renewalCleanup = null) {
-    const saved = renewalCleanup
-      ? await runtime.store.readArtifactForRenewal(sessionId, artifact)
-      : await runtime.store.readArtifact(sessionId, artifact);
+  async function cleanupAssistant(runtime, sessionId, artifact, vibe64User, storage) {
+    const saved = await storage.readArtifact(sessionId, artifact);
     let helper = null;
     try { helper = saved ? JSON.parse(saved) : null; }
     catch { throw databaseError(
@@ -87,25 +109,54 @@ function createDatabaseAssistantTasks({
         result?.code || "vibe64_database_assistant_cleanup_failed");
     }
     const retire = (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true });
-    if (renewalCleanup) await runtime.store.mutateSessionForRenewal(sessionId, retire);
-    else await runtime.store.mutateSession(sessionId, retire);
+    await storage.mutateSession(sessionId, retire);
     await rm(root, { recursive: true, force: true });
   }
 
   /**
    * Each person's receipt is closed on its own: one that cannot close is kept
    * for the next close and named, and never stops the others.
+   * @param {string} sessionId
+   * @param {{ runtime?: Vibe64SessionRuntime }} [options]
    */
   async function closeAssistantsForSession(sessionId, options = {}) {
+    const runtime = await closingRuntime(sessionId, options);
+    return closeSessionAssistants(sessionId, runtime, sessionStorage(runtime));
+  }
+
+  /**
+   * A renewal's helper cleanup closes the receipts through the renewal-private
+   * store, which refuses an ordinary close.
+   * @param {string} sessionId
+   * @param {{ runtime?: Vibe64SessionRuntime }} options
+   */
+  async function closeRenewalAssistantsForSession(sessionId, options) {
+    const runtime = await closingRuntime(sessionId, options);
+    return closeSessionAssistants(sessionId, runtime, renewalStorage(runtime));
+  }
+
+  /**
+   * Stops the session's running questions, then names the runtime that closes
+   * their receipts.
+   * @param {string} sessionId
+   * @param {{ runtime?: Vibe64SessionRuntime }} options
+   */
+  async function closingRuntime(sessionId, options) {
     const scope = currentProjectScopeKey();
     const tasks = [...activeAssistants].filter((task) => task.sessionId === sessionId && task.projectScope === scope);
     for (const task of tasks) task.controller.abort();
     await sessionQueries.cancelSession(sessionId);
     await Promise.allSettled(tasks.map((task) => task.promise));
-    const runtime = options.runtime || await project.createRuntimeWithoutSource();
-    const readPaths = options.renewalCleanup
-      ? runtime.store.withReadableSessionPathsForRenewal : runtime.store.withReadableSessionPaths;
-    const files = await readPaths(sessionId, async (paths) => {
+    return options.runtime || project.createRuntimeWithoutSource();
+  }
+
+  /**
+   * @param {string} sessionId
+   * @param {Vibe64SessionRuntime} runtime
+   * @param {ReturnType<typeof sessionStorage>} storage
+   */
+  async function closeSessionAssistants(sessionId, runtime, storage) {
+    const files = await storage.withReadableSessionPaths(sessionId, async (paths) => {
       try { return await readdir(path.join(paths.artifactsRoot, "database/assistant-tasks")); }
       catch (error) {
         if (error.code === "ENOENT") return [];
@@ -116,7 +167,7 @@ function createDatabaseAssistantTasks({
     for (const file of files) if (/^[a-f0-9]{20}\.json$/u.test(file)) {
       const artifact = `database/assistant-tasks/${file}`;
       try {
-        await cleanupAssistant(runtime, sessionId, artifact, null, options.renewalCleanup);
+        await cleanupAssistant(runtime, sessionId, artifact, null, storage);
       } catch (error) {
         failures.push(error);
         logOperationalEvent(logger, "warn", {
@@ -158,7 +209,7 @@ function createDatabaseAssistantTasks({
       const admitted = await runtime.store.runSessionExclusive(context.sessionId, `database-assistant-${task.actor}`, async () => {
         const schema = await sessionDatabase.currentSchema(context);
         const artifact = `database/assistant-tasks/${task.actor}.json`;
-        await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
+        await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User, sessionStorage(runtime));
         task.controller.signal.throwIfAborted();
         const id = `database_${randomUUID()}`;
         const root = path.join(runtime.stateRoot, "assistant-helpers", id);
@@ -226,7 +277,7 @@ function createDatabaseAssistantTasks({
         // Either way the retained artifact blocks the next question and is
         // retried on session close.
         try {
-          await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
+          await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User, sessionStorage(runtime));
         } catch (cleanupError) {
           if (failure) failure.cause ??= cleanupError;
           else failure = cleanupError;
@@ -267,6 +318,7 @@ function createDatabaseAssistantTasks({
   return Object.freeze({
     assistantDecision,
     closeAssistantsForSession,
+    closeRenewalAssistantsForSession,
     askAssistant,
     abortAll
   });

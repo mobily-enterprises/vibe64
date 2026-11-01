@@ -446,6 +446,7 @@ function createService({
     deleteSnippet,
     askAssistant: assistantTasks.askAssistant,
     closeAssistantsForSession: assistantTasks.closeAssistantsForSession,
+    closeRenewalAssistantsForSession: assistantTasks.closeRenewalAssistantsForSession,
     close
   });
 }

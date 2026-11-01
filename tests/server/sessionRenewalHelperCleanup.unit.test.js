@@ -48,16 +48,17 @@ for (const kind of ["hints", "database"]) {
           resolveAssistantPurpose: () => assert.fail("Cleanup must not resolve a new helper") } })
         : createDatabaseService({ logger: { info() {}, warn() {} }, publishLayoutChanged: async () => {}, sourceEditor: {}, project, terminals: { deleteEphemeralAgentConversation: remove } });
       const close = kind === "hints" ? service.cancelSessionPromptHintsForSession : service.closeAssistantsForSession;
+      const closeForRenewal = kind === "hints" ? service.cancelSessionPromptHintsForSession : service.closeRenewalAssistantsForSession;
       const context = { runtime, session: await store.readSessionForRenewal(sessionId),
         renewalCleanup: { kind: "successor", renewalId: "exact-renewal", sourceSessionId: "predecessor" } };
       await assert.rejects(close(sessionId), { code: "vibe64_session_renewal_private" });
       if (retained) {
-        await assert.rejects(close(sessionId, context), { code: "cleanup_pending" });
+        await assert.rejects(closeForRenewal(sessionId, context), { code: "cleanup_pending" });
         assert.deepEqual(JSON.parse(await store.readArtifactForRenewal(sessionId, artifact)), helper);
         await access(helper.scope.workdir);
       }
       cleanupReady = true;
-      assert.equal((await close(sessionId, context)).ok, true);
+      assert.equal((await closeForRenewal(sessionId, context)).ok, true);
       assert.equal(deletions, retained ? 2 : 0);
       assert.equal(await store.readArtifactForRenewal(sessionId, artifact), "");
       await assert.rejects(store.readSession(sessionId), { code: "vibe64_session_renewal_private" });
