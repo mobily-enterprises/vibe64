@@ -55,7 +55,7 @@ function publishingRoots(env = process.env) {
 }
 
 // A result shape the routes and assistant contracts share.
-async function result(operation) {
+async function publishingResult(operation) {
   try {
     return { ok: true, ...await operation() };
   } catch (error) {
@@ -201,9 +201,9 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     return chosen;
   }
 
-  const restoreFromRecoveryKit = (input) => result(async () => restoreRecoveryKit({ store: keys, bytes: Buffer.from(String(input.data || ""), "base64"), passphrase: input.passphrase }));
+  const restoreFromRecoveryKit = (input) => publishingResult(async () => restoreRecoveryKit({ store: keys, bytes: Buffer.from(String(input.data || ""), "base64"), passphrase: input.passphrase }));
 
-  const readState = () => result(async () => {
+  const readState = () => publishingResult(async () => {
     const { orchestrator } = projectRuntime();
     const state = await orchestrator.readState();
     return {
@@ -216,13 +216,13 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     };
   });
 
-  const suggestRelease = () => result(() => projectRuntime().orchestrator.suggestRelease());
+  const suggestRelease = () => publishingResult(() => projectRuntime().orchestrator.suggestRelease());
 
-  const prepareRelease = (input) => result(() => projectRuntime().orchestrator.prepareRelease({
+  const prepareRelease = (input) => publishingResult(() => projectRuntime().orchestrator.prepareRelease({
     sessionId: input.sessionId, versions: input.versions || {}, notes: input.notes, user: input.vibe64User || null
   }));
 
-  const addTarget = (input) => result(async () => {
+  const addTarget = (input) => publishingResult(async () => {
     const { targets, orchestrator } = projectRuntime();
     const state = await orchestrator.readState();
     const entry = state.packaging.packages.find((candidate) => candidate.id === input.package);
@@ -238,7 +238,7 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     return { target };
   });
 
-  const updateTarget = (input) => result(async () => {
+  const updateTarget = (input) => publishingResult(async () => {
     const { targets } = projectRuntime();
     const existing = await targets.get(input.targetId);
     if (!existing) throw publishingError(`There is no target ${input.targetId}.`, "vibe64_publishing_target_missing");
@@ -252,11 +252,11 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     return { target: await targets.update(existing.id, changes) };
   });
 
-  const removeTarget = (input) => result(() => projectRuntime().targets.remove(input.targetId));
+  const removeTarget = (input) => publishingResult(() => projectRuntime().targets.remove(input.targetId));
 
-  const plan = (input) => result(async () => ({ plan: await projectRuntime().orchestrator.plan({ targetIds: input.targetIds || [], acknowledged: input.acknowledged || [] }) }));
+  const plan = (input) => publishingResult(async () => ({ plan: await projectRuntime().orchestrator.plan({ targetIds: input.targetIds || [], acknowledged: input.acknowledged || [] }) }));
 
-  const runChecks = () => result(async () => {
+  const runChecks = () => publishingResult(async () => {
     const baseline = await repository.baseline();
     if (!baseline.supported) throw publishingError(baseline.message, "vibe64_publishing_repository_unavailable");
     const { verification } = projectRuntime();
@@ -266,7 +266,7 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
 
   // The release needs the saved work on the remote; the person pushes it from
   // the Release dialog instead of hunting for the branch menu.
-  const pushSavedWork = () => result(async () => {
+  const pushSavedWork = () => publishingResult(async () => {
     const baseline = await repository.baseline();
     if (!baseline.supported) throw publishingError(baseline.message, "vibe64_publishing_repository_unavailable");
     if (!baseline.saved) throw publishingError("Save your changes before pushing them.", "vibe64_publishing_baseline_unsaved");
@@ -274,24 +274,24 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     return { ...pushed, baseline: await repository.baseline() };
   });
 
-  const dryRun = (input) => result(() => projectRuntime().orchestrator.dryRun({
+  const dryRun = (input) => publishingResult(() => projectRuntime().orchestrator.dryRun({
     planHash: input.planHash, targetIds: input.targetIds || [], acknowledged: input.acknowledged || []
   }));
 
-  const requestPublish = (input) => result(() => projectRuntime().orchestrator.requestPublish({
+  const requestPublish = (input) => publishingResult(() => projectRuntime().orchestrator.requestPublish({
     planHash: input.planHash, targetIds: input.targetIds || [], requestedBy: "assistant"
   }));
 
-  const dismissRequest = () => result(async () => ({ pendingConfirmation: await projectRuntime().confirmations.dismissRequest() }));
+  const dismissRequest = () => publishingResult(async () => ({ pendingConfirmation: await projectRuntime().confirmations.dismissRequest() }));
 
-  const openConfirmation = (input, context) => result(() => projectRuntime().orchestrator.openConfirmation({
+  const openConfirmation = (input, context) => publishingResult(() => projectRuntime().orchestrator.openConfirmation({
     planHash: input.planHash,
     targetIds: input.targetIds || [],
     acknowledged: input.acknowledged || [],
     actor: confirmingActor({ channel: context.channel, assistant: Boolean(context.colleague), user: input.vibe64User })
   }));
 
-  const confirmRelease = (input, context) => result(() => projectRuntime().orchestrator.confirmRelease({
+  const confirmRelease = (input, context) => publishingResult(() => projectRuntime().orchestrator.confirmRelease({
     planHash: input.planHash,
     token: input.token,
     targetIds: input.targetIds || [],
@@ -299,28 +299,28 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     actor: confirmingActor({ channel: context.channel, assistant: Boolean(context.colleague), user: input.vibe64User })
   }));
 
-  const listHistory = (input) => result(async () => ({ releases: await projectRuntime().orchestrator.listHistory({ limit: input.limit || 30 }) }));
+  const listHistory = (input) => publishingResult(async () => ({ releases: await projectRuntime().orchestrator.listHistory({ limit: input.limit || 30 }) }));
 
-  const readRelease = (input) => result(async () => ({ release: await projectRuntime().orchestrator.readRelease(input.releaseId) }));
+  const readRelease = (input) => publishingResult(async () => ({ release: await projectRuntime().orchestrator.readRelease(input.releaseId) }));
 
-  const readLogs = (input) => result(() => projectRuntime().orchestrator.readLogs(input.releaseId));
+  const readLogs = (input) => publishingResult(() => projectRuntime().orchestrator.readLogs(input.releaseId));
 
-  const createKeys = (input) => result(async () => ({ keys: await keys.create({ passphrase: input.passphrase, windowMs: minutes(input.windowMinutes) }) }));
+  const createKeys = (input) => publishingResult(async () => ({ keys: await keys.create({ passphrase: input.passphrase, windowMs: minutes(input.windowMinutes) }) }));
 
-  const unlockKeys = (input) => result(async () => ({ keys: await keys.unlock({ passphrase: input.passphrase, windowMs: minutes(input.windowMinutes) }) }));
+  const unlockKeys = (input) => publishingResult(async () => ({ keys: await keys.unlock({ passphrase: input.passphrase, windowMs: minutes(input.windowMinutes) }) }));
 
-  const lockKeys = () => result(async () => ({ keys: await keys.lock() }));
+  const lockKeys = () => publishingResult(async () => ({ keys: await keys.lock() }));
 
-  const addAccount = (input) => result(async () => ({ account: await broker.addAccount(input) }));
+  const addAccount = (input) => publishingResult(async () => ({ account: await broker.addAccount(input) }));
 
-  const removeAccount = (input) => result(() => broker.removeAccount(input.accountId));
+  const removeAccount = (input) => publishingResult(() => broker.removeAccount(input.accountId));
 
-  const recoveryKit = (input) => result(async () => {
+  const recoveryKit = (input) => publishingResult(async () => {
     const kit = await createRecoveryKit({ store: keys, passphrase: input.passphrase, now });
     return { fileName: kit.fileName, data: kit.bytes.toString("base64"), record: kit.record };
   });
 
-  const createInstallKey = (input) => result(async () => {
+  const createInstallKey = (input) => publishingResult(async () => {
     const { targets, orchestrator } = projectRuntime();
     const target = await targets.get(input.targetId);
     if (target?.destination !== "android-sideload") throw publishingError("Install keys belong to an Install on my phone target.", "vibe64_publishing_target_invalid");
@@ -333,23 +333,23 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     return { key: { certificateSha256: key.certificateSha256, algorithm: key.algorithm } };
   });
 
-  const toolchainLicence = () => result(async () => ({ licence: await toolchains.licence() }));
+  const toolchainLicence = () => publishingResult(async () => ({ licence: await toolchains.licence() }));
 
-  const acceptToolchainLicence = (input) => result(async () => ({
+  const acceptToolchainLicence = (input) => publishingResult(async () => ({
     acceptance: await toolchains.accept({ id: input.id, hash: input.hash, acceptedBy: input.vibe64User?.username || input.vibe64User?.id || os.userInfo().username })
   }));
 
-  const installAndroidToolchain = () => result(async () => ({ install: await toolchains.installAndroid() }));
+  const installAndroidToolchain = () => publishingResult(async () => ({ install: await toolchains.installAndroid() }));
 
-  const installPythonTools = () => result(async () => {
+  const installPythonTools = () => publishingResult(async () => {
     await installTool(toolchainsRoot, "python3", ["-m", "venv", pythonTools], 120_000, runCommand);
     await installTool(toolchainsRoot, path.join(pythonTools, "bin", "python"), ["-m", "pip", "install", "--quiet", "--disable-pip-version-check", `twine==${TWINE_VERSION}`], 300_000, runCommand);
     return { python: { ready: true, folder: pythonTools } };
   });
 
-  const shareInstall = (input) => result(async () => ({ share: await lanShare.start(await signedApk(input)) }));
+  const shareInstall = (input) => publishingResult(async () => ({ share: await lanShare.start(await signedApk(input)) }));
 
-  const stopShare = () => result(async () => ({ share: await lanShare.stop() }));
+  const stopShare = () => publishingResult(async () => ({ share: await lanShare.stop() }));
 
   return Object.freeze({
     keys,
@@ -405,4 +405,4 @@ function minutes(value) {
   return Math.round(Number(value) * 60 * 1000);
 }
 
-export { createPublishingPackaging, createPublishingService, createPublishingToolchains, publishingRoots, result as publishingResult };
+export { createPublishingPackaging, createPublishingService, createPublishingToolchains, publishingResult, publishingRoots };
