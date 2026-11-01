@@ -138,7 +138,7 @@ function createColleagueHistory({
         worker.wakeForObservations(state);
       }
     }));
-    state.admission = rotating.catch(() => {});
+    state.admission = rotating.catch(() => {}); // The next admission waits; this failure reaches its caller.
     const fresh = await rotating;
     return { ...await records.snapshot(state), fresh };
   }

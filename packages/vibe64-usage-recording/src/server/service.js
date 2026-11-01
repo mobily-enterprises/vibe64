@@ -199,7 +199,8 @@ function createService({
       }
     } catch (error) {
       logger.warn({ error, recordingId: entry.record.id }, "Usage recording could not finish cleanly.");
-      await records.changeState(entry, "stopped", { stopReason: "error" }).catch(() => {});
+      await records.changeState(entry, "stopped", { stopReason: "error" }).catch(stateError => logger.warn(
+        { error: stateError, recordingId: entry.record.id }, "Usage recording could not save that it stopped after an error."));
     } finally {
       live.delete(entry.record.id);
       rememberReader(entry.directory, entry.reader);
@@ -232,7 +233,8 @@ function createService({
     entry.unregister();
     clearTimers(entry);
     await writeJsonFile(path.join(entry.directory, "control.json"), { state: "stopping" });
-    await entry.reader.poll().catch(() => {});
+    await entry.reader.poll().catch(error => logger.warn({ error, recordingId: entry.record.id },
+      "Usage recording could not read its last trace lines before stopping."));
     entry.record.tracers = state === "failed"
       ? entry.record.tracers.map((tracer) => ({ ...tracer, state: tracer.state === "unavailable" ? tracer.state : "failed", reason }))
       : records.unreadyTracers(entry, reason);

@@ -12,6 +12,7 @@ import { createTrainingLearnerNotesOperations } from "../../packages/vibe64-trai
 import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-training/src/server/learnerEvents.js";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-training/src/shared/learnerEvents.js";
 import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // Learning v2 learner notes (contract C7) over the real learner store. Notes
 // never read lesson content, so the installed content reader refuses any use.
@@ -25,7 +26,7 @@ async function fixture(t) {
   const systemRoot = path.join(root, "system");
   await mkdir(systemRoot, { mode: 0o700 });
   const content = { readLesson() { throw new Error("Learner notes must not read lesson content."); } };
-  const learners = createTrainingLearnerState({ systemRoot, content });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   const published = [];
   const publishLearnerChanged = createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event); } });
   const auth = { user: ALICE };

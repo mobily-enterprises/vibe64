@@ -51,6 +51,7 @@ async function start() {
 
 async function stop() {
   clearInterval(timer);
+  // Best effort: the share expires on its own within minutes anyway.
   if (share.value) await props.call("/share", { method: "DELETE", refreshAfter: false }).catch(() => {});
   share.value = null;
 }

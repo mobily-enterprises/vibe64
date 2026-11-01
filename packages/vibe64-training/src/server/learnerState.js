@@ -50,6 +50,7 @@ import { createLearnerSteps } from "./learnerSteps.js";
 import { createLearnerPreparation } from "./learnerPreparation.js";
 
 /** @typedef {import("./types.js").InstalledTrainingContent} InstalledTrainingContent */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Callers derive actor from fresh authentication and admit a new start against
@@ -60,11 +61,13 @@ import { createLearnerPreparation } from "./learnerPreparation.js";
  * @param {string} [dependencies.contentSystemRoot] where the installed content is read; an offline restore reads
  * staged state against the live installation
  * @param {InstalledTrainingContent} [dependencies.content] an isolated author-preview store's own exact reader
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createTrainingLearnerState({
   systemRoot,
   contentSystemRoot = systemRoot,
-  content
+  content,
+  logger
 }) {
   assertLearningSystemRoot(systemRoot);
   const installed = content ?? createInstalledTrainingContent({ systemRoot: contentSystemRoot });
@@ -553,7 +556,8 @@ function createTrainingLearnerState({
       await release();
     }
     // Disposable once the end is saved; a retry of the same end forgets them again.
-    await forgetAttemptRecords(paths, attemptId).catch(() => {});
+    await forgetAttemptRecords(paths, attemptId).catch(error => logger.warn({ error, attemptId },
+      "An ended attempt's code ledger and step results were not forgotten; a retry of the same end forgets them."));
     return ended;
   }
 

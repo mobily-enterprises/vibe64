@@ -15,6 +15,7 @@ import { createTrainingStepChecks } from "../../packages/vibe64-training/src/ser
 import { createTrainingStepActions } from "../../packages/vibe64-training/src/server/stepActions.js";
 import { createTrainingStepOperations } from "../../packages/vibe64-training/src/server/stepOperations.js";
 import { createTrainingStepReviewer } from "../../packages/vibe64-training/src/server/stepReview.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // The review check end to end over the real bundler, installed content,
 // learner store, step owner, actions and retained Helper. Only the evidence
@@ -51,7 +52,7 @@ async function fixture(t) {
   await writeFile(path.join(snapshotRoot, "pin.json"), JSON.stringify(topic));
   const pin = { course: { courseId: "intro", release: "0.1.0" }, topic, lesson: { code: "STEPS-ONE", hash: bundle.lessons[0].hash } };
   const content = createInstalledTrainingContent({ systemRoot });
-  const learners = createTrainingLearnerState({ systemRoot, content });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   const user = { uid: 42, username: "alice", role: "member" };
   const reserved = await learners.reserveAttempt({ actor: user, expectedRevision: 0, requestId: "start", pin });
   const attemptId = reserved.attempt.attemptId, sessionId = `training-${attemptId}`;
@@ -94,7 +95,7 @@ async function fixture(t) {
     evidence, reviewer: createTrainingStepReviewer({ learners, terminals }) });
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   const published = [];
-  const definitions = createTrainingStepActions({ stepOperations: createTrainingStepOperations({ learners, attemptLearners: learners, content, steps,
+  const definitions = createTrainingStepActions({ stepOperations: createTrainingStepOperations({ logger: silentLogger, learners, attemptLearners: learners, content, steps,
     publishLearnerChanged: async event => { published.push(event); } }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });

@@ -54,7 +54,8 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
     vibe64Driver(context);
     const entry = { upstreamSessionId: providerSessionId, workdir, promptContext: context };
     // This records delivery ownership, not prompt installation. Publish a
-    // binding only after hooks can read the same durable entry.
+    // binding only after hooks can read the same durable entry. An earlier
+    // write's failure already reached its own caller.
     const write = pending.catch(() => {}).then(async () => {
       if (JSON.stringify(sessions.get(providerSessionId)) === JSON.stringify(entry)) return;
       const next = new Map(sessions);
@@ -68,7 +69,7 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
 
   async function close() {
     closed = true;
-    await pending.catch(() => {});
+    await pending.catch(() => {}); // A write's failure already reached its caller.
     sessions.clear();
     if (!runtimeDirectory) await rm(directory, { recursive: true, force: true });
   }

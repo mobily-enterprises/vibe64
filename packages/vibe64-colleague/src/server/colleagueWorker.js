@@ -16,6 +16,7 @@ import { ACTION_COLLEAGUE_CONTEXT_READ } from "./colleagueActions.js";
 /** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
 /** @typedef {import("./types.js").ColleagueConversations} ColleagueConversations */
 /** @typedef {import("./types.js").ColleagueTurnInputs} ColleagueTurnInputs */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * A completed reply delivered these observations: drop them and settle the
@@ -45,6 +46,7 @@ function markObservationsDelivered(record, observations) {
  * @param {ColleagueThreads} dependencies.threads
  * @param {ColleagueConversations} dependencies.conversations
  * @param {ColleagueTurnInputs} dependencies.turnInputs
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createColleagueWorker({
   actions,
@@ -55,7 +57,8 @@ function createColleagueWorker({
   records,
   threads,
   conversations,
-  turnInputs
+  turnInputs,
+  logger
 }) {
   async function runApi(state, connection, generation, message, admission, controller) {
     const isCurrent = () =>
@@ -442,7 +445,7 @@ function createColleagueWorker({
     const controller = new AbortController();
     state.workerAbort = controller;
     const admission = Promise.withResolvers();
-    admission.promise.catch(() => {});
+    admission.promise.catch(() => {}); // Its caller awaits it; this only marks the rejection handled.
     state.record.status = "working";
     state.interimReply = null;
     state.running = records.persist(state).then(async () => {
@@ -481,11 +484,14 @@ function createColleagueWorker({
         }
         if (!serviceState.lifecycle.closed && !state.stopping && state.record.status === "ready") {
           if ((native || state.runtimeOwner === conversations.nativeRuntime) &&
-              state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
+              state.pendingMessages.length) {
+            void startWorker(state, state.nextConnection, null, true).catch(error => logger.warn({ error },
+              "Colleague's worker did not restart; the queued messages stay queued."));
+          }
           else wakeForObservations(state);
         }
       });
-    void state.running.catch(() => {});
+    void state.running.catch(() => {}); // The run records its own failure; this only marks the rejection handled.
     return admission.promise;
   }
 
@@ -501,7 +507,8 @@ function createColleagueWorker({
     // Reserve the worker synchronously; its preparation resolves the actual
     // backend before the first wake, without an untracked parallel preparation.
     void startWorker(state, { clientId: "", focus: observation.focus }, null,
-      state.runtimeOwner ? state.runtimeOwner === conversations.nativeRuntime : null).catch(() => {});
+      state.runtimeOwner ? state.runtimeOwner === conversations.nativeRuntime : null).catch(error => logger.warn({ error },
+      "Colleague's worker did not start for an observation; it stays queued."));
   }
 
   function scheduleWatches(state, delay = watchPollMs) {
@@ -512,7 +519,7 @@ function createColleagueWorker({
     clearTimeout(state.watchTimer);
     state.watchTimer = setTimeout(() => {
       state.watchTimer = null;
-      void pollWatches(state).catch(() => {});
+      void pollWatches(state).catch(error => logger.warn({ error }, "Colleague's watches were not polled; the next poll retries."));
     }, delay);
     state.watchTimer.unref();
   }

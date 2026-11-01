@@ -15,6 +15,7 @@ import { createReleaseOrchestrator } from "../../packages/vibe64-publishing/src/
 import { __testables, changelogSection } from "../../packages/vibe64-publishing/src/server/releaseRecords.js";
 import { createReleaseHistoryStore } from "../../packages/vibe64-publishing/src/server/state/releaseHistoryStore.js";
 import { createTargetsStore } from "../../packages/vibe64-publishing/src/server/state/targetsStore.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const { outputExcerpt } = __testables;
 
@@ -107,6 +108,7 @@ async function fixture(t, { failing = new Set(), failingBuilds = new Set(), veri
     repository,
     verification: { status: async (commit) => ({ commit, status: verification }) },
     credentials,
+    logger: silentLogger,
     sourceWriter: { prepareAndWrite: async ({ entry, version }) => ({ package: entry.id, previousVersion: "1.1.0", version, files: [{ path: "package.json" }, { path: "CHANGELOG.md" }] }) },
     packaging
   });

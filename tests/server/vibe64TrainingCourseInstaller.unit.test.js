@@ -14,6 +14,7 @@ import { createTrainingCourseInstaller } from "../../packages/vibe64-training/sr
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // Real local Git repositories stand in for GitHub: the installer's remote
 // resolver maps each canonical owner/name slug to a file:// URL.
@@ -244,7 +245,7 @@ test("catalogue actions require a signed-in user and report install results", as
   const f = await fixture(t);
   const auth = { user: null };
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const definitions = createTrainingActions({ operations: createTrainingOperations({ publishLearnerChanged: async () => {}, catalogue: f.catalogue, learners: { readState() {} },
+  const definitions = createTrainingActions({ operations: createTrainingOperations({ logger: silentLogger, publishLearnerChanged: async () => {}, catalogue: f.catalogue, learners: { readState() {} },
     courseInstaller: f.make() }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user, authorizeProject() { throw new Error("No project."); } });
@@ -269,7 +270,7 @@ test("an update installs the newer release and removes the older one, freeing it
   await installer.installCourse({ courseId: "first-course", release: "0.1.0" });
   // A learner already started the 0.1.0 lesson.
   const content = createInstalledTrainingContent({ systemRoot: f.systemRoot });
-  const learners = createTrainingLearnerState({ systemRoot: f.systemRoot, content });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot, content });
   const actor = { uid: 42, username: "member", role: "member" };
   const oldLesson = f.lock.topics[0].lessons[0];
   const oldPin = { course: { courseId: "first-course", release: "0.1.0" },

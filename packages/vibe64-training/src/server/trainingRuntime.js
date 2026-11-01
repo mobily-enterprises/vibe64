@@ -22,6 +22,7 @@ import { createTrainingOperations } from "./trainingOperations.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").LearningFacts} LearningFacts */
@@ -34,6 +35,7 @@ import { createTrainingOperations } from "./trainingOperations.js";
  * @param {ActionCatalogue} dependencies.actionCatalogue
  * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeEvents} dependencies.events
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {SessionsService} dependencies.sessions
@@ -45,6 +47,7 @@ function createTraining({
   actionCatalogue,
   env,
   events,
+  logger,
   project,
   projectContext,
   sessions,
@@ -61,7 +64,7 @@ function createTraining({
     repository: env.VIBE64_LEARNING_CATALOG_REPOSITORY
   });
   const content = createInstalledTrainingContent({ systemRoot });
-  const learners = createTrainingLearnerState({ systemRoot, content });
+  const learners = createTrainingLearnerState({ systemRoot, content, logger });
   const codeAuthorship = createTrainingCodeAuthorship({
     learners,
     content,
@@ -135,7 +138,8 @@ function createTraining({
       exercises,
       courseInstaller,
       learningSpace,
-      publishLearnerChanged
+      publishLearnerChanged,
+      logger
     }),
     stepOperations: createTrainingStepOperations({
       learners,
@@ -144,7 +148,8 @@ function createTraining({
       steps,
       exercises,
       learningSpace,
-      publishLearnerChanged
+      publishLearnerChanged,
+      logger
     }),
     learnerNotes: createTrainingLearnerNotesOperations({ learners, publishLearnerChanged }),
     lessonVisuals: createTrainingLessonVisuals({ learners, content })

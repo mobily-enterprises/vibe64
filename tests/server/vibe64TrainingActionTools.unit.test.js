@@ -15,6 +15,7 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createInstalledTrainingCatalogue } from "../../packages/vibe64-training/src/server/installedCatalogue.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { underActionPolicy } from "./vibe64TestHelpers.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 async function fixture(t, { presentation = false, released = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-actions-"));
@@ -54,7 +55,7 @@ async function fixture(t, { presentation = false, released = false } = {}) {
     topicManifest: installed.topicManifest, topicHash: installed.topicHash }]);
   const catalogue = createInstalledTrainingCatalogue({ systemRoot });
   await catalogue.enableCourse({ course, lock, expectedRevision: 0 });
-  const learners = createTrainingLearnerState({ systemRoot });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot });
   const pin = { course: { courseId: course.courseId, release: course.release }, topic, lesson: { code: "USE-ONE", hash: bundle.lessons[0].hash } };
   const auth = { user: { uid: 42, username: "member", role: "member" } };
   const reserve = () => learners.reserveAttempt({ actor: auth.user, requestId: "start-one", expectedRevision: 0, pin });
@@ -86,6 +87,7 @@ async function fixture(t, { presentation = false, released = false } = {}) {
   function register(host = exercises, replacements = {}) {
     const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
     const operations = createTrainingOperations({
+      logger: silentLogger,
       catalogue,
       learners,
       content,

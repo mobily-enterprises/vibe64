@@ -11,6 +11,7 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
 import { v2Content } from "./vibe64TrainingV2LessonStub.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // Learner state: step-progress.json (the attempt in progress), reader.json and the pass rules.
 // Lesson content is the real bundled code-practical fixture projected through
@@ -43,7 +44,7 @@ async function fixture(t, { lessonVersion = 2 } = {}) {
   const content = lessonVersion === 2 ? v2Content(installed, { steps,
     checks: [...(await installed.readLesson({ ...topic, lessonCode: "CODE-ONE", lessonHash: pin.lesson.hash })).lesson.checks,
       { id: "press-response", file: "checks/notes/title.mjs", kind: "response" }] }) : installed;
-  const learners = createTrainingLearnerState({ systemRoot, content });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   const actor = { uid: 42, username: "alice" };
   let revision = 0;
   async function start(requestId = "start") {

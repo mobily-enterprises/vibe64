@@ -12,6 +12,7 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { createTrainingDeclaredCheckOwner } from "../../packages/vibe64-training/src/server/declaredCheck.js";
 import { v2Content } from "./vibe64TrainingV2LessonStub.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // Preserved topic check, run as a lesson step's response check through the
 // actual standalone finite gateway.
@@ -55,7 +56,7 @@ async function fixture(t, { script = originalCheck, assets = false, lessonVersio
   const pin = { course: { courseId: "intro", release: "0.1.0" }, topic, lesson: { code: "USE-ONE", hash: bundle.lessons[0].hash } };
   const installed = createInstalledTrainingContent({ systemRoot });
   const content = lessonVersion === 2 ? v2Content(installed, { steps: v2Steps }) : installed;
-  const learners = createTrainingLearnerState({ systemRoot, content });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   const actor = { uid: 42, username: "alice" };
   const reserved = await learners.reserveAttempt({ actor, expectedRevision: 0, requestId: "start", pin });
   const attemptId = reserved.attempt.attemptId, sessionId = `training-${attemptId}`;

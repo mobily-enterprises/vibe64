@@ -21,6 +21,7 @@ import { text } from "./actionSchemas.js";
 /** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
 /** @typedef {import("./types.js").TrainingLearningSpace} TrainingLearningSpace */
 /** @typedef {import("./types.js").TrainingPublishLearnerChanged} TrainingPublishLearnerChanged */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Course creation reports the catalogue owner's own corrective message.
@@ -77,6 +78,7 @@ async function runForLearner(operation, input, context, toError) {
  * @param {TrainingCourseInstaller} dependencies.courseInstaller
  * @param {TrainingLearningSpace} dependencies.learningSpace
  * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createTrainingOperations({
   catalogue,
@@ -85,7 +87,8 @@ function createTrainingOperations({
   exercises,
   courseInstaller,
   learningSpace,
-  publishLearnerChanged
+  publishLearnerChanged,
+  logger
 }) {
   // A pinned lesson's steps never change, so each is read once; who may take
   // them is decided per read (lessonAvailability.js).
@@ -129,7 +132,8 @@ function createTrainingOperations({
     let result;
     try { result = await operation(); }
     catch (error) {
-      await notifyLearner(actor, lessonAttemptId).catch(() => {});
+      await notifyLearner(actor, lessonAttemptId).catch(notifyError => logger.warn({ error: notifyError, attemptId: lessonAttemptId },
+        "The learner's tabs were not told about a failed lesson change; the failure is still reported."));
       throw error;
     }
     await notifyLearner(actor, changedAttemptId(result));

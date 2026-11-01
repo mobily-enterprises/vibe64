@@ -41,6 +41,7 @@ import { publishingError } from "./publishingError.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-source-editor/server/types").SourceEditorService} SourceEditorService */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 const TWINE_VERSION = "6.1.0";
 
@@ -149,6 +150,7 @@ function createPublishingPackaging() {
 
 /**
  * @param {object} dependencies
+ * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {SourceEditorService} dependencies.sourceEditor
  * @param {RuntimeEnv} [dependencies.env]
@@ -157,6 +159,7 @@ function createPublishingPackaging() {
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  */
 function createPublishingService({
+  logger,
   project,
   sourceEditor,
   env = process.env,
@@ -212,6 +215,7 @@ function createPublishingService({
         credentials: broker,
         sourceWriter: writer,
         packaging,
+        logger,
         now
       });
       projects.set(runtimeRoot, { targets, history, verification, confirmations, orchestrator });

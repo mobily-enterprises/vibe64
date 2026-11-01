@@ -10,6 +10,7 @@ import { WebSocket } from "ws";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createActionRouteScope, createCapabilityHttpRuntime } from "@jskit-ai/kernel/server/http";
 import { EventProvider } from "@jskit-ai/kernel/server/runtime";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createCapabilityRuntime, defineProvider } from "@jskit-ai/kernel/shared/capabilities";
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { RealtimeProvider } from "@jskit-ai/realtime/server/RealtimeProvider";
@@ -229,7 +230,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
     setup({ events }) {
       const selection = { engineId: "codex", modelProviderId: "openai", modelId: "test-model" };
-      const service = createColleagueService({ actions, events, systemRoot: colleagueRoot,
+      const service = createColleagueService({ actions, events, systemRoot: colleagueRoot, logger: silentLogger,
         accounts: { async initializeModelRouting() {} },
         terminals: {
           async requireAssistantSelectionAccess(_selection, { vibe64User }) {

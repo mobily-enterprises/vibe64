@@ -15,6 +15,7 @@ import { ACTION_COLLEAGUE_ASSIGNMENT_CREATE, ACTION_COLLEAGUE_CONTEXT_READ } fro
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 // Learn threads teach; only Develop delegates work. Develop can still read and
 // switch the mode for the person. Learn threads watch only their lesson's
@@ -78,12 +79,14 @@ function publicOperation(call, activeRunId) {
  * @param {TerminalsService} dependencies.terminals
  * @param {RuntimeEvents} dependencies.events
  * @param {ColleagueServiceState} dependencies.serviceState
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createColleagueRecords({
   actions,
   terminals,
   events,
-  serviceState
+  serviceState,
+  logger
 }) {
   const storage = createConversationStorage({
     async readRecord(key) {
@@ -192,8 +195,10 @@ function createColleagueRecords({
         }
       } finally { await rm(temporary, { force: true }); }
     });
-    state.saving = operation.catch(() => {});
-    void operation.then(() => publishBrowserChange(state)).catch(() => {});
+    state.saving = operation.catch(() => {}); // Waiters only wait; the save's failure reaches its caller.
+    // The save's own failure reaches its caller; a failed announcement is logged.
+    void operation.then(() => publishBrowserChange(state), () => {})
+      .catch(error => logger.warn({ error }, "Colleague's browsers were not told about a saved change."));
     return operation;
   }
 
@@ -209,7 +214,10 @@ function createColleagueRecords({
       void actions.execute({ actionId: ACTION_COLLEAGUE_CONTEXT_READ, input: {}, context })
         .then(() => {
           if (!state.browserObservers.has(observer)) return;
-          try { Promise.resolve(observer.listener({ type: "application", interimReply: state.interimReply })).catch(() => {}); }
+          try {
+            Promise.resolve(observer.listener({ type: "application", interimReply: state.interimReply }))
+              .catch(error => logger.warn({ error }, "A Colleague browser observer failed to show a change."));
+          }
           catch { /* A presentation failure does not own the conversation. */ }
           if (observer.context.colleague?.conversationId !== state.record.scopeId) {
             state.browserObservers.delete(observer);
@@ -252,7 +260,7 @@ function createColleagueRecords({
             completedMessage
           }
         }
-      }).catch(() => {}); // A notification failure cannot fail or repeat a model turn.
+      }).catch(error => logger.warn({ error }, "Colleague's reply notification was not published; the model turn goes on."));
     };
     if (state.streamingReply?.text && !completedMessage) {
       if (!state.replyTimer) state.replyTimer = setTimeout(publish, 25);

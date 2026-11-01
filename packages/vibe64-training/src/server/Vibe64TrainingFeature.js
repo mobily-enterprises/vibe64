@@ -88,6 +88,7 @@ const Vibe64TrainingFeature = defineFeature({
       actionCatalogue,
       env,
       events,
+      logger,
       project,
       projectContext,
       sessions,

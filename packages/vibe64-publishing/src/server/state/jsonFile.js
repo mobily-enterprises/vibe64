@@ -37,7 +37,7 @@ function serialized() {
   let tail = Promise.resolve();
   return (operation) => {
     const run = tail.then(operation, operation);
-    tail = run.catch(() => {});
+    tail = run.catch(() => {}); // The queue goes on; run's failure reaches its caller.
     return run;
   };
 }

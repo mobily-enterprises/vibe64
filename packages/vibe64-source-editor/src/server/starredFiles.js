@@ -38,7 +38,8 @@ async function readStarredFilePaths(filePath) {
 }
 
 async function writeStarredFile(filePath, relativePath, starred) {
-  // Serialize read-modify-write for one account without blocking other accounts.
+  // Serialize read-modify-write for one account without blocking other accounts;
+  // an earlier write's failure already reached its own caller.
   const operation = (pendingWrites.get(filePath) || Promise.resolve()).catch(() => {}).then(async () => {
     const paths = await readStarredFilePaths(filePath);
     const next = starred

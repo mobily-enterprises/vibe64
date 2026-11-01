@@ -11,6 +11,7 @@ import { projectNoReply, releaseObserver } from "./colleaguePresentation.js";
 
 /** @typedef {import("./types.js").ColleagueServiceState} ColleagueServiceState */
 /** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 // A plain error, not a refusal: the API answers this 503 with its generic server-error text.
 const invalidHistory = () => Object.assign(
@@ -26,11 +27,13 @@ const invalidHistory = () => Object.assign(
  * @param {string} dependencies.systemRoot
  * @param {ColleagueServiceState} dependencies.serviceState
  * @param {ColleagueRecords} dependencies.records
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createColleagueThreads({
   systemRoot,
   serviceState,
-  records
+  records,
+  logger
 }) {
   function userKey(context) {
     const user = authenticatedVibe64User(context);
@@ -86,7 +89,7 @@ function createColleagueThreads({
     const previous = serviceState.visible.get(state.userKey);
     if (previous === state) return;
     serviceState.visible.set(state.userKey, state);
-    if (previous) void hideThread(previous).catch(() => {});
+    if (previous) void hideThread(previous).catch(error => logger.warn({ error }, "Colleague's replaced thread was not hidden cleanly."));
   }
   async function hideThread(state) {
     await state.admission;
@@ -120,7 +123,8 @@ function createColleagueThreads({
     state.released = true;
     state.generation += 1;
     state.workerAbort?.abort();
-    void Promise.resolve(state.conversation?.cancel()).catch(() => {});
+    void Promise.resolve(state.conversation?.cancel()).catch(error => logger.warn({ error },
+      "A released Learn thread's conversation did not cancel; its thread is still released."));
     state.pendingMessages = [];
     clearTimeout(state.watchTimer);
     clearTimeout(state.replyTimer);
@@ -136,7 +140,7 @@ function createColleagueThreads({
         for (const chat of [state.record, ...state.record.previousConversations]) serviceState.conversationOwners.delete(chat.runtimeId);
         await rm(state.root, { recursive: true, force: true });
       }
-    })().catch(() => {});
+    })().catch(error => logger.warn({ error }, "A released Learn thread's conversation was not disposed or removed cleanly."));
   }
 
   async function loadState(key, owner, thread) {

@@ -9,6 +9,7 @@ import test from "node:test";
 
 import { releaseGit } from "../../packages/vibe64-packaging/src/server/git.js";
 import { createPublishingService } from "../../packages/vibe64-publishing/src/server/service.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const ROOT = path.join(os.tmpdir(), "vibe64-release-git-project");
 
@@ -46,6 +47,7 @@ test("the Python publishing tools install through the gateway", async (t) => {
   const roots = { personalRoot: path.join(base, "personal"), toolchainsRoot: path.join(base, "toolchains"), cacheRoot: path.join(base, "cache") };
   const requests = [];
   const publishing = createPublishingService({
+    logger: silentLogger,
     project: { readCurrentProject: async () => ({}) },
     roots,
     runCommand: async (request) => { requests.push(request); return { ok: true, stdout: "" }; }

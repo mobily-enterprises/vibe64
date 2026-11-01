@@ -19,6 +19,7 @@ import {
 } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 async function fixture(t, { published = true, noExercise = false, secondLesson = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
@@ -62,7 +63,7 @@ async function fixture(t, { published = true, noExercise = false, secondLesson =
   const pin = pinFor(0);
   const secondPin = secondLesson ? pinFor(1) : null;
   const actor = { uid: 42, username: "learner" };
-  const state = createTrainingLearnerState({ systemRoot });
+  const state = createTrainingLearnerState({ logger: silentLogger, systemRoot });
   const userRoot = value => path.join(systemRoot, "training", "users", Buffer.from(String(value.uid ?? value.username)).toString("base64url"));
   const paths = { root: userRoot(actor), progress: path.join(userRoot(actor), "progress.json"), active: path.join(userRoot(actor), "active-lesson.json"),
     mode: path.join(userRoot(actor), "learning-mode.json"), lock: path.join(userRoot(actor), "state.lock") };
@@ -980,7 +981,7 @@ test("preparation explicitly preserves untouched reserved records and saves one 
   assert.deepEqual(prepared.attempt.preparation, { phase: "preparing", initialSessionId: `training-${reserved.attempt.attemptId}` });
   assert.deepEqual(prepared.active.preparation, prepared.attempt.preparation);
   assert.deepEqual({ ...prepared.attempt, preparation: reserved.attempt.preparation }, reserved.attempt);
-  const fresh = createTrainingLearnerState({ systemRoot: f.systemRoot });
+  const fresh = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot });
   assert.deepEqual((await fresh.resumeAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId })).attempt, prepared.attempt);
   const beforeReplay = await treeState(f.systemRoot);
   assert.deepEqual(await fresh.beginPreparation(input), { ...prepared, replayed: true });
@@ -1188,7 +1189,7 @@ test("preparation uses the persistent cross-process user lock and refuses revisi
   const release = await tryAcquireExclusiveFileLock(f.paths.lock);
   const before = await treeState(f.systemRoot);
   try {
-    const script = 'import { createTrainingLearnerState } from "@local/vibe64-training/server/learner-state";\nconst state = createTrainingLearnerState({systemRoot:process.env.FIXTURE_SYSTEM_ROOT});\ntry { await state.beginPreparation({actor:{uid:42},attemptId:process.env.FIXTURE_ATTEMPT_ID,expectedRevision:1}); process.exitCode=2; } catch(error) { if(error.code !== "VIBE64_TRAINING_STATE_BUSY" || error.statusCode !== 409) throw error; }\n';
+    const script = 'import { createTrainingLearnerState } from "@local/vibe64-training/server/learner-state";\nimport { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";\nconst state = createTrainingLearnerState({systemRoot:process.env.FIXTURE_SYSTEM_ROOT,logger:silentLogger});\ntry { await state.beginPreparation({actor:{uid:42},attemptId:process.env.FIXTURE_ATTEMPT_ID,expectedRevision:1}); process.exitCode=2; } catch(error) { if(error.code !== "VIBE64_TRAINING_STATE_BUSY" || error.statusCode !== 409) throw error; }\n';
     await promisify(execFile)(process.execPath, ["--input-type=module", "-e", script], { cwd: fileURLToPath(new URL("../../", import.meta.url)), env: { ...process.env, FIXTURE_SYSTEM_ROOT: f.systemRoot, FIXTURE_ATTEMPT_ID: input.attemptId } });
     await assert.rejects(() => f.state.beginPreparation(input), error => error.code === "VIBE64_TRAINING_STATE_BUSY");
     assert.deepEqual(await treeState(f.systemRoot), before);
@@ -1246,7 +1247,7 @@ test("preparation recovers newer ready progress after the wall clock moves backw
     }
   }
   const beforeRead = await treeState(f.systemRoot);
-  const fresh = createTrainingLearnerState({ systemRoot: f.systemRoot });
+  const fresh = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot });
   const state = await fresh.readState({ actor: f.actor });
   assert.equal(state.revision, 5);
   assert.equal(state.activeSummaryCurrent, false);
@@ -1417,7 +1418,7 @@ test("preparation exclusion uses a persistent cross-process lock without seriali
   const other = await f.reserve({ actor: otherActor });
   const input = { actor: f.actor, attemptId: reserved.attempt.attemptId };
   const otherInput = { actor: otherActor, attemptId: other.attempt.attemptId };
-  const fresh = createTrainingLearnerState({ systemRoot: f.systemRoot });
+  const fresh = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot });
   await f.state.runPreparationExclusive(input, () => null);
   await f.state.runPreparationExclusive(otherInput, () => null);
   const lock = path.join(f.paths.root, "preparation.lock");
@@ -1432,7 +1433,7 @@ test("preparation exclusion uses a persistent cross-process lock without seriali
   try {
     await Promise.race([entered.promise, holder]);
     const before = await treeState(f.systemRoot);
-    const script = 'import { createTrainingLearnerState } from "@local/vibe64-training/server/learner-state";\nconst state=createTrainingLearnerState({systemRoot:process.env.FIXTURE_SYSTEM_ROOT});\ntry { await state.runPreparationExclusive({actor:{uid:42},attemptId:process.env.FIXTURE_ATTEMPT_ID},()=>{throw new Error("Competing preparation entered.");}); process.exitCode=2; } catch(error) { if(error.code!=="VIBE64_TRAINING_PREPARATION_BUSY" || error.statusCode!==409) throw error; }\n';
+    const script = 'import { createTrainingLearnerState } from "@local/vibe64-training/server/learner-state";\nimport { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";\nconst state=createTrainingLearnerState({systemRoot:process.env.FIXTURE_SYSTEM_ROOT,logger:silentLogger});\ntry { await state.runPreparationExclusive({actor:{uid:42},attemptId:process.env.FIXTURE_ATTEMPT_ID},()=>{throw new Error("Competing preparation entered.");}); process.exitCode=2; } catch(error) { if(error.code!=="VIBE64_TRAINING_PREPARATION_BUSY" || error.statusCode!==409) throw error; }\n';
     await promisify(execFile)(process.execPath, ["--input-type=module", "-e", script], {
       cwd: fileURLToPath(new URL("../../", import.meta.url)),
       env: { ...process.env, FIXTURE_SYSTEM_ROOT: f.systemRoot, FIXTURE_ATTEMPT_ID: input.attemptId }
@@ -1869,7 +1870,7 @@ test("an isolated original store admits drafts only through its configured autho
   const previewRoot = path.join(f.root, "author-preview");
   await fs.mkdir(previewRoot, { mode: 0o700 });
   const content = createInstalledTrainingContentWithDrafts({ systemRoot: f.systemRoot });
-  const preview = createTrainingLearnerState({ systemRoot: previewRoot, contentSystemRoot: path.join(f.root, "missing-content"), content });
+  const preview = createTrainingLearnerState({ logger: silentLogger, systemRoot: previewRoot, contentSystemRoot: path.join(f.root, "missing-content"), content });
   const before = await treeState(f.systemRoot);
   await assert.rejects(() => f.reserve(), /draft and cannot be taught/u);
   const reserved = await preview.reserveAttempt({ actor: f.actor, requestId: "author-start", expectedRevision: 0, pin: f.pin });
@@ -2037,7 +2038,7 @@ test("reading progress verifies only the lesson in progress, never the lessons o
   const f = await fixture(t, { noExercise: true });
   const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
   let reads = 0;
-  const state = createTrainingLearnerState({ systemRoot: f.systemRoot,
+  const state = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot,
     content: { ...installed, readLesson: input => { reads++; return installed.readLesson(input); } } });
   const readsFor = async operation => { reads = 0; await operation(); return reads; };
   let revision = 0;
@@ -2077,7 +2078,7 @@ const passedSelf = (stepId, requestId) => ({ stepId, kind: "self", outcome: "pas
 test("a finished lesson that can no longer be taught never blocks the lesson in progress", async t => {
   const f = await fixture(t, { noExercise: true, secondLesson: true });
   const { content, unteachable } = unteachableReader(f.systemRoot);
-  const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content });
+  const state = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot, content });
   const first = await state.reserveAttempt({ actor: f.actor, requestId: "start-1", expectedRevision: 0, pin: f.pin });
   await state.updateStepProgress({ actor: f.actor, attemptId: first.attempt.attemptId },
     async entry => ({ entry: { ...entry, results: [passedSelf("try-it", "pass-1")] } }));
@@ -2102,7 +2103,7 @@ test("a finished lesson that can no longer be taught never blocks the lesson in 
 test("a lesson in progress that can no longer be taught can still be archived or deleted, but not continued or finished", async t => {
   const f = await fixture(t, { noExercise: true, secondLesson: true });
   const { content, unteachable } = unteachableReader(f.systemRoot);
-  const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content });
+  const state = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot, content });
   let revision = 0;
   for (const [index, reason] of [[1, "archived"], [2, "deleted"]]) {
     unteachable.delete("INTRO-01");

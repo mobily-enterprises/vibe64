@@ -11,6 +11,7 @@ import { createTrainingLearnerState } from "../../packages/vibe64-training/src/s
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/trainingActions.js";
 import { createTrainingOperations } from "../../packages/vibe64-training/src/server/trainingOperations.js";
 import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-training/src/server/learnerEvents.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // Learn mode (Rev 4 H1) over the real learner store: a saved per-learner flag,
 // separate from any lesson. L switches between Learn and Develop; switching
@@ -35,7 +36,7 @@ async function fixture(t) {
   await writeFile(path.join(snapshotRoot, "pin.json"), JSON.stringify(topic));
   const pin = { course: { courseId: "intro", release: "0.1.0" }, topic, lesson: { code: "STEPS-ONE", hash: bundle.lessons[0].hash } };
   const content = createInstalledTrainingContent({ systemRoot });
-  const learners = createTrainingLearnerState({ systemRoot, content });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   async function start(actor, requestId = "start", { prepared = true } = {}) {
     const reserved = await learners.reserveAttempt({ actor, expectedRevision: (await learners.readState({ actor })).revision, requestId, pin });
     const attemptId = reserved.attempt.attemptId;
@@ -52,7 +53,7 @@ function actionsFixture(f, { exercises = null } = {}) {
   const published = [];
   const auth = { user: ALICE };
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const definitions = createTrainingActions({ operations: createTrainingOperations({ catalogue: { readCatalogue() { throw new Error("unused"); } }, learners: f.learners, exercises,
+  const definitions = createTrainingActions({ operations: createTrainingOperations({ logger: silentLogger, catalogue: { readCatalogue() { throw new Error("unused"); } }, learners: f.learners, exercises,
     publishLearnerChanged: createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event.realtime.payload); } }) }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });

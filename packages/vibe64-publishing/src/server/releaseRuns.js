@@ -7,6 +7,7 @@ import { changelogSection, failureLog } from "./releaseRecords.js";
 /** @typedef {import("./types.js").ProjectRepository} ProjectRepository */
 /** @typedef {import("./types.js").CredentialBroker} CredentialBroker */
 /** @typedef {import("./types.js").PublishingPackaging} PublishingPackaging */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * Release and dry-run records as they run in the background. Each run builds every package of the plan once, into the
@@ -21,6 +22,7 @@ import { changelogSection, failureLog } from "./releaseRecords.js";
  * @param {ProjectRepository} dependencies.repository
  * @param {CredentialBroker} dependencies.credentials
  * @param {PublishingPackaging} dependencies.packaging
+ * @param {RuntimeLogger} dependencies.logger
  * @param {() => string} dependencies.now
  */
 function createReleaseRuns({
@@ -32,6 +34,7 @@ function createReleaseRuns({
   repository,
   credentials,
   packaging,
+  logger,
   now
 }) {
   const active = new Map(); // record id -> promise
@@ -81,7 +84,7 @@ function createReleaseRuns({
           for (const entry of record.steps || []) if (entry.status === "running") entry.status = "failed";
           record.log.push(...failureLog("", error, now()));
           return record;
-        }).catch(() => {});
+        }).catch(recordError => logger.warn({ error: recordError, recordId }, "A failed release run did not record its failure."));
       } finally {
         active.delete(recordId);
       }

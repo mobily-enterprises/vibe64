@@ -12,6 +12,7 @@ import { publicWatch } from "./colleaguePresentation.js";
 /** @typedef {import("./types.js").ColleagueRecords} ColleagueRecords */
 /** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
 /** @typedef {import("./types.js").ColleagueWorker} ColleagueWorker */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 const LEARN_WATCH_REFUSAL = "In Learn mode Colleague watches only this lesson's practice project.";
 
@@ -28,6 +29,7 @@ const LEARN_WATCH_REFUSAL = "In Learn mode Colleague watches only this lesson's 
  * @param {ColleagueRecords} dependencies.records
  * @param {ColleagueThreads} dependencies.threads
  * @param {ColleagueWorker} dependencies.worker
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createColleagueWatches({
   events,
@@ -36,11 +38,12 @@ function createColleagueWatches({
   serviceState,
   records,
   threads,
-  worker
+  worker,
+  logger
 }) {
   function changeWatches(state, operation) {
     const admitted = state.watchAdmission.then(operation);
-    state.watchAdmission = admitted.catch(() => {});
+    state.watchAdmission = admitted.catch(() => {}); // The next change waits; this failure reaches its caller.
     return admitted;
   }
 
@@ -70,7 +73,10 @@ function createColleagueWatches({
     state.record.error = "";
     await records.persist(state);
     records.publishReply(state);
-    if (state.pendingMessages.length) void worker.startWorker(state, state.nextConnection, null, true).catch(() => {});
+    if (state.pendingMessages.length) {
+      void worker.startWorker(state, state.nextConnection, null, true).catch(error => logger.warn({ error },
+        "Colleague's worker did not start; the queued messages stay queued."));
+    }
     else worker.wakeForObservations(state);
   }
 

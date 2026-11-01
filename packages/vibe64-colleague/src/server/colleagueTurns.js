@@ -12,6 +12,7 @@ import { answerPendingNavigation, releaseObserver } from "./colleaguePresentatio
 /** @typedef {import("./types.js").ColleagueThreads} ColleagueThreads */
 /** @typedef {import("./types.js").ColleagueConversations} ColleagueConversations */
 /** @typedef {import("./types.js").ColleagueWorker} ColleagueWorker */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * A person's turns with Colleague: reading the conversation, sending, choosing
@@ -24,6 +25,7 @@ import { answerPendingNavigation, releaseObserver } from "./colleaguePresentatio
  * @param {ColleagueThreads} dependencies.threads
  * @param {ColleagueConversations} dependencies.conversations
  * @param {ColleagueWorker} dependencies.worker
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createColleagueTurns({
   terminals,
@@ -31,7 +33,8 @@ function createColleagueTurns({
   records,
   threads,
   conversations,
-  worker
+  worker,
+  logger
 }) {
   async function read(input, context) {
     const state = await threads.stateFor(context);
@@ -142,7 +145,7 @@ function createColleagueTurns({
       state.record.error = "";
       await records.persist(state);
     });
-    state.admission = selecting.catch(() => {});
+    state.admission = selecting.catch(() => {}); // The next admission waits; this failure reaches its caller.
     await selecting;
     return records.snapshot(state);
   }
@@ -205,7 +208,10 @@ function createColleagueTurns({
         if (!turn) throw failure("The authored Colleague message could not be admitted.");
         state.pendingMessages.push({ messageId: input.messageId, text: input.message, turnId: turn.turnId });
         state.nextConnection = { ...connection, focus: structuredClone(connection.focus) };
-        if (!state.running) void worker.startWorker(state, state.nextConnection, null, true).catch(() => {});
+        if (!state.running) {
+          void worker.startWorker(state, state.nextConnection, null, true).catch(error => logger.warn({ error },
+            "Colleague's worker did not start; the message stays queued."));
+        }
         return { status: "accepted", messageId: input.messageId, turnId: turn.turnId, origin: "user" };
       }
       return worker.startWorker(state, {
@@ -216,7 +222,7 @@ function createColleagueTurns({
         text: input.message
       });
     });
-    state.admission = admitted.catch(() => {});
+    state.admission = admitted.catch(() => {}); // The next admission waits; this failure reaches its caller.
     const receipt = await admitted;
     if (receipt?.ok === false) return receipt;
     return context.colleagueReceiptOnly === true ? receipt : records.snapshot(state, input.clientId);

@@ -48,6 +48,7 @@ function requirePlayer() {
 
 function reload() {
   if (!player) return mount(frame.value);
+  // Best effort: the player's own state, not this reload, shows a failure.
   return player.restore(undefined, motionPreference()).catch(() => {});
 }
 

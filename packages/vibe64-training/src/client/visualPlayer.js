@@ -275,7 +275,8 @@ function createTrainingVisualPlayer({
       settle(id, Object.assign(new Error(value.description), { code: value.code }));
     } else return;
     // A cached completion describes its original command, not today's display.
-    // Ask the original controller for the actual current semantic state.
+    // Ask the original controller for the actual current semantic state; best
+    // effort: a snapshot that cannot be taken changes nothing.
     snapshot().catch(() => {});
   }
 

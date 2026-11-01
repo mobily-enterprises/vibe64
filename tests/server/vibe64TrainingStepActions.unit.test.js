@@ -25,6 +25,7 @@ import { registerLearningVocabulary } from "../../packages/vibe64-training/src/s
 import { createTrainingLessonVisuals } from "../../packages/vibe64-training/src/server/lessonVisuals.js";
 import { NO_LEARNING_SPACE } from "../../packages/vibe64-training/src/server/learningSpace.js";
 import { VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // Learning v2 actions (contract C3) over the real installed v2 fixture
 // (contract C1), the real learner store and step owner (contract C2). Only the
@@ -48,7 +49,7 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
   await writeFile(path.join(snapshotRoot, "pin.json"), JSON.stringify(topic));
   const pin = { course: { courseId: "intro", release: "0.1.0" }, topic, lesson: { code: "STEPS-ONE", hash: bundle.lessons[0].hash } };
   const content = contentWrapper(createInstalledTrainingContent({ systemRoot }));
-  const learners = createTrainingLearnerState({ systemRoot, content });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   const auth = { user: { uid: 42, username: "alice", role: "member" } };
   let revision = 0;
   async function start(requestId = "start") {
@@ -86,7 +87,7 @@ async function fixture(t, { contentWrapper = value => value, practice = true, ed
     ...(typeof practice === "object" ? practice : {}) } : NO_LEARNING_SPACE;
   const publishLearnerChanged = createTrainingLearnerChangedPublisher({ async publish(event) { published.push(event); } });
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const definitions = createTrainingStepActions({ stepOperations: createTrainingStepOperations({ learners, attemptLearners: learners, content, steps, exercises, learningSpace, publishLearnerChanged }) });
+  const definitions = createTrainingStepActions({ stepOperations: createTrainingStepOperations({ logger: silentLogger, learners, attemptLearners: learners, content, steps, exercises, learningSpace, publishLearnerChanged }) });
   actions.register({ contributorId: "training", domain: "training", actions: definitions.map(definition => ({
     channels: ["api", "automation", "internal"], surfaces: ["app"], ...definition })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => auth.user,
@@ -296,6 +297,7 @@ test("a practice presence check that fails keeps that project listed without fai
   const attempt = await f.start();
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "training", domain: "training", actions: createTrainingActions({ operations: createTrainingOperations({
+    logger: silentLogger,
     publishLearnerChanged: async () => {},
     catalogue: { async readCatalogue() { throw new Error("not read by learning.read"); } }, learners: f.learners, learningSpace
   }) }).map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });
@@ -419,9 +421,10 @@ test("a v2 lesson passes start, resume, learning.read, completion, finish and de
   });
   const actions = createActionCatalogue({ policy: vibe64ActionPolicy });
   actions.register({ contributorId: "training", domain: "training", actions: [...createTrainingActions({ operations: createTrainingOperations({
+    logger: silentLogger,
     catalogue: { async readCatalogue() { throw new Error("not read by these lifecycle actions"); } },
     learners: f.learners, exercises, publishLearnerChanged: async () => {}
-  }) }), ...createTrainingStepActions({ stepOperations: createTrainingStepOperations({ learners: f.learners, attemptLearners: f.learners, content: f.content, steps: { read() {} }, exercises,
+  }) }), ...createTrainingStepActions({ stepOperations: createTrainingStepOperations({ logger: silentLogger, learners: f.learners, attemptLearners: f.learners, content: f.content, steps: { read() {} }, exercises,
     publishLearnerChanged: async () => {} }) })]
     .filter(definition => definition.id !== "vibe64.training.lesson.read" && !/step\.|reader\./u.test(definition.id))
     .map(definition => ({ ...definition, channels: ["api"], surfaces: ["app"] })) });

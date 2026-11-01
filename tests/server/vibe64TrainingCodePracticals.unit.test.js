@@ -16,6 +16,7 @@ import { createTrainingStepChecks } from "../../packages/vibe64-training/src/ser
 import { v2Content } from "./vibe64TrainingV2LessonStub.js";
 import { createTrainingCodeSaveOwner } from "../../packages/vibe64-training/src/server/codeSaveOwner.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 // A fixture code lesson executed through the actual bounded native gateway.
 // Project/session seams are explicit fixtures; the learner and agent writes are
@@ -57,7 +58,7 @@ async function fixture(t, { check, timeoutSeconds, steps = [codeStep], enter = f
   const pin = { course: { courseId: "intro", release: "0.1.0" }, topic, lesson: { code: "CODE-ONE", hash: bundle.lessons[0].hash } };
   const installed = createInstalledTrainingContent({ systemRoot });
   const content = v2Content(installed, { steps });
-  const learners = createTrainingLearnerState({ systemRoot, content });
+  const learners = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   const actor = { uid: 42, username: "alice" };
   const reserved = await learners.reserveAttempt({ actor, expectedRevision: 0, requestId: "start", pin });
   const attemptId = reserved.attempt.attemptId, sessionId = `training-${attemptId}`;

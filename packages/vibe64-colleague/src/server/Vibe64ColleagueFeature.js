@@ -27,7 +27,8 @@ const Vibe64ColleagueFeature = defineFeature({
     accounts: "vibe64.accounts",
     http: "runtime.http",
     terminals: "vibe64.terminals",
-    events: "runtime.events"
+    events: "runtime.events",
+    logger: "runtime.logger"
   },
   // A composed host's own project views for navigation.open, and the name it gives Colleague.
   optional: {
@@ -43,6 +44,7 @@ const Vibe64ColleagueFeature = defineFeature({
    * @param {RuntimeHttp} capabilities.http
    * @param {TerminalsService} capabilities.terminals
    * @param {RuntimeEvents} capabilities.events
+   * @param {RuntimeLogger} capabilities.logger
    * @param {ColleagueNameResolver} [capabilities.resolveName]
    * @param {FeatureSetupContext} context
    */
@@ -51,6 +53,7 @@ const Vibe64ColleagueFeature = defineFeature({
     http,
     terminals,
     events,
+    logger,
     resolveName
   }, { actionCatalogue }) {
     assertColleagueNameResolver(resolveName);
@@ -59,6 +62,7 @@ const Vibe64ColleagueFeature = defineFeature({
       accounts,
       terminals,
       events,
+      logger,
       resolveName: resolveName ?? nameColleague,
       systemRoot: getStudioProjectContext().systemRoot
     });

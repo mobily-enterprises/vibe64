@@ -17,6 +17,7 @@ import { createColleagueTurns } from "./colleagueTurns.js";
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").ColleagueNameResolver} ColleagueNameResolver */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * One Colleague service: its concerns share one service state and are built
@@ -30,6 +31,7 @@ import { createColleagueTurns } from "./colleagueTurns.js";
  * @param {ColleagueNameResolver} dependencies.resolveName
  * @param {number} [dependencies.watchPollMs]
  * @param {number} [dependencies.watchDebounceMs]
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createColleagueService({
   actions,
@@ -39,7 +41,8 @@ function createColleagueService({
   events,
   resolveName,
   watchPollMs = 30000,
-  watchDebounceMs = 250
+  watchDebounceMs = 250,
+  logger
 }) {
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("Colleague needs the private application system root.");
   const serviceState = createColleagueServiceState();
@@ -47,12 +50,14 @@ function createColleagueService({
     actions,
     terminals,
     events,
-    serviceState
+    serviceState,
+    logger
   });
   const threads = createColleagueThreads({
     systemRoot,
     serviceState,
-    records
+    records,
+    logger
   });
   const conversations = createColleagueConversations({
     actions,
@@ -79,7 +84,8 @@ function createColleagueService({
     records,
     threads,
     conversations,
-    turnInputs
+    turnInputs,
+    logger
   });
   const watches = createColleagueWatches({
     events,
@@ -88,7 +94,8 @@ function createColleagueService({
     serviceState,
     records,
     threads,
-    worker
+    worker,
+    logger
   });
   const history = createColleagueHistory({
     serviceState,
@@ -111,7 +118,8 @@ function createColleagueService({
     records,
     threads,
     conversations,
-    worker
+    worker,
+    logger
   });
 
   return Object.freeze({

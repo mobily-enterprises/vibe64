@@ -6,6 +6,7 @@ import { attemptSummary, pick, practiceSlug, signedInLearner, toTrainingOperatio
 /** @typedef {import("./types.js").TrainingContent} TrainingContent */
 /** @typedef {import("./types.js").TrainingExercises} TrainingExercises */
 /** @typedef {import("./types.js").TrainingLearners} TrainingLearners */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("./types.js").TrainingLearningSpace} TrainingLearningSpace */
 /** @typedef {import("./types.js").TrainingPublishLearnerChanged} TrainingPublishLearnerChanged */
 /** @typedef {import("./types.js").TrainingStepChecks} TrainingStepChecks */
@@ -120,6 +121,7 @@ async function runLessonOperation(operation, input, context) {
  * @param {TrainingExercises} dependencies.exercises
  * @param {TrainingLearningSpace} dependencies.learningSpace
  * @param {TrainingPublishLearnerChanged} dependencies.publishLearnerChanged
+ * @param {RuntimeLogger} dependencies.logger
  */
 function createTrainingStepOperations({
   learners,
@@ -128,7 +130,8 @@ function createTrainingStepOperations({
   steps,
   exercises,
   learningSpace,
-  publishLearnerChanged
+  publishLearnerChanged,
+  logger
 }) {
   const notify = async (actor, attempt, reason) => {
     await publishLearnerChanged({ actor, attemptId: attempt, reason });
@@ -284,7 +287,8 @@ function createTrainingStepOperations({
     catch (cause) {
       if (!(cause.statusCode < 500 && /^(VIBE64_TRAINING_(PRACTICE_|ATTEMPT_MISSING)|vibe64_project_pinned)/u.test(cause.code || ""))) {
         // A removal that stopped part-way changed the lesson (its project deleting).
-        await notify(actor, input.attemptId, reason).catch(() => {});
+        await notify(actor, input.attemptId, reason).catch(error => logger.warn({ error, attemptId: input.attemptId },
+          "The learner's tabs were not told that a failed removal changed the lesson."));
         throw cause;
       }
       return { ok: false, available: true, attemptId: input.attemptId, error: refusalText(cause.message, "Nothing was changed.") };

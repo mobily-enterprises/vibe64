@@ -10,6 +10,7 @@ import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { __testables, createTrainingLearningSpace } from "../../packages/vibe64-training/src/server/learningSpace.js";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const { KEPT_ARCHIVED_PROJECTS, MAX_ARCHIVES } = __testables;
 
@@ -59,7 +60,7 @@ async function fixture(t, { headroom = async () => {}, release = async () => {},
     ? Promise.reject(Object.assign(new Error(`Lesson ${input.lessonCode} cannot be taught by this version of Vibe64.`),
       { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 }))
     : installed.readLesson(input) };
-  const store = createTrainingLearnerState({ systemRoot, content });
+  const store = createTrainingLearnerState({ logger: silentLogger, systemRoot, content });
   const working = path.join(root, "working");
   await mkdir(working);
   const projectContext = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: systemRoot,

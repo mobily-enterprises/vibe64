@@ -24,6 +24,7 @@ import { createReleaseRuns } from "./releaseRuns.js";
 /** @typedef {import("./types.js").CredentialBroker} CredentialBroker */
 /** @typedef {ReturnType<typeof import("./sessionReleaseWriter.js").createSessionReleaseWriter>} SessionReleaseWriter */
 /** @typedef {import("./types.js").PublishingPackaging} PublishingPackaging */
+/** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 
 /**
  * The local release flow, end to end:
@@ -51,6 +52,7 @@ import { createReleaseRuns } from "./releaseRuns.js";
  * @param {CredentialBroker} dependencies.credentials
  * @param {SessionReleaseWriter} dependencies.sourceWriter
  * @param {PublishingPackaging} dependencies.packaging
+ * @param {RuntimeLogger} dependencies.logger
  * @param {() => string} [dependencies.now]
  */
 function createReleaseOrchestrator({
@@ -67,6 +69,7 @@ function createReleaseOrchestrator({
   credentials,
   sourceWriter,
   packaging,
+  logger,
   now = () => new Date().toISOString()
 }) {
   const runs = createReleaseRuns({
@@ -78,6 +81,7 @@ function createReleaseOrchestrator({
     repository,
     credentials,
     packaging,
+    logger,
     now
   });
   const releaseCache = new Map(); // commit -> { packaging, versions }

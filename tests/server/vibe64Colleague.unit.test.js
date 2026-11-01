@@ -245,7 +245,8 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   const accounts = {
     async initializeModelRouting(input) { observations.routingInitialized.push(input.vibe64User.username); return { ok: true, initialized: [] }; }
   };
-  const service = createColleagueService({ actions, terminals, events, resolveName, watchPollMs, watchDebounceMs: 1, systemRoot: root, accounts });
+  const service = createColleagueService({ actions, terminals, events, resolveName, watchPollMs, watchDebounceMs: 1, systemRoot: root, accounts,
+    logger: silentLogger });
   const operation = Object.freeze({
     extensions: { vibe64: WORKSPACE_OPERATION },
     id: "vibe64.test.operate", kind: "command", idempotency: "none",
