@@ -199,8 +199,7 @@ function createService({
       }
     } catch (error) {
       logger.warn({ error, recordingId: entry.record.id }, "Usage recording could not finish cleanly.");
-      await records.changeState(entry, "stopped", { stopReason: "error" }).catch(stateError => logger.warn(
-        { error: stateError, recordingId: entry.record.id }, "Usage recording could not save that it stopped after an error."));
+      await records.changeState(entry, "stopped", { stopReason: "error" }).catch(stateError => logger.warn({ error: stateError, recordingId: entry.record.id }, "Usage recording could not save that it stopped after an error."));
     } finally {
       live.delete(entry.record.id);
       rememberReader(entry.directory, entry.reader);
@@ -233,8 +232,10 @@ function createService({
     entry.unregister();
     clearTimers(entry);
     await writeJsonFile(path.join(entry.directory, "control.json"), { state: "stopping" });
-    await entry.reader.poll().catch(error => logger.warn({ error, recordingId: entry.record.id },
-      "Usage recording could not read its last trace lines before stopping."));
+    await entry.reader.poll().catch(error => logger.warn(
+      { error, recordingId: entry.record.id },
+      "Usage recording could not read its last trace lines before stopping."
+    ));
     entry.record.tracers = state === "failed"
       ? entry.record.tracers.map((tracer) => ({ ...tracer, state: tracer.state === "unavailable" ? tracer.state : "failed", reason }))
       : records.unreadyTracers(entry, reason);
@@ -652,8 +653,12 @@ function createService({
     // Another Preview page of this recording already used this number; it
     // continues from the next free one.
     if (entry.interactions.has(id)) {
-      throw recordingError(409, "This interaction number is already recorded.", "vibe64_usage_recording_interaction_taken",
-        { nextInteraction: entry.record.highestInteraction + 1 });
+      throw recordingError(
+        409,
+        "This interaction number is already recorded.",
+        "vibe64_usage_recording_interaction_taken",
+        { nextInteraction: entry.record.highestInteraction + 1 }
+      );
     }
     if (entry.interactions.size >= USAGE_RECORDING_LIMITS.interactions) {
       throw recordingError(422, "This recording has reached its interaction limit.", "vibe64_usage_recording_interaction_limit");
