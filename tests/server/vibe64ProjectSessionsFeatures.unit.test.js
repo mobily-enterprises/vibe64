@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
@@ -308,6 +309,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
     }
   };
   const bootResult = Vibe64SessionsFeature.boot({
+    logger: silentLogger,
     project: selectedProject
   }, {
     outputs: { sessions }
@@ -341,6 +343,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   assert.equal(shutdownSettled, true);
 
   Vibe64SessionsFeature.boot({
+    logger: silentLogger,
     project: selectedProject
   }, {
     outputs: { sessions }
@@ -348,6 +351,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   assert.equal(resumeCalls, 1, "Feature shutdown permanently closes its recovery task");
 
   Vibe64SessionsFeature.boot({
+    logger: silentLogger,
     project: { targetRoot: "" }
   }, {
     outputs: {
@@ -366,6 +370,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   );
 
   Vibe64SessionsFeature.boot({
+    logger: silentLogger,
     project: selectedProject
   }, {
     outputs: {
@@ -414,7 +419,7 @@ test("startup recovery's session changes reach the recovered project's pages", a
       return { failures: [] };
     }
   };
-  Vibe64SessionsFeature.boot({ logger: { warn() {} }, project: selectedProject }, { outputs: { sessions } });
+  Vibe64SessionsFeature.boot({ logger: silentLogger, project: selectedProject }, { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   await recoveryShutdown(sessions);
   assert.deepEqual(published.filter(({ type }) => type === "entity.changed").map(({ realtime }) => realtime.audience), [
@@ -447,7 +452,7 @@ test("startup recovery resumes renewals after archive recovery fails and logs ea
     }
   };
   Vibe64SessionsFeature.boot({
-    logger: { warn(fields, message) { warnings.push({ fields, message }); } },
+    logger: { ...silentLogger, warn(fields, message) { warnings.push({ fields, message }); } },
     project: selectedProject
   }, { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
@@ -476,7 +481,7 @@ test("shutdown stops the startup archive loop instead of waiting for every pendi
     },
     async resumeSessionRenewals() { renewalsResumed += 1; return { failures: [] }; }
   };
-  Vibe64SessionsFeature.boot({ logger: { warn() {} }, project: selectedProject },
+  Vibe64SessionsFeature.boot({ logger: silentLogger, project: selectedProject },
     { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   const started = Date.now();
