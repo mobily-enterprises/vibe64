@@ -259,8 +259,7 @@ function createSessionArchiveAccess({
             return { ok: true, paths: [...published].sort() };
           });
         };
-        const pruneArtifacts = async (relativePaths, options = {}) => {
-          const { beforePrune } = options;
+        const pruneArtifacts = async (relativePaths, { beforePrune } = {}) => {
           const requested = artifactExpiryRequest(relativePaths, beforePrune);
           return change(() => pruneExtractedArtifacts(archived, requested, { beforePrune, beforeWork }));
         };
