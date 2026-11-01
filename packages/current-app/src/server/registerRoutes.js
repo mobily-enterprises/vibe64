@@ -5,22 +5,21 @@ import {
   vibe64RouteHandler,
   vibe64RouteHttp
 } from "@local/vibe64-core/server/featureRoutes";
-import {
-  currentAppQueryInputValidator
-} from "./inputSchemas.js";
+
+import { ACTION_READ_CURRENT_APP } from "./currentAppActions.js";
+import { currentAppQueryInputValidator } from "./inputSchemas.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
-/** @typedef {ReturnType<typeof import("@local/vibe64-core/server/studioProjectContext").createStudioProjectContext>} StudioProjectContext */
+/** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
 /**
  * @param {RuntimeHttp} http
  * @param {object} [options]
  * @param {StudioProjectContext} [options.projectContext]
  */
-function registerRoutes(http, options = {}) {
-  const {
-    projectContext
-  } = options;
+function registerRoutes(http, {
+  projectContext
+} = {}) {
   const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "current-app"] }), {
     routeBase: VIBE64_PROJECT_ROUTE_BASE,
     relativePath: "studio/current-app",
@@ -32,7 +31,7 @@ function registerRoutes(http, options = {}) {
   });
 
   routes.actionRoute("GET", "", {
-    actionId: "vibe64.current-app.read",
+    actionId: ACTION_READ_CURRENT_APP,
     buildInput: requestQuery,
     query: currentAppQueryInputValidator,
     summary: "Inspect the current project's Vibe64 output targets."

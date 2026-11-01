@@ -7,6 +7,7 @@ import { createService } from "./service.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
+/** @typedef {import("./types.js").CurrentAppService} CurrentAppService */
 
 const CurrentAppFeature = defineFeature({
   id: "vibe64.current-app",
@@ -37,6 +38,10 @@ const CurrentAppFeature = defineFeature({
     registerRoutes(http);
     return { currentApp };
   },
+  /**
+   * @param {object} capabilities
+   * @param {CurrentAppService} capabilities.currentApp
+   */
   actions({ currentApp }) {
     return createCurrentAppActions({ currentApp });
   }

@@ -10,6 +10,7 @@ import {
 import {
   inspectVibe64Outputs
 } from "@local/vibe64-genesis/server";
+import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -26,7 +27,7 @@ function currentAppResult(operation) {
   });
 }
 
-function unconfiguredCurrentApp(root = "", message = "") {
+function unconfiguredCurrentApp(root, message) {
   return {
     components: [],
     diagnostics: [],
@@ -42,7 +43,7 @@ function unconfiguredCurrentApp(root = "", message = "") {
   };
 }
 
-function outputsView(root = "", outputs = {}) {
+function outputsView(root, outputs) {
   return {
     components: Array.isArray(outputs.components) ? outputs.components : [],
     diagnostics: Array.isArray(outputs.diagnostics) ? outputs.diagnostics : [],
@@ -69,7 +70,7 @@ function createService({
   project
 }) {
   async function rootForInput(input) {
-    const sessionId = String(input.sessionId || "").trim();
+    const sessionId = normalizeText(input.sessionId);
     if (!sessionId) {
       return projectServiceSourceRoot(project);
     }
