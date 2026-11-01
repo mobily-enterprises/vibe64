@@ -478,6 +478,8 @@ async function controllerHarness({
     },
     project: {
       async readCurrentProject() { return { sourceRoot }; },
+      async projectExecutionEnvironment() { return {}; },
+      async projectInspectionEnvironment() { return {}; },
       currentServiceDataRoot() {
         return path.join(root, "services");
       },
