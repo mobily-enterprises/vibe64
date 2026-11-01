@@ -68,18 +68,20 @@ function createColleagueBrowserConversations({
       const conversation = await preparedConversation();
       // Reading an empty Colleague must not require AI Accounts setup or
       // choose a native engine. Its original transcript remains readable.
-      if (!conversation) return colleagueBrowserState({
-        id,
-        status: "ready",
-        phase: "",
-        error: state.record.error || "",
-        interimReply: state.interimReply,
-        capabilities: { steering: false, goals: false, attachments: false },
-        pendingRequest: null,
-        ...(paged ? await records.transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true })
-          : { conversationLog: await records.transcript.readConversationLog(state.record.runtimeId, { presentation: true }) }),
-        streaming: { revision: 0, messages: [] }
-      });
+      if (!conversation) {
+        return colleagueBrowserState({
+          id,
+          status: "ready",
+          phase: "",
+          error: state.record.error || "",
+          interimReply: state.interimReply,
+          capabilities: { steering: false, goals: false, attachments: false },
+          pendingRequest: null,
+          ...(paged ? await records.transcript.readConversationLogPage(state.record.runtimeId, { ...pageOptions, presentation: true })
+            : { conversationLog: await records.transcript.readConversationLog(state.record.runtimeId, { presentation: true }) }),
+          streaming: { revision: 0, messages: [] }
+        });
+      }
       const owner = state.runtimeOwner;
       let current = paged ? await conversation.read(pageOptions) : await conversation.read();
       if (paged && owner === conversations.runtime) {

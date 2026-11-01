@@ -34,12 +34,15 @@ function createColleagueTurnInputs({
       // Persisted notifications may outlive their original project access.
       try {
         const watch = state.record.watches.find(item => item.watchId === observation.watchId);
-        if (watch?.source) await readWatch(watch, context);
-        else requireResult(await actions.execute({
-          actionId: "vibe64.sessions.inspect",
-          input: { sessionId: observation.focus.sessionId },
-          context: { ...context, projectSlug: observation.focus.projectSlug }
-        }));
+        if (watch?.source) {
+          await readWatch(watch, context);
+        } else {
+          requireResult(await actions.execute({
+            actionId: "vibe64.sessions.inspect",
+            input: { sessionId: observation.focus.sessionId },
+            context: { ...context, projectSlug: observation.focus.projectSlug }
+          }));
+        }
         observations.push(observation);
       } catch (error) {
         const watch = state.record.watches.find(item => item.watchId === observation.watchId);

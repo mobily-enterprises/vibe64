@@ -63,12 +63,14 @@ function createConversationSummary({
         : { sessionId: input.sessionId, limit: "20", ...(input.beforeTurnId ? { beforeTurnId: input.beforeTurnId } : {}) },
       context
     });
-    if (result?.ok === false || result?.readError) return {
-      ok: false,
-      mode: "excerpts",
-      error: String(result.error || "The conversation could not be read.").slice(0, 512),
-      messages: []
-    };
+    if (result?.ok === false || result?.readError) {
+      return {
+        ok: false,
+        mode: "excerpts",
+        error: String(result.error || "The conversation could not be read.").slice(0, 512),
+        messages: []
+      };
+    }
     const source = input.conversationId ? (result.messages || []).map((message) => ({
       ...message,
       reference: message.id || message.messageId
@@ -112,12 +114,14 @@ function createConversationSummary({
     } catch (error) {
       return { ok: false, ...excerpts(), error: error.message.slice(0, 512) };
     }
-    if (messages.reduce((size, message) => size + message.text.length, 0) <= 8000) return {
-      ok: true,
-      ...range,
-      mode: "excerpts",
-      messages
-    };
+    if (messages.reduce((size, message) => size + message.text.length, 0) <= 8000) {
+      return {
+        ok: true,
+        ...range,
+        mode: "excerpts",
+        messages
+      };
+    }
 
     let answer, failure;
     try {
@@ -138,11 +142,13 @@ function createConversationSummary({
     } catch (error) {
       failure = error;
     }
-    if (failure) return {
-      ok: true,
-      ...excerpts(),
-      error: `Summary unavailable; read these bounded excerpts instead. ${failure.message}`.slice(0, 512)
-    };
+    if (failure) {
+      return {
+        ok: true,
+        ...excerpts(),
+        error: `Summary unavailable; read these bounded excerpts instead. ${failure.message}`.slice(0, 512)
+      };
+    }
     return { ok: true, ...range, mode: "summary", ...answer, messages: [] };
   }
 

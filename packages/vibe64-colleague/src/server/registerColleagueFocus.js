@@ -27,9 +27,11 @@ function registerColleagueFocus({
       const binding = bindings.get(clientId);
       bindings.delete(clientId);
       if (binding) binding.owner.connected = false;
-      if (binding?.release) void binding.release().catch((error) => {
-        logger.error({ error }, "Colleague browser focus cleanup failed.");
-      });
+      if (binding?.release) {
+        void binding.release().catch((error) => {
+          logger.error({ error }, "Colleague browser focus cleanup failed.");
+        });
+      }
     }
     async function update(input, acknowledge) {
       if (typeof acknowledge !== "function" || closed) return;
@@ -54,9 +56,11 @@ function registerColleagueFocus({
               owner: binding.owner,
               current,
               onRelease(detach) {
-                if (binding.release && binding.release !== detach) void binding.release().catch((error) => {
-                  logger.error({ error }, "Colleague previous actor focus cleanup failed.");
-                });
+                if (binding.release && binding.release !== detach) {
+                  void binding.release().catch((error) => {
+                    logger.error({ error }, "Colleague previous actor focus cleanup failed.");
+                  });
+                }
                 binding.release = detach;
                 if (!current()) release(input.clientId);
               }
@@ -65,10 +69,12 @@ function registerColleagueFocus({
         });
         if (current()) acknowledge(result);
       } catch (error) {
-        if (!closed && socket.connected) acknowledge({
-          ok: false,
-          error: Number(error.statusCode || error.status || 500) < 500 ? error.message : "Colleague could not update this browser's focus."
-        });
+        if (!closed && socket.connected) {
+          acknowledge({
+            ok: false,
+            error: Number(error.statusCode || error.status || 500) < 500 ? error.message : "Colleague could not update this browser's focus."
+          });
+        }
       }
     }
     function leave(input) {

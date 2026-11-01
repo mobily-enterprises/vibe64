@@ -159,9 +159,11 @@ function createAssignmentOperations({
     const existing = state.record.assignments?.find((item) => item.assignmentId === input.assignmentId);
     if (existing) {
       if (existing.requestMessageId !== input.requestMessageId || existing.projectSlug !== input.projectSlug ||
-          existing.sessionId !== input.sessionId || existing.conversationId !== (input.conversationId || "")) throw fail(
-        "That assignment ID already belongs to another request or target."
-      );
+          existing.sessionId !== input.sessionId || existing.conversationId !== (input.conversationId || "")) {
+        throw fail(
+          "That assignment ID already belongs to another request or target."
+        );
+      }
       return { ok: true, assignment: assignmentDetail(existing) };
     }
     const retained = state.record.assignments || [];
@@ -260,10 +262,12 @@ function createAssignmentOperations({
       await persist(state);
       throw fail(assignment.summary);
     }
-    if (assignment.reviewerConversationId && assignment.reviewCreated) return {
-      ok: true,
-      assignment: assignmentDetail(assignment)
-    };
+    if (assignment.reviewerConversationId && assignment.reviewCreated) {
+      return {
+        ok: true,
+        assignment: assignmentDetail(assignment)
+      };
+    }
     if (!assignment.turns.some((turn) => turn.recipient === "implementer" && turn.answerId)) {
       throw fail("Wait for the implementer's answer before starting review.");
     }
@@ -445,8 +449,10 @@ function createAssignmentOperations({
       if (assignment.turnLimit + extraTurns > 64) {
         throw fail("An assignment can use at most 64 agent turns; start a new scoped assignment after this one ends.");
       }
-      for (const message of messages) if (!assignment.amendments.some((item) => item.messageId === message.messageId)) {
-        assignment.amendments.push({ messageId: message.messageId, text: message.text });
+      for (const message of messages) {
+        if (!assignment.amendments.some((item) => item.messageId === message.messageId)) {
+          assignment.amendments.push({ messageId: message.messageId, text: message.text });
+        }
       }
       assignment.turnLimit += extraTurns;
       if (extraTurns) (assignment.budgetGrants ||= []).push(grantId);
@@ -475,9 +481,13 @@ function createAssignmentOperations({
           // Explicit resumption reconciles even a result that was observed
           // while another failed read had suspended the assignment.
           delete watch.cursor;
-        } else watch.status = "cancelled";
+        } else {
+          watch.status = "cancelled";
+        }
       }
-    } else if (input.status !== "waiting") cancelWatches(state, assignment);
+    } else if (input.status !== "waiting") {
+      cancelWatches(state, assignment);
+    }
     if (input.status === "cancelled") {
       state.record.observations = state.record.observations.filter((item) => item.assignmentId !== assignment.assignmentId);
     }

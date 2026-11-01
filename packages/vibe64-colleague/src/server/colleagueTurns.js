@@ -136,7 +136,9 @@ function createColleagueTurns({
         };
         if (pendingRequest) {
           if (Object.hasOwn(pendingRequest, "retireNative")) request.retireNative = pendingRequest.retireNative;
-        } else request.retireNative = true;
+        } else {
+          request.retireNative = true;
+        }
         await conversation.select(request);
       } finally {
         state.selecting = null;
@@ -253,10 +255,12 @@ function createColleagueTurns({
     state.interimReply = null;
     records.publishReply(state);
     state.summaryAbort?.abort();
-    for (const connection of state.connections.values()) answerPendingNavigation(connection, {
-      ok: false,
-      error: "Navigation was cancelled when Colleague stopped."
-    });
+    for (const connection of state.connections.values()) {
+      answerPendingNavigation(connection, {
+        ok: false,
+        error: "Navigation was cancelled when Colleague stopped."
+      });
+    }
     state.record.status = "interrupted";
     for (const assignment of state.record.assignments || []) {
       suspendAssignment(
@@ -268,16 +272,18 @@ function createColleagueTurns({
     }
     state.requestContext = context;
     try {
-      if (!state.conversation && state.record.conversationMetadata?.runtime) await conversations.openConversation(
-        state,
-        threads.actionContext(
+      if (!state.conversation && state.record.conversationMetadata?.runtime) {
+        await conversations.openConversation(
           state,
-          {
-            clientId: "",
-            focus: null
-          }
-        )
-      );
+          threads.actionContext(
+            state,
+            {
+              clientId: "",
+              focus: null
+            }
+          )
+        );
+      }
       await state.conversation?.cancel();
       await state.running;
       await state.summaryRunning;
@@ -317,10 +323,12 @@ function createColleagueTurns({
         // Stop running work only, in this thread rather than whichever one the
         // person's mode shows now. A summary receipt left by an earlier run is
         // retried before the thread's next summary, not at shutdown.
-        if (state.running || state.summaryRunning) await stop({}, {
-          ...state.requestContext,
-          colleague: { ...state.requestContext?.colleague, threadKey: state.key }
-        });
+        if (state.running || state.summaryRunning) {
+          await stop({}, {
+            ...state.requestContext,
+            colleague: { ...state.requestContext?.colleague, threadKey: state.key }
+          });
+        }
         await state.running;
         await state.saving;
       } catch (error) {

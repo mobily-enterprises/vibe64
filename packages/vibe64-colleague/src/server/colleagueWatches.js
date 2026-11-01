@@ -78,7 +78,9 @@ function createColleagueWatches({
         { error },
         "Colleague's worker did not start; the queued messages stay queued."
       ));
-    } else worker.wakeForObservations(state);
+    } else {
+      worker.wakeForObservations(state);
+    }
   }
 
   events?.register({
@@ -89,13 +91,15 @@ function createColleagueWatches({
       // Publishers may still hold a session write lock. Never await a read here.
       // A thread that fails to load reports to its own request, not here.
       const session = event.source === "vibe64" && event.entity === "session";
-      for (const pending of serviceState.users.values()) void pending.then((state) => {
-        const payload = event.realtime?.payload || {};
-        const relevant = watch => watch.status === "active" && (session
-          ? !watch.input && watch.sessionId === event.entityId && (!payload.projectSlug || watch.projectSlug === payload.projectSlug)
-          : watchSources.get(watch.source)?.entity === event.entity && watch.projectSlug === event.entityId);
-        if (state.record.watches.some(relevant)) worker.scheduleWatches(state, watchDebounceMs);
-      }, () => {});
+      for (const pending of serviceState.users.values()) {
+        void pending.then((state) => {
+          const payload = event.realtime?.payload || {};
+          const relevant = watch => watch.status === "active" && (session
+            ? !watch.input && watch.sessionId === event.entityId && (!payload.projectSlug || watch.projectSlug === payload.projectSlug)
+            : watchSources.get(watch.source)?.entity === event.entity && watch.projectSlug === event.entityId);
+          if (state.record.watches.some(relevant)) worker.scheduleWatches(state, watchDebounceMs);
+        }, () => {});
+      }
     }
   });
 
@@ -199,9 +203,11 @@ function createColleagueWatches({
         if (["source", "projectSlug", "sessionId", "conversationId"].some(key => (existing[key] || "") !== (target[key] || "")) ||
             !isDeepStrictEqual(existing.input || null, target.input || null) ||
             ["condition", "question"].some(key => (existing[key] || "") !== (input[key] || "")) ||
-            (existing.once !== false) !== (input.once !== false)) throw failure(
-          "This watch ID belongs to a different request. Use a new watch ID."
-        );
+            (existing.once !== false) !== (input.once !== false)) {
+          throw failure(
+            "This watch ID belongs to a different request. Use a new watch ID."
+          );
+        }
         return { ok: true, watch: publicWatch(existing) };
       }
       if (input.source && !source) throw failure("Colleague cannot watch that here.", "vibe64_colleague_failed", 422);

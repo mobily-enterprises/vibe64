@@ -42,12 +42,14 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
     try {
       entries = await readdir(directory, { withFileTypes: true });
     } catch (error) {
-      if (error.code === "ENOENT") return {
-        ok: false,
-        error: "Usage guides are unavailable in this application release.",
-        topics: [],
-        hasMore: false
-      };
+      if (error.code === "ENOENT") {
+        return {
+          ok: false,
+          error: "Usage guides are unavailable in this application release.",
+          topics: [],
+          hasMore: false
+        };
+      }
       throw error;
     }
     const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
@@ -85,11 +87,13 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
     try {
       return { ok: true, ...await readGuide(topicId) };
     } catch (error) {
-      if (["ENOENT", "ELOOP"].includes(error.code)) return {
-        ok: false,
-        topicId,
-        error: "That usage topic is unavailable in this application release. Search the topic list for an available guide."
-      };
+      if (["ENOENT", "ELOOP"].includes(error.code)) {
+        return {
+          ok: false,
+          topicId,
+          error: "That usage topic is unavailable in this application release. Search the topic list for an available guide."
+        };
+      }
       throw error;
     }
   }

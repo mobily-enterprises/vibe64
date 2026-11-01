@@ -136,10 +136,12 @@ function createColleagueFocusAndNavigation({ threads }) {
     if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
     const focus = connection.focus || {};
     if (guided.navigate && place.open.pane) {
-      if (!focus.projectSlug) return {
-        ok: false,
-        error: `${place.label} is in a project. Open the project with navigation.open first, then guide again.`
-      };
+      if (!focus.projectSlug) {
+        return {
+          ok: false,
+          error: `${place.label} is in a project. Open the project with navigation.open first, then guide again.`
+        };
+      }
       if (place.open.pane !== "preview" && !focus.sessionId) {
         return { ok: false, error: `${place.label} belongs to a session. Open one of the project's sessions first, then guide again.` };
       }

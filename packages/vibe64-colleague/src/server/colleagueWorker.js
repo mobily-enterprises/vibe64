@@ -387,8 +387,10 @@ function createColleagueWorker({
               }
               turn = await records.storage.read(state.record.runtimeId, transaction => transaction.readTurn(receipt.turnId));
             }
-            if (turn?.metadata?.runtime?.status !== "complete") throw failure(turn?.metadata?.runtime?.error || result?.error ||
+            if (turn?.metadata?.runtime?.status !== "complete") {
+              throw failure(turn?.metadata?.runtime?.error || result?.error ||
               "Colleague's response did not complete. Your message is kept.");
+            }
           }
           prepared = await conversation.prepareCompletedResponse(
             { messageId: internalMessageId, turnId: receipt.turnId },
@@ -502,7 +504,9 @@ function createColleagueWorker({
               { error },
               "Colleague's worker did not restart; the queued messages stay queued."
             ));
-          } else wakeForObservations(state);
+          } else {
+            wakeForObservations(state);
+          }
         }
       });
     void state.running.catch(() => {}); // The run records its own failure; this only marks the rejection handled.

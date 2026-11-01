@@ -129,13 +129,15 @@ function createColleagueConversations({
         if (event.origin === "application" && event.role === "commentary") {
           // API text can precede its tool classification. Retire that earlier
           // partial when the completed message is identified as commentary.
-          if (event.streaming) observer.listener({
-            type: "message-complete",
-            turnId: event.turnId,
-            messageId: event.messageId,
-            streaming: colleagueBrowserStream(event.streaming),
-            interimReply
-          });
+          if (event.streaming) {
+            observer.listener({
+              type: "message-complete",
+              turnId: event.turnId,
+              messageId: event.messageId,
+              streaming: colleagueBrowserStream(event.streaming),
+              interimReply
+            });
+          }
           return;
         }
         observer.listener({

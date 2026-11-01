@@ -263,9 +263,11 @@ async function restoreColleagueNativeContinuity({
                 value.session_id !== undefined && !uuid.test(value.session_id) ||
                 value.history_mode !== undefined && !["legacy", "paginated"].includes(value.history_mode) ||
                 value.dynamic_tools !== undefined &&
-                  (!Array.isArray(value.dynamic_tools) || value.dynamic_tools.length)) refuse(
-              "The original Codex rollout does not prove this exact private native scope and provider."
-            );
+                  (!Array.isArray(value.dynamic_tools) || value.dynamic_tools.length)) {
+              refuse(
+                "The original Codex rollout does not prove this exact private native scope and provider."
+              );
+            }
           }
           // Qualified original0.151/0.156 and current0.159 formats retain the
           // raw rollout across compaction. Inspect actual rows, not replacement
@@ -592,9 +594,11 @@ async function restoreColleagueNativeContinuity({
       }
       const after = await lstat(nativeFile.path);
       if (!after.isFile() || ["dev", "ino", "size", "mtimeMs", "ctimeMs"].some(key => before[key] !== after[key]) ||
-          await readUpgradeFile(receiptPath) !== receiptBytes) refuse(
-        "Native history or its receipt changed during inspection. Stop all writers before retrying."
-      );
+          await readUpgradeFile(receiptPath) !== receiptBytes) {
+        refuse(
+          "Native history or its receipt changed during inspection. Stop all writers before retrying."
+        );
+      }
     });
   };
 

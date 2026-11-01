@@ -267,7 +267,9 @@ function createColleagueRecords({
     };
     if (state.streamingReply?.text && !completedMessage) {
       if (!state.replyTimer) state.replyTimer = setTimeout(publish, 25);
-    } else publish();
+    } else {
+      publish();
+    }
   }
 
   async function snapshot(state, clientId = "") {
