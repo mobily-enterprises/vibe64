@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import test from "node:test";
-import { createActionProvider } from "@jskit-ai/kernel/server/actions";
+import { ActionProvider } from "@jskit-ai/kernel/server/actions";
 import { EventProvider } from "@jskit-ai/kernel/server/runtime";
 import { createCapabilityRuntime, defineProvider } from "@jskit-ai/kernel/shared/capabilities";
 import { RealtimeProvider } from "@jskit-ai/realtime/server/RealtimeProvider";
@@ -137,7 +137,7 @@ test("pages receive only the changes of the projects and sessions they watch", {
       "runtime.logger": { debug() {}, warn() {}, info() {}, error() {} },
       "vibe64.sessions": { async probeRepositoryUpdates(slug) { probes.push(slug); return { failed: false, inUse: false }; } }
     },
-    providers: [EventProvider, createActionProvider(), RealtimeProvider, Vibe64RepositoryUpdatesProvider, defineProvider({
+    providers: [EventProvider, ActionProvider, RealtimeProvider, Vibe64RepositoryUpdatesProvider, defineProvider({
       id: "test.action-context", requires: { actions: "runtime.actions", events: "runtime.events" },
       setup(values) {
         events = values.events;

@@ -145,7 +145,9 @@ test("bundled assistant file runtime preserves lazy optional SQL imports after r
     import assert from "node:assert/strict";
     import { AssistantFeature } from "@jskit-ai/assistant-runtime/server";
     import { createConversationRuntime, createFileConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
-    import { createActionProvider } from "@jskit-ai/kernel/server/actions";
+    import { ActionProvider } from "@jskit-ai/kernel/server/actions";
+    import { EventProvider } from "@jskit-ai/kernel/server/runtime";
+    import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
     import { createCapabilityRuntime, defineProvider } from "@jskit-ai/kernel/shared/capabilities";
     const conversations = createConversationRuntime({
       storage: createFileConversationStorage({ directory: ${JSON.stringify(path.join(root, "conversations"))} }),
@@ -158,7 +160,7 @@ test("bundled assistant file runtime preserves lazy optional SQL imports after r
       provides: { value: capability }, setup: () => ({ value }) });
     const routes = [];
     let assistant, actions;
-    const host = createCapabilityRuntime({ providers: [createActionProvider(),
+    const host = createCapabilityRuntime({ inputs: { "runtime.logger": silentLogger }, providers: [EventProvider, ActionProvider,
       valueProvider("runtime.config", {
         surfaceDefinitions: { home: { enabled: true, requiresWorkspace: false } },
         assistantSurfaces: { home: { settingsSurfaceId: "home", configScope: "global" } }

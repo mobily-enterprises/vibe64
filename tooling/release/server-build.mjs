@@ -226,7 +226,7 @@ async function writeStaticServerEntry({
   await writeFile(
     entryPath,
     `${[
-      'import { createActionProvider } from "@jskit-ai/kernel/server/actions";',
+      'import { ActionProvider } from "@jskit-ai/kernel/server/actions";',
       'import { HttpProvider } from "@jskit-ai/kernel/server/http";',
       'import { BootstrapProvider, EventProvider } from "@jskit-ai/kernel/server/runtime";',
       'import { createCapabilityRuntime } from "@jskit-ai/kernel/shared/capabilities";',
@@ -271,7 +271,7 @@ async function writeStaticServerEntry({
       '    },',
       '    providers: [',
       '      EventProvider,',
-      '      createActionProvider({ logger }),',
+      '      ActionProvider,',
       '      HttpProvider,',
       '      BootstrapProvider,',
       '      ...providers',

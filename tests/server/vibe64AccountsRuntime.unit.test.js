@@ -11,7 +11,7 @@ import { createService as createTerminalsService } from "../../packages/vibe64-t
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { createActionProvider } from "@jskit-ai/kernel/server/actions";
+import { ActionProvider } from "@jskit-ai/kernel/server/actions";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import {
   createCapabilityRuntime,
@@ -278,7 +278,7 @@ async function startAccountsFeature({
   });
   const runtime = createCapabilityRuntime({
     providers: [
-      createActionProvider(),
+      ActionProvider,
       Vibe64AccountsFeature,
       observer
     ],
