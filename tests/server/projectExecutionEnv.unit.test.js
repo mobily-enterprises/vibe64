@@ -6,7 +6,7 @@ import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/s
 import { readSessionConversationContext } from "../../packages/vibe64-terminals/src/server/mainConversationContext.js";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
-import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { sourceMetadata, sourcePath, withTemporaryRoot, projectServiceCollaborators } from "./vibe64TestHelpers.js";
 import { executionEnvRecord } from "../../packages/vibe64-terminals/src/server/executionEnvRecord.js";
 
 import {
@@ -83,7 +83,7 @@ test("Codex message preparation reuses only current resources and Env files", as
           write: writer, read: { ...writer, username: "reader", password: "reader-secret" } },
         resourceValues: [{ declaration: { component: "jskit-mysql", id: "database", kind: "mysql" }, values: writer }] };
     };
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
@@ -138,7 +138,7 @@ test("Codex message preparation reuses only current resources and Env files", as
 
 test("Codex context avoids source inspection while retaining workspace and account checks", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = createService({ logger: console, env: {},
+    const service = createService({ ...projectServiceCollaborators(), logger: console, env: {},
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }) });
     const runtime = await service.createRuntime();
     const sessionId = "codex-context";
@@ -215,7 +215,7 @@ test("resource configuration follows resolved application settings without secre
     await mkdir(path.join(targetRoot, ".git", "info"), { recursive: true });
     let failure = null;
     let defaults = [{ name: "WORKERS", value: "2" }, { name: "AUTH_SECRET", value: "default-secret" }];
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: { UNRELATED_HOST_SETTING: "not-project-configuration" },
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment() {
@@ -277,7 +277,7 @@ test("managed session credentials preserve resource configuration identity, but 
     let databaseBinding = "DB_DATABASE";
     let inspections = 0;
     let provisions = 0;
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext: createStudioProjectContext({
         explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),

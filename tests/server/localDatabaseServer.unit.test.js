@@ -9,7 +9,7 @@ import { localDatabaseServerDeclarations } from "../../packages/vibe64-project/s
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { __testables as serverCheckTestables, checkDatabaseServer } from "../../packages/vibe64-database-tools/src/server/serverCheck.js";
 import { __testables as serverGuideTestables, databaseServerGuide, isAdminUser } from "../../packages/vibe64-database-tools/src/shared/serverGuide.js";
-import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { sourceMetadata, sourcePath, withTemporaryRoot, projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const { describeFailure } = serverCheckTestables;
 const { testDatabaseNames } = serverGuideTestables;
@@ -52,7 +52,7 @@ test("declarations list the Stack's own names in a fixed order and never carry a
 
 test("the project answers with Env over Stack defaults, ignores the shell, and stays out of a host's managed databases", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const options = { logger: console,
+    const options = { ...projectServiceCollaborators(), logger: console,
       // A shell export must not count: Workspace setup never receives it.
       env: { DB_PASSWORD: "from-the-shell", DATABASE_URL: "mysql://shell@nowhere/x" },
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
@@ -93,7 +93,7 @@ test("the project answers with Env over Stack defaults, ignores the shell, and s
 
 test("project status counts only values the project's processes get", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: { DB_HOST: "127.0.0.1", DB_PORT: "5432", DB_DATABASE: "rails", DB_USERNAME: "rails" },
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
       inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [], resources: [{ component: "rails-postgresql",

@@ -19,13 +19,10 @@ import {
 import {
   savePreviewApplicationIdentities
 } from "./previewApplicationIdentities.js";
-import { NO_SAVED_ENV_VALUES } from "./savedEnvValues.js";
-import { LOCAL_PROJECT_RESOURCES } from "./resourceEnvironment.js";
 import {
   runProjectSessionPolicyExclusive,
   runProjectSourceExclusive
 } from "./projectSourceMutationLock.js";
-import { announceNoProjectChange } from "./projectActions.js";
 import { createProjectDevelopmentDatabase } from "./projectDevelopmentDatabase.js";
 import { createProjectEnvironment } from "./projectEnvironment.js";
 import { createProjectOnboarding } from "./projectOnboarding.js";
@@ -55,7 +52,7 @@ function catalogUnavailable() {
 
 /**
  * @param {object} dependencies
- * @param {RuntimeEnv} [dependencies.env]
+ * @param {RuntimeEnv} dependencies.env
  * @param {RuntimeLogger} dependencies.logger
  * @param {(fullName: string, input: object) => Promise<object>} [dependencies.inspectConnectedRepository]
  * @param {(fullName: string, branch: string, input: object) => Promise<object>} [dependencies.inspectConnectedBranch]
@@ -66,14 +63,14 @@ function catalogUnavailable() {
  * @param {typeof listGenesisTemplates} [dependencies.listTemplates]
  * @param {typeof applyGenesisTemplate} [dependencies.applyTemplate]
  * @param {StudioProjectContext} dependencies.projectContext
- * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
- * @param {ProjectResourceEnvironment} [dependencies.resourceEnvironmentProvider] a host's managed resources
- * @param {SavedEnvValues} [dependencies.savedEnvValues] a host's saved values
+ * @param {PublishProjectChanged} dependencies.publishProjectChanged
+ * @param {ProjectResourceEnvironment} dependencies.resourceEnvironmentProvider a host's managed resources, or local ones
+ * @param {SavedEnvValues} dependencies.savedEnvValues a host's saved values, or none
  * @param {typeof setGenesisCollaboration} [dependencies.setCollaboration]
  * @param {typeof setGenesisEngineeringProfile} [dependencies.setEngineeringProfile]
  */
 function createService({
-  env = process.env,
+  env,
   logger,
   inspectConnectedRepository = (fullName, input) => githubApi(input, {
     env,
@@ -92,9 +89,9 @@ function createService({
   listTemplates = listGenesisTemplates,
   applyTemplate = applyGenesisTemplate,
   projectContext,
-  publishProjectChanged = announceNoProjectChange,
-  resourceEnvironmentProvider = LOCAL_PROJECT_RESOURCES,
-  savedEnvValues = NO_SAVED_ENV_VALUES,
+  publishProjectChanged,
+  resourceEnvironmentProvider,
+  savedEnvValues,
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile
 }) {

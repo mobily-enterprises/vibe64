@@ -32,7 +32,8 @@ import {
   prepareCodexGitCommand
 } from "@local/vibe64-terminals/server/codexGitCommand";
 import {
-  withTemporaryRoot
+  withTemporaryRoot,
+  projectServiceCollaborators
 } from "./vibe64TestHelpers.js";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
@@ -162,7 +163,7 @@ test("GitHub refresh uses the managed socket and publishes only its bound projec
     const events = [];
     const projects = ["first", "second"].map((slug) => ({ slug, path: path.join(root, slug),
       githubRepository: { fullName: `owner/${slug}` }, repositoryMode: "local_source" }));
-    const project = createProjectService({ logger: console,
+    const project = createProjectService({ ...projectServiceCollaborators(), logger: console,
       projectContext: {
         targetRoot: projects[0].path,
         requestContextMatchesSelectedProject: () => false,

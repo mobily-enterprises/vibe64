@@ -10,6 +10,7 @@ import { initializeGenesisProject } from "@local/vibe64-genesis/server";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createService, runApplicationIntegrationSetup } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "@local/vibe64-core/server/sessionSourcePath";
+import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const configuration = () => ({
   schemaVersion: 1,
@@ -727,7 +728,7 @@ test("n8n registration uses real project Env and nested session locking", { time
   const source = path.join(root, "managed-source", "project", "sessions", "active", "one", "source");
   await mkdir(target, { recursive: true }); await mkdir(source, { recursive: true });
   await promisify(execFile)("git", ["init", "--quiet"], { cwd: source });
-  const project = createProjectService({ env: {},
+  const project = createProjectService({ ...projectServiceCollaborators(), env: {},
     projectContext: createStudioProjectContext({ explicitManagedSourceRoot: path.join(root, "managed-source"),
       explicitSystemRoot: path.join(root, "system"), explicitTargetRoot: target, home: root }),
     inspectEnvironment: async () => ({ status: "ready", components: [], resources: [], environmentDefaults: [],

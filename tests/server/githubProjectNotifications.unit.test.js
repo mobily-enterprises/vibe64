@@ -5,6 +5,7 @@ import test from "node:test";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createVibe64ProjectChangedPublisher } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
+import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 
 /** The project service's named GitHub method for one case's category and operation. */
@@ -42,6 +43,7 @@ test("confirmed GitHub mutations refresh their captured project without making n
     }
   }));
   const service = createService({
+    ...projectServiceCollaborators(),
     env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" },
     projectContext: { async listProjects() { return { currentProject: selectedProject, projects: [selectedProject] }; } },
     logger: { warn(...args) { warnings.push(args); } },

@@ -20,6 +20,7 @@ import {
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 async function fixture(t, { published = true, noExercise = false, secondLesson = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
@@ -1897,7 +1898,7 @@ test("actual saved exercise caller admits only its same original local Project r
   ]);
   const projectContext = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true, mode: "local" } });
-  const project = createProject({ projectContext });
+  const project = createProject({ ...projectServiceCollaborators(), projectContext });
   // Practice projects are ordinary projects: the attempt is read fresh and the
   // original local practice admission owns the callback.
   const practice = async ({ actor, attemptId: id, access = "observe" }, operation) => {
@@ -1957,7 +1958,7 @@ test("a practice session is an ordinary local project session that stays the lea
   ]);
   const core = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
-  const project = createProject({ projectContext: core });
+  const project = createProject({ ...projectServiceCollaborators(), projectContext: core });
   const repository = createManagedProjectRepositoryService({ projectContext: core, project });
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;

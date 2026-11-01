@@ -71,7 +71,8 @@ import {
   managedSessionSourceRoot,
   projectRuntimeRoot,
   sourcePath,
-  withTemporaryRoot
+  withTemporaryRoot,
+  projectServiceCollaborators
 } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
@@ -396,7 +397,7 @@ async function renewalHarness(targetRoot, {
   const predecessorResource = path.join(resourceRoot, PREDECESSOR_ID);
   await mkdir(predecessorResource, { recursive: true });
   await writeFile(path.join(predecessorResource, "database.marker"), "owned\n", "utf8");
-  const project = createProjectService({ logger: console,
+  const project = createProjectService({ ...projectServiceCollaborators(), logger: console,
     env: {},
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),

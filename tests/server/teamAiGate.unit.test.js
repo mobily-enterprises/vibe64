@@ -19,6 +19,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { PROJECT_OPERATION, registerVibe64ActionContext, vibe64ActionPolicy } from "../../packages/vibe64-core/src/server/actionContext.js";
 import { routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const OWNER = Object.freeze({ uid: 1, username: "tony", role: "owner" });
 const MEMBER = Object.freeze({ uid: 42, username: "learner", role: "member" });
@@ -174,7 +175,7 @@ test("a practice project follows the same rule", async (t) => {
 test("the owner's project list says whether team members can open projects", async (t) => {
   const ready = { value: false };
   const { context } = await withWorkspace(t, ready);
-  const project = createProjectService({ logger: console, projectContext: context });
+  const project = createProjectService({ ...projectServiceCollaborators(), logger: console, projectContext: context });
   const listed = await project.listProjects({ actor: OWNER });
   assert.deepEqual(listed.teamAi, { available: true, ownerName: "Tony", memberCount: 2, ready: false });
   ready.value = true;

@@ -6,6 +6,7 @@ import test from "node:test";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createTrainingService } from "@local/vibe64-training/server/preparation";
 import { NO_LEARNING_SPACE } from "@local/vibe64-training/server/learning-space";
+import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const actor = { uid: 123, username: "learner" };
 const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -401,7 +402,7 @@ test("practice preparation creates an ordinary initial session under exactly its
   await mkdir(working);
   const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(f.root, "system"),
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true } });
-  const actualProject = createProject({ projectContext: core });
+  const actualProject = createProject({ ...projectServiceCollaborators(), projectContext: core });
   const originalRuntime = f.owners.project.createRuntime;
   // Retain this ORIGINAL coordinator fixture's controlled session/setup seams.
   // Actual Runtime/Store/Git binding is proved in the original learner owner file.

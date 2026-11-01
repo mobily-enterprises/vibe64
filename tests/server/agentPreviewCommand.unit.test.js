@@ -12,7 +12,7 @@ import { promisify } from "node:util";
 
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
-import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { sourceMetadata, sourcePath, withTemporaryRoot, projectServiceCollaborators } from "./vibe64TestHelpers.js";
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import {
   agentPreviewBrowserWorkerSource,
@@ -1201,7 +1201,7 @@ test("managed browser and Playwright receive saved project secrets and reload th
     const sessionId = "browser-project-env";
     const runtimeRoot = path.join(root, "runtime-packs");
     const worktreePath = sourcePath(root, sessionId);
-    const project = createProjectService({ logger: console,
+    const project = createProjectService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext: createStudioProjectContext({
         explicitTargetRoot: root,

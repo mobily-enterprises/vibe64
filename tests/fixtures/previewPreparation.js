@@ -11,6 +11,7 @@ import { initializeGenesisProject } from "../../packages/vibe64-genesis/src/serv
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { terminalsServiceCollaborators } from "./terminalsServiceCollaborators.js";
+import { projectServiceCollaborators } from "../server/vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -73,7 +74,7 @@ require("node:http").createServer((_request, response) => {
   response.end("<h1>Preview works: " + process.env.PREVIEW_VALUE + "</h1>");
 }).listen(Number(process.argv[3]), process.argv[2]);
 `);
-  const project = createProjectService({ logger: console,
+  const project = createProjectService({ ...projectServiceCollaborators(), logger: console,
     env: {},
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(root, "managed"),

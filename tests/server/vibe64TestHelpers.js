@@ -12,6 +12,8 @@ import {
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import { LOCAL_PROJECT_RESOURCES } from "@local/vibe64-project/server/resourceEnvironment";
+import { NO_SAVED_ENV_VALUES } from "@local/vibe64-project/server/savedEnvValues";
 
 async function withTemporaryRoot(callback) {
   const previousRuntimeNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
@@ -108,10 +110,25 @@ function renderTestGenesisPrompt({ action = {} } = {}) {
   };
 }
 
+/**
+ * The project service's collaborators as a standalone server's project feature supplies them: this process's env,
+ * no project-change announcements, local resources and no saved values. Tests spread it first and override what
+ * they exercise.
+ */
+function projectServiceCollaborators() {
+  return {
+    env: process.env,
+    publishProjectChanged: async () => null,
+    resourceEnvironmentProvider: LOCAL_PROJECT_RESOURCES,
+    savedEnvValues: NO_SAVED_ENV_VALUES
+  };
+}
+
 export {
   markHistoricalConversationRewound,
   managedSessionSourceRoot,
   projectRuntimeRoot,
+  projectServiceCollaborators,
   renderTestGenesisPrompt,
   sourcePath,
   sourceMetadata,

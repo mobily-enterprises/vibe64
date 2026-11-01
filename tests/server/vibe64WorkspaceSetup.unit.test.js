@@ -28,7 +28,8 @@ import {
   projectRuntimeRoot,
   sourceMetadata,
   sourcePath,
-  withTemporaryRoot
+  withTemporaryRoot,
+  projectServiceCollaborators
 } from "./vibe64TestHelpers.js";
 
 const { WORKSPACE_SETUP_TRANSCRIPT_MAX_LENGTH, WORKSPACE_SETUP_TRANSCRIPT_TRUNCATED_MARKER } = __testables;
@@ -1218,7 +1219,7 @@ test("admitted practice Workspace setup finishes in original owner control after
     await mkdir(working);
     const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
       explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
-    const project = createProjectService({ projectContext: core });
+    const project = createProjectService({ ...projectServiceCollaborators(), projectContext: core });
     const training = { schemaVersion: 2, learnerKey: Buffer.from("42").toString("base64url"),
       practiceId: "12345678-1234-4234-8234-123456789abc",
       pin: { course: { courseId: "intro-course", release: "0.1.0" },

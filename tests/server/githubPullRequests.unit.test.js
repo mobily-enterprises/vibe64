@@ -20,6 +20,7 @@ import { createSessionsService as createService } from "./vibe64SessionsTestHelp
 import getPlacements from "../../src/placement.js";
 import { registerRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const user = { username: "alice", home: "/home/alice", uid: 1001, gid: 1001 };
 const project = { repositoryMode: "github", repository: { defaultBranch: "main", mode: "github" },
@@ -105,7 +106,7 @@ test("branch listing and session selection honor the host's per-user credential 
     if (previousMode === undefined) delete process.env.VIBE64_GITHUB_ACCOUNT_MODE;
     else process.env.VIBE64_GITHUB_ACCOUNT_MODE = previousMode;
   });
-  const service = createProjectService({ logger: console,
+  const service = createProjectService({ ...projectServiceCollaborators(), logger: console,
     env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" },
     projectContext: { async listProjects() { return { currentProject: branchProject, projects: [branchProject] }; } }
   });

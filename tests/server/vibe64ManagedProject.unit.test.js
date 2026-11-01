@@ -12,6 +12,7 @@ import {
   materializeInitialProject,
   verifyManagedProjectSource
 } from "@local/vibe64-project/server/managedProject";
+import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -432,7 +433,7 @@ test("shared managed repository owner provisions and clones a real private pract
     await mkdir(working);
     const core = createStudioProjectContext({ explicitTargetRoot: working, explicitSystemRoot: path.join(root, "system"),
       explicitManagedSourceRoot: path.join(root, "source"), home: root, runtimeProfile: { local: true } });
-    const project = createProject({ projectContext: core });
+    const project = createProject({ ...projectServiceCollaborators(), projectContext: core });
     const repository = createManagedProjectRepositoryService({ projectContext: core, project,
       initializeManagedProject: input => initializeManagedProject({ ...input, runCommand: directCommand }) });
     const actor = { uid: 42, username: "learner" };

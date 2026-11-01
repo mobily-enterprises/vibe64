@@ -146,14 +146,6 @@ function projectRealtimePayload(value = {}) {
 }
 
 /**
- * Without runtime events a project change goes unannounced; readers see it
- * on their next read.
- */
-async function announceNoProjectChange() {
-  return null;
-}
-
-/**
  * @param {object} dependencies
  * @param {RuntimeEvents} dependencies.events
  */
@@ -519,7 +511,6 @@ function createProjectActions({ project }) {
 }
 
 export {
-  announceNoProjectChange,
   ACTION_APPLY_TEMPLATE,
   ACTION_COMMENT_ON_ISSUE,
   ACTION_CREATE_ISSUE,

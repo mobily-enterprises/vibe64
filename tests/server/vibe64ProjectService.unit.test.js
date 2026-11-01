@@ -32,13 +32,14 @@ import {
 import {
   sourceMetadata,
   sourcePath,
-  withTemporaryRoot
+  withTemporaryRoot,
+  projectServiceCollaborators
 } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
 function project(targetRoot, options = {}) {
-  return createService({ logger: console,
+  return createService({ ...projectServiceCollaborators(), logger: console,
     env: {},
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
@@ -186,7 +187,7 @@ test("a catalog project can be created and selected without project-type setup",
       explicitSystemRoot: path.join(temporaryRoot, "system"),
       home: temporaryRoot
     });
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext
     });
@@ -212,7 +213,7 @@ test("a catalog project without a baseline checkout does not inspect its metadat
       home: temporaryRoot
     });
     let inspections = 0;
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       inspectEnvironment() {
         inspections += 1;
@@ -244,7 +245,7 @@ test("repository identities require a real project source", async () => {
       explicitSystemRoot: path.join(temporaryRoot, "system"),
       home: temporaryRoot
     });
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext
     });
@@ -283,7 +284,7 @@ test("catalogue engineering settings follow the selected session source and save
         name: "Durable product"
       }
     ];
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       async inspectEngineering({ projectRoot }) {
         inspections.push(projectRoot);
@@ -359,7 +360,7 @@ test("managed database defaults persist an explicit shared scope and provider-ow
       explicitSystemRoot: path.join(temporaryRoot, "system"),
       home: temporaryRoot
     });
-    const localService = createService({ logger: console,
+    const localService = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext
     });
@@ -371,7 +372,7 @@ test("managed database defaults persist an explicit shared scope and provider-ow
       slug: "shared-default"
     }), {});
 
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext,
       resourceEnvironmentProvider: {
@@ -436,7 +437,7 @@ test("managed development database scope is project state and changes only witho
     });
     let nameRequests = 0;
     const nameRequestInputs = [];
-    const service = createService({ logger: console,
+    const service = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext,
       resourceEnvironmentProvider: {
@@ -604,7 +605,7 @@ test("scope saving and session creation share one project policy boundary", asyn
     const namingCanFinish = new Promise((resolve) => {
       releaseNaming = resolve;
     });
-    const project = createService({ logger: console,
+    const project = createService({ ...projectServiceCollaborators(), logger: console,
       env: {},
       projectContext,
       resourceEnvironmentProvider: {
@@ -807,7 +808,7 @@ test("settings read reports no repository workflow, not a request failure, while
     const projectContext = Object.create(realContext, {
       listProjects: { value: async () => ({ currentProject: null, projects: [] }) }
     });
-    const service = createService({ logger: console, env: {}, projectContext, ...collaborationHarness() });
+    const service = createService({ ...projectServiceCollaborators(), logger: console, env: {}, projectContext, ...collaborationHarness() });
     const settings = await service.readSettings({ vibe64User: { role: "owner" } });
     assert.equal(settings.ok, true, JSON.stringify(settings.errors || []));
     assert.equal(settings.repositoryWorkflow.available, false);
@@ -872,7 +873,7 @@ test("catalogue collaboration follows the selected session source while prompt h
       home: temporaryRoot
     });
     const collaboration = collaborationHarness();
-    const service = createService({ logger: console, env: {}, projectContext, ...collaboration });
+    const service = createService({ ...projectServiceCollaborators(), logger: console, env: {}, projectContext, ...collaboration });
     await service.createProject({ name: "Source-owned collaboration" });
     const store = await service.createSessionStore();
     const firstSource = path.join(
@@ -1193,7 +1194,7 @@ test("standalone collaboration is keyed to the exact local source folder", async
       mkdir(secondRoot, { recursive: true })
     ]);
     const collaboration = collaborationHarness();
-    const standaloneService = (targetRoot) => createService({ logger: console,
+    const standaloneService = (targetRoot) => createService({ ...projectServiceCollaborators(), logger: console,
       ...collaboration,
       env: {},
       projectContext: createStudioProjectContext({
@@ -2534,7 +2535,7 @@ test("practice project runtime keeps its learning-space roots and lazy environme
     const projectsRoot = path.join(root, "projects");
     const core = createStudioProjectContext({ explicitProjectsRoot: projectsRoot, explicitSystemRoot: path.join(root, "system"),
       explicitManagedSourceRoot: projectsRoot, env: {}, home: root, learningSpace: { root: path.join(projectsRoot, ".learning") } });
-    const service = createService({ logger: console, projectContext: core, env: { ORIGINAL_PRACTICE_ENV: "actual source owner" } });
+    const service = createService({ ...projectServiceCollaborators(), logger: console, projectContext: core, env: { ORIGINAL_PRACTICE_ENV: "actual source owner" } });
     const actor = { uid: 42, username: "learner" };
     const practiceId = "12345678-1234-4234-8234-123456789abc";
     const pin = { course: { courseId: "intro-course", release: "0.1.0" }, topic: { schemaVersion: 1, topicId: "intro-topic", release: "0.1.0",

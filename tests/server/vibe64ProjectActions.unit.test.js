@@ -16,7 +16,7 @@ import {
   createProjectActions
 } from "../../packages/vibe64-project/src/server/projectActions.js";
 import { __testables, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
-import { underActionPolicy } from "./vibe64TestHelpers.js";
+import { underActionPolicy, projectServiceCollaborators } from "./vibe64TestHelpers.js";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
@@ -288,7 +288,7 @@ test("Learn mode creates no projects and selects only the practice project; Deve
   let releaseMode = () => {};
   t.after(() => releaseMode());
   const calls = [];
-  const project = createService({ logger: silentLogger, projectContext: {
+  const project = createService({ ...projectServiceCollaborators(), logger: silentLogger, projectContext: {
     createWorkspaceProject: input => { calls.push(["create", input.name]); return { ok: true }; },
     selectWorkspaceProject: input => { calls.push(["select", input.slug]); return { ok: true }; }
   } });

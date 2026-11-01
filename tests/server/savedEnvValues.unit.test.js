@@ -7,12 +7,12 @@ import { createService } from "../../packages/vibe64-project/src/server/service.
 import { NO_SAVED_ENV_VALUES, assertSavedEnvValues } from "../../packages/vibe64-project/src/server/savedEnvValues.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { __testables } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
-import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { sourceMetadata, sourcePath, withTemporaryRoot, projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const { runtimeConfigViewRecord } = __testables;
 
 function project(targetRoot, options = {}) {
-  return createService({ logger: console,
+  return createService({ ...projectServiceCollaborators(), logger: console,
     env: {},
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),

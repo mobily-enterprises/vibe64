@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { addGenesisStack, applyGenesisTemplate, initializeGenesisProject, listGenesisTemplates, setGenesisCollaboration, setGenesisEngineeringProfile } from "../../packages/vibe64-genesis/src/server/index.js";
-import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
+import { sourceMetadata, sourcePath, withTemporaryRoot, projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const exec = promisify(execFile);
 const sessionId = "2026-09-06_10-00-00";
@@ -28,7 +28,7 @@ async function fixture(targetRoot, options = {}) {
   const catalog = { schemaVersion: 1, templates: [{ id: "nodejs/public", technology: "nodejs", name: "Test", repository: templateRoot, branch: "public" }] };
   const templateSources = [{ namespace: "test", catalog }];
   // Another service over the same project, for a host's resources.
-  const serviceWith = (hostOptions = {}) => createService({ logger: console,
+  const serviceWith = (hostOptions = {}) => createService({ ...projectServiceCollaborators(), logger: console,
     env: {},
     ...options,
     ...hostOptions,
