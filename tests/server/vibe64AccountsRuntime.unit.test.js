@@ -7,11 +7,13 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 import { createService as createTerminalsService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { ActionProvider } from "@jskit-ai/kernel/server/actions";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { Vibe64ActionPolicyProvider } from "@local/vibe64-core/server/Vibe64ActionPolicyProvider";
 import { configureStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import {
@@ -477,7 +479,7 @@ test("Accounts, assistant readiness and Claude conversations share one Claude Co
     ].join("\n"), { mode: 0o755 });
     const unused = () => assert.fail("Reading Claude Code's account must not touch a project.");
     // The terminals service as the server composes it, with the runtime's own env.
-    const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+    const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot }, logger: silentLogger,
       projectService: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
         readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } });
     let readiness;
@@ -2390,7 +2392,7 @@ test("a Claude account change goes through the terminals service without touchin
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
     const unused = () => assert.fail("A Claude account change must not touch a project.");
-    const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+    const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot }, logger: silentLogger,
       projectService: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
         readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } });
     let refusal = null;
@@ -2574,7 +2576,7 @@ async function routingAccountsFixture(root) {
   const catalogCalls = [];
   const unavailable = new Set();
   const store = createAssistantRoutingStore({ systemRoot: root });
-  const manager = createSessionAgentManager({ readRoutingConfiguration: () => store.read(),
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, readRoutingConfiguration: () => store.read(),
     readAssistantAccess: async ({ assistantSelection: value }) => ({ available: !unavailable.has(value.modelId),
       ownerOnly: value.modelProviderId === "openai", connectionIdentity: `private-identity:${value.modelId}` }),
     providers: ["codex", "opencode", "claude"].map((engineId) => ({ id: engineId, transportId: `${engineId}_server`,

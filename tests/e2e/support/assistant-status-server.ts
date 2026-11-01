@@ -32,6 +32,7 @@ import { Vibe64ConversationsProvider } from "../../../packages/vibe64-sessions/s
 import { createSessionConversations } from "../../../packages/vibe64-terminals/src/server/sessionConversations.js";
 import { createSessionAttachments } from "../../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { createSessionAgentManager } from "../../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { sessionAgentManagerDefaults } from "../../fixtures/sessionAgentManagerDefaults.js";
 import { registerRoutes as registerTerminalRoutes } from "../../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { createColleagueService } from "../../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema } from "../../../packages/vibe64-colleague/src/server/colleagueActions.js";
@@ -639,7 +640,7 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
   // The owner's setup with its recommended "Same as" roles.
   await routingStore.write({ owner: { senior: role, junior: role, router: role, quickHelper: role, colleague: { follows: "senior" },
     fix: { follows: "junior" }, explain: { follows: "quickHelper" } }, nonOwner: {} }, 0);
-  const manager = createSessionAgentManager({ providers: [{ id: engineId, transportId: capabilities.transportId, capabilities: async () => capabilities }],
+  const manager = createSessionAgentManager({ ...sessionAgentManagerDefaults, providers: [{ id: engineId, transportId: capabilities.transportId, capabilities: async () => capabilities }],
     readRoutingConfiguration: () => routingStore.read(),
     readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "browser-fixture-connection" }) });
   Object.assign(sessionAgent, { resolveAssistantPurpose: (input, options) => manager.resolveAssistantPurpose(input, options) });
