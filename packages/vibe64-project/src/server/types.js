@@ -8,6 +8,16 @@
 /** @typedef {ReturnType<typeof import("./projectEnvironment.js").createProjectEnvironment>} ProjectEnvironment */
 /** @typedef {ReturnType<typeof import("./projectActions.js").createVibe64ProjectChangedPublisher>} PublishProjectChanged */
 /**
+ * A host's managed resources (vibe64.resource-environment.v2). A host prepares
+ * a session's resources and may also name and keep a managed project database.
+ * @typedef {object} ProjectResourceEnvironment
+ * @property {boolean} [managedDevelopmentDatabase]
+ * @property {(input: object) => Promise<object> | object} [environmentForResources]
+ * @property {(input: object) => Promise<object> | object} [environmentForProvisionedResources]
+ * @property {(input: object) => Promise<string> | string} [developmentDatabaseNameForProject]
+ * @property {(input: object) => Promise<object> | object} [removeSessionResources]
+ */
+/**
  * A host's saved values (vibe64.saved-env-values.v1), shown by its own label.
  * @typedef {object} SavedEnvValueProvider
  * @property {string} label

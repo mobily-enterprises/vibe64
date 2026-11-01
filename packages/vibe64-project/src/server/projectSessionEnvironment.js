@@ -6,6 +6,7 @@ import { materializeProjectEnvironmentFiles, projectEnvironmentFilesAreCurrent }
 import {
   applicationDatabaseToolEnvironment,
   localDatabaseServerDeclarations,
+  managesProjectResources,
   resourceKindIsDatabase,
   satisfiedAlternative
 } from "./resourceEnvironment.js";
@@ -13,7 +14,7 @@ import { envScope } from "./projectEnvironment.js";
 
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 /** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
-/** @typedef {import("./types.js").ProjectServiceSlots} ProjectServiceSlots */
+/** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 /** @typedef {import("./types.js").ProjectEnvironment} ProjectEnvironment */
 
 function projectEnvironmentResult(resolved, input, userRecords) {
@@ -48,11 +49,11 @@ function projectEnvironmentResult(resolved, input, userRecords) {
  * releasing a session's managed resources.
  * @param {object} dependencies
  * @param {ProjectEnvironment} dependencies.environment
+ * @param {ProjectResourceEnvironment} dependencies.resourceEnvironmentProvider
  * @param {ProjectSelection} dependencies.selection
  * @param {ProjectSessionWork} dependencies.sessionWork
- * @param {ProjectServiceSlots} dependencies.slots
  */
-function createProjectSessionEnvironment({ environment, selection, sessionWork, slots }) {
+function createProjectSessionEnvironment({ environment, resourceEnvironmentProvider, selection, sessionWork }) {
   const sessionEnvironment = Object.freeze({
     async projectExecutionEnvironment(input = {}) {
       if (input.reusePrepared === true) {
@@ -119,7 +120,7 @@ function createProjectSessionEnvironment({ environment, selection, sessionWork, 
     // the connection check uses. Secrets leave only as "set or not". A host
     // that supplies its own databases answers `managed` with nothing to do.
     async localDatabaseServers(input = {}) {
-      if (slots.resourceEnvironmentProvider) return { managed: true, databases: [] };
+      if (managesProjectResources(resourceEnvironmentProvider)) return { managed: true, databases: [] };
       const resolved = await environment.resolvedProjectEnvironment(input, await environment.userEnvRecords());
       return {
         managed: false,
@@ -162,15 +163,15 @@ function createProjectSessionEnvironment({ environment, selection, sessionWork, 
 
     async releaseSessionResources(input = {}) {
       const sessionId = String(input.sessionId || "").trim();
-      // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
-      if (!sessionId || typeof slots.resourceEnvironmentProvider?.removeSessionResources !== "function") {
+      // readable-check: allow method-probe - optional operation: a host that keeps no session resources has nothing to release
+      if (!sessionId || typeof resourceEnvironmentProvider.removeSessionResources !== "function") {
         return { ok: true };
       }
       const source = await selection.sourceForInput({
         session: input.session,
         sessionId
       });
-      return slots.resourceEnvironmentProvider.removeSessionResources({
+      return resourceEnvironmentProvider.removeSessionResources({
         ...(await selection.currentDevelopmentDatabaseConfiguration()),
         projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
         projectContextRoot: selection.selectedTargetRoot(),

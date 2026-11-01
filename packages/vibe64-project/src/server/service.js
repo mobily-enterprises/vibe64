@@ -19,6 +19,7 @@ import {
   savePreviewApplicationIdentities
 } from "./previewApplicationIdentities.js";
 import { NO_SAVED_ENV_VALUES } from "./savedEnvValues.js";
+import { LOCAL_PROJECT_RESOURCES } from "./resourceEnvironment.js";
 import {
   runProjectSessionPolicyExclusive,
   runProjectSourceExclusive
@@ -40,6 +41,7 @@ import { createProjectSettings } from "./projectSettings.js";
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 /** @typedef {import("./types.js").PublishProjectChanged} PublishProjectChanged */
 /** @typedef {import("./types.js").SavedEnvValueProvider} SavedEnvValueProvider */
+/** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 
 function catalogUnavailable() {
   return {
@@ -65,6 +67,7 @@ function catalogUnavailable() {
  * @param {typeof applyGenesisTemplate} [dependencies.applyTemplate]
  * @param {StudioProjectContext} dependencies.projectContext
  * @param {PublishProjectChanged} [dependencies.publishProjectChanged]
+ * @param {ProjectResourceEnvironment} [dependencies.resourceEnvironmentProvider] a host's managed resources
  * @param {SavedEnvValueProvider} [dependencies.savedEnvValueProvider] a host's saved values
  * @param {typeof setGenesisCollaboration} [dependencies.setCollaboration]
  * @param {typeof setGenesisEngineeringProfile} [dependencies.setEngineeringProfile]
@@ -86,20 +89,21 @@ function createService({
   applyTemplate = applyGenesisTemplate,
   projectContext,
   publishProjectChanged = announceNoProjectChange,
+  resourceEnvironmentProvider = LOCAL_PROJECT_RESOURCES,
   savedEnvValueProvider = NO_SAVED_ENV_VALUES,
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile
 }) {
   const slots = createProjectServiceSlots();
   const selection = createProjectSelection({ logger, projectContext });
-  const environment = createProjectEnvironment({ env, inspectEnvironment, savedEnvValueProvider, selection, slots });
+  const environment = createProjectEnvironment({ env, inspectEnvironment, resourceEnvironmentProvider, savedEnvValueProvider, selection });
   const sessionWork = createProjectSessionWork({ environment, selection });
-  const developmentDatabase = createProjectDevelopmentDatabase({ projectContext, selection, sessionWork, slots });
+  const developmentDatabase = createProjectDevelopmentDatabase({ projectContext, resourceEnvironmentProvider, selection, sessionWork });
   const projectSettings = createProjectSettings({
     inspectCollaboration, inspectConnectedRepository, inspectEngineering, selection, sessionWork, setCollaboration, setEngineeringProfile
   });
   const onboarding = createProjectOnboarding({ applyTemplate, environment, inspectProject, listTemplates, selection, sessionWork });
-  const sessionEnvironment = createProjectSessionEnvironment({ environment, selection, sessionWork, slots });
+  const sessionEnvironment = createProjectSessionEnvironment({ environment, resourceEnvironmentProvider, selection, sessionWork });
   const repositories = createProjectRepositories({
     env, inspectConnectedBranch, inspectConnectedRepository, logger, publishProjectChanged, projectSettings, selection
   });
@@ -285,17 +289,6 @@ function createService({
     slots.templateApplicationObserver = observer;
   }
 
-  function setResourceEnvironmentProvider(provider = null) {
-    if (
-      provider !== null &&
-      // readable-check: allow method-probe - input validation: a host's resource environment provider is checked when it is set
-      (!provider || typeof provider !== "object" || typeof provider.environmentForResources !== "function")
-    ) {
-      throw new TypeError("Vibe64 resource environment provider must expose environmentForResources() or be null.");
-    }
-    slots.resourceEnvironmentProvider = provider;
-  }
-
   async function saveEnvUserValues(input = {}) {
     return projectResult(() => sessionWork.runSessionSourceWorkExclusive(
       input,
@@ -411,8 +404,6 @@ function createService({
     runProjectSessionPolicyExclusive: runSelectedProjectSessionPolicyExclusive,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.project
     setTemplateApplicationObserver,
-    // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setResourceEnvironmentProvider,
     saveEnvUserValues,
     saveDevelopmentDatabaseScope,
     saveEngineeringProfile,

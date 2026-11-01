@@ -180,3 +180,6 @@ count toward satisfaction. The setup notice links to Env and can be rechecked;
 it does not provision resources, expose values, or replace the output area.
 Pending host-managed resources are left to application preparation rather than
 presented as credentials the person must enter.
+A host that prepares the project's declared resources provides them as the
+optional `vibe64.project.resource-environment` capability; without it the
+project uses the person's own resources and reports their database servers.

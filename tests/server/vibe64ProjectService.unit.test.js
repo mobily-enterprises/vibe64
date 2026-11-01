@@ -102,12 +102,6 @@ test("prepared execution reuses confirmed resources without source admission and
     };
     let prepared = false;
     let provisions = 0;
-    const service = projectService(targetRoot, {
-      inspectEnvironment: () => ({
-        components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
-        resources: [resource], status: "ready"
-      })
-    });
     const provided = () => ({
       contract: "vibe64.resource-environment.v2", ok: true, prepared,
       resourceValues: [{
@@ -115,10 +109,16 @@ test("prepared execution reuses confirmed resources without source admission and
         values: { endpoint: "https://service.example.test" }
       }]
     });
-    service.setResourceEnvironmentProvider({
-      managedDevelopmentDatabase: true,
-      environmentForProvisionedResources: provided,
-      async environmentForResources() { provisions += 1; prepared = true; return provided(); }
+    const service = projectService(targetRoot, {
+      inspectEnvironment: () => ({
+        components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
+        resources: [resource], status: "ready"
+      }),
+      resourceEnvironmentProvider: {
+        managedDevelopmentDatabase: true,
+        environmentForProvisionedResources: provided,
+        async environmentForResources() { provisions += 1; prepared = true; return provided(); }
+      }
     });
     const runtime = await service.createRuntime({ inspectSource: false });
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
@@ -359,27 +359,31 @@ test("managed database defaults persist an explicit shared scope and provider-ow
       explicitSystemRoot: path.join(temporaryRoot, "system"),
       home: temporaryRoot
     });
-    const service = createService({ logger: console,
+    const localService = createService({ logger: console,
       env: {},
       projectContext
     });
     const projectContextRoot = path.join(projectsRoot, "shared-default");
     const providerCalls = [];
 
-    assert.deepEqual(await service.managedDevelopmentDatabaseDefaults({
+    assert.deepEqual(await localService.managedDevelopmentDatabaseDefaults({
       projectContextRoot,
       slug: "shared-default"
     }), {});
 
-    service.setResourceEnvironmentProvider({
-      developmentDatabaseNameForProject(input) {
-        providerCalls.push(input);
-        return "unit_shared_default";
-      },
-      async environmentForResources() {
-        return { environment: {} };
-      },
-      managedDevelopmentDatabase: true
+    const service = createService({ logger: console,
+      env: {},
+      projectContext,
+      resourceEnvironmentProvider: {
+        developmentDatabaseNameForProject(input) {
+          providerCalls.push(input);
+          return "unit_shared_default";
+        },
+        async environmentForResources() {
+          return { environment: {} };
+        },
+        managedDevelopmentDatabase: true
+      }
     });
     await assert.rejects(
       () => service.managedDevelopmentDatabaseDefaults({
@@ -430,24 +434,24 @@ test("managed development database scope is project state and changes only witho
       explicitSystemRoot: path.join(temporaryRoot, "system"),
       home: temporaryRoot
     });
-    const service = createService({ logger: console,
-      env: {},
-      projectContext
-    });
-    await service.createProject({ name: "Shared catalogue" });
     let nameRequests = 0;
     const nameRequestInputs = [];
-    service.setResourceEnvironmentProvider({
-      developmentDatabaseNameForProject(input) {
-        nameRequests += 1;
-        nameRequestInputs.push(input);
-        return "merc_shared_catalogue";
-      },
-      async environmentForResources() {
-        return { environment: {} };
-      },
-      managedDevelopmentDatabase: true
+    const service = createService({ logger: console,
+      env: {},
+      projectContext,
+      resourceEnvironmentProvider: {
+        developmentDatabaseNameForProject(input) {
+          nameRequests += 1;
+          nameRequestInputs.push(input);
+          return "merc_shared_catalogue";
+        },
+        async environmentForResources() {
+          return { environment: {} };
+        },
+        managedDevelopmentDatabase: true
+      }
     });
+    await service.createProject({ name: "Shared catalogue" });
 
     const initial = await service.readSettings({});
     assert.deepEqual(initial.developmentDatabase, {
@@ -591,11 +595,6 @@ test("scope saving and session creation share one project policy boundary", asyn
       explicitSystemRoot: path.join(temporaryRoot, "system"),
       home: temporaryRoot
     });
-    const projectService = createService({ logger: console,
-      env: {},
-      projectContext
-    });
-    await projectService.createProject({ name: "Serialized database" });
 
     let reportNamingStarted;
     let releaseNaming;
@@ -605,17 +604,22 @@ test("scope saving and session creation share one project policy boundary", asyn
     const namingCanFinish = new Promise((resolve) => {
       releaseNaming = resolve;
     });
-    projectService.setResourceEnvironmentProvider({
-      async developmentDatabaseNameForProject() {
-        reportNamingStarted();
-        await namingCanFinish;
-        return "unit_serialized_database";
-      },
-      async environmentForResources() {
-        return { environment: {} };
-      },
-      managedDevelopmentDatabase: true
+    const projectService = createService({ logger: console,
+      env: {},
+      projectContext,
+      resourceEnvironmentProvider: {
+        async developmentDatabaseNameForProject() {
+          reportNamingStarted();
+          await namingCanFinish;
+          return "unit_serialized_database";
+        },
+        async environmentForResources() {
+          return { environment: {} };
+        },
+        managedDevelopmentDatabase: true
+      }
     });
+    await projectService.createProject({ name: "Serialized database" });
 
     const openSessions = [];
     let createCalls = 0;
@@ -1325,6 +1329,9 @@ test("the owner downloads every Env record with its real value as one .env file"
     await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
     const resource = { component: "example", resource: { id: "service", kind: "example",
       environmentAlternatives: [{ preferred: true, bindings: { endpoint: "SERVICE_ENDPOINT", token: "SERVICE_TOKEN" } }] } };
+    const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
+      resourceValues: [{ declaration: { component: "example", id: "service", kind: "example" },
+        values: { endpoint: "https://managed.example.test/a b", token: "managed-$ecret" } }] });
     const service = projectService(targetRoot, {
       inspectEnvironment: () => ({ components: [], environmentDefaults: [{ name: "APP_MODE", value: "demo" }],
         files: [], resources: [resource], status: "ready" }),
@@ -1332,13 +1339,10 @@ test("the owner downloads every Env record with its real value as one .env file"
         async link() { return { ok: true }; }, async unlink() { return { ok: true }; },
         async valuesForProject() {
           return { contract: "vibe64.saved-env-values.v1", values: [{ key: "PAYMENTS_KEY", value: "sk_test_linked", secret: true }] };
-        } }
+        } },
+      resourceEnvironmentProvider: { managedDevelopmentDatabase: true,
+        environmentForProvisionedResources: provided, environmentForResources: provided }
     });
-    const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
-      resourceValues: [{ declaration: { component: "example", id: "service", kind: "example" },
-        values: { endpoint: "https://managed.example.test/a b", token: "managed-$ecret" } }] });
-    service.setResourceEnvironmentProvider({ managedDevelopmentDatabase: true,
-      environmentForProvisionedResources: provided, environmentForResources: provided });
     const runtime = await service.createRuntime({ inspectSource: false });
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
     assert.equal((await service.saveEnvUserValues({ environment: "dev", sessionId, values: {
@@ -1862,14 +1866,15 @@ test("hidden renewal resource cleanup requires and reuses its exact internal ses
     const successorSource = sourcePath(targetRoot, successorSessionId);
     await mkdir(successorSource, { recursive: true });
     const released = [];
-    const service = projectService(targetRoot);
-    service.setResourceEnvironmentProvider({
-      async environmentForResources() {
-        return { environment: {} };
-      },
-      async removeSessionResources(input) {
-        released.push(input);
-        return { ok: true };
+    const service = projectService(targetRoot, {
+      resourceEnvironmentProvider: {
+        async environmentForResources() {
+          return { environment: {} };
+        },
+        async removeSessionResources(input) {
+          released.push(input);
+          return { ok: true };
+        }
       }
     });
     const store = await service.createSessionStore();
@@ -1921,47 +1926,6 @@ test("a host maps semantic database values onto exact Laravel-style Stack bindin
       })
     ]);
     const providerCalls = [];
-    const service = projectService(targetRoot, {
-      inspectEnvironment() {
-        return {
-          components: ["example-stack"],
-          environmentDefaults: [{
-            name: "DB_CONNECTION",
-            sources: ["component:example-stack"],
-            value: "mysql"
-          }],
-          files: [{ format: "dotenv", path: ".env" }],
-          resources: [{
-            component: "example-stack",
-            resource: {
-              environmentAlternatives: [{
-                allowEmpty: ["password"],
-                bindings: {
-                  database: "DB_DATABASE",
-                  host: "DB_HOST",
-                  password: "DB_PASSWORD",
-                  port: "DB_PORT",
-                  username: "DB_USERNAME"
-                },
-                preferred: true
-              }, {
-                allowEmpty: [],
-                bindings: {
-                  url: "DATABASE_URL"
-                },
-                preferred: false
-              }],
-              id: "database",
-              kind: "mysql",
-              optionalBindings: {
-                testDatabase: "TEST_DB_NAME"
-              }
-            }
-          }],
-          status: "missing-inputs"
-        };
-      }
-    });
     const released = [];
     const resolvedProviderCalls = [];
     const managedEnvironment = {
@@ -2001,19 +1965,60 @@ test("a host maps semantic database values onto exact Laravel-style Stack bindin
         }
       }]
     };
-    service.setResourceEnvironmentProvider({
-      managedDevelopmentDatabase: true,
-      async environmentForProvisionedResources(input) {
-        resolvedProviderCalls.push(input);
-        return managedEnvironment;
+    const service = projectService(targetRoot, {
+      inspectEnvironment() {
+        return {
+          components: ["example-stack"],
+          environmentDefaults: [{
+            name: "DB_CONNECTION",
+            sources: ["component:example-stack"],
+            value: "mysql"
+          }],
+          files: [{ format: "dotenv", path: ".env" }],
+          resources: [{
+            component: "example-stack",
+            resource: {
+              environmentAlternatives: [{
+                allowEmpty: ["password"],
+                bindings: {
+                  database: "DB_DATABASE",
+                  host: "DB_HOST",
+                  password: "DB_PASSWORD",
+                  port: "DB_PORT",
+                  username: "DB_USERNAME"
+                },
+                preferred: true
+              }, {
+                allowEmpty: [],
+                bindings: {
+                  url: "DATABASE_URL"
+                },
+                preferred: false
+              }],
+              id: "database",
+              kind: "mysql",
+              optionalBindings: {
+                testDatabase: "TEST_DB_NAME"
+              }
+            }
+          }],
+          status: "missing-inputs"
+        };
       },
-      async environmentForResources(input) {
-        providerCalls.push(input);
-        return managedEnvironment;
-      },
-      async removeSessionResources(input) {
-        released.push(input);
-        return { ok: true };
+      resourceEnvironmentProvider: {
+        managedDevelopmentDatabase: true,
+        async environmentForProvisionedResources(input) {
+          resolvedProviderCalls.push(input);
+          return managedEnvironment;
+        },
+        async environmentForResources(input) {
+          providerCalls.push(input);
+          return managedEnvironment;
+        },
+        async removeSessionResources(input) {
+          released.push(input);
+          return { ok: true };
+        }
       }
     });
 
@@ -2133,48 +2138,49 @@ test("the installed JSKIT MySQL Stack materializes its declared names without ex
       projectRoot: sessionSource
     });
 
-    const service = projectService(targetRoot);
-    service.setResourceEnvironmentProvider({
-      managedDevelopmentDatabase: true,
-      async environmentForResources({ resources }) {
-        const [{ component, resource }] = resources;
-        return {
-          contract: "vibe64.resource-environment.v2",
-          databaseToolEnvironment: {
-            contract: "vibe64.database-tool-environment.v1",
-            kind: "mysql",
-            read: {
-              database: "jskit_catalogue",
-              host: "127.0.0.1",
-              password: "reader-private",
-              port: 23060,
-              username: "jskit_reader"
+    const service = projectService(targetRoot, {
+      resourceEnvironmentProvider: {
+        managedDevelopmentDatabase: true,
+        async environmentForResources({ resources }) {
+          const [{ component, resource }] = resources;
+          return {
+            contract: "vibe64.resource-environment.v2",
+            databaseToolEnvironment: {
+              contract: "vibe64.database-tool-environment.v1",
+              kind: "mysql",
+              read: {
+                database: "jskit_catalogue",
+                host: "127.0.0.1",
+                password: "reader-private",
+                port: 23060,
+                username: "jskit_reader"
+              },
+              write: {
+                database: "jskit_catalogue",
+                host: "127.0.0.1",
+                password: "writer-private",
+                port: 23060,
+                username: "jskit_writer"
+              }
             },
-            write: {
-              database: "jskit_catalogue",
-              host: "127.0.0.1",
-              password: "writer-private",
-              port: 23060,
-              username: "jskit_writer"
-            }
-          },
-          resourceValues: [{
-            declaration: {
-              component,
-              id: resource.id,
-              kind: resource.kind
-            },
-            values: {
-              database: "jskit_catalogue",
-              host: "127.0.0.1",
-              password: "writer-private",
-              port: 23060,
-              testDatabase: "jskit_catalogue_test",
-              url: "mysql://jskit_writer:writer-private@127.0.0.1:23060/jskit_catalogue",
-              username: "jskit_writer"
-            }
-          }]
-        };
+            resourceValues: [{
+              declaration: {
+                component,
+                id: resource.id,
+                kind: resource.kind
+              },
+              values: {
+                database: "jskit_catalogue",
+                host: "127.0.0.1",
+                password: "writer-private",
+                port: 23060,
+                testDatabase: "jskit_catalogue_test",
+                url: "mysql://jskit_writer:writer-private@127.0.0.1:23060/jskit_catalogue",
+                username: "jskit_writer"
+              }
+            }]
+          };
+        }
       }
     });
     const store = await service.createSessionStore();
@@ -2210,47 +2216,48 @@ test("the installed JSKIT PostgreSQL Stack materializes its declared names witho
       projectRoot: sessionSource
     });
 
-    const service = projectService(targetRoot);
-    service.setResourceEnvironmentProvider({
-      managedDevelopmentDatabase: true,
-      async environmentForResources({ resources }) {
-        const [{ component, resource }] = resources;
-        return {
-          contract: "vibe64.resource-environment.v2",
-          databaseToolEnvironment: {
-            contract: "vibe64.database-tool-environment.v1",
-            kind: "postgresql",
-            read: {
-              database: "jskit_catalogue",
-              host: "127.0.0.1",
-              password: "reader-private",
-              port: 33060,
-              username: "jskit_reader"
+    const service = projectService(targetRoot, {
+      resourceEnvironmentProvider: {
+        managedDevelopmentDatabase: true,
+        async environmentForResources({ resources }) {
+          const [{ component, resource }] = resources;
+          return {
+            contract: "vibe64.resource-environment.v2",
+            databaseToolEnvironment: {
+              contract: "vibe64.database-tool-environment.v1",
+              kind: "postgresql",
+              read: {
+                database: "jskit_catalogue",
+                host: "127.0.0.1",
+                password: "reader-private",
+                port: 33060,
+                username: "jskit_reader"
+              },
+              write: {
+                database: "jskit_catalogue",
+                host: "127.0.0.1",
+                password: "writer-private",
+                port: 33060,
+                username: "jskit_writer"
+              }
             },
-            write: {
-              database: "jskit_catalogue",
-              host: "127.0.0.1",
-              password: "writer-private",
-              port: 33060,
-              username: "jskit_writer"
-            }
-          },
-          resourceValues: [{
-            declaration: {
-              component,
-              id: resource.id,
-              kind: resource.kind
-            },
-            values: {
-              database: "jskit_catalogue",
-              host: "127.0.0.1",
-              password: "writer-private",
-              port: 33060,
-              url: "postgresql://jskit_writer:writer-private@127.0.0.1:33060/jskit_catalogue",
-              username: "jskit_writer"
-            }
-          }]
-        };
+            resourceValues: [{
+              declaration: {
+                component,
+                id: resource.id,
+                kind: resource.kind
+              },
+              values: {
+                database: "jskit_catalogue",
+                host: "127.0.0.1",
+                password: "writer-private",
+                port: 33060,
+                url: "postgresql://jskit_writer:writer-private@127.0.0.1:33060/jskit_catalogue",
+                username: "jskit_writer"
+              }
+            }]
+          };
+        }
       }
     });
     const store = await service.createSessionStore();

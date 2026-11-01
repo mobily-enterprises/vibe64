@@ -7,7 +7,12 @@ import {
   rejectCallerEnvPolicy
 } from "@local/vibe64-execution/server";
 
+/** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
+
 const RESOURCE_ENVIRONMENT_CONTRACT = "vibe64.resource-environment.v2";
+// A composed host that prepares the project's declared resources provides them
+// through this token.
+const PROJECT_RESOURCE_ENVIRONMENT_TOKEN = "vibe64.project.resource-environment";
 const DATABASE_TOOL_ENVIRONMENT_CONTRACT = "vibe64.database-tool-environment.v1";
 const DATABASE_RESOURCE_KINDS = new Set(["mysql", "postgresql", "sqlite"]);
 const DATABASE_CONNECTION_SEMANTICS = new Set([
@@ -30,6 +35,29 @@ const RESOURCE_PROVIDER_RESULT_KEYS = new Set([
   "requiredUnits",
   "resourceValues"
 ]);
+
+/**
+ * The person's own resources: nothing is prepared for them, and the project
+ * reports their declared database servers.
+ * @type {ProjectResourceEnvironment}
+ */
+const LOCAL_PROJECT_RESOURCES = Object.freeze({ managedDevelopmentDatabase: false });
+
+/** @param {ProjectResourceEnvironment} provider */
+function managesProjectResources(provider) {
+  return provider !== LOCAL_PROJECT_RESOURCES;
+}
+
+/** @param {unknown} provider */
+function assertResourceEnvironmentProvider(provider) {
+  if (
+    provider &&
+    // readable-check: allow method-probe - input validation: a host's resource environment provider is checked when it is received
+    (typeof provider !== "object" || typeof provider.environmentForResources !== "function")
+  ) {
+    throw new TypeError("Vibe64 resource environment provider must expose environmentForResources() or be null.");
+  }
+}
 
 /**
  * Whether a resource semantic names a secret value: the fixed connection
@@ -562,10 +590,14 @@ function applicationDatabaseToolEnvironment(resources = [], environment = {}, so
 
 export {
   DATABASE_TOOL_ENVIRONMENT_CONTRACT,
+  LOCAL_PROJECT_RESOURCES,
+  PROJECT_RESOURCE_ENVIRONMENT_TOKEN,
   RESOURCE_ENVIRONMENT_CONTRACT,
   applicationDatabaseToolEnvironment,
+  assertResourceEnvironmentProvider,
   bindingValuePresent,
   localDatabaseServerDeclarations,
+  managesProjectResources,
   normalizeDatabaseToolEnvironment,
   normalizeResourceEnvironment,
   preferredAlternative,

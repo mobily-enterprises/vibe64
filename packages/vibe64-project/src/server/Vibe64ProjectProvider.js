@@ -7,12 +7,18 @@ import { createProjectActions, createVibe64ProjectChangedPublisher } from "./pro
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
 import { NO_SAVED_ENV_VALUES, SAVED_ENV_VALUES_TOKEN, assertSavedEnvValueProvider } from "./savedEnvValues.js";
+import {
+  LOCAL_PROJECT_RESOURCES,
+  PROJECT_RESOURCE_ENVIRONMENT_TOKEN,
+  assertResourceEnvironmentProvider
+} from "./resourceEnvironment.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("./types.js").SavedEnvValueProvider} SavedEnvValueProvider */
+/** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 
 const Vibe64ProjectProvider = defineFeature({
   id: "vibe64.project",
@@ -23,8 +29,9 @@ const Vibe64ProjectProvider = defineFeature({
     logger: "runtime.logger",
     http: "runtime.http"
   },
-  // A composed host's saved values for the Development Env.
+  // A composed host's managed resources and saved values for the Development Env.
   optional: {
+    resourceEnvironmentProvider: PROJECT_RESOURCE_ENVIRONMENT_TOKEN,
     savedEnvValueProvider: SAVED_ENV_VALUES_TOKEN
   },
   provides: {
@@ -40,15 +47,18 @@ const Vibe64ProjectProvider = defineFeature({
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
+   * @param {ProjectResourceEnvironment | null} capabilities.resourceEnvironmentProvider
    * @param {SavedEnvValueProvider | null} capabilities.savedEnvValueProvider
    */
-  setup({ env, events, http, logger, savedEnvValueProvider }) {
+  setup({ env, events, http, logger, resourceEnvironmentProvider, savedEnvValueProvider }) {
+    assertResourceEnvironmentProvider(resourceEnvironmentProvider);
     assertSavedEnvValueProvider(savedEnvValueProvider);
     const project = createService({
       env,
       logger,
       publishProjectChanged: createVibe64ProjectChangedPublisher({ events }),
       projectContext: getStudioProjectContext(),
+      resourceEnvironmentProvider: resourceEnvironmentProvider ?? LOCAL_PROJECT_RESOURCES,
       savedEnvValueProvider: savedEnvValueProvider ?? NO_SAVED_ENV_VALUES
     });
     registerRoutes(http);

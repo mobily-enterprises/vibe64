@@ -12,36 +12,36 @@ import {
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
 /** @typedef {import("./types.js").ProjectSessionWork} ProjectSessionWork */
-/** @typedef {import("./types.js").ProjectServiceSlots} ProjectServiceSlots */
+/** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 
 /**
  * The selected project's development database: whether a host manages it, the managed
  * project database's name, the policy open sessions allow, and saving its scope.
  * @param {object} dependencies
  * @param {StudioProjectContext} dependencies.projectContext
+ * @param {ProjectResourceEnvironment} dependencies.resourceEnvironmentProvider
  * @param {ProjectSelection} dependencies.selection
  * @param {ProjectSessionWork} dependencies.sessionWork
- * @param {ProjectServiceSlots} dependencies.slots
  */
-function createProjectDevelopmentDatabase({ projectContext, selection, sessionWork, slots }) {
+function createProjectDevelopmentDatabase({ projectContext, resourceEnvironmentProvider, selection, sessionWork }) {
   async function currentDevelopmentDatabaseScope() {
     return (await selection.currentDevelopmentDatabaseConfiguration()).developmentDatabaseScope;
   }
 
   function managedDevelopmentDatabaseAvailable() {
-    return slots.resourceEnvironmentProvider?.managedDevelopmentDatabase === true;
+    return resourceEnvironmentProvider.managedDevelopmentDatabase === true;
   }
 
   async function managedProjectDatabaseName({ projectContextRoot, slug }) {
-    // readable-check: allow method-probe - filled by a composing host repository; convert with its supplier
-    if (typeof slots.resourceEnvironmentProvider?.developmentDatabaseNameForProject !== "function") {
+    // readable-check: allow method-probe - optional operation: a host that does not name managed project databases refuses
+    if (typeof resourceEnvironmentProvider.developmentDatabaseNameForProject !== "function") {
       throw vibe64Error(
         "This Vibe64 installation cannot name a managed project database.",
         "vibe64_managed_development_database_name_unavailable"
       );
     }
     const developmentDatabaseName = normalizeDevelopmentDatabaseName(
-      await slots.resourceEnvironmentProvider.developmentDatabaseNameForProject({
+      await resourceEnvironmentProvider.developmentDatabaseNameForProject({
         projectContextRoot,
         serviceDataRoot: selection.serviceDataRoot(),
         slug

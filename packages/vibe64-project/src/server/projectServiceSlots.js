@@ -1,17 +1,14 @@
 /**
- * The slots one project service fills after construction: a composing host
- * repository sets the resource environment provider, and Sessions the observer
- * of an applied starter, through the service's setters.
- * Each concern reads them when it runs.
+ * The slot one project service fills after construction: Sessions sets the
+ * observer of an applied starter through the service's setter, and the service
+ * reads it when a starter is applied.
  * @typedef {object} ProjectServiceSlots
- * @property {object | null} resourceEnvironmentProvider The host's managed resource environment.
  * @property {((change: { sessionId: string }) => unknown) | null} templateApplicationObserver Workspace preparation after a starter.
  */
 
 /** @returns {ProjectServiceSlots} */
 function createProjectServiceSlots() {
   return {
-    resourceEnvironmentProvider: null,
     templateApplicationObserver: null
   };
 }

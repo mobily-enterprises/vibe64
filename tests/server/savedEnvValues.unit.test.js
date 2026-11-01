@@ -142,12 +142,12 @@ test("a managed resource binding wins over a linked value of the same name", asy
     await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
     const resource = { component: "example", resource: { id: "service", kind: "example",
       environmentAlternatives: [{ preferred: true, bindings: { endpoint: "SERVICE_ENDPOINT" } }] } };
-    const service = projectService(targetRoot, { inspectEnvironment: declaration([resource]),
-      savedEnvValueProvider: testVault([{ key: "SERVICE_ENDPOINT", value: "https://linked.example.test", secret: false }]) });
     const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
       resourceValues: [{ declaration: { component: "example", id: "service", kind: "example" }, values: { endpoint: "https://managed.example.test" } }] });
-    service.setResourceEnvironmentProvider({ managedDevelopmentDatabase: true,
-      environmentForProvisionedResources: provided, environmentForResources: provided });
+    const service = projectService(targetRoot, { inspectEnvironment: declaration([resource]),
+      savedEnvValueProvider: testVault([{ key: "SERVICE_ENDPOINT", value: "https://linked.example.test", secret: false }]),
+      resourceEnvironmentProvider: { managedDevelopmentDatabase: true,
+        environmentForProvisionedResources: provided, environmentForResources: provided } });
     const runtime = await service.createRuntime({ inspectSource: false });
     await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
 

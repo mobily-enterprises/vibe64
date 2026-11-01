@@ -76,14 +76,6 @@ test("Codex message preparation reuses only current resources and Env files", as
     let password = "first-secret";
     const resourcePreparation = { identity: "a".repeat(64), preserved: true };
     let failure;
-    const service = createService({ logger: console,
-      env: {},
-      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
-      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
-        resources: [{ component: "jskit-mysql", resource: { id: "database", kind: "mysql",
-          environmentAlternatives: [{ preferred: true, bindings: { host: "DB_HOST", port: "DB_PORT",
-            database: "DB_DATABASE", username: "DB_USER", password: "DB_PASSWORD" } }] } }] })
-    });
     const resourceEnvironment = () => {
       const writer = { host: "127.0.0.1", port: 3306, database: "chat", username: "writer", password };
       return { contract: "vibe64.resource-environment.v2", ok: true, prepared: ready, resourcePreparation,
@@ -91,13 +83,21 @@ test("Codex message preparation reuses only current resources and Env files", as
           write: writer, read: { ...writer, username: "reader", password: "reader-secret" } },
         resourceValues: [{ declaration: { component: "jskit-mysql", id: "database", kind: "mysql" }, values: writer }] };
     };
-    service.setResourceEnvironmentProvider({
-      environmentForProvisionedResources: resourceEnvironment,
-      environmentForResources() {
-        provisions += 1;
-        if (failure) throw failure;
-        ready = true;
-        return resourceEnvironment();
+    const service = createService({ logger: console,
+      env: {},
+      projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [{ format: "dotenv", path: ".env" }],
+        resources: [{ component: "jskit-mysql", resource: { id: "database", kind: "mysql",
+          environmentAlternatives: [{ preferred: true, bindings: { host: "DB_HOST", port: "DB_PORT",
+            database: "DB_DATABASE", username: "DB_USER", password: "DB_PASSWORD" } }] } }] }),
+      resourceEnvironmentProvider: {
+        environmentForProvisionedResources: resourceEnvironment,
+        environmentForResources() {
+          provisions += 1;
+          if (failure) throw failure;
+          ready = true;
+          return resourceEnvironment();
+        }
       }
     });
     const runtime = await service.createRuntime({ inspectSource: true });
@@ -296,28 +296,28 @@ test("managed session credentials preserve resource configuration identity, but 
             }
           }]
         };
-      }
-    });
-    service.setResourceEnvironmentProvider({
-      managedDevelopmentDatabase: true,
-      environmentForProvisionedResources({ sessionId }) {
-        const writer = {
-          host: "127.0.0.1", port: 3306, database: sessionId,
-          username: `writer_${sessionId}`, password: `private-${sessionId}`
-        };
-        return {
-          contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
-          databaseToolEnvironment: {
-            contract: "vibe64.database-tool-environment.v1", kind: "mysql", write: writer,
-            read: { ...writer, username: `reader_${sessionId}`, password: `read-${sessionId}` }
-          },
-          resourceValues: [{
-            declaration: { component: "jskit-mysql", id: "database", kind: "mysql" },
-            values: writer
-          }]
-        };
       },
-      environmentForResources() { provisions += 1; assert.fail("Identity reads cannot provision resources."); }
+      resourceEnvironmentProvider: {
+        managedDevelopmentDatabase: true,
+        environmentForProvisionedResources({ sessionId }) {
+          const writer = {
+            host: "127.0.0.1", port: 3306, database: sessionId,
+            username: `writer_${sessionId}`, password: `private-${sessionId}`
+          };
+          return {
+            contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
+            databaseToolEnvironment: {
+              contract: "vibe64.database-tool-environment.v1", kind: "mysql", write: writer,
+              read: { ...writer, username: `reader_${sessionId}`, password: `read-${sessionId}` }
+            },
+            resourceValues: [{
+              declaration: { component: "jskit-mysql", id: "database", kind: "mysql" },
+              values: writer
+            }]
+          };
+        },
+        environmentForResources() { provisions += 1; assert.fail("Identity reads cannot provision resources."); }
+      }
     });
     const store = await service.createSessionStore();
     for (const sessionId of ["one", "two"]) {

@@ -390,6 +390,11 @@ async function renewalHarness(targetRoot, {
     },
     sessionId: PREDECESSOR_ID
   });
+  const resourceCalls = [];
+  const resourceRoot = path.join(targetRoot, "managed-resources");
+  const predecessorResource = path.join(resourceRoot, PREDECESSOR_ID);
+  await mkdir(predecessorResource, { recursive: true });
+  await writeFile(path.join(predecessorResource, "database.marker"), "owned\n", "utf8");
   const projectService = createProjectService({ logger: console,
     env: {},
     projectContext: createStudioProjectContext({
@@ -397,24 +402,19 @@ async function renewalHarness(targetRoot, {
       explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
       explicitTargetRoot: targetRoot,
       home: path.dirname(targetRoot)
-    })
-  });
-  const resourceCalls = [];
-  const resourceRoot = path.join(targetRoot, "managed-resources");
-  const predecessorResource = path.join(resourceRoot, PREDECESSOR_ID);
-  await mkdir(predecessorResource, { recursive: true });
-  await writeFile(path.join(predecessorResource, "database.marker"), "owned\n", "utf8");
-  projectService.setResourceEnvironmentProvider({
-    async environmentForResources() {
-      return { environment: {} };
-    },
-    async removeSessionResources(input) {
-      resourceCalls.push(input);
-      await rm(path.join(resourceRoot, input.sessionId), {
-        force: true,
-        recursive: true
-      });
-      return { ok: true };
+    }),
+    resourceEnvironmentProvider: {
+      async environmentForResources() {
+        return { environment: {} };
+      },
+      async removeSessionResources(input) {
+        resourceCalls.push(input);
+        await rm(path.join(resourceRoot, input.sessionId), {
+          force: true,
+          recursive: true
+        });
+        return { ok: true };
+      }
     }
   });
   const commandProject = projectServiceProxy(projectService, runtime);

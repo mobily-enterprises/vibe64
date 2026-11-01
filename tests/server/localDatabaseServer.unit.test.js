@@ -49,7 +49,7 @@ test("declarations list the Stack's own names in a fixed order and never carry a
 
 test("the project answers with Env over Stack defaults, ignores the shell, and stays out of a host's managed databases", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = createService({ logger: console,
+    const options = { logger: console,
       // A shell export must not count: Workspace setup never receives it.
       env: { DB_PASSWORD: "from-the-shell", DATABASE_URL: "mysql://shell@nowhere/x" },
       projectContext: createStudioProjectContext({ explicitTargetRoot: targetRoot, home: path.dirname(targetRoot) }),
@@ -62,7 +62,8 @@ test("the project answers with Env over Stack defaults, ignores the shell, and s
         files: [],
         resources: [DJANGO_MYSQL]
       })
-    });
+    };
+    const service = createService(options);
     const runtime = await service.createRuntime({ inspectSource: true });
     const sessionId = "database-server";
     await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
@@ -82,8 +83,8 @@ test("the project answers with Env over Stack defaults, ignores the shell, and s
     assert.equal(answer.databases[0].endpoint.password, "s3cret");
     assert.equal(answer.databases[0].fields.find((field) => field.name === "DB_USER").value, "django");
 
-    service.setResourceEnvironmentProvider({ environmentForResources() { return {}; } });
-    assert.deepEqual(await service.localDatabaseServers({ sessionId, session }), { managed: true, databases: [] });
+    const hosted = createService({ ...options, resourceEnvironmentProvider: { environmentForResources() { return {}; } } });
+    assert.deepEqual(await hosted.localDatabaseServers({ sessionId, session }), { managed: true, databases: [] });
   });
 });
 

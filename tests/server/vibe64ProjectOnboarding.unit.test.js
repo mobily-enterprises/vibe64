@@ -27,9 +27,11 @@ async function fixture(targetRoot, options = {}) {
   await exec("git", ["-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "--quiet", "-m", "Starter"], { cwd: templateRoot });
   const catalog = { schemaVersion: 1, templates: [{ id: "nodejs/public", technology: "nodejs", name: "Test", repository: templateRoot, branch: "public" }] };
   const templateSources = [{ namespace: "test", catalog }];
-  const service = createService({ logger: console,
+  // Another service over the same project, for a host's resources.
+  const serviceWith = (hostOptions = {}) => createService({ logger: console,
     env: {},
     ...options,
+    ...hostOptions,
     projectContext: createStudioProjectContext({
       explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
       explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
@@ -39,9 +41,10 @@ async function fixture(targetRoot, options = {}) {
     applyTemplate: (input) => applyGenesisTemplate({ ...input, templateSources }),
     listTemplates: (input) => listGenesisTemplates({ ...input, templateSources })
   });
+  const service = serviceWith();
   const store = await service.createSessionStore();
   await store.createSession({ sessionId, metadata: sourceMetadata(targetRoot, sessionId) });
-  return { root, service, store, templateRoot };
+  return { root, service, serviceWith, store, templateRoot };
 }
 
 test("an empty session offers starters and applies only the configured selection into that session", async () => {
@@ -251,7 +254,7 @@ test("environment preparation waits for a brief holder of the source lock", asyn
 
 test("project environment setup does not require outputs and clears after Env is saved", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const { root, service } = await fixture(targetRoot, {
+    const { root, service, serviceWith } = await fixture(targetRoot, {
       inspectEnvironment: () => ({
         components: [],
         environmentDefaults: [],
@@ -291,7 +294,7 @@ test("project environment setup does not require outputs and clears after Env is
     const alternative = await service.readOnboarding({ sessionId });
     assert.deepEqual(alternative.environmentSetup.missingKeys, []);
     assert.equal(JSON.stringify(alternative).includes("private-url"), false);
-    service.setResourceEnvironmentProvider({
+    const hostedService = serviceWith({ resourceEnvironmentProvider: {
       managedDevelopmentDatabase: true,
       environmentForProvisionedResources: () => ({
         contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
@@ -301,9 +304,9 @@ test("project environment setup does not require outputs and clears after Env is
         }]
       }),
       environmentForResources() { assert.fail("Reading onboarding must never provision resources."); }
-    });
-    await service.saveEnvUserValues({ values: { STORAGE_URL: "" } });
-    const hosted = await service.readOnboarding({ sessionId });
+    } });
+    await hostedService.saveEnvUserValues({ values: { STORAGE_URL: "" } });
+    const hosted = await hostedService.readOnboarding({ sessionId });
     assert.equal(hosted.ok, true, JSON.stringify(hosted));
     assert.deepEqual(hosted.environmentSetup.missingKeys, []);
     assert.equal(JSON.stringify(hosted).includes("host-private-token"), false);
@@ -323,23 +326,23 @@ test("a fresh managed starter remains readable before database preparation and e
         }]
       }
     };
-    const { root, service } = await fixture(targetRoot, {
-      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [], resources: [resource] })
-    });
     const pending = { contract: "vibe64.resource-environment.v2", prepared: false, resourceValues: [], ok: true };
     let provisionCalls = 0;
     let inspectionCalls = 0;
     let inspectionError = new Error("Stored database service metadata could not be read.");
-    service.setResourceEnvironmentProvider({
-      managedDevelopmentDatabase: true,
-      environmentForProvisionedResources() {
-        inspectionCalls += 1;
-        if (inspectionError) throw inspectionError;
-        return pending;
-      },
-      environmentForResources() {
-        provisionCalls += 1;
-        return pending;
+    const { root, service } = await fixture(targetRoot, {
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [], resources: [resource] }),
+      resourceEnvironmentProvider: {
+        managedDevelopmentDatabase: true,
+        environmentForProvisionedResources() {
+          inspectionCalls += 1;
+          if (inspectionError) throw inspectionError;
+          return pending;
+        },
+        environmentForResources() {
+          provisionCalls += 1;
+          return pending;
+        }
       }
     });
     const applied = await service.applyTemplate({ sessionId, templateId: "test:nodejs/public" });
@@ -400,9 +403,6 @@ test("Database prepares again a session prepared with the same resources, and on
         }]
       }
     };
-    const { service, store } = await fixture(targetRoot, {
-      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [], resources: [resource] })
-    });
     const identity = "a".repeat(64);
     const endpoint = (username) => ({ database: "catalogue", host: "127.0.0.1", password: `${username}-secret`, port: 23060, username });
     let prepared = false;
@@ -420,13 +420,16 @@ test("Database prepares again a session prepared with the same resources, and on
         contract: "vibe64.database-tool-environment.v1", kind: "mysql", read: endpoint("reader"), write: endpoint("writer")
       } } : {})
     });
-    service.setResourceEnvironmentProvider({
-      managedDevelopmentDatabase: true,
-      environmentForProvisionedResources: () => environment(),
-      environmentForResources(input) {
-        provisioned.push(input.sessionId);
-        prepared = true;
-        return environment();
+    const { service, store } = await fixture(targetRoot, {
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [], resources: [resource] }),
+      resourceEnvironmentProvider: {
+        managedDevelopmentDatabase: true,
+        environmentForProvisionedResources: () => environment(),
+        environmentForResources(input) {
+          provisioned.push(input.sessionId);
+          prepared = true;
+          return environment();
+        }
       }
     });
     const setup = (state) => store.writeMetadataValue(sessionId, "workspace_setup",

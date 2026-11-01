@@ -12,12 +12,17 @@ import {
 import { readEnvUserValues, saveEnvUserValues } from "@local/vibe64-core/server/envUserValues";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { materializeProjectEnvironmentFiles } from "./projectEnvironmentFiles.js";
-import { normalizeResourceEnvironment, requiredAlternative, resourceSemanticIsSecret } from "./resourceEnvironment.js";
+import {
+  managesProjectResources,
+  normalizeResourceEnvironment,
+  requiredAlternative,
+  resourceSemanticIsSecret
+} from "./resourceEnvironment.js";
 import { SAVED_ENV_VALUE_SOURCE, offersSavedValues, savedEnvValueRecords } from "./savedEnvValues.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("./types.js").ProjectSelection} ProjectSelection */
-/** @typedef {import("./types.js").ProjectServiceSlots} ProjectServiceSlots */
+/** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 /** @typedef {import("./types.js").SavedEnvValueProvider} SavedEnvValueProvider */
 
 function envScope(input = {}) {
@@ -100,10 +105,10 @@ function genesisEnvironmentIsUnconfigured(error) {
  * @param {RuntimeEnv} dependencies.env
  * @param {typeof import("@local/vibe64-genesis/server").inspectGenesisEnvironment} dependencies.inspectEnvironment
  * @param {ProjectSelection} dependencies.selection
+ * @param {ProjectResourceEnvironment} dependencies.resourceEnvironmentProvider
  * @param {SavedEnvValueProvider} dependencies.savedEnvValueProvider
- * @param {ProjectServiceSlots} dependencies.slots
  */
-function createProjectEnvironment({ env, inspectEnvironment, savedEnvValueProvider, selection, slots }) {
+function createProjectEnvironment({ env, inspectEnvironment, resourceEnvironmentProvider, savedEnvValueProvider, selection }) {
   async function userEnvRecords() {
     return (await readEnvUserValues({
       projectRuntimeRoot: selection.selectedProjectRuntimeRoot()
@@ -183,12 +188,12 @@ function createProjectEnvironment({ env, inspectEnvironment, savedEnvValueProvid
           : String(error?.message || "")
       };
     }
-    const developmentDatabase = slots.resourceEnvironmentProvider && source.sessionId
+    const developmentDatabase = managesProjectResources(resourceEnvironmentProvider) && source.sessionId
       ? await selection.currentDevelopmentDatabaseConfiguration()
       : null;
     const environmentForResources = provisionResources
-      ? slots.resourceEnvironmentProvider?.environmentForResources
-      : slots.resourceEnvironmentProvider?.environmentForProvisionedResources;
+      ? resourceEnvironmentProvider.environmentForResources
+      : resourceEnvironmentProvider.environmentForProvisionedResources;
     if (developmentDatabase && typeof environmentForResources !== "function") {
       throw new TypeError(
         provisionResources
@@ -197,7 +202,7 @@ function createProjectEnvironment({ env, inspectEnvironment, savedEnvValueProvid
       );
     }
     const provided = developmentDatabase
-      ? await environmentForResources.call(slots.resourceEnvironmentProvider, {
+      ? await environmentForResources.call(resourceEnvironmentProvider, {
           components: declaration.components,
           ...developmentDatabase,
           projectRuntimeRoot: selection.selectedProjectRuntimeRoot(),
