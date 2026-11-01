@@ -67,7 +67,7 @@ function createSessionAgentRouting({
     const provider = sessionBindings.providerFor({ engineId: assistantSelection.engineId });
     const access = defineVibe64AssistantAccess(await Promise.resolve().then(() => readAssistantAccess({
       assistantSelection, engineId: provider.id, modelProviderId: assistantSelection.modelProviderId,
-      session: options.session || null, sessionId: normalizeText(options.session?.sessionId || options.session?.id),
+      session: options.session || null, sessionId: normalizeText(options.session?.sessionId),
       vibe64User: assistantUser(options)
     })).catch(() => ({ available: false, ownerOnly: true, connectionIdentity: "" })));
     return { ...access, available: access.available && Boolean(access.connectionIdentity), engineId: provider.id, modelProviderId: assistantSelection.modelProviderId,

@@ -195,7 +195,7 @@ function createSessionAgentLifecycle({
       }
       if (assistantUser(options)) {
         for (const session of providerSessions) {
-          await accessChecks.requireAccessFor(provider, session?.sessionId || session?.id, {
+          await accessChecks.requireAccessFor(provider, session?.sessionId, {
             ...options,
             session
           });

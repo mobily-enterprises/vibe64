@@ -95,7 +95,7 @@ function noGithubGitCommandActorFromSession(session = {}, {
       }
     );
   }
-  const sessionId = normalizeText(session.sessionId || session.id);
+  const sessionId = normalizeText(session.sessionId);
   const sourceRoot = sessionSourcePath(session);
   if (!sessionId || !sourceRoot) {
     return responseError(
@@ -276,7 +276,7 @@ function createCodexGitCommandService({
     sessionId: suppliedSessionId = "",
     vibe64User = null
   } = {}) {
-    const sessionId = normalizeText(suppliedSessionId || suppliedSession?.sessionId || suppliedSession?.id);
+    const sessionId = normalizeText(suppliedSessionId || suppliedSession?.sessionId);
     if (!sessionId) {
       return responseError(
         "Session Save requires a session id.",

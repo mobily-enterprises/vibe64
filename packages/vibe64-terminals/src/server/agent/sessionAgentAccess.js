@@ -107,7 +107,7 @@ function createSessionAgentAccess({
   }
 
   async function describeProvider(options = {}) {
-    const sessionId = normalizeText(options.session?.sessionId || options.session?.id);
+    const sessionId = normalizeText(options.session?.sessionId);
     const provider = sessionId
       ? sessionBindings.bindSession(sessionId, options)
       : sessionBindings.providerFor(options);

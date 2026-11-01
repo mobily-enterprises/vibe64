@@ -26,7 +26,7 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
     if (
       !projectRuntimeRoot ||
       record.projectRuntimeRoot !== projectRuntimeRoot ||
-      trimmedText(session?.sessionId || session?.id) !== record.sessionId ||
+      trimmedText(session?.sessionId) !== record.sessionId ||
       trimmedText(runtime?.projectContextRoot) !== record.projectContextRoot ||
       sessionSourcePath(session) !== record.workdir
     ) {
@@ -92,9 +92,9 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
       );
     }
     return { projectRuntimeRoot, context: {
-      get sessionId() { return sessionId || session?.sessionId || session?.id; },
+      get sessionId() { return sessionId || session?.sessionId; },
       async prepareRecord(record, ledger) {
-        const currentSession = trimmedText(session?.sessionId || session?.id) === record.sessionId
+        const currentSession = trimmedText(session?.sessionId) === record.sessionId
           ? session
           : await effectiveRuntime.getSession(record.sessionId, { inspectSource: false });
         return prepareCodexAppServerHelperThreadRestore(record, {
@@ -162,7 +162,7 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
     runtime = null,
     session = null
   } = {}) {
-    const sessionId = trimmedText(session?.sessionId || session?.id);
+    const sessionId = trimmedText(session?.sessionId);
     const projectRuntimeRoot = trimmedText(runtime?.stateRoot);
     if (!sessionId || !projectRuntimeRoot) {
       throw codexAppServerHelperOwnershipError(

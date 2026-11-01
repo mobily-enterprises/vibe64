@@ -174,7 +174,7 @@ function createCodexRuntimeHost({
     });
     const sharedRuntimeDir = trimmedText(runtimeDir) ||
       codexAppServerRuntimeDir(runtimeContext.providerOptions);
-    const sessionId = trimmedText(session?.sessionId || session?.id);
+    const sessionId = trimmedText(session?.sessionId);
     return {
       ...runtimeContext.providerOptions,
       helperWorkdir: path.join(
@@ -307,7 +307,7 @@ function createCodexSessionRuntimeHost({
   } = {}, nativeContext = "execution") {
     const metadata = session.metadata || {};
     const effectiveRuntime = runtime || await createRuntimeForSession();
-    const sessionId = trimmedText(session.sessionId || session.id);
+    const sessionId = trimmedText(session.sessionId);
     const learningRoot = effectiveRuntime.learningScope && nativeContext === "storage"
       ? (await effectiveRuntime.store.readSessionNativeDescriptor(sessionId)).nativeExecutionRoot
       : await learningSessionExecutionRoot(effectiveRuntime, sessionId, { allowClosing: nativeContext === "control" });
@@ -334,7 +334,7 @@ function createCodexSessionRuntimeHost({
         ...await codexManagedCommandEnv({
           runtime: effectiveRuntime,
           session,
-          sessionId: trimmedText(session.sessionId || session.id)
+          sessionId: trimmedText(session.sessionId)
         })
       };
     const selectedHome = await codexToolHomeResult(session);

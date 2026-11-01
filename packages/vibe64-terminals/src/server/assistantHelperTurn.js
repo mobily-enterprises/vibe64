@@ -177,7 +177,7 @@ async function runAssistantHelperTurn({
 // The record a session background task keeps for its helper.
 function backgroundTaskHelperRecord(agentContext = {}, taskId = "") {
   const { runtime, session } = agentContext;
-  const sessionId = session.sessionId || session.id;
+  const sessionId = session.sessionId;
   const write = (assistantHelper, kind) => runtime.store.writeBackgroundTaskEvent(sessionId, taskId, {
     event: { kind }, patch: { assistantHelper }
   });

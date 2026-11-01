@@ -440,8 +440,8 @@ async function createOpenCodeServerProcess({
         label: "OpenCode terminal",
         lifecycle: "interactive",
         operationId: "opencode-terminal",
-        ownerId: normalizeText(session.sessionId || session.id),
-        sessionId: normalizeText(session.sessionId || session.id)
+        ownerId: normalizeText(session.sessionId),
+        sessionId: normalizeText(session.sessionId)
       },
       inheritProcessEnv: false,
       mode: "pty",
