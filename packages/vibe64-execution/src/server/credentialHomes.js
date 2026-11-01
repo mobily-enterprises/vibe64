@@ -27,26 +27,6 @@ function normalizeGithubAccountMode(value = "", fallback = GITHUB_ACCOUNT_MODE_U
   return fallback === GITHUB_ACCOUNT_MODE_LOCAL ? GITHUB_ACCOUNT_MODE_LOCAL : GITHUB_ACCOUNT_MODE_USER;
 }
 
-/**
- * @param {RuntimeLogger | null} logger
- * @param {string} [level]
- * @param {object} [fields]
- * @param {string} [message]
- */
-function logOperationalEvent(logger, level = "info", fields = {}, message = "") {
-  // readable-check: allow method-probe - input validation: a logger without this level logs at info, and an absent one logs nothing
-  const log = typeof logger?.[level] === "function"
-    ? logger[level]
-    // readable-check: allow method-probe - input validation: a logger without this level logs at info, and an absent one logs nothing
-    : typeof logger?.info === "function"
-      ? logger.info
-      : null;
-  if (log) {
-    return log.call(logger, fields, message);
-  }
-  return null;
-}
-
 function normalizeHome(value = "") {
   const normalized = normalizeText(value);
   return normalized && path.isAbsolute(normalized) ? path.resolve(normalized) : "";
@@ -292,12 +272,13 @@ function composeGithubTerminalHome(result = {}) {
   };
 }
 
+/** @param {RuntimeLogger} logger */
 function logGithubCredentialHomeResolution(logger, result, {
   operation = "",
   terminalKind = ""
 } = {}) {
   const ok = result?.ok !== false;
-  return logOperationalEvent(logger, ok ? "info" : "warn", {
+  return logger[ok ? "info" : "warn"]({
     accountMode: normalizeText(result?.accountMode),
     code: result?.code || "",
     component: "vibe64.github_credential_home",
