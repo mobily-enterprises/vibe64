@@ -1,6 +1,6 @@
 export {
-  Vibe64DatabaseToolsProvider
-} from "./Vibe64DatabaseToolsProvider.js";
+  Vibe64DatabaseToolsFeature
+} from "./Vibe64DatabaseToolsFeature.js";
 export {
   createDatabaseActions
 } from "./databaseActions.js";

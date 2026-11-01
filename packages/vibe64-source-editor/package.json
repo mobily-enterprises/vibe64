@@ -37,8 +37,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64SourceEditorProvider.js",
-            "export": "Vibe64SourceEditorProvider"
+            "entrypoint": "src/server/Vibe64SourceEditorFeature.js",
+            "export": "Vibe64SourceEditorFeature"
           }
         ],
         "capabilities": [

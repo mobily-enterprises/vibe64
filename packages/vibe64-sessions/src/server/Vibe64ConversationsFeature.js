@@ -10,7 +10,7 @@ import { conversationTransportSchema } from "./conversationTransportSchema.js";
 
 // The original browser hosting owner is shared by Main and optional Colleague.
 // AssistantFeature still owns all routes, subscriptions and client contracts.
-const Vibe64ConversationsProvider = defineFeature({
+const Vibe64ConversationsFeature = defineFeature({
   id: "vibe64.conversations",
   domain: "vibe64-conversations",
   requires: {
@@ -83,4 +83,4 @@ const Vibe64ConversationsProvider = defineFeature({
   }
 });
 
-export { Vibe64ConversationsProvider };
+export { Vibe64ConversationsFeature };

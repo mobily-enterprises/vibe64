@@ -6,7 +6,7 @@ import { createCapabilityHttpRuntime } from "@jskit-ai/kernel/server/http";
 import { registerRoutes as registerStudioHealthRoutes } from "../../packages/studio-health/src/server/registerRoutes.js";
 import { registerRoutes as registerCurrentAppRoutes } from "../../packages/current-app/src/server/registerRoutes.js";
 import { registerRoutes as registerAccountRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
-import { registerColleagueRoutes } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js";
+import { registerColleagueRoutes } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueFeature.js";
 import { registerRoutes as registerDatabaseRoutes } from "../../packages/vibe64-database-tools/src/server/registerRoutes.js";
 import { registerRoutes as registerProjectRoutes } from "../../packages/vibe64-project/src/server/registerRoutes.js";
 import { registerRoutes as registerPublishingRoutes } from "../../packages/vibe64-publishing/src/server/registerRoutes.js";

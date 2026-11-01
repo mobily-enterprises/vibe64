@@ -30,8 +30,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64SystemGraphProvider.js",
-            "export": "Vibe64SystemGraphProvider"
+            "entrypoint": "src/server/Vibe64SystemGraphFeature.js",
+            "export": "Vibe64SystemGraphFeature"
           }
         ]
       },

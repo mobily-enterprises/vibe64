@@ -19,12 +19,14 @@ import {
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").DatabaseToolsService} DatabaseToolsService */
 
-const Vibe64DatabaseToolsProvider = defineFeature({
+const Vibe64DatabaseToolsFeature = defineFeature({
   actionDefaults: {
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
-  actions: ({ databaseTools }) => createDatabaseActions({ databaseTools }),
+  actions({ databaseTools }) {
+    return createDatabaseActions({ databaseTools });
+  },
   domain: "vibe64-database-tools",
   id: "vibe64.database-tools",
   provides: {
@@ -79,5 +81,5 @@ const Vibe64DatabaseToolsProvider = defineFeature({
 });
 
 export {
-  Vibe64DatabaseToolsProvider
+  Vibe64DatabaseToolsFeature
 };

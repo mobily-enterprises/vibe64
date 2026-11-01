@@ -1,3 +1,3 @@
 export {
-  Vibe64DatabaseToolsProvider
-} from "./server/Vibe64DatabaseToolsProvider.js";
+  Vibe64DatabaseToolsFeature
+} from "./server/Vibe64DatabaseToolsFeature.js";

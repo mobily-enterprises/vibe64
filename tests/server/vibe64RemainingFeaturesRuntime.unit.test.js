@@ -8,13 +8,13 @@ import {
   defineProvider
 } from "@jskit-ai/kernel/shared/capabilities";
 
-import { CurrentAppProvider } from "../../packages/current-app/src/server/CurrentAppProvider.js";
-import { StudioHealthProvider } from "../../packages/studio-health/src/server/StudioHealthProvider.js";
-import { Vibe64SourceEditorProvider } from "../../packages/vibe64-source-editor/src/server/Vibe64SourceEditorProvider.js";
+import { CurrentAppFeature } from "../../packages/current-app/src/server/CurrentAppFeature.js";
+import { StudioHealthFeature } from "../../packages/studio-health/src/server/StudioHealthFeature.js";
+import { Vibe64SourceEditorFeature } from "../../packages/vibe64-source-editor/src/server/Vibe64SourceEditorFeature.js";
 import {
   createSourceEditorFileChangedPublisher
 } from "../../packages/vibe64-source-editor/src/server/events.js";
-import { Vibe64SystemGraphProvider } from "../../packages/vibe64-system-graph/src/server/Vibe64SystemGraphProvider.js";
+import { Vibe64SystemGraphFeature } from "../../packages/vibe64-system-graph/src/server/Vibe64SystemGraphFeature.js";
 
 function projectApi() {
   return Object.freeze({
@@ -59,10 +59,10 @@ test("remaining Vibe64 features use named capabilities and register direct route
       ActionProvider,
       Vibe64ActionPolicyProvider,
       actionObserver,
-      CurrentAppProvider,
-      StudioHealthProvider,
-      Vibe64SourceEditorProvider,
-      Vibe64SystemGraphProvider
+      CurrentAppFeature,
+      StudioHealthFeature,
+      Vibe64SourceEditorFeature,
+      Vibe64SystemGraphFeature
     ],
     inputs: {
       "runtime.env": {},

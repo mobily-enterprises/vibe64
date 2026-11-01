@@ -13,7 +13,7 @@ Dashboard without opening a session.
 - `packages/vibe64-project/src/server/projectActions.js`
 - `packages/vibe64-project/src/server/assistantContracts.js`
 - `packages/vibe64-project/src/server/inputSchemas.js`
-- `packages/vibe64-project/src/server/Vibe64ProjectProvider.js`
+- `packages/vibe64-project/src/server/Vibe64ProjectFeature.js`
 - `packages/vibe64-terminals/src/server/codexGitCommand.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandOperations.js`
 - `packages/vibe64-terminals/src/server/codexGitCommandWrappers.js`

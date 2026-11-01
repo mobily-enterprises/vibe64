@@ -16,6 +16,7 @@ import { registerColleagueFocus } from "./registerColleagueFocus.js";
 /** @typedef {import("./types.js").ColleagueService} ColleagueService */
 /** @typedef {import("./types.js").ColleagueBrowserFocus} ColleagueBrowserFocus */
 /** @typedef {import("./types.js").ColleagueNameResolver} ColleagueNameResolver */
+/** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 
 /** @param {RuntimeHttp} http */
 function registerColleagueRoutes(http) {
@@ -117,7 +118,7 @@ function createColleagueBrowserFocus({ realtime, actions }) {
   return { close: registerColleagueFocus({ realtime, actions }) };
 }
 
-const Vibe64ColleagueProvider = defineFeature({
+const Vibe64ColleagueFeature = defineFeature({
   id: "vibe64.colleague",
   domain: "vibe64-colleague",
   requires: {
@@ -144,7 +145,7 @@ const Vibe64ColleagueProvider = defineFeature({
    * @param {TerminalsService} capabilities.terminals
    * @param {RuntimeEvents} capabilities.events
    * @param {ColleagueNameResolver | null} capabilities.resolveName
-   * @param {{ actionCatalogue: ActionCatalogue }} context
+   * @param {FeatureSetupContext} context
    */
   setup({
     accounts,
@@ -165,7 +166,9 @@ const Vibe64ColleagueProvider = defineFeature({
     registerColleagueRoutes(http);
     return { colleague };
   },
-  actions: ({ colleague, navigationPanes }) => createColleagueActions({ colleague, navigationPanes: navigationPanes || [] }),
+  actions({ colleague, navigationPanes }) {
+    return createColleagueActions({ colleague, navigationPanes: navigationPanes || [] });
+  },
   /**
    * @param {object} _deps
    * @param {{ outputs: { colleague: ColleagueService } }} context
@@ -176,7 +179,7 @@ const Vibe64ColleagueProvider = defineFeature({
 // An authentication layer composed on top may consume Colleague, so the service
 // does not depend on authenticated realtime. This adapter attaches only after
 // both owners exist.
-const Vibe64ColleagueFocusProvider = defineFeature({
+const Vibe64ColleagueFocusFeature = defineFeature({
   id: "vibe64.colleague.browser-focus",
   requires: {
     colleague: "vibe64.colleague",
@@ -186,7 +189,7 @@ const Vibe64ColleagueFocusProvider = defineFeature({
   /**
    * @param {object} capabilities
    * @param {RuntimeRealtime} capabilities.realtime
-   * @param {{ actionCatalogue: ActionCatalogue }} context
+   * @param {FeatureSetupContext} context
    */
   setup({ realtime }, { actionCatalogue }) {
     return { browserFocus: createColleagueBrowserFocus({ realtime, actions: actionCatalogue }) };
@@ -198,4 +201,4 @@ const Vibe64ColleagueFocusProvider = defineFeature({
   shutdown(_deps, { outputs }) { outputs.browserFocus.close(); }
 });
 
-export { Vibe64ColleagueProvider, Vibe64ColleagueFocusProvider, createColleague, createColleagueBrowserFocus, registerColleagueRoutes };
+export { Vibe64ColleagueFeature, Vibe64ColleagueFocusFeature, createColleague, createColleagueBrowserFocus, registerColleagueRoutes };

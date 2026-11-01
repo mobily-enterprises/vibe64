@@ -26,8 +26,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/StudioHealthProvider.js",
-            "export": "StudioHealthProvider"
+            "entrypoint": "src/server/StudioHealthFeature.js",
+            "export": "StudioHealthFeature"
           }
         ],
         "capabilities": [

@@ -15,7 +15,7 @@ import { createSourceEditorActions } from "./sourceEditorActions.js";
 /** @typedef {import("@local/vibe64-terminals/server/types").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").SourceEditorService} SourceEditorService */
 
-const Vibe64SourceEditorProvider = defineFeature({
+const Vibe64SourceEditorFeature = defineFeature({
   id: "vibe64.source-editor",
   domain: "vibe64-source-editor",
   requires: {
@@ -74,4 +74,4 @@ const Vibe64SourceEditorProvider = defineFeature({
   }
 });
 
-export { Vibe64SourceEditorProvider };
+export { Vibe64SourceEditorFeature };

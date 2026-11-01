@@ -22,7 +22,7 @@ import { registerVibe64ActionContext, vibe64ActionPolicy } from "../../packages/
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createSessionsService as createSessionService } from "./vibe64SessionsTestHelpers.js";
-import { Vibe64ConversationsProvider } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js";
+import { Vibe64ConversationsFeature } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { Readable } from "node:stream";
 import { codexAppServerThreadSettings, codexAppServerTurnSettings } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
@@ -12091,7 +12091,7 @@ test("Main browser facade uses the original native owner and action authority wi
       assistantSurfaces: { app: { settingsSurfaceId: "app", configScope: "global" } }
     };
     const hosting = createCapabilityRuntime({
-      providers: [Vibe64ConversationsProvider, RealtimeProvider, AssistantFeature],
+      providers: [Vibe64ConversationsFeature, RealtimeProvider, AssistantFeature],
       inputs: { "runtime.actions": actions, "runtime.http": http, "runtime.config": config,
         "runtime.env": {}, "vibe64.sessions": sessions, "runtime.fastify": app,
         "runtime.logger": app.log, "runtime.events": createEventRuntime() }

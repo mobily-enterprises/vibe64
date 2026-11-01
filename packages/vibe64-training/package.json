@@ -63,8 +63,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64TrainingProvider.js",
-            "export": "Vibe64TrainingProvider"
+            "entrypoint": "src/server/Vibe64TrainingFeature.js",
+            "export": "Vibe64TrainingFeature"
           }
         ]
       },

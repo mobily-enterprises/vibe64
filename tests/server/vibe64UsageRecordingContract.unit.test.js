@@ -7,7 +7,7 @@ import { test } from "node:test";
 import {
   USAGE_RECORDING_ADMISSION_TOKEN,
   USAGE_TRACERS,
-  Vibe64UsageRecordingProvider,
+  Vibe64UsageRecordingFeature,
   admitUsageRecording,
   recordingUnavailableReason,
   usageRecordingEnvironment,
@@ -36,7 +36,7 @@ function recordingHttp() {
 async function setupProvider(dependencies) {
   const actions = [];
   const actionCatalogue = { register: (contribution) => actions.push(...contribution.actions) };
-  const provided = await Vibe64UsageRecordingProvider.setup({
+  const provided = await Vibe64UsageRecordingFeature.setup({
     events: { publish: async () => {} },
     logger: { warn: () => {} },
     project: {},
@@ -67,7 +67,7 @@ test("the provider registers its routes and actions and admits by default or thr
   const admission = async () => refusal;
   const composed = await setupProvider({ http, admission });
   assert.equal(composed.usageRecording.admit, admission);
-  assert.equal(Vibe64UsageRecordingProvider.optional.admission, USAGE_RECORDING_ADMISSION_TOKEN);
+  assert.equal(Vibe64UsageRecordingFeature.optional.admission, USAGE_RECORDING_ADMISSION_TOKEN);
   assert.equal(USAGE_RECORDING_ADMISSION_TOKEN, "vibe64.usage-recording.admission");
 });
 

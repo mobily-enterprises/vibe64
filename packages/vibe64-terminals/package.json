@@ -57,8 +57,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64TerminalsProvider.js",
-            "export": "Vibe64TerminalsProvider"
+            "entrypoint": "src/server/Vibe64TerminalsFeature.js",
+            "export": "Vibe64TerminalsFeature"
           }
         ]
       },

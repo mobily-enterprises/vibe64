@@ -29,7 +29,7 @@ import {
 } from "./service.js";
 
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
-/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
@@ -114,7 +114,7 @@ function createVibe64TerminalsFeature({
      * @param {ProductionEnvironmentProvider | null} capabilities.productionEnvironmentProvider
      * @param {ProjectService} capabilities.project
      * @param {SavedEnvValueLinks | null} capabilities.savedEnvValueLinks
-     * @param {{ actionCatalogue: ActionCatalogue }} context
+     * @param {FeatureSetupContext} context
      */
     setup({
       env,
@@ -155,7 +155,9 @@ function createVibe64TerminalsFeature({
       });
       return { terminals };
     },
-    actions: ({ terminals }) => createTerminalActions({ terminals }),
+    actions({ terminals }) {
+      return createTerminalActions({ terminals });
+    },
     /**
      * @param {object} capabilities
      * @param {RuntimeEnv} capabilities.env
@@ -183,10 +185,10 @@ function createVibe64TerminalsFeature({
   });
 }
 
-const Vibe64TerminalsProvider = createVibe64TerminalsFeature();
+const Vibe64TerminalsFeature = createVibe64TerminalsFeature();
 
 export {
-  Vibe64TerminalsProvider,
+  Vibe64TerminalsFeature,
   createVibe64TerminalsFeature,
   terminalsProviderEnv
 };

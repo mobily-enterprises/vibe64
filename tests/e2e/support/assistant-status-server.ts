@@ -28,7 +28,7 @@ import { createSessionActions } from "../../../packages/vibe64-sessions/src/serv
 import { createTerminalActions } from "@local/vibe64-terminals/server/actions";
 import { mainConversationId, temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { createMainBrowserConversations } from "../../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
-import { Vibe64ConversationsProvider } from "../../../packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js";
+import { Vibe64ConversationsFeature } from "../../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
 import { createSessionConversations } from "../../../packages/vibe64-terminals/src/server/sessionConversations.js";
 import { createSessionAttachments } from "../../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { createSessionAgentManager } from "../../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
@@ -309,7 +309,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     }
   });
   const hosting = createCapabilityRuntime({ providers: [EventProvider, RealtimeProvider,
-    ...(colleagueProvider ? [colleagueProvider] : []), Vibe64ConversationsProvider, AssistantFeature, probe],
+    ...(colleagueProvider ? [colleagueProvider] : []), Vibe64ConversationsFeature, AssistantFeature, probe],
     inputs: { "runtime.actions": actions, "runtime.http": http, "runtime.fastify": app,
       "runtime.config": { surfaceDefinitions: { app: { enabled: true, requiresWorkspace: false } },
         assistantSurfaces: { app: { settingsSurfaceId: "app", configScope: "global" } } },

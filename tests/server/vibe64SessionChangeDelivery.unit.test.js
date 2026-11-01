@@ -128,9 +128,9 @@ test("a browser test's change made outside any request reaches the session's vie
 
 test("pages receive only the changes of the projects and sessions they watch", { timeout: 30_000 }, async (t) => {
   // Imported here so that the publisher tests above stand on their own.
-  const [{ PROJECT_WATCH, PROJECT_WATCH_RELEASE }, { Vibe64RepositoryUpdatesProvider }] = await Promise.all([
+  const [{ PROJECT_WATCH, PROJECT_WATCH_RELEASE }, { Vibe64RepositoryUpdatesFeature }] = await Promise.all([
     import("../../packages/vibe64-sessions/src/shared/projectWatch.js"),
-    import("../../packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js")
+    import("../../packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js")
   ]);
   const probes = [];
   const httpServer = createServer((_request, response) => { response.statusCode = 404; response.end(); });
@@ -141,7 +141,7 @@ test("pages receive only the changes of the projects and sessions they watch", {
       "runtime.logger": { debug() {}, warn() {}, info() {}, error() {} },
       "vibe64.sessions": { async probeRepositoryUpdates(slug) { probes.push(slug); return { failed: false, inUse: false }; } }
     },
-    providers: [EventProvider, ActionProvider, Vibe64ActionPolicyProvider, RealtimeProvider, Vibe64RepositoryUpdatesProvider, defineProvider({
+    providers: [EventProvider, ActionProvider, Vibe64ActionPolicyProvider, RealtimeProvider, Vibe64RepositoryUpdatesFeature, defineProvider({
       id: "test.action-context", requires: { actions: "runtime.actions", events: "runtime.events" },
       setup(values) {
         events = values.events;

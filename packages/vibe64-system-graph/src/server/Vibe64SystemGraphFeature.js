@@ -45,7 +45,7 @@ function createSystemGraph({
   });
 }
 
-const Vibe64SystemGraphProvider = defineFeature({
+const Vibe64SystemGraphFeature = defineFeature({
   id: "vibe64.system-graph",
   domain: "vibe64-system-graph",
   requires: {
@@ -87,6 +87,6 @@ const Vibe64SystemGraphProvider = defineFeature({
 });
 
 export {
-  Vibe64SystemGraphProvider,
+  Vibe64SystemGraphFeature,
   createSystemGraph
 };

@@ -9,7 +9,7 @@ follows it on every pane.
 ## Sources
 
 - Main: `packages/vibe64-usage-recording/src/server/service.js`
-- `packages/vibe64-usage-recording/src/server/Vibe64UsageRecordingProvider.js`
+- `packages/vibe64-usage-recording/src/server/Vibe64UsageRecordingFeature.js`
 - `packages/vibe64-usage-recording/src/server/usageRecordingActions.js`
 - `packages/vibe64-usage-recording/src/server/registerRoutes.js`
 - `packages/vibe64-usage-recording/src/server/traceStore.js`

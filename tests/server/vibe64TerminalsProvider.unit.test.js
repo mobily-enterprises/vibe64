@@ -25,10 +25,10 @@ import {
   readProjectRuntimeOpenState
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import {
-  Vibe64TerminalsProvider,
+  Vibe64TerminalsFeature,
   createVibe64TerminalsFeature,
   terminalsProviderEnv
-} from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js";
+} from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
 import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { startProjectRuntimeDormancyCleanupSchedule } from "../../packages/vibe64-terminals/src/server/service.js";
@@ -79,11 +79,11 @@ function featureDependencies({ env = {}, project, published = [], hooks = [] } =
 }
 
 test("terminals feature declares only named AI-first capabilities", () => {
-  assert.equal(Vibe64TerminalsProvider.id, "vibe64.terminals");
-  assert.deepEqual(Vibe64TerminalsProvider.provides, {
+  assert.equal(Vibe64TerminalsFeature.id, "vibe64.terminals");
+  assert.deepEqual(Vibe64TerminalsFeature.provides, {
     terminals: "vibe64.terminals"
   });
-  assert.deepEqual(Vibe64TerminalsProvider.requires, {
+  assert.deepEqual(Vibe64TerminalsFeature.requires, {
     env: "runtime.env",
     events: "runtime.events",
     fastify: "runtime.fastify",
@@ -93,7 +93,7 @@ test("terminals feature declares only named AI-first capabilities", () => {
     uploads: "runtime.uploads",
     actionCatalogue: "runtime.actions"
   });
-  assert.equal(Object.hasOwn(Vibe64TerminalsProvider, "register"), false);
+  assert.equal(Object.hasOwn(Vibe64TerminalsFeature, "register"), false);
 });
 
 test("terminals provider overlays only declared live host values", () => {

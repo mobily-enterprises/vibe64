@@ -25,8 +25,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/CurrentAppProvider.js",
-            "export": "CurrentAppProvider"
+            "entrypoint": "src/server/CurrentAppFeature.js",
+            "export": "CurrentAppFeature"
           }
         ],
         "capabilities": [

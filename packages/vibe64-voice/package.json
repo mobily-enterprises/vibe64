@@ -8,7 +8,7 @@
     "./client": "./src/client/index.js",
     "./shared/avatars": "./src/shared/avatars.js",
     "./shared/routes": "./src/shared/routes.js",
-    "./server": "./src/server/Vibe64VoiceProvider.js",
+    "./server": "./src/server/Vibe64VoiceFeature.js",
     "./server/types": "./src/server/types.js"
   },
   "jskit": {
@@ -29,8 +29,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64VoiceProvider.js",
-            "export": "Vibe64VoiceProvider"
+            "entrypoint": "src/server/Vibe64VoiceFeature.js",
+            "export": "Vibe64VoiceFeature"
           }
         ]
       },

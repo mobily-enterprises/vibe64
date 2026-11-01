@@ -12,7 +12,7 @@ teacher conversation.
 - `packages/vibe64-training/src/server/errors.js`
 - `packages/vibe64-training/src/server/stepChecks.js`
 - `packages/vibe64-training/src/server/preparation.js`
-- `packages/vibe64-training/src/server/Vibe64TrainingProvider.js`
+- `packages/vibe64-training/src/server/Vibe64TrainingFeature.js`
 - `packages/vibe64-training/src/server/registerRoutes.js`
 - `packages/vibe64-training/src/server/declaredCheck.js`
 - `packages/vibe64-training/src/server/codeAuthorship.js`

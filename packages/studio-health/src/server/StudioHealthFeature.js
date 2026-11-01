@@ -9,7 +9,7 @@ import { createService } from "./service.js";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 
-const StudioHealthProvider = defineFeature({
+const StudioHealthFeature = defineFeature({
   id: "vibe64.studio-health",
   domain: "vibe64-studio-health",
   requires: {
@@ -48,4 +48,4 @@ const StudioHealthProvider = defineFeature({
   }
 });
 
-export { StudioHealthProvider };
+export { StudioHealthFeature };

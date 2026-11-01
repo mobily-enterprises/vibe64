@@ -406,9 +406,9 @@ test("history tool projections preserve original provenance without leaking iden
 // owners. They do not launch a native teacher, provision an exercise or prove UI.
 test("standalone Training Feature uses actual OS-owner authority only for trusted learning transports", async t => {
   const f = await fixture(t);
-  const [{ Vibe64TrainingProvider }, { configureStudioProjectContext }, { currentOsUser },
+  const [{ Vibe64TrainingFeature }, { configureStudioProjectContext }, { currentOsUser },
     { WORKSPACE_OPERATION }, { createSchema }, { default: Fastify }] = await Promise.all([
-    import("../../packages/vibe64-training/src/server/Vibe64TrainingProvider.js"),
+    import("../../packages/vibe64-training/src/server/Vibe64TrainingFeature.js"),
     import("@local/vibe64-core/server/studioProjectContext"), import("@local/vibe64-core/server/osUserIdentity"),
     import("@local/vibe64-core/server/actionContext"), import("@jskit-ai/kernel/shared/validators"), import("fastify")
   ]);
@@ -428,11 +428,11 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
     server.route({ method, url, config: { surface: options.surface }, handler });
   } } };
   const unexpected = () => assert.fail("no-exercise preparation must not invoke source, setup or native session effects");
-  const { training } = await Vibe64TrainingProvider.setup({ actionCatalogue: actions, http,
+  const { training } = await Vibe64TrainingFeature.setup({ actionCatalogue: actions, http,
     project: { createRuntime: unexpected, runInProjectContext: unexpected },
     sessions: { createSession: unexpected, inspectSession: unexpected }, terminals: { outputTargetStatus: unexpected, closeProjectRuntime: unexpected }, trainingHost: null });
   // Learning v2 publishes learner-scoped realtime notices through the optional runtime events.
-  assert.deepEqual(Vibe64TrainingProvider.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" });
+  assert.deepEqual(Vibe64TrainingFeature.optional, { trainingHost: "vibe64.training.host", sourceEditor: "vibe64.source-editor", events: "runtime.events" });
   assert.equal(typeof training.checks.runOrientationCheck, "function");
   assert.equal(typeof training.checks.runCodeCheck, "function");
   assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners",
@@ -509,11 +509,11 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
 
 test("hosted Training Feature retains exact supplied owners and registers no second actions, authority or lesson routes", async t => {
   const f = await fixture(t);
-  const { Vibe64TrainingProvider } = await import("../../packages/vibe64-training/src/server/Vibe64TrainingProvider.js");
+  const { Vibe64TrainingFeature } = await import("../../packages/vibe64-training/src/server/Vibe64TrainingFeature.js");
   const registered = [];
   const trainingHost = Object.freeze({ catalogue: f.catalogue, content: f.content, learners: f.learners,
     exercises: f.exercises });
-  const outputs = await Vibe64TrainingProvider.setup({ actionCatalogue: {
+  const outputs = await Vibe64TrainingFeature.setup({ actionCatalogue: {
     register() { assert.fail("the hosted original action catalogue must not be registered twice"); },
     registerContextContributor() { assert.fail("the hosted original authority must not be registered twice"); }
   }, http: { router: { register(method, url, options, handler) { registered.push({ method, url, options, handler }); } } },

@@ -16,7 +16,7 @@ runtime while retaining its own identity, authorization and conversation history
 - `src/components/Vibe64LocalVoiceSettings.vue`
 - `src/composables/useVibe64LocalAvatarPreferences.js`
 - Main: `packages/vibe64-voice/src/client/projectVoiceBinding.js`
-- `packages/vibe64-voice/src/server/Vibe64VoiceProvider.js`
+- `packages/vibe64-voice/src/server/Vibe64VoiceFeature.js`
 - `src/composables/useVibe64ConversationRuntime.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64AgentSettings.js`

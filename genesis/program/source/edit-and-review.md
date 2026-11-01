@@ -924,7 +924,7 @@ Interface/Code, whose presentation their host records.
   preserves a stopped answer and its exact turn identity. A delayed Stop response
   still checks the targeted message and native turn before publishing state, so
   it cannot overwrite a newer follow-up or reopen a removed explanation.
-  `Vibe64SourceEditorProvider` connects explanation cleanup to terminal session
+  `Vibe64SourceEditorFeature` connects explanation cleanup to terminal session
   shutdown; failed cleanup blocks a successful shutdown acknowledgement. Session
   close tries every recorded explanation, logs each failure with its explanation
   and session, and names the failed helpers with their reasons. An unreadable

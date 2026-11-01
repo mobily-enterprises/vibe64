@@ -1,3 +1,3 @@
 export {
-  Vibe64SystemGraphProvider
-} from "./server/Vibe64SystemGraphProvider.js";
+  Vibe64SystemGraphFeature
+} from "./server/Vibe64SystemGraphFeature.js";

@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
-import { Vibe64ConversationsProvider } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js";
+import { Vibe64ConversationsFeature } from "../../packages/vibe64-sessions/src/server/Vibe64ConversationsFeature.js";
 import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
@@ -256,7 +256,7 @@ test("conversation facades and subscription checks preserve real Fastify request
       ["cookie-terminals", createTerminalActions({ terminals }).filter(({ id }) => id === ACTION_READ_CANONICAL_AGENT_GOAL)]
     ]) actions.register({ contributorId, domain: "test", actions: definitions.map(definition => ({ surfaces: ["app"], ...definition })) });
     const conversations = createMainBrowserConversations({ actions, terminals });
-    const { access } = await Vibe64ConversationsProvider.setup({
+    const { access } = await Vibe64ConversationsFeature.setup({
       actionCatalogue: actions, sessions: { browserConversations: conversations }, http: testRouteApp().http
     }, {});
     actions.register({ contributorId: "cookie-subscription", domain: "test", actions: [access.wrapAction({

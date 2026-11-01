@@ -61,7 +61,7 @@ function createUsageRecording({
   });
 }
 
-const Vibe64UsageRecordingProvider = defineFeature({
+const Vibe64UsageRecordingFeature = defineFeature({
   id: "vibe64.usage-recording",
   domain: "vibe64-usage-recording",
   requires: {
@@ -109,4 +109,4 @@ const Vibe64UsageRecordingProvider = defineFeature({
   actions: createUsageRecordingActions
 });
 
-export { Vibe64UsageRecordingProvider, createUsageRecording };
+export { Vibe64UsageRecordingFeature, createUsageRecording };

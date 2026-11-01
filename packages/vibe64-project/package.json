@@ -34,8 +34,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64ProjectProvider.js",
-            "export": "Vibe64ProjectProvider"
+            "entrypoint": "src/server/Vibe64ProjectFeature.js",
+            "export": "Vibe64ProjectFeature"
           }
         ]
       },

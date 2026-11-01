@@ -20,7 +20,7 @@ workspace.
 - `packages/vibe64-project/src/server/managedProject.js`
 - `packages/vibe64-project/src/server/managedRepository.js`
 - `packages/vibe64-training/src/server/preparation.js`
-- `packages/vibe64-training/src/server/Vibe64TrainingProvider.js`
+- `packages/vibe64-training/src/server/Vibe64TrainingFeature.js`
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
 - `packages/vibe64-terminals/src/server/workspaceSetupStart.js`
 - `tests/server/vibe64ManagedProject.unit.test.js`

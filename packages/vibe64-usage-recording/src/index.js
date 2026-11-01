@@ -1,1 +1,1 @@
-export { Vibe64UsageRecordingProvider } from "./server/Vibe64UsageRecordingProvider.js";
+export { Vibe64UsageRecordingFeature } from "./server/Vibe64UsageRecordingFeature.js";

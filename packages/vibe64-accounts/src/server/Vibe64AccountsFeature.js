@@ -41,7 +41,7 @@ import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").AccountsService} AccountsService */
 /** @typedef {import("./types.js").AccountsRuntime} AccountsRuntime */
-/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
@@ -181,7 +181,7 @@ const Vibe64AccountsFeature = defineFeature({
    * @param {RuntimeLogger} capabilities.logger
    * @param {ProjectService} capabilities.project
    * @param {TerminalsService | null} capabilities.terminals
-   * @param {{ actionCatalogue: ActionCatalogue }} context
+   * @param {FeatureSetupContext} context
    */
   setup({
     accountRuntime,
@@ -314,7 +314,9 @@ const Vibe64AccountsFeature = defineFeature({
 
     return { accounts, connections };
   },
-  actions: ({ accounts }) => createAccountsActions({ accounts })
+  actions({ accounts }) {
+    return createAccountsActions({ accounts });
+  }
 });
 
 export {

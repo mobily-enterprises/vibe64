@@ -34,8 +34,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64UsageRecordingProvider.js",
-            "export": "Vibe64UsageRecordingProvider"
+            "entrypoint": "src/server/Vibe64UsageRecordingFeature.js",
+            "export": "Vibe64UsageRecordingFeature"
           }
         ]
       },

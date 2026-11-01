@@ -36,16 +36,16 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64SessionsProvider.js",
-            "export": "Vibe64SessionsProvider"
+            "entrypoint": "src/server/Vibe64SessionsFeature.js",
+            "export": "Vibe64SessionsFeature"
           },
           {
-            "entrypoint": "src/server/Vibe64ConversationsProvider.js",
-            "export": "Vibe64ConversationsProvider"
+            "entrypoint": "src/server/Vibe64ConversationsFeature.js",
+            "export": "Vibe64ConversationsFeature"
           },
           {
-            "entrypoint": "src/server/Vibe64SessionsProvider.js",
-            "export": "Vibe64RepositoryUpdatesProvider"
+            "entrypoint": "src/server/Vibe64SessionsFeature.js",
+            "export": "Vibe64RepositoryUpdatesFeature"
           }
         ]
       },

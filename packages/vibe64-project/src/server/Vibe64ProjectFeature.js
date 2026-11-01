@@ -20,7 +20,7 @@ import {
 /** @typedef {import("./types.js").SavedEnvValues} SavedEnvValues */
 /** @typedef {import("./types.js").ProjectResourceEnvironment} ProjectResourceEnvironment */
 
-const Vibe64ProjectProvider = defineFeature({
+const Vibe64ProjectFeature = defineFeature({
   id: "vibe64.project",
   domain: "vibe64-project",
   requires: {
@@ -76,4 +76,4 @@ const Vibe64ProjectProvider = defineFeature({
   }
 });
 
-export { Vibe64ProjectProvider };
+export { Vibe64ProjectFeature };

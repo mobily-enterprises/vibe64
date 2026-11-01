@@ -32,7 +32,7 @@ import {
 /** @typedef {import("./types.js").SessionRepositoryUpdates} SessionRepositoryUpdates */
 /** @typedef {import("./types.js").RepositoryUpdateProbe} RepositoryUpdateProbe */
 /** @typedef {import("@local/vibe64-accounts/server/types").AccountsService} AccountsService */
-/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -195,7 +195,7 @@ function createVibe64SessionsFeature() {
      * @param {RenewalActorResolver | null} capabilities.renewalActorResolver
      * @param {SourceEditorService} capabilities.sourceEditor
      * @param {TerminalsService} capabilities.terminals
-     * @param {{ actionCatalogue: ActionCatalogue }} context
+     * @param {FeatureSetupContext} context
      */
     setup({
       accounts,
@@ -292,7 +292,7 @@ function createVibe64SessionsFeature() {
   });
 }
 
-const Vibe64SessionsProvider = createVibe64SessionsFeature();
+const Vibe64SessionsFeature = createVibe64SessionsFeature();
 
 // The terminals publish these when an agent turn starts in a session.
 const TURN_ACTIVE_REASONS = new Set([
@@ -321,7 +321,7 @@ function createRepositoryUpdates({ probe, closeWatches }) {
 // (projectWatch.js); the project update probe runs while a page watches the
 // project or an agent turn runs in it. Authenticated realtime may be composed
 // on top of sessions, so it attaches only after both owners exist.
-const Vibe64RepositoryUpdatesProvider = defineFeature({
+const Vibe64RepositoryUpdatesFeature = defineFeature({
   id: "vibe64.sessions.repository-updates",
   domain: "vibe64-sessions",
   requires: {
@@ -339,7 +339,7 @@ const Vibe64RepositoryUpdatesProvider = defineFeature({
    * @param {RuntimeEvents} capabilities.events
    * @param {RuntimeRealtime} capabilities.realtime
    * @param {SessionsService} capabilities.sessions
-   * @param {{ actionCatalogue: ActionCatalogue }} context
+   * @param {FeatureSetupContext} context
    */
   setup({
     events,
@@ -364,7 +364,9 @@ const Vibe64RepositoryUpdatesProvider = defineFeature({
     const closeWatches = registerProjectWatch({ actions: actionCatalogue, realtime });
     return { repositoryUpdates: createRepositoryUpdates({ probe, closeWatches }) };
   },
-  actions: ({ repositoryUpdates }) => createProjectWatchActions({ probe: repositoryUpdates.probe }),
+  actions({ repositoryUpdates }) {
+    return createProjectWatchActions({ probe: repositoryUpdates.probe });
+  },
   /**
    * @param {object} _deps
    * @param {{ outputs: { repositoryUpdates: SessionRepositoryUpdates } }} context
@@ -374,4 +376,4 @@ const Vibe64RepositoryUpdatesProvider = defineFeature({
   }
 });
 
-export { Vibe64RepositoryUpdatesProvider, Vibe64SessionsProvider, createRepositoryUpdates };
+export { Vibe64RepositoryUpdatesFeature, Vibe64SessionsFeature, createRepositoryUpdates };

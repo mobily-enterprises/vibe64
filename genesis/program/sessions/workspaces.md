@@ -23,7 +23,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-sessions/src/server/sessionCreation.js`
 - `packages/vibe64-sessions/src/server/sessionPolicySlots.js`
 - `packages/vibe64-sessions/src/server/sessionArchive.js`
-- `packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js`
+- `packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
 - `packages/vibe64-sessions/src/server/sessionResults.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
@@ -520,7 +520,7 @@ closing tree, one session at a time: a session that cannot be published is
 reported with its code while the others are published and open archives still
 resume. Startup runs archive recovery and then renewal recovery inside the
 selected project's context, so their session changes reach that project's pages
-(`Vibe64SessionsProvider.js`), logs every
+(`Vibe64SessionsFeature.js`), logs every
 reported failure as the operational warning
 `vibe64.sessions.recovery.session_failed` with its session and code, and stops
 before the next step when the server shuts down. Archive tar work (check,

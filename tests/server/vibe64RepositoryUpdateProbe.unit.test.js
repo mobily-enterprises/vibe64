@@ -15,7 +15,7 @@ import { createProjectWatchActions } from "../../packages/vibe64-sessions/src/se
 import { registerProjectWatch } from "../../packages/vibe64-sessions/src/server/projectWatch.js";
 import { createRepositoryUpdateProbe } from "../../packages/vibe64-sessions/src/server/repositoryUpdateProbe.js";
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
-import { Vibe64RepositoryUpdatesProvider } from "../../packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js";
+import { Vibe64RepositoryUpdatesFeature } from "../../packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js";
 import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../../packages/vibe64-sessions/src/shared/projectWatch.js";
 import { gitEnv } from "../../packages/vibe64-execution/src/server/env/gitEnv.js";
 import { checkSessionUpdates, readSessionAuthorityHeads } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
@@ -367,7 +367,7 @@ test("the probe reads heads through the same gateway request as the update check
 test("a starting agent turn wakes its project's probe", async () => {
   const listeners = [];
   const probes = [];
-  const { repositoryUpdates } = await Vibe64RepositoryUpdatesProvider.setup({
+  const { repositoryUpdates } = await Vibe64RepositoryUpdatesFeature.setup({
     actionCatalogue: createActionCatalogue({ policy: vibe64ActionPolicy }),
     events: { register: (listener) => listeners.push(listener) },
     realtime: { onConnection() { return () => {}; } },

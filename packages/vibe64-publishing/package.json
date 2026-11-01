@@ -29,8 +29,8 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64PublishingProvider.js",
-            "export": "Vibe64PublishingProvider"
+            "entrypoint": "src/server/Vibe64PublishingFeature.js",
+            "export": "Vibe64PublishingFeature"
           }
         ],
         "capabilities": [

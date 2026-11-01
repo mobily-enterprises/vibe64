@@ -12,9 +12,9 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
-  Vibe64VoiceProvider,
+  Vibe64VoiceFeature,
   registerVoiceCatalogueRoute
-} from "../../packages/vibe64-voice/src/server/Vibe64VoiceProvider.js";
+} from "../../packages/vibe64-voice/src/server/Vibe64VoiceFeature.js";
 import {
   ACTION_READ_VOICE_CATALOGUE,
   createVoiceActions
@@ -53,7 +53,7 @@ async function fixture(t, { inspection = { ok: true, sessionId: "session-one" },
     realtime = createSocketIoServer({ fastify });
     fastify.addHook("preHandler", async () => { await new Promise(resolve => setTimeout(resolve, 1200)); });
   }
-  await Vibe64VoiceProvider.setup({ env: { VIBE64_VOICE_ENDPOINT: `ws://127.0.0.1:${upstream.address().port}/v1/voice`, VIBE64_VOICE_ACCESS_TOKEN_FILE: tokenFile }, fastify,
+  await Vibe64VoiceFeature.setup({ env: { VIBE64_VOICE_ENDPOINT: `ws://127.0.0.1:${upstream.address().port}/v1/voice`, VIBE64_VOICE_ACCESS_TOKEN_FILE: tokenFile }, fastify,
     sessions: { async inspectSession(id) { inspections.push({ id, scope: currentProjectScopeKey() }); return inspection; } },
     actionCatalogue
   }, {});

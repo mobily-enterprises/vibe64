@@ -7,7 +7,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { vibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_SERVICE_DATA_ROOT_ENV } from "@local/vibe64-core/server/studioRoots";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
-import { createVibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js";
+import { createVibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 
 const claudeSelection = JSON.stringify({ engineId: "claude", agentId: "claude", modelId: "sonnet", modelProviderId: "anthropic",

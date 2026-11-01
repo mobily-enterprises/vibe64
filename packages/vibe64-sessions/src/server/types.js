@@ -3,7 +3,7 @@
 // package's files share.
 
 /** @typedef {ReturnType<typeof import("./service.js").createService>} SessionsService */
-/** @typedef {ReturnType<typeof import("./Vibe64SessionsProvider.js").createRepositoryUpdates>} SessionRepositoryUpdates */
+/** @typedef {ReturnType<typeof import("./Vibe64SessionsFeature.js").createRepositoryUpdates>} SessionRepositoryUpdates */
 /** @typedef {ReturnType<typeof import("./repositoryUpdateProbe.js").createRepositoryUpdateProbe>} RepositoryUpdateProbe */
 /** @typedef {ReturnType<typeof import("./sessionWorkOperations.js").createSessionWorkOperations>} SessionWorkOperations */
 /** @typedef {ReturnType<typeof import("./sessionPresence.js").createSessionPresenceService>} SessionPresenceService */

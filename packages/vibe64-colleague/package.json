@@ -6,7 +6,7 @@
   "description": "The user's independent conversation for operating Vibe64.",
   "exports": {
     "./client": "./src/client/index.js",
-    "./server": "./src/server/Vibe64ColleagueProvider.js",
+    "./server": "./src/server/Vibe64ColleagueFeature.js",
     "./server/service": "./src/server/service.js",
     "./server/colleagueName": "./src/server/colleagueName.js",
     "./server/conversationUpgrade": "./src/server/conversationUpgrade.js",
@@ -34,12 +34,12 @@
       "server": {
         "providers": [
           {
-            "entrypoint": "src/server/Vibe64ColleagueProvider.js",
-            "export": "Vibe64ColleagueProvider"
+            "entrypoint": "src/server/Vibe64ColleagueFeature.js",
+            "export": "Vibe64ColleagueFeature"
           },
           {
-            "entrypoint": "src/server/Vibe64ColleagueProvider.js",
-            "export": "Vibe64ColleagueFocusProvider"
+            "entrypoint": "src/server/Vibe64ColleagueFeature.js",
+            "export": "Vibe64ColleagueFocusFeature"
           }
         ],
         "capabilities": [

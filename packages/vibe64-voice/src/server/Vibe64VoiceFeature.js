@@ -10,6 +10,7 @@ import { ACTION_READ_VOICE_CATALOGUE, createVoiceActions } from "./voiceActions.
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeFastify} RuntimeFastify */
 /** @typedef {import("@local/vibe64-sessions/server/types").SessionsService} SessionsService */
+/** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 
 /**
  * @param {RuntimeFastify} fastify
@@ -34,7 +35,7 @@ function createVoice(proxyConfig) {
   return Object.freeze({ available: proxyConfig.available, readCatalogue });
 }
 
-const Vibe64VoiceProvider = defineFeature({
+const Vibe64VoiceFeature = defineFeature({
   id: "vibe64.voice",
   actionDefaults: {
     channels: ["api", "internal"],
@@ -53,7 +54,7 @@ const Vibe64VoiceProvider = defineFeature({
    * @param {RuntimeEnv} capabilities.env
    * @param {RuntimeFastify} capabilities.fastify
    * @param {SessionsService} capabilities.sessions
-   * @param {{ actionCatalogue: ActionCatalogue }} context
+   * @param {FeatureSetupContext} context
    */
   setup({
     env,
@@ -103,4 +104,4 @@ const Vibe64VoiceProvider = defineFeature({
     return createVoiceActions({ actions: actionCatalogue, voice });
   }
 });
-export { Vibe64VoiceProvider, createVoice, registerVoiceCatalogueRoute };
+export { Vibe64VoiceFeature, createVoice, registerVoiceCatalogueRoute };

@@ -9,11 +9,11 @@ import { createSessionChangedPublisher } from "@local/vibe64-core/server/session
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 
 import {
-  Vibe64ProjectProvider
-} from "../../packages/vibe64-project/src/server/Vibe64ProjectProvider.js";
+  Vibe64ProjectFeature
+} from "../../packages/vibe64-project/src/server/Vibe64ProjectFeature.js";
 import {
-  Vibe64SessionsProvider
-} from "../../packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js";
+  Vibe64SessionsFeature
+} from "../../packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js";
 
 test("session discovery pages every archived/open identity through canonical tools while native lists stay complete", async () => {
   const sessions = Array.from({ length: 127 }, (_, i) => ({ sessionId: `session-${i}`, sessionName: `History ${i}`,
@@ -63,21 +63,21 @@ test("session discovery pages every archived/open identity through canonical too
 });
 
 test("project and sessions expose only named Feature capabilities", () => {
-  assert.equal(Vibe64ProjectProvider.id, "vibe64.project");
-  assert.deepEqual(Vibe64ProjectProvider.requires, {
+  assert.equal(Vibe64ProjectFeature.id, "vibe64.project");
+  assert.deepEqual(Vibe64ProjectFeature.requires, {
     env: "runtime.env",
     events: "runtime.events",
     logger: "runtime.logger",
     http: "runtime.http",
     actionCatalogue: "runtime.actions"
   });
-  assert.deepEqual(Vibe64ProjectProvider.provides, {
+  assert.deepEqual(Vibe64ProjectFeature.provides, {
     project: "vibe64.project"
   });
-  assert.equal(Vibe64ProjectProvider.boot, null);
+  assert.equal(Vibe64ProjectFeature.boot, null);
 
-  assert.equal(Vibe64SessionsProvider.id, "vibe64.sessions");
-  assert.deepEqual(Vibe64SessionsProvider.requires, {
+  assert.equal(Vibe64SessionsFeature.id, "vibe64.sessions");
+  assert.deepEqual(Vibe64SessionsFeature.requires, {
     accounts: "vibe64.accounts",
     events: "runtime.events",
     http: "runtime.http",
@@ -87,17 +87,17 @@ test("project and sessions expose only named Feature capabilities", () => {
     terminals: "vibe64.terminals",
     actionCatalogue: "runtime.actions"
   });
-  assert.deepEqual(Vibe64SessionsProvider.provides, {
+  assert.deepEqual(Vibe64SessionsFeature.provides, {
     sessions: "vibe64.sessions"
   });
-  assert.equal(typeof Vibe64SessionsProvider.boot, "function");
-  assert.equal(typeof Vibe64SessionsProvider.shutdown, "function");
+  assert.equal(typeof Vibe64SessionsFeature.boot, "function");
+  assert.equal(typeof Vibe64SessionsFeature.shutdown, "function");
 });
 
 test("project and sessions register routes and captured actions during setup", async () => {
   const projectActions = [];
   const projectRoutes = [];
-  const projectOutputs = await Vibe64ProjectProvider.setup({
+  const projectOutputs = await Vibe64ProjectFeature.setup({
     actionCatalogue: {
       register(contributor) {
         projectActions.push(contributor);
@@ -161,7 +161,7 @@ test("project and sessions register routes and captured actions during setup", a
   const configurationReads = [];
   const templateObservers = [];
   const sessionCatalogue = createActionCatalogue({ policy: vibe64ActionPolicy });
-  const sessionOutputs = await Vibe64SessionsProvider.setup({
+  const sessionOutputs = await Vibe64SessionsFeature.setup({
     actionCatalogue: {
       ...sessionCatalogue,
       register(contributor) {
@@ -201,7 +201,7 @@ test("project and sessions register routes and captured actions during setup", a
   assert.equal(typeof sessionOutputs.sessions.createSession, "function");
   assert.deepEqual(templateObservers.map((observer) => typeof observer), ["function"], "applying a starter prepares its session workspace");
   await assert.rejects(
-    () => Vibe64SessionsProvider.setup({ renewalActorResolver: {} }, {}),
+    () => Vibe64SessionsFeature.setup({ renewalActorResolver: {} }, {}),
     /must be a function or null/u
   );
   assert.equal(sessionActions.length, 1);
@@ -307,7 +307,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
       return recovery;
     }
   };
-  const bootResult = Vibe64SessionsProvider.boot({
+  const bootResult = Vibe64SessionsFeature.boot({
     project: selectedProject
   }, {
     outputs: { sessions }
@@ -317,7 +317,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(resumeCalls, 1);
   let shutdownSettled = false;
-  const shutdown = Vibe64SessionsProvider.shutdown({
+  const shutdown = Vibe64SessionsFeature.shutdown({
     terminals: {
       async invalidateAgentRuntimes(input) {
         assert.deepEqual(input, { reason: "server-shutdown" });
@@ -340,14 +340,14 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   await shutdown;
   assert.equal(shutdownSettled, true);
 
-  Vibe64SessionsProvider.boot({
+  Vibe64SessionsFeature.boot({
     project: selectedProject
   }, {
     outputs: { sessions }
   });
   assert.equal(resumeCalls, 1, "Feature shutdown permanently closes its recovery task");
 
-  Vibe64SessionsProvider.boot({
+  Vibe64SessionsFeature.boot({
     project: { targetRoot: "" }
   }, {
     outputs: {
@@ -365,7 +365,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
     "hosted boot recovery is owned by the catalog-aware host boundary"
   );
 
-  Vibe64SessionsProvider.boot({
+  Vibe64SessionsFeature.boot({
     project: selectedProject
   }, {
     outputs: {
@@ -380,7 +380,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   await new Promise((resolve) => setImmediate(resolve));
 
   await assert.rejects(
-    () => Vibe64SessionsProvider.setup({
+    () => Vibe64SessionsFeature.setup({
       project: {},
       renewalActorResolver: {},
       terminals: {}
@@ -414,7 +414,7 @@ test("startup recovery's session changes reach the recovered project's pages", a
       return { failures: [] };
     }
   };
-  Vibe64SessionsProvider.boot({ logger: { warn() {} }, project: selectedProject }, { outputs: { sessions } });
+  Vibe64SessionsFeature.boot({ logger: { warn() {} }, project: selectedProject }, { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   await recoveryShutdown(sessions);
   assert.deepEqual(published.filter(({ type }) => type === "entity.changed").map(({ realtime }) => realtime.audience), [
@@ -424,7 +424,7 @@ test("startup recovery's session changes reach the recovered project's pages", a
 });
 
 function recoveryShutdown(sessions) {
-  return Vibe64SessionsProvider.shutdown({
+  return Vibe64SessionsFeature.shutdown({
     terminals: { async invalidateAgentRuntimes() { return { ok: true }; } }
   }, { outputs: { sessions } });
 }
@@ -446,7 +446,7 @@ test("startup recovery resumes renewals after archive recovery fails and logs ea
         sessionId: "renewing-b" }] };
     }
   };
-  Vibe64SessionsProvider.boot({
+  Vibe64SessionsFeature.boot({
     logger: { warn(fields, message) { warnings.push({ fields, message }); } },
     project: selectedProject
   }, { outputs: { sessions } });
@@ -476,7 +476,7 @@ test("shutdown stops the startup archive loop instead of waiting for every pendi
     },
     async resumeSessionRenewals() { renewalsResumed += 1; return { failures: [] }; }
   };
-  Vibe64SessionsProvider.boot({ logger: { warn() {} }, project: selectedProject },
+  Vibe64SessionsFeature.boot({ logger: { warn() {} }, project: selectedProject },
     { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   const started = Date.now();
@@ -492,7 +492,7 @@ test("sessions reject a fulfilled but unsuccessful agent-runtime shutdown", asyn
     ok: false
   };
   await assert.rejects(
-    () => Vibe64SessionsProvider.shutdown({
+    () => Vibe64SessionsFeature.shutdown({
       terminals: {
         async invalidateAgentRuntimes(input) {
           assert.deepEqual(input, { reason: "server-shutdown" });

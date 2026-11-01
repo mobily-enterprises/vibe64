@@ -6,7 +6,7 @@ import { registerRoutes } from "./registerRoutes.js";
 import { createPublishingService } from "./service.js";
 
 /** @typedef {import("./types.js").PublishingService} PublishingService */
-/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@local/vibe64-colleague/server/types").ColleagueService} ColleagueService */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
@@ -14,12 +14,14 @@ import { createPublishingService } from "./service.js";
 
 // The local publishing experience: release orchestration, targets, history,
 // keys and confirmation on this computer, built from @local/vibe64-packaging.
-const Vibe64PublishingProvider = defineFeature({
+const Vibe64PublishingFeature = defineFeature({
   actionDefaults: {
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
-  actions: ({ publishing }) => createPublishingActions({ publishing }),
+  actions({ publishing }) {
+    return createPublishingActions({ publishing });
+  },
   id: "vibe64.publishing",
   domain: "vibe64-publishing",
   requires: {
@@ -37,7 +39,7 @@ const Vibe64PublishingProvider = defineFeature({
    * @param {RuntimeHttp} capabilities.http
    * @param {ProjectService} capabilities.project
    * @param {SourceEditorService} capabilities.sourceEditor
-   * @param {{ actionCatalogue: ActionCatalogue }} context
+   * @param {FeatureSetupContext} context
    */
   setup({
     colleague,
@@ -60,4 +62,4 @@ const Vibe64PublishingProvider = defineFeature({
   }
 });
 
-export { Vibe64PublishingProvider };
+export { Vibe64PublishingFeature };

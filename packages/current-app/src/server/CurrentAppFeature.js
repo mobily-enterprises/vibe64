@@ -8,7 +8,7 @@ import { createService } from "./service.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeHttp} RuntimeHttp */
 
-const CurrentAppProvider = defineFeature({
+const CurrentAppFeature = defineFeature({
   id: "vibe64.current-app",
   domain: "vibe64-current-app",
   requires: {
@@ -46,4 +46,4 @@ const CurrentAppProvider = defineFeature({
   }
 });
 
-export { CurrentAppProvider };
+export { CurrentAppFeature };

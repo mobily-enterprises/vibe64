@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { createSessionsService as createService } from "./vibe64SessionsTestHelpers.js";
-import { Vibe64SessionsProvider } from "../../packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js";
+import { Vibe64SessionsFeature } from "../../packages/vibe64-sessions/src/server/Vibe64SessionsFeature.js";
 import { prepareNothingForArchive } from "../../packages/vibe64-sessions/src/server/sessionArchive.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
@@ -65,7 +65,7 @@ test("ordinary archival has no preparation policy unless a host registers it", a
   const f = archiveFixture();
   assert.equal((await f.service.archiveSession("session-a")).ok, true);
   assert.deepEqual(f.calls, ["stop", "resources", "archive"]);
-  await assert.rejects(() => Vibe64SessionsProvider.setup({ archivePreparation: {} }, {}), /function or null/u);
+  await assert.rejects(() => Vibe64SessionsFeature.setup({ archivePreparation: {} }, {}), /function or null/u);
 });
 
 test("preparation sees stopped, current session state before resource and source removal", async () => {

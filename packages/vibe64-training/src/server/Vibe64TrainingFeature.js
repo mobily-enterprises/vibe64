@@ -37,7 +37,7 @@ import { aiReadyFact, registerLearningFact } from "./learningFacts.js";
 /** @typedef {import("./types.js").TrainingCodeAuthorship} TrainingCodeAuthorship */
 /** @typedef {ReturnType<typeof import("./stepChecks.js").createTrainingStepChecks>} TrainingStepChecks */
 /** @typedef {import("./types.js").TrainingLearningSpace} TrainingLearningSpace */
-/** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
+/** @typedef {import("@jskit-ai/kernel/server/types").FeatureSetupContext} FeatureSetupContext */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
@@ -89,7 +89,7 @@ function createTraining({
   });
 }
 
-const Vibe64TrainingProvider = defineFeature({
+const Vibe64TrainingFeature = defineFeature({
   id: "vibe64.training",
   domain: "vibe64-training",
   requires: {
@@ -121,7 +121,7 @@ const Vibe64TrainingProvider = defineFeature({
    * @param {TrainingService | null} capabilities.trainingHost
    * @param {SourceEditorService | null} capabilities.sourceEditor
    * @param {RuntimeEvents | null} capabilities.events
-   * @param {{ actionCatalogue: ActionCatalogue }} context
+   * @param {FeatureSetupContext} context
    */
   setup({
     env,
@@ -270,4 +270,4 @@ const Vibe64TrainingProvider = defineFeature({
   }
 });
 
-export { Vibe64TrainingProvider, createTraining };
+export { Vibe64TrainingFeature, createTraining };

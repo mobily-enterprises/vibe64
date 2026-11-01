@@ -23,7 +23,7 @@ import { createColleagueNavigationCoordination } from "../../packages/vibe64-col
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { codexAppServerHelperTurnSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
-import { Vibe64ColleagueProvider, Vibe64ColleagueFocusProvider } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueProvider.js";
+import { Vibe64ColleagueFeature, Vibe64ColleagueFocusFeature } from "../../packages/vibe64-colleague/src/server/Vibe64ColleagueFeature.js";
 import { registerColleagueFocus } from "../../packages/vibe64-colleague/src/server/registerColleagueFocus.js";
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
@@ -5479,14 +5479,14 @@ test("Colleague browser focus uses the shared socket and retires stale acknowled
 test("Colleague browser focus adapter owns its subscription independently of Colleague service", async () => {
   let attached = 0;
   let released = 0;
-  const outputs = await Vibe64ColleagueFocusProvider.setup({
+  const outputs = await Vibe64ColleagueFocusFeature.setup({
     colleague: {},
     realtime: { onConnection(listener) { assert.equal(typeof listener, "function"); attached += 1; return () => { released += 1; }; } },
     actionCatalogue: { register() {} }
   }, {});
   assert.equal(attached, 1);
-  assert.equal(Vibe64ColleagueProvider.requires.realtime, undefined);
-  await Vibe64ColleagueFocusProvider.shutdown({}, { outputs });
+  assert.equal(Vibe64ColleagueFeature.requires.realtime, undefined);
+  await Vibe64ColleagueFocusFeature.shutdown({}, { outputs });
   assert.equal(released, 1);
 });
 
