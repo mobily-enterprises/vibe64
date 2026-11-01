@@ -2273,7 +2273,7 @@ async function withAgentMessageController(operation, {
     projectService
   };
   const terminalServices = [];
-  const createService = ({ logger } = {}) => {
+  const createService = ({ logger = silentLogger } = {}) => {
     const service = createTerminalService({
       actions,
       projectServices,
