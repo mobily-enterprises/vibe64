@@ -9,7 +9,7 @@ import { resetLearningForLearningSpace } from "../../packages/vibe64-training/sr
 const UPGRADE_ID = "20261022-learning-space-reset";
 const learnerKey = Buffer.from("1001").toString("base64url");
 const ids = {
-  hosted: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  catalogued: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   unmarked: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   mismatched: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
   github: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
@@ -67,7 +67,7 @@ async function fixture(t) {
   for (const [name, record, namespacePath] of [
     ["app", { repository: { mode: "managed_git", defaultBranch: "main" } }],
     [slug(ids.unmarked), { repository: { mode: "managed_git", defaultBranch: "main" } }],
-    [slug(ids.mismatched), { repository: { mode: "managed_git" }, training: marker(ids.hosted) }],
+    [slug(ids.mismatched), { repository: { mode: "managed_git" }, training: marker(ids.catalogued) }],
     [slug(ids.github), { repository: { mode: "github" }, training: marker(ids.github) }],
     // A Learning v2 practice project keeps its runtime root in this inventory.
     [slug(ids.space), { repository: { mode: "managed_git" }, training: spaceMarker(ids.space) },
@@ -105,18 +105,18 @@ async function hashes(paths) {
 
 test("check lists the exact practice projects, learner files and code ledgers and changes nothing; apply moves only them and keeps teacher notes and Colleague", async t => {
   const f = await fixture(t);
-  const practice = await f.project(slug(ids.hosted), { repository: { mode: "managed_git" }, training: marker(ids.hosted) });
+  const practice = await f.project(slug(ids.catalogued), { repository: { mode: "managed_git" }, training: marker(ids.catalogued) });
   const normalBefore = await hashes(f.normal);
   const before = await treeHash(f.root);
   await f.run({ projectsRoot: f.projectsRoot });
   assert.equal(await treeHash(f.root), before, "check is read-only");
   const messages = f.reports.map(({ level, message }) => `${level}: ${message}`);
-  assert.ok(messages.includes(`info: Practice project ${slug(ids.hosted)} (learner ${learnerKey}, lesson V64-START-01) will be retired.`));
+  assert.ok(messages.includes(`info: Practice project ${slug(ids.catalogued)} (learner ${learnerKey}, lesson V64-START-01) will be retired.`));
   for (const lookAlike of [ids.unmarked, ids.mismatched, ids.github]) {
     assert.ok(messages.some(line => line.startsWith(`warning: ${slug(lookAlike)} looks like a practice project`)), lookAlike);
   }
   assert.ok(!messages.some(line => line.includes(slug(ids.space))), "a learning-space practice project is skipped silently");
-  assert.ok(messages.some(line => /^warning: 1 hosted practice project\(s\) may have managed databases/u.test(line)));
+  assert.ok(messages.some(line => /^warning: 1 catalogued practice project\(s\) may have managed databases/u.test(line)));
   assert.ok(messages.includes(`info: Learner state training/users/${learnerKey}/state.lock will be retired.`));
   assert.ok(messages.includes(`info: Learner state training/users/${learnerKey}/code-ledgers will be retired.`));
   assert.ok(!messages.some(line => line.includes("teacher-notes")), "the learner's notes and their lock stay");
@@ -126,10 +126,10 @@ test("check lists the exact practice projects, learner files and code ledgers an
   await f.run({ projectsRoot: f.projectsRoot, apply: true });
   assert.deepEqual(await hashes(f.normal), normalBefore, "normal projects, sessions, chats, code and Colleague are byte-identical");
   await assert.rejects(lstat(practice), { code: "ENOENT" });
-  await assert.rejects(lstat(f.runtime(slug(ids.hosted))), { code: "ENOENT" });
-  assert.equal(await readFile(path.join(f.projectsRoot, ".learning-reset-20261022", slug(ids.hosted), "sessions/working/source/index.js"), "utf8"),
-    `// ${slug(ids.hosted)} code\n`);
-  assert.ok((await lstat(path.join(f.retired(f.runtime(slug(ids.hosted))), "project.json"))).isFile());
+  await assert.rejects(lstat(f.runtime(slug(ids.catalogued))), { code: "ENOENT" });
+  assert.equal(await readFile(path.join(f.projectsRoot, ".learning-reset-20261022", slug(ids.catalogued), "sessions/working/source/index.js"), "utf8"),
+    `// ${slug(ids.catalogued)} code\n`);
+  assert.ok((await lstat(path.join(f.retired(f.runtime(slug(ids.catalogued))), "project.json"))).isFile());
   for (const name of ["progress.json", "step-progress.json", "learning-mode.json", "state.lock", "learning-sessions", "code-ledgers"]) {
     await assert.rejects(lstat(path.join(f.userRoot, name)), { code: "ENOENT" }, name);
     assert.ok(await lstat(f.retired(path.join(f.userRoot, name))), name);
@@ -230,8 +230,8 @@ test("a cross-filesystem move whose source removal was interrupted finishes on r
 
 test("refuses symlinks, non-directories and an unexpected destination", async t => {
   const cases = {
-    "symlinked runtime root": async f => symlink(path.join(f.root, "elsewhere"), f.runtime(slug(ids.hosted))),
-    "file runtime root": async f => put(f.runtime(slug(ids.hosted)), "not a directory"),
+    "symlinked runtime root": async f => symlink(path.join(f.root, "elsewhere"), f.runtime(slug(ids.catalogued))),
+    "file runtime root": async f => put(f.runtime(slug(ids.catalogued)), "not a directory"),
     "symlinked learner file": async f => {
       await rm(path.join(f.userRoot, "progress.json"));
       await symlink(path.join(f.root, "elsewhere"), path.join(f.userRoot, "progress.json"));
@@ -241,8 +241,8 @@ test("refuses symlinks, non-directories and an unexpected destination", async t 
       await put(path.join(f.userRoot, "code-ledgers"), "not a directory");
     },
     "unexpected destination": async f => {
-      await f.project(slug(ids.hosted), { repository: { mode: "managed_git" }, training: marker(ids.hosted) });
-      await mkdir(path.join(f.projectsRoot, ".learning-reset-20261022", slug(ids.hosted)), { recursive: true });
+      await f.project(slug(ids.catalogued), { repository: { mode: "managed_git" }, training: marker(ids.catalogued) });
+      await mkdir(path.join(f.projectsRoot, ".learning-reset-20261022", slug(ids.catalogued)), { recursive: true });
     }
   };
   for (const [label, arrange] of Object.entries(cases)) {
@@ -257,16 +257,16 @@ test("refuses symlinks, non-directories and an unexpected destination", async t 
 });
 
 test("a v1 practice project whose deletion removed its namespace retires its runtime root with a warning on either host", async t => {
-  for (const hosted of [true, false]) {
+  for (const catalogued of [true, false]) {
     const f = await fixture(t);
-    const name = slug(ids.hosted);
-    const namespace = await f.project(name, { repository: { mode: "managed_git" }, training: marker(ids.hosted),
+    const name = slug(ids.catalogued);
+    const namespace = await f.project(name, { repository: { mode: "managed_git" }, training: marker(ids.catalogued),
       deletion: { startedAt: "2026-10-01T00:00:00.000Z" } });
     await rm(namespace, { recursive: true });
-    const options = hosted ? { projectsRoot: f.projectsRoot } : {};
+    const options = catalogued ? { projectsRoot: f.projectsRoot } : {};
     await f.run({ ...options, apply: true });
     assert.ok(f.reports.some(({ level, message }) => level === "warning" &&
-      message === `Practice project ${name} has no namespace (an interrupted deletion); only its runtime state will be retired.`), String(hosted));
+      message === `Practice project ${name} has no namespace (an interrupted deletion); only its runtime state will be retired.`), String(catalogued));
     assert.ok(!f.reports.some(({ level }) => level === "error"));
     await assert.rejects(lstat(f.runtime(name)), { code: "ENOENT" });
     assert.ok((await lstat(path.join(f.retired(f.runtime(name)), "project.json"))).isFile());

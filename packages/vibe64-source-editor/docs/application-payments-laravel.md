@@ -26,7 +26,7 @@ that the editor can no longer update.
   references, credit allocations and published product/price mappings.
 - The app's authentication and authorization own the billable subject. Choose
   the existing workspace/organization model when billing is shared by its
-  tenants; do not silently attach shared billing to the current user's model.
+  members; do not silently attach shared billing to the current user's model.
 
 Choose a durable application identity and explicitly select `sandbox` or `live`
 on the backend. Never infer the merchant, subject, currency, amount or provider

@@ -144,7 +144,7 @@ function sessionDriverOutput(input) {
       : []),
     ...(session.managedGit ? [
       "Use the managed `git` and `gh` commands on PATH. Do not bypass them with host binaries, a stripped PATH, or alternate credentials.",
-      "For GitHub-hosted attachments and inline images in issues (tickets), pull requests or comments, use authenticated managed `gh api` with the original attachment URL, save the response to a local file and inspect it before reporting its contents. Never use unauthenticated curl/wget, User-Agent experiments or extracted credentials; an unauthenticated 404 does not prove a private attachment is missing.",
+      "For attachments and inline images that GitHub stores for issues (tickets), pull requests or comments, use authenticated managed `gh api` with the original attachment URL, save the response to a local file and inspect it before reporting its contents. Never use unauthenticated curl/wget, User-Agent experiments or extracted credentials; an unauthenticated 404 does not prove a private attachment is missing.",
       "After changing GitHub issues, comments, labels or pull requests, run `vibe64-helper github refresh` once so Vibe64's Issues/PR view reflects it.",
       "When linking an issue in this project's repository, run `vibe64-helper github issue-link <number>` and use its returned Vibe64 path exactly, including the /app prefix, as the primary Markdown link destination; it navigates in-app. You may include the GitHub URL as a secondary link. Never guess the project slug or host; issues in other repositories keep their GitHub links.",
       "Report authentication or transport failures directly; do not inspect credentials or invent another login path.",

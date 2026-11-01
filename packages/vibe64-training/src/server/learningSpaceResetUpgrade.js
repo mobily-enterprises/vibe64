@@ -167,14 +167,14 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
       }
       continue;
     }
-    // Hosted v1 namespaces are in the catalogue; local ones are under the
-    // installation, with their session sources under the managed source root.
+    // Catalogued v1 namespaces are under the projects root; local ones are under
+    // the installation, with their session sources under the managed source root.
     const namespaces = [];
     if (projectsRoot) {
-      const hosted = path.join(projectsRoot, slug);
-      await verifyUpgradeParents(projectsRoot, hosted);
-      if (await expect(hosted, "directory", "Hosted practice namespace")) {
-        namespaces.push({ source: hosted, destination: path.join(projectsRoot, RESET_DIR, slug) });
+      const catalogued = path.join(projectsRoot, slug);
+      await verifyUpgradeParents(projectsRoot, catalogued);
+      if (await expect(catalogued, "directory", "Catalogued practice namespace")) {
+        namespaces.push({ source: catalogued, destination: path.join(projectsRoot, RESET_DIR, slug) });
       }
     } else {
       const local = path.join(systemRoot, "training", "practice", training.learnerKey, training.attemptId, slug);
@@ -202,7 +202,7 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
   if (projectsRoot && selected) {
     report(
       "warning",
-      `${selected} hosted practice project(s) may have managed databases or resource profiles keyed by their slugs. This upgrade cannot remove them; they become unreachable and never collide with new practice projects.`
+      `${selected} catalogued practice project(s) may have managed databases or resource profiles keyed by their slugs. This upgrade cannot remove them; they become unreachable and never collide with new practice projects.`
     );
   }
 
@@ -244,7 +244,7 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
  * learner's attempt state, code ledgers and source-less stores. Absent learner
  * files read as Develop mode with no lesson, so nothing new is written, and
  * each person's Colleague conversation stays as their Develop thread. Moves
- * only, nothing deleted: hosted namespaces to
+ * only, nothing deleted: catalogued namespaces to
  * <projectsRoot>/.learning-reset-20261022, local session sources to
  * <managedSourceRoot>/.learning-reset-20261022, everything under systemRoot to
  * training/retired/<upgrade id>, outside the upgrade backups that retention

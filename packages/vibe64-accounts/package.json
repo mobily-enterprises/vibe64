@@ -67,7 +67,7 @@
           },
           {
             "subpath": "./server/githubCliAuth",
-            "summary": "Classifies and redacts GitHub CLI authentication failures for hosted GitHub operations."
+            "summary": "Classifies and redacts GitHub CLI authentication failures for the GitHub operations Vibe64 runs."
           }
         ]
       }

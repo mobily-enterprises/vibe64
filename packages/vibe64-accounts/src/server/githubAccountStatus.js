@@ -191,7 +191,7 @@ async function readGithubStoredStatus({
 
 /**
  * The person's current Git name and email, read as that person in their tool
- * home, so a hosted card shows what their next Save will use.
+ * home, so their GitHub card shows what their next Save will use.
  */
 async function readPersonGitIdentity(runHostToolCommand, githubContext) {
   const options = hostCommandOptionsForCredentialContext(githubContext);

@@ -1490,9 +1490,9 @@ test("GitHub status retries transient host read failures before requiring reconn
   });
 });
 
-// Hosted incident 2026-10-25: the cached "connected as @login" card showed
-// empty Git name and email fields although the person's Git config had both.
-test("a hosted GitHub card shows the person's current Git name and email", async () => {
+// Incident 2026-10-25: the cached "connected as @login" card showed empty
+// Git name and email fields although the person's Git config had both.
+test("a GitHub card shows the person's current Git name and email", async () => {
   await withTempDir(async (root) => {
     const vibe64User = {
       github: { connectedAt: "2026-07-05T16:11:03.389Z", id: 2128734, login: "mercmobily" },
@@ -2603,7 +2603,7 @@ test("one default AI management policy refuses a team member for every AI settin
     const member = { role: "member", username: "member" };
     const owner = { role: "owner", username: "owner" };
     assert.equal(runtime.requireAiManagement({ vibe64User: owner }), null);
-    assert.equal(runtime.requireAiManagement({}), null, "a local request without a hosted user is the owner");
+    assert.equal(runtime.requireAiManagement({}), null, "a request without a signed-in user is the owner");
     assert.equal(runtime.requireAiManagement({ vibe64User: member }).code, "vibe64_owner_required");
     for (const [method, input] of [["readCodexProviders", {}], ["saveCodexProvider", { modelProviderId: "deepseek", apiKey: "never-sent" }],
       ["removeCodexProvider", { modelProviderId: "deepseek" }], ["previewModelRouting", { revision: 0, owner: {} }],
@@ -2613,9 +2613,9 @@ test("one default AI management policy refuses a team member for every AI settin
     }
     assert.deepEqual(await service.initializeModelRouting({ vibe64User: member }), { ok: true, initialized: [] });
     assert.equal((await service.readCodexProviders({ vibe64User: owner })).ok, true);
-    const hosted = createAccountsRuntime({ systemRoot: path.join(root, "system"),
+    const composed = createAccountsRuntime({ systemRoot: path.join(root, "system"),
       requireAiManagement: () => ({ ok: false, code: "host_refused", error: "Refused by the host." }) });
-    assert.equal((await createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: hosted }).startAuth({ accountId: "claude", vibe64User: owner })).code, "host_refused",
+    assert.equal((await createTestService({ logger: silentLogger, invalidateAgentRuntimes: async () => null, publishAccountChanged: async () => null, publishAuthSessionChanged: async () => null, accountRuntime: composed }).startAuth({ accountId: "claude", vibe64User: owner })).code, "host_refused",
       "a host policy replaces the default for Claude too");
   });
 });

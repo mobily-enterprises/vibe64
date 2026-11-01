@@ -133,7 +133,7 @@ export function integrationReadTool(operation) {
 export function integrationSetupTool() {
   const guidance = integrationSetupGuidance;
   return {
-    description: "Operate an already configured integration through the application's declared DEVELOPMENT setup command in the exact project/session. Read integrations.read to choose a real slot ID. This uses development source and Env, never the hosted production release. " +
+    description: "Operate an already configured integration through the application's declared DEVELOPMENT setup command in the exact project/session. Read integrations.read to choose a real slot ID. This uses development source and Env, never the published production release. " +
       guidance.application + guidance.connections +
       "Omit setupRequest unless resolving an actual saved chat Configure request using its exact turnId/requestId/configurationHash. A completed setupRequestOutcome does not mean the coding conversation resumed. " +
       guidance.payments +
