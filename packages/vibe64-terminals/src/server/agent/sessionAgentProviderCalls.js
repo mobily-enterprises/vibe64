@@ -4,7 +4,7 @@ import {
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 import { hasOwn } from "../hasOwn.js";
-import { createSharedOperations } from "../keyedOperations.js";
+import { createSharedOperations } from "@local/vibe64-core/server/keyedOperations";
 import {
   agentOperationResult,
   assistantUser,

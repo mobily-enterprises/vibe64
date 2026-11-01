@@ -104,7 +104,7 @@ const Vibe64SessionsFeature = defineFeature({
       logger,
       project,
       publishProjectChanged: createVibe64ProjectChangedPublisher({ events }),
-      publishSessionChanged: createSessionChangedPublisher(events),
+      publishSessionChanged: createSessionChangedPublisher({ events }),
       restoreRenewalActor: renewalActorResolver ? restoreRenewalActorWith(renewalActorResolver) : restoreStandaloneRenewalActor,
       sessionPresence,
       setupRunner: createTerminalsSetupRunner({ terminals }),

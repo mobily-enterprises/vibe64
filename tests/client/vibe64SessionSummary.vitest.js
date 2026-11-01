@@ -13,7 +13,7 @@ import {
 // Each must find in it what it needs from the full change.
 async function summaryOf(sessionId, change) {
   const published = [];
-  await createSessionChangedPublisher({ async publish(event) { published.push(event); return event; } })(sessionId, change);
+  await createSessionChangedPublisher({ events: { async publish(event) { published.push(event); return event; } } })(sessionId, change);
   return published.find(({ realtime }) => realtime.event === "vibe64.session.summary.changed")?.realtime.payload;
 }
 

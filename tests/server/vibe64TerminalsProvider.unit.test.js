@@ -388,7 +388,7 @@ test("terminal events publish direct session and project events without service 
       return event;
     }
   };
-  await createSessionChangedPublisher(events)("session-1", {
+  await createSessionChangedPublisher({ events })("session-1", {
     reason: "output-target-started"
   });
   await createProjectRuntimeChangedPublisher(events)({

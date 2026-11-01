@@ -31,7 +31,7 @@ function createProjectRuntimeChangedPublisher(events) {
  * @param {RuntimeEvents} events
  */
 function createTerminalSessionChangedPublishers(events) {
-  const sessionChanged = createSessionChangedPublisher(events);
+  const sessionChanged = createSessionChangedPublisher({ events });
   return Object.freeze({
     agentTerminal: sessionChanged,
     agentTerminalClosed: sessionChanged,

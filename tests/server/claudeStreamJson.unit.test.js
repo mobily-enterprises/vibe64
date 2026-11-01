@@ -802,7 +802,7 @@ test("Claude active turn publication carries the revision the client overlay req
   assert.ok(event, "Claude published its active turn.");
   assert.ok(Number.isSafeInteger(event.session?.revision) && event.session.revision > before);
   const published = [];
-  await createSessionChangedPublisher({ publish: async value => published.push(value) })("test", event);
+  await createSessionChangedPublisher({ events: { publish: async value => published.push(value) } })("test", event);
   const overlay = agentTurnRealtimeOverlayFromPayload(published[0].realtime.payload, "test");
   assert.equal(overlay?.active, true);
   assert.equal(overlay.revision, event.session.revision);

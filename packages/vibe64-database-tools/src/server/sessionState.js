@@ -6,6 +6,7 @@ import {
 import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 import { toText } from "@local/vibe64-core/shared/toText";
+import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -14,7 +15,7 @@ const ERD_LAYOUT_ARTIFACT_PATH = "database/erd-layout.json";
 const HISTORY_LIMIT = 50;
 const SNIPPET_LIMIT = 100;
 const LAYOUT_NODE_LIMIT = 2_000;
-const writes = new Map();
+const writes = createKeyedQueue();
 
 function actorIdentity(vibe64User) {
   return toText(
@@ -102,17 +103,6 @@ async function readWorkspace(store, sessionId, vibe64User) {
   return value ? normalizedWorkspace(value) : emptyWorkspace();
 }
 
-function serializeWrite(key, operation) {
-  const previous = writes.get(key) || Promise.resolve();
-  const current = previous.catch(() => null).then(operation);
-  writes.set(key, current);
-  return current.finally(() => {
-    if (writes.get(key) === current) {
-      writes.delete(key);
-    }
-  });
-}
-
 /**
  * @param {Vibe64SessionStore} store
  * @param {string} sessionId
@@ -121,7 +111,7 @@ function serializeWrite(key, operation) {
  */
 async function mutateWorkspace(store, sessionId, vibe64User, operation) {
   const path = workspaceArtifactPath(vibe64User);
-  return serializeWrite(`${sessionId}\u0000${path}`, async () => {
+  return writes.run(`${sessionId}\u0000${path}`, async () => {
     const workspace = await readWorkspace(store, sessionId, vibe64User);
     const next = normalizedWorkspace(await operation(workspace) || workspace);
     await store.writeJsonArtifact(sessionId, path, next);
@@ -270,7 +260,7 @@ async function saveErdLayout(store, sessionId, layout, options = {}) {
   if (Buffer.byteLength(JSON.stringify(normalized)) > ERD_LAYOUT_MAX_BYTES) {
     throw vibe64Error("The ERD layout is too large.", "vibe64_database_erd_layout_too_large");
   }
-  return serializeWrite(`${sessionId}\u0000${ERD_LAYOUT_ARTIFACT_PATH}`, async () => {
+  return writes.run(`${sessionId}\u0000${ERD_LAYOUT_ARTIFACT_PATH}`, async () => {
     const previous = parseArtifact(await store.readArtifact(sessionId, ERD_LAYOUT_ARTIFACT_PATH), "The database ERD layout");
     if (expectedRevision !== undefined && expectedRevision !== (previous?.revision || 0)) {
       throw vibe64Error(

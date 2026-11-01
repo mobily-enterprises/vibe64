@@ -293,7 +293,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   const probe = defineProvider({ id: "test.status.realtime", requires: { realtime: "runtime.realtime", events: "runtime.events" },
     setup(capabilities) {
       events = capabilities.events;
-      publishSessionChanged = createSessionChangedPublisher(events);
+      publishSessionChanged = createSessionChangedPublisher({ events });
       capabilities.realtime.onConnection(({ socket }) => {
         sockets.add(socket);
         // The fixture's page may watch anything: it joins the watched rooms

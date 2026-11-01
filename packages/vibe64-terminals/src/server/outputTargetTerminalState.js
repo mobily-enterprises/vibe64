@@ -1,5 +1,5 @@
 import { createLaunchPreviewProxyRegistry } from "./launchPreviewProxy.js";
-import { createSharedOperations } from "./keyedOperations.js";
+import { createSharedOperations } from "@local/vibe64-core/server/keyedOperations";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 

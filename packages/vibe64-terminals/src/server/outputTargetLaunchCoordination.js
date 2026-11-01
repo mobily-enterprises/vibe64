@@ -6,7 +6,7 @@ import { normalizeOpenTarget } from "./outputTargetMetadata.js";
 import { outputTargetTerminalNamespace } from "./terminalShared.js";
 import { ensureLaunchPreviewProxy, markLaunchTerminalReady } from "./launchPreviewReadiness.js";
 import { resolveLaunchPreviewStatus } from "./launchPreviewStatus.js";
-import { createKeyedQueue } from "./keyedOperations.js";
+import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 
 /** @typedef {import("./types.js").OutputTargetTerminalState} OutputTargetTerminalState */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */

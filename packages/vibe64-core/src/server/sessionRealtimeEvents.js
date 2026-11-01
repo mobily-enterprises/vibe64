@@ -166,8 +166,11 @@ function sessionSummaryPayload(full) {
   };
 }
 
-/** @param {RuntimeEvents} events */
-function createSessionChangedPublisher(events) {
+/**
+ * @param {object} options
+ * @param {RuntimeEvents} options.events
+ */
+function createSessionChangedPublisher({ events }) {
   return async function publishSessionChanged(sessionIdValue = "", options = {}) {
     const {
       operation = "updated",

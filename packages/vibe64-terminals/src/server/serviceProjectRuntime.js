@@ -10,7 +10,7 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { createKeyedQueue } from "./keyedOperations.js";
+import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { PROJECT_RUNTIME_IDLE_TIMEOUT_REASON, projectRuntimeDormancyState } from "./projectRuntimeDormancy.js";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { sessionRecordId } from "./serviceSessionRecords.js";

@@ -35,7 +35,7 @@ const turnIdle = {
 // lists its project's sessions needs no turn details or streamed text.
 test("a session change reaches its viewers in full and its project's pages as a small summary", async () => {
   const { events, published } = recordingEvents();
-  await createSessionChangedPublisher(events)("s1", turnIdle);
+  await createSessionChangedPublisher({ events })("s1", turnIdle);
   assert.deepEqual(published.map(({ type, realtime }) => [type, realtime.event, realtime.audience]), [
     ["entity.changed", FULL, { room: "vibe64:project:alpha:session:s1" }],
     ["entity.summary", SUMMARY, { room: "vibe64:project:alpha:sessions" }]
@@ -54,7 +54,7 @@ test("a session change reaches its viewers in full and its project's pages as a 
 
 test("streamed work reaches only the session's viewers", async () => {
   const { events, published } = recordingEvents();
-  const publish = createSessionChangedPublisher(events);
+  const publish = createSessionChangedPublisher({ events });
   for (const reason of ["claude-stream-message", "codex-app-server-live-progress", "output-target-ready"]) {
     await publish("s1", { reason, session: { sessionId: "s1", projectSlug: "alpha" } });
   }
@@ -66,7 +66,7 @@ test("streamed work reaches only the session's viewers", async () => {
 // conversation subscription, so a session change does not carry them again.
 test("a session change never carries the conversation's stream or transcript", async () => {
   const { events, published } = recordingEvents();
-  await createSessionChangedPublisher(events)("s1", {
+  await createSessionChangedPublisher({ events })("s1", {
     reason: "claude-stream-message",
     payload: {
       conversationLogPatch: { type: "upsert-turn", turn: { turnId: "t1", text: "x".repeat(4000) } },
@@ -81,7 +81,7 @@ test("a session change never carries the conversation's stream or transcript", a
 
 test("a streamed delta is not a session change", async () => {
   const { events, published } = recordingEvents();
-  const publish = createSessionChangedPublisher(events);
+  const publish = createSessionChangedPublisher({ events });
   assert.equal(await publish("s1", { reason: "assistant-stream", payload: { conversationStream: { text: "Hel" } },
     session: { sessionId: "s1", projectSlug: "alpha" } }), null);
   assert.deepEqual(published, [], "its subscribers receive the delta natively; no page reads it as a change");
@@ -101,7 +101,7 @@ test("a Preview change made outside any request reaches the session's viewers", 
     ensureWorkspacePrepared: async () => ({ ok: true }),
     // Outside a request, the project service still knows the project it holds.
     project: { currentProjectSlug: () => "alpha", async createRuntime() { return { store }; } },
-    publishSessionChanged: createSessionChangedPublisher(events),
+    publishSessionChanged: createSessionChangedPublisher({ events }),
     stopPreviewBrowsers: () => ({ ok: true })
   });
   t.after(() => controller.close());
@@ -117,7 +117,7 @@ test("a browser test's change made outside any request reaches the session's vie
     launchTarget: { previewTestRunAdmission: () => null },
     logger: silentLogger,
     project: {},
-    publishSessionChanged: createSessionChangedPublisher(events)
+    publishSessionChanged: createSessionChangedPublisher({ events })
   });
   // The assistant's start registers its browser inside the session's project.
   service.registerBrowserWorker("s1", { socketPath: "/tmp/v64-browser.sock", token: "t1", project: { slug: "alpha" } });
@@ -181,7 +181,7 @@ test("pages receive only the changes of the projects and sessions they watch", {
   await delay(50);
   assert.deepEqual(probes.sort(), ["alpha", "beta"], "a session watch starts no probe");
 
-  const publish = createSessionChangedPublisher(events);
+  const publish = createSessionChangedPublisher({ events });
   const reasons = () => Object.fromEntries(Object.entries(received).map(([name, list]) =>
     [name, list.map(([event, payload]) => `${event === FULL ? "full" : "summary"}:${payload.reason}`)]));
   await publish("s1", { reason: "codex-app-server-live-progress", session: { sessionId: "s1", projectSlug: "alpha" } });

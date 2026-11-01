@@ -421,7 +421,7 @@ function withStartupRecovery(sessions, logger = silentLogger) {
 // still reaches the pages that show its session.
 test("startup recovery's session changes reach the recovered project's pages", async () => {
   const published = [];
-  const publish = createSessionChangedPublisher({ async publish(event) { published.push(event); } });
+  const publish = createSessionChangedPublisher({ events: { async publish(event) { published.push(event); } } });
   const sessions = withStartupRecovery({
     async closeSessionRenewalWork() {},
     closeSessionPresence() {},

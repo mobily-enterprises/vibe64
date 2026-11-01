@@ -477,12 +477,12 @@ test("assistant message action accepts attachment lease ids and display details"
 
 test("deferred session changes publish modern top-level realtime events", async () => {
   const events = [];
-  const publish = createSessionChangedPublisher({
+  const publish = createSessionChangedPublisher({ events: {
     async publish(event) {
       events.push(event);
       return event;
     }
-  });
+  } });
 
   await publish("session-1", {
     originId: "tab:test",
@@ -520,7 +520,7 @@ test("deferred session changes publish modern top-level realtime events", async 
 
 test("session publications name the client reads each change invalidates", async () => {
   const events = [];
-  const publish = createSessionChangedPublisher({ async publish(event) { events.push(event); } });
+  const publish = createSessionChangedPublisher({ events: { async publish(event) { events.push(event); } } });
   const refreshFor = async (reason, payload = null) => {
     events.length = 0;
     await publish("session-1", { reason, payload });
@@ -539,7 +539,7 @@ test("session publications name the client reads each change invalidates", async
 
 test("session publications use the trusted project context and actions do not republish service completions", async () => {
   const published = [];
-  const publish = createSessionChangedPublisher({ async publish(event) { if (event.type === "entity.changed") published.push(event); } });
+  const publish = createSessionChangedPublisher({ events: { async publish(event) { if (event.type === "entity.changed") published.push(event); } } });
   await Promise.all(["project-a", "project-b"].map((slug) => runWithProjectRequestContext({ slug }, async () => {
     await Promise.resolve();
     await publish("same-session-id", { payload: { projectSlug: "untrusted", conversationLogPatch: { text: slug } } });
@@ -3353,7 +3353,7 @@ test("assistant selection checks destination access and prepares routing before 
       } };
       const service = createService({
         // Session changes only; each also sends its project's pages a summary.
-        publishSessionChanged: createSessionChangedPublisher({ publish(event) { if (event.type === "entity.changed") events.push(event); } }),
+        publishSessionChanged: createSessionChangedPublisher({ events: { publish(event) { if (event.type === "entity.changed") events.push(event); } } }),
         project: { async createRuntime() { return runtime; } }, terminals: {
         async resolveAssistantSelection() { return next; },
         async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
@@ -4587,7 +4587,7 @@ test("ordinary creation cannot be switched into learning by browser purpose, sco
 
 test("working notifications take the trusted project over extra payload or a conflicting session view", async () => {
   const published = [];
-  const publish = createSessionChangedPublisher({ async publish(event) { if (event.type === "entity.changed") published.push(event); } });
+  const publish = createSessionChangedPublisher({ events: { async publish(event) { if (event.type === "entity.changed") published.push(event); } } });
   await publish("working-one", { payload: { projectSlug: "working-project" } });
   await runWithProjectRequestContext({ slug: "trusted-working" }, () => publish("working-two", {
     session: { projectSlug: "conflicting-project" }, payload: { projectSlug: "forged-project" }

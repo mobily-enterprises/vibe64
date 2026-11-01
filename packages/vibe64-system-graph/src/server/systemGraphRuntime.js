@@ -29,7 +29,7 @@ function createSystemGraph({
   } = createService({
     project,
     logger,
-    publishSessionChanged: createSessionChangedPublisher(events)
+    publishSessionChanged: createSessionChangedPublisher({ events })
   });
   const {
     readUsageEntries,

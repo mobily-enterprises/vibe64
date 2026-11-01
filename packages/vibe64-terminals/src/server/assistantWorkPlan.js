@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseWorkPlanLines, workPlanScope } from "../shared/assistantWorkPlan.js";
-import { createKeyedQueue } from "./keyedOperations.js";
+import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 
 const PLAN_LIMIT = 256 * 1024;

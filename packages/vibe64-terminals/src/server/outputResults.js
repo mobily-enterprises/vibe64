@@ -15,7 +15,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import { openedFileWithin } from "./openedFileWithin.js";
-import { createKeyedQueue } from "./keyedOperations.js";
+import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { pathInside } from "@local/vibe64-core/server/core";
 
 const OUTPUT_RESULTS_DIRECTORY = "output-results";
