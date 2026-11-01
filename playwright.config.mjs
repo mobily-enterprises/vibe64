@@ -36,7 +36,9 @@ export default defineConfig({
         timeout: 10_000
       },
       url: `${baseURL}/api/health`,
-      reuseExistingServer: true,
+      // Every run tests the build it just made: a server already on the port may
+      // serve a build from before the last JSKIT install, so the run refuses it.
+      reuseExistingServer: false,
       timeout: 180_000
     }
   })
