@@ -66,7 +66,7 @@ function createColleagueWatches({ events, watchSources, watchDebounceMs, service
 
   events?.register({
     id: "vibe64.colleague.attention",
-    matches: (event) => !serviceState.closed && event.type === "entity.changed" &&
+    matches: (event) => !serviceState.lifecycle.closed && event.type === "entity.changed" &&
       (event.source === "vibe64" && event.entity === "session" || watchSources.readsEntity(event.entity)),
     handle(event) {
       // Publishers may still hold a session write lock. Never await a read here.
@@ -100,7 +100,7 @@ function createColleagueWatches({ events, watchSources, watchDebounceMs, service
       const state = await threads.stateFor(context);
       if (operation === "read") return records.assignments.read(state, input, context);
       return changeWatches(state, async () => {
-        if (serviceState.closed || state.stopping) throw failure("Colleague is stopping.");
+        if (serviceState.lifecycle.closed || state.stopping) throw failure("Colleague is stopping.");
         const result = await records.assignments[operation](state, input, context);
         worker.scheduleWatches(state, watchDebounceMs);
         return result;
@@ -112,7 +112,7 @@ function createColleagueWatches({ events, watchSources, watchDebounceMs, service
     async watch(input, context) {
       const state = await threads.stateFor(context);
       return changeWatches(state, async () => {
-        if (serviceState.closed) throw failure("Colleague is shutting down.");
+        if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.");
         const source = input.source ? watchSources.get(input.source) : null;
         const watchedInput = source?.kind === "state" ? stateWatchInput(source, input.input) : null;
         if (watchedInput && !Object.hasOwn(source.conditions, input.condition)) {

@@ -120,49 +120,65 @@ function createAccountsRuntime({
     return selectedTargetRoot ? resolveVibe64AccountsRoot(selectedTargetRoot) : "";
   }
 
+  function readClaudeContext() {
+    return appCredentialContext({
+      home: daemonHome || undefined,
+      gid: daemonGid ?? undefined,
+      uid: daemonUid ?? undefined,
+      username: daemonUsername
+    });
+  }
+
+  function readCodexContext() {
+    return codexRuntimeContext({
+      env,
+      gid: daemonGid ?? undefined,
+      home: daemonHome || undefined,
+      requireSystemRoot: requireExplicitRoots,
+      systemRoot: resolvedSystemRoot,
+      uid: daemonUid ?? undefined,
+      username: daemonUsername
+    });
+  }
+
+  function codexModeAllowed(mode = "") {
+    return codexAuthModes.has(String(mode || "").trim().toLowerCase());
+  }
+
+  function readDebugInput(input = {}) {
+    return debugInput(input) || {};
+  }
+
+  function readGithubContext(input = {}) {
+    return githubCredentialContext(input, {
+      accountMode: githubAccountMode
+    });
+  }
+
+  function readPreviousGithub(input = {}) {
+    return previousGithub(input);
+  }
+
+  // The one answer to who may manage AI here; a host may override it.
+  function checkAiManagement(input = {}) {
+    return requireAiManagement(input);
+  }
+
+  function unsupportedCodexAuthModeText(mode = "") {
+    return unsupportedCodexAuthModeMessage(mode);
+  }
+
   return Object.freeze({
-    claudeContext() {
-      return appCredentialContext({
-        home: daemonHome || undefined,
-        gid: daemonGid ?? undefined,
-        uid: daemonUid ?? undefined,
-        username: daemonUsername
-      });
-    },
-    codexContext() {
-      return codexRuntimeContext({
-        env,
-        gid: daemonGid ?? undefined,
-        home: daemonHome || undefined,
-        requireSystemRoot: requireExplicitRoots,
-        systemRoot: resolvedSystemRoot,
-        uid: daemonUid ?? undefined,
-        username: daemonUsername
-      });
-    },
-    codexModeAllowed(mode = "") {
-      return codexAuthModes.has(String(mode || "").trim().toLowerCase());
-    },
+    claudeContext: readClaudeContext,
+    codexContext: readCodexContext,
+    codexModeAllowed,
     currentTargetRoot,
-    debugInput(input = {}) {
-      return debugInput(input) || {};
-    },
-    githubContext(input = {}) {
-      return githubCredentialContext(input, {
-        accountMode: githubAccountMode
-      });
-    },
-    previousGithub(input = {}) {
-      return previousGithub(input);
-    },
-    // The one answer to who may manage AI here; a host may override it.
-    requireAiManagement(input = {}) {
-      return requireAiManagement(input);
-    },
+    debugInput: readDebugInput,
+    githubContext: readGithubContext,
+    previousGithub: readPreviousGithub,
+    requireAiManagement: checkAiManagement,
     systemRoot: resolvedSystemRoot,
-    unsupportedCodexAuthModeMessage(mode = "") {
-      return unsupportedCodexAuthModeMessage(mode);
-    }
+    unsupportedCodexAuthModeMessage: unsupportedCodexAuthModeText
   });
 }
 

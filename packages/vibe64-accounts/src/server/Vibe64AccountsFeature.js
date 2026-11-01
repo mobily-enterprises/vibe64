@@ -99,37 +99,37 @@ function createConnections({
   project,
   listAssistantCapabilities
 }) {
-  return Object.freeze({
-    async getStatus(input = {}) {
-      const accountInput = await connectionAccountStatusInput(input, project);
-      // Readiness needs only whether GitHub is connected, not the Git name
-      // the Account card reads for the person.
-      const status = await accounts.getStatus({ ...accountInput, readGitIdentity: false });
-      if (status?.ok === false) {
-        return status;
-      }
-      const connections = Array.isArray(status?.accounts) ? [...status.accounts] : [];
-      if (!hasAccountSelection(input) && listAssistantCapabilities) {
-        const catalog = await listAssistantCapabilities({ configuredOnly: "true", vibe64User: input.vibe64User });
-        if (catalog?.ok === false) return catalog;
-        const connected = (catalog.engines || []).some((engine) =>
-          (engine.modelProviders || []).some((provider) => provider.connected === true));
-        const codexIndex = connections.findIndex((account) => account.id === "codex");
-        if (codexIndex >= 0) connections.splice(codexIndex, 1);
-        connections.unshift({
-          id: "ai", label: "AI connection", connected, required: true,
-          message: connected ? "An AI provider is connected." : "Connect an AI provider in AI Accounts."
-        });
-      }
-      const ready = connections.every((connection) => connection.required !== true || connection.connected === true);
-      return {
-        ...status,
-        blockedReason: ready ? "" : blockedReason(connections),
-        connections,
-        ready
-      };
+  async function getStatus(input = {}) {
+    const accountInput = await connectionAccountStatusInput(input, project);
+    // Readiness needs only whether GitHub is connected, not the Git name
+    // the Account card reads for the person.
+    const status = await accounts.getStatus({ ...accountInput, readGitIdentity: false });
+    if (status?.ok === false) {
+      return status;
     }
-  });
+    const connections = Array.isArray(status?.accounts) ? [...status.accounts] : [];
+    if (!hasAccountSelection(input) && listAssistantCapabilities) {
+      const catalog = await listAssistantCapabilities({ configuredOnly: "true", vibe64User: input.vibe64User });
+      if (catalog?.ok === false) return catalog;
+      const connected = (catalog.engines || []).some((engine) =>
+        (engine.modelProviders || []).some((provider) => provider.connected === true));
+      const codexIndex = connections.findIndex((account) => account.id === "codex");
+      if (codexIndex >= 0) connections.splice(codexIndex, 1);
+      connections.unshift({
+        id: "ai", label: "AI connection", connected, required: true,
+        message: connected ? "An AI provider is connected." : "Connect an AI provider in AI Accounts."
+      });
+    }
+    const ready = connections.every((connection) => connection.required !== true || connection.connected === true);
+    return {
+      ...status,
+      blockedReason: ready ? "" : blockedReason(connections),
+      connections,
+      ready
+    };
+  }
+
+  return Object.freeze({ getStatus });
 }
 
 // Plain words in the terminal, and only when no AI tool runs Vibe64 at all:

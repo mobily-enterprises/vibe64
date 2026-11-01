@@ -77,7 +77,7 @@ function createColleagueThreads({ systemRoot, serviceState, records }) {
   async function hideThread(state) {
     await state.admission;
     while (state.running || state.transfer) await (state.running || state.transfer);
-    if (serviceState.closed || state.released || state.opening || serviceState.visible.get(state.userKey) === state) return;
+    if (serviceState.lifecycle.closed || state.released || state.opening || serviceState.visible.get(state.userKey) === state) return;
     for (const observer of state.browserObservers) releaseObserver(observer);
     state.browserObservers.clear();
     const conversation = state.conversation;

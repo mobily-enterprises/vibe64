@@ -59,7 +59,7 @@ function createColleagueNavigationCoordination({ changed }) {
       ...(guideReceipt ? { guide: guideReceipt } : {}) });
     return { ok: true };
   }
-  return { begin, acknowledge };
+  return Object.freeze({ begin, acknowledge });
 }
 
 export { createColleagueNavigationCoordination };

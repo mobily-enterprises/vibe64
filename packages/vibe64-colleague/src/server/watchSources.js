@@ -30,35 +30,40 @@ function createWatchSources() {
     if (!SOURCE_ID.test(id) || sources.has(id)) throw new TypeError("A watch source needs a unique name.");
     sources.set(id, Object.freeze({ id, ...source }));
   }
-  return Object.freeze({
-    registerConversation(id, read) {
-      if (typeof read !== "function") throw new TypeError("A conversation source needs an authorized reader.");
-      add(id, { kind: "conversation", read });
-    },
-    // scope "project": the watch names one project (input.projectSlug), whose
-    // ordinary access and Learn/Develop rule apply to every read. "studio":
-    // nothing project-specific. `entity`: the realtime entity whose change
-    // events (entityId = the project) make a watch read again soon.
-    register({ id, label, description, scope = "project", input = {}, conditions, read, entity = "" } = {}) {
-      if (typeof read !== "function" || typeof label !== "string" || !label.trim() ||
-          typeof description !== "string" || !description.trim() || !["project", "studio"].includes(scope) ||
-          typeof entity !== "string") {
-        throw new TypeError("A watch source needs a label, a description, its scope and an authorized reader.");
-      }
-      const fields = descriptions(input, "input");
-      if (scope === "project" && !fields.projectSlug) throw new TypeError("A project watch source takes projectSlug.");
-      const named = descriptions(conditions, "condition");
-      if (!Object.keys(named).length) throw new TypeError("A watch source offers at least one condition.");
-      add(id, { kind: "state", label: label.trim(), description: description.trim(), scope, input: fields,
-        conditions: named, read, ...(entity ? { entity } : {}) });
-    },
-    get: id => sources.get(id) || null,
-    readsEntity: entity => Boolean(entity) && [...sources.values()].some(source => source.entity === entity),
-    // What the assistant may watch through watch.source.create.
-    list: () => [...sources.values()].filter(source => source.kind === "state")
-      .map(({ id, label, description, scope, input, conditions }) => ({ source: id, label, description, scope,
-        input: { ...input }, conditions: { ...conditions } }))
-  });
+
+  function registerConversation(id, read) {
+    if (typeof read !== "function") throw new TypeError("A conversation source needs an authorized reader.");
+    add(id, { kind: "conversation", read });
+  }
+
+  // scope "project": the watch names one project (input.projectSlug), whose
+  // ordinary access and Learn/Develop rule apply to every read. "studio":
+  // nothing project-specific. `entity`: the realtime entity whose change
+  // events (entityId = the project) make a watch read again soon.
+  function register({ id, label, description, scope = "project", input = {}, conditions, read, entity = "" } = {}) {
+    if (typeof read !== "function" || typeof label !== "string" || !label.trim() ||
+        typeof description !== "string" || !description.trim() || !["project", "studio"].includes(scope) ||
+        typeof entity !== "string") {
+      throw new TypeError("A watch source needs a label, a description, its scope and an authorized reader.");
+    }
+    const fields = descriptions(input, "input");
+    if (scope === "project" && !fields.projectSlug) throw new TypeError("A project watch source takes projectSlug.");
+    const named = descriptions(conditions, "condition");
+    if (!Object.keys(named).length) throw new TypeError("A watch source offers at least one condition.");
+    add(id, { kind: "state", label: label.trim(), description: description.trim(), scope, input: fields,
+      conditions: named, read, ...(entity ? { entity } : {}) });
+  }
+
+  const get = id => sources.get(id) || null;
+
+  const readsEntity = entity => Boolean(entity) && [...sources.values()].some(source => source.entity === entity);
+
+  // What the assistant may watch through watch.source.create.
+  const list = () => [...sources.values()].filter(source => source.kind === "state")
+    .map(({ id, label, description, scope, input, conditions }) => ({ source: id, label, description, scope,
+      input: { ...input }, conditions: { ...conditions } }));
+
+  return Object.freeze({ registerConversation, register, get, readsEntity, list });
 }
 
 // A state watch's input: exactly the source's declared fields, each a short

@@ -116,58 +116,62 @@ function createAiConnectionService({ aiConnections, readAssistantCapabilities, i
     };
   }
 
-  return Object.freeze({
-    async list() {
-      return {
-        connections: aiConnections ? await aiConnections.listConnections() : [],
-        ok: true,
-        unavailable: !aiConnections
-      };
-    },
-    async catalog({ modelProviderId = "", vibe64User } = {}) {
+  async function list() {
+    return {
+      connections: aiConnections ? await aiConnections.listConnections() : [],
+      ok: true,
+      unavailable: !aiConnections
+    };
+  }
+
+  async function catalog({ modelProviderId = "", vibe64User } = {}) {
+    requireAssistantCatalog();
+    modelProviderId = String(modelProviderId || "").trim();
+    if (!modelProviderId) return readAllOpenCodeProviders(vibe64User);
+    const { engine, policy, provider, result } = await readOpenCodeProvider(modelProviderId, vibe64User);
+    const models = provider.models || [];
+    return {
+      ...result,
+      engines: result.engines.map((candidate) => candidate?.engineId === "opencode"
+        ? {
+            ...engine,
+            modelProviders: [{ ...provider, connectionPolicy: policy }],
+            page: completeCapabilityPage(engine, models.length)
+          }
+        : candidate)
+    };
+  }
+
+  function save({ modelProviderId, vibe64User, ...input } = {}) {
+    return connectionChange("save-connection", { modelProviderId, vibe64User }, async () => {
+      requireConnectionStore();
       requireAssistantCatalog();
-      modelProviderId = String(modelProviderId || "").trim();
-      if (!modelProviderId) return readAllOpenCodeProviders(vibe64User);
-      const { engine, policy, provider, result } = await readOpenCodeProvider(modelProviderId, vibe64User);
-      const models = provider.models || [];
-      return {
-        ...result,
-        engines: result.engines.map((candidate) => candidate?.engineId === "opencode"
-          ? {
-              ...engine,
-              modelProviders: [{ ...provider, connectionPolicy: policy }],
-              page: completeCapabilityPage(engine, models.length)
-            }
-          : candidate)
-      };
-    },
-    save({ modelProviderId, vibe64User, ...input } = {}) {
-      return connectionChange("save-connection", { modelProviderId, vibe64User }, async () => {
-        requireConnectionStore();
-        requireAssistantCatalog();
-        const { provider } = await readOpenCodeProvider(modelProviderId, vibe64User);
-        const connection = await aiConnections.upsertConnection({ ...input, modelProviderId }, { provider });
-        // The connection is already saved. Report setup separately so a routing
-        // conflict never tells the person that their working key was rejected.
-        const routing = typeof initializeModelRouting === "function"
-          ? await initializeModelRouting({ engineIds: ["opencode"], vibe64User }).catch((error) => ({ ok: false, error: error.message }))
-          : { ok: false, error: "Open Models to finish choosing models for this connection." };
-        return { connection, ok: true, routing };
-      });
-    },
-    remove({ modelProviderId, vibe64User } = {}) {
-      return connectionChange("remove-connection", { modelProviderId, vibe64User }, async () => {
-        requireConnectionStore();
-        return aiConnections.removeConnection(modelProviderId);
-      });
-    },
-    modelAccess({ modelProviderId, ...input } = {}) {
-      return connectionChange("update-model-access", { modelProviderId, vibe64User: input.vibe64User }, async () => {
-        requireConnectionStore();
-        return { connection: await aiConnections.updateModelAccess(modelProviderId, input), ok: true };
-      });
-    }
-  });
+      const { provider } = await readOpenCodeProvider(modelProviderId, vibe64User);
+      const connection = await aiConnections.upsertConnection({ ...input, modelProviderId }, { provider });
+      // The connection is already saved. Report setup separately so a routing
+      // conflict never tells the person that their working key was rejected.
+      const routing = typeof initializeModelRouting === "function"
+        ? await initializeModelRouting({ engineIds: ["opencode"], vibe64User }).catch((error) => ({ ok: false, error: error.message }))
+        : { ok: false, error: "Open Models to finish choosing models for this connection." };
+      return { connection, ok: true, routing };
+    });
+  }
+
+  function remove({ modelProviderId, vibe64User } = {}) {
+    return connectionChange("remove-connection", { modelProviderId, vibe64User }, async () => {
+      requireConnectionStore();
+      return aiConnections.removeConnection(modelProviderId);
+    });
+  }
+
+  function modelAccess({ modelProviderId, ...input } = {}) {
+    return connectionChange("update-model-access", { modelProviderId, vibe64User: input.vibe64User }, async () => {
+      requireConnectionStore();
+      return { connection: await aiConnections.updateModelAccess(modelProviderId, input), ok: true };
+    });
+  }
+
+  return Object.freeze({ list, catalog, save, remove, modelAccess });
 }
 
 export { createAiConnectionService };

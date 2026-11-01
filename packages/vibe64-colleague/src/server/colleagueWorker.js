@@ -80,7 +80,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
   }
 
   async function workerData(state, connection, currentContext, autonomous) {
-    return { assistantName: await serviceState.resolveName(), focus: connection.focus,
+    return { assistantName: await serviceState.slots.resolveName(), focus: connection.focus,
       userMessageIds: currentContext.context.colleague.userMessageIds, observations: currentContext.observations, readOnly: currentContext.readOnly, autonomous,
       assignments: (state.record.assignments || []).filter(item => ["active", "waiting", "needs-user"].includes(item.status) || currentContext.observedAssignmentIds.includes(item.assignmentId))
         .map(item => {
@@ -91,7 +91,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
   }
 
   async function runApi(state, connection, generation, message, admission, controller) {
-    const isCurrent = () => !serviceState.closed && !state.stopping && !controller.signal.aborted && generation === state.generation;
+    const isCurrent = () => !serviceState.lifecycle.closed && !state.stopping && !controller.signal.aborted && generation === state.generation;
     const autonomous = !message;
     const currentContext = await workerContext(state, connection, generation, autonomous, message ? [message.messageId] : [], isCurrent);
     if (!currentContext) return;
@@ -207,7 +207,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
   }
 
   async function runNative(state, connection, generation, controller) {
-    const isCurrent = () => !serviceState.closed && !state.stopping && generation === state.generation && !controller.signal.aborted;
+    const isCurrent = () => !serviceState.lifecycle.closed && !state.stopping && generation === state.generation && !controller.signal.aborted;
     let autonomous = !state.pendingMessages.length;
     const userMessageIds = [];
     let feedback = "", progressAlreadySaid = "", progress = null;
@@ -430,7 +430,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
           state.operationContext = null;
           state.operationRunId = "";
         }
-        if (!serviceState.closed && !state.stopping && state.record.status === "ready") {
+        if (!serviceState.lifecycle.closed && !state.stopping && state.record.status === "ready") {
           if ((native || state.runtimeOwner === conversations.nativeRuntime) && state.pendingMessages.length) void startWorker(state, state.nextConnection, null, true).catch(() => {});
           else wakeForObservations(state);
         }
@@ -440,7 +440,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
   }
 
   function wakeForObservations(state) {
-    if (serviceState.closed || state.stopping || state.rotating || state.running || !state.requestContext || !state.record.observations.length ||
+    if (serviceState.lifecycle.closed || state.stopping || state.rotating || state.running || !state.requestContext || !state.record.observations.length ||
         state.record.status !== "ready" || serviceState.visible.get(state.userKey) !== state) return;
     const observation = state.record.observations[0];
     // Reserve the worker synchronously; its preparation resolves the actual
@@ -451,7 +451,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
 
   function scheduleWatches(state, delay = watchPollMs) {
     // A released Learn thread's watches ended with its lesson attempt.
-    if (serviceState.closed || state.released || state.rotating || !state.requestContext ||
+    if (serviceState.lifecycle.closed || state.released || state.rotating || !state.requestContext ||
         !state.record.watches.some((watch) => watch.status === "active")) return;
     if (state.watchTimer && delay === watchPollMs) return;
     clearTimeout(state.watchTimer);
@@ -480,7 +480,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
 
   async function observeWatch(state, watch) {
     const observation = await readWatch(watch, threads.actionContext(state, { clientId: "", focus: watch }));
-    if (serviceState.closed || state.released || watch.status !== "active") return;
+    if (serviceState.lifecycle.closed || state.released || watch.status !== "active") return;
     if (watch.assignmentId && !watch.expectedRunId && observation.latestUserMessageId === watch.messageId && observation.runId !== watch.cursor?.runId) {
       watch.expectedRunId = observation.runId;
     }
@@ -514,7 +514,7 @@ function createColleagueWorker({ actions, terminals, watchSources, watchPollMs, 
     if (state.polling) { state.watchDirty = true; return state.polling; }
     state.polling = (async () => {
       for (const watch of state.record.watches) {
-        if (serviceState.closed || !state.requestContext) break;
+        if (serviceState.lifecycle.closed || !state.requestContext) break;
         if (watch.status !== "active") continue;
         try {
           await observeWatch(state, watch);

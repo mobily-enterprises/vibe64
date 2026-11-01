@@ -44,6 +44,11 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const browserConversations = createColleagueBrowserConversations({ actions, serviceState, records, threads, conversations });
   const turns = createColleagueTurns({ terminals, serviceState, records, threads, conversations, worker });
 
+  function setNameResolver(resolver) {
+    if (typeof resolver !== "function") throw new TypeError("Colleague name resolver must be a function.");
+    serviceState.slots.resolveName = resolver;
+  }
+
   return Object.freeze({
     browserConversations,
     registerConversationSource: watches.registerConversationSource,
@@ -51,10 +56,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     listWatchSources: watches.listWatchSources,
     watchState: watches.watchState,
     // readable-check: allow setter-seam - filled by a composing host repository; convert with its supplier
-    setNameResolver(resolver) {
-      if (typeof resolver !== "function") throw new TypeError("Colleague name resolver must be a function.");
-      serviceState.resolveName = resolver;
-    },
+    setNameResolver,
     read: turns.read,
     startFresh: history.startFresh,
     readHistory: history.readHistory,

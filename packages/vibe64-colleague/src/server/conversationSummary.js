@@ -77,7 +77,7 @@ function createConversationSummary({ actions, terminals, persist }) {
     return { ok: true, ...range, mode: "summary", ...answer, messages: [] };
   }
 
-  return { read, cleanup, runHelper };
+  return Object.freeze({ read, cleanup, runHelper });
 }
 
 export { createConversationSummary };

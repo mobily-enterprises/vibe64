@@ -31,49 +31,53 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
     }
   }
 
-  return {
-    async topics({ query = "", offset = 0, limit = 20 } = {}) {
-      let entries;
-      try { entries = await readdir(directory, { withFileTypes: true }); }
-      catch (error) {
-        if (error.code === "ENOENT") return { ok: false, error: "Usage guides are unavailable in this application release.", topics: [], hasMore: false };
-        throw error;
-      }
-      const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
-      const topics = [];
-      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-        if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
-        const topicId = entry.name.slice(0, -3);
-        if (!topicPattern.test(topicId)) continue;
-        const measured = {};
-        let topic, searchable = topicId;
-        try {
-          const guide = await readGuide(topicId, measured);
-          topic = { topicId, title: guide.title, summary: guide.summary };
-          searchable = `${topicId} ${guide.text}`.toLowerCase();
-        } catch (error) {
-          // A refused guide is listed as unavailable; it never hides the other topics.
-          topic = { topicId, error: error.code ? "This usage guide could not be read in this application release." : error.message };
-          const size = measured.bytes === undefined ? "size unknown"
-            : `${measured.bytes} bytes${measured.characters === undefined ? "" : `, ${measured.characters} characters`}`;
-          const warning = `Colleague usage guide ${path.join(directory, entry.name)} (${size}) is unavailable: ${error.message}`;
-          if (!warned.has(warning)) { warned.add(warning); console.warn(warning); }
-        }
-        if (terms.some(term => !searchable.includes(term))) continue;
-        topics.push(topic);
-      }
-      const page = topics.slice(offset, offset + limit);
-      const hasMore = offset + page.length < topics.length;
-      return { ok: true, topics: page, total: topics.length, hasMore, ...(hasMore ? { nextOffset: offset + page.length } : {}) };
-    },
-    async guide({ topicId }) {
-      try { return { ok: true, ...await readGuide(topicId) }; }
-      catch (error) {
-        if (["ENOENT", "ELOOP"].includes(error.code)) return { ok: false, topicId, error: "That usage topic is unavailable in this application release. Search the topic list for an available guide." };
-        throw error;
-      }
+  async function listTopics({ query = "", offset = 0, limit = 20 } = {}) {
+    let entries;
+    try { entries = await readdir(directory, { withFileTypes: true }); }
+    catch (error) {
+      if (error.code === "ENOENT") return { ok: false, error: "Usage guides are unavailable in this application release.", topics: [], hasMore: false };
+      throw error;
     }
-  };
+    const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
+    const topics = [];
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
+      const topicId = entry.name.slice(0, -3);
+      if (!topicPattern.test(topicId)) continue;
+      const measured = {};
+      let topic, searchable = topicId;
+      try {
+        const guide = await readGuide(topicId, measured);
+        topic = { topicId, title: guide.title, summary: guide.summary };
+        searchable = `${topicId} ${guide.text}`.toLowerCase();
+      } catch (error) {
+        // A refused guide is listed as unavailable; it never hides the other topics.
+        topic = { topicId, error: error.code ? "This usage guide could not be read in this application release." : error.message };
+        const size = measured.bytes === undefined ? "size unknown"
+          : `${measured.bytes} bytes${measured.characters === undefined ? "" : `, ${measured.characters} characters`}`;
+        const warning = `Colleague usage guide ${path.join(directory, entry.name)} (${size}) is unavailable: ${error.message}`;
+        if (!warned.has(warning)) { warned.add(warning); console.warn(warning); }
+      }
+      if (terms.some(term => !searchable.includes(term))) continue;
+      topics.push(topic);
+    }
+    const page = topics.slice(offset, offset + limit);
+    const hasMore = offset + page.length < topics.length;
+    return { ok: true, topics: page, total: topics.length, hasMore, ...(hasMore ? { nextOffset: offset + page.length } : {}) };
+  }
+
+  async function readTopicGuide({ topicId }) {
+    try { return { ok: true, ...await readGuide(topicId) }; }
+    catch (error) {
+      if (["ENOENT", "ELOOP"].includes(error.code)) return { ok: false, topicId, error: "That usage topic is unavailable in this application release. Search the topic list for an available guide." };
+      throw error;
+    }
+  }
+
+  return Object.freeze({
+    topics: listTopics,
+    guide: readTopicGuide
+  });
 }
 
 export { createColleagueUsageKnowledge, maxGuideCharacters };

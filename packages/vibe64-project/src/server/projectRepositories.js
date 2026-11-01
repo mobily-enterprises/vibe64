@@ -60,158 +60,176 @@ function createProjectRepositories({
     }
   }
 
-  return Object.freeze({
-    async repositoryRemote(input) {
-      return projectResult(async () => localRepositoryRemote(await selection.currentProjectState(), input, { logger }));
-    },
+  async function repositoryRemote(input) {
+    return projectResult(async () => localRepositoryRemote(await selection.currentProjectState(), input, { logger }));
+  }
 
-    async repositoryBranches(input) {
-      return projectResult(async () => repositoryBranches(await selection.currentProjectState(), input, { env }));
-    },
+  async function readRepositoryBranches(input) {
+    return projectResult(async () => repositoryBranches(await selection.currentProjectState(), input, { env }));
+  }
 
-    async resolveSessionBranch(input = {}) {
-      return repositoryBranches(await selection.currentProjectState(), input, { env });
-    },
+  async function resolveSessionBranch(input = {}) {
+    return repositoryBranches(await selection.currentProjectState(), input, { env });
+  }
 
-    async connectedProjectTargets(input = {}) {
-      const connections = await projectSettings.connectedProjectsState(input);
-      if (!connections.available) throw vibe64Error(connections.unavailableReason, "vibe64_connections_source_required");
-      const listed = await selection.listProjectsState();
-      return connections.projects.map(connection => {
-        const fullName = githubRepositoryFullName(connection.repository);
-        const matches = listed.projects.filter(candidate => candidate.repositoryMode === "github" &&
-          projectGithubFullName(candidate).toLowerCase() === fullName);
-        if (matches.length !== 1) throw vibe64Error(
-          `Register one accessible GitHub project for ${fullName} before preparing this connection. Existing source and access are unchanged.`,
-          "vibe64_connected_project_registration_required");
-        return { ...connection, fullName, projectSlug: matches[0].slug };
-      });
-    },
+  async function connectedProjectTargets(input = {}) {
+    const connections = await projectSettings.connectedProjectsState(input);
+    if (!connections.available) throw vibe64Error(connections.unavailableReason, "vibe64_connections_source_required");
+    const listed = await selection.listProjectsState();
+    return connections.projects.map(connection => {
+      const fullName = githubRepositoryFullName(connection.repository);
+      const matches = listed.projects.filter(candidate => candidate.repositoryMode === "github" &&
+        projectGithubFullName(candidate).toLowerCase() === fullName);
+      if (matches.length !== 1) throw vibe64Error(
+        `Register one accessible GitHub project for ${fullName} before preparing this connection. Existing source and access are unchanged.`,
+        "vibe64_connected_project_registration_required");
+      return { ...connection, fullName, projectSlug: matches[0].slug };
+    });
+  }
 
-    async inspectWorkspaceSetup({ session, projectRoot = sessionSourcePath(session), environment = env } = {}) {
-      const [setup, inspection] = await Promise.all([
-        inspectVibe64WorkspaceSetup({ projectRoot, environment }),
-        inspectVibe64ConnectedDevelopment({ projectRoot, environment })
-      ]);
-      return inspectConnectedWorkspaceSetup({ session, setup, inspection, env: environment });
-    },
+  async function inspectWorkspaceSetup({ session, projectRoot = sessionSourcePath(session), environment = env } = {}) {
+    const [setup, inspection] = await Promise.all([
+      inspectVibe64WorkspaceSetup({ projectRoot, environment }),
+      inspectVibe64ConnectedDevelopment({ projectRoot, environment })
+    ]);
+    return inspectConnectedWorkspaceSetup({ session, setup, inspection, env: environment });
+  }
 
-    async inspectConnectedDevelopmentInputs({ session, projects, environment = env } = {}) {
-      const inspection = await inspectVibe64ConnectedDevelopment({
-        projectRoot: sessionSourcePath(session), environment
-      });
-      if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
-      return inspectConnectedDevelopmentInputs({ session, projects, inspection, env: environment });
-    },
+  async function inspectSessionConnectedInputs({ session, projects, environment = env } = {}) {
+    const inspection = await inspectVibe64ConnectedDevelopment({
+      projectRoot: sessionSourcePath(session), environment
+    });
+    if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
+    return inspectConnectedDevelopmentInputs({ session, projects, inspection, env: environment });
+  }
 
-    async prepareConnectedDevelopmentInputs({ session, projects, environment = env } = {}) {
-      const inspection = await inspectVibe64ConnectedDevelopment({
-        projectRoot: sessionSourcePath(session), environment
-      });
-      if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
-      return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
-        () => materializeConnectedDevelopmentInputs({ session, projects, inspection, env: environment }),
-        { operation: "prepare-connected-development-inputs" });
-    },
+  async function prepareConnectedDevelopmentInputs({ session, projects, environment = env } = {}) {
+    const inspection = await inspectVibe64ConnectedDevelopment({
+      projectRoot: sessionSourcePath(session), environment
+    });
+    if (projects.length === 0 && inspection.status === "unconfigured") return { status: "unconfigured" };
+    return runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
+      () => materializeConnectedDevelopmentInputs({ session, projects, inspection, env: environment }),
+      { operation: "prepare-connected-development-inputs" });
+  }
 
-    async connectedContributionSource(input = {}) {
-      const current = await selection.currentProjectState();
-      const repository = requireGithubRepository(current, "Connected contribution");
-      if (current.repositoryMode !== "github") throw vibe64Error(
-        "Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_authority_changed");
-      const access = await inspectConnectedRepository(repository, input);
-      if (access.permissions?.push !== true || access.archived || access.disabled) throw vibe64Error(
-        `Write access to ${repository} is required to prepare its contribution.`, "vibe64_connections_access_required");
-      const integrationBranch = current.repository.defaultBranch;
-      // Read only the integration branch; listing every branch made each
-      // connected session start page through the whole repository.
-      const branch = await inspectConnectedBranch(repository, integrationBranch, input);
-      if (!branch?.commit?.sha) throw vibe64Error("The receiving integration branch is unavailable.", "vibe64_incoming_target_missing");
-      return { repository: repository.toLowerCase(), integrationBranch, baseCommit: branch.commit.sha };
-    },
+  async function connectedContributionSource(input = {}) {
+    const current = await selection.currentProjectState();
+    const repository = requireGithubRepository(current, "Connected contribution");
+    if (current.repositoryMode !== "github") throw vibe64Error(
+      "Connected contributions need the receiving project's GitHub source authority.", "vibe64_contribution_authority_changed");
+    const access = await inspectConnectedRepository(repository, input);
+    if (access.permissions?.push !== true || access.archived || access.disabled) throw vibe64Error(
+      `Write access to ${repository} is required to prepare its contribution.`, "vibe64_connections_access_required");
+    const integrationBranch = current.repository.defaultBranch;
+    // Read only the integration branch; listing every branch made each
+    // connected session start page through the whole repository.
+    const branch = await inspectConnectedBranch(repository, integrationBranch, input);
+    if (!branch?.commit?.sha) throw vibe64Error("The receiving integration branch is unavailable.", "vibe64_incoming_target_missing");
+    return { repository: repository.toLowerCase(), integrationBranch, baseCommit: branch.commit.sha };
+  }
 
-    async readRepositoryWorkflow() {
-      return readProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot());
-    },
+  async function readRepositoryWorkflow() {
+    return readProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot());
+  }
 
-    async saveRepositoryWorkflow(input) {
-      return projectResult(async () => {
-        requireGithubRepository(await selection.currentProjectState(), "Pull request workflow");
-        const workflow = await runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
-          () => saveProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot(), input.requirePullRequest),
-          { operation: "repository-workflow-settings" });
-        await publishProjectChanged({ projectSlug: (await selection.currentProjectState()).slug, repositoryWorkflow: workflow }, { reason: "repository-workflow-settings" });
-        return { ok: true, workflow };
-      });
-    },
+  async function saveRepositoryWorkflow(input) {
+    return projectResult(async () => {
+      requireGithubRepository(await selection.currentProjectState(), "Pull request workflow");
+      const workflow = await runProjectSourceExclusive(selection.selectedProjectRuntimeRoot(),
+        () => saveProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot(), input.requirePullRequest),
+        { operation: "repository-workflow-settings" });
+      await publishProjectChanged({ projectSlug: (await selection.currentProjectState()).slug, repositoryWorkflow: workflow }, { reason: "repository-workflow-settings" });
+      return { ok: true, workflow };
+    });
+  }
 
-    async refreshGithub() {
-      const project = await selection.currentProjectState();
-      requireGithubRepository(project);
-      await publishProjectChanged({ projectSlug: project.slug, githubRefresh: true }, { reason: "github-refreshed" });
-      return { ok: true };
-    },
+  async function refreshGithub() {
+    const project = await selection.currentProjectState();
+    requireGithubRepository(project);
+    await publishProjectChanged({ projectSlug: project.slug, githubRefresh: true }, { reason: "github-refreshed" });
+    return { ok: true };
+  }
 
-    async incomingRepository(input = {}) {
-      const project = await selection.currentProjectState();
-      const fullName = requireGithubRepository(project, "Incoming changes");
-      if (project.repositoryMode !== "github") {
-        throw vibe64Error("Incoming changes need a configured GitHub integration target.", "vibe64_incoming_repository_required");
-      }
-      const repository = await inspectConnectedRepository(fullName, input);
-      const writeReason = repository.archived || repository.disabled
-        ? "This repository is archived or disabled."
-        : repository.permissions?.push !== true ? "Your GitHub account needs write access to this receiving repository." : "";
-      const workflow = await readProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot());
-      const mergeReason = writeReason || (workflow.requirePullRequest
-        ? "This project requires pull requests for integration. Its current Save policy prevents direct Incoming merges." : "");
-      const actions = { merge: mergeReason, discard: writeReason };
-      if (input.action && actions[input.action]) {
-        throw vibe64Error(actions[input.action], "vibe64_incoming_integration_forbidden");
-      }
-      return { project, actions };
-    },
-
-    async githubIssues(input) {
-      return projectResult(async () => {
-        const project = await selection.currentProjectState();
-        const result = await githubIssues(project, input, { env });
-        if (input.operation === "comment") {
-          await notifyGithubChanged(project, {
-            originId: input.originId,
-            issueComment: { number: Number(input.number), id: result.comment.id, author: result.comment.author.login }
-          }, "github-issue-commented");
-        } else if (["create", "edit", "edit-comment", "state", "create-label", "set-labels"].includes(input.operation)) {
-          await notifyGithubChanged(project);
-        }
-        return result;
-      });
-    },
-
-    async githubPullRequests(input) {
-      return projectResult(async () => {
-        const project = await selection.currentProjectState();
-        const result = await githubPullRequests(project, input, { env });
-        if (["ready", "update-branch", "merge"].includes(input.operation)) await notifyGithubChanged(project);
-        return result;
-      });
-    },
-
-    async resolvePullRequestSource(input = {}) {
-      const result = await githubPullRequests(await selection.currentProjectState(), { ...input, operation: "read" }, { env });
-      return pullRequestSessionSource(result.pullRequest);
-    },
-
-    async preparePullRequestSource(session, input = {}) {
-      return preparePullRequestSource(await selection.currentProjectState(), session, input, { env });
-    },
-
-    async publishSessionPullRequest(source, input = {}) {
-      const project = await selection.currentProjectState();
-      const result = await publishSessionPullRequest(source, input, { env });
-      await notifyGithubChanged(project);
-      return result;
+  async function incomingRepository(input = {}) {
+    const project = await selection.currentProjectState();
+    const fullName = requireGithubRepository(project, "Incoming changes");
+    if (project.repositoryMode !== "github") {
+      throw vibe64Error("Incoming changes need a configured GitHub integration target.", "vibe64_incoming_repository_required");
     }
+    const repository = await inspectConnectedRepository(fullName, input);
+    const writeReason = repository.archived || repository.disabled
+      ? "This repository is archived or disabled."
+      : repository.permissions?.push !== true ? "Your GitHub account needs write access to this receiving repository." : "";
+    const workflow = await readProjectRepositoryWorkflow(selection.selectedProjectRuntimeRoot());
+    const mergeReason = writeReason || (workflow.requirePullRequest
+      ? "This project requires pull requests for integration. Its current Save policy prevents direct Incoming merges." : "");
+    const actions = { merge: mergeReason, discard: writeReason };
+    if (input.action && actions[input.action]) {
+      throw vibe64Error(actions[input.action], "vibe64_incoming_integration_forbidden");
+    }
+    return { project, actions };
+  }
+
+  async function handleGithubIssues(input) {
+    return projectResult(async () => {
+      const project = await selection.currentProjectState();
+      const result = await githubIssues(project, input, { env });
+      if (input.operation === "comment") {
+        await notifyGithubChanged(project, {
+          originId: input.originId,
+          issueComment: { number: Number(input.number), id: result.comment.id, author: result.comment.author.login }
+        }, "github-issue-commented");
+      } else if (["create", "edit", "edit-comment", "state", "create-label", "set-labels"].includes(input.operation)) {
+        await notifyGithubChanged(project);
+      }
+      return result;
+    });
+  }
+
+  async function handleGithubPullRequests(input) {
+    return projectResult(async () => {
+      const project = await selection.currentProjectState();
+      const result = await githubPullRequests(project, input, { env });
+      if (["ready", "update-branch", "merge"].includes(input.operation)) await notifyGithubChanged(project);
+      return result;
+    });
+  }
+
+  async function resolvePullRequestSource(input = {}) {
+    const result = await githubPullRequests(await selection.currentProjectState(), { ...input, operation: "read" }, { env });
+    return pullRequestSessionSource(result.pullRequest);
+  }
+
+  async function prepareSessionPullRequestSource(session, input = {}) {
+    return preparePullRequestSource(await selection.currentProjectState(), session, input, { env });
+  }
+
+  async function publishPullRequestForSession(source, input = {}) {
+    const project = await selection.currentProjectState();
+    const result = await publishSessionPullRequest(source, input, { env });
+    await notifyGithubChanged(project);
+    return result;
+  }
+
+  return Object.freeze({
+    repositoryRemote,
+    repositoryBranches: readRepositoryBranches,
+    resolveSessionBranch,
+    connectedProjectTargets,
+    inspectWorkspaceSetup,
+    inspectConnectedDevelopmentInputs: inspectSessionConnectedInputs,
+    prepareConnectedDevelopmentInputs,
+    connectedContributionSource,
+    readRepositoryWorkflow,
+    saveRepositoryWorkflow,
+    refreshGithub,
+    incomingRepository,
+    githubIssues: handleGithubIssues,
+    githubPullRequests: handleGithubPullRequests,
+    resolvePullRequestSource,
+    preparePullRequestSource: prepareSessionPullRequestSource,
+    publishSessionPullRequest: publishPullRequestForSession
   });
 }
 

@@ -49,7 +49,7 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
     },
     async summarize(input, context) {
       const state = await threads.stateFor(context);
-      if (serviceState.closed || state.stopping || state.summaryRunning) throw failure("Finish or stop the current Colleague summary first.");
+      if (serviceState.lifecycle.closed || state.stopping || state.summaryRunning) throw failure("Finish or stop the current Colleague summary first.");
       state.requestContext = context;
       const scoped = threads.actionContext(state, { clientId: context.colleague?.clientId || "", focus: { projectSlug: input.projectSlug } });
       state.summaryAbort = new AbortController();
@@ -61,7 +61,7 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
       const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
       const selecting = state.admission.then(async () => {
         threads.assertCurrentConversation(state, expected);
-        if (serviceState.closed || state.stopping || state.running) throw failure("Finish or stop Colleague's current turn before changing its model.");
+        if (serviceState.lifecycle.closed || state.stopping || state.running) throw failure("Finish or stop Colleague's current turn before changing its model.");
         if (!input.assistantSelection) throw failure("Choose a model for Colleague.");
         const selected = await conversations.chooseSelection(context, input.assistantSelection);
         const settings = await terminals.resolveConversationConfiguration(selected, conversations.promptFor(state), { vibe64User: authenticatedVibe64User(context) });
@@ -123,7 +123,7 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
       const expected = input.expectedConversationId || context.colleague?.conversationId || state.record.scopeId;
       const admitted = state.admission.then(async () => {
         threads.assertCurrentConversation(state, expected);
-        if (serviceState.closed) throw failure("Colleague is shutting down.");
+        if (serviceState.lifecycle.closed) throw failure("Colleague is shutting down.");
         if (state.stopping) throw failure("Colleague is stopping its previous turn. Send again once it has stopped.");
         if (state.record.previousConversations.some(old => old.unconfirmedMessages.some(message => message.messageId === input.messageId) ||
             old.conversationLog.some(turn => turn.messages.some(message => message.messageId === input.messageId)) ||
@@ -208,7 +208,7 @@ function createColleagueTurns({ terminals, serviceState, records, threads, conve
       return records.snapshot(state);
     },
     async close() {
-      serviceState.closed = true;
+      serviceState.lifecycle.closed = true;
       threads.unregisterReleaser();
       // Each thread stops on its own. One that cannot stop cleanly is reported
       // by name and never keeps the other threads, or the conversation
