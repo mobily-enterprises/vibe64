@@ -38,6 +38,8 @@ const { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE } = __testa
 const fixtureResources = new WeakMap();
 
 const modelFrame = (delta, finish_reason = null) => `data: ${JSON.stringify({ choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+const modelAnswer = content => Response.json({ choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+  usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } });
 const selection = { engineId: "codex", modelProviderId: "openai", modelId: "test-model" };
 const reply = (text) => JSON.stringify({ kind: "reply", text, toolName: "", arguments: "" });
 const call = (value) => JSON.stringify({ kind: "tool", text: "", toolName: "vibe64_test_operate", arguments: JSON.stringify({ value }) });
@@ -209,16 +211,31 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   };
   if (!nativeCommands) t.mock.method(globalThis, "fetch", async (_url, request) => {
     const body = JSON.parse(request.body);
-    const current = body.messages.findLast(message => message.role === "user").content;
+    // The engine's own unstreamed calls are not Colleague's scripted steps: its claims
+    // check finds nothing unsupported, and its account of a stopped reply falls back to
+    // its plain words.
+    if (!body.stream) {
+      if (!body.messages[0].content.startsWith("You check an assistant's reply")) throw new Error("This fixture writes no accounts.");
+      return modelAnswer(JSON.stringify({ unsupported: [] }));
+    }
+    // Colleague's own request frame; the engine's checks add their notes after it.
+    const current = body.messages.findLast(message => message.role === "user" && message.content.startsWith("[Application data]")).content;
     const data = JSON.parse(current.split("\n")[2]);
     const last = body.messages.at(-1);
     let result = null;
     if (last.role === "tool") {
       const saved = JSON.parse(await readFile(path.join(root, "colleague", "NDI", "conversation.json"), "utf8"));
-      result = saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || [])
-        .findLast(call => call.id === last.tool_call_id)?.result;
-      assert.ok(result, "The model continuation must reference its durable tool receipt");
-      assert.deepEqual(JSON.parse(last.content), result.ok ? result.result ?? null : { error: result.error });
+      // A durable receipt is the provider's call id under its step, reply-N. A call to an
+      // action the model was not given is answered by the engine: nothing runs or is saved.
+      const receipt = saved.conversationLog.flatMap(turn => turn.metadata?.applicationTools || [])
+        .findLast(call => call.id.endsWith(`:${last.tool_call_id}`));
+      if (receipt) {
+        result = receipt.result;
+        assert.ok(result, "The model continuation must reference its durable tool receipt");
+        assert.deepEqual(JSON.parse(last.content), result.ok ? result.result ?? null : { error: result.error });
+      } else {
+        assert.match(last.content, /unavailable tool/, "The model continuation must reference its durable tool receipt");
+      }
     }
     observations.starts.push({ body, data, result, scope: { ...observations.scope, stableContext: body.messages[0].content } });
     const next = responses.shift();
@@ -612,7 +629,7 @@ async function finishAssignedTurn(f, conversationId = "temporary-1", text = "Imp
 }
 
 test("assignment retains the real request, follows a reply into same-session review and reports evidence for testing", async (t) => {
-  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("I will follow this through with eight turns.")];
+  const responses = [assignmentTool("assignment.create", assignmentInput), assignmentSend("implement-1"), reply("The assignment has eight turns to follow this through.")];
   const f = await fixture(t, responses, { assigning: true });
   await f.send("Get the agent to add reset and reload persistence to the tally.");
   let result = await f.service.wait(f.context);
@@ -989,7 +1006,7 @@ test("mediation waits for a busy recipient and can resume from its own wake with
   f.observations.conversations["temporary-2"] = { ok: true, conversationId: "temporary-2", status: "completed", runId: "", messages: [] };
   await f.send("Have the two assignments exchange reset requirements.");
   await f.service.wait(f.context);
-  responses.push(relay, reply("The recipient is busy; I will relay when its existing turn finishes."));
+  responses.push(relay, reply("The recipient is busy, so the relay waits for its existing turn to finish."));
   let result = await finishAssignedTurn(f);
   assert.deepEqual(result.assignments.map(a => a.turnsUsed), [1, 1]);
   responses.push(relay, reply("The retained question has now reached the idle recipient."));
@@ -1292,15 +1309,14 @@ test("autonomous watch notifications cannot execute a mutating tool", async (t) 
   assert.deepEqual(result.messages.filter(message => message.role === "assistant").map(message => message.text), [answer]);
   assert.deepEqual(f.observations.mutations, []);
   assert.equal(f.observations.starts.length, 2);
-  assert.equal(f.observations.starts[1].result.ok, false);
-  assert.equal(f.observations.starts[1].result.error.code, "assistant_tool_unknown");
+  // The engine answers a call to an action the model was not given with a tool error:
+  // nothing runs, and no receipt is saved for it.
+  assert.match(f.observations.starts[1].body.messages.at(-1).content, /unavailable tool 'vibe64_test_operate'/);
   assert.equal(f.observations.starts[0].body.tools.some(tool => tool.function.name === "vibe64_test_operate"), false,
     "The refused command must remain excluded from the autonomous schemas");
   const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
-  const rejected = saved.conversationLog.at(-1).metadata.applicationTools.find(call => call.name === "vibe64_test_operate");
-  assert.equal(rejected.status, "complete", "The no-effect refusal has a durable verified receipt");
-  assert.equal(rejected.result.ok, false);
-  assert.equal(rejected.result.error.code, "assistant_tool_unknown");
+  assert.equal((saved.conversationLog.at(-1).metadata.applicationTools || []).some(call => call.name === "vibe64_test_operate"), false,
+    "The refused command has no receipt");
 });
 
 test("missed events reconcile by code polling; current access revocation pauses without inference", async (t) => {
@@ -1454,12 +1470,12 @@ test("an observation arriving during discussion waits for a decision boundary wi
   await changed(f);
   await until(async () => (await f.service.read({}, f.context)).watches[0].status === "pending");
   assert.equal(f.observations.starts.length, 1, "do not start a concurrent native turn");
-  answer.resolve(reply("Let's discuss the design."));
+  answer.resolve(reply("The design is worth discussing."));
   await until(() => f.observations.starts.length === 2);
   const final = await f.service.wait(f.context);
   assert.equal(final.status, "ready", final.error);
   assert.deepEqual(final.messages.map(({ role }) => role), ["user", "assistant", "system", "assistant"]);
-  assert.equal(final.messages[1].text, "Let's discuss the design.");
+  assert.equal(final.messages[1].text, "The design is worth discussing.");
   assert.equal(f.observations.starts[1].data.readOnly, true);
 });
 
@@ -1517,7 +1533,7 @@ test("ongoing watches deduplicate reported failures and observe subsequent turns
 });
 
 test("watch tools use the native action catalogue and retry IDs retain one subscription", async (t) => {
-  const f = await fixture(t, [JSON.stringify({ kind: "tool", text: "", toolName: "vibe64_colleague_watch_create", arguments: JSON.stringify(watchInput) }), reply("I'll tell you when it answers.")], { watching: true });
+  const f = await fixture(t, [JSON.stringify({ kind: "tool", text: "", toolName: "vibe64_colleague_watch_create", arguments: JSON.stringify(watchInput) }), reply("The watch will tell you when it answers.")], { watching: true });
   await f.send("Watch the temporary conversation in Alpha.");
   const result = await f.service.wait(f.context);
   assert.equal(result.status, "ready", await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
@@ -1850,7 +1866,7 @@ test("steering received during a model response takes precedence before any tool
   let finish;
   let started;
   const waiting = new Promise((resolve) => { started = resolve; });
-  const f = await fixture(t, [() => { started(); return new Promise((resolve) => { finish = resolve; }); }, reply("We will discuss it first.")]);
+  const f = await fixture(t, [() => { started(); return new Promise((resolve) => { finish = resolve; }); }, reply("We will discuss it before doing anything.")]);
   await f.send("Do something");
   await waiting;
   await f.send("Wait, discuss it first", "steer-1");
@@ -1858,7 +1874,7 @@ test("steering received during a model response takes precedence before any tool
   const result = await f.service.wait(f.context);
   assert.equal(result.status, "ready", result.error);
   assert.deepEqual(f.observations.mutations, []);
-  assert.equal(result.messages.at(-1).text, "We will discuss it first.");
+  assert.equal(result.messages.at(-1).text, "We will discuss it before doing anything.");
   const steered = f.observations.starts[1].data;
   assert.deepEqual(steered.userMessageIds, ["steer-1"]);
   const outgoing = f.observations.starts[1].body.messages.findLast(message => message.role === "user").content;
@@ -2859,7 +2875,9 @@ test("fresh recovery refuses working turns, excessive annotation data and other 
   await assert.rejects(historyAction(f), { statusCode: 401 });
   await assert.rejects(freshAction(f, input), { statusCode: 401 });
   f.observations.allow = true;
-  stream.finish();
+  // Stopped, the working turn settles before the test ends.
+  await f.service.stop({}, f.context);
+  await f.service.wait(f.context);
 });
 
 test("archive annotations do not duplicate verified receipts and older fresh operations retain their successor", async t => {
@@ -4031,18 +4049,21 @@ for (const length of [16_000, 16_001]) {
 }
 
 
-test("Colleague decoded reply bound preserves a larger DeepSeek text-carried application payload", async t => {
+// The engine never runs a call written out as text: its markup check tells the model so
+// once, and the call it then makes properly keeps the larger application payload.
+test("a DeepSeek text-carried call never runs, and its proper call keeps a larger application payload", async t => {
   const value = "private-handover-".repeat(1100);
   assert.ok(value.length > 16_000);
   const text = `<｜DSML｜function_calls><｜DSML｜invoke name="vibe64_test_operate">${JSON.stringify({ value })}</｜DSML｜invoke></｜DSML｜function_calls>`;
   const f = await fixture(t, [new Response(modelFrame({ content: text }) + modelFrame({}, "stop"),
-    { headers: { "content-type": "text/event-stream" } }), reply("The handover is saved.")]);
+    { headers: { "content-type": "text/event-stream" } }), call(value), reply("The handover is saved.")]);
   await f.send("Save this handover.");
   const result = await f.service.wait(f.context);
   assert.equal(result.status, "ready", result.error);
   assert.deepEqual(f.observations.mutations, [value], "The independent application argument limit remains in force");
   assert.equal(result.messages.at(-1).text, "The handover is saved.");
-  assert.equal(f.observations.starts.length, 2, "One tool response and one final; no extra model work");
+  assert.match(f.observations.starts[1].body.messages.at(-1).content, /^\(Check from the app: your last message contained raw markup/);
+  assert.equal(f.observations.starts.length, 3, "The markup check, one tool response and one final; no extra model work");
   assert.equal(result.messages.some(message => message.text.includes(value)), false);
   assert.equal(f.observations.realtime.some(event => JSON.stringify(event.realtime.payload).includes(value)), false,
     "The private tool carrier never becomes a visible answer");
