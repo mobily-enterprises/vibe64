@@ -123,9 +123,8 @@ for (const [name, component] of [
   ["Vibe64EphemeralConversationMessages", Vibe64EphemeralConversationMessages],
   ["Vibe64ConversationStatus", Vibe64ConversationStatus]
 ]) {
-  const componentPath = component.__file || path.resolve(SharedConversation[name]
-    ? `node_modules/@jskit-ai/assistant-core/src/client/conversation/${name}.vue`
-    : `src/components/studio/vibe64-session/${name}.vue`);
+  // Each component, published or the project's own, compiled from its own file.
+  const componentPath = component.__file;
   const componentSource = fs.readFileSync(componentPath, "utf8");
   const { descriptor } = parse(componentSource, { filename: componentPath });
   const script = compileScript(descriptor, { id: `${name}-test` });

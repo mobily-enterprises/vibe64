@@ -2,6 +2,7 @@ import { test, expect, type Locator } from "@playwright/test";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
+import { createLogoDevImageUrl } from "@jskit-ai/connectors-catalog/client/logo-dev";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { DASHBOARD_PATH, directChatSessionId, viewports } from "./support/base-shell-data";
@@ -1322,22 +1323,23 @@ for (const { viewport, providerBatch } of [
             body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aDAAAAAASUVORK5CYII=", "base64")
           });
         });
-        const images = await page.evaluate(async () => {
-          // Load the installed browser library through Vite; all CDN responses are local fixtures.
-          const modulePath = "/node_modules/@jskit-ai/connectors-catalog/src/client/logo-dev.js";
-          const { createLogoDevImageUrl } = await import(modulePath);
+        // The published library builds each image address; the page loads it, and
+        // every CDN response is a local fixture.
+        const imageUrls = [{ ticker: "AAPL", fallback: "monogram" }, { email: "private@example.com", fallback: "404" }]
+          .map((lookup) => createLogoDevImageUrl({ publishableKey: "pk_browser_fixture", ...lookup }));
+        const images = await page.evaluate(async (urls) => {
           const results = [];
-          for (const lookup of [{ ticker: "AAPL", fallback: "monogram" }, { email: "private@example.com", fallback: "404" }]) {
+          for (const url of urls) {
             const image = new Image();
             image.referrerPolicy = "origin";
             results.push(await new Promise((resolve) => {
               image.onload = () => resolve({ loaded: true, width: image.naturalWidth });
               image.onerror = () => resolve({ loaded: false });
-              image.src = createLogoDevImageUrl({ publishableKey: "pk_browser_fixture", ...lookup });
+              image.src = url;
             }));
           }
           return results;
-        });
+        }, imageUrls);
         expect(images).toEqual([{ loaded: true, width: 1 }, { loaded: false }]);
         expect(imageRequests).toHaveLength(2);
         expect(new URL(imageRequests[0].url).pathname).toBe("/ticker/AAPL");
@@ -1373,22 +1375,23 @@ for (const { viewport, providerBatch } of [
             body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aDAAAAAASUVORK5CYII=", "base64")
           });
         });
-        const images = await page.evaluate(async () => {
-          // Load the installed browser library through Vite; all CDN responses are local fixtures.
-          const modulePath = "/node_modules/@jskit-ai/connectors-catalog/src/client/logo-dev.js";
-          const { createLogoDevImageUrl } = await import(modulePath);
+        // The published library builds each image address; the page loads it, and
+        // every CDN response is a local fixture.
+        const imageUrls = ["monogram", "404"]
+          .map((fallback) => createLogoDevImageUrl({ publishableKey: "pk_browser_fixture", domain: "example.com", fallback }));
+        const images = await page.evaluate(async (urls) => {
           const results = [];
-          for (const fallback of ["monogram", "404"]) {
+          for (const url of urls) {
             const image = new Image();
             image.referrerPolicy = "origin";
             results.push(await new Promise((resolve) => {
               image.onload = () => resolve({ loaded: true, width: image.naturalWidth });
               image.onerror = () => resolve({ loaded: false });
-              image.src = createLogoDevImageUrl({ publishableKey: "pk_browser_fixture", domain: "example.com", fallback });
+              image.src = url;
             }));
           }
           return results;
-        });
+        }, imageUrls);
         expect(images).toEqual([{ loaded: true, width: 1 }, { loaded: false }]);
         expect(imageRequests).toHaveLength(2);
         for (const request of imageRequests) {

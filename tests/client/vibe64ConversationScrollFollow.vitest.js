@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import path from "node:path";
 
 import { compile } from "@vue/compiler-dom";
 import { compileScript, parse } from "@vue/compiler-sfc";
@@ -66,8 +65,10 @@ Object.assign(SharedConversation.LongTextPreviewBlocks, {
   }
 });
 
-function attachClientRender(component, sourcePath, id) {
-  const componentPath = component.__file || path.resolve(sourcePath);
+// Each component, published or the project's own, compiled from its own file for
+// this test's renderer.
+function attachClientRender(component, id) {
+  const componentPath = component.__file;
   const componentSource = fs.readFileSync(componentPath, "utf8");
   const { descriptor } = parse(componentSource, {
     filename: componentPath
@@ -92,22 +93,14 @@ for (const name of [
   "AssistantPromptInput",
   "AssistantComposerActions"
 ]) {
-  attachClientRender(SharedConversation[name], `node_modules/@jskit-ai/assistant-core/src/client/conversation/${name}.vue`, `${name}-test`);
+  attachClientRender(SharedConversation[name], `${name}-test`);
 }
 
-attachClientRender(
-  Vibe64ConversationLog,
-  "src/components/studio/vibe64-session/Vibe64ConversationLog.vue",
-  "vibe64-conversation-scroll-follow-test"
-);
-attachClientRender(
-  Vibe64ConversationAttachments,
-  "src/components/studio/vibe64-session/Vibe64ConversationAttachments.vue",
-  "vibe64-conversation-attachments-test"
-);
+attachClientRender(Vibe64ConversationLog, "vibe64-conversation-scroll-follow-test");
+attachClientRender(Vibe64ConversationAttachments, "vibe64-conversation-attachments-test");
 
 for (const component of [Vibe64ConversationStatus, Vibe64ProjectMessage, Vibe64EphemeralConversationMessages]) {
-  attachClientRender(component, `src/components/studio/vibe64-session/${component.__name}.vue`, `${component.__name}-test`);
+  attachClientRender(component, `${component.__name}-test`);
 }
 
 function passthroughComponent(element = "div") {

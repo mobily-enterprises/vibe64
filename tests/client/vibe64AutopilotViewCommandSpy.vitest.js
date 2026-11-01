@@ -8,6 +8,7 @@ import { renderToString } from "@vue/server-renderer";
 import * as mdi from "@mdi/js";
 import { describe, expect, it, vi } from "vitest";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { VoiceConversationControls, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { createProjectVoiceBinding } from "../../packages/vibe64-voice/src/client/projectVoiceBinding.js";
 import { sourceEditorLinkTarget } from "../../src/lib/vibe64SourceEditorLinks.js";
 import { thinkingMessagePresentation, usesCommentaryForThinking } from "../../src/lib/vibe64ThinkingPresentation.js";
@@ -23,15 +24,6 @@ const temporaryAiRepairsPath = path.resolve("src/composables/useVibe64TemporaryA
 const promptTextareaPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue"
 );
-const sharedPromptInputPath = path.resolve(
-  "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantPromptInput.vue"
-);
-const sharedComposerActionsPath = path.resolve(
-  "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantComposerActions.vue"
-);
-const promptHintsPath = path.resolve(
-  "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantComposerSupport.vue"
-);
 const runtimeHostPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue");
 const temporaryAiPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue"
@@ -42,12 +34,8 @@ const temporaryAiFixActionPath = path.resolve(
 );
 
 // Match the original Colleague client renderer: compile the actual SFC setup,
-// use the real Vue instance and moved launcher, and stub presentation only.
-// From JSKIT 0.2 the voice controls import their own message module, and shared
-// components render texts from message keys: load the real module, accept either form.
-const controlsI18nUrl = new URL("./i18n.js", import.meta.resolve("@jskit-ai/assistant-voice/client"));
-const controlsI18n = fs.existsSync(controlsI18nUrl) ? await import(controlsI18nUrl.href) : null;
-const containsText = (source, english, key) => source.includes(english) || source.includes(key);
+// use the real Vue instance and the published voice launcher and controls, and
+// stub presentation only.
 
 function mountMainConversationLog({ render = false, speech = { voices: [{ id: "cori" }], defaultVoice: "cori" },
   avatarPreferences = vue.reactive({ coding: {} }) } = {}) {
@@ -55,13 +43,6 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
   const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
   const script = compileScript(descriptor, { id: "main-voice-client" });
   const { code } = transformSync(script.content, { format: "cjs" });
-  const launcherFilename = new URL("./voiceLauncher.js", import.meta.resolve("@jskit-ai/assistant-voice/client"));
-  const { code: launcherCode } = transformSync(fs.readFileSync(launcherFilename, "utf8"), { format: "cjs" });
-  const launcher = { exports: {} };
-  new Function("require", "module", "exports", launcherCode)(name => {
-    expect(name).toBe("vue");
-    return vue;
-  }, launcher, launcher.exports);
   const voice = {
     controller: { state: vue.shallowReactive({ binding: null, session: null, nextTarget: null, error: "" }) },
     readAloudFor: vi.fn(binding => binding.defaults?.readAloud === true),
@@ -92,7 +73,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
       if (!speech) throw Object.assign(new Error("Speaking voices could not load."), { status: 503, code: "voice_unavailable" });
       return speech;
     }) }) },
-    "@jskit-ai/assistant-voice/client": { VoiceAvatar: {}, VoiceConversationControls: {}, VoiceConversationHost: {}, VoiceConversationSettings: {}, useVoiceLauncher: launcher.exports.useVoiceLauncher },
+    "@jskit-ai/assistant-voice/client": { VoiceAvatar: {}, VoiceConversationControls: {}, VoiceConversationHost: {}, VoiceConversationSettings: {}, useVoiceLauncher },
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {} },
     "@local/vibe64-runtime/shared/assistantRouting": { assistantModeLabel },
     "@local/vibe64-runtime/shared": { parseIntegrationSetupRequest, vibe64AssistantSelectionLabel },
@@ -104,25 +85,15 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
   const controls = [];
   const avatarRenders = [];
   if (render) {
-    const controlsFilename = new URL("./VoiceConversationControls.vue", import.meta.resolve("@jskit-ai/assistant-voice/client"));
-    const controlsDescriptor = parse(fs.readFileSync(controlsFilename, "utf8"), { filename: controlsFilename.pathname }).descriptor;
-    const controlsCode = transformSync(compileScript(controlsDescriptor, { id: "main-voice-controls" }).content, { format: "cjs" }).code;
-    const controlsModule = { exports: {} };
-    new Function("require", "module", "exports", controlsCode)(name => {
-      if (name === "./voiceLauncher.js") return launcher.exports;
-      if (name === "./i18n.js" && controlsI18n) return controlsI18n;
-      if (name === "vue") return vue;
-      if (name === "@mdi/js") return mdi;
-      throw new Error(`Unexpected control import ${name}`);
-    }, controlsModule, controlsModule.exports);
-    const originalControlsSetup = controlsModule.exports.default.setup;
-    controlsModule.exports.default.setup = (props, context) => {
-      const state = originalControlsSetup(props, context);
-      controls.push(state);
-      return state;
+    imports["@jskit-ai/assistant-voice/client"].VoiceConversationControls = {
+      ...VoiceConversationControls,
+      setup(props, context) {
+        const state = VoiceConversationControls.setup(props, context);
+        controls.push(state);
+        return state;
+      },
+      render: () => null
     };
-    controlsModule.exports.default.render = () => null;
-    imports["@jskit-ai/assistant-voice/client"].VoiceConversationControls = controlsModule.exports.default;
     imports["@jskit-ai/assistant-voice/client"].VoiceConversationHost = {
       props: ["controller", "presentation"], setup: (props, { slots }) => () => slots.conversation({ session: props.controller.state.session, disabled: false })
     };
@@ -183,6 +154,9 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
     return () => null;
   } });
   if (render) {
+    // Vitest compiles the published voice controls for server rendering: their setup records the component in
+    // Vue's server-rendering context, so this test's renderer supplies an empty one.
+    app.provide(vue.ssrContextKey, {});
     for (const name of ["v-btn", "v-icon", "v-card", "v-card-actions", "v-card-text"]) {
       app.component(name, { setup: (_, { slots }) => () => vue.h("span", slots.default?.()) });
     }
@@ -1095,8 +1069,6 @@ describe("Vibe64 direct session view", () => {
   it("labels active-turn messages as compact steering", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const composable = fs.readFileSync(composablePath, "utf8");
-    const promptHints = fs.readFileSync(promptHintsPath, "utf8");
-    const composerActions = fs.readFileSync(sharedComposerActionsPath, "utf8");
 
     expect(component).toContain(':stop-visible="agentStopVisible"');
     // Only the live native turn can show the assistant as working; routing,
@@ -1108,15 +1080,8 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain(':sending="composerSending"');
     expect(component).toContain('@submit="sendComposerMessage"');
     expect(component).toContain('@stop="requestAgentInterrupt"');
-    expect(composerActions).toContain(':aria-busy="state.pending && !state.canSend ? \'true\' : undefined"');
-    expect(composerActions).toContain(':aria-busy="state.stopPending ? \'true\' : undefined"');
-    expect(composerActions).not.toContain(":loading=");
-    expect(composerActions).toContain('v-if="state.canStop"');
-    expect(containsText(composerActions, "{{ state.stopPending ? 'Stopping…' : 'Stop' }}",
-      "{{ state.stopPending ? t('jskit.assistant.composer.stopping') : t('jskit.assistant.composer.stop') }}")).toBe(true);
     expect(component).toContain(':described-by="composerSupportStatusVisible ? thinkingStatusId : \'\'"');
     expect(component).toContain("<AssistantComposerSupport");
-    expect(promptHints).toContain("@media (prefers-reduced-motion: reduce)");
     expect(composable).toContain('waiting: "Waiting for the assistant to accept guidance"');
     expect(composable).toContain('steering: "Sending guidance to assistant"');
     expect(composable).toContain('retry: "Retry guidance to assistant"');
@@ -1127,16 +1092,10 @@ describe("Vibe64 direct session view", () => {
 
   it("requires complete compact structured answers while preserving free-form escape", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const questions = fs.readFileSync(path.resolve("node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantQuestionInputs.vue"), "utf8");
     const composable = fs.readFileSync(composablePath, "utf8");
 
     expect(component).toContain("<AssistantQuestionInputs")
-    expect(questions).toContain("<v-select");
-    expect(questions).toContain('item-title="selectLabel"');
     expect(component).toContain(':select-items="numberedQuestionSelectItems"');
-    expect(questions).not.toContain("#selection=");
-    expect(containsText(questions, "Answer normally instead", "jskit.assistant.questions.answerNormally")).toBe(true);
-    expect(questions).toContain(':prepend-icon="mdiPencilOutline"');
     expect(component.match(/:can-submit="composerCanSubmit && !composerBlocked && attachmentState\.canSubmit"/gu)).toHaveLength(1);
     expect(composable).toContain('const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";');
     expect(composable).toContain("numberedQuestions.value.every");
@@ -1230,7 +1189,6 @@ describe("Vibe64 direct session view", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const composable = fs.readFileSync(composablePath, "utf8");
     const promptTextarea = fs.readFileSync(promptTextareaPath, "utf8");
-    const sharedPromptInput = fs.readFileSync(sharedPromptInputPath, "utf8");
 
     expect(component).toContain("tab-to-submit");
     expect(component).toContain(':submit-enabled="composerCanSubmit && !composerBlocked"');
@@ -1239,9 +1197,6 @@ describe("Vibe64 direct session view", () => {
     expect(composable).not.toContain("Enter sends. Shift+Enter adds a line.");
     expect(promptTextarea).toContain("<AssistantPromptInput");
     expect(promptTextarea).toContain('@tab-to-submit="emit(\'tab-to-submit\')"');
-    expect(sharedPromptInput).toContain('event.key === "Enter" && !props.submitOnEnter');
-    expect(sharedPromptInput).toContain("props.submitEnabled");
-    expect(sharedPromptInput).toContain("event.stopPropagation()");
   });
 
 });

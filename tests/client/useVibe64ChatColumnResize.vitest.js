@@ -143,44 +143,14 @@ describe("useVibe64ChatColumnResize", () => {
     expect(source).not.toContain("Answer the assistant's questions");
   });
 
-  it("keeps off-screen conversation turns out of wide-pane relayouts", () => {
-    const filename = "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantTranscript.vue";
-    const source = readFileSync(filename, "utf8");
-    const descriptor = parse(source, { filename }).descriptor;
-    const style = descriptor.styles[0];
-    const result = compileStyle({
-      filename,
-      id: "data-v-chat-turn-containment-test",
-      scoped: style.scoped,
-      source: style.content
-    });
-
-    expect(result.errors).toEqual([]);
-    expect(result.code).toMatch(
-      /assistant-transcript__turn[^}]*content-visibility:\s*auto/u
-    );
-    expect(result.code).toMatch(
-      /assistant-transcript__turn[^}]*contain-intrinsic-block-size:\s*auto 12rem/u
-    );
-  });
-
-  it("bounds thinking, message parsing, and live scroll work", () => {
-    const conversation = readFileSync(
-      "node_modules/@jskit-ai/assistant-core/src/client/conversation/AssistantTranscript.vue",
-      "utf8"
-    );
+  // The transcript's own containment, parsing bounds and scroll work belong to
+  // JSKIT's conversation package and its tests; the view only must not deep-watch.
+  it("bounds the view's live scroll work without deep watchers", () => {
     const view = readFileSync(
       "src/composables/useVibe64AutopilotView.js",
       "utf8"
     );
 
-    expect(conversation).toContain("AssistantProgress");
-    expect(conversation).toContain("DISPLAY_MESSAGE_CACHE_LIMIT = 500");
-    expect(conversation).toContain(':pending="isWorking && entry === displayEntries.at(-1)"');
-    expect(conversation).toContain(':key="`${scrollKey}:${entry.key}`"');
-    expect(conversation).toContain("props.working ?? props.turns.some(turn => turn.pending)");
-    expect(conversation).toContain("window.requestAnimationFrame(() =>");
-    expect(conversation).toContain('scrollToLatestMessageNow({ behavior: "auto" })');
     expect(view).not.toContain("}, { deep: true });");
   });
 
